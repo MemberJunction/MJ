@@ -13111,6 +13111,284 @@ export const CredentialSchema = z.object({
 export type CredentialEntityType = z.infer<typeof CredentialSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Dashboard Category Links
+ */
+export const DashboardCategoryLinkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    DashboardID: z.string().describe(`
+        * * Field Name: DashboardID
+        * * Display Name: Dashboard
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    DashboardCategoryID: z.string().nullable().describe(`
+        * * Field Name: DashboardCategoryID
+        * * Display Name: Dashboard Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
+        * * Description: The category in the user's personal folder structure. NULL means the dashboard appears at root level.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional user-friendly alias for the dashboard within this user's view. If NULL, uses the original dashboard name.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order of this dashboard within the user's category. Lower values appear first.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Dashboard: z.string().describe(`
+        * * Field Name: Dashboard
+        * * Display Name: Dashboard Name
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    DashboardCategory: z.string().nullable().describe(`
+        * * Field Name: DashboardCategory
+        * * Display Name: Category Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type DashboardCategoryLinkEntityType = z.infer<typeof DashboardCategoryLinkSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Dashboard Category Permissions
+ */
+export const DashboardCategoryPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    DashboardCategoryID: z.string().describe(`
+        * * Field Name: DashboardCategoryID
+        * * Display Name: Dashboard Category ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    CanRead: z.boolean().describe(`
+        * * Field Name: CanRead
+        * * Display Name: Can Read
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the user can view dashboards within this category`),
+    CanEdit: z.boolean().describe(`
+        * * Field Name: CanEdit
+        * * Display Name: Can Edit
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can modify dashboards within this category`),
+    CanAddRemove: z.boolean().describe(`
+        * * Field Name: CanAddRemove
+        * * Display Name: Can Add/Remove
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can add new dashboards to or remove dashboards from this category`),
+    CanShare: z.boolean().describe(`
+        * * Field Name: CanShare
+        * * Display Name: Can Share
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can share this category with other users`),
+    SharedByUserID: z.string().nullable().describe(`
+        * * Field Name: SharedByUserID
+        * * Display Name: Shared By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who granted this permission. NULL if shared by the category owner.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    DashboardCategory: z.string().describe(`
+        * * Field Name: DashboardCategory
+        * * Display Name: Dashboard Category
+        * * SQL Data Type: nvarchar(100)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    SharedByUser: z.string().nullable().describe(`
+        * * Field Name: SharedByUser
+        * * Display Name: Shared By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type DashboardCategoryPermissionEntityType = z.infer<typeof DashboardCategoryPermissionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Dashboard Part Types
+ */
+export const DashboardPartTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name for the panel type (e.g., View, Query, Artifact, WebURL, Custom)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of what this panel type displays and its capabilities`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class for the panel type (e.g., fa-solid fa-table)`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The @RegisterClass name for the panel renderer component that extends DashboardBasePanelRenderer`),
+    ConfigDialogClass: z.string().nullable().describe(`
+        * * Field Name: ConfigDialogClass
+        * * Display Name: Configuration Dialog Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The @RegisterClass name for the configuration dialog component that extends DashboardBasePanelConfigDialog`),
+    DefaultConfig: z.string().nullable().describe(`
+        * * Field Name: DefaultConfig
+        * * Display Name: Default Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing default configuration values for new panels of this type`),
+    SortOrder: z.number().describe(`
+        * * Field Name: SortOrder
+        * * Display Name: Sort Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order in panel type selection UI (lower numbers appear first)`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this panel type is currently available for use`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type DashboardPartTypeEntityType = z.infer<typeof DashboardPartTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Dashboard Permissions
+ */
+export const DashboardPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    DashboardID: z.string().describe(`
+        * * Field Name: DashboardID
+        * * Display Name: Dashboard ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    CanRead: z.boolean().describe(`
+        * * Field Name: CanRead
+        * * Display Name: Can Read
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the user can view the dashboard and its contents`),
+    CanEdit: z.boolean().describe(`
+        * * Field Name: CanEdit
+        * * Display Name: Can Edit
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can modify the dashboard layout, add/remove parts, or change settings`),
+    CanDelete: z.boolean().describe(`
+        * * Field Name: CanDelete
+        * * Display Name: Can Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can delete the dashboard entirely`),
+    CanShare: z.boolean().describe(`
+        * * Field Name: CanShare
+        * * Display Name: Can Share
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can share the dashboard with other users`),
+    SharedByUserID: z.string().nullable().describe(`
+        * * Field Name: SharedByUserID
+        * * Display Name: Shared By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who granted this permission. NULL if shared by the dashboard owner.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Dashboard: z.string().describe(`
+        * * Field Name: Dashboard
+        * * Display Name: Dashboard
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    SharedByUser: z.string().nullable().describe(`
+        * * Field Name: SharedByUser
+        * * Display Name: Shared By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type DashboardPermissionEntityType = z.infer<typeof DashboardPermissionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Dashboard User Preferences
  */
 export const DashboardUserPreferenceSchema = z.object({
@@ -14841,7 +15119,7 @@ export const TestRunSchema = z.object({
         * * Description: Overall test score from 0.0000 to 1.0000 (0-100%). Calculated by test driver based on passed/failed checks and weights.`),
     CostUSD: z.number().nullable().describe(`
         * * Field Name: CostUSD
-        * * Display Name: Cost USD
+        * * Display Name: Cost (USD)
         * * SQL Data Type: decimal(10, 6)
         * * Description: Cost in USD for running this test (e.g., LLM token costs, compute resources)`),
     ErrorMessage: z.string().nullable().describe(`
@@ -14901,13 +15179,18 @@ export const TestRunSchema = z.object({
         * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
     TargetLogEntityID: z.string().nullable().describe(`
         * * Field Name: TargetLogEntityID
-        * * Display Name: Target Log Entity ID
+        * * Display Name: Target Log Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         * * Description: Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.`),
+    ResolvedVariables: z.string().nullable().describe(`
+        * * Field Name: ResolvedVariables
+        * * Display Name: Resolved Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing the final resolved variable values used during test execution. Includes both the resolved values and the source of each value (run, suite, test, or type level). Stored for reproducibility and auditing.`),
     Test: z.string().describe(`
         * * Field Name: Test
-        * * Display Name: Test
+        * * Display Name: Test Name
         * * SQL Data Type: nvarchar(255)`),
     TestSuiteRun: z.string().nullable().describe(`
         * * Field Name: TestSuiteRun
@@ -14919,7 +15202,7 @@ export const TestRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     TargetLogEntity: z.string().nullable().describe(`
         * * Field Name: TargetLogEntity
-        * * Display Name: Target Log Entity
+        * * Display Name: Target Log Entity Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -14942,7 +15225,7 @@ export const TestSuiteRunSchema = z.object({
         * * Description: Foreign Key - The test suite that was executed`),
     RunByUserID: z.string().describe(`
         * * Field Name: RunByUserID
-        * * Display Name: Run By User
+        * * Display Name: Run By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: Foreign Key - The user who triggered the suite run (could be system user for automated runs)`),
@@ -15016,12 +15299,12 @@ export const TestSuiteRunSchema = z.object({
         * * Description: Number of tests that encountered execution errors (different from failing validation)`),
     TotalDurationSeconds: z.number().nullable().describe(`
         * * Field Name: TotalDurationSeconds
-        * * Display Name: Total Duration (seconds)
+        * * Display Name: Total Duration Seconds
         * * SQL Data Type: decimal(10, 3)
         * * Description: Total execution time in seconds for the entire suite`),
     TotalCostUSD: z.number().nullable().describe(`
         * * Field Name: TotalCostUSD
-        * * Display Name: Total Cost (USD)
+        * * Display Name: Total Cost USD
         * * SQL Data Type: decimal(10, 6)
         * * Description: Total cost in USD for running the entire suite (sum of all test costs)`),
     Configuration: z.string().nullable().describe(`
@@ -15079,6 +15362,11 @@ export const TestSuiteRunSchema = z.object({
         * * Display Name: Run Context Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
+    ResolvedVariables: z.string().nullable().describe(`
+        * * Field Name: ResolvedVariables
+        * * Display Name: Resolved Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun.ResolvedVariables with source="suite".`),
     Suite: z.string().describe(`
         * * Field Name: Suite
         * * Display Name: Suite
@@ -15167,7 +15455,7 @@ export const TestSuiteSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
         * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.`),
@@ -15217,13 +15505,18 @@ export const TestSuiteSchema = z.object({
         * * Display Name: Max Execution Time (ms)
         * * SQL Data Type: int
         * * Description: Maximum total execution time in milliseconds for the entire suite. If NULL, no suite-level timeout applies (individual test timeouts still apply). When exceeded, current test is cancelled and remaining tests are skipped.`),
+    Variables: z.string().nullable().describe(`
+        * * Field Name: Variables
+        * * Display Name: Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing variable values to apply to all tests in this suite. These values override test-level defaults but can be overridden by run-level values.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -15274,6 +15567,11 @@ export const TestTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    VariablesSchema: z.string().nullable().describe(`
+        * * Field Name: VariablesSchema
+        * * Display Name: Variables Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON schema defining the variables available for tests of this type. Contains schemaVersion and array of variable definitions with name, displayName, description, dataType, valueSource, possibleValues, defaultValue, and required fields.`),
 });
 
 export type TestTypeEntityType = z.infer<typeof TestTypeSchema>;
@@ -15370,9 +15668,14 @@ export const TestSchema = z.object({
         * * Display Name: Max Execution Time (ms)
         * * SQL Data Type: int
         * * Description: Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.`),
+    Variables: z.string().nullable().describe(`
+        * * Field Name: Variables
+        * * Display Name: Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType.VariablesSchema.`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Test Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -20913,6 +21216,7 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     /**
     * Validate() method override for AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CompactLength: This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
+    * * CompactMode: CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
     * * MaxExecutionsPerRun: This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
     * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
     * * ResultExpirationTurns: This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
@@ -20927,6 +21231,7 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateCompactLengthGreaterThanZero(result);
+        this.ValidateCompactModeAllowedValues(result);
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
         this.ValidateMinExecutionsPerRunIsNonNegative(result);
         this.ValidateResultExpirationTurnsNonNegative(result);
@@ -20948,6 +21253,24 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     public ValidateCompactLengthGreaterThanZero(result: ValidationResult) {
     	if (this.CompactLength != null && this.CompactLength <= 0) {
     		result.Errors.push(new ValidationErrorInfo("CompactLength", "CompactLength must be greater than zero if specified.", this.CompactLength, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactModeAllowedValues(result: ValidationResult) {
+    	// CompactMode is optional; if set, it must be one of the allowed options
+    	if (this.CompactMode != null && this.CompactMode !== 'AI Summary' && this.CompactMode !== 'First N Chars') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			'CompactMode',
+    			"CompactMode must be either 'AI Summary' or 'First N Chars' when provided.",
+    			this.CompactMode,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -40837,6 +41160,7 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
 
     /**
     * Validate() method override for MJ: AI Agent Data Sources entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ResultType: Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
     * * Table-Level: This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
     * * Table-Level: This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
     * * Table-Level: This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
@@ -40846,12 +41170,31 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateResultTypeAllowedValues(result);
         this.ValidateCacheTimeoutSecondsRequiredForPerAgentPolicy(result);
         this.ValidateEntityNameRequiredWhenSourceTypeRunView(result);
         this.ValidateQueryNameRequiredWhenSourceTypeIsRunQuery(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultTypeAllowedValues(result: ValidationResult) {
+    	// If ResultType has a value, ensure it is one of the permitted options
+    	if (this.ResultType != null && this.ResultType !== 'entity_object' && this.ResultType !== 'simple') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ResultType",
+    			"Result Type must be either 'entity_object' or 'simple' when specified",
+    			this.ResultType,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -42460,6 +42803,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * FinalPayloadValidationResult: The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -42467,10 +42811,33 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateFinalPayloadValidationResultAllowedValues(result);
         this.ValidateStepNumberGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
+    	// Ensure the value is either null or one of the permitted statuses
+    	if (this.FinalPayloadValidationResult != null &&
+    		!(this.FinalPayloadValidationResult === 'Warn' ||
+    		  this.FinalPayloadValidationResult === 'Fail' ||
+    		  this.FinalPayloadValidationResult === 'Retry' ||
+    		  this.FinalPayloadValidationResult === 'Pass')) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FinalPayloadValidationResult",
+    			"FinalPayloadValidationResult must be one of: Warn, Fail, Retry, Pass, or left empty.",
+    			this.FinalPayloadValidationResult,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -42862,6 +43229,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     /**
     * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * EffortLevel: This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
+    * * FinalStep: The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
     * @public
     * @method
     * @override
@@ -42869,6 +43237,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateEffortLevelBetween1And100(result);
+        this.ValidateFinalStepAllowedValues(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -42883,6 +43252,27 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     public ValidateEffortLevelBetween1And100(result: ValidationResult) {
     	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
     		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFinalStepAllowedValues(result: ValidationResult) {
+    	// If FinalStep has a value, it must be one of the permitted options
+    	if (this.FinalStep != null) {
+    		const allowed = ["While", "ForEach", "Chat", "Sub-Agent", "Actions", "Retry", "Failed", "Success"];
+    		if (!allowed.includes(this.FinalStep)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"FinalStep",
+    				`FinalStep must be one of the allowed values: ${allowed.join(", ")}.`,
+    				this.FinalStep,
+    				ValidationErrorType.Failure
+    			));
+    		}
     	}
     }
 
@@ -53160,6 +53550,713 @@ export class CredentialEntity extends BaseEntity<CredentialEntityType> {
 
 
 /**
+ * MJ: Dashboard Category Links - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardCategoryLink
+ * * Base View: vwDashboardCategoryLinks
+ * * @description Allows users to organize shared dashboards into their own category structure. Creates a link/reference to a dashboard without duplicating it. Users can optionally provide a custom display name and control ordering within their folders.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard Category Links')
+export class DashboardCategoryLinkEntity extends BaseEntity<DashboardCategoryLinkEntityType> {
+    /**
+    * Loads the MJ: Dashboard Category Links record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard Category Links record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardCategoryLinkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: DashboardID
+    * * Display Name: Dashboard
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)
+    */
+    get DashboardID(): string {
+        return this.Get('DashboardID');
+    }
+    set DashboardID(value: string) {
+        this.Set('DashboardID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: DashboardCategoryID
+    * * Display Name: Dashboard Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
+    * * Description: The category in the user's personal folder structure. NULL means the dashboard appears at root level.
+    */
+    get DashboardCategoryID(): string | null {
+        return this.Get('DashboardCategoryID');
+    }
+    set DashboardCategoryID(value: string | null) {
+        this.Set('DashboardCategoryID', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional user-friendly alias for the dashboard within this user's view. If NULL, uses the original dashboard name.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order of this dashboard within the user's category. Lower values appear first.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Dashboard
+    * * Display Name: Dashboard Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Dashboard(): string {
+        return this.Get('Dashboard');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: DashboardCategory
+    * * Display Name: Category Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DashboardCategory(): string | null {
+        return this.Get('DashboardCategory');
+    }
+}
+
+
+/**
+ * MJ: Dashboard Category Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardCategoryPermission
+ * * Base View: vwDashboardCategoryPermissions
+ * * @description Manages user permissions for dashboard categories (folders). Permissions cascade to all dashboards within the category. Enables sharing entire folders of dashboards with granular access control.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard Category Permissions')
+export class DashboardCategoryPermissionEntity extends BaseEntity<DashboardCategoryPermissionEntityType> {
+    /**
+    * Loads the MJ: Dashboard Category Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard Category Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardCategoryPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: DashboardCategoryID
+    * * Display Name: Dashboard Category ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
+    */
+    get DashboardCategoryID(): string {
+        return this.Get('DashboardCategoryID');
+    }
+    set DashboardCategoryID(value: string) {
+        this.Set('DashboardCategoryID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: CanRead
+    * * Display Name: Can Read
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the user can view dashboards within this category
+    */
+    get CanRead(): boolean {
+        return this.Get('CanRead');
+    }
+    set CanRead(value: boolean) {
+        this.Set('CanRead', value);
+    }
+
+    /**
+    * * Field Name: CanEdit
+    * * Display Name: Can Edit
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can modify dashboards within this category
+    */
+    get CanEdit(): boolean {
+        return this.Get('CanEdit');
+    }
+    set CanEdit(value: boolean) {
+        this.Set('CanEdit', value);
+    }
+
+    /**
+    * * Field Name: CanAddRemove
+    * * Display Name: Can Add/Remove
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can add new dashboards to or remove dashboards from this category
+    */
+    get CanAddRemove(): boolean {
+        return this.Get('CanAddRemove');
+    }
+    set CanAddRemove(value: boolean) {
+        this.Set('CanAddRemove', value);
+    }
+
+    /**
+    * * Field Name: CanShare
+    * * Display Name: Can Share
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can share this category with other users
+    */
+    get CanShare(): boolean {
+        return this.Get('CanShare');
+    }
+    set CanShare(value: boolean) {
+        this.Set('CanShare', value);
+    }
+
+    /**
+    * * Field Name: SharedByUserID
+    * * Display Name: Shared By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who granted this permission. NULL if shared by the category owner.
+    */
+    get SharedByUserID(): string | null {
+        return this.Get('SharedByUserID');
+    }
+    set SharedByUserID(value: string | null) {
+        this.Set('SharedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DashboardCategory
+    * * Display Name: Dashboard Category
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DashboardCategory(): string {
+        return this.Get('DashboardCategory');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: SharedByUser
+    * * Display Name: Shared By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SharedByUser(): string | null {
+        return this.Get('SharedByUser');
+    }
+}
+
+
+/**
+ * MJ: Dashboard Part Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardPartType
+ * * Base View: vwDashboardPartTypes
+ * * @description Stores available panel types for metadata-driven dashboards. Each panel type defines a driver class for rendering content and an optional config dialog for setup UI.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard Part Types')
+export class DashboardPartTypeEntity extends BaseEntity<DashboardPartTypeEntityType> {
+    /**
+    * Loads the MJ: Dashboard Part Types record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard Part Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardPartTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name for the panel type (e.g., View, Query, Artifact, WebURL, Custom)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this panel type displays and its capabilities
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class for the panel type (e.g., fa-solid fa-table)
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The @RegisterClass name for the panel renderer component that extends DashboardBasePanelRenderer
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: ConfigDialogClass
+    * * Display Name: Configuration Dialog Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The @RegisterClass name for the configuration dialog component that extends DashboardBasePanelConfigDialog
+    */
+    get ConfigDialogClass(): string | null {
+        return this.Get('ConfigDialogClass');
+    }
+    set ConfigDialogClass(value: string | null) {
+        this.Set('ConfigDialogClass', value);
+    }
+
+    /**
+    * * Field Name: DefaultConfig
+    * * Display Name: Default Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing default configuration values for new panels of this type
+    */
+    get DefaultConfig(): string | null {
+        return this.Get('DefaultConfig');
+    }
+    set DefaultConfig(value: string | null) {
+        this.Set('DefaultConfig', value);
+    }
+
+    /**
+    * * Field Name: SortOrder
+    * * Display Name: Sort Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order in panel type selection UI (lower numbers appear first)
+    */
+    get SortOrder(): number {
+        return this.Get('SortOrder');
+    }
+    set SortOrder(value: number) {
+        this.Set('SortOrder', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this panel type is currently available for use
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Dashboard Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardPermission
+ * * Base View: vwDashboardPermissions
+ * * @description Manages user permissions for dashboards with granular access control (Read, Edit, Delete, Share). Each record grants a specific user access to a dashboard with configurable permission levels.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard Permissions')
+export class DashboardPermissionEntity extends BaseEntity<DashboardPermissionEntityType> {
+    /**
+    * Loads the MJ: Dashboard Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: DashboardID
+    * * Display Name: Dashboard ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)
+    */
+    get DashboardID(): string {
+        return this.Get('DashboardID');
+    }
+    set DashboardID(value: string) {
+        this.Set('DashboardID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: CanRead
+    * * Display Name: Can Read
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the user can view the dashboard and its contents
+    */
+    get CanRead(): boolean {
+        return this.Get('CanRead');
+    }
+    set CanRead(value: boolean) {
+        this.Set('CanRead', value);
+    }
+
+    /**
+    * * Field Name: CanEdit
+    * * Display Name: Can Edit
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can modify the dashboard layout, add/remove parts, or change settings
+    */
+    get CanEdit(): boolean {
+        return this.Get('CanEdit');
+    }
+    set CanEdit(value: boolean) {
+        this.Set('CanEdit', value);
+    }
+
+    /**
+    * * Field Name: CanDelete
+    * * Display Name: Can Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can delete the dashboard entirely
+    */
+    get CanDelete(): boolean {
+        return this.Get('CanDelete');
+    }
+    set CanDelete(value: boolean) {
+        this.Set('CanDelete', value);
+    }
+
+    /**
+    * * Field Name: CanShare
+    * * Display Name: Can Share
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can share the dashboard with other users
+    */
+    get CanShare(): boolean {
+        return this.Get('CanShare');
+    }
+    set CanShare(value: boolean) {
+        this.Set('CanShare', value);
+    }
+
+    /**
+    * * Field Name: SharedByUserID
+    * * Display Name: Shared By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who granted this permission. NULL if shared by the dashboard owner.
+    */
+    get SharedByUserID(): string | null {
+        return this.Get('SharedByUserID');
+    }
+    set SharedByUserID(value: string | null) {
+        this.Set('SharedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Dashboard
+    * * Display Name: Dashboard
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Dashboard(): string {
+        return this.Get('Dashboard');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: SharedByUser
+    * * Display Name: Shared By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SharedByUser(): string | null {
+        return this.Get('SharedByUser');
+    }
+}
+
+
+/**
  * MJ: Dashboard User Preferences - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: DashboardUserPreference
@@ -57704,7 +58801,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: CostUSD
-    * * Display Name: Cost USD
+    * * Display Name: Cost (USD)
     * * SQL Data Type: decimal(10, 6)
     * * Description: Cost in USD for running this test (e.g., LLM token costs, compute resources)
     */
@@ -57854,7 +58951,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: TargetLogEntityID
-    * * Display Name: Target Log Entity ID
+    * * Display Name: Target Log Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     * * Description: Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.
@@ -57867,8 +58964,21 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     }
 
     /**
+    * * Field Name: ResolvedVariables
+    * * Display Name: Resolved Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing the final resolved variable values used during test execution. Includes both the resolved values and the source of each value (run, suite, test, or type level). Stored for reproducibility and auditing.
+    */
+    get ResolvedVariables(): string | null {
+        return this.Get('ResolvedVariables');
+    }
+    set ResolvedVariables(value: string | null) {
+        this.Set('ResolvedVariables', value);
+    }
+
+    /**
     * * Field Name: Test
-    * * Display Name: Test
+    * * Display Name: Test Name
     * * SQL Data Type: nvarchar(255)
     */
     get Test(): string {
@@ -57895,7 +59005,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: TargetLogEntity
-    * * Display Name: Target Log Entity
+    * * Display Name: Target Log Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get TargetLogEntity(): string | null {
@@ -57963,7 +59073,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: RunByUserID
-    * * Display Name: Run By User
+    * * Display Name: Run By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: Foreign Key - The user who triggered the suite run (could be system user for automated runs)
@@ -58141,7 +59251,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: TotalDurationSeconds
-    * * Display Name: Total Duration (seconds)
+    * * Display Name: Total Duration Seconds
     * * SQL Data Type: decimal(10, 3)
     * * Description: Total execution time in seconds for the entire suite
     */
@@ -58154,7 +59264,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: TotalCostUSD
-    * * Display Name: Total Cost (USD)
+    * * Display Name: Total Cost USD
     * * SQL Data Type: decimal(10, 6)
     * * Description: Total cost in USD for running the entire suite (sum of all test costs)
     */
@@ -58300,6 +59410,19 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
     }
     set RunContextDetails(value: string | null) {
         this.Set('RunContextDetails', value);
+    }
+
+    /**
+    * * Field Name: ResolvedVariables
+    * * Display Name: Resolved Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun.ResolvedVariables with source="suite".
+    */
+    get ResolvedVariables(): string | null {
+        return this.Get('ResolvedVariables');
+    }
+    set ResolvedVariables(value: string | null) {
+        this.Set('ResolvedVariables', value);
     }
 
     /**
@@ -58524,7 +59647,7 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
     * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.
@@ -58641,8 +59764,21 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
     }
 
     /**
+    * * Field Name: Variables
+    * * Display Name: Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing variable values to apply to all tests in this suite. These values override test-level defaults but can be overridden by run-level values.
+    */
+    get Variables(): string | null {
+        return this.Get('Variables');
+    }
+    set Variables(value: string | null) {
+        this.Set('Variables', value);
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -58651,7 +59787,7 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -58779,6 +59915,19 @@ export class TestTypeEntity extends BaseEntity<TestTypeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: VariablesSchema
+    * * Display Name: Variables Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON schema defining the variables available for tests of this type. Contains schemaVersion and array of variable definitions with name, displayName, description, dataType, valueSource, possibleValues, defaultValue, and required fields.
+    */
+    get VariablesSchema(): string | null {
+        return this.Get('VariablesSchema');
+    }
+    set VariablesSchema(value: string | null) {
+        this.Set('VariablesSchema', value);
     }
 }
 
@@ -59057,8 +60206,21 @@ export class TestEntity extends BaseEntity<TestEntityType> {
     }
 
     /**
+    * * Field Name: Variables
+    * * Display Name: Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType.VariablesSchema.
+    */
+    get Variables(): string | null {
+        return this.Get('Variables');
+    }
+    set Variables(value: string | null) {
+        this.Set('Variables', value);
+    }
+
+    /**
     * * Field Name: Type
-    * * Display Name: Test Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {

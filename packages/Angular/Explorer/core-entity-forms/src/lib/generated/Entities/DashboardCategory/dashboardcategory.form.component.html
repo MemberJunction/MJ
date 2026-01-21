@@ -155,5 +155,49 @@
             </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
+
+    <!-- MJ: Dashboard Category Links Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJDashboardCategoryLinks"
+        sectionName="MJ: Dashboard Category Links"
+        icon="fa fa-folder-open"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJDashboardCategoryLinks')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Category Links','DashboardCategoryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Links')"
+                [AllowLoad]="IsSectionExpanded('mJDashboardCategoryLinks')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryLinks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Dashboard Category Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJDashboardCategoryPermissions"
+        sectionName="MJ: Dashboard Category Permissions"
+        icon="fa fa-folder-open"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJDashboardCategoryPermissions')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Category Permissions','DashboardCategoryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJDashboardCategoryPermissions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

@@ -3,6 +3,7 @@
     *ngFor="let item of navItems"
     class="nav-item"
     [class.active]="isActive(item)"
+    [class.no-icon]="!item.Icon"
     (click)="onNavClick(item, $event)"
     (dblclick)="onNavDblClick(item, $event)">
     <i *ngIf="item.Icon" [class]="item.Icon"></i>

@@ -14,7 +14,7 @@ SELECT
     a.ID as ArtifactID,
     a.Name as ArtifactName,
     a.Description as ArtifactDescription,
-    a.Type as ArtifactType,
+    a.Type as ArtifactType, 
     a.Visibility as SharingScope,
     a.Comments as ArtifactComments,
     a.__mj_CreatedAt as ArtifactCreatedAt,

@@ -10,7 +10,7 @@ import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
-import express from 'express';
+import express, { Application } from 'express';
 import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
@@ -77,7 +77,7 @@ const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInt
 export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
-export { configInfo } from './config.js';
+export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export * from './directives/index.js';
 export * from './entitySubclasses/entityPermissions.server.js';
 export * from './types.js';
@@ -131,9 +131,9 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const createApp = () => express();
+export const createApp = (): Application => express();
 
-export const serve = async (resolverPaths: Array<string>, app = createApp(), options?: MJServerOptions) => {
+export const serve = async (resolverPaths: Array<string>, app: Application = createApp(), options?: MJServerOptions): Promise<void> => {
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];

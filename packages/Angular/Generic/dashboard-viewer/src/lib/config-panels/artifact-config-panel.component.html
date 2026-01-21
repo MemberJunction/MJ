@@ -1,0 +1,124 @@
+<!-- Artifact Config Panel - Compact layout with tree dropdown and collapsible sections -->
+<div class="config-panel config-panel--compact">
+    <!-- Artifact Selection (Primary) -->
+    <div class="form-group">
+        <label>
+            <i class="fa-solid fa-cube"></i>
+            Select Artifact
+            <span class="required">*</span>
+        </label>
+        <mj-tree-dropdown
+            #artifactDropdown
+            [BranchConfig]="CollectionConfig"
+            [LeafConfig]="ArtifactLeafConfig"
+            [Value]="ArtifactIdAsKey"
+            [SelectableTypes]="'leaf'"
+            [SelectionMode]="'single'"
+            [Placeholder]="'Search or browse artifacts...'"
+            [EnableSearch]="true"
+            (SelectionChange)="onArtifactSelection($event)"
+            [class.error]="artifactError">
+        </mj-tree-dropdown>
+        <span class="form-error" *ngIf="artifactError">{{ artifactError }}</span>
+        <span class="form-hint" *ngIf="!artifactError && !artifactId">
+            Browse collections or search to find an artifact
+        </span>
+        <span class="form-hint form-hint--selected" *ngIf="!artifactError && artifactId">
+            <i class="fa-solid fa-check"></i>
+            Selected: {{ artifactName }}
+        </span>
+    </div>
+
+    <!-- Version Selection (Available only after artifact is selected) -->
+    <div class="form-group" *ngIf="artifactId">
+        <label for="versionSelect">
+            <i class="fa-solid fa-code-branch"></i>
+            Version
+        </label>
+        <div class="version-select-wrapper">
+            <select
+                *ngIf="!isLoadingVersions && versions.length > 0"
+                id="versionSelect"
+                [(ngModel)]="versionNumber"
+                (change)="onVersionChange()"
+                class="form-select">
+                <option *ngFor="let v of versions" [ngValue]="v.VersionNumber">
+                    v{{ v.VersionNumber }} - {{ v.__mj_CreatedAt | date:'short' }}
+                </option>
+            </select>
+            <span class="form-hint" *ngIf="isLoadingVersions">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Loading versions...
+            </span>
+            <span class="form-hint" *ngIf="!isLoadingVersions && versions.length === 0">
+                No versions available
+            </span>
+        </div>
+        <span class="form-hint" *ngIf="versions.length > 0">
+            Select which version to display (latest is default)
+        </span>
+    </div>
+
+    <!-- Title (Optional) -->
+    <div class="form-group">
+        <label for="partTitle">
+            <i class="fa-solid fa-heading"></i>
+            Part Title
+            <span class="optional-tag">(optional)</span>
+        </label>
+        <input
+            type="text"
+            id="partTitle"
+            [(ngModel)]="title"
+            (input)="onTitleChange()"
+            [placeholder]="artifactName ? 'Default: ' + artifactName : 'Enter a custom title'"
+            class="form-input">
+        <span class="form-hint">Leave empty to use artifact name as title</span>
+    </div>
+
+    <!-- Display Options (Collapsible) -->
+    <div class="collapsible-section">
+        <button
+            type="button"
+            class="collapsible-header"
+            (click)="toggleOptions()"
+            [attr.aria-expanded]="showOptions">
+            <span class="collapsible-title">
+                <i class="fa-solid fa-sliders"></i>
+                Display Options
+            </span>
+            <i class="collapsible-chevron fa-solid"
+               [class.fa-chevron-down]="!showOptions"
+               [class.fa-chevron-up]="showOptions"></i>
+        </button>
+
+        <div class="collapsible-content" *ngIf="showOptions">
+            <div class="checkbox-group checkbox-group--compact">
+                <label class="checkbox-option checkbox-option--compact">
+                    <input
+                        type="checkbox"
+                        [(ngModel)]="showHeader"
+                        (change)="onOptionChange()">
+                    <span class="checkbox-mark"></span>
+                    <span class="checkbox-label">Show Header</span>
+                </label>
+                <label class="checkbox-option checkbox-option--compact">
+                    <input
+                        type="checkbox"
+                        [(ngModel)]="showTabs"
+                        (change)="onOptionChange()">
+                    <span class="checkbox-mark"></span>
+                    <span class="checkbox-label">Show Tabs</span>
+                </label>
+                <label class="checkbox-option checkbox-option--compact">
+                    <input
+                        type="checkbox"
+                        [(ngModel)]="showMetadata"
+                        (change)="onOptionChange()">
+                    <span class="checkbox-mark"></span>
+                    <span class="checkbox-label">Show Metadata</span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>

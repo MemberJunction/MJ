@@ -422,12 +422,6 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     private buildRelationships(): void {
         if (!this.entity) return;
 
-        // DEBUG: Log relationship data
-        console.log(`[buildRelationships] Entity: ${this.entity.Name}`);
-        console.log(`[buildRelationships] Fields with RelatedEntityID:`, this.entity.Fields.filter(f => f.RelatedEntityID).map(f => ({ name: f.Name, relatedEntityID: f.RelatedEntityID, relatedEntity: f.RelatedEntity })));
-        console.log(`[buildRelationships] RelatedEntities (first 5):`, this.entity.RelatedEntities.slice(0, 5).map(r => ({ entity: r.Entity, relatedEntity: r.RelatedEntity, joinField: r.RelatedEntityJoinField })));
-        console.log(`[buildRelationships] Unique Entity values:`, [...new Set(this.entity.RelatedEntities.map(r => r.Entity))]);
-
         // Incoming: Relationships defined on this entity (other entities that reference this one)
         this.incomingRelationships = this.entity.RelatedEntities;
 

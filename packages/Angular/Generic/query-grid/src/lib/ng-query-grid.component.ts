@@ -12,7 +12,16 @@ export type GridRowClickedEvent = {
   entityName: string;
   KeyValuePairs: KeyValuePair[];
 }
- 
+
+/**
+ * @deprecated Use `mj-query-viewer` from `@memberjunction/ng-query-viewer` instead.
+ * This component is deprecated and will be removed in a future version.
+ * The new QueryViewerComponent provides better features including:
+ * - State persistence to User Settings
+ * - Parameter persistence
+ * - Entity linking for clickable record IDs
+ * - Auto-run capability
+ */
 @Component({
   selector: 'mj-query-grid',
   templateUrl: './ng-query-grid.component.html',
