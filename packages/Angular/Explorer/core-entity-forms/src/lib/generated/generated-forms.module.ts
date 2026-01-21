@@ -121,7 +121,6 @@ import { FileCategoryFormComponent, LoadFileCategoryFormComponent } from "./Enti
 import { FileEntityRecordLinkFormComponent, LoadFileEntityRecordLinkFormComponent } from "./Entities/FileEntityRecordLink/fileentityrecordlink.form.component";
 import { FileStorageProviderFormComponent, LoadFileStorageProviderFormComponent } from "./Entities/FileStorageProvider/filestorageprovider.form.component";
 import { FileFormComponent, LoadFileFormComponent } from "./Entities/File/file.form.component";
-import { flyway_schema_historyFormComponent, Loadflyway_schema_historyFormComponent } from "./Entities/flyway_schema_history/flyway_schema_history.form.component";
 import { GeneratedCodeCategoryFormComponent, LoadGeneratedCodeCategoryFormComponent } from "./Entities/GeneratedCodeCategory/generatedcodecategory.form.component";
 import { GeneratedCodeFormComponent, LoadGeneratedCodeFormComponent } from "./Entities/GeneratedCode/generatedcode.form.component";
 import { IntegrationURLFormatFormComponent, LoadIntegrationURLFormatFormComponent } from "./Entities/IntegrationURLFormat/integrationurlformat.form.component";
@@ -163,6 +162,10 @@ import { AIPromptRunFormComponent, LoadAIPromptRunFormComponent } from "./Entiti
 import { AIVendorTypeDefinitionFormComponent, LoadAIVendorTypeDefinitionFormComponent } from "./Entities/AIVendorTypeDefinition/aivendortypedefinition.form.component";
 import { AIVendorTypeFormComponent, LoadAIVendorTypeFormComponent } from "./Entities/AIVendorType/aivendortype.form.component";
 import { AIVendorFormComponent, LoadAIVendorFormComponent } from "./Entities/AIVendor/aivendor.form.component";
+import { APIKeyScopeFormComponent, LoadAPIKeyScopeFormComponent } from "./Entities/APIKeyScope/apikeyscope.form.component";
+import { APIKeyUsageLogFormComponent, LoadAPIKeyUsageLogFormComponent } from "./Entities/APIKeyUsageLog/apikeyusagelog.form.component";
+import { APIKeyFormComponent, LoadAPIKeyFormComponent } from "./Entities/APIKey/apikey.form.component";
+import { APIScopeFormComponent, LoadAPIScopeFormComponent } from "./Entities/APIScope/apiscope.form.component";
 import { ArtifactPermissionFormComponent, LoadArtifactPermissionFormComponent } from "./Entities/ArtifactPermission/artifactpermission.form.component";
 import { ArtifactTypeFormComponent, LoadArtifactTypeFormComponent } from "./Entities/ArtifactType/artifacttype.form.component";
 import { ArtifactUseFormComponent, LoadArtifactUseFormComponent } from "./Entities/ArtifactUse/artifactuse.form.component";
@@ -476,11 +479,11 @@ declarations: [
     FileEntityRecordLinkFormComponent,
     FileStorageProviderFormComponent,
     FileFormComponent,
-    flyway_schema_historyFormComponent,
     GeneratedCodeCategoryFormComponent,
     GeneratedCodeFormComponent,
     IntegrationURLFormatFormComponent,
-    IntegrationFormComponent],
+    IntegrationFormComponent,
+    LibraryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -506,7 +509,6 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
-    LibraryFormComponent,
     LibraryItemFormComponent,
     ListCategoryFormComponent,
     ListDetailFormComponent,
@@ -525,7 +527,8 @@ declarations: [
     AIAgentRunFormComponent,
     AIAgentStepPathFormComponent,
     AIAgentStepFormComponent,
-    AIAgentTypeFormComponent],
+    AIAgentTypeFormComponent,
+    AIArchitectureFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -551,7 +554,6 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
-    AIArchitectureFormComponent,
     AIConfigurationParamFormComponent,
     AIConfigurationFormComponent,
     AICredentialBindingFormComponent,
@@ -568,9 +570,10 @@ declarations: [
     AIVendorTypeDefinitionFormComponent,
     AIVendorTypeFormComponent,
     AIVendorFormComponent,
-    ArtifactPermissionFormComponent,
-    ArtifactTypeFormComponent,
-    ArtifactUseFormComponent],
+    APIKeyScopeFormComponent,
+    APIKeyUsageLogFormComponent,
+    APIKeyFormComponent,
+    APIScopeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -596,6 +599,9 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    ArtifactPermissionFormComponent,
+    ArtifactTypeFormComponent,
+    ArtifactUseFormComponent,
     ArtifactVersionAttributeFormComponent,
     ArtifactVersionFormComponent,
     ArtifactFormComponent,
@@ -612,10 +618,7 @@ declarations: [
     ConversationArtifactFormComponent,
     ConversationDetailArtifactFormComponent,
     ConversationDetailAttachmentFormComponent,
-    ConversationDetailRatingFormComponent,
-    CredentialCategoryFormComponent,
-    CredentialTypeFormComponent,
-    CredentialFormComponent],
+    ConversationDetailRatingFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -641,6 +644,9 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    CredentialCategoryFormComponent,
+    CredentialTypeFormComponent,
+    CredentialFormComponent,
     DashboardCategoryLinkFormComponent,
     DashboardCategoryPermissionFormComponent,
     DashboardPartTypeFormComponent,
@@ -657,10 +663,7 @@ declarations: [
     PublicLinkFormComponent,
     QueryParameterFormComponent,
     RecordLinkFormComponent,
-    ReportUserStateFormComponent,
-    ReportVersionFormComponent,
-    ScheduledJobRunFormComponent,
-    ScheduledJobTypeFormComponent],
+    ReportUserStateFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -686,6 +689,9 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    ReportVersionFormComponent,
+    ScheduledJobRunFormComponent,
+    ScheduledJobTypeFormComponent,
     ScheduledJobFormComponent,
     TaskDependencyFormComponent,
     TaskTypeFormComponent,
@@ -702,10 +708,7 @@ declarations: [
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
     OutputTriggerTypeFormComponent,
-    QueryFormComponent,
-    QueryCategoryFormComponent,
-    QueryEntityFormComponent,
-    QueryFieldFormComponent],
+    QueryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -731,6 +734,9 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    QueryCategoryFormComponent,
+    QueryEntityFormComponent,
+    QueryFieldFormComponent,
     QueryPermissionFormComponent,
     QueueTaskFormComponent,
     QueueTypeFormComponent,
@@ -747,10 +753,7 @@ declarations: [
     ReportSnapshotFormComponent,
     ReportFormComponent,
     ResourceLinkFormComponent,
-    ResourcePermissionFormComponent,
-    ResourceTypeFormComponent,
-    RoleFormComponent,
-    RowLevelSecurityFilterFormComponent],
+    ResourcePermissionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -776,6 +779,9 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    ResourceTypeFormComponent,
+    RoleFormComponent,
+    RowLevelSecurityFilterFormComponent,
     ScheduledActionParamFormComponent,
     ScheduledActionFormComponent,
     SchemaInfoFormComponent,
@@ -792,10 +798,7 @@ declarations: [
     UserFavoriteFormComponent,
     UserNotificationFormComponent,
     UserRecordLogFormComponent,
-    UserRoleFormComponent,
-    UserViewCategoryFormComponent,
-    UserViewRunDetailFormComponent,
-    UserViewRunFormComponent],
+    UserRoleFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -821,6 +824,9 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    UserViewCategoryFormComponent,
+    UserViewRunDetailFormComponent,
+    UserViewRunFormComponent,
     UserViewFormComponent,
     UserFormComponent,
     VectorDatabaseFormComponent,
@@ -976,7 +982,6 @@ export function LoadCoreGeneratedForms() {
     LoadFileEntityRecordLinkFormComponent();
     LoadFileStorageProviderFormComponent();
     LoadFileFormComponent();
-    Loadflyway_schema_historyFormComponent();
     LoadGeneratedCodeCategoryFormComponent();
     LoadGeneratedCodeFormComponent();
     LoadIntegrationURLFormatFormComponent();
@@ -1018,6 +1023,10 @@ export function LoadCoreGeneratedForms() {
     LoadAIVendorTypeDefinitionFormComponent();
     LoadAIVendorTypeFormComponent();
     LoadAIVendorFormComponent();
+    LoadAPIKeyScopeFormComponent();
+    LoadAPIKeyUsageLogFormComponent();
+    LoadAPIKeyFormComponent();
+    LoadAPIScopeFormComponent();
     LoadArtifactPermissionFormComponent();
     LoadArtifactTypeFormComponent();
     LoadArtifactUseFormComponent();
