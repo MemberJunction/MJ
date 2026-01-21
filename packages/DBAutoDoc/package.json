@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/db-auto-doc",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "AI-powered database documentation generator for SQL Server, MySQL, and PostgreSQL. Analyzes your database structure, uses AI to generate comprehensive descriptions, and saves them as metadata. Works standalone - no MemberJunction runtime required.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

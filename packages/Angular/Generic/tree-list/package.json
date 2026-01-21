@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-treelist",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "DEPRECATED: MemberJunction Timeline component. This package is deprecated and will be removed in a future release.",
   "deprecated": "This package is deprecated and will be removed in a future release. The package name is misleading - it contains a Timeline component, not a tree list.",
   "main": "./dist/public-api.js",

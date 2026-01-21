@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/actions-bizapps-lms",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "LMS system integration actions for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

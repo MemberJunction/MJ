@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-tasks",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Angular components for task visualization and management with Gantt chart support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

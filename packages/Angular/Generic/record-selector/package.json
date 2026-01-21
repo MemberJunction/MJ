@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-record-selector",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Angular Components to allow a user to select/deselect items from a possible set",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

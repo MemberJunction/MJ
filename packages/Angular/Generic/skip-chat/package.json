@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-skip-chat",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "deprecated": "This package is deprecated. Use @memberjunction/ng-conversations instead.",
   "description": "DEPRECATED: Use @memberjunction/ng-conversations instead. MemberJunction: Simple Skip Chat components usable in any Angular project",
   "main": "./dist/public-api.js",

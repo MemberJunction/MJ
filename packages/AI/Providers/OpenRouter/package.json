@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-openrouter",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction Wrapper for OpenRouter AI inference services",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/testing-cli",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction Testing Framework CLI - Command-line interface for test execution and management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

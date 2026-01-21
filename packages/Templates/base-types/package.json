@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/templates-base-types",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction Templating Base Types for Client/Server Use",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

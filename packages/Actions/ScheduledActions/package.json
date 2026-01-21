@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/scheduled-actions",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Scheduled Actions allow a system administrator to take any action defined in MemberJunction and schedule it for recurring or one-time future execution.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

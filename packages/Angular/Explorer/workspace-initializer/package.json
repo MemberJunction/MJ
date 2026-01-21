@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-workspace-initializer",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Workspace Initialization Service and Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

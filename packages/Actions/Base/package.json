@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/actions-base",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Base Classes for MemberJunction Actions. This library is used on both server and network nodes.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

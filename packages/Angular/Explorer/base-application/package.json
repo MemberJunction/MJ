@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-base-application",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction Explorer: BaseApplication class system for app-centric navigation",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

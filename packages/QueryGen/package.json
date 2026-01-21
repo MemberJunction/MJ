@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/query-gen",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "AI-powered generation of domain-specific SQL query templates with automatic testing, refinement, and metadata export",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

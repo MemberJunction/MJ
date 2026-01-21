@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-conversations",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Conversation, Collection, and Artifact management components for any Angular application",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-user-avatar",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Angular User Avatar Service - Manages user avatar synchronization from auth providers and avatar operations",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

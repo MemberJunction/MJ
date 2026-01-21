@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/communication-ms-graph",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Microsoft Graph Provider for the MJ Communication Framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

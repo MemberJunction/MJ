@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/scheduling-actions",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Scheduling Actions - agentic tools for managing scheduled jobs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

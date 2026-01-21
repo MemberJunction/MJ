@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-base-types",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Simple types that are used across many generic Angular UI components for coordination",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

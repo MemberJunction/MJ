@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-find-record",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Angular Component to allow a user to find a single record in any entity",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

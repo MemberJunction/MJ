@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/testing-engine-base",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction Testing Framework Engine Base - Metadata cache for test types, suites, and tests (UI-safe, no execution)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

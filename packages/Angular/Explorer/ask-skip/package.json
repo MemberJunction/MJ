@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-ask-skip",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "deprecated": "This package is deprecated. Use @memberjunction/ng-conversations instead.",
   "description": "DEPRECATED: Use @memberjunction/ng-conversations instead. MemberJunction Explorer: Ask Skip UI Components",
   "main": "./dist/public-api.js",

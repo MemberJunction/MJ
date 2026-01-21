@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/testing-engine",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction Testing Framework Engine - Core test execution and evaluation engine supporting multiple test types",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

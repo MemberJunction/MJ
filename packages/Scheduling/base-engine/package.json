@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/scheduling-engine-base",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Base Scheduling Engine Package - extended entity types and metadata caching, can be used anywhere.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

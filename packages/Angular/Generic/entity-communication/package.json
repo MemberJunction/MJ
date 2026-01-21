@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-entity-communications",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Angular Components to allow a user to select templates, preview the messages with those tempaltes, and send them",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

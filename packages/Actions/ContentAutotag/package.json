@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/actions-content-autotag",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Action classes that execute the content autotagging and vectorization actions.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

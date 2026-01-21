@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/react-test-harness",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "React component test harness for MemberJunction using Playwright",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

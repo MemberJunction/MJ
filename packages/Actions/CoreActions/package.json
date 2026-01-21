@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/core-actions",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Library of generated and custom actions for the core MemberJunction framework. This library is maintained by MemberJunction and includes actions for use within the framework itself.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

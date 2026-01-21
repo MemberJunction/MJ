@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/metadata-sync",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction metadata synchronization CLI tool",
   "keywords": [
     "metadata",

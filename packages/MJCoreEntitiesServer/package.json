@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/core-entities-server",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Entity subclasses for the metadata layer of MemberJunction that are only used on server side applications like MJAPI, distributed as part of each release of MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

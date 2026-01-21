@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-form-toolbar",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Angular Form Toolbar",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-ai-test-harness",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction AI Test Harness - A reusable component for testing AI agents and prompts with beautiful UX",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

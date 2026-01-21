@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-settings",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Reusable Angular components for the settings section of the MJ Explorer App",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

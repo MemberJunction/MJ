@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-dashboard-viewer",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MemberJunction: Angular components for metadata-driven dashboards with Golden Layout panels, supporting views, queries, artifacts, and custom content",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
