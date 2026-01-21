@@ -11696,6 +11696,228 @@ export const AIVendorSchema = z.object({
 export type AIVendorEntityType = z.infer<typeof AIVendorSchema>;
 
 /**
+ * zod schema definition for the entity MJ: API Key Scopes
+ */
+export const APIKeyScopeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    APIKeyID: z.string().describe(`
+        * * Field Name: APIKeyID
+        * * Display Name: API Key
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)`),
+    ScopeID: z.string().describe(`
+        * * Field Name: ScopeID
+        * * Display Name: Scope
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    APIKey: z.string().describe(`
+        * * Field Name: APIKey
+        * * Display Name: API Key
+        * * SQL Data Type: nvarchar(255)`),
+    Scope: z.string().describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type APIKeyScopeEntityType = z.infer<typeof APIKeyScopeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: API Key Usage Logs
+ */
+export const APIKeyUsageLogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    APIKeyID: z.string().describe(`
+        * * Field Name: APIKeyID
+        * * Display Name: API Key
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)`),
+    Endpoint: z.string().describe(`
+        * * Field Name: Endpoint
+        * * Display Name: Endpoint
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The API endpoint path that was accessed (e.g., /mcp, /graphql, /api/v1/entities).`),
+    Operation: z.string().nullable().describe(`
+        * * Field Name: Operation
+        * * Display Name: Operation
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The specific operation performed, such as the GraphQL operation name or MCP tool invoked (e.g., Get_Users_Record, Run_Agent).`),
+    Method: z.string().describe(`
+        * * Field Name: Method
+        * * Display Name: Method
+        * * SQL Data Type: nvarchar(10)
+        * * Description: HTTP method used for the request (GET, POST, PUT, DELETE, etc.).`),
+    StatusCode: z.number().describe(`
+        * * Field Name: StatusCode
+        * * Display Name: Status Code
+        * * SQL Data Type: int
+        * * Description: HTTP response status code returned to the client (e.g., 200 for success, 401 for unauthorized, 500 for server error).`),
+    ResponseTimeMs: z.number().nullable().describe(`
+        * * Field Name: ResponseTimeMs
+        * * Display Name: Response Time (ms)
+        * * SQL Data Type: int
+        * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.`),
+    IPAddress: z.string().nullable().describe(`
+        * * Field Name: IPAddress
+        * * Display Name: IP Address
+        * * SQL Data Type: nvarchar(45)
+        * * Description: Client IP address that made the request. Supports both IPv4 and IPv6 addresses (up to 45 characters).`),
+    UserAgent: z.string().nullable().describe(`
+        * * Field Name: UserAgent
+        * * Display Name: User Agent
+        * * SQL Data Type: nvarchar(500)
+        * * Description: User-Agent header from the HTTP request, identifying the client application or library making the API call.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    APIKey: z.string().describe(`
+        * * Field Name: APIKey
+        * * Display Name: API Key
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type APIKeyUsageLogEntityType = z.infer<typeof APIKeyUsageLogSchema>;
+
+/**
+ * zod schema definition for the entity MJ: API Keys
+ */
+export const APIKeySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Hash: z.string().describe(`
+        * * Field Name: Hash
+        * * Display Name: Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the raw API key (64 hexadecimal characters). The raw key is only shown once at creation time and cannot be recovered.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    Label: z.string().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(255)
+        * * Description: User-friendly name for identifying the key purpose (e.g., Cowork Integration, CI/CD Pipeline, Mobile App).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Optional detailed description of the key's intended use, integration details, or other notes.`),
+    Status: z.union([z.literal('Active'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Revoked
+        * * Description: Current lifecycle status of the key. Active keys can be used for authentication; Revoked keys are permanently disabled.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional expiration timestamp. Keys with NULL expiration never expire. Expired keys are rejected during authentication.`),
+    LastUsedAt: z.date().nullable().describe(`
+        * * Field Name: LastUsedAt
+        * * Display Name: Last Used At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the most recent successful authentication using this key. Updated on each valid API request.`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedByUser: z.string().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type APIKeyEntityType = z.infer<typeof APIKeySchema>;
+
+/**
+ * zod schema definition for the entity MJ: API Scopes
+ */
+export const APIScopeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Scope Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique scope identifier following the pattern category:permission (e.g., entities:read, agents:execute, admin:*). Supports wildcard (*) for broad permissions.`),
+    Category: z.string().describe(`
+        * * Field Name: Category
+        * * Display Name: Scope Category
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Grouping category for the scope (e.g., Entities, Agents, Admin). Used for organizing and filtering scopes in the UI.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Human-readable description explaining what permissions this scope grants.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type APIScopeEntityType = z.infer<typeof APIScopeSchema>;
+
+/**
  * zod schema definition for the entity MJ: Artifact Permissions
  */
 export const ArtifactPermissionSchema = z.object({
@@ -50332,6 +50554,589 @@ export class AIVendorEntity extends BaseEntity<AIVendorEntityType> {
     */
     get CredentialType(): string | null {
         return this.Get('CredentialType');
+    }
+}
+
+
+/**
+ * MJ: API Key Scopes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIKeyScope
+ * * Base View: vwAPIKeyScopes
+ * * @description Junction table linking API keys to their assigned permission scopes. Each key can have multiple scopes, and scopes can be shared across multiple keys.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Key Scopes')
+export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
+    /**
+    * Loads the MJ: API Key Scopes record from the database
+    * @param ID: string - primary key value to load the MJ: API Key Scopes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIKeyScopeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: APIKeyID
+    * * Display Name: API Key
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)
+    */
+    get APIKeyID(): string {
+        return this.Get('APIKeyID');
+    }
+    set APIKeyID(value: string) {
+        this.Set('APIKeyID', value);
+    }
+
+    /**
+    * * Field Name: ScopeID
+    * * Display Name: Scope
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
+    */
+    get ScopeID(): string {
+        return this.Get('ScopeID');
+    }
+    set ScopeID(value: string) {
+        this.Set('ScopeID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: APIKey
+    * * Display Name: API Key
+    * * SQL Data Type: nvarchar(255)
+    */
+    get APIKey(): string {
+        return this.Get('APIKey');
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Scope(): string {
+        return this.Get('Scope');
+    }
+}
+
+
+/**
+ * MJ: API Key Usage Logs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIKeyUsageLog
+ * * Base View: vwAPIKeyUsageLogs
+ * * @description Audit log tracking all API key usage for analytics, debugging, and security monitoring. Records each request including endpoint, response status, timing, and client information.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Key Usage Logs')
+export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
+    /**
+    * Loads the MJ: API Key Usage Logs record from the database
+    * @param ID: string - primary key value to load the MJ: API Key Usage Logs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIKeyUsageLogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: APIKeyID
+    * * Display Name: API Key
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)
+    */
+    get APIKeyID(): string {
+        return this.Get('APIKeyID');
+    }
+    set APIKeyID(value: string) {
+        this.Set('APIKeyID', value);
+    }
+
+    /**
+    * * Field Name: Endpoint
+    * * Display Name: Endpoint
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The API endpoint path that was accessed (e.g., /mcp, /graphql, /api/v1/entities).
+    */
+    get Endpoint(): string {
+        return this.Get('Endpoint');
+    }
+    set Endpoint(value: string) {
+        this.Set('Endpoint', value);
+    }
+
+    /**
+    * * Field Name: Operation
+    * * Display Name: Operation
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The specific operation performed, such as the GraphQL operation name or MCP tool invoked (e.g., Get_Users_Record, Run_Agent).
+    */
+    get Operation(): string | null {
+        return this.Get('Operation');
+    }
+    set Operation(value: string | null) {
+        this.Set('Operation', value);
+    }
+
+    /**
+    * * Field Name: Method
+    * * Display Name: Method
+    * * SQL Data Type: nvarchar(10)
+    * * Description: HTTP method used for the request (GET, POST, PUT, DELETE, etc.).
+    */
+    get Method(): string {
+        return this.Get('Method');
+    }
+    set Method(value: string) {
+        this.Set('Method', value);
+    }
+
+    /**
+    * * Field Name: StatusCode
+    * * Display Name: Status Code
+    * * SQL Data Type: int
+    * * Description: HTTP response status code returned to the client (e.g., 200 for success, 401 for unauthorized, 500 for server error).
+    */
+    get StatusCode(): number {
+        return this.Get('StatusCode');
+    }
+    set StatusCode(value: number) {
+        this.Set('StatusCode', value);
+    }
+
+    /**
+    * * Field Name: ResponseTimeMs
+    * * Display Name: Response Time (ms)
+    * * SQL Data Type: int
+    * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.
+    */
+    get ResponseTimeMs(): number | null {
+        return this.Get('ResponseTimeMs');
+    }
+    set ResponseTimeMs(value: number | null) {
+        this.Set('ResponseTimeMs', value);
+    }
+
+    /**
+    * * Field Name: IPAddress
+    * * Display Name: IP Address
+    * * SQL Data Type: nvarchar(45)
+    * * Description: Client IP address that made the request. Supports both IPv4 and IPv6 addresses (up to 45 characters).
+    */
+    get IPAddress(): string | null {
+        return this.Get('IPAddress');
+    }
+    set IPAddress(value: string | null) {
+        this.Set('IPAddress', value);
+    }
+
+    /**
+    * * Field Name: UserAgent
+    * * Display Name: User Agent
+    * * SQL Data Type: nvarchar(500)
+    * * Description: User-Agent header from the HTTP request, identifying the client application or library making the API call.
+    */
+    get UserAgent(): string | null {
+        return this.Get('UserAgent');
+    }
+    set UserAgent(value: string | null) {
+        this.Set('UserAgent', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: APIKey
+    * * Display Name: API Key
+    * * SQL Data Type: nvarchar(255)
+    */
+    get APIKey(): string {
+        return this.Get('APIKey');
+    }
+}
+
+
+/**
+ * MJ: API Keys - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIKey
+ * * Base View: vwAPIKeys
+ * * @description Stores API keys for programmatic access to MemberJunction services. Keys are stored as SHA-256 hashes for security. Each key is associated with a user context and can have multiple permission scopes assigned.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Keys')
+export class APIKeyEntity extends BaseEntity<APIKeyEntityType> {
+    /**
+    * Loads the MJ: API Keys record from the database
+    * @param ID: string - primary key value to load the MJ: API Keys record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIKeyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Hash
+    * * Display Name: Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the raw API key (64 hexadecimal characters). The raw key is only shown once at creation time and cannot be recovered.
+    */
+    get Hash(): string {
+        return this.Get('Hash');
+    }
+    set Hash(value: string) {
+        this.Set('Hash', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    * * Description: User-friendly name for identifying the key purpose (e.g., Cowork Integration, CI/CD Pipeline, Mobile App).
+    */
+    get Label(): string {
+        return this.Get('Label');
+    }
+    set Label(value: string) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Optional detailed description of the key's intended use, integration details, or other notes.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Revoked
+    * * Description: Current lifecycle status of the key. Active keys can be used for authentication; Revoked keys are permanently disabled.
+    */
+    get Status(): 'Active' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional expiration timestamp. Keys with NULL expiration never expire. Expired keys are rejected during authentication.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: LastUsedAt
+    * * Display Name: Last Used At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the most recent successful authentication using this key. Updated on each valid API request.
+    */
+    get LastUsedAt(): Date | null {
+        return this.Get('LastUsedAt');
+    }
+    set LastUsedAt(value: Date | null) {
+        this.Set('LastUsedAt', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string {
+        return this.Get('CreatedByUser');
+    }
+}
+
+
+/**
+ * MJ: API Scopes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIScope
+ * * Base View: vwAPIScopes
+ * * @description Defines reusable permission scopes that can be assigned to API keys. Scopes follow a hierarchical naming convention (e.g., entities:read, agents:execute, admin:*) and are grouped by category for organizational purposes.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Scopes')
+export class APIScopeEntity extends BaseEntity<APIScopeEntityType> {
+    /**
+    * Loads the MJ: API Scopes record from the database
+    * @param ID: string - primary key value to load the MJ: API Scopes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIScopeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Scope Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique scope identifier following the pattern category:permission (e.g., entities:read, agents:execute, admin:*). Supports wildcard (*) for broad permissions.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Scope Category
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Grouping category for the scope (e.g., Entities, Agents, Admin). Used for organizing and filtering scopes in the UI.
+    */
+    get Category(): string {
+        return this.Get('Category');
+    }
+    set Category(value: string) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Human-readable description explaining what permissions this scope grants.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 

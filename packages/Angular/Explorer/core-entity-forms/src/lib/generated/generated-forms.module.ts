@@ -162,6 +162,10 @@ import { AIPromptRunFormComponent, LoadAIPromptRunFormComponent } from "./Entiti
 import { AIVendorTypeDefinitionFormComponent, LoadAIVendorTypeDefinitionFormComponent } from "./Entities/AIVendorTypeDefinition/aivendortypedefinition.form.component";
 import { AIVendorTypeFormComponent, LoadAIVendorTypeFormComponent } from "./Entities/AIVendorType/aivendortype.form.component";
 import { AIVendorFormComponent, LoadAIVendorFormComponent } from "./Entities/AIVendor/aivendor.form.component";
+import { APIKeyScopeFormComponent, LoadAPIKeyScopeFormComponent } from "./Entities/APIKeyScope/apikeyscope.form.component";
+import { APIKeyUsageLogFormComponent, LoadAPIKeyUsageLogFormComponent } from "./Entities/APIKeyUsageLog/apikeyusagelog.form.component";
+import { APIKeyFormComponent, LoadAPIKeyFormComponent } from "./Entities/APIKey/apikey.form.component";
+import { APIScopeFormComponent, LoadAPIScopeFormComponent } from "./Entities/APIScope/apiscope.form.component";
 import { ArtifactPermissionFormComponent, LoadArtifactPermissionFormComponent } from "./Entities/ArtifactPermission/artifactpermission.form.component";
 import { ArtifactTypeFormComponent, LoadArtifactTypeFormComponent } from "./Entities/ArtifactType/artifacttype.form.component";
 import { ArtifactUseFormComponent, LoadArtifactUseFormComponent } from "./Entities/ArtifactUse/artifactuse.form.component";
@@ -567,9 +571,10 @@ declarations: [
     AIVendorTypeDefinitionFormComponent,
     AIVendorTypeFormComponent,
     AIVendorFormComponent,
-    ArtifactPermissionFormComponent,
-    ArtifactTypeFormComponent,
-    ArtifactUseFormComponent,
+    APIKeyScopeFormComponent,
+    APIKeyUsageLogFormComponent,
+    APIKeyFormComponent,
+    APIScopeFormComponent,
     ArtifactVersionAttributeFormComponent],
 imports: [
     CommonModule,
@@ -596,6 +601,9 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    ArtifactPermissionFormComponent,
+    ArtifactTypeFormComponent,
+    ArtifactUseFormComponent,
     ArtifactVersionFormComponent,
     ArtifactFormComponent,
     CollectionArtifactFormComponent,
@@ -612,9 +620,6 @@ declarations: [
     ConversationDetailArtifactFormComponent,
     ConversationDetailAttachmentFormComponent,
     ConversationDetailRatingFormComponent,
-    CredentialCategoryFormComponent,
-    CredentialTypeFormComponent,
-    CredentialFormComponent,
     DashboardCategoryLinkFormComponent],
 imports: [
     CommonModule,
@@ -641,6 +646,9 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    CredentialCategoryFormComponent,
+    CredentialTypeFormComponent,
+    CredentialFormComponent,
     DashboardCategoryPermissionFormComponent,
     DashboardPartTypeFormComponent,
     DashboardPermissionFormComponent,
@@ -657,10 +665,7 @@ declarations: [
     PublicLinkFormComponent,
     QueryParameterFormComponent,
     RecordLinkFormComponent,
-    ReportUserStateFormComponent,
-    ReportVersionFormComponent,
-    ScheduledJobRunFormComponent,
-    ScheduledJobTypeFormComponent],
+    ReportUserStateFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -686,6 +691,9 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    ReportVersionFormComponent,
+    ScheduledJobRunFormComponent,
+    ScheduledJobTypeFormComponent,
     ScheduledJobFormComponent,
     TaskDependencyFormComponent,
     TaskTypeFormComponent,
@@ -702,10 +710,7 @@ declarations: [
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
     OutputTriggerTypeFormComponent,
-    QueryFormComponent,
-    QueryCategoryFormComponent,
-    QueryEntityFormComponent,
-    QueryFieldFormComponent],
+    QueryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -731,6 +736,9 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    QueryCategoryFormComponent,
+    QueryEntityFormComponent,
+    QueryFieldFormComponent,
     QueryPermissionFormComponent,
     QueueTaskFormComponent,
     QueueTypeFormComponent,
@@ -747,10 +755,7 @@ declarations: [
     ReportSnapshotFormComponent,
     ReportFormComponent,
     ResourceLinkFormComponent,
-    ResourcePermissionFormComponent,
-    ResourceTypeFormComponent,
-    RoleFormComponent,
-    RowLevelSecurityFilterFormComponent],
+    ResourcePermissionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -776,6 +781,9 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    ResourceTypeFormComponent,
+    RoleFormComponent,
+    RowLevelSecurityFilterFormComponent,
     ScheduledActionParamFormComponent,
     ScheduledActionFormComponent,
     SchemaInfoFormComponent,
@@ -792,10 +800,7 @@ declarations: [
     UserFavoriteFormComponent,
     UserNotificationFormComponent,
     UserRecordLogFormComponent,
-    UserRoleFormComponent,
-    UserViewCategoryFormComponent,
-    UserViewRunDetailFormComponent,
-    UserViewRunFormComponent],
+    UserRoleFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -821,6 +826,9 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    UserViewCategoryFormComponent,
+    UserViewRunDetailFormComponent,
+    UserViewRunFormComponent,
     UserViewFormComponent,
     UserFormComponent,
     VectorDatabaseFormComponent,
@@ -1017,6 +1025,10 @@ export function LoadCoreGeneratedForms() {
     LoadAIVendorTypeDefinitionFormComponent();
     LoadAIVendorTypeFormComponent();
     LoadAIVendorFormComponent();
+    LoadAPIKeyScopeFormComponent();
+    LoadAPIKeyUsageLogFormComponent();
+    LoadAPIKeyFormComponent();
+    LoadAPIScopeFormComponent();
     LoadArtifactPermissionFormComponent();
     LoadArtifactTypeFormComponent();
     LoadArtifactUseFormComponent();
