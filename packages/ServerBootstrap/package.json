@@ -18,8 +18,8 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/server": "3.0.0",
+    "@memberjunction/core": "3.1.0",
+    "@memberjunction/server": "3.1.0",
     "cosmiconfig": "^9.0.0"
   },
   "devDependencies": {

@@ -34,7 +34,7 @@
   "dependencies": {
     "@angular/forms": "18.2.14",
     "@dagrejs/dagre": "^1.1.8",
-    "@memberjunction/core": "3.0.0",
+    "@memberjunction/core": "3.1.0",
     "@progress/kendo-angular-layout": "^16.2.0",
     "@types/d3": "^7.4.3",
     "d3": "^7.9.0",

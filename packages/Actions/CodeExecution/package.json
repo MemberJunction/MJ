@@ -9,8 +9,8 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/global": "3.0.0",
+    "@memberjunction/core": "3.1.0",
+    "@memberjunction/global": "3.1.0",
     "isolated-vm": "^6.0.2",
     "lodash": "^4.17.21",
     "date-fns": "^3.0.0",

@@ -29,8 +29,8 @@
     "@angular/router": "18.2.14"
   },
   "dependencies": {
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/global": "3.0.0",
+    "@memberjunction/core": "3.1.0",
+    "@memberjunction/global": "3.1.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

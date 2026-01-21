@@ -30,9 +30,9 @@
     "rxjs": "^7.5.0"
   },
   "dependencies": {
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/core-entities": "3.0.0",
-    "@memberjunction/global": "3.0.0",
+    "@memberjunction/core": "3.1.0",
+    "@memberjunction/core-entities": "3.1.0",
+    "@memberjunction/global": "3.1.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

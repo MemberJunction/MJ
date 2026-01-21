@@ -19,9 +19,9 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/interactive-component-types": "3.0.0"
+    "@memberjunction/global": "3.1.0",
+    "@memberjunction/core": "3.1.0",
+    "@memberjunction/interactive-component-types": "3.1.0"
   },
   "repository": {
     "type": "git",
