@@ -12,7 +12,7 @@ import { FormsModule } from '@angular/forms';
 // MemberJunction Imports
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
@@ -121,6 +121,7 @@ import { FileCategoryFormComponent, LoadFileCategoryFormComponent } from "./Enti
 import { FileEntityRecordLinkFormComponent, LoadFileEntityRecordLinkFormComponent } from "./Entities/FileEntityRecordLink/fileentityrecordlink.form.component";
 import { FileStorageProviderFormComponent, LoadFileStorageProviderFormComponent } from "./Entities/FileStorageProvider/filestorageprovider.form.component";
 import { FileFormComponent, LoadFileFormComponent } from "./Entities/File/file.form.component";
+import { flyway_schema_historyFormComponent, Loadflyway_schema_historyFormComponent } from "./Entities/flyway_schema_history/flyway_schema_history.form.component";
 import { GeneratedCodeCategoryFormComponent, LoadGeneratedCodeCategoryFormComponent } from "./Entities/GeneratedCodeCategory/generatedcodecategory.form.component";
 import { GeneratedCodeFormComponent, LoadGeneratedCodeFormComponent } from "./Entities/GeneratedCode/generatedcode.form.component";
 import { IntegrationURLFormatFormComponent, LoadIntegrationURLFormatFormComponent } from "./Entities/IntegrationURLFormat/integrationurlformat.form.component";
@@ -306,7 +307,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -351,7 +352,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -397,7 +398,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -442,7 +443,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -475,11 +476,11 @@ declarations: [
     FileEntityRecordLinkFormComponent,
     FileStorageProviderFormComponent,
     FileFormComponent,
+    flyway_schema_historyFormComponent,
     GeneratedCodeCategoryFormComponent,
     GeneratedCodeFormComponent,
     IntegrationURLFormatFormComponent,
-    IntegrationFormComponent,
-    LibraryFormComponent],
+    IntegrationFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -487,7 +488,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -505,6 +506,7 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    LibraryFormComponent,
     LibraryItemFormComponent,
     ListCategoryFormComponent,
     ListDetailFormComponent,
@@ -523,8 +525,7 @@ declarations: [
     AIAgentRunFormComponent,
     AIAgentStepPathFormComponent,
     AIAgentStepFormComponent,
-    AIAgentTypeFormComponent,
-    AIArchitectureFormComponent],
+    AIAgentTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -532,7 +533,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -550,6 +551,7 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    AIArchitectureFormComponent,
     AIConfigurationParamFormComponent,
     AIConfigurationFormComponent,
     AICredentialBindingFormComponent,
@@ -568,8 +570,7 @@ declarations: [
     AIVendorFormComponent,
     ArtifactPermissionFormComponent,
     ArtifactTypeFormComponent,
-    ArtifactUseFormComponent,
-    ArtifactVersionAttributeFormComponent],
+    ArtifactUseFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -577,7 +578,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -595,6 +596,7 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    ArtifactVersionAttributeFormComponent,
     ArtifactVersionFormComponent,
     ArtifactFormComponent,
     CollectionArtifactFormComponent,
@@ -613,10 +615,7 @@ declarations: [
     ConversationDetailRatingFormComponent,
     CredentialCategoryFormComponent,
     CredentialTypeFormComponent,
-    CredentialFormComponent,
-    DashboardCategoryLinkFormComponent,
-    DashboardCategoryPermissionFormComponent,
-    DashboardPartTypeFormComponent],
+    CredentialFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -624,7 +623,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -642,10 +641,11 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    DashboardCategoryLinkFormComponent,
+    DashboardCategoryPermissionFormComponent,
+    DashboardPartTypeFormComponent,
     DashboardPermissionFormComponent,
     DashboardUserPreferenceFormComponent,
-    DashboardUserStateFormComponent,
-    EncryptionAlgorithmFormComponent,
     DashboardUserStateFormComponent,
     EncryptionAlgorithmFormComponent,
     EncryptionKeySourceFormComponent,
@@ -660,10 +660,7 @@ declarations: [
     ReportUserStateFormComponent,
     ReportVersionFormComponent,
     ScheduledJobRunFormComponent,
-    ScheduledJobTypeFormComponent,
-    ScheduledJobFormComponent,
-    TaskDependencyFormComponent,
-    TaskTypeFormComponent],
+    ScheduledJobTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -671,7 +668,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -689,10 +686,11 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    ScheduledJobFormComponent,
+    TaskDependencyFormComponent,
+    TaskTypeFormComponent,
     TaskFormComponent,
     TestRubricFormComponent,
-    TestRunFeedbackFormComponent,
-    TestRunFormComponent,
     TestRunFeedbackFormComponent,
     TestRunFormComponent,
     TestSuiteRunFormComponent,
@@ -707,10 +705,7 @@ declarations: [
     QueryFormComponent,
     QueryCategoryFormComponent,
     QueryEntityFormComponent,
-    QueryFieldFormComponent,
-    QueryPermissionFormComponent,
-    QueueTaskFormComponent,
-    QueueTypeFormComponent],
+    QueryFieldFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -718,7 +713,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -736,10 +731,11 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    QueryPermissionFormComponent,
+    QueueTaskFormComponent,
+    QueueTypeFormComponent,
     QueueFormComponent,
     RecommendationItemFormComponent,
-    RecommendationProviderFormComponent,
-    RecommendationRunFormComponent,
     RecommendationProviderFormComponent,
     RecommendationRunFormComponent,
     RecommendationFormComponent,
@@ -754,10 +750,7 @@ declarations: [
     ResourcePermissionFormComponent,
     ResourceTypeFormComponent,
     RoleFormComponent,
-    RowLevelSecurityFilterFormComponent,
-    ScheduledActionParamFormComponent,
-    ScheduledActionFormComponent,
-    SchemaInfoFormComponent],
+    RowLevelSecurityFilterFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -765,7 +758,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -783,10 +776,11 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    ScheduledActionParamFormComponent,
+    ScheduledActionFormComponent,
+    SchemaInfoFormComponent,
     SkillFormComponent,
     TaggedItemFormComponent,
-    TagFormComponent,
-    TemplateCategoryFormComponent,
     TagFormComponent,
     TemplateCategoryFormComponent,
     TemplateContentTypeFormComponent,
@@ -801,10 +795,7 @@ declarations: [
     UserRoleFormComponent,
     UserViewCategoryFormComponent,
     UserViewRunDetailFormComponent,
-    UserViewRunFormComponent,
-    UserViewFormComponent,
-    UserFormComponent,
-    VectorDatabaseFormComponent],
+    UserViewRunFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -812,7 +803,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -830,10 +821,11 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    UserViewFormComponent,
+    UserFormComponent,
+    VectorDatabaseFormComponent,
     VectorIndexFormComponent,
     VersionInstallationFormComponent,
-    WorkflowEngineFormComponent,
-    WorkflowRunFormComponent,
     WorkflowEngineFormComponent,
     WorkflowRunFormComponent,
     WorkflowFormComponent,
@@ -846,7 +838,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -984,6 +976,7 @@ export function LoadCoreGeneratedForms() {
     LoadFileEntityRecordLinkFormComponent();
     LoadFileStorageProviderFormComponent();
     LoadFileFormComponent();
+    Loadflyway_schema_historyFormComponent();
     LoadGeneratedCodeCategoryFormComponent();
     LoadGeneratedCodeFormComponent();
     LoadIntegrationURLFormatFormComponent();

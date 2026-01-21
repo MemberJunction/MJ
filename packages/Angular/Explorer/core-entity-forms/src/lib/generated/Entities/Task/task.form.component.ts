@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { TaskEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Tasks') // Tell MemberJunction about this class
 @Component({
@@ -18,6 +18,7 @@ export class TaskFormComponent extends BaseFormComponent {
             { sectionKey: 'relationshipsOwnership', sectionName: 'Relationships & Ownership', isExpanded: true },
             { sectionKey: 'taskDetails', sectionName: 'Task Details', isExpanded: true },
             { sectionKey: 'timelineMilestones', sectionName: 'Timeline & Milestones', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTaskDependencies', sectionName: 'MJ: Task Dependencies', isExpanded: false },
             { sectionKey: 'mJTaskDependencies1', sectionName: 'MJ: Task Dependencies', isExpanded: false },
