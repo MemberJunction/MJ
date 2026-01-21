@@ -140,6 +140,12 @@ EXEC sp_addextendedproperty
 GO
 
 
+
+
+
+
+
+
 /* SQL generated to create new entity MJ: User Notification Types */
 
       INSERT INTO [${flyway:defaultSchema}].Entity (

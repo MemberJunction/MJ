@@ -1,14 +1,19 @@
-import { BaseEngine, IMetadataProvider, Metadata, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { UserNotificationEntity, UserNotificationTypeEntity, UserEntity, UserInfoEngine, CachedUserNotificationPreference } from '@memberjunction/core-entities';
+import { BaseEngine, IMetadataProvider, Metadata, UserInfo, LogError, LogStatus, RegisterForStartup } from '@memberjunction/core';
+import { UserNotificationEntity, UserNotificationTypeEntity, UserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { SendNotificationParams, NotificationResult, DeliveryChannels } from './types';
+
 /*
  * Unified notification engine that handles in-app, email, and SMS delivery
  * based on notification types and user preferences.
- 
+ *
+ * This engine relies on UserInfoEngine for notification types and preferences.
+ * UserInfoEngine loads and caches all notification metadata via BaseEngine.
  */
+@RegisterForStartup()
 export class NotificationEngine extends BaseEngine<NotificationEngine> {
   /**
    * Returns the singleton instance of the NotificationEngine
@@ -18,8 +23,11 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
   }
 
   /**
-   * Configures the notification engine by delegating to UserInfoEngine.
-   * UserInfoEngine now handles caching of preferences, etc.; Notification types are globally cached..
+   * Configures the notification engine.
+   *
+   * NOTE: This does NOT load notification types - UserInfoEngine handles that.
+   * UserInfoEngine is auto-configured via @RegisterForStartup() and loads notification types
+   * into its cache. This engine just provides the delivery mechanism.
    *
    * @param forceRefresh - If true, reloads data even if already loaded
    * @param contextUser - User context for database operations (required on server)
@@ -30,21 +38,30 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     contextUser?: UserInfo,
     provider?: IMetadataProvider
   ): Promise<void> {
-    // Delegate to UserInfoEngine which now handles notification metadata
+    // Ensure UserInfoEngine is configured (it loads notification types)
     await UserInfoEngine.Instance.Config(forceRefresh, contextUser, provider);
+
+    // BaseEngine Load with empty configs - we don't load our own data
     await this.Load([], provider || Metadata.Provider, forceRefresh, contextUser);
   }
 
   /**
    * Get a notification type by name (case-insensitive) or ID.
-   * Delegates to UserInfoEngine's cached data for fast lookup.
+   * Uses UserInfoEngine's cached notification types.
    *
    * @param nameOrId - The notification type name or UUID
    * @returns The notification type entity or null if not found
    */
   private getNotificationType(nameOrId: string): UserNotificationTypeEntity | null {
-    // Delegate to UserInfoEngine's cached types
-    return UserInfoEngine.Instance.GetNotificationType(nameOrId) ?? null;
+    const types = UserInfoEngine.Instance.NotificationTypes;
+
+    // Try by ID first
+    const byId = types.find(t => t.ID === nameOrId);
+    if (byId) return byId;
+
+    // Try by name (case-insensitive)
+    const lowerName = nameOrId.toLowerCase();
+    return types.find(t => t.Name.toLowerCase() === lowerName) || null;
   }
 
   /**
@@ -128,7 +145,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private resolveDeliveryChannels(
     params: SendNotificationParams,
-    prefs: CachedUserNotificationPreference | null,
+    prefs: UserNotificationPreferenceEntity | null,
     type: UserNotificationTypeEntity,
   ): DeliveryChannels {
     // If forceDeliveryChannels is specified, use it directly
@@ -164,13 +181,13 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
 
   /**
    * Get user preferences for a notification type from UserInfoEngine's cache.
-   * Preferences are now cached in UserInfoEngine for better performance.
+   * Preferences are still cached in UserInfoEngine (user-specific data).
    */
   private getUserPreferences(
     userId: string,
     typeId: string
-  ): CachedUserNotificationPreference | null {
-    // Use cached preferences from UserInfoEngine
+  ): UserNotificationPreferenceEntity | null {
+    // Use cached preferences from UserInfoEngine (user-specific)
     const pref = UserInfoEngine.Instance.GetUserPreferenceForType(userId, typeId);
 
     // If preference exists, return it
@@ -179,7 +196,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     }
 
     // If no preference exists and the type doesn't allow user preferences, return null
-    const type = UserInfoEngine.Instance.GetNotificationTypeById(typeId);
+    const type = this.getNotificationType(typeId);
     if (type && !type.AllowUserPreference) {
       return null;
     }
@@ -249,15 +266,14 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     if (!templateEntity) {
       throw new Error(`Email template not found: ${emailTemplateId}`);
     }
-   
-    // Load user entity to get email address
-    const md = new Metadata();
-    const userEntity = await md.GetEntityObject<UserEntity>('Users', contextUser);
-    if (!(await userEntity.Load(params.userId))) {
+
+    // Get user from cache (server-side optimization - no database query)
+    const user = UserCache.Instance.Users.find((u) => u.ID === params.userId);
+    if (!user) {
       throw new Error('User not found for email delivery');
     }
 
-    if (!userEntity.Email) {
+    if (!user.Email) {
       throw new Error('User has no email address configured');
     }
 
@@ -266,7 +282,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     await commEngine.Config(false, contextUser);
     const message = new Message();
     message.From = process.env.NOTIFICATION_FROM_EMAIL || 'notifications@memberjunction.com';
-    message.To = 'madhavrsubramaniyam@gmail.com';
+    message.To = user.Email;
     message.HTMLBodyTemplate = templateEntity;
     message.ContextData = params.templateData || {};
     message.Subject = params.title;
@@ -276,7 +292,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     const success = sendResult?.Success === true;
 
     if (success) {
-      LogStatus(`Email sent successfully to ${userEntity.Email} for notification type: ${type.Name}`);
+      LogStatus(`Email sent successfully to ${user.Email} for notification type: ${type.Name}`);
     }
 
     return success;
@@ -308,14 +324,14 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
       throw new Error(`SMS template not found: ${smsTemplateId}`);
     }
 
-    const md = new Metadata();
-    const userEntity = await md.GetEntityObject<UserEntity>('Users', contextUser);
-    if (!(await userEntity.Load(params.userId))) {
+    // Get user from cache (server-side optimization - no database query)
+    const user = UserCache.Instance.Users.find((u) => u.ID === params.userId);
+    if (!user) {
       throw new Error('User not found for SMS delivery');
     }
 
-    // Type assertion since UserEntity doesn't have Phone field yet
-    const userWithPhone = userEntity as UserEntity & { Phone?: string };
+    // Type assertion since UserInfo doesn't have Phone property yet
+    const userWithPhone = user as UserInfo & { Phone?: string };
     if (!userWithPhone.Phone) {
       throw new Error('User has no phone number configured');
     }

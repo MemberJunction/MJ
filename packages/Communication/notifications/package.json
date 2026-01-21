@@ -24,7 +24,8 @@
     "@memberjunction/core-entities": "3.0.0",
     "@memberjunction/templates": "3.0.0",
     "@memberjunction/communication-engine": "3.0.0",
-    "@memberjunction/communication-types": "3.0.0"
+    "@memberjunction/communication-types": "3.0.0",
+    "@memberjunction/sqlserver-dataprovider": "3.0.0"
   },
   "repository": {
     "type": "git",

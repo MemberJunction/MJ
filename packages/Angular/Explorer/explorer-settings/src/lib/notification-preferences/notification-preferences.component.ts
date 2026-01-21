@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
-import { UserNotificationTypeEntity, UserNotificationPreferenceEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { UserNotificationTypeEntity, UserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
 interface NotificationPreferenceViewModel {
@@ -35,35 +35,27 @@ export class NotificationPreferencesComponent implements OnInit {
   private async loadData() {
     try {
       this.loading = true;
-      const md = new Metadata();
-      const rv = new RunView();
-      const currentUser = md.CurrentUser;
 
-      // Load all notification types
-      const typesResult = await rv.RunView<UserNotificationTypeEntity>({
-        EntityName: 'MJ: User Notification Types',
-        OrderBy: 'Priority ASC, Name ASC',
-        ResultType: 'entity_object',
+      // UserInfoEngine is auto-configured via @RegisterForStartup()
+      // NotificationEngine (server-side) loads notification types into global cache
+      // UserInfoEngine provides a getter to access them from both client and server
+
+      // Get notification types from UserInfoEngine, sorted client-side
+      const types = [...UserInfoEngine.Instance.NotificationTypes].sort((a, b) => {
+        const priorityA = a.Priority ?? 999;
+        const priorityB = b.Priority ?? 999;
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
+        return a.Name.localeCompare(b.Name);
       });
 
-      if (!typesResult.Success) {
-        throw new Error('Failed to load notification types');
-      }
+      // Get preferences from UserInfoEngine (entity objects - can be mutated)
+      const prefs = UserInfoEngine.Instance.NotificationPreferences;
 
-      // Load user's existing preferences
-      const prefsResult = await rv.RunView<UserNotificationPreferenceEntity>({
-        EntityName: 'MJ: User Notification Preferences',
-        ExtraFilter: `UserID='${currentUser.ID}'`,
-        ResultType: 'entity_object',
-      });
-
-      if (!prefsResult.Success) {
-        throw new Error('Failed to load user preferences');
-      }
-
-      // Build view models
-      this.viewModels = (typesResult.Results || []).map((type) => {
-        const existingPref = (prefsResult.Results || []).find((p) => p.NotificationTypeID === type.ID);
+      // Build view models from cached data
+      this.viewModels = types.map((type) => {
+        const existingPref = prefs.find((p) => p.NotificationTypeID === type.ID);
 
         // Get channel values: user preference > type default
         const inAppEnabled = existingPref?.InAppEnabled ?? type.DefaultInApp ?? true;
@@ -103,8 +95,9 @@ export class NotificationPreferencesComponent implements OnInit {
       const currentUser = md.CurrentUser;
       const transGroup = await md.CreateTransactionGroup();
 
-      // Prepare all saves in parallel
-      const savePromises = this.viewModels.filter((v) => v.changed).map(async (vm) => {
+      // Queue all saves in transaction group - no need to await individual saves
+      // Transaction group queues them and submits all in one batch
+      for (const vm of this.viewModels.filter((v) => v.changed)) {
         let pref = vm.preference;
 
         if (!pref) {
@@ -123,10 +116,11 @@ export class NotificationPreferencesComponent implements OnInit {
         pref.EmailEnabled = vm.emailEnabled;
         pref.SMSEnabled = vm.smsEnabled;
         pref.TransactionGroup = transGroup;
-        await pref.Save();
-      });
+        // Don't await - Save() with transaction group queues immediately
+        pref.Save();
+      }
 
-      await Promise.all(savePromises);
+      // Submit transaction group - this is where the actual network call happens
       const success = await transGroup.Submit();
 
       if (success) {
