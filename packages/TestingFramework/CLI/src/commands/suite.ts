@@ -10,6 +10,7 @@ import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
 import { loadCLIConfig } from '../utils/config-loader';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
+import { parseVariableFlags } from '../utils/variable-parser';
 
 /**
  * Suite command - Execute a test suite
@@ -73,13 +74,18 @@ export class SuiteCommand {
                 process.exit(1);
             }
 
+            // Parse variables from --var flags
+            // Note: Suite variables apply to all tests - type conversion happens per-test
+            const variables = parseVariableFlags(flags.var);
+
             // Execute suite
             this.spinner.start(`Running test suite: ${suite.Name}...`);
 
             // Note: parallel and failFast are handled by RunSuite internally
             // We only pass the standard TestRunOptions
             const result = await engine.RunSuite(suite.ID, {
-                verbose: flags.verbose
+                verbose: flags.verbose,
+                variables
             }, contextUser);
 
             this.spinner.stop();

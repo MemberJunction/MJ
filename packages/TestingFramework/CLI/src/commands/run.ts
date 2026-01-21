@@ -10,6 +10,7 @@ import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
 import { loadCLIConfig } from '../utils/config-loader';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
+import { parseVariableFlags, getTestVariablesSchema } from '../utils/variable-parser';
 
 /**
  * Run command - Execute a single test or filtered set of tests
@@ -75,11 +76,18 @@ export class RunCommand {
                 process.exit(1);
             }
 
+            // Parse variables from --var flags
+            const variablesSchema = getTestVariablesSchema(engine, test.ID);
+            const variables = parseVariableFlags(flags.var, variablesSchema);
+
             // Dry run mode
             if (flags.dryRun) {
                 console.log(OutputFormatter.formatInfo(`Would run test: ${test.Name}`));
                 console.log(OutputFormatter.formatInfo(`Type: ${test.Type}`));
                 console.log(OutputFormatter.formatInfo(`Environment: ${environment}`));
+                if (variables) {
+                    console.log(OutputFormatter.formatInfo(`Variables: ${JSON.stringify(variables)}`));
+                }
                 return;
             }
 
@@ -88,7 +96,8 @@ export class RunCommand {
 
             const result = await engine.RunTest(test.ID, {
                 environment,
-                verbose: flags.verbose
+                verbose: flags.verbose,
+                variables
             }, contextUser);
 
             this.spinner.stop();
