@@ -255,9 +255,22 @@ export class SkipSDK {
 
         } catch (error) {
             LogError(`[SkipSDK] Error calling Skip API: ${error}`);
+
+            // Provide user-friendly error messages for common failures
+            let userFriendlyError = String(error);
+            const errorStr = String(error).toLowerCase();
+
+            if (errorStr.includes('stream error') || errorStr.includes('aborted') || errorStr.includes('econnreset')) {
+                userFriendlyError = 'The Skip analysis service became unavailable during processing. Please try again.';
+            } else if (errorStr.includes('econnrefused') || errorStr.includes('enotfound')) {
+                userFriendlyError = 'Unable to connect to the Skip analysis service. The service may be temporarily unavailable.';
+            } else if (errorStr.includes('timeout')) {
+                userFriendlyError = 'The Skip analysis service took too long to respond. Please try again.';
+            }
+
             return {
                 success: false,
-                error: String(error)
+                error: userFriendlyError
             };
         }
     }
