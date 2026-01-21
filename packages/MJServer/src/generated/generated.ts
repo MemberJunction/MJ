@@ -38022,6 +38022,9 @@ export class MJConversationArtifact_ {
     @Field(() => [MJConversationArtifactPermission_])
     MJ_ConversationArtifactPermissions_ConversationArtifactIDArray: MJConversationArtifactPermission_[]; // Link to MJ_ConversationArtifactPermissions
     
+    @Field(() => [MJConversationArtifactVersion_])
+    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: MJConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
+    
     @Field(() => [MJConversationDetail_])
     ConversationDetails_ArtifactIDArray: MJConversationDetail_[]; // Link to ConversationDetails
     
@@ -38143,17 +38146,6 @@ export class MJConversationArtifactResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJConversationArtifactVersion_])
-    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${mjconversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJConversationArtifactPermission_])
     async MJ_ConversationArtifactPermissions_ConversationArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
@@ -38162,6 +38154,17 @@ export class MJConversationArtifactResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ConversationArtifactID]='${mjconversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversationArtifactVersion_])
+    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${mjconversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -41343,11 +41346,11 @@ export class MJEnvironment_ {
     @Field(() => [MJArtifact_])
     MJ_Artifacts_EnvironmentIDArray: MJArtifact_[]; // Link to MJ_Artifacts
     
-    @Field(() => [MJDashboard_])
-    Dashboards_EnvironmentIDArray: MJDashboard_[]; // Link to Dashboards
-    
     @Field(() => [MJTask_])
     MJ_Tasks_EnvironmentIDArray: MJTask_[]; // Link to MJ_Tasks
+    
+    @Field(() => [MJDashboard_])
+    Dashboards_EnvironmentIDArray: MJDashboard_[]; // Link to Dashboards
     
     @Field(() => [MJReport_])
     Reports_EnvironmentIDArray: MJReport_[]; // Link to Reports
@@ -41494,17 +41497,6 @@ export class MJEnvironmentResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJDashboard_])
-    async Dashboards_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Dashboards', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Dashboards', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('Dashboards', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJTask_])
     async MJ_Tasks_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
@@ -41513,6 +41505,17 @@ export class MJEnvironmentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTasks] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tasks', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJDashboard_])
+    async Dashboards_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Dashboards', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Dashboards', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('Dashboards', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -45211,6 +45214,9 @@ export class MJTestRun_ {
     @MaxLength(16)
     TargetLogEntityID?: string;
         
+    @Field({nullable: true, description: `JSON object containing the final resolved variable values used during test execution. Includes both the resolved values and the source of each value (run, suite, test, or type level). Stored for reproducibility and auditing.`}) 
+    ResolvedVariables?: string;
+        
     @Field() 
     @MaxLength(510)
     Test: string;
@@ -45335,6 +45341,9 @@ export class CreateMJTestRunInput {
 
     @Field({ nullable: true })
     TargetLogEntityID: string | null;
+
+    @Field({ nullable: true })
+    ResolvedVariables: string | null;
 }
     
 
@@ -45429,6 +45438,9 @@ export class UpdateMJTestRunInput {
 
     @Field({ nullable: true })
     TargetLogEntityID?: string | null;
+
+    @Field({ nullable: true })
+    ResolvedVariables?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -45681,6 +45693,9 @@ export class MJTestSuiteRun_ {
     @Field({nullable: true, description: `JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`}) 
     RunContextDetails?: string;
         
+    @Field({nullable: true, description: `JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun.ResolvedVariables with source="suite".`}) 
+    ResolvedVariables?: string;
+        
     @Field() 
     @MaxLength(510)
     Suite: string;
@@ -45776,6 +45791,9 @@ export class CreateMJTestSuiteRunInput {
 
     @Field({ nullable: true })
     RunContextDetails: string | null;
+
+    @Field({ nullable: true })
+    ResolvedVariables: string | null;
 }
     
 
@@ -45861,6 +45879,9 @@ export class UpdateMJTestSuiteRunInput {
 
     @Field({ nullable: true })
     RunContextDetails?: string | null;
+
+    @Field({ nullable: true })
+    ResolvedVariables?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -46189,6 +46210,9 @@ export class MJTestSuite_ {
     @Field(() => Int, {nullable: true, description: `Maximum total execution time in milliseconds for the entire suite. If NULL, no suite-level timeout applies (individual test timeouts still apply). When exceeded, current test is cancelled and remaining tests are skipped.`}) 
     MaxExecutionTimeMS?: number;
         
+    @Field({nullable: true, description: `JSON object containing variable values to apply to all tests in this suite. These values override test-level defaults but can be overridden by run-level values.`}) 
+    Variables?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -46236,6 +46260,9 @@ export class CreateMJTestSuiteInput {
 
     @Field(() => Int, { nullable: true })
     MaxExecutionTimeMS: number | null;
+
+    @Field({ nullable: true })
+    Variables: string | null;
 }
     
 
@@ -46267,6 +46294,9 @@ export class UpdateMJTestSuiteInput {
 
     @Field(() => Int, { nullable: true })
     MaxExecutionTimeMS?: number | null;
+
+    @Field({ nullable: true })
+    Variables?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -46424,6 +46454,9 @@ export class MJTestType_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON schema defining the variables available for tests of this type. Contains schemaVersion and array of variable definitions with name, displayName, description, dataType, valueSource, possibleValues, defaultValue, and required fields.`}) 
+    VariablesSchema?: string;
+        
     @Field(() => [MJTestRubric_])
     MJ_TestRubrics_TypeIDArray: MJTestRubric_[]; // Link to MJ_TestRubrics
     
@@ -46451,6 +46484,9 @@ export class CreateMJTestTypeInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    VariablesSchema: string | null;
 }
     
 
@@ -46473,6 +46509,9 @@ export class UpdateMJTestTypeInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    VariablesSchema?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -46646,6 +46685,9 @@ export class MJTest_ {
     @Field(() => Int, {nullable: true, description: `Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.`}) 
     MaxExecutionTimeMS?: number;
         
+    @Field({nullable: true, description: `JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType.VariablesSchema.`}) 
+    Variables?: string;
+        
     @Field() 
     @MaxLength(200)
     Type: string;
@@ -46704,6 +46746,9 @@ export class CreateMJTestInput {
 
     @Field(() => Int, { nullable: true })
     MaxExecutionTimeMS: number | null;
+
+    @Field({ nullable: true })
+    Variables: string | null;
 }
     
 
@@ -46753,6 +46798,9 @@ export class UpdateMJTestInput {
 
     @Field(() => Int, { nullable: true })
     MaxExecutionTimeMS?: number | null;
+
+    @Field({ nullable: true })
+    Variables?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -57539,11 +57587,11 @@ export class MJUser_ {
     @Field(() => [MJListShare_])
     MJ_ListShares_UserIDArray: MJListShare_[]; // Link to MJ_ListShares
     
-    @Field(() => [MJDashboardCategoryPermission_])
-    MJ_DashboardCategoryPermissions_UserIDArray: MJDashboardCategoryPermission_[]; // Link to MJ_DashboardCategoryPermissions
-    
     @Field(() => [MJDashboardCategoryLink_])
     MJ_DashboardCategoryLinks_UserIDArray: MJDashboardCategoryLink_[]; // Link to MJ_DashboardCategoryLinks
+    
+    @Field(() => [MJDashboardCategoryPermission_])
+    MJ_DashboardCategoryPermissions_UserIDArray: MJDashboardCategoryPermission_[]; // Link to MJ_DashboardCategoryPermissions
     
     @Field(() => [MJDashboardPermission_])
     MJ_DashboardPermissions_SharedByUserIDArray: MJDashboardPermission_[]; // Link to MJ_DashboardPermissions
@@ -57578,11 +57626,11 @@ export class MJUser_ {
     @Field(() => [MJTestRun_])
     MJ_TestRuns_RunByUserIDArray: MJTestRun_[]; // Link to MJ_TestRuns
     
-    @Field(() => [MJDashboardCategoryPermission_])
-    MJ_DashboardCategoryPermissions_SharedByUserIDArray: MJDashboardCategoryPermission_[]; // Link to MJ_DashboardCategoryPermissions
-    
     @Field(() => [MJDashboardPermission_])
     MJ_DashboardPermissions_UserIDArray: MJDashboardPermission_[]; // Link to MJ_DashboardPermissions
+    
+    @Field(() => [MJDashboardCategoryPermission_])
+    MJ_DashboardCategoryPermissions_SharedByUserIDArray: MJDashboardCategoryPermission_[]; // Link to MJ_DashboardCategoryPermissions
     
     @Field(() => [MJAIAgentRun_])
     MJ_AIAgentRuns_UserIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
@@ -58315,17 +58363,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
 
-    @FieldResolver(() => [MJDashboardCategoryPermission_])
-    async MJ_DashboardCategoryPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Dashboard Category Permissions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategoryPermissions] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard Category Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard Category Permissions', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJDashboardCategoryLink_])
     async MJ_DashboardCategoryLinks_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Category Links', userPayload);
@@ -58334,6 +58371,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategoryLinks] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard Category Links', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard Category Links', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJDashboardCategoryPermission_])
+    async MJ_DashboardCategoryPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard Category Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategoryPermissions] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard Category Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard Category Permissions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -58447,17 +58495,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJDashboardCategoryPermission_])
-    async MJ_DashboardCategoryPermissions_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Dashboard Category Permissions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategoryPermissions] WHERE [SharedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard Category Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard Category Permissions', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJDashboardPermission_])
     async MJ_DashboardPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Permissions', userPayload);
@@ -58466,6 +58503,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardPermissions] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJDashboardCategoryPermission_])
+    async MJ_DashboardCategoryPermissions_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard Category Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategoryPermissions] WHERE [SharedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard Category Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard Category Permissions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

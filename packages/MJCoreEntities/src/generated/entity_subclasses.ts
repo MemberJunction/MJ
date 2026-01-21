@@ -15248,7 +15248,7 @@ export const TestRunSchema = z.object({
         * * Description: Overall test score from 0.0000 to 1.0000 (0-100%). Calculated by test driver based on passed/failed checks and weights.`),
     CostUSD: z.number().nullable().describe(`
         * * Field Name: CostUSD
-        * * Display Name: Cost USD
+        * * Display Name: Cost (USD)
         * * SQL Data Type: decimal(10, 6)
         * * Description: Cost in USD for running this test (e.g., LLM token costs, compute resources)`),
     ErrorMessage: z.string().nullable().describe(`
@@ -15308,13 +15308,18 @@ export const TestRunSchema = z.object({
         * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
     TargetLogEntityID: z.string().nullable().describe(`
         * * Field Name: TargetLogEntityID
-        * * Display Name: Target Log Entity ID
+        * * Display Name: Target Log Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         * * Description: Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.`),
+    ResolvedVariables: z.string().nullable().describe(`
+        * * Field Name: ResolvedVariables
+        * * Display Name: Resolved Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing the final resolved variable values used during test execution. Includes both the resolved values and the source of each value (run, suite, test, or type level). Stored for reproducibility and auditing.`),
     Test: z.string().describe(`
         * * Field Name: Test
-        * * Display Name: Test
+        * * Display Name: Test Name
         * * SQL Data Type: nvarchar(255)`),
     TestSuiteRun: z.string().nullable().describe(`
         * * Field Name: TestSuiteRun
@@ -15326,7 +15331,7 @@ export const TestRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     TargetLogEntity: z.string().nullable().describe(`
         * * Field Name: TargetLogEntity
-        * * Display Name: Target Log Entity
+        * * Display Name: Target Log Entity Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -15349,7 +15354,7 @@ export const TestSuiteRunSchema = z.object({
         * * Description: Foreign Key - The test suite that was executed`),
     RunByUserID: z.string().describe(`
         * * Field Name: RunByUserID
-        * * Display Name: Run By User
+        * * Display Name: Run By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: Foreign Key - The user who triggered the suite run (could be system user for automated runs)`),
@@ -15423,12 +15428,12 @@ export const TestSuiteRunSchema = z.object({
         * * Description: Number of tests that encountered execution errors (different from failing validation)`),
     TotalDurationSeconds: z.number().nullable().describe(`
         * * Field Name: TotalDurationSeconds
-        * * Display Name: Total Duration (seconds)
+        * * Display Name: Total Duration Seconds
         * * SQL Data Type: decimal(10, 3)
         * * Description: Total execution time in seconds for the entire suite`),
     TotalCostUSD: z.number().nullable().describe(`
         * * Field Name: TotalCostUSD
-        * * Display Name: Total Cost (USD)
+        * * Display Name: Total Cost USD
         * * SQL Data Type: decimal(10, 6)
         * * Description: Total cost in USD for running the entire suite (sum of all test costs)`),
     Configuration: z.string().nullable().describe(`
@@ -15486,6 +15491,11 @@ export const TestSuiteRunSchema = z.object({
         * * Display Name: Run Context Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
+    ResolvedVariables: z.string().nullable().describe(`
+        * * Field Name: ResolvedVariables
+        * * Display Name: Resolved Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun.ResolvedVariables with source="suite".`),
     Suite: z.string().describe(`
         * * Field Name: Suite
         * * Display Name: Suite
@@ -15574,7 +15584,7 @@ export const TestSuiteSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
         * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.`),
@@ -15624,13 +15634,18 @@ export const TestSuiteSchema = z.object({
         * * Display Name: Max Execution Time (ms)
         * * SQL Data Type: int
         * * Description: Maximum total execution time in milliseconds for the entire suite. If NULL, no suite-level timeout applies (individual test timeouts still apply). When exceeded, current test is cancelled and remaining tests are skipped.`),
+    Variables: z.string().nullable().describe(`
+        * * Field Name: Variables
+        * * Display Name: Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing variable values to apply to all tests in this suite. These values override test-level defaults but can be overridden by run-level values.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -15681,6 +15696,11 @@ export const TestTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    VariablesSchema: z.string().nullable().describe(`
+        * * Field Name: VariablesSchema
+        * * Display Name: Variables Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON schema defining the variables available for tests of this type. Contains schemaVersion and array of variable definitions with name, displayName, description, dataType, valueSource, possibleValues, defaultValue, and required fields.`),
 });
 
 export type TestTypeEntityType = z.infer<typeof TestTypeSchema>;
@@ -15777,9 +15797,14 @@ export const TestSchema = z.object({
         * * Display Name: Max Execution Time (ms)
         * * SQL Data Type: int
         * * Description: Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.`),
+    Variables: z.string().nullable().describe(`
+        * * Field Name: Variables
+        * * Display Name: Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType.VariablesSchema.`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Test Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -21315,7 +21340,7 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     /**
     * Validate() method override for AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CompactLength: This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
-    * * CompactMode: Compact Mode can be left empty, but if a value is provided it must be either "AI Summary" or "First N Chars".
+    * * CompactMode: CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
     * * MaxExecutionsPerRun: This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
     * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
     * * ResultExpirationTurns: This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
@@ -21356,16 +21381,17 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     }
 
     /**
-    * Compact Mode can be left empty, but if a value is provided it must be either "AI Summary" or "First N Chars".
+    * CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateCompactModeAllowedValues(result: ValidationResult) {
+    	// CompactMode is optional; if set, it must be one of the allowed options
     	if (this.CompactMode != null && this.CompactMode !== 'AI Summary' && this.CompactMode !== 'First N Chars') {
     		result.Errors.push(new ValidationErrorInfo(
     			'CompactMode',
-    			'Compact Mode must be either "AI Summary" or "First N Chars" when specified.',
+    			"CompactMode must be either 'AI Summary' or 'First N Chars' when provided.",
     			this.CompactMode,
     			ValidationErrorType.Failure
     		));
@@ -41123,7 +41149,7 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
 
     /**
     * Validate() method override for MJ: AI Agent Data Sources entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * ResultType: Result Type can be left blank, but if a value is provided it must be either 'entity_object' or 'simple'. This ensures only supported result types are stored.
+    * * ResultType: Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
     * * Table-Level: This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
     * * Table-Level: This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
     * * Table-Level: This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
@@ -41143,17 +41169,17 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
     }
 
     /**
-    * Result Type can be left blank, but if a value is provided it must be either 'entity_object' or 'simple'. This ensures only supported result types are stored.
+    * Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateResultTypeAllowedValues(result: ValidationResult) {
-    	// If ResultType is set, it must be one of the allowed values
+    	// If ResultType has a value, ensure it is one of the permitted options
     	if (this.ResultType != null && this.ResultType !== 'entity_object' && this.ResultType !== 'simple') {
     		result.Errors.push(new ValidationErrorInfo(
     			"ResultType",
-    			"Result Type must be either 'entity_object' or 'simple' when provided.",
+    			"Result Type must be either 'entity_object' or 'simple' when specified",
     			this.ResultType,
     			ValidationErrorType.Failure
     		));
@@ -42066,7 +42092,7 @@ export class AIAgentPermissionEntity extends BaseEntity<AIAgentPermissionEntityT
     		result.Errors.push(new ValidationErrorInfo(
     			"RoleID/UserID",
     			"You must specify either a Role or a User, but not both and not neither.",
-    			`RoleID: $$$$$${this.RoleID}, UserID: $$$$$${this.UserID}`,
+    			`RoleID: $${this.RoleID}, UserID: $${this.UserID}`,
     			ValidationErrorType.Failure
     		));
     	}
@@ -43046,7 +43072,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * FinalPayloadValidationResult: The FinalPayloadValidationResult field must either be empty or contain one of the approved status values – Warn, Fail, Retry, or Pass – ensuring only recognized validation outcomes are stored.
+    * * FinalPayloadValidationResult: The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -43062,22 +43088,24 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     }
 
     /**
-    * The FinalPayloadValidationResult field must either be empty or contain one of the approved status values – Warn, Fail, Retry, or Pass – ensuring only recognized validation outcomes are stored.
+    * The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
-    	if (this.FinalPayloadValidationResult != null) {
-    		const allowed = ['Warn', 'Fail', 'Retry', 'Pass'];
-    		if (!allowed.includes(this.FinalPayloadValidationResult)) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"FinalPayloadValidationResult",
-    				"Final payload validation result must be one of: Warn, Fail, Retry, Pass, or left empty.",
-    				this.FinalPayloadValidationResult,
-    				ValidationErrorType.Failure
-    			));
-    		}
+    	// Ensure the value is either null or one of the permitted statuses
+    	if (this.FinalPayloadValidationResult != null &&
+    		!(this.FinalPayloadValidationResult === 'Warn' ||
+    		  this.FinalPayloadValidationResult === 'Fail' ||
+    		  this.FinalPayloadValidationResult === 'Retry' ||
+    		  this.FinalPayloadValidationResult === 'Pass')) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FinalPayloadValidationResult",
+    			"FinalPayloadValidationResult must be one of: Warn, Fail, Retry, Pass, or left empty.",
+    			this.FinalPayloadValidationResult,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -43452,7 +43480,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     /**
     * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * EffortLevel: This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
-    * * FinalStep: Final Step must be either empty or one of the predefined values: While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures the step recorded for a run is valid and recognizable.
+    * * FinalStep: The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
     * @public
     * @method
     * @override
@@ -43479,18 +43507,19 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     }
 
     /**
-    * Final Step must be either empty or one of the predefined values: While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures the step recorded for a run is valid and recognizable.
+    * The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateFinalStepAllowedValues(result: ValidationResult) {
+    	// If FinalStep has a value, it must be one of the permitted options
     	if (this.FinalStep != null) {
     		const allowed = ["While", "ForEach", "Chat", "Sub-Agent", "Actions", "Retry", "Failed", "Success"];
     		if (!allowed.includes(this.FinalStep)) {
     			result.Errors.push(new ValidationErrorInfo(
     				"FinalStep",
-    				"Final Step must be one of: While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, Success, or left blank.",
+    				`FinalStep must be one of the allowed values: ${allowed.join(", ")}.`,
     				this.FinalStep,
     				ValidationErrorType.Failure
     			));
@@ -59264,7 +59293,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: CostUSD
-    * * Display Name: Cost USD
+    * * Display Name: Cost (USD)
     * * SQL Data Type: decimal(10, 6)
     * * Description: Cost in USD for running this test (e.g., LLM token costs, compute resources)
     */
@@ -59414,7 +59443,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: TargetLogEntityID
-    * * Display Name: Target Log Entity ID
+    * * Display Name: Target Log Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     * * Description: Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.
@@ -59427,8 +59456,21 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     }
 
     /**
+    * * Field Name: ResolvedVariables
+    * * Display Name: Resolved Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing the final resolved variable values used during test execution. Includes both the resolved values and the source of each value (run, suite, test, or type level). Stored for reproducibility and auditing.
+    */
+    get ResolvedVariables(): string | null {
+        return this.Get('ResolvedVariables');
+    }
+    set ResolvedVariables(value: string | null) {
+        this.Set('ResolvedVariables', value);
+    }
+
+    /**
     * * Field Name: Test
-    * * Display Name: Test
+    * * Display Name: Test Name
     * * SQL Data Type: nvarchar(255)
     */
     get Test(): string {
@@ -59455,7 +59497,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: TargetLogEntity
-    * * Display Name: Target Log Entity
+    * * Display Name: Target Log Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get TargetLogEntity(): string | null {
@@ -59523,7 +59565,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: RunByUserID
-    * * Display Name: Run By User
+    * * Display Name: Run By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: Foreign Key - The user who triggered the suite run (could be system user for automated runs)
@@ -59701,7 +59743,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: TotalDurationSeconds
-    * * Display Name: Total Duration (seconds)
+    * * Display Name: Total Duration Seconds
     * * SQL Data Type: decimal(10, 3)
     * * Description: Total execution time in seconds for the entire suite
     */
@@ -59714,7 +59756,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: TotalCostUSD
-    * * Display Name: Total Cost (USD)
+    * * Display Name: Total Cost USD
     * * SQL Data Type: decimal(10, 6)
     * * Description: Total cost in USD for running the entire suite (sum of all test costs)
     */
@@ -59860,6 +59902,19 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
     }
     set RunContextDetails(value: string | null) {
         this.Set('RunContextDetails', value);
+    }
+
+    /**
+    * * Field Name: ResolvedVariables
+    * * Display Name: Resolved Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun.ResolvedVariables with source="suite".
+    */
+    get ResolvedVariables(): string | null {
+        return this.Get('ResolvedVariables');
+    }
+    set ResolvedVariables(value: string | null) {
+        this.Set('ResolvedVariables', value);
     }
 
     /**
@@ -60084,7 +60139,7 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
     * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.
@@ -60201,8 +60256,21 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
     }
 
     /**
+    * * Field Name: Variables
+    * * Display Name: Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing variable values to apply to all tests in this suite. These values override test-level defaults but can be overridden by run-level values.
+    */
+    get Variables(): string | null {
+        return this.Get('Variables');
+    }
+    set Variables(value: string | null) {
+        this.Set('Variables', value);
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -60211,7 +60279,7 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -60339,6 +60407,19 @@ export class TestTypeEntity extends BaseEntity<TestTypeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: VariablesSchema
+    * * Display Name: Variables Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON schema defining the variables available for tests of this type. Contains schemaVersion and array of variable definitions with name, displayName, description, dataType, valueSource, possibleValues, defaultValue, and required fields.
+    */
+    get VariablesSchema(): string | null {
+        return this.Get('VariablesSchema');
+    }
+    set VariablesSchema(value: string | null) {
+        this.Set('VariablesSchema', value);
     }
 }
 
@@ -60617,8 +60698,21 @@ export class TestEntity extends BaseEntity<TestEntityType> {
     }
 
     /**
+    * * Field Name: Variables
+    * * Display Name: Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType.VariablesSchema.
+    */
+    get Variables(): string | null {
+        return this.Get('Variables');
+    }
+    set Variables(value: string | null) {
+        this.Set('Variables', value);
+    }
+
+    /**
     * * Field Name: Type
-    * * Display Name: Test Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {

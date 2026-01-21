@@ -582,7 +582,7 @@ export class AgentEvalDriver extends BaseTestDriver {
 
                 this.logToTestRun(context, 'info', `Executing turn ${turnNumber} of ${turns.length}`);
 
-                // Execute single turn with cancellation token
+                // Execute single turn with cancellation token and resolved variables
                 const turnResult = await this.executeSingleTurn({
                     agent,
                     turn,
@@ -594,7 +594,8 @@ export class AgentEvalDriver extends BaseTestDriver {
                     contextUser,
                     test,
                     testRun,
-                    cancellationToken: abortController.signal
+                    cancellationToken: abortController.signal,
+                    resolvedVariables: context.resolvedVariables
                 });
 
                 agentRuns.push(turnResult.agentRun);
@@ -633,6 +634,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         test: TestEntity;
         testRun: TestRunEntity;
         cancellationToken?: AbortSignal;
+        resolvedVariables?: { values: Record<string, unknown>; sources: Record<string, string> };
     }): Promise<TurnResult> {
         const runner = new AgentRunner();
 
@@ -669,6 +671,9 @@ export class AgentEvalDriver extends BaseTestDriver {
         // Get Entity ID for AI Agent Runs for proper FK linkage
         const aiAgentRunsEntityId = this.getAIAgentRunsEntityId();
 
+        // Build override from turn execution params and resolved variables
+        const override = this.buildExecutionOverride(params.turn.executionParams, params.resolvedVariables);
+
         // Build execution parameters with cancellation token and onAgentRunCreated callback
         const runParams = {
             agent: params.agent as any,
@@ -676,9 +681,7 @@ export class AgentEvalDriver extends BaseTestDriver {
             conversationMessages,
             contextUser: params.contextUser,
             payload: params.inputPayload,  // Pass payload from previous turn
-            override: params.turn.executionParams?.modelOverride ? {
-                modelId: params.turn.executionParams.modelOverride
-            } : undefined,
+            override,
             cancellationToken: params.cancellationToken,  // Pass cancellation token to agent
             // Callback to immediately link TestRun <-> AgentRun when AgentRun is created
             onAgentRunCreated: async (agentRunId: string) => {
@@ -771,6 +774,60 @@ export class AgentEvalDriver extends BaseTestDriver {
             errorMessage: agentRun.ErrorMessage,
             conversationId: agentRun.ConversationID
         };
+    }
+
+    /**
+     * Build execution override object from turn params and resolved variables.
+     *
+     * Priority (highest to lowest):
+     * 1. Turn-level execution params (modelOverride, temperatureOverride, etc.)
+     * 2. Resolved variables (AIConfiguration, Temperature, etc.)
+     *
+     * @private
+     */
+    private buildExecutionOverride(
+        turnExecutionParams?: {
+            modelOverride?: string;
+            temperatureOverride?: number;
+            maxTokensOverride?: number;
+        },
+        resolvedVariables?: { values: Record<string, unknown>; sources: Record<string, string> }
+    ): Record<string, unknown> | undefined {
+        const override: Record<string, unknown> = {};
+
+        // Apply resolved variables (lower priority)
+        if (resolvedVariables?.values) {
+            // AIConfiguration variable maps to aiConfigurationId
+            if (resolvedVariables.values['AIConfiguration']) {
+                override.aiConfigurationId = resolvedVariables.values['AIConfiguration'];
+            }
+
+            // Temperature variable maps to temperature override
+            if (resolvedVariables.values['Temperature'] !== undefined) {
+                override.temperature = resolvedVariables.values['Temperature'];
+            }
+
+            // MaxTokens variable maps to maxTokens override
+            if (resolvedVariables.values['MaxTokens'] !== undefined) {
+                override.maxTokens = resolvedVariables.values['MaxTokens'];
+            }
+        }
+
+        // Apply turn execution params (higher priority - overwrites variables)
+        if (turnExecutionParams) {
+            if (turnExecutionParams.modelOverride) {
+                override.modelId = turnExecutionParams.modelOverride;
+            }
+            if (turnExecutionParams.temperatureOverride !== undefined) {
+                override.temperature = turnExecutionParams.temperatureOverride;
+            }
+            if (turnExecutionParams.maxTokensOverride !== undefined) {
+                override.maxTokens = turnExecutionParams.maxTokensOverride;
+            }
+        }
+
+        // Return undefined if no overrides
+        return Object.keys(override).length > 0 ? override : undefined;
     }
 
     /**

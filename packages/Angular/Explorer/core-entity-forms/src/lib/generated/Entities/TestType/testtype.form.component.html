@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Test Type Definition Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
+        sectionKey="testTypeDefinition"
+        sectionName="Test Type Definition"
+        icon="fa fa-list-alt"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -42,6 +42,24 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="VariablesSchema"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
