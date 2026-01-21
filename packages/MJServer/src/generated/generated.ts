@@ -38021,10 +38021,7 @@ export class MJConversationArtifact_ {
     
     @Field(() => [MJConversationArtifactPermission_])
     MJ_ConversationArtifactPermissions_ConversationArtifactIDArray: MJConversationArtifactPermission_[]; // Link to MJ_ConversationArtifactPermissions
-    
-    @Field(() => [MJConversationArtifactVersion_])
-    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: MJConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
-    
+
     @Field(() => [MJConversationDetail_])
     ConversationDetails_ArtifactIDArray: MJConversationDetail_[]; // Link to ConversationDetails
     
