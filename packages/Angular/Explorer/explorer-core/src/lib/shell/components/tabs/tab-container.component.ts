@@ -70,7 +70,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly MAX_LAYOUT_INIT_RETRIES = 5;
   private hasEmittedFirstLoadComplete = false;
   private layoutInitialized = false;
-  private layoutRestorationComplete = false; // True only AFTER layout is fully restored/created
 
   // Track component references for cleanup (legacy - keep for backward compat during transition)
   private componentRefs = new Map<string, ComponentRef<BaseResourceComponent>>();
@@ -145,10 +144,9 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
                 this.loadSingleResourceContent();
               }
             }
-          } else if (this.layoutRestorationComplete && !this.isCreatingInitialTabs) {
+          } else if (this.layoutInitialized && !this.isCreatingInitialTabs) {
             // In multi-tab mode, sync with Golden Layout
-            // IMPORTANT: Only sync AFTER layout restoration is complete to avoid creating duplicate tabs
-            // layoutRestorationComplete is set to true only after initializeGoldenLayout finishes
+            // Skip during initial tab creation to avoid race condition (tabs would be created twice)
             this.syncTabsWithConfiguration(config.tabs);
           }
         }
