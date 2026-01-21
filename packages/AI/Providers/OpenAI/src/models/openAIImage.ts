@@ -10,7 +10,7 @@ import {
     ErrorAnalyzer
 } from "@memberjunction/ai";
 import OpenAI from "openai";
-import { Uploadable } from "openai/core";
+import { type Uploadable } from "openai";
 
 /**
  * Extended image generation params for GPT Image models (gpt-image-1, gpt-image-1.5).
