@@ -1,0 +1,178 @@
+<!-- Query Info Panel - Slide-in Panel -->
+<div class="info-panel-overlay"
+     *ngIf="Visible && ShowOverlay"
+     @fadeIn
+     (click)="OnClose()">
+</div>
+
+<div class="info-panel"
+     *ngIf="Visible"
+     @slideIn
+     [style.width.px]="PanelWidth">
+    <!-- Resize handle -->
+    <div class="resize-handle" (mousedown)="OnResizeStart($event)"></div>
+
+    <!-- Header -->
+    <div class="panel-header">
+        <div class="header-content">
+            <i class="fa-solid fa-circle-info header-icon"></i>
+            <div class="header-text">
+                <h3 class="header-title">Query Information</h3>
+                <span class="header-subtitle" *ngIf="QueryInfo">{{ QueryInfo.Name }}</span>
+            </div>
+        </div>
+        <button class="close-btn" (click)="OnClose()" title="Close">
+            <i class="fa-solid fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Content -->
+    <div class="panel-content" *ngIf="QueryInfo">
+        <!-- Overview Section -->
+        <div class="info-section" [class.expanded]="IsSectionExpanded('overview')">
+            <div class="section-header" (click)="ToggleSection('overview')">
+                <i class="fa-solid section-icon"
+                   [class.fa-chevron-down]="IsSectionExpanded('overview')"
+                   [class.fa-chevron-right]="!IsSectionExpanded('overview')"></i>
+                <span class="section-title">Overview</span>
+            </div>
+            <div class="section-content" *ngIf="IsSectionExpanded('overview')">
+                <div class="info-row">
+                    <span class="info-label">Name</span>
+                    <span class="info-value">{{ QueryInfo.Name }}</span>
+                </div>
+                <div class="info-row" *ngIf="QueryInfo.Description">
+                    <span class="info-label">Description</span>
+                    <span class="info-value description">{{ QueryInfo.Description }}</span>
+                </div>
+                <div class="info-row" *ngIf="QueryInfo.Category">
+                    <span class="info-label">Category</span>
+                    <span class="info-value">
+                        <i class="fa-solid fa-folder category-icon"></i>
+                        {{ QueryInfo.Category }}
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Status</span>
+                    <span class="info-value">
+                        <span class="status-badge" [class.approved]="QueryInfo.Status === 'Approved'">
+                            {{ QueryInfo.Status }}
+                        </span>
+                    </span>
+                </div>
+                <div class="info-row" *ngIf="QueryInfo.OriginalSQL">
+                    <span class="info-label">Has SQL</span>
+                    <span class="info-value">
+                        <i class="fa-solid fa-check text-success"></i> Yes
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fields Section -->
+        <div class="info-section" [class.expanded]="IsSectionExpanded('fields')">
+            <div class="section-header" (click)="ToggleSection('fields')">
+                <i class="fa-solid section-icon"
+                   [class.fa-chevron-down]="IsSectionExpanded('fields')"
+                   [class.fa-chevron-right]="!IsSectionExpanded('fields')"></i>
+                <span class="section-title">Fields</span>
+                <span class="section-count">({{ QueryInfo.Fields.length || 0 }})</span>
+            </div>
+            <div class="section-content" *ngIf="IsSectionExpanded('fields')">
+                <div class="fields-list" *ngIf="QueryInfo.Fields.length; else noFields">
+                    <div class="field-item" *ngFor="let field of QueryInfo.Fields; trackBy: TrackByField">
+                        <div class="field-header">
+                            <span class="field-name">{{ field.Name }}</span>
+                            <span class="field-type">{{ GetFieldTypeDisplay(field) }}</span>
+                        </div>
+                        <div class="field-details" *ngIf="field.Description || field.SourceEntity">
+                            <span class="field-description" *ngIf="field.Description">
+                                {{ field.Description }}
+                            </span>
+                            <span class="field-source" *ngIf="field.SourceEntity">
+                                <i class="fa-solid fa-link"></i>
+                                {{ field.SourceEntity }}.{{ field.SourceFieldName }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <ng-template #noFields>
+                    <div class="empty-section">
+                        <i class="fa-solid fa-table-columns"></i>
+                        <span>No fields defined</span>
+                    </div>
+                </ng-template>
+            </div>
+        </div>
+
+        <!-- Parameters Section -->
+        <div class="info-section" [class.expanded]="IsSectionExpanded('parameters')">
+            <div class="section-header" (click)="ToggleSection('parameters')">
+                <i class="fa-solid section-icon"
+                   [class.fa-chevron-down]="IsSectionExpanded('parameters')"
+                   [class.fa-chevron-right]="!IsSectionExpanded('parameters')"></i>
+                <span class="section-title">Parameters</span>
+                <span class="section-count">({{ QueryInfo.Parameters.length || 0 }})</span>
+            </div>
+            <div class="section-content" *ngIf="IsSectionExpanded('parameters')">
+                <div class="params-list" *ngIf="QueryInfo.Parameters.length; else noParams">
+                    <div class="param-item" *ngFor="let param of QueryInfo.Parameters; trackBy: TrackByParam">
+                        <div class="param-header">
+                            <span class="param-name">
+                                {{ param.Name }}
+                                <span class="required-badge" *ngIf="param.IsRequired">Required</span>
+                            </span>
+                            <span class="param-type">{{ GetParamTypeDisplay(param) }}</span>
+                        </div>
+                        <div class="param-details" *ngIf="param.Description || param.DefaultValue">
+                            <span class="param-description" *ngIf="param.Description">
+                                {{ param.Description }}
+                            </span>
+                            <span class="param-default" *ngIf="param.DefaultValue">
+                                Default: {{ param.DefaultValue }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <ng-template #noParams>
+                    <div class="empty-section">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>No parameters required</span>
+                    </div>
+                </ng-template>
+            </div>
+        </div>
+
+        <!-- SQL Section -->
+        <div class="info-section" [class.expanded]="IsSectionExpanded('sql')">
+            <div class="section-header" (click)="ToggleSection('sql')">
+                <i class="fa-solid section-icon"
+                   [class.fa-chevron-down]="IsSectionExpanded('sql')"
+                   [class.fa-chevron-right]="!IsSectionExpanded('sql')"></i>
+                <span class="section-title">SQL Query</span>
+            </div>
+            <div class="section-content" *ngIf="IsSectionExpanded('sql')">
+                <div class="sql-container" *ngIf="QueryInfo.SQL; else noSql">
+                    <pre class="sql-code">{{ QueryInfo.SQL }}</pre>
+                </div>
+                <ng-template #noSql>
+                    <div class="empty-section">
+                        <i class="fa-solid fa-code"></i>
+                        <span>SQL not available</span>
+                    </div>
+                </ng-template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="panel-footer">
+        <button class="btn btn-primary" (click)="OnOpenRecord()">
+            <i class="fa-solid fa-external-link-alt"></i>
+            Open Full Record
+        </button>
+        <button class="btn btn-secondary" (click)="OnClose()">
+            Close
+        </button>
+    </div>
+</div>

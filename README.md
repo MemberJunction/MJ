@@ -84,6 +84,15 @@ Extensive documentation is available at [https://docs.memberjunction.org](https:
    - Navigate to http://localhost:4200
    - Log in with your configured authentication provider
 
+   > **⚠️ Important:** If you change the database connection information (switching to a different database while keeping the same API URL), you must clear the browser's IndexedDB cache to remove cached metadata from the previous connection.
+   >
+   > To clear the cache:
+   > 1. Open browser DevTools → Application → Storage → IndexedDB
+   > 2. Delete the `MJ_Metadata` database
+   > 3. Refresh the page to rebuild the cache from the new database
+   >
+   > This is necessary because the current cache implementation uses only the API URL (not the database name) as the cache key, which can cause stale data issues when switching databases.
+
 ## 🏗️ Architecture & Package Structure
 
 MemberJunction uses a modular monorepo architecture with 100+ TypeScript packages. Each package is designed to be used independently or as part of the complete platform.

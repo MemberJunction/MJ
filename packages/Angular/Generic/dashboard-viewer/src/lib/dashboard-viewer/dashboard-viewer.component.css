@@ -1,0 +1,507 @@
+/**
+ * Dashboard Viewer Component Styles
+ *
+ * IMPORTANT: For Golden Layout tabs to display correctly, you must import
+ * Golden Layout's CSS in your application's global styles:
+ *
+ *   @import 'golden-layout/dist/css/goldenlayout-base.css';
+ *
+ * Or add to your angular.json styles array:
+ *   "node_modules/golden-layout/dist/css/goldenlayout-base.css"
+ */
+
+:host {
+    display: block;
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.dashboard-viewer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: var(--dashboard-bg, #f5f5f5);
+}
+
+.dashboard-viewer.editing .layout-container {
+    outline: 2px dashed var(--dashboard-edit-outline, #5c6bc0);
+    outline-offset: -2px;
+}
+
+/* ========================================
+   Toolbar
+   ======================================== */
+
+.dashboard-toolbar {
+    flex: 0 0 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--dashboard-toolbar-bg, #ffffff);
+    border-bottom: 1px solid var(--dashboard-border, #e0e0e0);
+    box-sizing: border-box;
+    z-index: 10;
+}
+
+.toolbar-left,
+.toolbar-center,
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toolbar-left {
+    flex: 1;
+}
+
+.toolbar-center {
+    flex: 0 0 auto;
+}
+
+.toolbar-right {
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.dashboard-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--dashboard-title-color, #333);
+}
+
+.dashboard-title i {
+    margin-right: 8px;
+    color: var(--dashboard-title-icon, #5c6bc0);
+}
+
+.unsaved-indicator {
+    font-size: 12px;
+    color: var(--dashboard-unsaved-color, #ff9800);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.unsaved-indicator i {
+    font-size: 8px;
+}
+
+.toolbar-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--dashboard-button-border, #ddd);
+    border-radius: 4px;
+    background: var(--dashboard-button-bg, #fff);
+    color: var(--dashboard-button-color, #333);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.toolbar-button:hover {
+    background: var(--dashboard-button-hover-bg, #f5f5f5);
+    border-color: var(--dashboard-button-hover-border, #ccc);
+}
+
+.toolbar-button.active {
+    background: var(--dashboard-button-active-bg, #e8eaf6);
+    border-color: var(--dashboard-button-active-border, #5c6bc0);
+    color: var(--dashboard-button-active-color, #5c6bc0);
+}
+
+.toolbar-button.primary {
+    background: var(--dashboard-button-primary-bg, #5c6bc0);
+    border-color: var(--dashboard-button-primary-border, #3f51b5);
+    color: var(--dashboard-button-primary-color, #fff);
+}
+
+.toolbar-button.primary:hover {
+    background: var(--dashboard-button-primary-hover-bg, #3f51b5);
+}
+
+.toolbar-button i {
+    font-size: 14px;
+}
+
+/* ========================================
+   Layout Container
+   ======================================== */
+
+/* Layout container fills remaining space in the flex column */
+.layout-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* ========================================
+   Dashboard Panel Content (our wrapper)
+   ======================================== */
+
+/* Dashboard panel wrapper (header + content) */
+:host ::ng-deep .dashboard-part-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #fff;
+}
+
+/* Dashboard part header */
+:host ::ng-deep .dashboard-part-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #e0e0e0;
+    min-height: 40px;
+    flex-shrink: 0;
+}
+
+/* Dashboard part content */
+:host ::ng-deep .dashboard-part-content {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+}
+
+/* ========================================
+   Loading Overlay
+   ======================================== */
+
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.9);
+    z-index: 100;
+}
+
+/* ========================================
+   Empty State
+   ======================================== */
+
+.empty-state {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--dashboard-empty-color, #666);
+    max-width: 400px;
+    padding: 40px;
+}
+
+.empty-state .empty-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+}
+
+.empty-state .empty-icon i {
+    font-size: 36px;
+    color: #5c6bc0;
+}
+
+.empty-state h3 {
+    margin: 0 0 12px 0;
+    font-size: 20px;
+    font-weight: 500;
+    color: #333;
+}
+
+.empty-state p {
+    margin: 0 0 24px 0;
+    font-size: 14px;
+    color: var(--dashboard-empty-text, #666);
+    line-height: 1.5;
+}
+
+.add-part-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #5c6bc0 0%, #3f51b5 100%);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(92, 107, 192, 0.3);
+}
+
+.add-part-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(92, 107, 192, 0.4);
+}
+
+.add-part-button i {
+    font-size: 14px;
+}
+
+/* ========================================
+   Panel Error State
+   ======================================== */
+
+:host ::ng-deep .panel-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 24px;
+    text-align: center;
+    color: var(--dashboard-error-color, #d32f2f);
+    background: var(--dashboard-error-bg, #ffebee);
+}
+
+:host ::ng-deep .panel-error i {
+    font-size: 32px;
+    margin-bottom: 12px;
+}
+
+:host ::ng-deep .panel-error span {
+    font-size: 14px;
+}
+
+/* ========================================
+   Golden Layout Overrides
+   These require ViewEncapsulation.None to work on dynamic GL elements
+   ======================================== */
+
+/* Override shell's hide-tab-bar rule that hides GL headers when dashboard is inside shell */
+/* The shell hides .lm_header when mj-tab-container has hide-tab-bar class */
+/* We need to ensure OUR Golden Layout headers are always visible */
+mj-dashboard-viewer .lm_header {
+    display: block !important;
+}
+
+/* Ensure GL root container fills available space */
+mj-dashboard-viewer .lm_goldenlayout {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Ensure the root layout item fills space */
+mj-dashboard-viewer .lm_root {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Ensure proper box-sizing for all GL layout elements */
+mj-dashboard-viewer .lm_item,
+mj-dashboard-viewer .lm_content,
+mj-dashboard-viewer .lm_stack,
+mj-dashboard-viewer .lm_row,
+mj-dashboard-viewer .lm_column {
+    box-sizing: border-box !important;
+}
+
+/* Ensure layout items don't overflow */
+mj-dashboard-viewer .lm_item {
+    overflow: hidden !important;
+}
+
+/* Fix for .lm_items - the content container inside stacks */
+mj-dashboard-viewer .lm_items {
+    width: 100% !important;
+    height: calc(100% - 38px) !important; /* Account for header height (38px) */
+    box-sizing: border-box !important;
+    position: relative !important;
+}
+
+/* When tabs are maximized, no header visible */
+mj-dashboard-viewer .lm_stack.lm_maximised > .lm_items {
+    height: 100% !important;
+}
+
+/* Target the ComponentItem div inside lm_items */
+mj-dashboard-viewer .lm_items > div {
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+    flex-direction: column !important;
+}
+
+/* Only apply flex display to the active/visible tab content div */
+mj-dashboard-viewer .lm_items > div:not([style*="display: none"]) {
+    display: flex !important;
+}
+
+/* Clearfix for float-based row layout */
+mj-dashboard-viewer .lm_row::after {
+    content: "" !important;
+    display: table !important;
+    clear: both !important;
+}
+
+/* Force content children to respect parent bounds */
+mj-dashboard-viewer .lm_content > * {
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+mj-dashboard-viewer .lm_content {
+    background: white !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    width: 100% !important;
+}
+
+mj-dashboard-viewer .lm_item_container {
+    background: white !important;
+}
+
+/* Tab header styling */
+mj-dashboard-viewer .lm_header {
+    height: 38px !important;
+    padding-top: 2px !important;
+    padding-left: 4px !important;
+    background: #f5f5f5 !important;
+    border-bottom: 1px solid #ebebeb !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+}
+
+mj-dashboard-viewer .lm_tabs {
+    height: 36px !important;
+}
+
+/* Hide Golden Layout window controls (popout, maximize) */
+mj-dashboard-viewer .lm_controls {
+    display: none !important;
+}
+
+/* Tab styling */
+mj-dashboard-viewer .lm_header .lm_tab {
+    padding: 0 16px 0 28px !important; /* Extra left padding for icon */
+    font-size: 13px !important;
+    height: 35px !important;
+    line-height: 35px !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid #ebebeb !important;
+    transition: all 0.15s ease !important;
+    position: relative !important;
+    z-index: 1 !important;
+    margin-right: 1px !important;
+}
+
+mj-dashboard-viewer .lm_header .lm_tab:hover {
+    background: #e8e8e8 !important;
+}
+
+mj-dashboard-viewer .lm_header .lm_tab.lm_active {
+    background: white !important;
+    height: 36px !important;
+    margin-bottom: -1px !important;
+    margin-right: 0 !important;
+    border: 1px solid #ebebeb !important;
+    border-bottom-color: white !important;
+    border-radius: 4px 4px 0 0 !important;
+    z-index: 2 !important;
+}
+
+mj-dashboard-viewer .lm_title {
+    cursor: pointer !important;
+    user-select: none !important;
+}
+
+/* Panel icon styling - icon is direct child of .lm_tab to preserve GL's drag/drop */
+/* Positioned absolutely in the left padding area so it doesn't affect GL's title structure */
+mj-dashboard-viewer .lm_header .lm_tab .panel-icon {
+    position: absolute !important;
+    left: 10px !important;
+    top: 50% !important;
+    transform: translateY(-30%) !important; 
+    font-family: "Font Awesome 6 Free", "Font Awesome 6 Pro", "Font Awesome 5 Free", "Font Awesome 5 Pro", FontAwesome !important;
+    font-weight: 900 !important; /* Required for solid icons */
+    font-size: 12px !important;
+    color: #5c6bc0 !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+mj-dashboard-viewer .lm_close_tab {
+    position: absolute !important;
+    right: 4px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 16px !important;
+    height: 16px !important;
+    cursor: pointer !important;
+    opacity: 0 !important;
+    transition: all 0.15s ease !important;
+}
+
+mj-dashboard-viewer .lm_header .lm_tab:hover .lm_close_tab {
+    opacity: 0.7 !important;
+}
+
+mj-dashboard-viewer .lm_close_tab:hover {
+    opacity: 1 !important;
+    color: #c62828 !important;
+}
+
+/* Add padding for close button when editing */
+mj-dashboard-viewer .dashboard-viewer.editing .lm_header .lm_tab {
+    padding-right: 24px !important;
+}
+
+/* ========================================
+   View Mode (Not Editing) - Lock Layout
+   ======================================== */
+
+/* Hide close buttons on tabs when not editing */
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_close_tab {
+    display: none !important;
+}
+
+/* Remove extra padding for close button when not editing */
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_header .lm_tab {
+    padding-right: 16px !important;
+}
+
+/* Disable splitter dragging when not editing */
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_splitter {
+    pointer-events: none !important;
+    cursor: default !important;
+}
+
+/* Hide splitter drag handle visual when not editing */
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_splitter .lm_drag_handle {
+    display: none !important;
+}
+
+/* Disable tab dragging cursor when not editing */
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_header .lm_tab {
+    cursor: default !important;
+}
+
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_title {
+    cursor: default !important;
+}

@@ -8,6 +8,10 @@ export interface TestExecutionOptions {
   suiteId?: string;
   verbose?: boolean;
   parallel?: boolean;
+  /**
+   * Variable values to use for this test run
+   */
+  variables?: Record<string, unknown>;
 }
 
 export interface TestExecutionProgress {
@@ -40,13 +44,14 @@ export class TestingExecutionService {
 
   ExecuteTest(
     testId: string,
-    options: { verbose?: boolean } = {}
+    options: { verbose?: boolean; variables?: Record<string, unknown> } = {}
   ): Observable<{ result: TestExecutionResult; progress: TestExecutionProgress }> {
     const progress$ = new Subject<{ result: TestExecutionResult; progress: TestExecutionProgress }>();
 
     this.testingClient.RunTest({
       testId,
       verbose: options.verbose ?? true,
+      variables: options.variables,
       onProgress: (progressUpdate) => {
         progress$.next({
           result: null as any,
@@ -76,7 +81,7 @@ export class TestingExecutionService {
 
   ExecuteSuite(
     suiteId: string,
-    options: { verbose?: boolean; parallel?: boolean } = {}
+    options: { verbose?: boolean; parallel?: boolean; variables?: Record<string, unknown> } = {}
   ): Observable<{ result: TestExecutionResult; progress: TestExecutionProgress }> {
     const progress$ = new Subject<{ result: TestExecutionResult; progress: TestExecutionProgress }>();
 
@@ -84,6 +89,7 @@ export class TestingExecutionService {
       suiteId,
       verbose: options.verbose ?? true,
       parallel: options.parallel ?? false,
+      variables: options.variables,
       onProgress: (progressUpdate) => {
         progress$.next({
           result: null as any,

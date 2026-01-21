@@ -1,0 +1,47 @@
+<!-- Generic Edit Part Dialog -->
+<div class="edit-part-dialog-overlay" *ngIf="Visible" (click)="cancel()">
+    <div class="edit-part-dialog" (click)="$event.stopPropagation()">
+        <!-- Header -->
+        <div class="dialog-header">
+            <div class="header-icon">
+                <i [class]="getIcon()"></i>
+            </div>
+            <h3>{{ getDialogTitle() }}</h3>
+            <button class="close-button" (click)="cancel()">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="dialog-content">
+            <!-- Loading state -->
+            <div class="loading-state" *ngIf="IsLoading">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <span>Loading configuration panel...</span>
+            </div>
+
+            <!-- Error state -->
+            <div class="error-state" *ngIf="LoadError && !IsLoading">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                <span>{{ LoadError }}</span>
+            </div>
+
+            <!-- Dynamic config panel container -->
+            <ng-container #configPanelContainer></ng-container>
+        </div>
+
+        <!-- Footer -->
+        <div class="dialog-footer">
+            <button
+                class="btn-primary"
+                (click)="save()"
+                [disabled]="!IsValid || IsLoading || LoadError">
+                <i class="fa-solid fa-check"></i>
+                {{ getSaveButtonText() }}
+            </button>
+            <button class="btn-secondary" (click)="cancel()">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>

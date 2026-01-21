@@ -4,7 +4,9 @@ dotenv.config();
 
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
+import { mergeConfigs } from '@memberjunction/config';
+import { DEFAULT_SERVER_CONFIG } from '@memberjunction/server';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -90,17 +92,25 @@ export const {
 
 export function loadConfig(): ConfigInfo {
   const configSearchResult = explorer.search(process.cwd());
-  if (!configSearchResult) {
-    throw new Error('Config file not found.');
+
+  // Start with DEFAULT_SERVER_CONFIG as base
+  let mergedConfig = DEFAULT_SERVER_CONFIG;
+
+  // If user config exists, merge it with defaults
+  if (configSearchResult && !configSearchResult.isEmpty) {
+    LogStatus(`MCP Server: Config file found at ${configSearchResult.filepath}`);
+
+    // Merge user config with defaults (user config takes precedence)
+    mergedConfig = mergeConfigs(DEFAULT_SERVER_CONFIG, configSearchResult.config);
+  } else {
+    LogStatus(`MCP Server: No config file found, using DEFAULT_SERVER_CONFIG`);
   }
 
-  if (configSearchResult.isEmpty) {
-    throw new Error(`Config file ${configSearchResult.filepath} is empty or does not exist.`);
-  }
-
-  const configParsing = configInfoSchema.safeParse(configSearchResult.config);
+  // Validate the merged configuration
+  const configParsing = configInfoSchema.safeParse(mergedConfig);
   if (!configParsing.success) {
     LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
+    throw new Error('Configuration validation failed');
   }
-  return <ConfigInfo>configParsing.data;
+  return configParsing.data;
 }

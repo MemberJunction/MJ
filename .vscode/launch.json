@@ -387,6 +387,128 @@
       "sourceMapPathOverrides": {
         "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
       }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MJCLI - Migrate",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
+      "args": [
+        "migrate"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development",
+        "DEBUG": "node-flyway:*"
+      },
+      "preLaunchTask": "Build MJCLI",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MJCLI - Migrate (Verbose)",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
+      "args": [
+        "migrate",
+        "--verbose"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development",
+        "DEBUG": "node-flyway:*"
+      },
+      "preLaunchTask": "Build MJCLI",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MJCLI - Migrate with Tag",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
+      "args": [
+        "migrate",
+        "--verbose",
+        "--tag",
+        "${input:migrateTag}"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development",
+        "DEBUG": "node-flyway:*"
+      },
+      "preLaunchTask": "Build MJCLI",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "DEBUG: MetadataSync Push Components (SqlLogger Verbose)",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev",
+      "args": ["sync", "push", "--dir", "metadata", "--include", "components,component-libraries", "--verbose"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development",
+        "DEBUG": "*"
+      },
+      "preLaunchTask": "Build MetadataSync with SQLLogger",
+      "runtimeArgs": ["--enable-source-maps", "--trace-warnings"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
     }
   ],
   "inputs": [
@@ -549,6 +671,12 @@
       "type": "promptString",
       "description": "Enter entity names to generate queries for (comma-separated)",
       "default": "Customers,Orders"
+    },
+    {
+      "id": "migrateTag",
+      "type": "promptString",
+      "description": "Enter version tag for remote migrations (e.g., v2.132.0)",
+      "default": ""
     }
   ]
 }

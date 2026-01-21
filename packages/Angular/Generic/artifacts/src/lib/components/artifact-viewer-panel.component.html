@@ -1,64 +1,70 @@
-<div class="artifact-viewer-panel">
-  <div class="panel-header">
-    <div class="panel-header-left">
-      <h3>
-        <i class="fas" [ngClass]="getArtifactIcon()"></i>
-        {{ displayName }}
-      </h3>
-      @if (displayDescription) {
-        <p class="header-description">{{ displayDescription }}</p>
-      }
-    </div>
-    <div class="panel-header-right">
-      <div class="version-selector"
-           [class.clickable]="allVersions.length > 1 && viewContext !== 'collection'"
-           (click)="viewContext !== 'collection' && toggleVersionDropdown()">
-        <i class="fas fa-history"></i>
-        <span class="version-label">v{{ selectedVersionNumber }}</span>
-        @if (allVersions.length > 1 && viewContext !== 'collection') {
-          <i class="fas fa-chevron-down dropdown-icon" [class.open]="showVersionDropdown"></i>
-        }
-        @if (showVersionDropdown) {
-          <div class="version-dropdown" (click)="$event.stopPropagation()">
-            @for (version of allVersions; track version.ID) {
-              <div class="version-option"
-                   [class.selected]="version.VersionNumber === selectedVersionNumber"
-                   (click)="selectVersion(version); $event.stopPropagation()">
-                <span class="version-number">v{{ version.VersionNumber }}</span>
-                <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
-                @if (version.VersionNumber === selectedVersionNumber) {
-                  <i class="fas fa-check"></i>
-                }
-              </div>
-            }
-          </div>
+<div class="artifact-viewer-panel" [class.no-header]="!showHeader">
+  @if (showHeader) {
+    <div class="panel-header">
+      <div class="panel-header-left">
+        <h3>
+          <i class="fas" [ngClass]="getArtifactIcon()"></i>
+          {{ displayName }}
+        </h3>
+        @if (displayDescription) {
+          <p class="header-description">{{ displayDescription }}</p>
         }
       </div>
-      @if (showSaveToCollection) {
-        <button class="save-to-collection-btn"
-                [class.in-collection]="isInCollection"
-                (click)="onSaveToLibrary()"
-                [title]="isInCollection ? 'Current version saved to ' + currentVersionCollections.length + ' collection(s)' : 'Save to Collection'">
-          <i [class]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
-        </button>
-      }
-      @if (canShare) {
-        <button class="share-btn"
-                (click)="onShare()"
-                title="Share">
-          <i class="fas fa-share-nodes"></i>
-        </button>
-      }
-      <button class="maximize-btn"
-              (click)="onMaximizeToggle()"
-              [title]="isMaximized ? 'Restore Width' : 'Maximize Width'">
-        <i class="fas" [ngClass]="isMaximized ? 'fa-compress-arrows-alt' : 'fa-arrows-left-right'"></i>
-      </button>
-      <button class="close-btn" (click)="onClose()" title="Close">
-        <i class="fas fa-times"></i>
-      </button>
+      <div class="panel-header-right">
+        <div class="version-selector"
+             [class.clickable]="allVersions.length > 1 && viewContext !== 'collection'"
+             (click)="viewContext !== 'collection' && toggleVersionDropdown()">
+          <i class="fas fa-history"></i>
+          <span class="version-label">v{{ selectedVersionNumber }}</span>
+          @if (allVersions.length > 1 && viewContext !== 'collection') {
+            <i class="fas fa-chevron-down dropdown-icon" [class.open]="showVersionDropdown"></i>
+          }
+          @if (showVersionDropdown) {
+            <div class="version-dropdown" (click)="$event.stopPropagation()">
+              @for (version of allVersions; track version.ID) {
+                <div class="version-option"
+                     [class.selected]="version.VersionNumber === selectedVersionNumber"
+                     (click)="selectVersion(version); $event.stopPropagation()">
+                  <span class="version-number">v{{ version.VersionNumber }}</span>
+                  <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
+                  @if (version.VersionNumber === selectedVersionNumber) {
+                    <i class="fas fa-check"></i>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+        @if (showSaveToCollection) {
+          <button class="save-to-collection-btn"
+                  [class.in-collection]="isInCollection"
+                  (click)="onSaveToLibrary()"
+                  [title]="isInCollection ? 'Current version saved to ' + currentVersionCollections.length + ' collection(s)' : 'Save to Collection'">
+            <i [class]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
+          </button>
+        }
+        @if (canShare) {
+          <button class="share-btn"
+                  (click)="onShare()"
+                  title="Share">
+            <i class="fas fa-share-nodes"></i>
+          </button>
+        }
+        @if (showMaximizeButton) {
+          <button class="maximize-btn"
+                  (click)="onMaximizeToggle()"
+                  [title]="isMaximized ? 'Restore Width' : 'Maximize Width'">
+            <i class="fas" [ngClass]="isMaximized ? 'fa-compress-arrows-alt' : 'fa-arrows-left-right'"></i>
+          </button>
+        }
+        @if (showCloseButton) {
+          <button class="close-btn" (click)="onClose()" title="Close">
+            <i class="fas fa-times"></i>
+          </button>
+        }
+      </div>
     </div>
-  </div>
+  }
 
   <div class="panel-content">
     @if (isLoading) {
@@ -76,20 +82,22 @@
     }
 
     @if (!isLoading && !error && artifact) {
-      <div class="artifact-content-wrapper">
-        <!-- Tab Navigation (Dynamic) -->
-        <div class="tab-navigation">
-          @for (tab of allTabs; track tab) {
-            <button class="tab-btn"
-                    [class.active]="activeTab === tab.toLowerCase()"
-                    (click)="SetActiveTab(tab)">
-              @if (GetTabIcon(tab)) {
-                <i [class]="GetTabIcon(tab)!"></i>
-              }
-              {{ tab }}
-            </button>
-          }
-        </div>
+      <div class="artifact-content-wrapper" [class.no-tabs]="!showTabs">
+        <!-- Tab Navigation (Dynamic) - Hidden when showTabs is false -->
+        @if (showTabs) {
+          <div class="tab-navigation">
+            @for (tab of allTabs; track tab) {
+              <button class="tab-btn"
+                      [class.active]="activeTab === tab.toLowerCase()"
+                      (click)="SetActiveTab(tab)">
+                @if (GetTabIcon(tab)) {
+                  <i [class]="GetTabIcon(tab)!"></i>
+                }
+                {{ tab }}
+              </button>
+            }
+          </div>
+        }
 
         <!-- Tab Content (Dynamic) -->
         <div class="tab-content">
