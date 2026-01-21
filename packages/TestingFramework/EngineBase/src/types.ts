@@ -60,6 +60,13 @@ export interface TestProgress {
 }
 
 /**
+ * Variables to pass to a test/suite run
+ */
+export interface TestRunVariables {
+    [variableName: string]: string | number | boolean | Date;
+}
+
+/**
  * Options for running a single test
  */
 export interface TestRunOptions {
@@ -107,6 +114,13 @@ export interface TestRunOptions {
    * Tags to apply to the test run (JSON string array)
    */
   tags?: string;
+
+  /**
+   * Variable values to use for this run.
+   * These values take highest priority in the resolution order:
+   * run > suite > test > type
+   */
+  variables?: TestRunVariables;
 }
 
 /**
@@ -278,6 +292,11 @@ export interface TestRunResult {
    * Iteration number for repeated tests (when RepeatCount > 1)
    */
   sequence?: number;
+
+  /**
+   * Resolved variables that were used for this test run
+   */
+  resolvedVariables?: ResolvedTestVariables;
 }
 
 /**
@@ -348,6 +367,11 @@ export interface TestSuiteRunResult {
    * When execution completed
    */
   completedAt: Date;
+
+  /**
+   * Resolved variables that were provided at suite run level
+   */
+  resolvedVariables?: ResolvedTestVariables;
 }
 
 /**
@@ -502,3 +526,182 @@ export interface OracleConfig {
    */
   [key: string]: unknown;
 }
+
+// ============================================================================
+// TEST VARIABLES SYSTEM
+// ============================================================================
+
+/**
+ * Data types supported for test variables
+ */
+export type TestVariableDataType = 'string' | 'number' | 'boolean' | 'date';
+
+/**
+ * How the valid values for a variable are determined
+ */
+export type TestVariableValueSource =
+  | 'static'    // Hardcoded list in possibleValues
+  | 'freeform'; // Any value of the given dataType
+  // Future: | 'entity'   // Pull from MJ entity (e.g., AI Configurations)
+
+/**
+ * A possible value for a static variable
+ */
+export interface TestVariablePossibleValue {
+  /**
+   * The actual value
+   */
+  value: string | number | boolean;
+
+  /**
+   * Display label (defaults to value.toString() if not provided)
+   */
+  label?: string;
+
+  /**
+   * Optional description of what this value means
+   */
+  description?: string;
+}
+
+/**
+ * Definition of a single test variable.
+ * Stored in TestType.VariablesSchema.variables array.
+ */
+export interface TestVariableDefinition {
+  /**
+   * Unique name for the variable (e.g., "AIConfiguration", "Temperature")
+   */
+  name: string;
+
+  /**
+   * Human-readable display name
+   */
+  displayName: string;
+
+  /**
+   * Description of what this variable controls
+   */
+  description?: string;
+
+  /**
+   * Data type of the variable value
+   */
+  dataType: TestVariableDataType;
+
+  /**
+   * How valid values are determined
+   */
+  valueSource: TestVariableValueSource;
+
+  /**
+   * For static valueSource: list of valid values
+   * Each entry has a value and optional display label
+   */
+  possibleValues?: TestVariablePossibleValue[];
+
+  /**
+   * Default value (must match dataType)
+   */
+  defaultValue?: string | number | boolean | Date;
+
+  /**
+   * Whether this variable must have a value to run the test
+   */
+  required: boolean;
+}
+
+/**
+ * Variables schema for a TestType.
+ * Stored in TestType.VariablesSchema JSON column.
+ */
+export interface TestTypeVariablesSchema {
+  /**
+   * Version of the schema format (for future migrations)
+   */
+  schemaVersion: '1.0';
+
+  /**
+   * Variables available for tests of this type
+   */
+  variables: TestVariableDefinition[];
+}
+
+/**
+ * Override settings for a variable at the test level
+ */
+export interface TestVariableOverride {
+  /**
+   * Whether this variable is exposed for this test.
+   * If false, the variable is not available for override.
+   */
+  exposed: boolean;
+
+  /**
+   * Override the default value for this test
+   */
+  defaultValue?: string | number | boolean | Date;
+
+  /**
+   * If true, this variable cannot be overridden at suite/run level
+   */
+  locked?: boolean;
+
+  /**
+   * Restrict possible values to a subset of the type's values
+   */
+  restrictedValues?: (string | number | boolean)[];
+}
+
+/**
+ * Variable configuration for a specific Test.
+ * Stored in Test.Variables JSON column.
+ */
+export interface TestVariablesConfig {
+  /**
+   * Variables exposed by this test (subset of type's variables).
+   * Key is the variable name from TestType.
+   */
+  variables: {
+    [variableName: string]: TestVariableOverride;
+  };
+}
+
+/**
+ * Variable values for a TestSuite.
+ * Stored in TestSuite.Variables JSON column.
+ */
+export interface TestSuiteVariablesConfig {
+  /**
+   * Variable values to apply to all tests in this suite.
+   * Key is the variable name.
+   */
+  variables: {
+    [variableName: string]: string | number | boolean | Date;
+  };
+}
+
+/**
+ * Resolved variables with metadata.
+ * Used during test execution and stored in TestRun.ResolvedVariables.
+ */
+export interface ResolvedTestVariables {
+  /**
+   * The resolved values
+   */
+  values: {
+    [variableName: string]: string | number | boolean | Date;
+  };
+
+  /**
+   * Source of each resolved value (for debugging/auditing)
+   */
+  sources: {
+    [variableName: string]: 'run' | 'suite' | 'test' | 'type';
+  };
+}
+
+/**
+ * Variable value type union
+ */
+export type TestVariableValue = string | number | boolean | Date;
