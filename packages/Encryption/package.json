@@ -23,10 +23,10 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/core-entities": "3.0.0",
-    "@memberjunction/actions-base": "3.0.0",
+    "@memberjunction/global": "3.1.0",
+    "@memberjunction/core": "3.1.0",
+    "@memberjunction/core-entities": "3.1.0",
+    "@memberjunction/actions-base": "3.1.0",
     "cosmiconfig": "^9.0.0"
   },
   "optionalDependencies": {

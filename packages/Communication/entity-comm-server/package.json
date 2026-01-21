@@ -19,12 +19,12 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/communication-engine": "3.0.0",
-    "@memberjunction/communication-types": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/core-entities": "3.0.0",
-    "@memberjunction/entity-communications-base": "3.0.0",
-    "@memberjunction/global": "3.0.0"
+    "@memberjunction/communication-engine": "3.1.0",
+    "@memberjunction/communication-types": "3.1.0",
+    "@memberjunction/core": "3.1.0",
+    "@memberjunction/core-entities": "3.1.0",
+    "@memberjunction/entity-communications-base": "3.1.0",
+    "@memberjunction/global": "3.1.0"
   },
   "repository": {
     "type": "git",

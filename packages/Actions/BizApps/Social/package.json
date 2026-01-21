@@ -26,11 +26,11 @@
   "author": "MemberJunction.com",
   "license": "SEE LICENSE IN LICENSE.md",
   "dependencies": {
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/actions-base": "3.0.0",
-    "@memberjunction/actions": "3.0.0",
-    "@memberjunction/core-entities": "3.0.0",
+    "@memberjunction/core": "3.1.0",
+    "@memberjunction/global": "3.1.0",
+    "@memberjunction/actions-base": "3.1.0",
+    "@memberjunction/actions": "3.1.0",
+    "@memberjunction/core-entities": "3.1.0",
     "axios": "^1.6.2",
     "form-data": "^4.0.0"
   },

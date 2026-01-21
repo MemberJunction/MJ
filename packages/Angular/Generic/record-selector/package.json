@@ -28,11 +28,11 @@
     "@progress/kendo-angular-listbox": "16.2.0"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "3.0.0",
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/ng-container-directives": "3.0.0",
-    "@memberjunction/ng-shared": "3.0.0",
+    "@memberjunction/core-entities": "3.1.0",
+    "@memberjunction/global": "3.1.0",
+    "@memberjunction/core": "3.1.0",
+    "@memberjunction/ng-container-directives": "3.1.0",
+    "@memberjunction/ng-shared": "3.1.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,
