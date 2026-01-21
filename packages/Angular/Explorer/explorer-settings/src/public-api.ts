@@ -13,6 +13,7 @@ export * from './lib/role-management/role-management.component';
 export * from './lib/application-management/application-management.component';
 export * from './lib/entity-permissions/entity-permissions.component';
 export * from './lib/user-profile-settings/user-profile-settings.component';
+export * from './lib/notification-preferences/notification-preferences.component';
 
 // Dialog components
 export * from './lib/role-management/role-dialog/role-dialog.component';
