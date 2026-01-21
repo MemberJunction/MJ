@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-vector-dupe",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "MemberJunction: AI Vector/Entity Sync Package - Handles synchronization between Vector DB and MJ CDP Data",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,15 +15,15 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "3.1.0",
-    "@memberjunction/ai-vectordb": "3.1.0",
-    "@memberjunction/ai-vectors": "3.1.0",
-    "@memberjunction/ai-vectors-pinecone": "3.1.0",
-    "@memberjunction/ai-vector-sync": "3.1.0",
-    "@memberjunction/aiengine": "3.1.0",
-    "@memberjunction/core": "3.1.0",
-    "@memberjunction/global": "3.1.0",
-    "@memberjunction/core-entities": "3.1.0",
+    "@memberjunction/ai": "3.1.1",
+    "@memberjunction/ai-vectordb": "3.1.1",
+    "@memberjunction/ai-vectors": "3.1.1",
+    "@memberjunction/ai-vectors-pinecone": "3.1.1",
+    "@memberjunction/ai-vector-sync": "3.1.1",
+    "@memberjunction/aiengine": "3.1.1",
+    "@memberjunction/core": "3.1.1",
+    "@memberjunction/global": "3.1.1",
+    "@memberjunction/core-entities": "3.1.1",
     "dotenv": "^16.4.1"
   },
   "devDependencies": {

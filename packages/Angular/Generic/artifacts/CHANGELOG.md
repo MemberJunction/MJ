@@ -1,5 +1,20 @@
 # @memberjunction/ng-artifacts
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ng-notifications@3.1.1
+- @memberjunction/ng-react@3.1.1
+- @memberjunction/ng-base-types@3.1.1
+- @memberjunction/ng-code-editor@3.1.1
+- @memberjunction/ng-markdown@3.1.1
+- @memberjunction/ng-shared-generic@3.1.1
+- @memberjunction/interactive-component-types@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

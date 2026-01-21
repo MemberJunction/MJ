@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-list-management",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "MemberJunction: Angular Components for managing entity list membership with beautiful, responsive UI",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -36,12 +36,12 @@
     "rxjs": "^7.8.1"
   },
   "dependencies": {
-    "@memberjunction/core": "3.1.0",
-    "@memberjunction/core-entities": "3.1.0",
-    "@memberjunction/global": "3.1.0",
-    "@memberjunction/ng-container-directives": "3.1.0",
-    "@memberjunction/ng-shared": "3.1.0",
-    "@memberjunction/ng-shared-generic": "3.1.0",
+    "@memberjunction/core": "3.1.1",
+    "@memberjunction/core-entities": "3.1.1",
+    "@memberjunction/global": "3.1.1",
+    "@memberjunction/ng-container-directives": "3.1.1",
+    "@memberjunction/ng-shared": "3.1.1",
+    "@memberjunction/ng-shared-generic": "3.1.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

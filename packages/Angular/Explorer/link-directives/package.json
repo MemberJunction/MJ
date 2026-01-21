@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-link-directives",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "MemberJunction: Angular Link Directives for turning an element in an angular app into an email, web, or record link",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -30,8 +30,8 @@
   },
   "dependencies": {
     "tslib": "^2.3.0",
-    "@memberjunction/core": "3.1.0",
-    "@memberjunction/ng-shared": "3.1.0"
+    "@memberjunction/core": "3.1.1",
+    "@memberjunction/ng-shared": "3.1.1"
   },
   "sideEffects": false,
   "repository": {

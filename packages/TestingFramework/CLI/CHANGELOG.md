@@ -1,5 +1,16 @@
 # @memberjunction/testing-cli
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+- @memberjunction/testing-engine@3.1.1
+- @memberjunction/testing-engine-base@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes
