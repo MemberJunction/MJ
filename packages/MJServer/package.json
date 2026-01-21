@@ -59,7 +59,6 @@
     "@memberjunction/global": "3.0.0",
     "@memberjunction/graphql-dataprovider": "3.0.0",
     "@memberjunction/interactive-component-types": "3.0.0",
-    "@memberjunction/notifications": "3.1.0",
     "@memberjunction/queue": "3.0.0",
     "@memberjunction/scheduling-actions": "3.0.0",
     "@memberjunction/scheduling-base-types": "3.0.0",

@@ -1,106 +1,46 @@
-import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
+import { Component, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
-import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity, UserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 import { Metadata, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
 import { Router } from '@angular/router';
 import { SafeJSONParse } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-
-/**
- * Radio button filter options for notification read status
- */
-type ReadFilterOption = 'All' | 'Unread' | 'Read';
-
-/**
- * Configuration for record-type resource navigation
- */
-interface RecordResourceConfig {
-  Entity?: string;
-}
-
-/**
- * Configuration for conversation-type resource navigation
- */
-interface ConversationResourceConfig {
-  type: 'conversation';
-  conversationId?: string;
-  messageId?: string;
-  artifactId?: string;
-  versionNumber?: string;
-  taskId?: string;
-}
-
-/**
- * Result of parsing a notification URL
- */
-interface NotificationUrlInfo {
-  urlParts: string[];
-  queryString: string;
-}
 
 @Component({
   selector: 'app-user-notifications',
   templateUrl: './user-notifications.component.html',
   styleUrls: ['./user-notifications.component.css']
 })
-export class UserNotificationsComponent implements OnInit, AfterViewInit {
-  @ViewChild('allRadio') allRadio!: ElementRef<HTMLInputElement>;
-  @ViewChild('unreadRadio') unreadRadio!: ElementRef<HTMLInputElement>;
-  @ViewChild('readRadio') readRadio!: ElementRef<HTMLInputElement>;
+export class UserNotificationsComponent implements AfterViewInit {
+  @ViewChild('allRadio') allRadio!: ElementRef;
+  @ViewChild('unreadRadio') unreadRadio!: ElementRef;
+  @ViewChild('readRadio') readRadio!: ElementRef;  
 
-  public radioSelected: ReadFilterOption = 'All';
+  public radioSelected: string = 'all';
   public currentFilter: string = '';
-  public notificationTypes: UserNotificationTypeEntity[] = [];
-  public selectedTypeFilter: string | null = null;
-  public loadingTypes: boolean = true;
 
   constructor (public sharedService: SharedService, private router: Router) {}
-
-  async ngOnInit() {
-    this.loadNotificationTypes();
-  }
 
   ngAfterViewInit(): void {
     this.sharedService.InvokeManualResize(); // make sure the notifications component is sized correctly
   }
 
-  private loadNotificationTypes() {
-    // Get notification types from UserInfoEngine cache, sorted client-side
-    // UserInfoEngine is auto-configured via @RegisterForStartup()
-    this.notificationTypes = [...UserInfoEngine.Instance.NotificationTypes].sort((a, b) => {
-      const priorityA = a.Priority ?? 999;
-      const priorityB = b.Priority ?? 999;
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB;
-      }
-      return a.Name.localeCompare(b.Name);
-    });
-    this.loadingTypes = false;
-  }
-
   public get NotificationsToShow(): UserNotificationEntity[] {
     let temp: UserNotificationEntity[] = [];
-    switch (this.radioSelected) {
-      case 'All':
-        temp = this.AllNotifications;
-        break;
-      case 'Unread':
-        temp = this.AllNotifications.filter(n => n.Unread);
-        break;
-      case 'Read':
-        temp = this.AllNotifications.filter(n => !n.Unread);
-        break;
+    if (this.radioSelected.trim().toLowerCase() === 'all') {
+      temp = this.AllNotifications;
+    }
+    else if (this.radioSelected.trim().toLowerCase() === 'unread') {
+      temp = this.AllNotifications.filter(n => n.Unread);
+    }
+    else {
+      temp = this.AllNotifications.filter(n => !n.Unread);
     }
 
-    // Apply type filter if selected
-    if (this.selectedTypeFilter) {
-      temp = temp.filter(n => n.NotificationTypeID === this.selectedTypeFilter);
-    }
-
-    // Apply text filter if it is not empty
+    // Apply filter if it is not empty
     if (this.currentFilter.trim().length > 0) {
       // check for inclusion of filter value in title or message
-      temp = temp.filter(n => n.Title?.toLowerCase().includes(this.currentFilter.trim().toLowerCase()) ||
+      temp = temp.filter(n => n.Title?.toLowerCase().includes(this.currentFilter.trim().toLowerCase()) || 
                               n.Message?.toLowerCase().includes(this.currentFilter.trim().toLowerCase())
                         );
     }
@@ -113,18 +53,18 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     return (info !== null && info.urlParts && info.urlParts.length > 0);
   }
 
-  public notificationUrl(notification: UserNotificationEntity): NotificationUrlInfo {
-    const url: string[] = [];
+  public notificationUrl(notification: UserNotificationEntity): {urlParts: string[], queryString: string} {
+    let url: string[] = [];
     let queryString = '';
-    if (notification.ResourceRecordID && notification.ResourceRecordID.length > 0 &&
+    if (notification.ResourceRecordID && notification.ResourceRecordID.length > 0 && 
         notification.ResourceTypeID && notification.ResourceTypeID.length > 0) {
       // we have a resource here, like a Report, Dashboard, etc
       // we can generate a url to navigate to it
       const rt = this.sharedService.ResourceTypeByID(notification.ResourceTypeID);
-      let routeSegment: string | null | undefined;
+      let routeSegment;
       if (rt)
         routeSegment = this.sharedService.mapResourceTypeNameToRouteSegment(rt.Name);
-
+      
       if (rt && routeSegment && routeSegment.trim().length > 0) {
         url.push('resource');
         url.push(routeSegment);
@@ -132,11 +72,11 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
         if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
           if (rt.Name.trim().toLowerCase() === 'records') {
             // special handling for records
-            const config = SafeJSONParse<RecordResourceConfig>(notification.ResourceConfiguration);
+            const config = SafeJSONParse<any>(notification.ResourceConfiguration);
             if (config && config.Entity)
               queryString = `Entity=${config.Entity}`;
           }
-          else
+          else 
             queryString = notification.ResourceConfiguration;
         }
       }
@@ -146,21 +86,29 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       // string, which means we might have information on how to navigate to what we want if we parse the config
       // HOME screen stuff is done this way
 
-      const config = SafeJSONParse<ConversationResourceConfig>(notification.ResourceConfiguration);
-      if (config && config.type?.trim().toLowerCase() === 'conversation') {
-        url.push('chat');
-        // Build query string with conversation and artifact navigation
-        const queryParams: string[] = [];
-        if (config.conversationId) queryParams.push(`conversationId=${config.conversationId}`);
-        if (config.messageId) queryParams.push(`messageId=${config.messageId}`);
-        if (config.artifactId) queryParams.push(`artifactId=${config.artifactId}`);
-        if (config.versionNumber) queryParams.push(`versionNumber=${config.versionNumber}`);
-        if (config.taskId) queryParams.push(`taskId=${config.taskId}`);
-        queryString = queryParams.join('&');
+      const config = SafeJSONParse<any>(notification.ResourceConfiguration);
+      if (config) {
+        switch (config.type?.trim().toLowerCase()) {
+          case 'conversation':
+            url.push('chat');
+            // Build query string with conversation and artifact navigation
+            const queryParams: string[] = [];
+            if (config.conversationId) queryParams.push(`conversationId=${config.conversationId}`);
+            if (config.messageId) queryParams.push(`messageId=${config.messageId}`);
+            if (config.artifactId) queryParams.push(`artifactId=${config.artifactId}`);
+            if (config.versionNumber) queryParams.push(`versionNumber=${config.versionNumber}`);
+            if (config.taskId) queryParams.push(`taskId=${config.taskId}`);
+            queryString = queryParams.join('&');
+            break;
+        }
       }
     }
+    else {
+      // we have nothing to click on
+      // don't generate a url
+    }
 
-    return { urlParts: url, queryString };
+    return {urlParts: url, queryString: queryString};
   }
 
   public get AllNotifications(): UserNotificationEntity[] {
@@ -175,46 +123,48 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     return this.AllNotifications.filter(n => !n.Unread);
   }
 
-  selectReadOption(option: ReadFilterOption): void {
+  selectReadOption(option: string): void {
     this.radioSelected = option;
     // now update the radio button group in the UI
-    switch (option) {
-      case 'All':
+    switch (option.trim().toLowerCase()) {
+      case 'all':
         this.allRadio.nativeElement.checked = true;
         break;
-      case 'Unread':
+      case 'unread':
         this.unreadRadio.nativeElement.checked = true;
         break;
-      case 'Read':
+      case 'read':
         this.readRadio.nativeElement.checked = true;
         break;
     }
   }
 
   onReadRadioChanged(event: Event): void {
-    if (event.target instanceof HTMLInputElement) {
-      this.radioSelected = event.target.value as ReadFilterOption;
-    }
+    const target = event.target as HTMLInputElement;
+    const value = target.value;
+    this.radioSelected = value;
   }
 
   onFilterChanged(value: string): void {
     this.currentFilter = value;
   }
 
-  getItemTitleClass(notification: UserNotificationEntity): string {
+  getItemTitleClass(notification: UserNotificationEntity) {
     if (notification.Unread) {
       return 'notification-title notification-title-unread';
     }
-    return 'notification-title';
+    else {
+      return 'notification-title';
+    }
   }
 
-  getItemWrapperClass(notification: UserNotificationEntity): string {
+  getItemWrapperClass(notification: UserNotificationEntity) {
     let classInfo = 'notification-wrap';
 
-    if (this.isNotificationClickable(notification))
+    if (this.isNotificationClickable(notification)) 
       classInfo += ' notification-wrap-clickable';
 
-    if (notification.Unread)
+    if (notification.Unread) 
       classInfo += ' notification-wrap-unread';
 
     return classInfo;
@@ -244,11 +194,15 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
         return true;
       }
       else {
-        // Save the notification (not part of transaction group)
-        await notificationEntity.Save();
-        // Update the observables so badge count refreshes immediately
-        MJNotificationService.UpdateNotificationObservables();
-        return true;
+        if (await notificationEntity.Save()) {
+          // Update the observables so badge count refreshes immediately
+          MJNotificationService.UpdateNotificationObservables();
+          return true;
+        }
+        else  {
+          this.sharedService.CreateSimpleNotification('Unable to mark notification as read', 'error', 5000);
+          return false; // let caller do notifications
+        }
       }
     }
     else {
@@ -302,26 +256,30 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
   }
 
   public async markAll(bRead: boolean) {
-    // Use transaction group for batching - all saves are queued and sent in one round-trip
+    // do a transaction group, not so much for ATOMICITY but for performance in terms of latency to/from the server
     const md = new Metadata();
     const transGroup = await md.CreateTransactionGroup();
 
-    // Queue all saves - no need to await individual saves since transaction group queues them
     for (const notification of this.AllNotifications) {
       if (notification.Unread && bRead || !notification.Unread && !bRead) {
-        // Don't await - Save() with transaction group queues the operation immediately
-        this.markAsRead(notification, bRead, transGroup);
+        // don't await, we want to just keep going, the backgorund DB stuff happens when it happens but we can update the UI right away
+        if (!await this.markAsRead(notification, bRead, transGroup)) {
+          // failed
+          this.sharedService.CreateSimpleNotification('Unable to mark all notifications as read', 'error', 5000);
+          // bail out here
+          return;
+        }
       }
     }
 
-    // Submit transaction group - this is where the actual network call happens
+    // if we get here, that means all the saves worked...
     if (!await transGroup.Submit())
       this.sharedService.CreateSimpleNotification('Unable to mark all notifications as read', 'error', 5000);
     else
       SharedService.RefreshUserNotifications();
   }
   
-  notificationClicked(notification: UserNotificationEntity): void {
+  notificationClicked(notification: UserNotificationEntity) {
     if (this.isNotificationClickable(notification)) {
       // also mark this as read when we click it
       this.markAsRead(notification, true, null);
@@ -331,33 +289,9 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
         const fullUrl = `${info.urlParts.join('/')}${info.queryString ? '?' + info.queryString : ''}`;
         this.router.navigateByUrl(fullUrl);
       }
-      else {
+      else{
         this.router.navigate(info.urlParts);
       }
     }
-  }
-
-  public getNotificationType(typeId: string | null): UserNotificationTypeEntity | null {
-    if (!typeId) return null;
-    return this.notificationTypes.find(t => t.ID === typeId) || null;
-  }
-
-  public getTypeIcon(notification: UserNotificationEntity): string {
-    const type = this.getNotificationType(notification.NotificationTypeID);
-    return type?.Icon || 'fa-bell';
-  }
-
-  public getTypeColor(notification: UserNotificationEntity): string {
-    const type = this.getNotificationType(notification.NotificationTypeID);
-    return type?.Color || '#999';
-  }
-
-  public getTypeName(notification: UserNotificationEntity): string {
-    const type = this.getNotificationType(notification.NotificationTypeID);
-    return type ? type.Name : 'Notification';
-  }
-
-  public onTypeFilterChange(typeId: string | null): void {
-    this.selectedTypeFilter = typeId;
-  }
+  } 
 }
