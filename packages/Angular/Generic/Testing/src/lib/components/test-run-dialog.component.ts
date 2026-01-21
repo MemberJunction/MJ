@@ -17,7 +17,7 @@ interface SuiteTestItem {
 
 interface VariableInput {
   definition: TestVariableDefinition;
-  value: string | number | boolean | null;
+  value: string | number | Date | boolean | null;
   stringValue: string; // For input binding (converted on submit)
 }
 

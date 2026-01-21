@@ -60,6 +60,13 @@ export interface TestProgress {
 }
 
 /**
+ * Variables to pass to a test/suite run
+ */
+export interface TestRunVariables {
+    [variableName: string]: string | number | boolean | Date;
+}
+
+/**
  * Options for running a single test
  */
 export interface TestRunOptions {
@@ -113,9 +120,7 @@ export interface TestRunOptions {
    * These values take highest priority in the resolution order:
    * run > suite > test > type
    */
-  variables?: {
-    [variableName: string]: string | number | boolean | Date;
-  };
+  variables?: TestRunVariables;
 }
 
 /**

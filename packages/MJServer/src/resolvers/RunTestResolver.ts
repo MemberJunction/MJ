@@ -16,6 +16,7 @@ import { LogError, LogStatus } from '@memberjunction/core';
 import { TestEngine } from '@memberjunction/testing-engine';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
+import { TestRunVariables } from '@memberjunction/testing-engine-base';
 
 // ===== GraphQL Types =====
 
@@ -131,7 +132,7 @@ export class RunTestResolver extends ResolverBase {
                 undefined;
 
             // Parse variables from JSON string if provided
-            let parsedVariables: Record<string, unknown> | undefined;
+            let parsedVariables: TestRunVariables | undefined;
             if (variables) {
                 try {
                     parsedVariables = JSON.parse(variables);
@@ -261,7 +262,7 @@ export class RunTestResolver extends ResolverBase {
             }
 
             // Parse variables from JSON string if provided
-            let parsedVariables: Record<string, unknown> | undefined;
+            let parsedVariables: TestRunVariables | undefined;
             if (variables) {
                 try {
                     parsedVariables = JSON.parse(variables);
