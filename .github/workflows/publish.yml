@@ -97,6 +97,9 @@ jobs:
         if: ${{ env.BRANCH == 'main' }}
         run: ./.github/scripts/validate-npm-packages.sh
 
+      - name: Validate package repository.url for npm provenance
+        run: ./.github/scripts/validate-package-repository.sh
+
       - name: Set up git credentials
         run: |
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
