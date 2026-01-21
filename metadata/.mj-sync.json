@@ -28,6 +28,7 @@
     "component-libraries",
     "components",
     "applications",
+    "dashboard-part-types",
     "dashboards",
     "test-types",
     "tests",

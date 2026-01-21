@@ -41,7 +41,7 @@
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^18.15.11",
-    "rimraf": "^4.4.0"
+    "rimraf": "^5.0.10"
   },
   "repository": {
     "type": "git",

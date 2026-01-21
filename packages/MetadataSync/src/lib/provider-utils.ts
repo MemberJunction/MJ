@@ -63,8 +63,8 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
       user: config.dbUsername,
       password: config.dbPassword,
       options: {
-        encrypt: config.dbEncrypt === 'Y' || config.dbEncrypt === 'true' || 
-                 config.dbHost.includes('.database.windows.net'), // Auto-detect Azure SQL
+        encrypt: config.dbEncrypt === 'Y' || config.dbEncrypt === 'true' ||
+                 config.dbHost?.includes('.database.windows.net'), // Auto-detect Azure SQL
         trustServerCertificate: config.dbTrustServerCertificate === 'Y',
         instanceName: config.dbInstanceName,
         enableArithAbort: true

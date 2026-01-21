@@ -2,16 +2,23 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrateg
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { TestEngineBase } from '@memberjunction/testing-engine-base';
+import { TestEngineBase, TestVariableDefinition, TestTypeVariablesSchema, TestVariablesConfig } from '@memberjunction/testing-engine-base';
 import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { TestEntity, TestSuiteEntity, TestSuiteTestEntity } from '@memberjunction/core-entities';
+import { TestEntity, TestSuiteEntity, TestSuiteTestEntity, TestTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
+import { SafeJSONParse } from '@memberjunction/global';
 
 interface SuiteTestItem {
   testId: string;
   testName: string;
   sequence: number;
   selected: boolean;
+}
+
+interface VariableInput {
+  definition: TestVariableDefinition;
+  value: string | number | Date | boolean | null;
+  stringValue: string; // For input binding (converted on submit)
 }
 
 interface ProgressUpdate {
@@ -87,6 +94,64 @@ interface ProgressUpdate {
                 </div>
               </div>
             </div>
+
+            <!-- Variables Section for Preselected Mode -->
+            @if (availableVariables.length > 0) {
+              <div class="variables-section">
+                <button class="variables-toggle" (click)="showVariablesSection = !showVariablesSection">
+                  <i class="fa-solid" [class.fa-chevron-right]="!showVariablesSection" [class.fa-chevron-down]="showVariablesSection"></i>
+                  <i class="fa-solid fa-sliders"></i>
+                  <span>Test Variables</span>
+                  <span class="variables-count-badge">{{ availableVariables.length }}</span>
+                </button>
+
+                @if (showVariablesSection) {
+                  <div class="variables-content">
+                    @for (variable of availableVariables; track variable.definition.name) {
+                      <div class="variable-row">
+                        <div class="variable-info">
+                          <label class="variable-label">{{ variable.definition.displayName }}</label>
+                          @if (variable.definition.description) {
+                            <span class="variable-description">{{ variable.definition.description }}</span>
+                          }
+                        </div>
+                        <div class="variable-input">
+                          @if (variable.definition.valueSource === 'static' && variable.definition.possibleValues) {
+                            <select [(ngModel)]="variable.stringValue" class="variable-select">
+                              <option value="">-- Select --</option>
+                              @for (option of variable.definition.possibleValues; track option.value) {
+                                <option [value]="option.value">{{ option.label || option.value }}</option>
+                              }
+                            </select>
+                          } @else if (variable.definition.dataType === 'boolean') {
+                            <select [(ngModel)]="variable.stringValue" class="variable-select">
+                              <option value="">-- Select --</option>
+                              <option value="true">Yes</option>
+                              <option value="false">No</option>
+                            </select>
+                          } @else if (variable.definition.dataType === 'number') {
+                            <input
+                              type="number"
+                              [(ngModel)]="variable.stringValue"
+                              class="variable-input-field"
+                              [placeholder]="variable.definition.defaultValue?.toString() || 'Enter value'"
+                              [step]="variable.definition.name.toLowerCase().includes('temperature') ? 0.1 : 1"
+                            />
+                          } @else {
+                            <input
+                              type="text"
+                              [(ngModel)]="variable.stringValue"
+                              class="variable-input-field"
+                              [placeholder]="variable.definition.defaultValue?.toString() || 'Enter value'"
+                            />
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
 
             <!-- Advanced Options for Preselected Suite Mode -->
             @if (runMode === 'suite' && suiteTests.length > 0) {
@@ -1639,6 +1704,106 @@ interface ProgressUpdate {
     .preselected-advanced {
       /* No extra margin - handled by dialog-scroll-content gap */
     }
+
+    /* Variables Section Styles */
+    .variables-section {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .variables-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      text-align: left;
+      transition: background 0.2s ease;
+    }
+
+    .variables-toggle:hover {
+      background: #f5f7fa;
+    }
+
+    .variables-toggle .fa-sliders {
+      color: #9c27b0;
+    }
+
+    .variables-count-badge {
+      margin-left: auto;
+      padding: 2px 8px;
+      background: #f3e5f5;
+      color: #7b1fa2;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .variables-content {
+      padding: 0 12px 12px 12px;
+      border-top: 1px solid #eee;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-top: 12px;
+    }
+
+    .variable-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .variable-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .variable-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .variable-description {
+      font-size: 11px;
+      color: #666;
+      line-height: 1.3;
+    }
+
+    .variable-input {
+      width: 100%;
+    }
+
+    .variable-select,
+    .variable-input-field {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e0e4e8;
+      border-radius: 4px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s ease;
+      background: white;
+    }
+
+    .variable-select:focus,
+    .variable-input-field:focus {
+      border-color: #9c27b0;
+    }
+
+    .variable-input-field::placeholder {
+      color: #999;
+    }
   `]
 })
 export class TestRunDialogComponent implements OnInit, OnDestroy {
@@ -1674,6 +1839,10 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   useSequenceRange = false;
   sequenceStart: number | null = null;
   sequenceEnd: number | null = null;
+
+  // Variables for parameterized tests
+  availableVariables: VariableInput[] = [];
+  showVariablesSection = false;
 
   // Execution state
   isRunning = false;
@@ -1729,6 +1898,10 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
       this.runMode = 'test';
       const test = this.allTests.find(t => t.ID === this.selectedTestId);
       this.preselectedName = test ? test.Name : 'Test';
+      // Load variables for the selected test
+      if (test) {
+        this.loadVariablesForTest(test);
+      }
     } else if (this.selectedSuiteId) {
       this.isPreselected = true;
       this.runMode = 'suite';
@@ -1781,6 +1954,11 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
 
   selectTest(testId: string): void {
     this.selectedTestId = testId;
+    // Load variables for the selected test
+    const test = this.allTests.find(t => t.ID === testId);
+    if (test) {
+      this.loadVariablesForTest(test);
+    }
     this.cdr.markForCheck();
   }
 
@@ -1820,6 +1998,89 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   toggleAdvancedOptions(): void {
     this.showAdvancedOptions = !this.showAdvancedOptions;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Load available variables for a test based on its TestType's VariablesSchema
+   */
+  private loadVariablesForTest(test: TestEntity): void {
+    this.availableVariables = [];
+    this.showVariablesSection = false;
+
+    // Get the TestType to access VariablesSchema
+    const testType = this.engine.TestTypes.find(tt => tt.ID === test.TypeID);
+    if (!testType) {
+      return;
+    }
+
+    // Parse the type's VariablesSchema
+    const variablesSchemaJson = (testType as TestTypeEntity & { VariablesSchema?: string }).VariablesSchema;
+    if (!variablesSchemaJson) {
+      return;
+    }
+
+    const typeSchema = SafeJSONParse(variablesSchemaJson) as TestTypeVariablesSchema | null;
+    if (!typeSchema || !typeSchema.variables || typeSchema.variables.length === 0) {
+      return;
+    }
+
+    // Parse the test's Variables config to check which are exposed
+    const testVariablesJson = (test as TestEntity & { Variables?: string }).Variables;
+    const testConfig = testVariablesJson ? SafeJSONParse(testVariablesJson) as TestVariablesConfig | null : null;
+
+    // Build the available variables list
+    for (const varDef of typeSchema.variables) {
+      // Check if test explicitly hides this variable
+      const testOverride = testConfig?.variables?.[varDef.name];
+      if (testOverride?.exposed === false) {
+        continue; // Variable not exposed by this test
+      }
+
+      // Determine the default value to show
+      const defaultValue = testOverride?.defaultValue ?? varDef.defaultValue;
+
+      this.availableVariables.push({
+        definition: varDef,
+        value: defaultValue ?? null,
+        stringValue: defaultValue != null ? String(defaultValue) : ''
+      });
+    }
+
+    // Auto-expand variables section if there are required variables
+    if (this.availableVariables.some(v => v.definition.required)) {
+      this.showVariablesSection = true;
+    }
+  }
+
+  /**
+   * Collect variable values for test execution
+   */
+  private getVariablesForExecution(): Record<string, unknown> | undefined {
+    if (this.availableVariables.length === 0) {
+      return undefined;
+    }
+
+    const variables: Record<string, unknown> = {};
+    let hasValues = false;
+
+    for (const variable of this.availableVariables) {
+      if (variable.stringValue !== '' && variable.stringValue != null) {
+        hasValues = true;
+        // Convert string value to appropriate type
+        switch (variable.definition.dataType) {
+          case 'number':
+            variables[variable.definition.name] = parseFloat(variable.stringValue);
+            break;
+          case 'boolean':
+            variables[variable.definition.name] = variable.stringValue.toLowerCase() === 'true';
+            break;
+          default:
+            variables[variable.definition.name] = variable.stringValue;
+        }
+      }
+    }
+
+    return hasValues ? variables : undefined;
   }
 
   toggleAllTests(selectAll: boolean): void {
@@ -1921,10 +2182,14 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
 
   private async executeTest(): Promise<void> {
     try {
+      // Collect variable values for execution
+      const variables = this.getVariablesForExecution();
+
       const result = await this.testingClient.RunTest({
         testId: this.selectedTestId!,
         verbose: this.verbose,
         tags: this.tags.length > 0 ? this.tags : undefined,
+        variables,
         onProgress: (progress) => {
           // Update progress percentage (fallback to 0 if not provided)
           this.progress = progress.percentage ?? 0;
@@ -1973,12 +2238,15 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
       // Build selective execution parameters
       const selectedTestIds = this.getSelectedTestIds();
       const sequenceParams = this.getSequenceRangeParams();
+      // Collect variable values for execution (applies to all tests in suite)
+      const variables = this.getVariablesForExecution();
 
       const result = await this.testingClient.RunTestSuite({
         suiteId: this.selectedSuiteId!,
         verbose: this.verbose,
         parallel: this.parallel,
         tags: this.tags.length > 0 ? this.tags : undefined,
+        variables,
         selectedTestIds: selectedTestIds.length < this.suiteTests.length ? selectedTestIds : undefined,
         sequenceStart: sequenceParams.start,
         sequenceEnd: sequenceParams.end,

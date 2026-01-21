@@ -35,7 +35,8 @@
     "@memberjunction/ai-recommendations-rex": "3.0.0",
     "@memberjunction/ai-vectors-pinecone": "3.0.0",
     "@memberjunction/ai-vertex": "3.0.0",
-    "@memberjunction/ai-xai": "3.0.0"
+    "@memberjunction/ai-xai": "3.0.0",
+    "@memberjunction/ai-blackforestlabs": "3.0.0"
   },
   "repository": {
     "type": "git",

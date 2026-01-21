@@ -1,0 +1,101 @@
+<!-- Query Viewer Component -->
+<div class="query-viewer-container">
+    <!-- Header bar when query is loaded -->
+    <div class="query-header" *ngIf="QueryInfo">
+        <div class="query-info">
+            <h3 class="query-name">{{ QueryInfo.Name }}</h3>
+            <span class="query-category" *ngIf="QueryInfo.Category">
+                <i class="fa-solid fa-folder"></i>
+                {{ QueryInfo.Category }}
+            </span>
+        </div>
+
+        <div class="query-actions">
+            <!-- Info button -->
+            <button (click)="OpenInfoPanel()"
+                    [disabled]="IsLoading"
+                    class="btn btn-secondary"
+                    title="Query information">
+                <i class="fa-solid fa-info-circle"></i>
+                Info
+            </button>
+
+            <!-- Parameters button -->
+            <button *ngIf="HasParameters"
+                    (click)="OpenParametersPanel()"
+                    [disabled]="IsLoading"
+                    class="btn btn-secondary"
+                    title="Edit parameters">
+                <i class="fa-solid fa-sliders"></i>
+                Parameters
+            </button>
+
+            <!-- Execution stats -->
+            <span class="execution-stats" *ngIf="ExecutionTimeMs !== null">
+                <i class="fa-solid fa-clock"></i>
+                {{ ExecutionTimeMs }}ms
+            </span>
+        </div>
+    </div>
+
+    <!-- Main content area -->
+    <div class="query-content">
+        <!-- No query selected state -->
+        <div class="no-query-state" *ngIf="!QueryId">
+            <i class="fa-solid fa-database state-icon"></i>
+            <p class="state-message">Select a query to view results</p>
+        </div>
+
+        <!-- Query not found error -->
+        <div class="error-state" *ngIf="QueryId && !QueryInfo && LastError">
+            <i class="fa-solid fa-exclamation-triangle state-icon error"></i>
+            <p class="state-message">{{ LastError }}</p>
+        </div>
+
+        <!-- Query description -->
+        <div class="query-description" *ngIf="QueryInfo?.Description && !HasRun">
+            <i class="fa-solid fa-info-circle"></i>
+            {{ QueryInfo?.Description }}
+        </div>
+
+        <!-- Query execution error -->
+        <div class="execution-error" *ngIf="LastError && HasRun">
+            <i class="fa-solid fa-exclamation-circle"></i>
+            <span>{{ LastError }}</span>
+            <button class="btn btn-secondary" (click)="Refresh()">Try Again</button>
+        </div>
+
+        <!-- Grid -->
+        <mj-query-data-grid
+            *ngIf="QueryInfo"
+            [QueryInfo]="QueryInfo"
+            [Data]="QueryData"
+            [SelectionMode]="SelectionMode"
+            [ShowToolbar]="ShowToolbar"
+            [VisualConfig]="VisualConfig"
+            [IsLoading]="IsLoading"
+            (EntityLinkClick)="OnEntityLinkClick($event)"
+            (RowDoubleClick)="OnRowDoubleClick($event)"
+            (SelectionChange)="OnSelectionChange($event)"
+            (GridStateChange)="OnGridStateChange($event)"
+            (RefreshRequest)="OnRefreshRequest()">
+        </mj-query-data-grid>
+    </div>
+
+    <!-- Parameter form panel -->
+    <mj-query-parameter-form
+        [QueryInfo]="QueryInfo"
+        [InitialValues]="SavedParams"
+        [IsOpen]="ShowParamsPanel"
+        (ParametersSubmit)="OnParametersSubmit($event)"
+        (Close)="OnParamsPanelClose()">
+    </mj-query-parameter-form>
+
+    <!-- Query info panel -->
+    <mj-query-info-panel
+        [QueryInfo]="QueryInfo"
+        [Visible]="ShowInfoPanel"
+        (Close)="CloseInfoPanel()"
+        (OpenRecord)="OnOpenQueryRecord($event)">
+    </mj-query-info-panel>
+</div>

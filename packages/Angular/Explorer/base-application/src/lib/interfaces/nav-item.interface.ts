@@ -44,3 +44,19 @@ export interface NavItem {
    */
   Status?: 'Active' | 'Pending' | 'Disabled';
 }
+
+/**
+ * Extended NavItem interface supporting dynamic nav items with custom matching logic.
+ * Used by applications like HomeApplication to create nav items for orphan resources.
+ */
+export interface DynamicNavItem extends NavItem {
+  /** Whether this is a dynamically generated nav item */
+  isDynamic?: boolean;
+
+  /**
+   * Custom matching function for determining if this nav item should be highlighted.
+   * Receives the active tab and returns true if this nav item matches it.
+   * Used when standard label/route matching is insufficient.
+   */
+  isActiveMatch?: (tab: unknown) => boolean;
+}

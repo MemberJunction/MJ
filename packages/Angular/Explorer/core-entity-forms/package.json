@@ -54,6 +54,7 @@
     "@memberjunction/ng-tabstrip": "3.0.0",
     "@memberjunction/ng-testing": "3.0.0",
     "@memberjunction/ng-timeline": "3.0.0",
+    "@memberjunction/ng-list-management": "3.0.0",
     "@memberjunction/ng-user-view-grid": "3.0.0",
     "@memberjunction/templates-base-types": "3.0.0",
     "@progress/kendo-angular-buttons": "16.2.0",

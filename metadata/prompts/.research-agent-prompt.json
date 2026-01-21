@@ -68,8 +68,22 @@
       "ID": "7F538775-F3D8-4210-8872-02C706BF3188"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:32.731Z",
-      "checksum": "c53309bdcbd48785304bcae9827e7b53d28803703c0f8185a051ac9f9e305eda"
-    }
+      "lastModified": "2026-01-15T18:50:30.501Z",
+      "checksum": "32f43e603cbbaa047b281e5f5e97ddaad9db56806c323d49b106890b4e2a9bba"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=MJ: System",
+        "resolved": "7D2DEF7F-138F-4620-8309-33964A97A997"
+      }
+    ]
   }
 ]

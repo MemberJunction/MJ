@@ -3,7 +3,8 @@
     "Name": "Agent Eval",
     "Description": "Evaluates AI agent behavior through multi-oracle evaluation including schema validation, trace analysis, and LLM-as-judge assessment",
     "DriverClass": "AgentEvalDriver",
-    "Status": "Active"
+    "Status": "Active",
+    "VariablesSchema": "@file:schemas/agent-eval-variables.schema.json"
   },
   "primaryKey": {
     "ID": "BE78D976-2AE2-46B1-8E10-2EB6D8A4C8EB"

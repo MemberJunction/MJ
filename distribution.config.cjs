@@ -99,49 +99,64 @@ module.exports = {
   // ---------------------------------------------------------------------------
   // New Entity Defaults Overrides
   // ---------------------------------------------------------------------------
-  // Default: TrackRecordChanges: true, AllowCreateAPI: true, etc.
+  // Default v3.x settings for new entities
   // newEntityDefaults: {
   //   TrackRecordChanges: true,
   //   AuditRecordAccess: false,
+  //   AuditViewRuns: false,
+  //   AllowAllRowsAPI: false,
   //   AllowCreateAPI: true,
   //   AllowUpdateAPI: true,
   //   AllowDeleteAPI: true,
+  //   AllowUserSearchAPI: false,
+  //   CascadeDeletes: false,
   //   UserViewMaxRows: 1000,
-  //   ...
+  //   AddToApplicationWithSchemaName: true,
+  //   IncludeFirstNFieldsAsDefaultInView: 5,
+  //   NameRulesBySchema: [{ SchemaName: '${mj_core_schema}', EntityNamePrefix: 'MJ: ' }]
   // },
 
   // ---------------------------------------------------------------------------
   // Schema/Table Exclusions
   // ---------------------------------------------------------------------------
   // Default: excludeSchemas: ['sys', 'staging', '__mj']
-  // Default: excludeTables: [{ schema: '%', table: 'sys%' }]
+  // Default: excludeTables: [{ schema: '%', table: 'sys%' }, { schema: '%', table: 'flyway_schema_history' }]
+  //
+  // Using defaults - Core entities (__mj schema) should not be modified by distributions.
+  // Uncomment only if you need different exclusions than the defaults.
   // excludeSchemas: ['sys', 'staging', '__mj'],
-  // excludeTables: [{ schema: '%', table: 'sys%' }],
+  // excludeTables: [
+  //   { schema: '%', table: 'sys%' },
+  //   { schema: '%', table: 'flyway_schema_history' }
+  // ],
 
   // ---------------------------------------------------------------------------
   // AI-Powered Advanced Generation Features
   // ---------------------------------------------------------------------------
-  // Default: All features disabled (enabled: false)
+  // Default v3.x: Several features enabled by default
   // advancedGeneration: {
   //   enableAdvancedGeneration: true,
   //   features: [
   //     { name: 'EntityNames', enabled: false },
+  //     { name: 'DefaultInViewFields', enabled: true },
   //     { name: 'EntityDescriptions', enabled: false },
-  //     { name: 'EntityFieldDescriptions', enabled: false },
-  //     { name: 'FormLayout', enabled: false },
-  //     { name: 'FormTabs', enabled: false },
+  //     { name: 'SmartFieldIdentification', enabled: true },
+  //     { name: 'TransitiveJoinIntelligence', enabled: true },
+  //     { name: 'FormLayoutGeneration', enabled: true },
+  //     { name: 'ParseCheckConstraints', enabled: true },
   //   ],
   // },
 
   // ---------------------------------------------------------------------------
   // SQL Output (for migrations)
   // ---------------------------------------------------------------------------
-  // Default: enabled: false, folderPath: './migrations/v2/'
+  // Default v3.x: enabled: true, folderPath: './migrations/v3/'
   // SQLOutput: {
-  //   enabled: false,
-  //   folderPath: './migrations/v2/',
+  //   enabled: true,
+  //   folderPath: './migrations/v3/',
   //   appendToFile: true,
   //   convertCoreSchemaToFlywayMigrationFile: true,
+  //   omitRecurringScriptsFromLog: true,
   // },
 
   // ---------------------------------------------------------------------------
