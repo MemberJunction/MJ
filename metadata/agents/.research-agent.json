@@ -515,6 +515,34 @@
                   "lastModified": "2025-12-30T23:07:35.475Z",
                   "checksum": "f80fec83ab753821ee8a23c7cbba8eca982e54743e23c7688d397cd311450d5b"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Generate Image",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "13D6F266-04A0-467A-8A71-96D9CE4AA4BC"
+                },
+                "sync": {
+                  "lastModified": "2026-01-13T23:45:24.319Z",
+                  "checksum": "79e6bc17002f1592f4f4b2e362be1f2e982048b8904ff97e9b663424c51fda38"
+                },
+                "__mj_sync_notes": [
+                  {
+                    "type": "parent",
+                    "field": "fields.AgentID",
+                    "expression": "@parent:ID",
+                    "resolved": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
+                  },
+                  {
+                    "type": "lookup",
+                    "field": "fields.ActionID",
+                    "expression": "@lookup:Actions.Name=Generate Image",
+                    "resolved": "048FF309-C2CD-44D8-8A8E-8C771ADA8284"
+                  }
+                ]
               }
             ],
             "MJ: AI Agent Relationships": [

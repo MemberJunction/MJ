@@ -566,6 +566,28 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- MJ: AI Agent Run Medias Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentRunMedias"
+        sectionName="MJ: AI Agent Run Medias"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentRunMedias')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Medias','AgentRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunMedias', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- MJ: AI Agent Run Steps Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJAIAgentRunSteps"
