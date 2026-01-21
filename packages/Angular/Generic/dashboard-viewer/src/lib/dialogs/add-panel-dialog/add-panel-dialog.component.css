@@ -1,0 +1,469 @@
+/**
+ * Add Part Dialog Styles
+ */
+
+/* ========================================
+   Overlay
+   ======================================== */
+
+.add-part-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ========================================
+   Dialog Container
+   ======================================== */
+
+.add-part-dialog {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 560px;
+    max-width: 90vw;
+    max-height: 85vh;
+    overflow: hidden;
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========================================
+   Header
+   ======================================== */
+
+.dialog-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e0e0e0;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e8eaf6 100%);
+}
+
+.dialog-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dialog-header h3 i {
+    color: #5c6bc0;
+    font-size: 16px;
+}
+
+.back-button,
+.close-button {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.back-button:hover,
+.close-button:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #333;
+}
+
+.back-button i,
+.close-button i {
+    font-size: 16px;
+}
+
+/* ========================================
+   Content
+   ======================================== */
+
+.dialog-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    min-height: 0;
+}
+
+.instruction {
+    margin: 0 0 20px 0;
+    font-size: 14px;
+    color: #666;
+}
+
+/* ========================================
+   Part Type Grid
+   ======================================== */
+
+.part-type-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.part-type-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    border: 2px solid #e8eaf6;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #fff;
+}
+
+.part-type-card:hover {
+    background: #f5f7fa;
+    border-color: #5c6bc0;
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(92, 107, 192, 0.15);
+}
+
+.part-type-card:hover .card-arrow {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.card-icon {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+    color: #5c6bc0;
+    flex-shrink: 0;
+}
+
+.card-icon i {
+    font-size: 24px;
+}
+
+.card-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.card-description {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.5;
+}
+
+.card-arrow {
+    flex-shrink: 0;
+    color: #5c6bc0;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: all 0.2s ease;
+    font-size: 16px;
+}
+
+/* ========================================
+   No Types
+   ======================================== */
+
+.no-types {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 40px;
+    text-align: center;
+}
+
+.no-types .warning-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #fff3e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.no-types .warning-icon i {
+    font-size: 28px;
+    color: #ff9800;
+}
+
+.no-types h4 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+}
+
+.no-types p {
+    margin: 0;
+    font-size: 14px;
+    color: #666;
+}
+
+/* ========================================
+   Configuration Form
+   ======================================== */
+
+.config-content {
+    padding: 24px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #333;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #5c6bc0;
+    box-shadow: 0 0 0 3px rgba(92, 107, 192, 0.1);
+}
+
+.form-group input::placeholder {
+    color: #999;
+}
+
+.form-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #999;
+}
+
+.config-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    text-align: center;
+    color: #999;
+    background: #f9f9f9;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.config-placeholder i {
+    font-size: 32px;
+    margin-bottom: 12px;
+    color: #ccc;
+}
+
+.config-placeholder p {
+    margin: 0;
+    font-size: 14px;
+}
+
+/* ========================================
+   Footer
+   ======================================== */
+
+.dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid #e0e0e0;
+    background: #fafafa;
+}
+
+.btn-secondary {
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #fff;
+    border: 1px solid #ddd;
+    color: #333;
+}
+
+.btn-secondary:hover {
+    background: #f5f5f5;
+    border-color: #ccc;
+}
+
+.btn-primary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: linear-gradient(135deg, #5c6bc0 0%, #3f51b5 100%);
+    border: none;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(92, 107, 192, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(92, 107, 192, 0.4);
+}
+
+.btn-primary i {
+    font-size: 12px;
+}
+
+.btn-primary:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.btn-primary:disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+/* ========================================
+   Validation Errors
+   ======================================== */
+
+.validation-errors {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: #fff5f5;
+    border: 1px solid #ffcdd2;
+    border-radius: 8px;
+}
+
+.error-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #d32f2f;
+}
+
+.error-item i {
+    font-size: 14px;
+}
+
+.error-item + .error-item {
+    margin-top: 8px;
+}
+
+/* ========================================
+   Loading State
+   ======================================== */
+
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 48px 24px;
+    color: #666;
+}
+
+.loading-state i {
+    font-size: 24px;
+    color: #5c6bc0;
+}
+
+.loading-state span {
+    font-size: 14px;
+}
+
+/* ========================================
+   Error State
+   ======================================== */
+
+.error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 48px 24px;
+    color: #ff9800;
+    text-align: center;
+}
+
+.error-state i {
+    font-size: 32px;
+}
+
+.error-state span {
+    font-size: 14px;
+    max-width: 300px;
+}
+
+.error-state .error-hint {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+}

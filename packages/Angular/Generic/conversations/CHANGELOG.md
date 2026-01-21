@@ -1,5 +1,26 @@
 # @memberjunction/ng-conversations
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@3.0.0
+- @memberjunction/ai@3.0.0
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/ng-testing@3.0.0
+- @memberjunction/ng-artifacts@3.0.0
+- @memberjunction/ng-base-types@3.0.0
+- @memberjunction/ng-code-editor@3.0.0
+- @memberjunction/ng-container-directives@3.0.0
+- @memberjunction/ng-markdown@3.0.0
+- @memberjunction/ng-notifications@3.0.0
+- @memberjunction/ng-shared-generic@3.0.0
+- @memberjunction/ng-tasks@3.0.0
+- @memberjunction/graphql-dataprovider@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes

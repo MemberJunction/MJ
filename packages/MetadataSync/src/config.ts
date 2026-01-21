@@ -109,6 +109,8 @@ export interface SyncConfig {
      * - 'include': If ANY pattern matches, the SQL IS logged
      */
     filterType?: 'exclude' | 'include';
+    /** Whether to output verbose debug information to console (default: false) */
+    verboseOutput?: boolean;
   };
   /** Watch command configuration */
   watch?: {

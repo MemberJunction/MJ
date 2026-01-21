@@ -11,6 +11,10 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 
+/**
+ * @deprecated Use `QueryViewerModule` from `@memberjunction/ng-query-viewer` instead.
+ * This module is deprecated and will be removed in a future version.
+ */
 @NgModule({
   declarations: [
     QueryGridComponent

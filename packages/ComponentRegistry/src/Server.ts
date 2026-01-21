@@ -539,10 +539,14 @@ export class ComponentRegistryAPIServer {
     try {
       const { namespace, name } = req.params;
       const { version, hash } = req.query;
-      
+
+      // Ensure namespace and name are strings (route params are always strings)
+      const namespaceStr = Array.isArray(namespace) ? namespace[0] : namespace;
+      const nameStr = Array.isArray(name) ? name[0] : name;
+
       // Escape single quotes in parameters
-      const escapedNamespace = namespace.replace(/'/g, "''");
-      const escapedName = name.replace(/'/g, "''");
+      const escapedNamespace = namespaceStr.replace(/'/g, "''");
+      const escapedName = nameStr.replace(/'/g, "''");
       
       let filter = `Namespace = '${escapedNamespace}' AND Name = '${escapedName}' AND ${this.getComponentFilter()}`;
       

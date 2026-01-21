@@ -108,11 +108,11 @@
               type="text"
               class="smart-filter-input"
               placeholder="Filter records... (press / to focus)"
-              [ngModel]="state.smartFilterPrompt"
-              (ngModelChange)="onSmartFilterChanged($event)"
+              [ngModel]="debouncedFilterText"
+              (ngModelChange)="onFilterTextChanged($event)"
             />
-            @if (state.smartFilterPrompt) {
-              <button class="clear-filter-btn" (click)="onSmartFilterChanged('')">
+            @if (debouncedFilterText) {
+              <button class="clear-filter-btn" (click)="onFilterTextChanged('')">
                 <i class="fa-solid fa-times"></i>
               </button>
             }

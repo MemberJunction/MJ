@@ -1898,6 +1898,21 @@ export abstract class BaseEntity<T = unknown> {
         }
     }
 
+    /**
+     * Utility method to return the Name of the record (the value of the column that comes back from EntityInfo.NameField) from the current object. This avoids needing a network round trip to get
+     * the record name whenever we have the object already loaded in memory.
+     * @returns 
+     */
+    public GetRecordName(): any {
+        const f = this.EntityInfo.NameField;
+        if (!f) {
+            return null;
+        }
+        else {
+            return this.Get(f.Name)
+        }
+    }
+
 
     /**
      * Static Utility method to get RecordChanges for a given entityName/KeyValuePair combination

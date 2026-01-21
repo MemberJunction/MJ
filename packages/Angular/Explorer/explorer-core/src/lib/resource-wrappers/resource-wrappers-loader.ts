@@ -15,7 +15,9 @@ import {
     LoadAIPromptsResource,
     LoadAIAgentsResource,
     LoadAIModelsResource,
-    LoadAIConfigResource
+    LoadAIConfigResource,
+    LoadHomeApplication,
+    LoadHomeDashboard
 } from '@memberjunction/ng-dashboards';
 
 export function LoadResourceWrappers()
@@ -36,4 +38,6 @@ export function LoadResourceWrappers()
     LoadAIConfigResource();
     LoadArtifactResource();
     LoadNotificationsResource();
+    LoadHomeApplication();
+    LoadHomeDashboard();
 }

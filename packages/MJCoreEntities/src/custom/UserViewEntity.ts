@@ -381,11 +381,15 @@ export class UserViewEntityExtended extends UserViewEntity  {
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         if (this.UserCanEdit) {
             // we want to preprocess the Save() call because we need to regenerate the WhereClause in some situations
+            const id = this.ID;
+            const filterStateField = this.Fields.find(c => c.Name.toLowerCase() == 'filterstate');
+            const smartFilterEnabledField = this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterenabled');
+            const smartFilterPromptField = this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt');
             if (!this.ID ||
                 options?.IgnoreDirtyState || 
-                this.Fields.find(c => c.Name.toLowerCase() == 'filterstate')?.Dirty ||
-                this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterenabled')?.Dirty ||
-                this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt')?.Dirty) {
+                filterStateField?.Dirty ||
+                smartFilterEnabledField?.Dirty ||
+                smartFilterPromptField?.Dirty) {
                 // either we're ignoring dirty state or the filter state is dirty, so we need to update the where clause
                 await this.UpdateWhereClause(options?.IgnoreDirtyState);
             }

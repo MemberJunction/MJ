@@ -188,12 +188,6 @@ export class WorkspaceStateManager {
    * Used for Shift+Click behavior - checks for existing tab first, only creates new if none exists
    */
   OpenTabForced(request: TabRequest, appColor: string): string {
-    console.log('[WorkspaceStateManager.OpenTabForced] Opening tab with forced mode:', {
-      appId: request.ApplicationId,
-      title: request.Title,
-      config: request.Configuration
-    });
-
     const config = this.configuration$.value;
     if (!config) {
       throw new Error('Configuration not initialized');
@@ -245,7 +239,6 @@ export class WorkspaceStateManager {
     });
 
     if (existingTab) {
-      console.log('[WorkspaceStateManager.OpenTabForced] Found existing tab, activating:', existingTab.title);
       // Focus existing tab
       const updatedConfig = {
         ...config,
@@ -256,8 +249,6 @@ export class WorkspaceStateManager {
     }
 
     // No existing tab found - create new pinned tab
-    console.log('[WorkspaceStateManager.OpenTabForced] No existing tab found, creating new pinned tab');
-
     const newTab: WorkspaceTab = {
       id: this.generateUUID(),
       applicationId: request.ApplicationId,
@@ -269,8 +260,6 @@ export class WorkspaceStateManager {
       lastAccessedAt: new Date().toISOString(),
       configuration: request.Configuration || {}
     };
-
-    console.log('[WorkspaceStateManager.OpenTabForced] Created new tab:', newTab.id);
 
     // CRITICAL: If creating a temporary tab, pin all existing temporary tabs first
     // This ensures only ONE temporary tab exists at any time
@@ -298,7 +287,10 @@ export class WorkspaceStateManager {
 
     // Check for existing tab - match by resource type and record ID for resource-based tabs
     const existingTab = config.tabs.find(tab => {
-      if (tab.applicationId !== request.ApplicationId) return false;
+      const appIdMatch = tab.applicationId === request.ApplicationId;
+      if (!appIdMatch) {
+        return false;
+      }
 
       // For resource-based tabs, match by resourceType in configuration
       if (request.Configuration?.resourceType) {
@@ -446,7 +438,6 @@ export class WorkspaceStateManager {
    * Close all tabs except the specified one
    */
   CloseOtherTabs(tabId: string): void {
-    console.log('[WorkspaceStateManager.CloseOtherTabs] Closing all tabs except:', tabId);
     const config = this.configuration$.value;
     if (!config) return;
 
@@ -464,7 +455,6 @@ export class WorkspaceStateManager {
    * Close all tabs to the right of the specified tab
    */
   CloseTabsToRight(tabId: string): void {
-    console.log('[WorkspaceStateManager.CloseTabsToRight] Closing tabs to the right of:', tabId);
     const config = this.configuration$.value;
     if (!config) return;
 
@@ -492,7 +482,6 @@ export class WorkspaceStateManager {
    * This is used to recover from corrupted layouts - tabs will be recreated fresh.
    */
   ClearLayout(): void {
-    console.log('[WorkspaceStateManager.ClearLayout] Clearing saved layout structure');
     const config = this.configuration$.value;
     if (!config) return;
 
@@ -593,11 +582,8 @@ export class WorkspaceStateManager {
   UpdateTabTitle(tabId: string, newTitle: string): void {
     const config = this.configuration$.value;
     if (!config) {
-      console.warn('[WorkspaceStateManager.UpdateTabTitle] No configuration available');
       return;
     }
-
-    console.log('[WorkspaceStateManager.UpdateTabTitle] Updating tab title:', { tabId, newTitle });
 
     const updatedTabs = config.tabs.map(tab =>
       tab.id === tabId ? { ...tab, title: newTitle } : tab
@@ -607,8 +593,44 @@ export class WorkspaceStateManager {
       ...config,
       tabs: updatedTabs
     });
+  }
 
-    console.log('[WorkspaceStateManager.UpdateTabTitle] Tab title updated and configuration saved');
+  /**
+   * Update the configuration of a specific tab.
+   * Merges the provided partial configuration with the existing tab configuration.
+   * @param tabId The ID of the tab to update
+   * @param configUpdate Partial configuration to merge with existing configuration
+   */
+  UpdateTabConfiguration(tabId: string, configUpdate: Partial<WorkspaceTab['configuration']>): void {
+    const config = this.configuration$.value;
+    if (!config) {
+      return;
+    }
+
+    const updatedTabs = config.tabs.map(tab => {
+      if (tab.id === tabId) {
+        return {
+          ...tab,
+          configuration: {
+            ...tab.configuration,
+            ...configUpdate
+          }
+        };
+      }
+      return tab;
+    });
+
+    this.UpdateConfiguration({
+      ...config,
+      tabs: updatedTabs
+    });
+  }
+
+  /**
+   * Get the ID of the currently active tab
+   */
+  GetActiveTabId(): string | null {
+    return this.configuration$.value?.activeTabId ?? null;
   }
 
   /**

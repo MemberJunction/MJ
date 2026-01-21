@@ -37,6 +37,9 @@
     "start:api": "turbo start --filter=mj_api",
     "start:explorer": "turbo start --filter=mj_explorer",
     "start:mcp-agent": "node agent-run-mcp-server/dist/index.js",
+    "mj": "node packages/MJCLI/bin/run.js",
+    "mj:migrate": "node packages/MJCLI/bin/run.js migrate",
+    "mj:codegen": "node packages/MJCLI/bin/run.js codegen",
     "deps:check": "syncpack list-mismatches",
     "deps:fix": "syncpack fix-mismatches",
     "deps:update": "syncpack update",
@@ -59,7 +62,7 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/cli": "2.128.0",
+    "@memberjunction/cli": "3.0.0",
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",
     "simple-git": "^3.27.0"
@@ -70,6 +73,7 @@
     "@typescript-eslint/eslint-plugin": "7.12.0",
     "@typescript-eslint/parser": "7.12.0",
     "baseline-browser-mapping": "^2.9.11",
+    "caniuse-lite": "1.0.30001764",
     "eslint": "8.56.0",
     "eslint-config-prettier": "9.1.0",
     "eslint-import-resolver-typescript": "~3.5.2",
@@ -79,12 +83,14 @@
     "knip": "^5.71.0",
     "prettier": "^3.3.1",
     "syncpack": "^12.3.2",
-    "turbo": "^2.3.3",
-    "typedoc": "~0.25.12",
-    "typedoc-plugin-missing-exports": "~2.2.0",
-    "typescript": "^5.4.5"
+    "turbo": "^2.7.3",
+    "typedoc": "~0.26.0",
+    "typedoc-plugin-missing-exports": "~3.0.0",
+    "typescript": "5.4.5"
   },
   "overrides": {
-    "@types/node": "20.14.2"
+    "@types/node": "20.14.2",
+    "browserslist": "4.24.4",
+    "caniuse-lite": "1.0.30001764"
   }
 }

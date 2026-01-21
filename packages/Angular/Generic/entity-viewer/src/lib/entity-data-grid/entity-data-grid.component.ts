@@ -278,11 +278,22 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     this._data = value || [];
     this._useExternalData = this._data.length > 0;
     if (this._useExternalData || hadData) {
-      this.processData();
+      // Suppress sort events during data update to prevent AG Grid from clearing
+      // our saved sort state when it processes the new row data
+      const savedSortState = [...this._sortState];
+      this.suppressSortEvents = true;
+
+      try {
+        this.processData();
+      } finally {
+        this.suppressSortEvents = false;
+      }
 
       // Reapply sort state to grid after data changes to maintain visual indicators
       // Use microtask to ensure AG Grid has processed the new row data first
-      if (this.gridApi && this._sortState.length > 0) {
+      if (this.gridApi && savedSortState.length > 0) {
+        // Restore sort state in case it was cleared during processData
+        this._sortState = savedSortState;
         Promise.resolve().then(() => {
           this.applySortStateToGrid();
         });
@@ -1216,7 +1227,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     // Flush any pending state persistence immediately before destroying
-    this.flushPendingPersistence();
+    this.EnsurePendingChangesSaved();
 
     this.destroy$.next();
     this.destroy$.complete();
@@ -1225,8 +1236,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   /**
    * Immediately persists any pending state changes without waiting for debounce.
    * Called on component destroy to ensure changes aren't lost.
+   * Also exposed publicly so parent components can flush before view/entity switches.
    */
-  private flushPendingPersistence(): void {
+  public EnsurePendingChangesSaved(): void {
     // Flush pending view state
     if (this._pendingViewStateToPersist && this._viewEntity) {
       this.persistGridStateToView(this._pendingViewStateToPersist);
@@ -1299,7 +1311,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       if (this._params.ViewEntity) {
         // ViewEntity was provided directly
         this._viewEntity = this._params.ViewEntity as UserViewEntityExtended;
-        this._entityInfo = this._viewEntity.ViewEntityInfo;
+        this._entityInfo = this.getEntityInfoFromViewEntity(this._viewEntity);
         this.applyViewEntitySettings();
       } else if (this._params.ViewID) {
         // Load view entity by ID from engine
@@ -1310,7 +1322,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           // View not in cache - use ViewInfo (which also uses engine)
           this._viewEntity = await ViewInfo.GetViewEntity(this._params.ViewID);
         }
-        this._entityInfo = this._viewEntity.ViewEntityInfo;
+        this._entityInfo = this.getEntityInfoFromViewEntity(this._viewEntity);
         this.applyViewEntitySettings();
       } else if (this._params.ViewName) {
         // Load view entity by name from engine
@@ -1321,7 +1333,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           // View not in cache - use ViewInfo (which also uses engine)
           this._viewEntity = await ViewInfo.GetViewEntityByName(this._params.ViewName);
         }
-        this._entityInfo = this._viewEntity.ViewEntityInfo;
+        this._entityInfo = this.getEntityInfoFromViewEntity(this._viewEntity);
         this.applyViewEntitySettings();
       } else if (this._params.EntityName) {
         // Dynamic view - just get entity metadata
@@ -1384,6 +1396,43 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Engine may not be initialized yet
       return undefined;
     }
+  }
+
+  /**
+   * Gets EntityInfo from a ViewEntity with multiple fallback strategies.
+   * Priority: 1) ViewEntityInfo property (set by Load)
+   *           2) Entity name lookup (virtual field)
+   *           3) EntityID lookup
+   * Returns null if entity cannot be determined.
+   */
+  private getEntityInfoFromViewEntity(viewEntity: UserViewEntityExtended | null): EntityInfo | null {
+    if (!viewEntity) return null;
+
+    // First try: ViewEntityInfo is the preferred source (set by UserViewEntityExtended.Load)
+    if (viewEntity.ViewEntityInfo) {
+      return viewEntity.ViewEntityInfo;
+    }
+
+    const md = new Metadata();
+
+    // Second try: Look up by Entity name (virtual field that returns entity name)
+    if (viewEntity.Entity) {
+      const entityByName = md.Entities.find(e => e.Name === viewEntity.Entity);
+      if (entityByName) {
+        return entityByName;
+      }
+    }
+
+    // Third try: Look up by EntityID
+    if (viewEntity.EntityID) {
+      const entityById = md.Entities.find(e => e.ID === viewEntity.EntityID);
+      if (entityById) {
+        return entityById;
+      }
+    }
+
+    console.warn(`[EntityDataGrid] Could not determine entity for view "${viewEntity.Name}" (ID: ${viewEntity.ID})`);
+    return null;
   }
 
   /**
@@ -1503,14 +1552,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this.gridApi.refreshHeader();
       }
 
-      // Apply sort if present
+      // Apply sort if present - support multi-column sort
       if (this._gridState.sortSettings?.length && this.gridApi) {
-        const sortSetting = this._gridState.sortSettings[0];
-        this._sortState = [{
+        this._sortState = this._gridState.sortSettings.map((sortSetting, index) => ({
           field: sortSetting.field,
           direction: sortSetting.dir,
-          index: 0
-        }];
+          index: index
+        }));
         this.applySortStateToGrid();
       }
     }
@@ -2659,7 +2707,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   onAgSortChanged(event: AgSortChangedEvent): void {
-    if (this.suppressSortEvents) return;
+    if (this.suppressSortEvents) {
+      return;
+    }
 
     const sortModel = event.api.getColumnState()
       .filter(col => col.sort)
@@ -2711,12 +2761,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Client-side sorting is only possible if we have ALL the data loaded
       if (this._serverSideSorting && !this._useExternalData) {
         this.loadData(true);
-      } else if (this._useExternalData) {
-        // Using external data - check if we have all data or just a page
-        // If totalRowCount > current data length, we only have partial data and parent must handle sorting
-        // Parent receives afterSort event and can reload with new sort order
-        // If we have all data, AG Grid handles client-side sorting automatically
       }
+      // When using external data, parent receives afterSort event and can reload with new sort order
+      // If we have all data, AG Grid handles client-side sorting automatically
     } else {
       this._sortState = [];
       // User cleared sort - mark as dirty and emit grid state changed
@@ -2942,7 +2989,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
 
     const columnSettings: ViewColumnConfig[] = [];
-    const sortSettings: ViewSortConfig[] = [];
+    // Collect sorted columns with their sortIndex for proper ordering
+    const sortedColumns: Array<{ field: string; dir: 'asc' | 'desc'; sortIndex: number }> = [];
 
     for (let i = 0; i < columnState.length; i++) {
       const col = columnState[i];
@@ -2977,21 +3025,33 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
 
       if (col.sort) {
-        sortSettings.push({
+        sortedColumns.push({
           field: col.colId,
-          dir: col.sort as 'asc' | 'desc'
+          dir: col.sort as 'asc' | 'desc',
+          sortIndex: col.sortIndex ?? 0
         });
       }
     }
+
+    // Sort by sortIndex to maintain correct multi-sort priority order
+    sortedColumns.sort((a, b) => a.sortIndex - b.sortIndex);
+    const sortSettings: ViewSortConfig[] = sortedColumns.map(s => ({
+      field: s.field,
+      dir: s.dir
+    }));
 
     return { columnSettings, sortSettings };
   }
 
   private applySortStateToGrid(): void {
-    if (!this.gridApi || this._sortState.length === 0) return;
+    if (!this.gridApi || this._sortState.length === 0) {
+      return;
+    }
 
     const currentColumnState = this.gridApi.getColumnState();
-    if (!currentColumnState) return;
+    if (!currentColumnState) {
+      return;
+    }
 
     this.suppressSortEvents = true;
     try {
@@ -3679,3 +3739,4 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       .sort((a, b) => a.order - b.order);
   }
 }
+

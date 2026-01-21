@@ -7,6 +7,7 @@ import { LoadComponentStudioDashboard } from './ComponentStudio/component-studio
 import { LoadSchedulingDashboard } from './Scheduling/scheduling-dashboard.component';
 import { LoadTestingDashboard } from './Testing/testing-dashboard.component';
 import { LoadDataExplorerDashboard } from './DataExplorer/data-explorer-dashboard.component';
+import { LoadDataExplorerResource } from './DataExplorer/data-explorer-resource.component';
 import { LoadCommunicationDashboard } from './Communication/communication-dashboard.component';
 import { LoadCredentialsDashboard } from './Credentials/credentials-dashboard.component';
 import { LoadCredentialsOverviewResource } from './Credentials/components/credentials-overview-resource.component';
@@ -18,6 +19,13 @@ import { LoadCredentialsAuditResource } from './Credentials/components/credentia
 import { LoadSystemDiagnosticsResource } from './SystemDiagnostics/system-diagnostics.component';
 // Lists Dashboard
 import { LoadListsResources } from './Lists';
+// Query Browser
+import { LoadQueryBrowserResource } from './QueryBrowser/query-browser-resource.component';
+// Dashboard Browser
+import { LoadDashboardBrowserResource } from './DashboardBrowser/dashboard-browser-resource.component';
+// Home Application and Dashboard
+import { LoadHomeApplication } from './Home/home-application';
+import { LoadHomeDashboard } from './Home/home-dashboard.component';
 
 import {
   LoadActionsOverviewResource,
@@ -141,6 +149,27 @@ export {
   LoadTestingFeedbackResource
 } from './Testing/components';
 
+// Query Browser
+export {
+  QueryBrowserResourceComponent,
+  LoadQueryBrowserResource
+} from './QueryBrowser/query-browser-resource.component';
+
+// Dashboard Browser
+export {
+  DashboardBrowserResourceComponent,
+  LoadDashboardBrowserResource
+} from './DashboardBrowser/dashboard-browser-resource.component';
+export {
+  DashboardShareDialogComponent,
+  UserSharePermission,
+  ShareDialogResult
+} from './DashboardBrowser/dashboard-share-dialog.component';
+
+// Home Application and Dashboard
+export { HomeApplication, LoadHomeApplication } from './Home/home-application';
+export { HomeDashboardComponent, LoadHomeDashboard } from './Home/home-dashboard.component';
+
 // Module
 export * from './module';
 
@@ -172,8 +201,9 @@ LoadTestingAnalyticsResource();
 LoadTestingVersionResource();
 LoadTestingFeedbackResource();
 
-// Data Explorer Dashboard loader
+// Data Explorer Dashboard and Resource loaders
 LoadDataExplorerDashboard();
+LoadDataExplorerResource();
 
 // Communication Dashboard loader
 LoadCommunicationDashboard();
@@ -199,3 +229,13 @@ LoadSystemDiagnosticsResource();
 
 // Lists Dashboard resource loaders
 LoadListsResources();
+
+// Query Browser resource loader
+LoadQueryBrowserResource();
+
+// Dashboard Browser resource loader
+LoadDashboardBrowserResource();
+
+// Home Application and Dashboard loader
+LoadHomeApplication();
+LoadHomeDashboard();

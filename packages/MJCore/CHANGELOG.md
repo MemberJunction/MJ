@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/core
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/global@3.0.0
+
 ## 2.133.0
 
 ### Minor Changes
@@ -301,7 +307,6 @@
 
 - bd75336: ix: Improve React component system registry handling and chart
   flexibility
-
   - Enhanced component manager to optimize pre-registered component loading
     by skipping redundant fetches
   - Fixed SimpleChart component to accept any field for grouping, not just
@@ -349,7 +354,6 @@
   metadata usage, and component composition.
 
   ### New Components
-
   - **SimpleChart**: Lightweight charting component with
     automatic data aggregation, smart chart type selection, and
     proper date formatting
@@ -438,7 +442,6 @@
 ### Patch Changes
 
 - f703033: Implement extensible N-provider authentication architecture
-
   - Created shared authentication types in @memberjunction/core for use
     across frontend and backend
   - Refactored authentication to support multiple providers using MJGlobal
@@ -456,7 +459,6 @@
   This enables teams to add custom authentication providers (SAML,
   proprietary SSO, etc.)
   without forking or modifying the core authentication modules.
-
   - @memberjunction/global@2.91.0
 
 ## 2.90.0
@@ -537,7 +539,6 @@
 
   Add comprehensive audit logging and caching capabilities to the
   MemberJunction Query system:
-
   - Add ForceAuditLog and AuditLogDescription parameters to RunQuery for
     granular audit control
   - Implement TTL-based result caching with LRU eviction strategy for
@@ -552,7 +553,6 @@
 ### Patch Changes
 
 - 6d2d478: feat: AI Agent UI improvements and server-side context fixes
-
   - Enhanced AI Agent dialogs with resizable and draggable functionality
     using Kendo UI Window component
   - Improved dialog positioning with consistent center placement and proper
@@ -617,7 +617,6 @@
   relationships.
 
   ### New Features
-
   - **Hierarchical Path Resolution**: CategoryName now supports paths like
     "/MJ/AI/Agents/" that are parsed by splitting on "/" and walking down the
     category hierarchy using ParentID relationships

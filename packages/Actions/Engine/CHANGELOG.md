@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/actions
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.0.0
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/aiengine@3.0.0
+- @memberjunction/ai-prompts@3.0.0
+- @memberjunction/actions-base@3.0.0
+- @memberjunction/doc-utils@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes

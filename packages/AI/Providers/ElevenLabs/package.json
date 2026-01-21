@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-elevenlabs",
-  "version": "2.133.0",
+  "version": "3.0.0",
   "description": "MemberJunction Wrapper for ElevenLabs Audio Generation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,8 +19,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.133.0",
-    "@memberjunction/global": "2.133.0",
+    "@memberjunction/ai": "3.0.0",
+    "@memberjunction/global": "3.0.0",
     "elevenlabs": "^1.51.0"
   },
   "repository": {
