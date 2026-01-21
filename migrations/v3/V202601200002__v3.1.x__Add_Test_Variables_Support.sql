@@ -3846,10 +3846,11 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 	// If FinalStep has a value, it must be one of the permitted options
 	if (this.FinalStep != null) {
 		const allowed = ["While", "ForEach", "Chat", "Sub-Agent", "Actions", "Retry", "Failed", "Success"];
+		const allowedValues = allowed.join(", ");
 		if (!allowed.includes(this.FinalStep)) {
 			result.Errors.push(new ValidationErrorInfo(
 				"FinalStep",
-				`FinalStep must be one of the allowed values: While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, Success.`,
+				"FinalStep must be one of the allowed values: " + allowedValues + ".",
 				this.FinalStep,
 				ValidationErrorType.Failure
 			));
