@@ -46,15 +46,12 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
                 Type: 'entity',
                 EntityName: 'MJ: File Storage Accounts',
                 PropertyName: '_accounts',
-                OrderBy: 'Name ASC',
                 CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'File Storage Providers',
                 PropertyName: '_providers',
-                Filter: 'IsActive = 1',
-                OrderBy: 'Name ASC',
                 CacheLocal: true
             }
         ];
@@ -73,19 +70,20 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
     }
 
     /**
-     * Gets all active file storage providers
+     * Gets all file storage providers.
+     * Consumers should filter by IsActive if needed.
      */
-    public get ActiveProviders(): FileStorageProviderEntity[] {
+    public get Providers(): FileStorageProviderEntity[] {
         return this._providers || [];
     }
 
     /**
      * Gets all storage accounts combined with their provider details.
-     * Only includes accounts whose providers are active.
+     * Consumers should filter/sort as needed (e.g., by provider.IsActive).
      */
     public get AccountsWithProviders(): StorageAccountWithProvider[] {
         const providerMap = new Map<string, FileStorageProviderEntity>();
-        this.ActiveProviders.forEach(p => providerMap.set(p.ID, p));
+        this.Providers.forEach(p => providerMap.set(p.ID, p));
 
         return this.Accounts
             .map(account => {
@@ -115,7 +113,7 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
      * @returns The provider entity or undefined if not found
      */
     public GetProviderById(providerId: string): FileStorageProviderEntity | undefined {
-        return this.ActiveProviders.find(p => p.ID === providerId);
+        return this.Providers.find(p => p.ID === providerId);
     }
 
     /**
