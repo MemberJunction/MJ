@@ -16,7 +16,6 @@ export class APIKeyUsageLogFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'requestInformation', sectionName: 'Request Information', isExpanded: true },
             { sectionKey: 'responseClientInfo', sectionName: 'Response & Client Info', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -11730,7 +11730,7 @@ export const APIKeyScopeSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     Scope: z.string().describe(`
         * * Field Name: Scope
-        * * Display Name: Scope Name
+        * * Display Name: Scope
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -11747,7 +11747,7 @@ export const APIKeyUsageLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     APIKeyID: z.string().describe(`
         * * Field Name: APIKeyID
-        * * Display Name: API Key
+        * * Display Name: API Key ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)`),
     Endpoint: z.string().describe(`
@@ -50662,7 +50662,7 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
 
     /**
     * * Field Name: Scope
-    * * Display Name: Scope Name
+    * * Display Name: Scope
     * * SQL Data Type: nvarchar(100)
     */
     get Scope(): string {
@@ -50716,7 +50716,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: APIKeyID
-    * * Display Name: API Key
+    * * Display Name: API Key ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)
     */
