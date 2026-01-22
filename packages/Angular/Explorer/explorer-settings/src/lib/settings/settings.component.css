@@ -2,6 +2,25 @@
    Settings Component - MD3 Design System
    ============================================ */
 
+/* Host element must fill its container */
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Page container needs proper height and scrolling */
+.mj-page-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 /* Animations */
 @keyframes shimmer {
   0% {
@@ -41,7 +60,7 @@
   height: 100%;
   width: 100%;
   background-color: var(--mat-sys-surface);
-  overflow: hidden;
+  overflow-y: auto;
   position: relative;
 }
 
@@ -299,9 +318,11 @@
 .settings-content {
   display: flex;
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   flex-direction: column;
   width: 100%;
+  min-height: 0;
 }
 
 .desktop-layout {
@@ -311,12 +332,6 @@
 }
 
 .settings-content .desktop-layout {
-  display: flex !important;
-  height: 100%;
-  width: 100%;
-}
-
-:host ::ng-deep .desktop-layout {
   display: flex !important;
   height: 100%;
   width: 100%;
@@ -461,18 +476,38 @@
 /* ============================================
    Settings Grid
    ============================================ */
-.settings-grid {
+.settings-grid,
+.mj-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
   gap: 1.5rem;
   margin-top: 1.5rem;
 }
 
+.mj-grid-responsive {
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+}
+
 @media (max-width: 768px) {
-  .settings-grid {
+  .settings-grid,
+  .mj-grid,
+  .mj-grid-responsive {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
+}
+
+/* ============================================
+   Section Title & Description Spacing
+   ============================================ */
+.general-settings .section-title,
+.users-settings .section-title,
+.roles-settings .section-title {
+  margin-bottom: 0.25rem;
+}
+
+.users-settings .section-description,
+.roles-settings .section-description {
+  margin-bottom: 0.5rem;
 }
 
 /* ============================================
@@ -677,8 +712,6 @@
   background: var(--mat-sys-surface);
   border-radius: var(--mat-sys-corner-large);
   padding: 0;
-  min-height: 500px;
-  max-height: calc(100vh - 350px);
 }
 
 .performance-settings,
@@ -713,19 +746,43 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  gap: 1rem;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.general-settings > *,
-.users-settings > *,
-.roles-settings > *,
-.applications-settings > *,
-.permissions-settings > *,
-.advanced-settings > * {
+/* Only apply flex: 1 to actual content components, not titles/descriptions */
+.general-settings > mj-settings-card,
+.general-settings > .mj-grid,
+.users-settings > mj-user-management,
+.roles-settings > mj-role-management,
+.applications-settings > mj-application-management,
+.permissions-settings > mj-entity-permissions,
+.advanced-settings > .advanced-tabs,
+.advanced-settings > .advanced-tab-content {
+  flex-shrink: 0;
+}
+
+/* Only the main content area should grow and scroll */
+.users-settings > mj-user-management,
+.roles-settings > mj-role-management,
+.applications-settings > mj-application-management,
+.permissions-settings > mj-entity-permissions,
+.advanced-settings > .advanced-tab-content {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* Titles and descriptions should not flex or grow */
+.general-settings > .section-title,
+.users-settings > .section-title,
+.roles-settings > .section-title,
+.users-settings > .section-description,
+.roles-settings > .section-description {
+  flex-shrink: 0;
+  flex-grow: 0;
 }
 
 /* ============================================

@@ -1,114 +1,119 @@
 <div class="application-management-container">
-  <!-- Action Buttons -->
-  <div class="action-buttons">
-    <button
-      class="mj-btn mj-btn-secondary"
-      (click)="refreshData()"
-      [disabled]="isLoading"
-      aria-label="Refresh applications"
-    >
-      <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
-      Refresh
-    </button>
-    <button class="mj-btn mj-btn-primary" (click)="createNewApplication()">
-      <i class="fa-solid fa-plus"></i>
-      Add Application
-    </button>
-  </div>
-
-  <!-- Stats Cards -->
-  <div class="mj-grid-4">
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-total">
-        <i class="fa-solid fa-grid-2"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.totalApplications }}</div>
-        <div class="stat-label">Total Applications</div>
-      </div>
+  <!-- Sticky Header Section -->
+  <div class="sticky-header">
+    <!-- Action Buttons -->
+    <div class="action-buttons" role="toolbar" aria-label="Application management actions">
+      <button
+        class="mj-btn mj-btn-secondary mj-btn-icon-mobile"
+        (click)="refreshData()"
+        [disabled]="isLoading"
+        aria-label="Refresh applications"
+      >
+        <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading" aria-hidden="true"></i>
+        <span class="btn-text">Refresh</span>
+      </button>
+      <button class="mj-btn mj-btn-primary mj-btn-icon-mobile" (click)="createNewApplication()" aria-label="Add new application">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span class="btn-text">Add Application</span>
+      </button>
     </div>
 
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-active">
-        <i class="fa-solid fa-check-circle"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.activeApplications }}</div>
-        <div class="stat-label">Active Applications</div>
-      </div>
-    </div>
-
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-entities">
-        <i class="fa-solid fa-database"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.totalEntities }}</div>
-        <div class="stat-label">Total Entities</div>
-      </div>
-    </div>
-
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-public">
-        <i class="fa-solid fa-globe"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.publicEntities }}</div>
-        <div class="stat-label">Public Entities</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Filters Section -->
-  <div class="filters-section">
-    <div class="filters-row">
-      <!-- Search -->
-      <div class="mj-search">
-        <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
-        <input
-          type="text"
-          class="mj-search-input"
-          placeholder="Search applications by name or description..."
-          (input)="onSearchChange($event)"
-          [value]="filters$.value.search"
-          aria-label="Search applications"
-        />
+    <!-- Stats Cards -->
+    <div class="mj-grid-4" role="region" aria-label="Application statistics">
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-total" aria-hidden="true">
+          <i class="fa-solid fa-cubes"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Total applications count">{{ stats.totalApplications }}</div>
+          <div class="stat-label">Total Applications</div>
+        </div>
       </div>
 
-      <!-- Status Filter -->
-      <div class="mj-filter-group">
-        <label class="mj-filter-label" id="status-filter-label">Status</label>
-        <div class="mj-filter-buttons" role="group" aria-labelledby="status-filter-label">
-          <button
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.status === 'all'"
-            (click)="onStatusFilterChange('all')"
-            [attr.aria-pressed]="filters$.value.status === 'all'"
-          >
-            All
-          </button>
-          <button
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.status === 'active'"
-            (click)="onStatusFilterChange('active')"
-            [attr.aria-pressed]="filters$.value.status === 'active'"
-          >
-            Active
-          </button>
-          <button
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.status === 'inactive'"
-            (click)="onStatusFilterChange('inactive')"
-            [attr.aria-pressed]="filters$.value.status === 'inactive'"
-          >
-            Inactive
-          </button>
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-active" aria-hidden="true">
+          <i class="fa-solid fa-check-circle"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Active applications count">{{ stats.activeApplications }}</div>
+          <div class="stat-label">Active Applications</div>
+        </div>
+      </div>
+
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-entities" aria-hidden="true">
+          <i class="fa-solid fa-database"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Total entities count">{{ stats.totalEntities }}</div>
+          <div class="stat-label">Total Entities</div>
+        </div>
+      </div>
+
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-public" aria-hidden="true">
+          <i class="fa-solid fa-globe"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Public entities count">{{ stats.publicEntities }}</div>
+          <div class="stat-label">Public Entities</div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Loading State -->
+    <!-- Filters Section -->
+    <div class="filters-section" role="search" aria-label="Filter applications">
+      <div class="filters-row">
+        <!-- Search - Enhanced prominent search box -->
+        <div class="mj-search">
+          <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
+          <input
+            type="text"
+            class="mj-search-input"
+            placeholder="Search applications by name or description..."
+            (input)="onSearchChange($event)"
+            [value]="filters$.value.search"
+            aria-label="Search applications"
+          />
+        </div>
+
+        <!-- Status Filter -->
+        <div class="mj-filter-group">
+          <label class="mj-filter-label" id="status-filter-label">Status</label>
+          <div class="mj-filter-buttons" role="group" aria-labelledby="status-filter-label">
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.status === 'all'"
+              (click)="onStatusFilterChange('all')"
+              [attr.aria-pressed]="filters$.value.status === 'all'"
+            >
+              All
+            </button>
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.status === 'active'"
+              (click)="onStatusFilterChange('active')"
+              [attr.aria-pressed]="filters$.value.status === 'active'"
+            >
+              Active
+            </button>
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.status === 'inactive'"
+              (click)="onStatusFilterChange('inactive')"
+              [attr.aria-pressed]="filters$.value.status === 'inactive'"
+            >
+              Inactive
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- End Sticky Header -->
+
+  <!-- Scrollable Content Section -->
+  <div class="scrollable-content">
+    <!-- Loading State -->
   @if (isLoading) {
     <div class="loading-container" role="status" aria-live="polite">
       <mj-loading text="Loading applications..."></mj-loading>
@@ -176,6 +181,33 @@
 
             @if (isAppExpanded(app.ID)) {
               <div class="app-content">
+                <!-- Mobile-only actions bar -->
+                <div class="mobile-actions-bar" (click)="$event.stopPropagation()">
+                  <span class="status-badge" [class]="getAppStatusClass(app)">
+                    {{ getAppStatusLabel(app) }}
+                  </span>
+                  <div class="mobile-action-buttons">
+                    <button
+                      class="mj-btn mj-btn-ghost mj-btn-sm"
+                      (click)="editApplication(app)"
+                      title="Edit"
+                      [attr.aria-label]="'Edit ' + app.Name"
+                    >
+                      <i class="fa-solid fa-edit"></i>
+                      <span class="btn-label">Edit</span>
+                    </button>
+                    <button
+                      class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                      (click)="confirmDeleteApplication(app)"
+                      title="Delete"
+                      [attr.aria-label]="'Delete ' + app.Name"
+                    >
+                      <i class="fa-solid fa-trash"></i>
+                      <span class="btn-label">Delete</span>
+                    </button>
+                  </div>
+                </div>
+
                 <div class="app-stats">
                   <div class="stat-item">
                     <i class="fa-solid fa-database" aria-hidden="true"></i>
@@ -227,7 +259,7 @@
 
         @if (filteredApplications.length === 0) {
           <div class="empty-state">
-            <i class="fa-solid fa-grid-2 empty-icon" aria-hidden="true"></i>
+            <i class="fa-solid fa-cubes empty-icon" aria-hidden="true"></i>
             <p class="empty-text">No applications found</p>
             <p class="empty-subtext">Try adjusting your filters or create a new application</p>
           </div>
@@ -235,6 +267,7 @@
       </div>
     </div>
   }
+  </div><!-- End Scrollable Content -->
 
   <!-- Application Dialog -->
   <mj-application-dialog

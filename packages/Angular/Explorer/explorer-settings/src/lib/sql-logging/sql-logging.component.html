@@ -132,9 +132,7 @@
               <h3 class="panel-title">Active Sessions</h3>
               @if (activeSessions.length > 0) {
                 <button
-                <button
                   class="btn-danger btn-small"
-                  (click)="openStopAllSessionsConfirm()"
                   (click)="openStopAllSessionsConfirm()"
                   [disabled]="loading"
                   aria-label="Stop all active sessions"
@@ -171,7 +169,6 @@
                         </span>
                       </div>
                     </div>
-                    <button
                     <button
                       class="action-btn action-btn-danger"
                       (click)="openStopSessionConfirm(session, $event)"
@@ -211,14 +208,11 @@
                   <label class="checkbox-label">
                     <input
                       type="checkbox"
-                    <input
-                      type="checkbox"
                       [(ngModel)]="autoRefresh"
                       aria-label="Enable auto-refresh"
                     />
                     Auto-refresh
                   </label>
-                  <button
                   <button
                     class="action-btn"
                     (click)="loadSessionLog(selectedSession)"

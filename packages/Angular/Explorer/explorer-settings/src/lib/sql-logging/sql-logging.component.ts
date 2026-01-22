@@ -110,18 +110,6 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
   /** Whether stopping all sessions (vs single session) */
   isStoppingAll = false;
 
-  /** Whether the log viewer is in expanded (fullscreen) mode */
-  isLogViewerExpanded = false;
-
-  /** Whether the stop session confirmation dialog is visible */
-  showStopConfirmDialog = false;
-
-  /** Session pending stop confirmation (single session or null for all) */
-  sessionToStop: SqlLoggingSession | null = null;
-
-  /** Whether stopping all sessions (vs single session) */
-  isStoppingAll = false;
-
   /** Options for creating a new SQL logging session */
   newSessionOptions = {
     /** Custom filename for the log file */
@@ -135,12 +123,6 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     /** Whether to format SQL with proper indentation */
     prettyPrint: true,
     /** Human-readable name for the session */
-    sessionName: '',
-    /** Regex filter options */
-    filterPatterns: '' as string, // Comma or newline separated patterns
-    filterType: 'exclude' as 'include' | 'exclude',
-    verboseOutput: false,
-    defaultSchemaName: '__mj', // Default MJ schema
     sessionName: '',
     /** Regex filter options */
     filterPatterns: '' as string, // Comma or newline separated patterns
@@ -340,17 +322,11 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    * Executes the stop operation for a specific SQL logging session.
    * Called after user confirms via the confirmation dialog.
    *
-   * Executes the stop operation for a specific SQL logging session.
-   * Called after user confirms via the confirmation dialog.
-   *
    * @param session - The session object to stop
-   */
-  private async executeStopSession(session: SqlLoggingSession) {
    */
   private async executeStopSession(session: SqlLoggingSession) {
     try {
       this.loading = true;
-
 
       const dataProvider = Metadata.Provider as GraphQLDataProvider;
       const mutation = `
@@ -359,9 +335,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
         }
       `;
 
-
       const result = await dataProvider.ExecuteGQL(mutation, { sessionId: session.id });
-
 
       if (result.errors) {
         throw new Error(result.errors[0].message);
@@ -374,7 +348,6 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
         this.logContent = '';
       }
 
-
       await this.loadActiveSessions();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to stop SQL logging session';
@@ -385,18 +358,13 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     }
   }
 
-
   /**
-   * Executes the stop operation for all active SQL logging sessions.
-   * Called after user confirms via the confirmation dialog.
    * Executes the stop operation for all active SQL logging sessions.
    * Called after user confirms via the confirmation dialog.
    */
   private async executeStopAllSessions() {
-  private async executeStopAllSessions() {
     try {
       this.loading = true;
-
 
       const dataProvider = Metadata.Provider as GraphQLDataProvider;
       const mutation = `
@@ -405,9 +373,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
         }
       `;
 
-
       const result = await dataProvider.ExecuteGQL(mutation, {});
-
 
       if (result.errors) {
         throw new Error(result.errors[0].message);
@@ -678,90 +644,6 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    */
   getTotalStatementCount(): number {
     return this.activeSessions.reduce((sum, session) => sum + (session.statementCount || 0), 0);
-  }
-
-  /**
-   * Parses a string of filter patterns (comma or newline separated) into an array
-   * @param patternsString - Comma or newline separated patterns
-   * @returns Array of pattern strings, or undefined if empty
-   */
-  private parseFilterPatterns(patternsString: string): string[] | undefined {
-    if (!patternsString || !patternsString.trim()) {
-      return undefined;
-    }
-
-    /** Split by comma or newline, trim whitespace, filter empty */
-    return patternsString
-      .split(/[,\n]/)
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0);
-  }
-
-  /**
-   * Toggles the log viewer between normal and expanded (fullscreen) mode.
-   */
-  toggleLogViewerExpand() {
-    this.isLogViewerExpanded = !this.isLogViewerExpanded;
-  }
-
-  /**
-   * Handles keyboard events for the component.
-   * Closes expanded log viewer or confirmation dialog when Escape is pressed.
-   */
-  @HostListener('document:keydown.escape')
-  onEscapeKey() {
-    if (this.showStopConfirmDialog) {
-      this.cancelStopConfirm();
-    } else if (this.isLogViewerExpanded) {
-      this.isLogViewerExpanded = false;
-    } else if (this.showStartSessionDialog) {
-      this.showStartSessionDialog = false;
-    }
-  }
-
-  /**
-   * Opens the confirmation dialog for stopping a single session.
-   *
-   * @param session - The session to stop
-   * @param event - Optional event to stop propagation
-   */
-  openStopSessionConfirm(session: SqlLoggingSession, event?: Event) {
-    if (event) {
-      event.stopPropagation();
-    }
-    this.sessionToStop = session;
-    this.isStoppingAll = false;
-    this.showStopConfirmDialog = true;
-  }
-
-  /**
-   * Opens the confirmation dialog for stopping all sessions.
-   */
-  openStopAllSessionsConfirm() {
-    this.sessionToStop = null;
-    this.isStoppingAll = true;
-    this.showStopConfirmDialog = true;
-  }
-
-  /**
-   * Closes the stop confirmation dialog without taking action.
-   */
-  cancelStopConfirm() {
-    this.showStopConfirmDialog = false;
-    this.sessionToStop = null;
-    this.isStoppingAll = false;
-  }
-
-  /**
-   * Confirms and executes the stop action (single session or all sessions).
-   */
-  async confirmStopSession() {
-    if (this.isStoppingAll) {
-      await this.executeStopAllSessions();
-    } else if (this.sessionToStop) {
-      await this.executeStopSession(this.sessionToStop);
-    }
-    this.cancelStopConfirm();
   }
 
   /**

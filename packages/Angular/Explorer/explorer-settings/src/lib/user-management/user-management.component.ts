@@ -68,8 +68,10 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public showCreateDialog = false;
   public showEditDialog = false;
   public showDeleteConfirm = false;
-  public viewMode: 'grid' | 'cards' = 'grid';
-  
+
+  // Mobile expansion state
+  private expandedUserIds = new Set<string>();
+
   // User-Role mapping
   private userRoleMap = new Map<string, string[]>(); // userId -> roleIds[]
   
@@ -317,10 +319,6 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       console.error('Error updating user status:', error);
       user.IsActive = !user.IsActive; // Revert on error
     }
-  }
-  
-  public toggleViewMode(): void {
-    this.viewMode = this.viewMode === 'grid' ? 'cards' : 'grid';
   }
   
   public exportUsers(): void {
@@ -611,5 +609,24 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       default:
         return 'Confirm';
     }
+  }
+
+  // Expansion methods
+  public toggleUserExpansion(userId: string): void {
+    if (this.expandedUserIds.has(userId)) {
+      this.expandedUserIds.delete(userId);
+    } else {
+      this.expandedUserIds.add(userId);
+    }
+  }
+
+  public isUserExpanded(userId: string): boolean {
+    return this.expandedUserIds.has(userId);
+  }
+
+  // Get roles for a specific user
+  public getUserRoles(userId: string): RoleEntity[] {
+    const roleIds = this.userRoleMap.get(userId) || [];
+    return this.roles.filter(role => roleIds.includes(role.ID));
   }
 }

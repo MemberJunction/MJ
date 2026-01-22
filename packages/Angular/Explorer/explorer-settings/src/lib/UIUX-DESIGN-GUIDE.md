@@ -1005,6 +1005,309 @@ Use the MJ Loading component:
 
 ---
 
+## MJ Component Reference
+
+This section documents the **actual CSS classes** available in the MemberJunction design system. These classes are implemented in the shared styles file (`shared/styles/_md3-shared.css`) and can be used across all components.
+
+### MJ Button System
+
+The MJ Button System provides consistent button styling across all components. Import patterns from `_md3-shared.css`.
+
+#### Base Button Class
+
+```css
+.mj-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.5rem;
+  font: var(--mat-sys-label-large);
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  min-height: 44px;  /* Touch-friendly minimum */
+}
+```
+
+#### Button Variants
+
+| Class | Use Case | Example |
+|-------|----------|---------|
+| `.mj-btn-primary` | Primary actions (Save, Create, Submit) | Blue/primary background |
+| `.mj-btn-secondary` | Secondary actions (Edit, Update) | Outlined with border |
+| `.mj-btn-ghost` | Low-emphasis actions (Cancel, Close) | Transparent background |
+| `.mj-btn-danger` | Destructive actions (Delete, Remove) | Error color background |
+
+#### Button Sizes
+
+| Class | Size | Min-Height | Use Case |
+|-------|------|------------|----------|
+| `.mj-btn-sm` | Small | 36px | Compact UIs, table rows |
+| `.mj-btn` (default) | Medium | 44px | Standard buttons |
+| `.mj-btn-lg` | Large | 52px | Hero actions, CTAs |
+
+#### Icon Buttons
+
+| Class | Use Case |
+|-------|----------|
+| `.mj-btn-icon-only` | Icon-only button (always visible) |
+| `.mj-btn-icon-mobile` | Shows only icon on mobile, full button on desktop |
+
+**Usage Example:**
+```html
+<!-- Primary action -->
+<button class="mj-btn mj-btn-primary">
+  <i class="fa-solid fa-plus"></i>
+  Create New
+</button>
+
+<!-- Secondary action -->
+<button class="mj-btn mj-btn-secondary">
+  <i class="fa-solid fa-pencil"></i>
+  Edit
+</button>
+
+<!-- Ghost button for cancel -->
+<button class="mj-btn mj-btn-ghost">Cancel</button>
+
+<!-- Danger button -->
+<button class="mj-btn mj-btn-danger">
+  <i class="fa-solid fa-trash"></i>
+  Delete
+</button>
+
+<!-- Icon-only button -->
+<button class="mj-btn mj-btn-ghost mj-btn-icon-only" aria-label="Close">
+  <i class="fa-solid fa-times"></i>
+</button>
+
+<!-- Responsive icon button -->
+<button class="mj-btn mj-btn-primary mj-btn-icon-mobile">
+  <i class="fa-solid fa-plus"></i>
+  <span>Add Item</span>
+</button>
+```
+
+### MJ Card System
+
+#### Stats Cards
+
+Stats cards display key metrics with icons and values.
+
+```html
+<div class="mj-card">
+  <div class="stat-icon stat-icon-total">
+    <i class="fa-solid fa-layer-group"></i>
+  </div>
+  <div class="stat-content">
+    <div class="stat-value">1,234</div>
+    <div class="stat-label">Total Items</div>
+  </div>
+</div>
+```
+
+**Icon Color Variants:**
+
+| Class | Use Case | Colors |
+|-------|----------|--------|
+| `.stat-icon-total` | Total/summary stats | Primary container |
+| `.stat-icon-active` | Active/online items | Secondary container |
+| `.stat-icon-entities` | Entity-related stats | Tertiary container |
+| `.stat-icon-public` | Public/shared items | Surface variant |
+
+#### Expandable Settings Card
+
+The settings card component (`<mj-settings-card>`) provides collapsible sections.
+
+**Component Usage:**
+```html
+<mj-settings-card
+  [title]="'General Settings'"
+  [icon]="'fa-solid fa-cog'"
+  [expanded]="true"
+  (toggle)="onToggle()">
+
+  <!-- Card content goes here -->
+  <div class="settings-content">
+    <p>Your settings content...</p>
+  </div>
+</mj-settings-card>
+```
+
+**File Reference:** `shared/settings-card.component.ts` and `shared/settings-card.component.css`
+
+### MJ Search Component
+
+The prominent search pattern with icon, input, and optional clear button.
+
+```html
+<div class="mj-search mj-search-prominent">
+  <i class="fa-solid fa-search mj-search-icon"></i>
+  <input
+    type="text"
+    class="mj-search-input"
+    placeholder="Search...">
+  <button class="mj-search-clear" *ngIf="hasValue">
+    <i class="fa-solid fa-times"></i>
+  </button>
+</div>
+```
+
+**Variants:**
+
+| Class | Description |
+|-------|-------------|
+| `.mj-search` | Base search container |
+| `.mj-search-prominent` | Larger, more visible search (hero sections) |
+| `.mj-search-icon` | Positioned search icon |
+| `.mj-search-input` | Styled input field |
+| `.mj-search-clear` | Clear button (right side) |
+
+### MJ Filter Group
+
+Filter buttons for data filtering with active states.
+
+```html
+<div class="mj-filter-group">
+  <span class="mj-filter-label">Status:</span>
+  <div class="mj-filter-buttons">
+    <button
+      class="mj-filter-btn"
+      [class.active]="filter === 'all'"
+      (click)="setFilter('all')">
+      All
+    </button>
+    <button
+      class="mj-filter-btn"
+      [class.active]="filter === 'active'"
+      (click)="setFilter('active')">
+      Active
+    </button>
+    <button
+      class="mj-filter-btn"
+      [class.active]="filter === 'inactive'"
+      (click)="setFilter('inactive')">
+      Inactive
+    </button>
+  </div>
+</div>
+```
+
+### MJ Grid Layouts
+
+Responsive grid layouts for cards and content.
+
+```css
+/* 4-column responsive grid */
+.mj-grid-4 {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;  /* Mobile: 1 column */
+}
+
+@media (min-width: 640px) { /* 2 columns */ }
+@media (min-width: 1024px) { /* 3 columns */ }
+@media (min-width: 1440px) { /* 4 columns */ }
+```
+
+**Grid Classes:**
+
+| Class | Behavior |
+|-------|----------|
+| `.mj-grid-4` | Responsive 1→2→3→4 column grid |
+| `.mj-grid-responsive` | Auto-fill grid with min-width cards |
+
+### Status Badges
+
+```html
+<span class="status-badge status-active">Active</span>
+<span class="status-badge status-inactive">Inactive</span>
+```
+
+**Badge Variants:**
+
+| Class | Color | Use Case |
+|-------|-------|----------|
+| `.status-active` | Green/secondary | Active, enabled, online |
+| `.status-inactive` | Gray/neutral | Inactive, disabled, offline |
+
+### Empty States
+
+```html
+<div class="empty-state">
+  <i class="fa-solid fa-inbox empty-state-icon"></i>
+  <p class="empty-state-text">No items found</p>
+  <p class="empty-state-subtext">Create your first item to get started</p>
+  <button class="mj-btn mj-btn-primary">
+    <i class="fa-solid fa-plus"></i>
+    Create Item
+  </button>
+</div>
+```
+
+### Modal/Dialog System
+
+```html
+<div class="modal-backdrop" (click)="close()">
+  <div class="modal-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2 class="modal-title">Dialog Title</h2>
+      <button class="mj-btn mj-btn-ghost mj-btn-icon-only" (click)="close()">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <!-- Content -->
+    </div>
+    <div class="modal-footer">
+      <!-- IMPORTANT: Confirm buttons on LEFT, Cancel on RIGHT -->
+      <button class="mj-btn mj-btn-primary">Save</button>
+      <button class="mj-btn mj-btn-ghost" (click)="close()">Cancel</button>
+    </div>
+  </div>
+</div>
+```
+
+**Button Placement Note:** In MemberJunction dialogs, primary action buttons (Save, Submit, Confirm) go on the **LEFT**, and cancel/close buttons go on the **RIGHT**. This is consistent across all MJ components.
+
+### File Reference
+
+All shared MJ component styles are available in:
+
+```
+packages/Angular/Explorer/explorer-settings/src/lib/
+├── shared/
+│   ├── settings-card.component.ts      # Expandable settings card
+│   ├── settings-card.component.css     # Card styles
+│   └── styles/
+│       ├── _md3-shared.css            # MJ component system (buttons, cards, etc.)
+│       ├── _variables.css             # CSS custom properties
+│       └── _mixins.css                # Animation mixins
+```
+
+### Using MJ Components
+
+To use MJ shared styles in your component:
+
+1. **Import styles in your component CSS:**
+   ```css
+   /* At the top of your component.css */
+   @import '../shared/styles/_md3-shared.css';
+   ```
+
+2. **Or use the classes directly** if your module already imports the shared styles.
+
+3. **Use the settings card component:**
+   ```typescript
+   // In your module imports
+   import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+   ```
+
+---
+
 ## Accessibility
 
 ### WCAG 2.1 Compliance
