@@ -1,5 +1,114 @@
 # Change Log - @memberjunction/server
 
+## 3.2.0
+
+### Minor Changes
+
+- 582ca0c: Added unified notification system with email/SMS delivery, user notification preferences, and agent completion notifications
+
+### Patch Changes
+
+- cbd2714: Improve error handling and stability across Skip integration, component artifacts, and metadata sync
+- Updated dependencies [039983c]
+- Updated dependencies [011c820]
+- Updated dependencies [6806a6c]
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-agents@3.2.0
+  - @memberjunction/core-actions@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/storage@3.2.0
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/skip-types@3.2.0
+  - @memberjunction/notifications@3.2.0
+  - @memberjunction/ai-agent-manager-actions@3.2.0
+  - @memberjunction/ai-agent-manager@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/aiengine@3.2.0
+  - @memberjunction/ai-prompts@3.2.0
+  - @memberjunction/actions-apollo@3.2.0
+  - @memberjunction/actions-bizapps-accounting@3.2.0
+  - @memberjunction/actions-bizapps-crm@3.2.0
+  - @memberjunction/actions-bizapps-formbuilders@3.2.0
+  - @memberjunction/actions-bizapps-lms@3.2.0
+  - @memberjunction/actions-bizapps-social@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/entity-communications-server@3.2.0
+  - @memberjunction/communication-ms-graph@3.2.0
+  - @memberjunction/communication-sendgrid@3.2.0
+  - @memberjunction/doc-utils@3.2.0
+  - @memberjunction/encryption@3.2.0
+  - @memberjunction/external-change-detection@3.2.0
+  - @memberjunction/core-entities-server@3.2.0
+  - @memberjunction/data-context@3.2.0
+  - @memberjunction/queue@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/scheduling-actions@3.2.0
+  - @memberjunction/scheduling-engine-base@3.2.0
+  - @memberjunction/scheduling-engine@3.2.0
+  - @memberjunction/templates@3.2.0
+  - @memberjunction/testing-engine@3.2.0
+  - @memberjunction/ai-provider-bundle@3.2.0
+  - @memberjunction/component-registry-client-sdk@3.2.0
+  - @memberjunction/ai-vectors-pinecone@3.2.0
+  - @memberjunction/data-context-server@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/config@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+  - @memberjunction/scheduling-base-types@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- 8c0b624: no migration
+- Updated dependencies [8c0b624]
+  - @memberjunction/graphql-dataprovider@3.1.1
+  - @memberjunction/ai-agent-manager-actions@3.1.1
+  - @memberjunction/ai-agent-manager@3.1.1
+  - @memberjunction/ai-agents@3.1.1
+  - @memberjunction/ai@3.1.1
+  - @memberjunction/ai-core-plus@3.1.1
+  - @memberjunction/aiengine@3.1.1
+  - @memberjunction/ai-prompts@3.1.1
+  - @memberjunction/ai-provider-bundle@3.1.1
+  - @memberjunction/ai-vectors-pinecone@3.1.1
+  - @memberjunction/actions-apollo@3.1.1
+  - @memberjunction/actions-bizapps-accounting@3.1.1
+  - @memberjunction/actions-bizapps-crm@3.1.1
+  - @memberjunction/actions-bizapps-formbuilders@3.1.1
+  - @memberjunction/actions-bizapps-lms@3.1.1
+  - @memberjunction/actions-bizapps-social@3.1.1
+  - @memberjunction/core-actions@3.1.1
+  - @memberjunction/actions@3.1.1
+  - @memberjunction/entity-communications-server@3.1.1
+  - @memberjunction/communication-ms-graph@3.1.1
+  - @memberjunction/communication-sendgrid@3.1.1
+  - @memberjunction/component-registry-client-sdk@3.1.1
+  - @memberjunction/config@3.1.1
+  - @memberjunction/doc-utils@3.1.1
+  - @memberjunction/encryption@3.1.1
+  - @memberjunction/external-change-detection@3.1.1
+  - @memberjunction/interactive-component-types@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/core-entities-server@3.1.1
+  - @memberjunction/data-context@3.1.1
+  - @memberjunction/data-context-server@3.1.1
+  - @memberjunction/global@3.1.1
+  - @memberjunction/queue@3.1.1
+  - @memberjunction/storage@3.1.1
+  - @memberjunction/sqlserver-dataprovider@3.1.1
+  - @memberjunction/scheduling-actions@3.1.1
+  - @memberjunction/scheduling-engine-base@3.1.1
+  - @memberjunction/scheduling-base-types@3.1.1
+  - @memberjunction/scheduling-engine@3.1.1
+  - @memberjunction/skip-types@3.1.1
+  - @memberjunction/templates@3.1.1
+  - @memberjunction/testing-engine@3.1.1
+
 ## 3.0.0
 
 ### Major Changes

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-treelist",
-  "version": "3.0.0",
+  "version": "3.2.0",
   "description": "DEPRECATED: MemberJunction Timeline component. This package is deprecated and will be removed in a future release.",
   "deprecated": "This package is deprecated and will be removed in a future release. The package name is misleading - it contains a Timeline component, not a tree list.",
   "main": "./dist/public-api.js",
@@ -26,12 +26,12 @@
     "@angular/router": "18.2.14"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "3.0.0",
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/ng-container-directives": "3.0.0",
-    "@memberjunction/ng-entity-form-dialog": "3.0.0",
-    "@memberjunction/ng-shared": "3.0.0",
+    "@memberjunction/core-entities": "3.2.0",
+    "@memberjunction/global": "3.2.0",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/ng-container-directives": "3.2.0",
+    "@memberjunction/ng-entity-form-dialog": "3.2.0",
+    "@memberjunction/ng-shared": "3.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
     "@progress/kendo-angular-indicators": "16.2.0",

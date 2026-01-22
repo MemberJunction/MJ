@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/ng-user-view-properties
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ng-base-forms@3.2.0
+  - @memberjunction/ng-shared@3.2.0
+  - @memberjunction/ng-find-record@3.2.0
+  - @memberjunction/ng-resource-permissions@3.2.0
+  - @memberjunction/ng-shared-generic@3.2.0
+  - @memberjunction/ng-tabstrip@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@3.1.1
+- @memberjunction/ng-base-forms@3.1.1
+- @memberjunction/ng-find-record@3.1.1
+- @memberjunction/ng-resource-permissions@3.1.1
+- @memberjunction/ng-shared-generic@3.1.1
+- @memberjunction/ng-tabstrip@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

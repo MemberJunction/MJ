@@ -1,5 +1,51 @@
 # @memberjunction/ai-cli
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [011c820]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-agents@3.2.0
+  - @memberjunction/core-actions@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/ai-prompts@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/core-entities-server@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/ai-anthropic@3.2.0
+  - @memberjunction/ai-betty-bot@3.2.0
+  - @memberjunction/ai-cerebras@3.2.0
+  - @memberjunction/ai-groq@3.2.0
+  - @memberjunction/ai-mistral@3.2.0
+  - @memberjunction/ai-openai@3.2.0
+  - @memberjunction/core@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@3.1.1
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/ai-prompts@3.1.1
+- @memberjunction/ai-anthropic@3.1.1
+- @memberjunction/ai-betty-bot@3.1.1
+- @memberjunction/ai-cerebras@3.1.1
+- @memberjunction/ai-groq@3.1.1
+- @memberjunction/ai-mistral@3.1.1
+- @memberjunction/ai-openai@3.1.1
+- @memberjunction/core-actions@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/core-entities-server@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

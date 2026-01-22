@@ -32,4 +32,6 @@ export type {
     ComponentSpecWithHash
 } from './GraphQLComponentRegistryClient';
 
+export * from './graphQLFileStorageClient';
+
 export * from './storage-providers';

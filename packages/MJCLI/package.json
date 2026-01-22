@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/cli",
-  "version": "3.0.0",
+  "version": "3.2.0",
   "description": "MemberJunction command line tools",
   "keywords": [
     "oclif"
@@ -51,15 +51,15 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^5.0.1",
-    "@memberjunction/ai-cli": "3.0.0",
-    "@memberjunction/codegen-lib": "3.0.0",
-    "@memberjunction/config": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/db-auto-doc": "3.0.0",
-    "@memberjunction/metadata-sync": "3.0.0",
-    "@memberjunction/query-gen": "3.0.0",
-    "@memberjunction/sqlserver-dataprovider": "3.0.0",
-    "@memberjunction/testing-cli": "3.0.0",
+    "@memberjunction/ai-cli": "3.2.0",
+    "@memberjunction/codegen-lib": "3.2.0",
+    "@memberjunction/config": "3.2.0",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/db-auto-doc": "3.2.0",
+    "@memberjunction/metadata-sync": "3.2.0",
+    "@memberjunction/query-gen": "3.2.0",
+    "@memberjunction/sqlserver-dataprovider": "3.2.0",
+    "@memberjunction/testing-cli": "3.2.0",
     "@oclif/core": "^3",
     "@oclif/plugin-help": "^6",
     "@oclif/plugin-version": "^2.0.17",

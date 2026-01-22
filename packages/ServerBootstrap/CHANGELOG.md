@@ -1,5 +1,26 @@
 # @memberjunction/server-bootstrap
 
+## 3.2.0
+
+### Minor Changes
+
+- 6806a6c: Add enterprise file storage accounts with credential-based authentication
+
+### Patch Changes
+
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/server@3.2.0
+  - @memberjunction/core@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [8c0b624]
+  - @memberjunction/server@3.1.1
+  - @memberjunction/core@3.1.1
+
 ## 3.0.0
 
 ### Major Changes

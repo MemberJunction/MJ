@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-azure",
-  "version": "3.0.0",
+  "version": "3.2.0",
   "description": "Azure AI Provider for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,8 +17,8 @@
     "@azure-rest/ai-inference": "^1.0.0-beta.6",
     "@azure/core-auth": "^1.5.0",
     "@azure/identity": "^4.0.0",
-    "@memberjunction/ai": "3.0.0",
-    "@memberjunction/global": "3.0.0"
+    "@memberjunction/ai": "3.2.0",
+    "@memberjunction/global": "3.2.0"
   },
   "devDependencies": {
     "rimraf": "^5.0.0",

@@ -65,7 +65,7 @@ db-auto-doc init
 
 This interactive wizard will:
 - Configure database connection
-- Set up AI provider (OpenAI, Anthropic, Google, or Groq)
+- Set up AI provider (Gemini default, plus OpenAI, Anthropic, Groq, and more)
 - Configure guardrails and resource limits
 - Optionally add seed context for better analysis
 - Create `config.json`
@@ -633,12 +633,35 @@ This rich context enables AI to make accurate inferences.
 
 ## Supported AI Providers
 
-DBAutoDoc integrates with MemberJunction's AI provider system, supporting:
+DBAutoDoc integrates with MemberJunction's AI provider system. Supported providers:
+
+| Config Provider | Driver Class | Description |
+|-----------------|--------------|-------------|
+| `gemini` (default) | GeminiLLM | Google Gemini |
+| `openai` | OpenAILLM | OpenAI |
+| `anthropic` | AnthropicLLM | Anthropic Claude |
+| `groq` | GroqLLM | Groq |
+| `mistral` | MistralLLM | Mistral AI |
+| `vertex` | VertexLLM | Google Vertex AI |
+| `azure` | AzureLLM | Azure OpenAI |
+| `cerebras` | CerebrasLLM | Cerebras |
+| `openrouter` | OpenRouterLLM | OpenRouter (multi-model) |
+| `xai` | xAILLM | xAI (Grok) |
+| `bedrock` | BedrockLLM | AWS Bedrock |
+
+### Gemini (Default)
+```json
+{
+  "provider": "gemini",
+  "model": "gemini-3-flash-preview",
+  "apiKey": "..."
+}
+```
 
 ### OpenAI
 ```json
 {
-  "provider": "OpenAILLM",
+  "provider": "openai",
   "model": "gpt-4-turbo-preview",
   "apiKey": "sk-..."
 }
@@ -647,32 +670,20 @@ DBAutoDoc integrates with MemberJunction's AI provider system, supporting:
 ### Anthropic
 ```json
 {
-  "provider": "AnthropicLLM",
+  "provider": "anthropic",
   "model": "claude-3-5-sonnet-20241022",
   "apiKey": "sk-ant-..."
-}
-```
-
-### Google
-```json
-{
-  "provider": "GoogleLLM",
-  "model": "gemini-1.5-pro",
-  "apiKey": "..."
 }
 ```
 
 ### Groq
 ```json
 {
-  "provider": "GroqLLM",
+  "provider": "groq",
   "model": "llama-3.3-70b-versatile",
   "apiKey": "gsk_..."
 }
 ```
-
-### Other Providers
-Any BaseLLM-compatible provider registered with MemberJunction can be used.
 
 ## State File
 
@@ -733,7 +744,7 @@ const result = await api.analyze({
     password: 'password'
   },
   ai: {
-    provider: 'OpenAILLM',
+    provider: 'openai',
     model: 'gpt-4-turbo-preview',
     apiKey: 'sk-...'
   },
