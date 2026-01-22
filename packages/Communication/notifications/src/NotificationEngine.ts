@@ -13,7 +13,6 @@ import { SendNotificationParams, NotificationResult, DeliveryChannels } from './
  * This engine relies on UserInfoEngine for notification types and preferences.
  * UserInfoEngine loads and caches all notification metadata via BaseEngine.
  */
-@RegisterForStartup()
 export class NotificationEngine extends BaseEngine<NotificationEngine> {
   /**
    * Returns the singleton instance of the NotificationEngine
