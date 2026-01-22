@@ -5,7 +5,7 @@
   "fixed": [["@memberjunction/*"]],
   "linked": [],
   "access": "public",
-  "baseBranch": "next",
+  "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": ["mj_*"]
 }
