@@ -65,6 +65,7 @@
     "@memberjunction/cli": "3.0.0",
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",
+    "fs.realpath": "^1.0.0",
     "simple-git": "^3.27.0",
     "tiny-emitter": "^2.1.0"
   },
