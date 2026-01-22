@@ -345,6 +345,7 @@
 ### Patch Changes
 
 - 3f71ef4: Add new storage actions and external API integrations
+
   - Add 13 individual file storage actions
   - Add Gamma API integration for AI-powered presentation generation
   - Add Perplexity Search action for AI-powered web search with

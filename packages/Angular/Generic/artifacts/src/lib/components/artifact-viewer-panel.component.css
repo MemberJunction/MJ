@@ -599,6 +599,29 @@
   box-sizing: border-box;
   margin-bottom: 5px;
   min-width: 0;
+  min-height: 0;
+}
+
+/* Plugin Container */
+.plugin-container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Override inline display:block to ensure proper flex layout */
+.plugin-container[style*="display: block"] {
+  display: flex !important;
+  flex-direction: column;
+}
+
+/* Ensure artifact viewer component takes full height */
+.plugin-container mj-artifact-type-plugin-viewer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
 }
 
 .display-content {

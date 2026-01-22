@@ -28,9 +28,8 @@ import {
 import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, ResourceTypeEntity } from '@memberjunction/core-entities';
-import { DatasetResultType, LogError, Metadata, RunView } from '@memberjunction/core';
+import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
-import { DashboardResource } from '../../../resource-wrappers/dashboard-resource.component';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -68,7 +67,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private layoutInitRetryCount = 0;
   private readonly MAX_LAYOUT_INIT_RETRIES = 5;
-  private hasEmittedFirstLoadComplete = false;
   private layoutInitialized = false;
   private layoutRestorationComplete = false; // True only AFTER layout is fully restored/created
 

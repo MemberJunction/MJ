@@ -5506,16 +5506,16 @@ The context is now within limits. Please retry your request with the recovered c
             }; 
 
             // Finalize step entity
-            await this.finalizeStepEntity(stepEntity, subAgentResult.success, 
+            await this.finalizeStepEntity(stepEntity, subAgentResult.success,
                 subAgentResult.agentRun?.ErrorMessage, outputData);
-            
+
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Return the Chat step, including responseForm and commands from sub-agent
-                // Use mergedPayload to preserve sub-agent payload changes (e.g., PRD from Requirements Expert)
-                return {
+                // Create Chat nextStep but validate it through parent's ChatHandlingOption
+                // This allows parent agents to remap Chat -> Success/Failed/Retry if configured
+                const chatStep: BaseAgentNextStep<SR, SC> = {
                     step: 'Chat',
-                    terminate: true, // Bubble up to the main loop to handle Chat
+                    terminate: true,
                     message: subAgentResult.agentRun?.Message || null,
                     previousPayload: previousDecision?.newPayload,
                     newPayload: mergedPayload, // Preserve sub-agent payload changes
@@ -5523,6 +5523,10 @@ The context is now within limits. Please retry your request with the recovered c
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands
                 };
+
+                // Validate through parent's ChatHandlingOption (if configured)
+                // This ensures parent agents can override child Chat steps
+                return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
             }
             
             // Build a clean summary of sub-agent result
@@ -5872,9 +5876,9 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Return the Chat step, including responseForm and commands from sub-agent
-                // Use mergedPayload to preserve sub-agent payload changes (e.g., PRD from Requirements Expert)
-                return {
+                // Create Chat nextStep but validate it through parent's ChatHandlingOption
+                // This allows parent agents to remap Chat -> Success/Failed/Retry if configured
+                const chatStep: BaseAgentNextStep<SR, SC> = {
                     step: 'Chat',
                     terminate: true,
                     message: subAgentResult.agentRun?.Message || null,
@@ -5884,6 +5888,10 @@ The context is now within limits. Please retry your request with the recovered c
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands
                 };
+
+                // Validate through parent's ChatHandlingOption (if configured)
+                // This ensures parent agents can override child Chat steps
+                return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
             }
 
             // Add sub-agent result to conversation as user message

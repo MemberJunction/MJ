@@ -19,6 +19,8 @@
     "actions",
     "prompt-categories",
     "prompts",
+    "templates",
+    "notifications",
     "agent-types",
     "agents",
     "scheduled-jobs",

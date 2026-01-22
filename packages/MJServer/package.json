@@ -59,6 +59,7 @@
     "@memberjunction/global": "3.1.1",
     "@memberjunction/graphql-dataprovider": "3.1.1",
     "@memberjunction/interactive-component-types": "3.1.1",
+    "@memberjunction/notifications": "3.1.1",
     "@memberjunction/queue": "3.1.1",
     "@memberjunction/scheduling-actions": "3.1.1",
     "@memberjunction/scheduling-base-types": "3.1.1",

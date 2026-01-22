@@ -215,11 +215,48 @@
   min-width: 0;
 }
 
+.title-with-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
 .card-title {
-  margin: 0 0 4px 0;
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: #212529;
+}
+
+.new-query-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+  animation: subtle-pulse 2s ease-in-out infinite;
+}
+
+.new-query-badge i {
+  font-size: 9px;
+}
+
+@keyframes subtle-pulse {
+  0%, 100% {
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+  }
+  50% {
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+  }
 }
 
 .card-path {

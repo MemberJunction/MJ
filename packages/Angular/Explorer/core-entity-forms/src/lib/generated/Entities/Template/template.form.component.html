@@ -190,6 +190,28 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- MJ: User Notification Types Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJUserNotificationTypes"
+        sectionName="MJ: User Notification Types"
+        icon="fa fa-bell"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJUserNotificationTypes')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Types','SMSTemplateID')"
+                [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
+                [AllowLoad]="IsSectionExpanded('mJUserNotificationTypes')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- AI Prompts Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="aIPrompts"
@@ -207,6 +229,28 @@
                 [AllowLoad]="IsSectionExpanded('aIPrompts')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: User Notification Types Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJUserNotificationTypes"
+        sectionName="MJ: User Notification Types"
+        icon="fa fa-bell"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJUserNotificationTypes')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Types','EmailTemplateID')"
+                [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
+                [AllowLoad]="IsSectionExpanded('mJUserNotificationTypes')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
