@@ -270,7 +270,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
             }
         };
 
-
         // Start server with SSE transport
         server.start(serverOptions);
 
