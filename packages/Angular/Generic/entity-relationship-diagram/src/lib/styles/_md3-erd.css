@@ -1,0 +1,449 @@
+/**
+ * ERD Component MD3 Design Tokens
+ * Material Design 3 styling for Entity Relationship Diagram components
+ *
+ * This file provides common MD3-based styles used across all ERD components.
+ * Import this file into component CSS files that need MD3 theming.
+ */
+
+/* ============================================
+   BUTTON PATTERNS
+   ============================================ */
+
+/* MD3 Outlined Button */
+.md3-btn-outlined {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font: var(--mat-sys-label-large);
+  background: transparent;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 20px;
+  color: var(--mat-sys-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.md3-btn-outlined:hover:not(:disabled) {
+  background: var(--mat-sys-surface-container-highest);
+  border-color: var(--mat-sys-primary);
+}
+
+.md3-btn-outlined:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
+.md3-btn-outlined:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* MD3 Filled Button */
+.md3-btn-filled {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  font: var(--mat-sys-label-large);
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--mat-sys-elevation-1);
+}
+
+.md3-btn-filled:hover:not(:disabled) {
+  box-shadow: var(--mat-sys-elevation-2);
+}
+
+.md3-btn-filled:active:not(:disabled) {
+  box-shadow: none;
+}
+
+.md3-btn-filled:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* MD3 Filled Tonal Button */
+.md3-btn-tonal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  font: var(--mat-sys-label-large);
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.md3-btn-tonal:hover:not(:disabled) {
+  box-shadow: var(--mat-sys-elevation-1);
+}
+
+.md3-btn-tonal:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* MD3 Text Button */
+.md3-btn-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font: var(--mat-sys-label-large);
+  background: transparent;
+  color: var(--mat-sys-primary);
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.md3-btn-text:hover:not(:disabled) {
+  background: var(--mat-sys-surface-container-highest);
+}
+
+.md3-btn-text:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* MD3 Icon Button */
+.md3-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-size: 18px;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.md3-btn-icon:hover:not(:disabled) {
+  background: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface);
+}
+
+.md3-btn-icon:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* Small control button variant */
+.md3-btn-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font: var(--mat-sys-label-medium);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface-variant);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.md3-btn-control:hover:not(:disabled) {
+  background: var(--mat-sys-surface-container);
+  border-color: var(--mat-sys-outline);
+  color: var(--mat-sys-on-surface);
+}
+
+.md3-btn-control.active {
+  background: var(--mat-sys-primary);
+  border-color: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+.md3-btn-control:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   CARD PATTERNS
+   ============================================ */
+
+.md3-card {
+  background: var(--mat-sys-surface-container);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  box-shadow: var(--mat-sys-elevation-1);
+  transition: box-shadow 0.2s ease;
+}
+
+.md3-card:hover {
+  box-shadow: var(--mat-sys-elevation-2);
+}
+
+.md3-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--mat-sys-surface);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px 12px 0 0;
+}
+
+.md3-card-content {
+  padding: 16px;
+}
+
+/* ============================================
+   PANEL PATTERNS
+   ============================================ */
+
+.md3-panel {
+  background: var(--mat-sys-surface);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.md3-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--mat-sys-surface-container);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  flex-shrink: 0;
+}
+
+.md3-panel-header h3 {
+  margin: 0;
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-on-surface);
+}
+
+.md3-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* ============================================
+   INPUT PATTERNS
+   ============================================ */
+
+.md3-input {
+  width: 100%;
+  padding: 12px 16px;
+  font: var(--mat-sys-body-large);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.md3-input:focus {
+  outline: none;
+  border-color: var(--mat-sys-primary);
+  box-shadow: 0 0 0 3px var(--mat-sys-primary-container);
+}
+
+.md3-input:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.md3-input::placeholder {
+  color: var(--mat-sys-on-surface-variant);
+  opacity: 0.6;
+}
+
+.md3-select {
+  width: 100%;
+  padding: 12px 16px;
+  font: var(--mat-sys-body-large);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.md3-select:focus {
+  outline: none;
+  border-color: var(--mat-sys-primary);
+  box-shadow: 0 0 0 3px var(--mat-sys-primary-container);
+}
+
+/* ============================================
+   BADGE PATTERNS
+   ============================================ */
+
+.md3-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  font: var(--mat-sys-label-small);
+  font-weight: 600;
+  border-radius: 8px;
+  text-transform: uppercase;
+}
+
+.md3-badge-primary {
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+.md3-badge-secondary {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.md3-badge-tertiary {
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}
+
+.md3-badge-error {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+/* Small badge variant */
+.md3-badge-sm {
+  padding: 2px 6px;
+  font-size: 10px;
+  border-radius: 4px;
+}
+
+/* ============================================
+   FLOATING PANEL
+   ============================================ */
+
+.md3-floating-panel {
+  background: var(--mat-sys-surface-container-highest);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 28px;
+  box-shadow: var(--mat-sys-elevation-3);
+  overflow: hidden;
+}
+
+/* ============================================
+   SECTION PATTERNS
+   ============================================ */
+
+.md3-section {
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+.md3-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--mat-sys-surface-container-low);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  cursor: pointer;
+  user-select: none;
+}
+
+.md3-section-header:hover {
+  background: var(--mat-sys-surface-container);
+}
+
+.md3-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: var(--mat-sys-title-small);
+  color: var(--mat-sys-on-surface);
+}
+
+.md3-section-content {
+  padding: 16px;
+}
+
+/* ============================================
+   SCROLLBAR STYLING
+   ============================================ */
+
+.md3-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.md3-scrollbar::-webkit-scrollbar-track {
+  background: var(--mat-sys-surface-container);
+  border-radius: 3px;
+}
+
+.md3-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--mat-sys-outline);
+  border-radius: 3px;
+}
+
+.md3-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--mat-sys-on-surface-variant);
+}
+
+/* ============================================
+   LOADING STATE
+   ============================================ */
+
+.md3-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--mat-sys-surface);
+  opacity: 0.95;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* ============================================
+   TYPOGRAPHY HELPERS
+   ============================================ */
+
+.md3-text-display-lg { font: var(--mat-sys-display-large); }
+.md3-text-display-md { font: var(--mat-sys-display-medium); }
+.md3-text-display-sm { font: var(--mat-sys-display-small); }
+.md3-text-headline-lg { font: var(--mat-sys-headline-large); }
+.md3-text-headline-md { font: var(--mat-sys-headline-medium); }
+.md3-text-headline-sm { font: var(--mat-sys-headline-small); }
+.md3-text-title-lg { font: var(--mat-sys-title-large); }
+.md3-text-title-md { font: var(--mat-sys-title-medium); }
+.md3-text-title-sm { font: var(--mat-sys-title-small); }
+.md3-text-body-lg { font: var(--mat-sys-body-large); }
+.md3-text-body-md { font: var(--mat-sys-body-medium); }
+.md3-text-body-sm { font: var(--mat-sys-body-small); }
+.md3-text-label-lg { font: var(--mat-sys-label-large); }
+.md3-text-label-md { font: var(--mat-sys-label-medium); }
+.md3-text-label-sm { font: var(--mat-sys-label-small); }
+
+/* Color helpers */
+.md3-text-primary { color: var(--mat-sys-primary); }
+.md3-text-on-surface { color: var(--mat-sys-on-surface); }
+.md3-text-on-surface-variant { color: var(--mat-sys-on-surface-variant); }
+.md3-text-error { color: var(--mat-sys-error); }

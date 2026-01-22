@@ -1,316 +1,454 @@
 <div class="user-management-container">
-  <!-- Action Buttons -->
-  <div class="action-buttons">
-    <button class="mj-btn mj-btn-secondary" (click)="refreshData()" [disabled]="isLoading">
-      <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
-      Refresh
-    </button>
-    <button class="mj-btn mj-btn-secondary" (click)="exportUsers()">
-      <i class="fa-solid fa-download"></i>
-      Export
-    </button>
-    <button class="mj-btn mj-btn-primary" (click)="createNewUser()">
-      <i class="fa-solid fa-plus"></i>
-      Add User
-    </button>
-  </div>
+  <!-- Sticky Header Section -->
+  <div class="sticky-header">
+    <!-- Action Buttons -->
+    <div class="action-buttons" role="toolbar" aria-label="User management actions">
+      <button
+        class="mj-btn mj-btn-secondary mj-btn-icon-mobile"
+        (click)="refreshData()"
+        [disabled]="isLoading"
+        aria-label="Refresh user list"
+      >
+        <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading" aria-hidden="true"></i>
+        <span class="btn-text">Refresh</span>
+      </button>
+      <button
+        class="mj-btn mj-btn-secondary mj-btn-icon-mobile"
+        (click)="exportUsers()"
+        aria-label="Export users to file"
+      >
+        <i class="fa-solid fa-download" aria-hidden="true"></i>
+        <span class="btn-text">Export</span>
+      </button>
+      <button
+        class="mj-btn mj-btn-primary mj-btn-icon-mobile"
+        (click)="createNewUser()"
+        aria-label="Add new user"
+      >
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span class="btn-text">Add User</span>
+      </button>
+    </div>
 
-  <!-- Stats Cards -->
-  <div class="mj-grid mj-grid-4">
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-total">
-        <i class="fa-solid fa-users"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.totalUsers }}</div>
-        <div class="stat-label">Total Users</div>
-      </div>
-    </div>
-    
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-active">
-        <i class="fa-solid fa-user-check"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.activeUsers }}</div>
-        <div class="stat-label">Active Users</div>
-      </div>
-    </div>
-    
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-inactive">
-        <i class="fa-solid fa-user-xmark"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.inactiveUsers }}</div>
-        <div class="stat-label">Inactive Users</div>
-      </div>
-    </div>
-    
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-admin">
-        <i class="fa-solid fa-shield-halved"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.adminUsers }}</div>
-        <div class="stat-label">Owners</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Filters Section -->
-  <div class="filters-section">
-    <div class="filters-row">
-      <!-- Search -->
-      <div class="search-container">
-        <i class="fa-solid fa-search search-icon"></i>
-        <input 
-          type="text" 
-          class="search-input" 
-          placeholder="Search users by name or email..."
-          (input)="onSearchChange($event)"
-          [value]="filters$.value.search"
-        />
-      </div>
-      
-      <!-- Status Filter -->
-      <div class="filter-group">
-        <label class="filter-label">Status</label>
-        <div class="filter-buttons">
-          <button 
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.status === 'all'"
-            (click)="onStatusFilterChange('all')"
+    <!-- Bulk Action Toolbar -->
+    @if (hasSelection) {
+      <div class="bulk-action-toolbar" role="toolbar" aria-label="Bulk actions">
+        <div class="bulk-selection-info">
+          <i class="fa-solid fa-check-square" aria-hidden="true"></i>
+          <span>{{ selectedCount }} user{{ selectedCount > 1 ? 's' : '' }} selected</span>
+          <button
+            class="mj-btn mj-btn-ghost mj-btn-sm"
+            (click)="clearSelection()"
+            aria-label="Clear selection"
           >
-            All
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
+            Clear
           </button>
-          <button 
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.status === 'active'"
-            (click)="onStatusFilterChange('active')"
+        </div>
+        <div class="bulk-action-buttons">
+          <button
+            class="mj-btn mj-btn-secondary mj-btn-sm"
+            (click)="confirmBulkAction('enable')"
+            aria-label="Enable selected users"
           >
-            Active
+            <i class="fa-solid fa-toggle-on" aria-hidden="true"></i>
+            <span class="btn-text">Enable</span>
           </button>
-          <button 
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.status === 'inactive'"
-            (click)="onStatusFilterChange('inactive')"
+          <button
+            class="mj-btn mj-btn-secondary mj-btn-sm"
+            (click)="confirmBulkAction('disable')"
+            aria-label="Disable selected users"
           >
-            Inactive
+            <i class="fa-solid fa-toggle-off" aria-hidden="true"></i>
+            <span class="btn-text">Disable</span>
+          </button>
+          <button
+            class="mj-btn mj-btn-secondary mj-btn-sm"
+            (click)="openBulkRoleAssign()"
+            aria-label="Assign role to selected users"
+          >
+            <i class="fa-solid fa-user-tag" aria-hidden="true"></i>
+            <span class="btn-text">Assign Role</span>
+          </button>
+          <button
+            class="mj-btn mj-btn-danger mj-btn-sm"
+            (click)="confirmBulkAction('delete')"
+            aria-label="Delete selected users"
+          >
+            <i class="fa-solid fa-trash" aria-hidden="true"></i>
+            <span class="btn-text">Delete</span>
           </button>
         </div>
       </div>
-      
-      <!-- Role Filter -->
-      <div class="filter-group">
-        <label class="filter-label">Role</label>
-        <select class="filter-select" (change)="onRoleFilterChange($any($event.target).value)">
-          <option value="">All Roles</option>
-          @for (role of roles; track role.ID) {
-            <option [value]="role.ID">{{ role.Name }}</option>
-          }
-        </select>
+    }
+
+    <!-- Stats Cards -->
+    <div class="mj-grid-4" role="region" aria-label="User statistics">
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-total" aria-hidden="true">
+          <i class="fa-solid fa-users"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Total users count">{{ stats.totalUsers }}</div>
+          <div class="stat-label">Total Users</div>
+        </div>
       </div>
-      
-      <!-- View Toggle -->
-      <div class="view-toggle">
-        <button 
-          class="mj-btn mj-btn-icon-only"
-          [class.mj-btn-primary]="viewMode === 'grid'"
-          [class.mj-btn-ghost]="viewMode !== 'grid'"
-          (click)="viewMode = 'grid'"
-          title="Grid View"
-        >
-          <i class="fa-solid fa-table"></i>
-        </button>
-        <button 
-          class="mj-btn mj-btn-icon-only"
-          [class.mj-btn-primary]="viewMode === 'cards'"
-          [class.mj-btn-ghost]="viewMode !== 'cards'"
-          (click)="viewMode = 'cards'"
-          title="Card View"
-        >
-          <i class="fa-solid fa-th-large"></i>
-        </button>
+
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-active" aria-hidden="true">
+          <i class="fa-solid fa-user-check"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Active users count">{{ stats.activeUsers }}</div>
+          <div class="stat-label">Active Users</div>
+        </div>
+      </div>
+
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-inactive" aria-hidden="true">
+          <i class="fa-solid fa-user-xmark"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Inactive users count">{{ stats.inactiveUsers }}</div>
+          <div class="stat-label">Inactive Users</div>
+        </div>
+      </div>
+
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-admin" aria-hidden="true">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Owner users count">{{ stats.adminUsers }}</div>
+          <div class="stat-label">Owners</div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- Loading State -->
-  @if (isLoading) {
-    <div class="loading-container">
-      <div class="loading-spinner">
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
-      </div>
-      <div class="loading-text">Loading users...</div>
-    </div>
-  }
+    <!-- Filters Section -->
+    <div class="filters-section" role="search" aria-label="Filter users">
+      <div class="filters-row">
+        <!-- Search -->
+        <div class="mj-search">
+          <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
+          <input
+            type="text"
+            class="mj-search-input"
+            placeholder="Search users by name or email..."
+            (input)="onSearchChange($event)"
+            [value]="filters$.value.search"
+            aria-label="Search users by name or email"
+          />
+        </div>
 
-  <!-- Error State -->
-  @if (error && !isLoading) {
-    <div class="error-container">
-      <div class="error-content">
-        <i class="fa-solid fa-exclamation-triangle error-icon"></i>
-        <p class="error-message">{{ error }}</p>
-        <button class="retry-button" (click)="loadInitialData()">
-          <i class="fa-solid fa-refresh"></i>
-          Try Again
-        </button>
-      </div>
-    </div>
-  }
+        <!-- Mobile: Combined Status & Role row -->
+        <div class="mobile-filters-row">
+          <!-- Status Filter - Mobile dropdown only in this row -->
+          <div class="mj-filter-group mobile-filter-group">
+            <label class="mj-filter-label" id="status-filter-label-mobile">Status</label>
+            <select
+              class="mj-filter-select"
+              [value]="filters$.value.status"
+              (change)="onStatusFilterChange($any($event.target).value)"
+              aria-labelledby="status-filter-label-mobile"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
 
-  <!-- Content Area -->
-  @if (!isLoading && !error) {
-    <div class="content-area">
-      <!-- Grid View -->
-      @if (viewMode === 'grid') {
-        <div class="users-table">
-          <table class="modern-table">
-            <thead>
-              <tr>
-                <th class="th-checkbox">
-                  <input type="checkbox" class="checkbox" />
-                </th>
-                <th>User</th>
-                <th>Email</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Last Updated</th>
-                <th class="th-actions">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (user of filteredUsers; track user.ID) {
-                <tr class="table-row" (click)="selectUser(user)">
-                  <td class="td-checkbox" (click)="$event.stopPropagation()">
-                    <input type="checkbox" class="checkbox" />
-                  </td>
-                  <td>
-                    <div class="user-cell">
-                      <div class="user-avatar">
-                        {{ getUserInitials(user) }}
-                      </div>
-                      <div class="user-info">
-                        <div class="user-name">{{ user.Name }}</div>
-                        <div class="user-fullname">
-                          {{ user.FirstName }} {{ user.LastName }}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>{{ user.Email }}</td>
-                  <td>
-                    <div class="user-type">
-                      <i [class]="'fa-solid ' + getUserTypeIcon(user)"></i>
-                      {{ user.Type }}
-                    </div>
-                  </td>
-                  <td>
-                    <span class="status-badge" [class]="getStatusClass(user)">
-                      <i [class]="'fa-solid ' + getStatusIcon(user)"></i>
-                      {{ user.IsActive ? 'Active' : 'Inactive' }}
-                    </span>
-                  </td>
-                  <td>
-                    <span class="last-login">
-                      {{ user.__mj_UpdatedAt ? (user.__mj_UpdatedAt | date:'short') : 'Never' }}
-                    </span>
-                  </td>
-                  <td class="td-actions" (click)="$event.stopPropagation()">
-                    <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editUser(user)" title="Edit">
-                      <i class="fa-solid fa-edit"></i>
-                    </button>
-                    <button 
-                      class="mj-btn mj-btn-ghost mj-btn-sm" 
-                      (click)="toggleUserStatus(user)"
-                      [title]="user.IsActive ? 'Deactivate' : 'Activate'"
-                    >
-                      <i [class]="user.IsActive ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off'"></i>
-                    </button>
-                    <button class="mj-btn mj-btn-ghost mj-btn-sm text-danger" (click)="confirmDeleteUser(user)" title="Delete">
-                      <i class="fa-solid fa-trash"></i>
-                    </button>
-                  </td>
-                </tr>
+          <!-- Role Filter - Mobile dropdown only in this row -->
+          <div class="mj-filter-group mobile-filter-group">
+            <label class="mj-filter-label" for="role-filter-mobile">Role</label>
+            <select
+              id="role-filter-mobile"
+              class="mj-filter-select"
+              (change)="onRoleFilterChange($any($event.target).value)"
+              aria-label="Filter by role"
+            >
+              <option value="">All Roles</option>
+              @for (role of roles; track role.ID) {
+                <option [value]="role.ID">{{ role.Name }}</option>
               }
-            </tbody>
-          </table>
-          
-          @if (filteredUsers.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-users-slash empty-icon"></i>
-              <p class="empty-text">No users found</p>
-              <p class="empty-subtext">Try adjusting your filters or add a new user</p>
-            </div>
-          }
+            </select>
+          </div>
         </div>
-      }
 
-      <!-- Card View -->
-      @if (viewMode === 'cards') {
-        <div class="users-grid">
+        <!-- Desktop: Status Filter - Button group -->
+        <div class="mj-filter-group desktop-filter-group">
+          <label class="mj-filter-label" id="status-filter-label">Status</label>
+          <div class="mj-filter-buttons" role="group" aria-labelledby="status-filter-label">
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.status === 'all'"
+              (click)="onStatusFilterChange('all')"
+              [attr.aria-pressed]="filters$.value.status === 'all'"
+            >
+              All
+            </button>
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.status === 'active'"
+              (click)="onStatusFilterChange('active')"
+              [attr.aria-pressed]="filters$.value.status === 'active'"
+            >
+              Active
+            </button>
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.status === 'inactive'"
+              (click)="onStatusFilterChange('inactive')"
+              [attr.aria-pressed]="filters$.value.status === 'inactive'"
+            >
+              Inactive
+            </button>
+          </div>
+        </div>
+
+        <!-- Desktop: Role Filter -->
+        <div class="mj-filter-group desktop-filter-group">
+          <label class="mj-filter-label" for="role-filter">Role</label>
+          <select
+            id="role-filter"
+            class="mj-filter-select"
+            (change)="onRoleFilterChange($any($event.target).value)"
+            aria-label="Filter by role"
+          >
+            <option value="">All Roles</option>
+            @for (role of roles; track role.ID) {
+              <option [value]="role.ID">{{ role.Name }}</option>
+            }
+          </select>
+        </div>
+      </div>
+    </div>
+  </div><!-- End Sticky Header -->
+
+  <!-- Scrollable Content Section -->
+  <div class="scrollable-content">
+    <!-- Loading State -->
+    @if (isLoading) {
+      <div class="loading-container" role="status" aria-live="polite" aria-busy="true">
+        <mj-loading text="Loading users..." size="medium"></mj-loading>
+      </div>
+    }
+
+    <!-- Error State -->
+    @if (error && !isLoading) {
+      <div class="error-container" role="alert" aria-live="assertive">
+        <div class="error-content">
+          <i class="fa-solid fa-exclamation-triangle error-icon" aria-hidden="true"></i>
+          <p class="error-message">{{ error }}</p>
+          <button class="retry-button" (click)="loadInitialData()" aria-label="Retry loading users">
+            <i class="fa-solid fa-refresh" aria-hidden="true"></i>
+            Try Again
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Content Area -->
+    @if (!isLoading && !error) {
+      <div class="content-area">
+        <!-- Users List -->
+        <div class="users-list" role="list" aria-label="Users list">
+          <!-- List Header with Select All -->
+          <div class="list-header">
+            <label class="select-all-label">
+              <input
+                type="checkbox"
+                class="checkbox"
+                [checked]="isAllSelected"
+                [indeterminate]="isIndeterminate"
+                (change)="toggleSelectAll()"
+                aria-label="Select all users"
+              />
+              <span class="select-all-text">Select All ({{ filteredUsers.length }})</span>
+            </label>
+            @if (hasSelection) {
+              <span class="selection-count">{{ selectedCount }} selected</span>
+            }
+          </div>
+
           @for (user of filteredUsers; track user.ID) {
-            <div class="user-card" (click)="selectUser(user)">
-              <div class="card-header">
-                <div class="user-avatar-large">
-                  {{ getUserInitials(user) }}
+            <div
+              class="user-card"
+              [class.expanded]="isUserExpanded(user.ID)"
+              [class.selected]="isUserSelected(user.ID)"
+              role="listitem"
+            >
+              <!-- User Card Header - Always Visible -->
+              <div
+                class="user-header"
+                (click)="toggleUserExpansion(user.ID)"
+                role="button"
+                [attr.aria-expanded]="isUserExpanded(user.ID)"
+                tabindex="0"
+                (keydown.enter)="toggleUserExpansion(user.ID)"
+              >
+                <!-- Selection Checkbox -->
+                <div class="user-selection" (click)="$event.stopPropagation()">
+                  <input
+                    type="checkbox"
+                    class="checkbox"
+                    [checked]="isUserSelected(user.ID)"
+                    (change)="toggleUserSelection(user.ID, $event)"
+                    [attr.aria-label]="'Select ' + user.Name"
+                  />
                 </div>
-                <div class="card-actions">
-                  <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editUser(user); $event.stopPropagation()" title="Edit">
-                    <i class="fa-solid fa-edit"></i>
-                  </button>
-                  <button class="mj-btn mj-btn-ghost mj-btn-sm text-danger" (click)="confirmDeleteUser(user); $event.stopPropagation()" title="Delete">
-                    <i class="fa-solid fa-trash"></i>
-                  </button>
-                </div>
-              </div>
-              
-              <div class="card-body">
-                <h3 class="user-name">{{ user.Name }}</h3>
-                <p class="user-fullname">{{ user.FirstName }} {{ user.LastName }}</p>
-                <p class="user-email">
-                  <i class="fa-solid fa-envelope"></i>
-                  {{ user.Email }}
-                </p>
-                
-                <div class="card-meta">
-                  <div class="meta-item">
-                    <i [class]="'fa-solid ' + getUserTypeIcon(user)"></i>
-                    {{ user.Type }}
+
+                <!-- User Info -->
+                <div class="user-info">
+                  <div class="user-avatar" aria-hidden="true">
+                    {{ getUserInitials(user) }}
                   </div>
+                  <div class="user-details">
+                    <h3 class="user-name">{{ user.Name }}</h3>
+                    <p class="user-email">{{ user.Email }}</p>
+                  </div>
+                </div>
+
+                <!-- User Meta -->
+                <div class="user-meta">
                   <span class="status-badge" [class]="getStatusClass(user)">
-                    <i [class]="'fa-solid ' + getStatusIcon(user)"></i>
+                    <i [class]="'fa-solid ' + getStatusIcon(user)" aria-hidden="true"></i>
                     {{ user.IsActive ? 'Active' : 'Inactive' }}
                   </span>
-                </div>
-                
-                <div class="card-footer">
-                  <div class="last-login">
-                    <i class="fa-solid fa-clock"></i>
-                    Last updated: {{ user.__mj_UpdatedAt ? (user.__mj_UpdatedAt | date:'short') : 'Never' }}
+                  <div class="user-actions desktop-only" (click)="$event.stopPropagation()">
+                    <button
+                      class="mj-btn mj-btn-ghost mj-btn-sm"
+                      (click)="editUser(user)"
+                      [attr.aria-label]="'Edit ' + user.Name"
+                      title="Edit"
+                    >
+                      <i class="fa-solid fa-edit" aria-hidden="true"></i>
+                    </button>
+                    <button
+                      class="mj-btn mj-btn-ghost mj-btn-sm"
+                      (click)="toggleUserStatus(user)"
+                      [attr.aria-label]="(user.IsActive ? 'Deactivate ' : 'Activate ') + user.Name"
+                      [title]="user.IsActive ? 'Deactivate' : 'Activate'"
+                    >
+                      <i [class]="user.IsActive ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off'" aria-hidden="true"></i>
+                    </button>
+                    <button
+                      class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                      (click)="confirmDeleteUser(user)"
+                      [attr.aria-label]="'Delete ' + user.Name"
+                      title="Delete"
+                    >
+                      <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                    </button>
                   </div>
+                  <button class="expand-btn" aria-label="Toggle user details">
+                    <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                  </button>
                 </div>
               </div>
+
+              <!-- User Card Content - Expanded -->
+              @if (isUserExpanded(user.ID)) {
+                <div class="user-content">
+                  <!-- Mobile Actions Bar -->
+                  <div class="mobile-actions-bar" (click)="$event.stopPropagation()">
+                    <span class="status-badge" [class]="getStatusClass(user)">
+                      <i [class]="'fa-solid ' + getStatusIcon(user)" aria-hidden="true"></i>
+                      {{ user.IsActive ? 'Active' : 'Inactive' }}
+                    </span>
+                    <div class="mobile-action-buttons">
+                      <button
+                        class="mj-btn mj-btn-ghost mj-btn-sm"
+                        (click)="editUser(user)"
+                        [attr.aria-label]="'Edit ' + user.Name"
+                      >
+                        <i class="fa-solid fa-edit" aria-hidden="true"></i>
+                        <span class="btn-label">Edit</span>
+                      </button>
+                      <button
+                        class="mj-btn mj-btn-ghost mj-btn-sm"
+                        (click)="toggleUserStatus(user)"
+                        [attr.aria-label]="(user.IsActive ? 'Deactivate ' : 'Activate ') + user.Name"
+                      >
+                        <i [class]="user.IsActive ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off'" aria-hidden="true"></i>
+                        <span class="btn-label">{{ user.IsActive ? 'Disable' : 'Enable' }}</span>
+                      </button>
+                      <button
+                        class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                        (click)="confirmDeleteUser(user)"
+                        [attr.aria-label]="'Delete ' + user.Name"
+                      >
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                        <span class="btn-label">Delete</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- User Stats -->
+                  <div class="user-stats">
+                    <div class="stat-item">
+                      <i class="fa-solid fa-user-tag" aria-hidden="true"></i>
+                      <span class="stat-label">Type:</span>
+                      <span class="stat-value">
+                        <i [class]="'fa-solid ' + getUserTypeIcon(user)" aria-hidden="true"></i>
+                        {{ user.Type }}
+                      </span>
+                    </div>
+                    <div class="stat-item">
+                      <i class="fa-solid fa-id-card" aria-hidden="true"></i>
+                      <span class="stat-label">Full Name:</span>
+                      <span class="stat-value">{{ user.FirstName }} {{ user.LastName }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <i class="fa-solid fa-calendar" aria-hidden="true"></i>
+                      <span class="stat-label">Created:</span>
+                      <span class="stat-value">{{ user.__mj_CreatedAt | date:'short' }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                      <span class="stat-label">Updated:</span>
+                      <span class="stat-value">{{ user.__mj_UpdatedAt | date:'short' }}</span>
+                    </div>
+                  </div>
+
+                  <!-- User Roles Section -->
+                  <div class="roles-section">
+                    <h4 class="section-title">
+                      <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
+                      Assigned Roles
+                    </h4>
+                    @if (getUserRoles(user.ID).length > 0) {
+                      <div class="roles-grid">
+                        @for (role of getUserRoles(user.ID); track role.ID) {
+                          <div class="role-item">
+                            <i class="fa-solid fa-shield" aria-hidden="true"></i>
+                            {{ role.Name }}
+                          </div>
+                        }
+                      </div>
+                    } @else {
+                      <p class="no-roles">No roles assigned to this user</p>
+                    }
+                  </div>
+                </div>
+              }
             </div>
           }
-          
+
           @if (filteredUsers.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-users-slash empty-icon"></i>
+            <div class="empty-state" role="status">
+              <i class="fa-solid fa-users-slash empty-icon" aria-hidden="true"></i>
               <p class="empty-text">No users found</p>
               <p class="empty-subtext">Try adjusting your filters or add a new user</p>
             </div>
           }
         </div>
-      }
-    </div>
-  }
+      </div>
+    }
+  </div><!-- End Scrollable Content -->
 
   <!-- User Create/Edit Dialog -->
-  <mj-user-dialog 
+  <mj-user-dialog
     [data]="userDialogData"
     [visible]="showUserDialog"
     (result)="onUserDialogResult($event)">
@@ -318,26 +456,166 @@
 
   <!-- Delete Confirmation Dialog -->
   @if (showDeleteConfirm && selectedUser) {
-    <div class="modal-backdrop" (click)="showDeleteConfirm = false">
+    <div
+      class="modal-backdrop"
+      (click)="showDeleteConfirm = false"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-dialog-title"
+      aria-describedby="delete-dialog-desc"
+    >
       <div class="modal-dialog" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <h3 class="modal-title">
-            <i class="fa-solid fa-exclamation-triangle text-danger"></i>
+          <h3 class="modal-title" id="delete-dialog-title">
+            <i class="fa-solid fa-exclamation-triangle text-danger" aria-hidden="true"></i>
             Confirm Delete
           </h3>
-          <button class="modal-close" (click)="showDeleteConfirm = false">
-            <i class="fa-solid fa-times"></i>
+          <button
+            class="modal-close"
+            (click)="showDeleteConfirm = false"
+            aria-label="Close dialog"
+          >
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
           </button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" id="delete-dialog-desc">
           <p>Are you sure you want to delete user <strong>{{ selectedUser.Name }}</strong>?</p>
           <p class="text-muted">This action cannot be undone.</p>
         </div>
         <div class="modal-footer">
-          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">Cancel</button>
-          <button class="mj-btn mj-btn-primary text-danger" (click)="deleteUser()">
-            <i class="fa-solid fa-trash"></i>
+          <button class="mj-btn mj-btn-danger" (click)="deleteUser()">
+            <i class="fa-solid fa-trash" aria-hidden="true"></i>
             Delete User
+          </button>
+          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Bulk Action Confirmation Dialog -->
+  @if (showBulkActionConfirm) {
+    <div
+      class="modal-backdrop"
+      (click)="cancelBulkAction()"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="bulk-action-dialog-title"
+      aria-describedby="bulk-action-dialog-desc"
+    >
+      <div class="modal-dialog" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3 class="modal-title" id="bulk-action-dialog-title">
+            @if (bulkActionType === 'delete') {
+              <i class="fa-solid fa-exclamation-triangle text-danger" aria-hidden="true"></i>
+            } @else if (bulkActionType === 'enable') {
+              <i class="fa-solid fa-toggle-on text-success" aria-hidden="true"></i>
+            } @else {
+              <i class="fa-solid fa-toggle-off text-warning" aria-hidden="true"></i>
+            }
+            {{ getBulkActionTitle() }}
+          </h3>
+          <button
+            class="modal-close"
+            (click)="cancelBulkAction()"
+            aria-label="Close dialog"
+          >
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="modal-body" id="bulk-action-dialog-desc">
+          <p>{{ getBulkActionMessage() }}</p>
+          @if (bulkActionType === 'delete') {
+            <p class="text-muted">This action cannot be undone.</p>
+          }
+        </div>
+        <div class="modal-footer">
+          <button
+            [class]="bulkActionType === 'delete' ? 'mj-btn mj-btn-danger' : 'mj-btn mj-btn-primary'"
+            (click)="executeBulkAction()"
+            [disabled]="isLoading"
+          >
+            @if (isLoading) {
+              <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+              Processing...
+            } @else {
+              @if (bulkActionType === 'delete') {
+                <i class="fa-solid fa-trash" aria-hidden="true"></i>
+              } @else if (bulkActionType === 'enable') {
+                <i class="fa-solid fa-toggle-on" aria-hidden="true"></i>
+              } @else {
+                <i class="fa-solid fa-toggle-off" aria-hidden="true"></i>
+              }
+              {{ getBulkActionButtonText() }}
+            }
+          </button>
+          <button class="mj-btn mj-btn-secondary" (click)="cancelBulkAction()" [disabled]="isLoading">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Bulk Role Assignment Dialog -->
+  @if (showBulkRoleAssign) {
+    <div
+      class="modal-backdrop"
+      (click)="cancelBulkRoleAssign()"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="bulk-role-dialog-title"
+      aria-describedby="bulk-role-dialog-desc"
+    >
+      <div class="modal-dialog" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3 class="modal-title" id="bulk-role-dialog-title">
+            <i class="fa-solid fa-user-tag" aria-hidden="true"></i>
+            Assign Role to {{ selectedCount }} User{{ selectedCount > 1 ? 's' : '' }}
+          </h3>
+          <button
+            class="modal-close"
+            (click)="cancelBulkRoleAssign()"
+            aria-label="Close dialog"
+          >
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="modal-body" id="bulk-role-dialog-desc">
+          <p>Select a role to assign to the selected users:</p>
+          <div class="form-field">
+            <label class="field-label" for="bulk-role-select">Role</label>
+            <select
+              id="bulk-role-select"
+              class="field-select"
+              [(ngModel)]="bulkRoleId"
+              aria-label="Select role to assign"
+            >
+              <option value="">Select a role...</option>
+              @for (role of roles; track role.ID) {
+                <option [value]="role.ID">{{ role.Name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button
+            class="mj-btn mj-btn-primary"
+            (click)="executeBulkRoleAssign()"
+            [disabled]="!bulkRoleId || isLoading"
+          >
+            @if (isLoading) {
+              <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+              Assigning...
+            } @else {
+              <i class="fa-solid fa-user-tag" aria-hidden="true"></i>
+              Assign Role
+            }
+          </button>
+          <button class="mj-btn mj-btn-secondary" (click)="cancelBulkRoleAssign()" [disabled]="isLoading">
+            Cancel
           </button>
         </div>
       </div>

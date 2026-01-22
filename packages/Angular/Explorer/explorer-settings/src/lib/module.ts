@@ -2,15 +2,6 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Kendo UI Angular imports
-import { GridModule } from '@progress/kendo-angular-grid';
-import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { SortableModule } from '@progress/kendo-angular-sortable';
-
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
@@ -33,7 +24,6 @@ import { RoleManagementComponent } from './role-management/role-management.compo
 import { ApplicationManagementComponent } from './application-management/application-management.component';
 import { EntityPermissionsComponent } from './entity-permissions/entity-permissions.component';
 import { UserProfileSettingsComponent } from './user-profile-settings/user-profile-settings.component';
-import { NotificationPreferencesComponent } from './notification-preferences/notification-preferences.component';
 
 // Dialog components
 import { RoleDialogComponent } from './role-management/role-dialog/role-dialog.component';
@@ -52,7 +42,6 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     ApplicationManagementComponent,
     EntityPermissionsComponent,
     UserProfileSettingsComponent,
-    NotificationPreferencesComponent,
     // Dialog components
     RoleDialogComponent,
     UserDialogComponent,
@@ -64,24 +53,16 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    GridModule,
-    DialogsModule,
-    WindowModule,
-    ExcelExportModule,
     CompareRecordsModule,
     ContainerDirectivesModule,
-    ButtonsModule,
-    DropDownsModule,
     EntityPermissionsModule,
     MJTabStripModule,
     EntityFormDialogModule,
-    IndicatorsModule,
     UserViewGridModule,
     SimpleRecordListModule,
     JoinGridModule,
     CodeEditorModule,
     SharedSettingsModule,
-    SortableModule,
     SharedGenericModule
   ],
   exports: [
@@ -93,7 +74,6 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     ApplicationManagementComponent,
     EntityPermissionsComponent,
     UserProfileSettingsComponent,
-    NotificationPreferencesComponent,
     // Dialog components
     RoleDialogComponent,
     UserDialogComponent,
