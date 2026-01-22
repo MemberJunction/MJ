@@ -46,6 +46,7 @@ const mcpServerInfoSchema = z.object({
   actionTools: z.array(mcpServerActionToolInfoSchema).optional(),
   agentTools: z.array(mcpServerAgentToolInfoSchema).optional(),
   enableMCPServer: z.boolean().optional().default(false),
+  systemApiKey: z.string().optional(),
 });
 
 const configInfoSchema = z.object({
