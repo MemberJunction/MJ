@@ -88,26 +88,26 @@ import { FeedbackService } from '../services/feedback.service';
             </kendo-textarea>
           </div>
 
-          <!-- Expected vs Actual -->
-          <div class="feedback-row" *ngIf="FieldConfig.showExpectedBehavior || FieldConfig.showActualBehavior">
-            <div class="feedback-section half" *ngIf="FieldConfig.showExpectedBehavior">
-              <label class="feedback-label">Expected Behavior</label>
-              <kendo-textarea
-                [(ngModel)]="ExpectedBehavior"
-                placeholder="What should have happened?"
-                [rows]="2"
-                style="width: 100%;">
-              </kendo-textarea>
-            </div>
-            <div class="feedback-section half" *ngIf="FieldConfig.showActualBehavior">
-              <label class="feedback-label">Actual Behavior</label>
-              <kendo-textarea
-                [(ngModel)]="ActualBehavior"
-                placeholder="What actually happened?"
-                [rows]="2"
-                style="width: 100%;">
-              </kendo-textarea>
-            </div>
+          <!-- Expected Behavior -->
+          <div class="feedback-section" *ngIf="FieldConfig.showExpectedBehavior">
+            <label class="feedback-label">Expected Behavior</label>
+            <kendo-textarea
+              [(ngModel)]="ExpectedBehavior"
+              placeholder="What should have happened?"
+              [rows]="2"
+              style="width: 100%;">
+            </kendo-textarea>
+          </div>
+
+          <!-- Actual Behavior -->
+          <div class="feedback-section" *ngIf="FieldConfig.showActualBehavior">
+            <label class="feedback-label">Actual Behavior</label>
+            <kendo-textarea
+              [(ngModel)]="ActualBehavior"
+              placeholder="What actually happened?"
+              [rows]="2"
+              style="width: 100%;">
+            </kendo-textarea>
           </div>
 
           <!-- Severity -->

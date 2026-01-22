@@ -18,9 +18,9 @@ export interface FeedbackFieldConfig {
   /** Show proposed solution field for feature requests (default: true) */
   showProposedSolution?: boolean;
 
-  /** Show email field (default: true) */
+  /** Show email field (default: false - auto-populated from authenticated user) */
   showEmail?: boolean;
-  /** Show name field (default: true) */
+  /** Show name field (default: false - auto-populated from authenticated user) */
   showName?: boolean;
   /** Show environment dropdown (default: false) */
   showEnvironment?: boolean;
@@ -33,11 +33,11 @@ export interface FeedbackFieldConfig {
 
 /**
  * Main configuration for the feedback module
+ *
+ * Note: Feedback is submitted via GraphQL mutation (SubmitFeedback) to the
+ * standard MJ GraphQL endpoint. No separate API endpoint configuration is needed.
  */
 export interface FeedbackConfig {
-  /** API endpoint for feedback submission (required) */
-  apiEndpoint: string;
-
   /** Application name shown in feedback details (required) */
   appName: string;
 
@@ -70,6 +70,8 @@ export const FEEDBACK_CONFIG = new InjectionToken<FeedbackConfig>('FEEDBACK_CONF
 
 /**
  * Default field configuration
+ * Note: showEmail and showName default to false since user info is auto-populated
+ * from the authenticated session via Metadata.CurrentUser
  */
 export const DEFAULT_FIELD_CONFIG: Required<FeedbackFieldConfig> = {
   showStepsToReproduce: true,
@@ -78,8 +80,8 @@ export const DEFAULT_FIELD_CONFIG: Required<FeedbackFieldConfig> = {
   showSeverity: true,
   showUseCase: true,
   showProposedSolution: true,
-  showEmail: true,
-  showName: true,
+  showEmail: false,
+  showName: false,
   showEnvironment: false,
   showAffectedArea: false,
   affectedAreas: []
