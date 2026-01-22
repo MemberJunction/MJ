@@ -120,7 +120,7 @@ module.exports = {
     ],
     entityTools: [
       {
-        schemaName: '__mj',
+        schemaName: 'CRM',
         entityName: '*',
         get: true,
         create: true,
