@@ -1,0 +1,10 @@
+{
+  "Name": "Evaluate Resume for Job Fit",
+  "Description": "Evaluates a candidate's resume against job requirements, providing a detailed score and multi-dimensional assessment",
+  "CategoryID": "@lookup:AI Prompt Categories.Name=Recruiting & Hiring",
+  "UserID": null,
+  "IsActive": true,
+  "Prompt": "@file:templates/evaluate-resume.md",
+  "Type": "Prompt",
+  "OutputType": "JSON"
+}

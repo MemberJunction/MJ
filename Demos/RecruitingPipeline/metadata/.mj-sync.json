@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "directoryOrder": [
+    "prompt-categories",
+    "prompts",
+    "dashboard-categories",
+    "dashboards",
+    "agents"
+  ],
+  "sqlLogging": {
+    "enabled": true,
+    "outputDirectory": "./sql_logging",
+    "filterPatterns": [
+      "*spCreateAIPromptRun*",
+      "*spCreateAIAgentRun*"
+    ],
+    "filterType": "exclude",
+    "formatAsMigration": true
+  }
+}

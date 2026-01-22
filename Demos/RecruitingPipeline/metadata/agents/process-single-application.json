@@ -1,0 +1,199 @@
+{
+  "Name": "Process Single Application",
+  "Description": "Processes a single job application: creates/updates candidate, evaluates resume, creates application record, and sends audio screening invitation if passed",
+  "Type": "Flow Agent",
+  "IsActive": true,
+  "Steps": [
+    {
+      "Name": "Check Candidate Exists",
+      "Description": "Check if candidate already exists by email",
+      "Type": "Action",
+      "Sequence": 1,
+      "ActionName": "Get Records",
+      "InputMapping": {
+        "EntityName": "static:Candidates",
+        "ExtraFilter": "payload.candidateEmail",
+        "OrderBy": "static:__mj_CreatedAt DESC",
+        "MaxRecords": 1
+      },
+      "OutputMapping": {
+        "existingCandidate": "output.Records"
+      }
+    },
+    {
+      "Name": "Create or Update Candidate",
+      "Description": "Create new candidate or update existing one",
+      "Type": "Action",
+      "Sequence": 2,
+      "ActionName": "Create Record",
+      "InputMapping": {
+        "EntityName": "static:Candidates",
+        "Data": {
+          "FullName": "payload.candidateName",
+          "Email": "payload.candidateEmail",
+          "Phone": "payload.candidatePhone",
+          "ResumeURL": "payload.resumeURL",
+          "LinkedInProfile": "payload.linkedInProfile",
+          "CurrentTitle": "payload.currentTitle",
+          "CurrentCompany": "payload.currentCompany",
+          "YearsExperience": "payload.yearsExperience"
+        }
+      },
+      "OutputMapping": {
+        "candidateID": "output.RecordID",
+        "candidateRecord": "output.Record"
+      },
+      "ConditionalPath": "payload.existingCandidate.length === 0"
+    },
+    {
+      "Name": "Use Existing Candidate",
+      "Description": "Use existing candidate ID if found",
+      "Type": "Action",
+      "Sequence": 3,
+      "ActionName": "Set Variables",
+      "InputMapping": {
+        "candidateID": "payload.existingCandidate[0].ID"
+      },
+      "OutputMapping": {
+        "candidateID": "output.candidateID"
+      },
+      "ConditionalPath": "payload.existingCandidate.length > 0"
+    },
+    {
+      "Name": "Download Resume",
+      "Description": "Download resume file from TypeForm",
+      "Type": "Action",
+      "Sequence": 4,
+      "ActionName": "Typeform Get File Content",
+      "InputMapping": {
+        "CompanyID": "payload.companyID",
+        "FileURL": "payload.resumeURL",
+        "Format": "static:text"
+      },
+      "OutputMapping": {
+        "resumeText": "output.Content"
+      }
+    },
+    {
+      "Name": "Check Application Exists",
+      "Description": "Check if application already exists for this TypeForm response",
+      "Type": "Action",
+      "Sequence": 5,
+      "ActionName": "Get Records",
+      "InputMapping": {
+        "EntityName": "static:Applications",
+        "ExtraFilter": "payload.typeformResponseID",
+        "MaxRecords": 1
+      },
+      "OutputMapping": {
+        "existingApplication": "output.Records"
+      }
+    },
+    {
+      "Name": "Evaluate Resume",
+      "Description": "Use AI to evaluate resume against job requirements",
+      "Type": "Prompt",
+      "Sequence": 6,
+      "PromptName": "Evaluate Resume for Job Fit",
+      "ModelName": "gpt-4o",
+      "InputMapping": {
+        "jobTitle": "payload.jobTitle",
+        "requiredSkills": "payload.requiredSkills",
+        "preferredSkills": "payload.preferredSkills",
+        "minimumYearsExperience": "payload.minimumYearsExperience",
+        "jobDescription": "payload.jobDescription",
+        "evaluationRubric": "payload.evaluationRubric",
+        "baselinePassingScore": "payload.baselinePassingScore",
+        "candidateName": "payload.candidateName",
+        "currentTitle": "payload.currentTitle",
+        "currentCompany": "payload.currentCompany",
+        "yearsExperience": "payload.yearsExperience",
+        "resumeText": "payload.resumeText",
+        "typeformAnswers": "payload.typeformAnswers"
+      },
+      "OutputMapping": {
+        "resumeEvaluation": "output.Result"
+      },
+      "ConditionalPath": "payload.existingApplication.length === 0",
+      "ResponseFormat": "json_object"
+    },
+    {
+      "Name": "Create Application Record",
+      "Description": "Create application record with evaluation results",
+      "Type": "Action",
+      "Sequence": 7,
+      "ActionName": "Create Record",
+      "InputMapping": {
+        "EntityName": "static:Applications",
+        "Data": {
+          "JobRequisitionID": "payload.jobRequisitionID",
+          "CandidateID": "payload.candidateID",
+          "TypeformResponseID": "payload.typeformResponseID",
+          "SubmittedAt": "payload.submittedAt",
+          "CurrentStage": "static:ResumeScreening",
+          "Status": "static:Screening",
+          "ResumeEvaluationScore": "payload.resumeEvaluation.resumeEvaluationScore",
+          "ResumeEvaluationReasoning": "payload.resumeEvaluation.reasoning",
+          "ResumeEvaluationDimensions": "payload.resumeEvaluation.resumeEvaluationDimensions",
+          "PassedResumeScreening": "payload.resumeEvaluation.passedResumeScreening"
+        }
+      },
+      "OutputMapping": {
+        "applicationID": "output.RecordID",
+        "applicationRecord": "output.Record"
+      },
+      "ConditionalPath": "payload.existingApplication.length === 0"
+    },
+    {
+      "Name": "Create Application Note - Resume Evaluation",
+      "Description": "Create note with resume evaluation details",
+      "Type": "Action",
+      "Sequence": 8,
+      "ActionName": "Create Record",
+      "InputMapping": {
+        "EntityName": "static:Application Notes",
+        "Data": {
+          "ApplicationID": "payload.applicationID",
+          "NoteText": "payload.resumeEvaluation.reasoning",
+          "NoteType": "static:ResumeEvaluation",
+          "IsSystemGenerated": true
+        }
+      },
+      "ConditionalPath": "payload.existingApplication.length === 0"
+    },
+    {
+      "Name": "Send Audio Screening Invitation",
+      "Description": "Send email with link to audio agent if candidate passed resume screening",
+      "Type": "Action",
+      "Sequence": 9,
+      "ActionName": "Send Email",
+      "InputMapping": {
+        "To": "payload.candidateEmail",
+        "Subject": "payload.emailSubject",
+        "Body": "payload.emailBody",
+        "TemplateID": "static:audio-screening-invitation"
+      },
+      "OutputMapping": {
+        "emailSent": true
+      },
+      "ConditionalPath": "payload.resumeEvaluation.passedResumeScreening === true && payload.existingApplication.length === 0"
+    },
+    {
+      "Name": "Update Application with Audio Link",
+      "Description": "Update application with audio agent session URL",
+      "Type": "Action",
+      "Sequence": 10,
+      "ActionName": "Update Record",
+      "InputMapping": {
+        "EntityName": "static:Applications",
+        "RecordID": "payload.applicationID",
+        "Data": {
+          "AudioAgentSessionURL": "payload.audioAgentSessionURL",
+          "AudioAgentSessionID": "payload.audioAgentSessionID",
+          "Status": "static:AudioScheduled"
+        }
+      },
+      "ConditionalPath": "payload.resumeEvaluation.passedResumeScreening === true && payload.existingApplication.length === 0"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "Name": "Synthesize Interview Feedback",
+  "Description": "Aggregates feedback from multiple interviewers and provides a comprehensive recommendation and next steps",
+  "CategoryID": "@lookup:AI Prompt Categories.Name=Recruiting & Hiring",
+  "UserID": null,
+  "IsActive": true,
+  "Prompt": "@file:templates/synthesize-interview-feedback.md",
+  "Type": "Prompt",
+  "OutputType": "JSON"
+}

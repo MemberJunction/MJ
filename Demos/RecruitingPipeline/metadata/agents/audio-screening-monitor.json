@@ -1,0 +1,51 @@
+{
+  "Name": "Audio Screening Monitor",
+  "Description": "Scheduled agent that checks for completed audio screening sessions and processes them",
+  "Type": "Flow Agent",
+  "IsActive": true,
+  "Steps": [
+    {
+      "Name": "Get Pending Audio Screenings",
+      "Description": "Get applications with audio sessions that haven't been evaluated yet",
+      "Type": "Action",
+      "Sequence": 1,
+      "ActionName": "Get Records",
+      "InputMapping": {
+        "EntityName": "static:Applications",
+        "ExtraFilter": "static:AudioAgentSessionID IS NOT NULL AND AudioEvaluationScore IS NULL AND Status = 'AudioScheduled'",
+        "OrderBy": "static:SubmittedAt ASC"
+      },
+      "OutputMapping": {
+        "pendingApplications": "output.Records"
+      }
+    },
+    {
+      "Name": "Process Each Audio Screening",
+      "Description": "Process each pending audio screening",
+      "Type": "ForEach",
+      "Sequence": 2,
+      "ItemVariable": "application",
+      "ItemsPath": "payload.pendingApplications",
+      "Parallelizable": true,
+      "ContinueOnError": true,
+      "Steps": [
+        {
+          "Name": "Process Audio Screening",
+          "Description": "Call sub-agent to process this audio screening",
+          "Type": "SubAgent",
+          "Sequence": 1,
+          "SubAgentName": "Process Audio Screening",
+          "InputMapping": {
+            "applicationID": "application.ID",
+            "audioSessionID": "application.AudioAgentSessionID",
+            "audioSessionStatusURL": "static:https://audio-agent-api.example.com/sessions/{audioSessionID}/status",
+            "audioServiceAPIKey": "static:{{AUDIO_SERVICE_API_KEY}}"
+          },
+          "SubAgentContextPaths": [
+            "*"
+          ]
+        }
+      ]
+    }
+  ]
+}
