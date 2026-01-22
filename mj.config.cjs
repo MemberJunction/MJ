@@ -111,7 +111,7 @@ module.exports = {
   mcpServerSettings: {
     port: 3100,
     enableMCPServer: true,
-    systemApiKey: 'mj_sk_e520cf8d3d486d9abb20aeece80f3ef9b2e87dd913fe270926c203ae96582aa3',
+    systemApiKey: 'MY_API_KEY_FOR_MCP_SERVER',
     actionTools: [
       {
         actionName: 'NOT YET SUPPORTED',
