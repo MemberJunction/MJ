@@ -196,6 +196,14 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
 
   onComponentEvent(event: unknown): void {
     console.log('Component event:', event);
+
+    // Handle error events from React component
+    if (event && typeof event === 'object' && 'type' in event && event.type === 'error') {
+      const errorEvent = event as { type: 'error'; payload: { error: string; source: string } };
+      this.hasError = true;
+      this.errorMessage = 'Component Failed to Load';
+      this.errorDetails = errorEvent.payload.error || 'Unknown error occurred while loading the component';
+    }
   }
 
   /**

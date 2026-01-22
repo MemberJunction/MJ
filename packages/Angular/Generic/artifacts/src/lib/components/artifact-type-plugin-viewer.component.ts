@@ -34,7 +34,13 @@ import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.compon
       @if (error) {
         <div class="error-state">
           <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ error }}</span>
+          @if (errorTitle) {
+            <div class="error-title">{{ errorTitle }}</div>
+          }
+          <div class="error-details">{{ error }}</div>
+          @if (errorDetails) {
+            <div class="error-tech-details">{{ errorDetails }}</div>
+          }
         </div>
       }
       <ng-container #viewerContainer></ng-container>
@@ -62,6 +68,9 @@ import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.compon
       padding: 40px;
       gap: 16px;
       color: #6c757d;
+      width: 100%;
+      height: 100%;
+      min-height: 200px;
     }
 
     .loading-state i {
@@ -70,10 +79,35 @@ import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.compon
 
     .error-state {
       color: #dc3545;
+      text-align: center;
+      max-width: 600px;
     }
 
     .error-state i {
       font-size: 32px;
+    }
+
+    .error-state .error-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .error-state .error-details {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #6c757d;
+    }
+
+    .error-state .error-tech-details {
+      margin-top: 12px;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #495057;
+      word-break: break-word;
     }
   `]
 })
@@ -93,6 +127,8 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
 
   public isLoading = true;
   public error: string | null = null;
+  public errorDetails: string | null = null;
+  public errorTitle: string | null = null;
 
   private componentRef: ComponentRef<any> | null = null;
 
@@ -125,15 +161,25 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
     try {
       this.isLoading = true;
       this.error = null;
+      this.errorTitle = null;
+      this.errorDetails = null;
 
       if (!this.artifactVersion) {
-        this.error = 'No artifact version provided';
+        this.setError(
+          'Missing Artifact Data',
+          'Unable to display this artifact because the version information is missing.',
+          'artifactVersion is null or undefined'
+        );
         this.isLoading = false;
         return;
       }
 
       if (!this.artifactTypeName) {
-        this.error = 'No artifact type name provided';
+        this.setError(
+          'Missing Artifact Type',
+          'Unable to display this artifact because the type information is missing.',
+          'artifactTypeName is empty'
+        );
         this.isLoading = false;
         return;
       }
@@ -141,7 +187,11 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
       // Get the artifact type entity to find the DriverClass
       const artifactType = await this.getArtifactType();
       if (!artifactType) {
-        this.error = `Artifact type "${this.artifactTypeName}" not found`;
+        this.setError(
+          'Unknown Artifact Type',
+          `The artifact type "${this.artifactTypeName}" is not recognized. This might be a custom type that hasn't been properly configured.`,
+          `Artifact type "${this.artifactTypeName}" not found in metadata`
+        );
         this.isLoading = false;
         return;
       }
@@ -149,7 +199,11 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
       // Resolve DriverClass by traversing parent hierarchy if needed
       const driverClass = await this.resolveDriverClass(artifactType);
       if (!driverClass) {
-        this.error = `No DriverClass found in artifact type hierarchy for "${this.artifactTypeName}" and no valid JSON content for fallback`;
+        this.setError(
+          'No Viewer Available',
+          `This artifact type (${this.artifactTypeName}) doesn't have a viewer component configured. The artifact content may need to be viewed in the JSON tab.`,
+          `No DriverClass in hierarchy and content is not valid JSON`
+        );
         this.isLoading = false;
         return;
       }
@@ -162,7 +216,11 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
       );
 
       if (!tempInstance) {
-        this.error = `Component "${driverClass}" not found. Make sure the component is registered with @RegisterClass decorator.`;
+        this.setError(
+          'Viewer Component Not Found',
+          `The viewer component "${driverClass}" is not registered in the application. This usually means the required package or module hasn't been loaded.`,
+          `Component "${driverClass}" not found in ClassFactory registry. Ensure it's registered with @RegisterClass(BaseArtifactViewerPluginComponent, '${driverClass}').`
+        );
         this.isLoading = false;
         return;
       }
@@ -211,9 +269,24 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
     } catch (err) {
       console.error('Error loading artifact viewer:', err);
       LogError(err);
-      this.error = 'Failed to load artifact viewer: ' + (err instanceof Error ? err.message : String(err));
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorStack = err instanceof Error && err.stack ? err.stack : undefined;
+      this.setError(
+        'Failed to Load Viewer',
+        'An unexpected error occurred while loading the artifact viewer. Please try refreshing the page or contact support if the problem persists.',
+        errorStack || errorMessage
+      );
       this.isLoading = false;
     }
+  }
+
+  /**
+   * Set a structured error message with title, user-friendly description, and technical details
+   */
+  private setError(title: string, userMessage: string, technicalDetails: string): void {
+    this.errorTitle = title;
+    this.error = userMessage;
+    this.errorDetails = technicalDetails;
   }
 
   /**
