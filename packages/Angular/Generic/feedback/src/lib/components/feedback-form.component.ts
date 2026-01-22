@@ -203,10 +203,7 @@ import { FeedbackService } from '../services/feedback.service';
       </div>
 
       <!-- Loading state -->
-      <div class="feedback-loading" *ngIf="IsSubmitting">
-        <i class="fas fa-spinner fa-spin fa-2x"></i>
-        <span>Submitting your feedback...</span>
-      </div>
+      <mj-loading *ngIf="IsSubmitting" text="Submitting your feedback..." size="medium"></mj-loading>
 
       <!-- Success state -->
       <div class="feedback-success" *ngIf="SubmissionSuccess">
@@ -303,16 +300,6 @@ import { FeedbackService } from '../services/feedback.service';
 
     .char-count.warning {
       color: #f59e0b;
-    }
-
-    .feedback-loading {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      padding: 60px 20px;
-      color: #64748b;
     }
 
     .feedback-success {

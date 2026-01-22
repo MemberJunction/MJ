@@ -9,6 +9,9 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 
+// MemberJunction modules
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+
 // Components
 import { FeedbackFormComponent } from './components/feedback-form.component';
 import { FeedbackButtonComponent } from './components/feedback-button.component';
@@ -73,7 +76,8 @@ import { FeedbackConfig, FEEDBACK_CONFIG } from './feedback.config';
     ButtonsModule,
     InputsModule,
     DropDownsModule,
-    IndicatorsModule
+    IndicatorsModule,
+    SharedGenericModule
   ],
   exports: [
     FeedbackFormComponent,
