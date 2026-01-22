@@ -70,12 +70,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly MAX_LAYOUT_INIT_RETRIES = 5;
   private hasEmittedFirstLoadComplete = false;
   private layoutInitialized = false;
-<<<<<<< HEAD
-  private layoutRestorationComplete = false; // True only AFTER layout is fully restored/created
-=======
-  // Tracks when layout restoration/creation is fully complete (saved layout restored or fresh tabs created)
   private layoutRestorationComplete = false;
->>>>>>> 24485b472 (Simplify code comments for clarity)
 
   // Track component references for cleanup (legacy - keep for backward compat during transition)
   private componentRefs = new Map<string, ComponentRef<BaseResourceComponent>>();
