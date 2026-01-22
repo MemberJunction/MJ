@@ -11,7 +11,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Delete Storage Object',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'SharePoint Storage'
  *   }, {
  *     Name: 'ObjectName',
@@ -27,7 +27,7 @@ export class DeleteObjectAction extends BaseFileStorageAction {
      * Delete a file object
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - ObjectName: Required - Name/path of the object to delete
      *
      * @returns Operation result with:

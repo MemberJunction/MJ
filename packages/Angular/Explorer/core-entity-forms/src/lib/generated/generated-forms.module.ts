@@ -121,7 +121,6 @@ import { FileCategoryFormComponent, LoadFileCategoryFormComponent } from "./Enti
 import { FileEntityRecordLinkFormComponent, LoadFileEntityRecordLinkFormComponent } from "./Entities/FileEntityRecordLink/fileentityrecordlink.form.component";
 import { FileStorageProviderFormComponent, LoadFileStorageProviderFormComponent } from "./Entities/FileStorageProvider/filestorageprovider.form.component";
 import { FileFormComponent, LoadFileFormComponent } from "./Entities/File/file.form.component";
-import { flyway_schema_historyFormComponent, Loadflyway_schema_historyFormComponent } from "./Entities/flyway_schema_history/flyway_schema_history.form.component";
 import { GeneratedCodeCategoryFormComponent, LoadGeneratedCodeCategoryFormComponent } from "./Entities/GeneratedCodeCategory/generatedcodecategory.form.component";
 import { GeneratedCodeFormComponent, LoadGeneratedCodeFormComponent } from "./Entities/GeneratedCode/generatedcode.form.component";
 import { IntegrationURLFormatFormComponent, LoadIntegrationURLFormatFormComponent } from "./Entities/IntegrationURLFormat/integrationurlformat.form.component";
@@ -196,6 +195,7 @@ import { EncryptionAlgorithmFormComponent, LoadEncryptionAlgorithmFormComponent 
 import { EncryptionKeySourceFormComponent, LoadEncryptionKeySourceFormComponent } from "./Entities/EncryptionKeySource/encryptionkeysource.form.component";
 import { EncryptionKeyFormComponent, LoadEncryptionKeyFormComponent } from "./Entities/EncryptionKey/encryptionkey.form.component";
 import { EnvironmentFormComponent, LoadEnvironmentFormComponent } from "./Entities/Environment/environment.form.component";
+import { FileStorageAccountFormComponent, LoadFileStorageAccountFormComponent } from "./Entities/FileStorageAccount/filestorageaccount.form.component";
 import { ListInvitationFormComponent, LoadListInvitationFormComponent } from "./Entities/ListInvitation/listinvitation.form.component";
 import { ListShareFormComponent, LoadListShareFormComponent } from "./Entities/ListShare/listshare.form.component";
 import { ProjectFormComponent, LoadProjectFormComponent } from "./Entities/Project/project.form.component";
@@ -476,11 +476,11 @@ declarations: [
     FileEntityRecordLinkFormComponent,
     FileStorageProviderFormComponent,
     FileFormComponent,
-    flyway_schema_historyFormComponent,
     GeneratedCodeCategoryFormComponent,
     GeneratedCodeFormComponent,
     IntegrationURLFormatFormComponent,
-    IntegrationFormComponent],
+    IntegrationFormComponent,
+    LibraryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -506,7 +506,6 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
-    LibraryFormComponent,
     LibraryItemFormComponent,
     ListCategoryFormComponent,
     ListDetailFormComponent,
@@ -525,7 +524,8 @@ declarations: [
     AIAgentRunFormComponent,
     AIAgentStepPathFormComponent,
     AIAgentStepFormComponent,
-    AIAgentTypeFormComponent],
+    AIAgentTypeFormComponent,
+    AIArchitectureFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -551,7 +551,6 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
-    AIArchitectureFormComponent,
     AIConfigurationParamFormComponent,
     AIConfigurationFormComponent,
     AICredentialBindingFormComponent,
@@ -570,7 +569,8 @@ declarations: [
     AIVendorFormComponent,
     ArtifactPermissionFormComponent,
     ArtifactTypeFormComponent,
-    ArtifactUseFormComponent],
+    ArtifactUseFormComponent,
+    ArtifactVersionAttributeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -596,7 +596,6 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
-    ArtifactVersionAttributeFormComponent,
     ArtifactVersionFormComponent,
     ArtifactFormComponent,
     CollectionArtifactFormComponent,
@@ -615,7 +614,8 @@ declarations: [
     ConversationDetailRatingFormComponent,
     CredentialCategoryFormComponent,
     CredentialTypeFormComponent,
-    CredentialFormComponent],
+    CredentialFormComponent,
+    DashboardCategoryLinkFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -641,7 +641,6 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
-    DashboardCategoryLinkFormComponent,
     DashboardCategoryPermissionFormComponent,
     DashboardPartTypeFormComponent,
     DashboardPermissionFormComponent,
@@ -651,6 +650,7 @@ declarations: [
     EncryptionKeySourceFormComponent,
     EncryptionKeyFormComponent,
     EnvironmentFormComponent,
+    FileStorageAccountFormComponent,
     ListInvitationFormComponent,
     ListShareFormComponent,
     ProjectFormComponent,
@@ -976,7 +976,6 @@ export function LoadCoreGeneratedForms() {
     LoadFileEntityRecordLinkFormComponent();
     LoadFileStorageProviderFormComponent();
     LoadFileFormComponent();
-    Loadflyway_schema_historyFormComponent();
     LoadGeneratedCodeCategoryFormComponent();
     LoadGeneratedCodeFormComponent();
     LoadIntegrationURLFormatFormComponent();
@@ -1051,6 +1050,7 @@ export function LoadCoreGeneratedForms() {
     LoadEncryptionKeySourceFormComponent();
     LoadEncryptionKeyFormComponent();
     LoadEnvironmentFormComponent();
+    LoadFileStorageAccountFormComponent();
     LoadListInvitationFormComponent();
     LoadListShareFormComponent();
     LoadProjectFormComponent();

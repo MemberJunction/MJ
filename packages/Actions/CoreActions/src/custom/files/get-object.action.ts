@@ -11,7 +11,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Get Storage Object',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'Google Cloud Storage'
  *   }, {
  *     Name: 'ObjectName',
@@ -27,7 +27,7 @@ export class GetObjectAction extends BaseFileStorageAction {
      * Download file content from storage
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - ObjectName: Required if ObjectID not provided - Name/path of the object
      *   - ObjectID: Optional - Provider-specific object ID (bypasses path resolution for faster access)
      *
