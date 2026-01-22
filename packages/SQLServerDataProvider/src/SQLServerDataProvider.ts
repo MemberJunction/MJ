@@ -535,6 +535,17 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Gets a specific SQL logging session by its ID.
+   * Returns the session if found, or undefined if not found.
+   *
+   * @param sessionId - The unique identifier of the session to retrieve
+   * @returns The SqlLoggingSession if found, undefined otherwise
+   */
+  public GetSqlLoggingSessionById(sessionId: string): SqlLoggingSession | undefined {
+    return this._sqlLoggingSessions.get(sessionId);
+  }
+
+  /**
    * Disposes all active SQL logging sessions.
    * Useful for cleanup on provider shutdown.
    */
