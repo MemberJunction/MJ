@@ -179,12 +179,35 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
             name: "MemberJunction",
             version: "1.0.0",
             authenticate: async (request: http.IncomingMessage) => {
-                const apiKey = request.headers['x-api-key'] as string
+                // Try to extract API key from multiple sources
+                let apiKey = request.headers['x-api-key'] as string
                     || request.headers['x-mj-api-key'] as string;
+
+                // Also check Authorization header (Bearer token format)
+                if (!apiKey && request.headers['authorization']) {
+                    const authHeader = request.headers['authorization'] as string;
+                    if (authHeader.startsWith('Bearer ')) {
+                        apiKey = authHeader.substring(7); // Remove "Bearer " prefix
+                    }
+                }
+
+                // Check URL query parameters as fallback
+                if (!apiKey && request.url) {
+                    const url = new URL(request.url, `http://${request.headers.host}`);
+                    const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
+                    if (queryKey) {
+                        apiKey = queryKey;
+                    }
+                }
+
+                console.log(`[Auth] API key found: ${apiKey ? 'yes' : 'no'}`);
 
                 // Backward compatibility: if no API key header but systemApiKey configured, use system user
                 if (!apiKey && mcpServerSettings?.systemApiKey) {
-                    const systemUser = UserCache.Instance.Users[0];
+                    const systemUser = UserCache.Instance.GetSystemUser();
+                    if (!systemUser) {
+                        throw new Error('System user not found in UserCache');
+                    }
                     console.log(`Authenticated via system API key for user: ${systemUser?.Email}`);
                     return { apiKey: 'system', apiKeyId: 'system', user: systemUser };
                 }
@@ -193,15 +216,24 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
                     throw new Error('API key required. Provide via x-api-key header.');
                 }
 
-                const systemUser = UserCache.Instance.Users[0];
-                const validation = await validateAPIKey(apiKey, systemUser);
+                console.log(`[Auth] Validating API key...`);
+                try {
+                    const systemUser = UserCache.Instance.Users[0];
+                    const validation = await validateAPIKey(apiKey, systemUser);
 
-                if (!validation.isValid) {
-                    throw new Error(validation.error || 'Invalid API key');
+                    console.log(`[Auth] Validation result: isValid=${validation.isValid}, user=${validation.user?.Email}`);
+
+                    if (!validation.isValid) {
+                        console.error(`[Auth] Validation failed: ${validation.error}`);
+                        throw new Error(validation.error || 'Invalid API key');
+                    }
+
+                    console.log(`✅ Authenticated via API key for user: ${validation.user?.Email}`);
+                    return { apiKey, apiKeyId: validation.apiKeyId!, user: validation.user! };
+                } catch (error) {
+                    console.error(`[Auth] Exception during validation:`, error);
+                    throw error;
                 }
-
-                console.log(`Authenticated via API key for user: ${validation.user?.Email}`);
-                return { apiKey, apiKeyId: validation.apiKeyId!, user: validation.user! };
             }
         });
 
@@ -211,9 +243,12 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
         await setupSQLServerClient(config);
         console.log("Database connection setup completed.");
 
+        const contextUser = UserCache.Instance.Users[0];
 
         // Load API keys into cache for fast validation
-        // await CredentialEngine.Instance.LoadAPIKeys(pool, configInfo.mjCoreSchema);
+        console.log('Loading credentials and API keys into cache...');
+        await CredentialEngine.Instance.Config(false, contextUser);
+        console.log(`API keys loaded successfully. Count: ${CredentialEngine.Instance.APIKeys.length}`);
 
 
         addToolWithFilter({
@@ -226,8 +261,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
                 return output;
             }
         });
-
-        const contextUser = UserCache.Instance.Users[0];
         await loadEntityTools();
         await loadActionTools(contextUser);
         await loadAgentTools(contextUser);

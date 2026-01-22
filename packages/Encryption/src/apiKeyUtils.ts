@@ -90,7 +90,8 @@ export async function validateAPIKey(
   const rv = new RunView();
   const result = await rv.RunView<UserEntity>({
     EntityName: "Users",
-    ExtraFilter: "ID = '" + cachedKey.UserID + "'"
+    ExtraFilter: "ID = '" + cachedKey.UserID + "'",
+    ResultType: 'entity_object'
   }, contextUser);
   const u = result.Results ? result.Results[0] : null;
   if (!u) {
