@@ -635,14 +635,19 @@ This rich context enables AI to make accurate inferences.
 
 DBAutoDoc integrates with MemberJunction's AI provider system. Supported providers:
 
-- **gemini** (default) - Google Gemini
-- **openai** - OpenAI
-- **anthropic** - Anthropic Claude
-- **groq** - Groq
-- **mistral** - Mistral AI
-- **vertex** - Google Vertex AI
-- **azure** - Azure OpenAI
-- **cerebras** - Cerebras
+| Config Provider | Driver Class | Description |
+|-----------------|--------------|-------------|
+| `gemini` (default) | GeminiLLM | Google Gemini |
+| `openai` | OpenAILLM | OpenAI |
+| `anthropic` | AnthropicLLM | Anthropic Claude |
+| `groq` | GroqLLM | Groq |
+| `mistral` | MistralLLM | Mistral AI |
+| `vertex` | VertexLLM | Google Vertex AI |
+| `azure` | AzureLLM | Azure OpenAI |
+| `cerebras` | CerebrasLLM | Cerebras |
+| `openrouter` | OpenRouterLLM | OpenRouter (multi-model) |
+| `xai` | xAILLM | xAI (Grok) |
+| `bedrock` | BedrockLLM | AWS Bedrock |
 
 ### Gemini (Default)
 ```json
@@ -739,7 +744,7 @@ const result = await api.analyze({
     password: 'password'
   },
   ai: {
-    provider: 'OpenAILLM',
+    provider: 'openai',
     model: 'gpt-4-turbo-preview',
     apiKey: 'sk-...'
   },
