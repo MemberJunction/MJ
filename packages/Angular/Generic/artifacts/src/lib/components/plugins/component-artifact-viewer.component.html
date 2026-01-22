@@ -4,10 +4,15 @@
     @if (hasError) {
       <div class="error-state">
         <i class="fa-solid fa-exclamation-triangle"></i>
-        <h3>Component Error</h3>
-        <p>{{ errorMessage }}</p>
+        <h3>{{ errorMessage }}</h3>
+        <p>This component could not be loaded. This usually happens when:</p>
+        <ul style="text-align: left; max-width: 500px; color: #6c757d; line-height: 1.6;">
+          <li>The component registry is unavailable or unreachable</li>
+          <li>The component version does not exist in the registry</li>
+          <li>There was a network error during component retrieval</li>
+        </ul>
         @if (errorDetails) {
-          <details>
+          <details style="margin-top: 20px;">
             <summary>Technical Details</summary>
             <pre>{{ errorDetails }}</pre>
           </details>
