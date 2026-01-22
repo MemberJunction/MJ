@@ -28,6 +28,7 @@
     "@memberjunction/global": "3.0.0",
     "@memberjunction/server": "3.0.0",
     "@memberjunction/server-bootstrap": "3.0.0",
+    "@memberjunction/feedback-server": "3.0.0",
     "@memberjunction/sqlserver-dataprovider": "3.0.0",
     "@memberjunction/templates": "3.0.0",
     "axios": "^1.6.7",

@@ -12,6 +12,9 @@ LoadGeneratedEntities(); // forces the generated entities library to load up, so
 
 @Component({
   selector: 'app-root',
-  template: '<mj-explorer-app></mj-explorer-app>'
+  template: `
+    <mj-explorer-app></mj-explorer-app>
+    <mj-feedback-button Position="bottom-right"></mj-feedback-button>
+  `
 })
 export class AppComponent {}

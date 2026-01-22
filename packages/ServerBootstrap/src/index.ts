@@ -11,8 +11,9 @@
  * - Server startup with proper lifecycle hooks
  */
 
-import { serve, MJServerOptions, configInfo } from '@memberjunction/server';
+import { serve, MJServerOptions, configInfo, createApp } from '@memberjunction/server';
 import { cosmiconfigSync } from 'cosmiconfig';
+import { Application, Router } from 'express';
 
 /**
  * Configuration options for creating an MJ Server
@@ -43,6 +44,28 @@ export interface MJServerConfig {
    * Options for REST API configuration
    */
   restApiOptions?: MJServerOptions['restApiOptions'];
+
+  /**
+   * Custom Express middleware/routers to add before the server starts.
+   * These are added to the Express app before the GraphQL endpoint is set up.
+   *
+   * @example
+   * ```typescript
+   * import { createFeedbackHandler } from '@memberjunction/feedback-server';
+   *
+   * createMJServer({
+   *   customMiddleware: (app) => {
+   *     app.use('/api/feedback', createFeedbackHandler({
+   *       owner: 'MemberJunction',
+   *       repo: 'MJ',
+   *       token: process.env.GITHUB_PAT!,
+   *       defaultLabels: ['user-submitted']
+   *     }));
+   *   }
+   * });
+   * ```
+   */
+  customMiddleware?: (app: Application) => void | Promise<void>;
 }
 
 /**
@@ -167,6 +190,16 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
     restApiOptions: options.restApiOptions
   };
 
+  // Create Express app
+  const app = createApp();
+
+  // Apply custom middleware if provided
+  if (options.customMiddleware) {
+    console.log('Applying custom middleware...');
+    await Promise.resolve(options.customMiddleware(app));
+    console.log('');
+  }
+
   // Start the MJ Server
   // The serve() function from @memberjunction/server handles:
   // - Database connection pooling
@@ -175,7 +208,7 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   // - REST API endpoint registration
   // - Graceful shutdown handling
   console.log('Starting MemberJunction Server...\n');
-  await serve(resolverPaths, undefined, serverOptions);
+  await serve(resolverPaths, app, serverOptions);
 
   // Optional post-start hook
   if (options.afterStart) {
@@ -185,3 +218,4 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
 
 // Re-export types from @memberjunction/server for convenience
 export type { MJServerOptions } from '@memberjunction/server';
+export type { Application, Router } from 'express';

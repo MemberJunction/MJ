@@ -20,6 +20,7 @@ import {
 } from '@memberjunction/ng-explorer-modules';
 import { AuthServicesModule, RedirectComponent, MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJExplorerAppModule } from '@memberjunction/ng-explorer-app';
+import { FeedbackModule } from '@memberjunction/ng-feedback';
 
 LoadCoreGeneratedForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
 LoadCoreCustomForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
@@ -84,7 +85,31 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     MJExplorerAppModule.forRoot(environment),
 
     // App-specific modules
-    GeneratedFormsModule
+    GeneratedFormsModule,
+
+    // Feedback module for bug reporting
+    FeedbackModule.forRoot({
+      apiEndpoint: 'http://localhost:4000/api/feedback',
+      appName: 'MemberJunction Explorer',
+      title: 'Report an Issue',
+      subtitle: 'Help us improve MemberJunction Explorer',
+      fields: {
+        showSeverity: true,
+        showEnvironment: true,
+        affectedAreas: [
+          'Entities',
+          'Views',
+          'Queries',
+          'Reports',
+          'Dashboards',
+          'User Management',
+          'Admin Settings',
+          'Navigation',
+          'Search',
+          'Other'
+        ]
+      }
+    })
   ],
   providers: [
     SharedService,
