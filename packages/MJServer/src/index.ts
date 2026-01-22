@@ -406,4 +406,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+  // Handle unhandled promise rejections to prevent server crashes
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Promise Rejection:', reason);
+    console.error('   Promise:', promise);
+    // Log the error but DO NOT crash the server
+    // This is critical for server stability when downstream dependencies fail
+  });
 };
