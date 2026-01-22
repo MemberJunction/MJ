@@ -10,7 +10,11 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test:all",
+    "test:all": "npx ts-node src/__tests__/agent-type-prompt-params.test.ts && npx ts-node src/__tests__/action-changes.test.ts && npx ts-node src/__tests__/chat-handling-option.test.ts",
+    "test:chat-handling": "npx ts-node src/__tests__/chat-handling-option.test.ts",
+    "test:prompt-params": "npx ts-node src/__tests__/agent-type-prompt-params.test.ts",
+    "test:action-changes": "npx ts-node src/__tests__/action-changes.test.ts"
   },
   "author": "MemberJunction.com",
   "license": "ISC",

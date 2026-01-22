@@ -88,33 +88,48 @@ export default class Migrate extends Command {
           return path.isAbsolute(cleanLoc) ? loc : `filesystem:${path.resolve(cleanLoc)}`;
         });
 
-        // First try migrate to see the actual SQL error
-        const migrateArgs = [
+        // First try validate to catch checksum mismatches
+        const validateArgs = [
           ...baseArgs,
-          `-baselineVersion=${config.baselineVersion}`,
-          `-baselineOnMigrate=${config.baselineOnMigrate}`,
           `-locations=${absoluteMigrationPaths.join(',')}`,
-          'migrate'
+          'validate'
         ];
 
-        const migrateResult = spawnSync(flywayExePath, migrateArgs, { encoding: 'utf8' });
-        const migrateOutput = migrateResult.stderr || migrateResult.stdout || '';
+        const validateResult = spawnSync(flywayExePath, validateArgs, { encoding: 'utf8' });
+        const validateOutput = validateResult.stderr || validateResult.stdout || '';
 
-        // Check if output contains error messages even if exit code is 0
-        const hasErrorsInOutput = migrateOutput.toLowerCase().includes('error') ||
-                                   migrateOutput.toLowerCase().includes('incorrect syntax') ||
-                                   migrateOutput.toLowerCase().includes('must be the only statement');
-
-        if (migrateResult.status === 0 && !hasErrorsInOutput) {
-          this.logToStderr('✓ Migration executed successfully (Flyway CLI reports success)');
-          this.logToStderr('   The issue was with node-flyway response parsing only\n');
-        } else if (migrateResult.status === 0 && hasErrorsInOutput) {
-          // Exit code was 0 but output contains errors - SQL script likely has error handling
-          this.logToStderr('⚠️  Migration completed but errors were detected in output:\n');
-          this.analyzeFlywayError(migrateOutput, config);
+        // Check if validation failed
+        if (validateResult.status !== 0 || validateOutput.toLowerCase().includes('validate failed')) {
+          this.analyzeFlywayError(validateOutput, config);
         } else {
-          // Migration failed with non-zero exit code
-          this.analyzeFlywayError(migrateOutput, config);
+          // Validation passed, try migrate to see the actual SQL error
+          const migrateArgs = [
+            ...baseArgs,
+            `-baselineVersion=${config.baselineVersion}`,
+            `-baselineOnMigrate=${config.baselineOnMigrate}`,
+            `-locations=${absoluteMigrationPaths.join(',')}`,
+            'migrate'
+          ];
+
+          const migrateResult = spawnSync(flywayExePath, migrateArgs, { encoding: 'utf8' });
+          const migrateOutput = migrateResult.stderr || migrateResult.stdout || '';
+
+          // Check if output contains error messages even if exit code is 0
+          const hasErrorsInOutput = migrateOutput.toLowerCase().includes('error') ||
+                                     migrateOutput.toLowerCase().includes('incorrect syntax') ||
+                                     migrateOutput.toLowerCase().includes('must be the only statement');
+
+          if (migrateResult.status === 0 && !hasErrorsInOutput) {
+            this.logToStderr('✓ Migration executed successfully (Flyway CLI reports success)');
+            this.logToStderr('   The issue was with node-flyway response parsing only\n');
+          } else if (migrateResult.status === 0 && hasErrorsInOutput) {
+            // Exit code was 0 but output contains errors - SQL script likely has error handling
+            this.logToStderr('⚠️  Migration completed but errors were detected in output:\n');
+            this.analyzeFlywayError(migrateOutput, config);
+          } else {
+            // Migration failed with non-zero exit code
+            this.analyzeFlywayError(migrateOutput, config);
+          }
         }
       } catch (err: any) {
         this.logToStderr(`❌ Error running diagnostic: ${err.message || err}\n`);
@@ -146,6 +161,10 @@ export default class Migrate extends Command {
     ) || '';
 
     // Determine error type
+    const isValidationError = fullError.includes('validate failed') ||
+                              fullError.includes('checksum mismatch') ||
+                              fullError.includes('migrations have failed validation');
+
     const isSqlError = fullError.includes('incorrect syntax') ||
                       fullError.includes('must be the only statement in the batch') ||
                       fullError.includes('invalid object name') ||
@@ -157,7 +176,9 @@ export default class Migrate extends Command {
                              fullError.includes('connection') && !fullError.includes('clientconnectionid');
 
     // Display error header
-    if (isSqlError) {
+    if (isValidationError) {
+      this.logToStderr('❌ Validation Failed - Checksum Mismatch Detected\n');
+    } else if (isSqlError) {
       this.logToStderr('❌ SQL Migration Error Detected\n');
     } else if (isConnectionError) {
       this.logToStderr('❌ Database Connection Failed\n');
@@ -166,41 +187,57 @@ export default class Migrate extends Command {
     }
 
     // Display error details
-    if (errorCodeLine && messageLine) {
+    if (isValidationError) {
+      // For validation errors, show the COMPLETE raw Flyway output
+      // This includes all checksum details which are critical for debugging
+      this.logToStderr('\n📋 Full Flyway Validation Output:');
+      this.logToStderr('=' .repeat(100));
+      this.logToStderr(errorOutput);
+      this.logToStderr('=' .repeat(100));
+      this.logToStderr('');
+    } else if (errorCodeLine && messageLine) {
       this.logToStderr(`   ${errorCodeLine.trim()}`);
       this.logToStderr(`   ${messageLine.trim()}\n`);
     } else if (errorLine) {
       const cleanError = errorLine.replace(/^ERROR:\s*/, '').trim();
       this.logToStderr(`   Error: ${cleanError}\n`);
     } else if (errorOutput) {
-      // Show lines containing error-related keywords
-      const errorKeywords = ['error', 'incorrect', 'syntax', 'invalid', 'failed', 'must be', 'cannot', 'line'];
-      const relevantLines = errorOutput.split('\n')
-        .filter(line => {
-          const lower = line.toLowerCase();
-          return line.trim() &&
-                 !lower.includes('flyway community') &&
-                 !lower.includes('skipping filesystem location') &&
-                 errorKeywords.some(keyword => lower.includes(keyword));
-        })
-        .slice(0, 15);
+      if (false) { // Disabled - keeping structure for non-validation errors
+        // Show lines containing error-related keywords
+        const errorKeywords = ['error', 'incorrect', 'syntax', 'invalid', 'failed', 'must be', 'cannot', 'line'];
+        const relevantLines = errorOutput.split('\n')
+          .filter(line => {
+            const lower = line.toLowerCase();
+            return line.trim() &&
+                   !lower.includes('flyway community') &&
+                   !lower.includes('skipping filesystem location') &&
+                   errorKeywords.some(keyword => lower.includes(keyword));
+          })
+          .slice(0, 15);
 
-      if (relevantLines.length > 0) {
-        this.logToStderr('   Error details from Flyway output:');
-        relevantLines.forEach(line => this.logToStderr(`   ${line.trim()}`));
-        this.logToStderr('');
-      } else {
-        // If no error keywords found, show last 20 lines of output
-        const allLines = errorOutput.split('\n').filter(l => l.trim());
-        const lastLines = allLines.slice(-20);
-        this.logToStderr('   Last 20 lines of Flyway output:');
-        lastLines.forEach(line => this.logToStderr(`   ${line.trim()}`));
-        this.logToStderr('');
+        if (relevantLines.length > 0) {
+          this.logToStderr('   Error details from Flyway output:');
+          relevantLines.forEach(line => this.logToStderr(`   ${line.trim()}`));
+          this.logToStderr('');
+        } else {
+          // If no error keywords found, show last 20 lines of output
+          const allLines = errorOutput.split('\n').filter(l => l.trim());
+          const lastLines = allLines.slice(-20);
+          this.logToStderr('   Last 20 lines of Flyway output:');
+          lastLines.forEach(line => this.logToStderr(`   ${line.trim()}`));
+          this.logToStderr('');
+        }
       }
     }
 
     // Provide guidance
-    if (isSqlError) {
+    if (isValidationError) {
+      this.logToStderr('💡 Migration checksum validation failed:');
+      this.logToStderr('   - A migration file has been modified after it was applied to the database');
+      this.logToStderr('   - Check the migration file(s) listed above for unexpected changes');
+      this.logToStderr('   - To repair: Use `flyway repair` if you intentionally modified the file');
+      this.logToStderr('   - Or revert the file to match the checksum in the database');
+    } else if (isSqlError) {
       this.logToStderr('💡 This is a SQL script error:');
       this.logToStderr('   - Check the migration SQL file for syntax errors');
       this.logToStderr('   - Look for missing GO statements before CREATE TRIGGER/PROCEDURE/FUNCTION');
