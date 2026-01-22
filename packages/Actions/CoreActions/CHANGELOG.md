@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/core-actions
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@3.1.1
+- @memberjunction/ai-agents@3.1.1
+- @memberjunction/ai-engine-base@3.1.1
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/aiengine@3.1.1
+- @memberjunction/ai-prompts@3.1.1
+- @memberjunction/ai-betty-bot@3.1.1
+- @memberjunction/ai-vector-sync@3.1.1
+- @memberjunction/actions-base@3.1.1
+- @memberjunction/code-execution@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/communication-types@3.1.1
+- @memberjunction/communication-engine@3.1.1
+- @memberjunction/content-autotagging@3.1.1
+- @memberjunction/external-change-detection@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/core-entities-server@3.1.1
+- @memberjunction/export-engine@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/storage@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

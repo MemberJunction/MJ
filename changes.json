@@ -1,0 +1,1353 @@
+{
+  "changesets": [
+    {
+      "releases": [
+        {
+          "name": "@memberjunction/ng-core-entity-forms",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/ai-provider-bundle",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/core-actions",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/core-entities",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/ai-core-plus",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/ai-agents",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/aiengine",
+          "type": "minor"
+        }
+      ],
+      "summary": "Multi-modal agent output support",
+      "id": "forty-vans-ring"
+    },
+    {
+      "releases": [
+        {
+          "name": "@memberjunction/graphql-dataprovider",
+          "type": "patch"
+        },
+        {
+          "name": "@memberjunction/server",
+          "type": "patch"
+        }
+      ],
+      "summary": "no migration",
+      "id": "olive-carpets-make"
+    },
+    {
+      "releases": [
+        {
+          "name": "@memberjunction/ai-agents",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/ai-core-plus",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/ng-core-entity-forms",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/core-entities",
+          "type": "minor"
+        }
+      ],
+      "summary": "migration",
+      "id": "purple-falcons-beam"
+    },
+    {
+      "releases": [
+        {
+          "name": "@memberjunction/core-actions",
+          "type": "patch"
+        }
+      ],
+      "summary": "Upgrade archiver to v7",
+      "id": "salty-rules-brush"
+    },
+    {
+      "releases": [
+        {
+          "name": "@memberjunction/core",
+          "type": "patch"
+        },
+        {
+          "name": "@memberjunction/sqlserver-dataprovider",
+          "type": "patch"
+        }
+      ],
+      "summary": "no migration",
+      "id": "six-times-behave"
+    },
+    {
+      "releases": [
+        {
+          "name": "@memberjunction/ai-core-plus",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/ng-dashboards",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/ng-explorer-core",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/ng-dashboard-viewer",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/core-entities",
+          "type": "minor"
+        }
+      ],
+      "summary": "migration",
+      "id": "yellow-hairs-smash"
+    },
+    {
+      "releases": [
+        {
+          "name": "@memberjunction/ng-testing",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/testing-cli",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/testing-engine",
+          "type": "minor"
+        },
+        {
+          "name": "@memberjunction/testing-engine-base",
+          "type": "minor"
+        }
+      ],
+      "summary": "migration",
+      "id": "yellow-singers-tickle"
+    }
+  ],
+  "releases": [
+    {
+      "name": "@memberjunction/ng-core-entity-forms",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "forty-vans-ring",
+        "purple-falcons-beam"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-provider-bundle",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "forty-vans-ring"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/core-actions",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "forty-vans-ring",
+        "salty-rules-brush"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/core-entities",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "forty-vans-ring",
+        "purple-falcons-beam",
+        "yellow-hairs-smash"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-core-plus",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "forty-vans-ring",
+        "purple-falcons-beam",
+        "yellow-hairs-smash"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-agents",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "forty-vans-ring",
+        "purple-falcons-beam"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/aiengine",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "forty-vans-ring"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/graphql-dataprovider",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "olive-carpets-make"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/server",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "olive-carpets-make"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/core",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "six-times-behave"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/sqlserver-dataprovider",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "six-times-behave"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-dashboards",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "yellow-hairs-smash"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-explorer-core",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "yellow-hairs-smash"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-dashboard-viewer",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "yellow-hairs-smash"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-testing",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "yellow-singers-tickle"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/testing-cli",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "yellow-singers-tickle"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/testing-engine",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "yellow-singers-tickle"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/testing-engine-base",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [
+        "yellow-singers-tickle"
+      ],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-explorer-modules",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "mj_explorer",
+      "type": "none",
+      "oldVersion": "1.0.0",
+      "changesets": [],
+      "newVersion": "1.0.0"
+    },
+    {
+      "name": "@memberjunction/codegen-lib",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/communication-ms-graph",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/content-autotagging",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/db-auto-doc",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/core-entities-server",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/queue",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/templates",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-cli",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/actions-content-autotag",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/scheduled-actions",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/a2aserver",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-agent-manager-actions",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-agent-manager",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-engine-base",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-mcp-server",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-prompts",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-recommendations-rex",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-recommendations",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-vectors",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-vector-dupe",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-vector-sync",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/actions-apollo",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/actions-base",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/actions-bizapps-accounting",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/actions-bizapps-crm",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/actions-bizapps-formbuilders",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/actions-bizapps-lms",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/actions-bizapps-social",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/actions",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/scheduled-actions-server",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-ask-skip",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-base-application",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-base-forms",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-compare-records",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-entity-form-dialog",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-entity-permissions",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-explorer-settings",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-form-toolbar",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-list-detail-grid",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-record-changes",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-shared",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-simple-record-list",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-user-view-grid",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-user-view-properties",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-action-gallery",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-ai-test-harness",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-artifacts",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-base-types",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-code-editor",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-conversations",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-data-context",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-entity-communications",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-entity-viewer",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-file-storage",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-find-record",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-join-grid",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-list-management",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-notifications",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-query-grid",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-query-viewer",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-react",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-record-selector",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-resource-permissions",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-shared-generic",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-skip-chat",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-tasks",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-treelist",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-trees",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-user-avatar",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/communication-types",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/communication-engine",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/entity-communications-base",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/entity-communications-client",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/entity-communications-server",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/communication-sendgrid",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/component-registry-server",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/credentials",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/doc-utils",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/encryption",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/external-change-detection",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "mj_generatedactions",
+      "type": "none",
+      "oldVersion": "1.0.0",
+      "changesets": [],
+      "newVersion": "1.0.0"
+    },
+    {
+      "name": "mj_codegen_api",
+      "type": "none",
+      "oldVersion": "1.0.0",
+      "changesets": [],
+      "newVersion": "1.0.0"
+    },
+    {
+      "name": "@memberjunction/data-context",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/storage",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/metadata-sync",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/query-gen",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/react-runtime",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/react-test-harness",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/scheduling-actions",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/scheduling-engine-base",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/scheduling-engine",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/templates-base-types",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/skip-types",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-vectors-pinecone",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-bootstrap",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-workspace-initializer",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "mj_angular_elements_demo",
+      "type": "none",
+      "oldVersion": "0.0.0",
+      "changesets": [],
+      "newVersion": "0.0.0"
+    },
+    {
+      "name": "mj_api",
+      "type": "none",
+      "oldVersion": "1.0.0",
+      "changesets": [],
+      "newVersion": "1.0.0"
+    },
+    {
+      "name": "@memberjunction/server-bootstrap",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-vectordb",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-vectors-memory",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/code-execution",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-auth-services",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-explorer-app",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-link-directives",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-chat",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-container-directives",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-deep-diff",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-entity-relationship-diagram",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-filter-builder",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-timeline",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/communication-gmail",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/communication-twilio",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/component-registry-client-sdk",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "mj_generatedentities",
+      "type": "none",
+      "oldVersion": "1.0.0",
+      "changesets": [],
+      "newVersion": "1.0.0"
+    },
+    {
+      "name": "@memberjunction/interactive-component-types",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/cli",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/data-context-server",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-tabstrip",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-anthropic",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-azure",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-bedrock",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-betty-bot",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-blackforestlabs",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-cerebras",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-elevenlabs",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-gemini",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-groq",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-heygen",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-lmstudio",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-local-embeddings",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-mistral",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-ollama",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-openai",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-openrouter",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-vertex",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ai-xai",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-kendo-modules",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-export-service",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-generic-dialog",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/ng-markdown",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/config",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/export-engine",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/global",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    },
+    {
+      "name": "@memberjunction/scheduling-base-types",
+      "type": "major",
+      "oldVersion": "3.0.0",
+      "changesets": [],
+      "newVersion": "4.0.0"
+    }
+  ]
+}

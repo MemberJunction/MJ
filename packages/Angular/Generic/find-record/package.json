@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-find-record",
-  "version": "3.0.0",
+  "version": "3.1.1",
   "description": "MemberJunction: Angular Component to allow a user to find a single record in any entity",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -30,11 +30,11 @@
     "@progress/kendo-angular-listbox": "16.2.0"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "3.0.0",
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/ng-container-directives": "3.0.0",
-    "@memberjunction/ng-shared": "3.0.0",
+    "@memberjunction/core-entities": "3.1.1",
+    "@memberjunction/global": "3.1.1",
+    "@memberjunction/core": "3.1.1",
+    "@memberjunction/ng-container-directives": "3.1.1",
+    "@memberjunction/ng-shared": "3.1.1",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },

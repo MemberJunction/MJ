@@ -1,5 +1,20 @@
 # @memberjunction/scheduling-engine
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/actions-base@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+- @memberjunction/scheduling-engine-base@3.1.1
+- @memberjunction/scheduling-base-types@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

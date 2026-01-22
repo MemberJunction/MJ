@@ -1,5 +1,26 @@
 # @memberjunction/ai-cli
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@3.1.1
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/ai-prompts@3.1.1
+- @memberjunction/ai-anthropic@3.1.1
+- @memberjunction/ai-betty-bot@3.1.1
+- @memberjunction/ai-cerebras@3.1.1
+- @memberjunction/ai-groq@3.1.1
+- @memberjunction/ai-mistral@3.1.1
+- @memberjunction/ai-openai@3.1.1
+- @memberjunction/core-actions@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/core-entities-server@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

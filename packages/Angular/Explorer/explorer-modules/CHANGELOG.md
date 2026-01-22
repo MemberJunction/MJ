@@ -1,5 +1,19 @@
 # @memberjunction/ng-explorer-modules
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@3.1.1
+- @memberjunction/ng-explorer-settings@3.1.1
+- @memberjunction/ng-shared@3.1.1
+- @memberjunction/ng-user-view-grid@3.1.1
+- @memberjunction/ng-workspace-initializer@3.1.1
+- @memberjunction/ng-explorer-core@3.1.1
+- @memberjunction/ng-link-directives@3.1.1
+- @memberjunction/ng-kendo-modules@3.1.1
+- @memberjunction/ng-container-directives@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

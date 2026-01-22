@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-form-toolbar
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@3.1.1
+- @memberjunction/ng-base-forms@3.1.1
+- @memberjunction/ng-list-management@3.1.1
+- @memberjunction/ng-record-changes@3.1.1
+- @memberjunction/ng-container-directives@3.1.1
+- @memberjunction/ng-markdown@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

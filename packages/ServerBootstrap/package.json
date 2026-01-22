@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/server-bootstrap",
-  "version": "3.0.0",
+  "version": "3.1.1",
   "description": "MemberJunction Server Bootstrap - Encapsulates all server initialization logic",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,8 +18,8 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/server": "3.0.0",
+    "@memberjunction/core": "3.1.1",
+    "@memberjunction/server": "3.1.1",
     "cosmiconfig": "^9.0.0"
   },
   "devDependencies": {
@@ -28,5 +28,9 @@
   },
   "files": [
     "dist/**/*"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

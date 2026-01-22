@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ng-shared
 
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [8c0b624]
+  - @memberjunction/graphql-dataprovider@3.1.1
+  - @memberjunction/ng-notifications@3.1.1
+  - @memberjunction/ai-engine-base@3.1.1
+  - @memberjunction/ng-base-application@3.1.1
+  - @memberjunction/ng-base-types@3.1.1
+  - @memberjunction/ng-shared-generic@3.1.1
+  - @memberjunction/entity-communications-base@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/global@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

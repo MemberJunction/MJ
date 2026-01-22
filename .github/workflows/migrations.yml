@@ -47,4 +47,4 @@ jobs:
           DB_PASSWORD: VeryStr0ngP@ssw0rd
           CODEGEN_DB_USERNAME: sa
           CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
-          DB_TRUST_SERVER_CERTIFICATE: Y
+          DB_TRUST_SERVER_CERTIFICATE: 'true'

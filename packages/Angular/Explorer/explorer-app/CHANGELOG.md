@@ -1,5 +1,15 @@
 # @memberjunction/ng-explorer-app
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ng-bootstrap@3.1.1
+- @memberjunction/ng-workspace-initializer@3.1.1
+- @memberjunction/ng-explorer-core@3.1.1
+- @memberjunction/ng-auth-services@3.1.1
+- @memberjunction/core@3.1.1
+
 ## 3.0.0
 
 ### Major Changes
