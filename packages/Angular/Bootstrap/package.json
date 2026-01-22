@@ -2,10 +2,15 @@
   "name": "@memberjunction/ng-bootstrap",
   "version": "3.1.1",
   "description": "MemberJunction Angular Bootstrap - Encapsulates all Angular authentication and initialization logic",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/fesm2022/memberjunction-ng-bootstrap.mjs",
+  "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "directory": "dist",
+    "main": "./fesm2022/memberjunction-ng-bootstrap.mjs",
+    "types": "./index.d.ts"
+  },
   "scripts": {
-    "build": "ng-packagr -p ng-package.json",
+    "build": "ng-packagr -p ng-package.json && node scripts/fix-dist-package.js",
     "watch": "ng-packagr -p ng-package.json --watch",
     "clean": "rm -rf dist"
   },
