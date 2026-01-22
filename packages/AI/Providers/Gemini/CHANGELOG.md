@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 3.2.0
+
+### Patch Changes
+
+- cbd2714: Improve error handling and stability across Skip integration, component artifacts, and metadata sync
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

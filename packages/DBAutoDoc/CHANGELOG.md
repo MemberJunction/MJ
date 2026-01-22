@@ -1,5 +1,18 @@
 # @memberjunction/db-auto-doc
 
+## 3.2.0
+
+### Minor Changes
+
+- 454d2dd: Add new AI providers and set Gemini as default
+
+### Patch Changes
+
+- @memberjunction/ai-provider-bundle@3.2.0
+- @memberjunction/ai@3.2.0
+- @memberjunction/core@3.2.0
+- @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

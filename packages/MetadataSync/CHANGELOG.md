@@ -1,5 +1,21 @@
 # @memberjunction/metadata-sync
 
+## 3.2.0
+
+### Patch Changes
+
+- cbd2714: Improve error handling and stability across Skip integration, component artifacts, and metadata sync
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/core-entities-server@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/config@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/cli
 
+## 3.2.0
+
+### Patch Changes
+
+- 011c820: Improve migration error diagnostics and fix parent agent chat handling to respect sub-agent responses
+- Updated dependencies [cbd2714]
+- Updated dependencies [454d2dd]
+  - @memberjunction/metadata-sync@3.2.0
+  - @memberjunction/db-auto-doc@3.2.0
+  - @memberjunction/ai-cli@3.2.0
+  - @memberjunction/codegen-lib@3.2.0
+  - @memberjunction/query-gen@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/testing-cli@3.2.0
+  - @memberjunction/config@3.2.0
+  - @memberjunction/core@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

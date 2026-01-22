@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-bootstrap",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "description": "MemberJunction Angular Bootstrap - Encapsulates all Angular authentication and initialization logic",
   "main": "./dist/fesm2022/memberjunction-ng-bootstrap.mjs",
   "types": "./dist/index.d.ts",
@@ -29,10 +29,10 @@
     "rxjs": "^7.8.1"
   },
   "dependencies": {
-    "@memberjunction/core": "3.1.1",
-    "@memberjunction/graphql-dataprovider": "3.1.1",
-    "@memberjunction/ng-auth-services": "3.1.1",
-    "@memberjunction/ng-shared": "3.1.1",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/graphql-dataprovider": "3.2.0",
+    "@memberjunction/ng-auth-services": "3.2.0",
+    "@memberjunction/ng-shared": "3.2.0",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {

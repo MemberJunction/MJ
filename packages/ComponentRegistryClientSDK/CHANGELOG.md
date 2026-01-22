@@ -1,5 +1,14 @@
 # @memberjunction/component-registry-client-sdk
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [cbd2714]
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

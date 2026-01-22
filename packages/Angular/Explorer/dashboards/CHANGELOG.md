@@ -1,5 +1,49 @@
 # @memberjunction/ng-dashboards
 
+## 3.2.0
+
+### Minor Changes
+
+- 582ca0c: Added unified notification system with email/SMS delivery, user notification preferences, and agent completion notifications
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/ng-core-entity-forms@3.2.0
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/skip-types@3.2.0
+  - @memberjunction/ng-explorer-settings@3.2.0
+  - @memberjunction/ai-engine-base@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/ng-base-application@3.2.0
+  - @memberjunction/ng-shared@3.2.0
+  - @memberjunction/ng-user-view-grid@3.2.0
+  - @memberjunction/ng-testing@3.2.0
+  - @memberjunction/ng-action-gallery@3.2.0
+  - @memberjunction/ng-ai-test-harness@3.2.0
+  - @memberjunction/ng-code-editor@3.2.0
+  - @memberjunction/ng-dashboard-viewer@3.2.0
+  - @memberjunction/ng-entity-viewer@3.2.0
+  - @memberjunction/ng-list-management@3.2.0
+  - @memberjunction/ng-notifications@3.2.0
+  - @memberjunction/ng-query-viewer@3.2.0
+  - @memberjunction/ng-react@3.2.0
+  - @memberjunction/ng-shared-generic@3.2.0
+  - @memberjunction/templates-base-types@3.2.0
+  - @memberjunction/testing-engine-base@3.2.0
+  - @memberjunction/ng-container-directives@3.2.0
+  - @memberjunction/ng-entity-relationship-diagram@3.2.0
+  - @memberjunction/ng-export-service@3.2.0
+  - @memberjunction/ng-filter-builder@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/export-engine@3.2.0
+  - @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

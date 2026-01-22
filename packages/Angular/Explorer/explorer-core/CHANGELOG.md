@@ -1,5 +1,55 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 3.2.0
+
+### Minor Changes
+
+- 582ca0c: Added unified notification system with email/SMS delivery, user notification preferences, and agent completion notifications
+
+### Patch Changes
+
+- 293d656: fix missing comment from Soham's PR
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ng-file-storage@3.2.0
+  - @memberjunction/ng-artifacts@3.2.0
+  - @memberjunction/ng-explorer-settings@3.2.0
+  - @memberjunction/ng-dashboards@3.2.0
+  - @memberjunction/ai-engine-base@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/ng-base-application@3.2.0
+  - @memberjunction/ng-base-forms@3.2.0
+  - @memberjunction/ng-compare-records@3.2.0
+  - @memberjunction/ng-entity-form-dialog@3.2.0
+  - @memberjunction/ng-entity-permissions@3.2.0
+  - @memberjunction/ng-list-detail-grid@3.2.0
+  - @memberjunction/ng-record-changes@3.2.0
+  - @memberjunction/ng-shared@3.2.0
+  - @memberjunction/ng-user-view-grid@3.2.0
+  - @memberjunction/ng-user-view-properties@3.2.0
+  - @memberjunction/ng-ai-test-harness@3.2.0
+  - @memberjunction/ng-conversations@3.2.0
+  - @memberjunction/ng-dashboard-viewer@3.2.0
+  - @memberjunction/ng-entity-viewer@3.2.0
+  - @memberjunction/ng-notifications@3.2.0
+  - @memberjunction/ng-query-grid@3.2.0
+  - @memberjunction/ng-record-selector@3.2.0
+  - @memberjunction/ng-resource-permissions@3.2.0
+  - @memberjunction/ng-shared-generic@3.2.0
+  - @memberjunction/ng-user-avatar@3.2.0
+  - @memberjunction/communication-types@3.2.0
+  - @memberjunction/entity-communications-client@3.2.0
+  - @memberjunction/templates-base-types@3.2.0
+  - @memberjunction/ng-auth-services@3.2.0
+  - @memberjunction/ng-container-directives@3.2.0
+  - @memberjunction/ng-generic-dialog@3.2.0
+  - @memberjunction/ng-tabstrip@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

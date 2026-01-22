@@ -1,5 +1,14 @@
 # @memberjunction/ai-vertex
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [cbd2714]
+  - @memberjunction/ai-gemini@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

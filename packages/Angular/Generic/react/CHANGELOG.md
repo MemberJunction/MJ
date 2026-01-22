@@ -1,5 +1,22 @@
 # @memberjunction/ng-react
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/ng-notifications@3.2.0
+  - @memberjunction/react-runtime@3.2.0
+  - @memberjunction/ai-vectors-memory@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

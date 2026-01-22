@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/core-actions
 
+## 3.2.0
+
+### Minor Changes
+
+- 6806a6c: Add enterprise file storage accounts with credential-based authentication
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [011c820]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-agents@3.2.0
+  - @memberjunction/storage@3.2.0
+  - @memberjunction/ai-agent-manager@3.2.0
+  - @memberjunction/ai-engine-base@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/aiengine@3.2.0
+  - @memberjunction/ai-prompts@3.2.0
+  - @memberjunction/ai-vector-sync@3.2.0
+  - @memberjunction/actions-base@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/communication-types@3.2.0
+  - @memberjunction/communication-engine@3.2.0
+  - @memberjunction/content-autotagging@3.2.0
+  - @memberjunction/external-change-detection@3.2.0
+  - @memberjunction/core-entities-server@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/ai-betty-bot@3.2.0
+  - @memberjunction/code-execution@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/export-engine@3.2.0
+  - @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

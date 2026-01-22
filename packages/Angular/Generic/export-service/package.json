@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-export-service",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "description": "MemberJunction: Angular export service and dialog for exporting data to Excel, CSV, and JSON",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -32,7 +32,7 @@
     "@angular/cdk": "18.2.14"
   },
   "dependencies": {
-    "@memberjunction/export-engine": "3.1.1",
+    "@memberjunction/export-engine": "3.2.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

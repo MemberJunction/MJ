@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 3.2.0
+
+### Minor Changes
+
+- 582ca0c: Added unified notification system with email/SMS delivery, user notification preferences, and agent completion notifications
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/ng-base-application@3.2.0
+  - @memberjunction/ng-base-forms@3.2.0
+  - @memberjunction/ng-compare-records@3.2.0
+  - @memberjunction/ng-entity-form-dialog@3.2.0
+  - @memberjunction/ng-entity-permissions@3.2.0
+  - @memberjunction/ng-shared@3.2.0
+  - @memberjunction/ng-simple-record-list@3.2.0
+  - @memberjunction/ng-user-view-grid@3.2.0
+  - @memberjunction/ng-code-editor@3.2.0
+  - @memberjunction/ng-join-grid@3.2.0
+  - @memberjunction/ng-notifications@3.2.0
+  - @memberjunction/ng-shared-generic@3.2.0
+  - @memberjunction/ng-user-avatar@3.2.0
+  - @memberjunction/ng-container-directives@3.2.0
+  - @memberjunction/ng-tabstrip@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes

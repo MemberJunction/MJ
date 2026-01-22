@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/core-entities
 
+## 3.2.0
+
+### Minor Changes
+
+- 039983c: migration
+- 6806a6c: Add enterprise file storage accounts with credential-based authentication
+- 582ca0c: Added unified notification system with email/SMS delivery, user notification preferences, and agent completion notifications
+
+### Patch Changes
+
+- Updated dependencies [cbd2714]
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
 ## 3.1.1
 
 ### Patch Changes
