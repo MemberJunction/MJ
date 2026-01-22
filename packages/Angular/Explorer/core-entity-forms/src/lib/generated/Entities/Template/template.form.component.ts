@@ -21,7 +21,9 @@ export class TemplateFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'templateContents', sectionName: 'Template Contents', isExpanded: false },
             { sectionKey: 'templateParams', sectionName: 'Template Params', isExpanded: false },
+            { sectionKey: 'mJUserNotificationTypes', sectionName: 'MJ: User Notification Types', isExpanded: false },
             { sectionKey: 'aIPrompts', sectionName: 'AI Prompts', isExpanded: false },
+            { sectionKey: 'mJUserNotificationTypes1', sectionName: 'MJ: User Notification Types', isExpanded: false },
             { sectionKey: 'entityDocuments', sectionName: 'Entity Documents', isExpanded: false }
         ]);
     }
