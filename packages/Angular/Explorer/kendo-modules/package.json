@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-kendo-modules",
-  "version": "3.0.0",
+  "version": "3.1.1",
   "description": "MemberJunction: Consolidated Kendo UI Modules Bundle",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ng-notifications@3.1.1
+- @memberjunction/ng-compare-records@3.1.1
+- @memberjunction/ng-base-types@3.1.1
+- @memberjunction/ng-container-directives@3.1.1
+- @memberjunction/ng-generic-dialog@3.1.1
+- @memberjunction/ng-shared-generic@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

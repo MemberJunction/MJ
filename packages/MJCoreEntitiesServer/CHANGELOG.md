@@ -1,5 +1,24 @@
 # @memberjunction/core-entities-server
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@3.1.1
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/aiengine@3.1.1
+- @memberjunction/ai-prompts@3.1.1
+- @memberjunction/ai-provider-bundle@3.1.1
+- @memberjunction/ai-vector-dupe@3.1.1
+- @memberjunction/actions-base@3.1.1
+- @memberjunction/doc-utils@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+- @memberjunction/skip-types@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

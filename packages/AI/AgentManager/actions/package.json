@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-agent-manager-actions",
-  "version": "3.0.0",
+  "version": "3.1.1",
   "description": "Agent Management actions for creating and managing AI agents in MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,14 +19,14 @@
   "author": "MemberJunction",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "3.0.0",
-    "@memberjunction/actions-base": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/core-entities": "3.0.0",
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/ai-agent-manager": "3.0.0",
-    "@memberjunction/ai-core-plus": "3.0.0",
-    "@memberjunction/ai-engine-base": "3.0.0"
+    "@memberjunction/actions": "3.1.1",
+    "@memberjunction/actions-base": "3.1.1",
+    "@memberjunction/core": "3.1.1",
+    "@memberjunction/core-entities": "3.1.1",
+    "@memberjunction/global": "3.1.1",
+    "@memberjunction/ai-agent-manager": "3.1.1",
+    "@memberjunction/ai-core-plus": "3.1.1",
+    "@memberjunction/ai-engine-base": "3.1.1"
   },
   "devDependencies": {
     "@types/node": "^18.11.0",

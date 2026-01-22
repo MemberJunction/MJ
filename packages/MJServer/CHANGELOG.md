@@ -1,5 +1,55 @@
 # Change Log - @memberjunction/server
 
+## 3.1.1
+
+### Patch Changes
+
+- 8c0b624: no migration
+- Updated dependencies [8c0b624]
+  - @memberjunction/graphql-dataprovider@3.1.1
+  - @memberjunction/ai-agent-manager-actions@3.1.1
+  - @memberjunction/ai-agent-manager@3.1.1
+  - @memberjunction/ai-agents@3.1.1
+  - @memberjunction/ai@3.1.1
+  - @memberjunction/ai-core-plus@3.1.1
+  - @memberjunction/aiengine@3.1.1
+  - @memberjunction/ai-prompts@3.1.1
+  - @memberjunction/ai-provider-bundle@3.1.1
+  - @memberjunction/ai-vectors-pinecone@3.1.1
+  - @memberjunction/actions-apollo@3.1.1
+  - @memberjunction/actions-bizapps-accounting@3.1.1
+  - @memberjunction/actions-bizapps-crm@3.1.1
+  - @memberjunction/actions-bizapps-formbuilders@3.1.1
+  - @memberjunction/actions-bizapps-lms@3.1.1
+  - @memberjunction/actions-bizapps-social@3.1.1
+  - @memberjunction/core-actions@3.1.1
+  - @memberjunction/actions@3.1.1
+  - @memberjunction/entity-communications-server@3.1.1
+  - @memberjunction/communication-ms-graph@3.1.1
+  - @memberjunction/communication-sendgrid@3.1.1
+  - @memberjunction/component-registry-client-sdk@3.1.1
+  - @memberjunction/config@3.1.1
+  - @memberjunction/doc-utils@3.1.1
+  - @memberjunction/encryption@3.1.1
+  - @memberjunction/external-change-detection@3.1.1
+  - @memberjunction/interactive-component-types@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/core-entities-server@3.1.1
+  - @memberjunction/data-context@3.1.1
+  - @memberjunction/data-context-server@3.1.1
+  - @memberjunction/global@3.1.1
+  - @memberjunction/queue@3.1.1
+  - @memberjunction/storage@3.1.1
+  - @memberjunction/sqlserver-dataprovider@3.1.1
+  - @memberjunction/scheduling-actions@3.1.1
+  - @memberjunction/scheduling-engine-base@3.1.1
+  - @memberjunction/scheduling-base-types@3.1.1
+  - @memberjunction/scheduling-engine@3.1.1
+  - @memberjunction/skip-types@3.1.1
+  - @memberjunction/templates@3.1.1
+  - @memberjunction/testing-engine@3.1.1
+
 ## 3.0.0
 
 ### Major Changes

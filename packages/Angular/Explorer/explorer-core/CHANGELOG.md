@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ng-dashboards@3.1.1
+- @memberjunction/ng-explorer-settings@3.1.1
+- @memberjunction/ng-shared@3.1.1
+- @memberjunction/ng-user-view-grid@3.1.1
+- @memberjunction/ng-ai-test-harness@3.1.1
+- @memberjunction/ng-conversations@3.1.1
+- @memberjunction/ng-file-storage@3.1.1
+- @memberjunction/ng-notifications@3.1.1
+- @memberjunction/entity-communications-client@3.1.1
+- @memberjunction/ng-base-forms@3.1.1
+- @memberjunction/ng-entity-form-dialog@3.1.1
+- @memberjunction/ng-entity-permissions@3.1.1
+- @memberjunction/ng-list-detail-grid@3.1.1
+- @memberjunction/ng-user-view-properties@3.1.1
+- @memberjunction/ng-query-grid@3.1.1
+- @memberjunction/ng-record-selector@3.1.1
+- @memberjunction/ng-record-changes@3.1.1
+- @memberjunction/ng-artifacts@3.1.1
+- @memberjunction/ng-resource-permissions@3.1.1
+- @memberjunction/ng-dashboard-viewer@3.1.1
+- @memberjunction/ai-engine-base@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/ng-auth-services@3.1.1
+- @memberjunction/ng-base-application@3.1.1
+- @memberjunction/ng-compare-records@3.1.1
+- @memberjunction/ng-container-directives@3.1.1
+- @memberjunction/ng-entity-viewer@3.1.1
+- @memberjunction/ng-generic-dialog@3.1.1
+- @memberjunction/ng-shared-generic@3.1.1
+- @memberjunction/ng-tabstrip@3.1.1
+- @memberjunction/ng-user-avatar@3.1.1
+- @memberjunction/communication-types@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/templates-base-types@3.1.1
+
 ## 3.0.0
 
 ### Major Changes

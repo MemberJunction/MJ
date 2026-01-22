@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-lmstudio",
-  "version": "3.0.0",
+  "version": "3.1.1",
   "description": "MemberJunction Wrapper for LM Studio AI - Local Inference Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,8 +19,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "3.0.0",
-    "@memberjunction/global": "3.0.0",
+    "@memberjunction/ai": "3.1.1",
+    "@memberjunction/global": "3.1.1",
     "@lmstudio/sdk": "^1.4.0"
   },
   "repository": {
