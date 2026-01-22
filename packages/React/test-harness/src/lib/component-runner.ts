@@ -1030,11 +1030,58 @@ export class ComponentRunner {
         }
       });
 
-      // Get the rendered HTML
-      const html = await page.content();
+      // Get the rendered HTML with size protection
+      // Node.js has a maximum string length of ~536MB (0x1fffffe8 characters)
+      // If content is too large, it will crash the process with ERR_STRING_TOO_LONG
+      let html: string;
+      let screenshot: Buffer;
 
-      // Take screenshot
-      const screenshot = await page.screenshot();
+      try {
+        // Try to get HTML content with a reasonable size limit
+        html = await page.content();
+
+        // Check if HTML is excessively large (>100MB is suspicious)
+        const htmlSizeEstimate = Buffer.byteLength(html, 'utf8');
+        const maxSafeSize = 100 * 1024 * 1024; // 100MB
+
+        if (htmlSizeEstimate > maxSafeSize) {
+          console.warn(`⚠️ HTML content is very large (${Math.round(htmlSizeEstimate / 1024 / 1024)}MB). Truncating to prevent crashes.`);
+          // Truncate to a safe size
+          html = html.substring(0, maxSafeSize) + '\n<!-- TRUNCATED: Content exceeded safe size limit -->';
+          errors.push(`HTML content too large (${Math.round(htmlSizeEstimate / 1024 / 1024)}MB). This may indicate excessive data or a render issue.`);
+        }
+      } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (errorMsg.includes('string longer than') || errorMsg.includes('ERR_STRING_TOO_LONG')) {
+          console.error('❌ HTML content exceeds Node.js maximum string length. Cannot capture page content.');
+          html = '<html><body><!-- ERROR: Content too large to capture (exceeds Node.js string limit) --></body></html>';
+          errors.push('HTML content exceeds maximum size (>536MB). Component may be rendering too much data.');
+        } else {
+          console.error('❌ Failed to capture HTML content:', errorMsg);
+          html = '<html><body><!-- ERROR: Failed to capture content --></body></html>';
+          errors.push(`Failed to capture HTML: ${errorMsg}`);
+        }
+      }
+
+      // Take screenshot with size protection
+      try {
+        screenshot = await page.screenshot();
+
+        // Check screenshot size (should be reasonable)
+        const screenshotSize = screenshot.length;
+        const maxScreenshotSize = 50 * 1024 * 1024; // 50MB
+
+        if (screenshotSize > maxScreenshotSize) {
+          console.warn(`⚠️ Screenshot is very large (${Math.round(screenshotSize / 1024 / 1024)}MB). This is unusual.`);
+          // Keep the screenshot but add a warning
+          warnings.push(`Screenshot size is unusually large (${Math.round(screenshotSize / 1024 / 1024)}MB).`);
+        }
+      } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error('❌ Failed to capture screenshot:', errorMsg);
+        screenshot = Buffer.from('');
+        // Don't add to errors - screenshot is not critical for functionality
+      }
 
       // Check for excessive render count first
       const hasRenderLoop = renderCount > ComponentRunner.MAX_RENDER_COUNT;

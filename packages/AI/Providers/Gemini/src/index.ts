@@ -268,10 +268,60 @@ export class GeminiLLM extends BaseLLM {
                 message: finalMessageParts,
                 config: modelOptions
             });
-            
-            const rawContent = result.candidates?.[0]?.content?.parts?.find(part => part.text && !part.thought)?.text || '';
-            const thinking = result.candidates?.[0]?.content?.parts?.find(part => part.thought)?.text || '';
-            
+
+            // Check for blocked response or empty candidates
+            if (!result.candidates || result.candidates.length === 0) {
+                // Response was blocked or failed - check promptFeedback for details
+                const blockReason = (result as any).promptFeedback?.blockReason;
+                const safetyRatings = (result as any).promptFeedback?.safetyRatings;
+
+                let errorMessage = 'No output received from model';
+                if (blockReason) {
+                    errorMessage += `: Blocked (${blockReason})`;
+                    if (safetyRatings && safetyRatings.length > 0) {
+                        const blockedCategories = safetyRatings
+                            .filter((r: any) => r.blocked)
+                            .map((r: any) => r.category)
+                            .join(', ');
+                        if (blockedCategories) {
+                            errorMessage += ` - Categories: ${blockedCategories}`;
+                        }
+                    }
+                } else if (result.usageMetadata?.candidatesTokenCount === 0) {
+                    errorMessage += ': Model returned 0 completion tokens (possible timeout or internal error)';
+                }
+
+                throw new Error(errorMessage);
+            }
+
+            // Check finishReason for blocking or errors
+            const candidate = result.candidates[0];
+            const finishReason = (candidate as any).finishReason;
+
+            // Detect problematic finishReasons that indicate the response should not be used
+            if (finishReason && ['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'MODEL_ARMOR'].includes(finishReason)) {
+                const safetyRatings = (candidate as any).safetyRatings || [];
+                const blockedCategories = safetyRatings
+                    .filter((r: any) => r.blocked || (r.probability && ['HIGH', 'MEDIUM'].includes(r.probability)))
+                    .map((r: any) => `${r.category}(${r.probability})`)
+                    .join(', ');
+
+                throw new Error(`Content blocked by model: ${finishReason}${blockedCategories ? ` - ${blockedCategories}` : ''}`);
+            }
+
+            const rawContent = candidate.content?.parts?.find(part => part.text && !part.thought)?.text || '';
+            const thinking = candidate.content?.parts?.find(part => part.thought)?.text || '';
+
+            // Check if we got empty content despite no blocking
+            if (!rawContent && !thinking) {
+                const usage = result.usageMetadata;
+                throw new Error(
+                    `No output received from model (finishReason: ${finishReason || 'none'}, ` +
+                    `promptTokens: ${usage?.promptTokenCount || 0}, ` +
+                    `completionTokens: ${usage?.candidatesTokenCount || 0})`
+                );
+            }
+
             // Extract thinking content if present
             let content: string = rawContent.trim();
             let thinkingContent: string | undefined = undefined;
@@ -286,7 +336,7 @@ export class GeminiLLM extends BaseLLM {
             else {
                 thinkingContent = thinking;
             }
-            
+
             const endTime = new Date();
             return {
                 success: true,
@@ -296,12 +346,12 @@ export class GeminiLLM extends BaseLLM {
                 timeElapsed: endTime.getTime() - startTime.getTime(),
                 data: {
                     choices: [{
-                        message: { 
-                            role: 'assistant', 
+                        message: {
+                            role: 'assistant',
                             content: content,
                             thinking: thinkingContent || undefined
                         },
-                        finish_reason: "completed",
+                        finish_reason: finishReason || "completed",
                         index: 0
                     }],
                     usage: new ModelUsage(
@@ -634,16 +684,57 @@ export class GeminiLLM extends BaseLLM {
         if (lastChunk?.candidates && lastChunk.candidates.length > 0 && lastChunk.candidates[0].finishReason) {
             finishReason = lastChunk.candidates[0].finishReason;
         }
-        
-        // Create dates (will be overridden by base class)
-        const now = new Date();
-        
-        // Create a proper ChatResult instance with constructor params
-        const result = new ChatResult(true, now, now);
-        
+
         // Get thinking content from streaming state
         const thinkingContent = this._streamingState.accumulatedThinking.trim();
-        
+        const hasContent = (accumulatedContent && accumulatedContent.trim().length > 0) || thinkingContent.length > 0;
+
+        // Check for problematic finishReasons in streaming responses
+        if (finishReason && ['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'MODEL_ARMOR'].includes(finishReason)) {
+            const safetyRatings = lastChunk?.candidates?.[0]?.safetyRatings || [];
+            const blockedCategories = safetyRatings
+                .filter((r: any) => r.blocked || (r.probability && ['HIGH', 'MEDIUM'].includes(r.probability)))
+                .map((r: any) => `${r.category}(${r.probability})`)
+                .join(', ');
+
+            // Create error result for blocked content
+            const now = new Date();
+            const errorResult = new ChatResult(false, now, now);
+            errorResult.statusText = 'Content blocked';
+            errorResult.errorMessage = `Content blocked by model: ${finishReason}${blockedCategories ? ` - ${blockedCategories}` : ''}`;
+            errorResult.exception = new Error(errorResult.errorMessage);
+            errorResult.errorInfo = ErrorAnalyzer.analyzeError(errorResult.exception, 'Gemini');
+            errorResult.data = {
+                choices: [],
+                usage: usage || new ModelUsage(0, 0)
+            };
+            return errorResult;
+        }
+
+        // Check for empty response (no content received)
+        if (!hasContent) {
+            const now = new Date();
+            const errorResult = new ChatResult(false, now, now);
+            const usageMetadata = usage || lastChunk?.usageMetadata;
+            errorResult.statusText = 'No output received';
+            errorResult.errorMessage = `No output received from model in streaming response (finishReason: ${finishReason || 'none'}, ` +
+                `promptTokens: ${usageMetadata?.promptTokenCount || 0}, ` +
+                `completionTokens: ${usageMetadata?.candidatesTokenCount || 0})`;
+            errorResult.exception = new Error(errorResult.errorMessage);
+            errorResult.errorInfo = ErrorAnalyzer.analyzeError(errorResult.exception, 'Gemini');
+            errorResult.data = {
+                choices: [],
+                usage: usage || new ModelUsage(0, 0)
+            };
+            return errorResult;
+        }
+
+        // Create dates (will be overridden by base class)
+        const now = new Date();
+
+        // Create a proper ChatResult instance with constructor params
+        const result = new ChatResult(true, now, now);
+
         // Set all properties
         result.data = {
             choices: [{
