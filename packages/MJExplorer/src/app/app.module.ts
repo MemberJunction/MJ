@@ -87,9 +87,8 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     // App-specific modules
     GeneratedFormsModule,
 
-    // Feedback module for bug reporting
+    // Feedback module for bug reporting (uses GraphQL mutation via standard MJ endpoint)
     FeedbackModule.forRoot({
-      apiEndpoint: 'http://localhost:4000/api/feedback',
       appName: 'MemberJunction Explorer',
       title: 'Report an Issue',
       subtitle: 'Help us improve MemberJunction Explorer',

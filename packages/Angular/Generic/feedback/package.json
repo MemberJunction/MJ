@@ -23,6 +23,7 @@
     "@angular/forms": "18.2.14"
   },
   "dependencies": {
+    "@memberjunction/graphql-dataprovider": "3.0.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-inputs": "16.2.0",

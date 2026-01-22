@@ -1,7 +1,6 @@
 import { NgModule, ModuleWithProviders } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { HttpClientModule } from '@angular/common/http';
 
 // Kendo UI modules
 import { DialogModule } from '@progress/kendo-angular-dialog';
@@ -25,6 +24,7 @@ import { FeedbackConfig, FEEDBACK_CONFIG } from './feedback.config';
  * MemberJunction Feedback Module
  *
  * Provides feedback collection and bug reporting functionality for Angular applications.
+ * Feedback is submitted via GraphQL mutation to the standard MJ GraphQL endpoint.
  *
  * @example
  * ```typescript
@@ -33,7 +33,6 @@ import { FeedbackConfig, FEEDBACK_CONFIG } from './feedback.config';
  * @NgModule({
  *   imports: [
  *     FeedbackModule.forRoot({
- *       apiEndpoint: '/api/feedback',
  *       appName: 'MemberJunction Explorer',
  *       appVersion: '1.0.0',
  *       fields: {
@@ -70,7 +69,6 @@ import { FeedbackConfig, FEEDBACK_CONFIG } from './feedback.config';
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    HttpClientModule,
     DialogModule,
     ButtonsModule,
     InputsModule,
@@ -96,7 +94,6 @@ export class FeedbackModule {
    * @example
    * ```typescript
    * FeedbackModule.forRoot({
-   *   apiEndpoint: '/api/feedback',
    *   appName: 'My Application',
    *   appVersion: environment.version,
    *   title: 'Report an Issue',

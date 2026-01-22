@@ -69,6 +69,7 @@
     "@memberjunction/storage": "3.0.0",
     "@memberjunction/templates": "3.0.0",
     "@memberjunction/testing-engine": "3.0.0",
+    "@octokit/rest": "^21.0.0",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.13",
     "@types/jsonwebtoken": "9.0.6",

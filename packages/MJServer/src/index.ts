@@ -113,6 +113,7 @@ export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
 export * from './resolvers/CreateQueryResolver.js';
 export * from './resolvers/TelemetryResolver.js';
+export * from './resolvers/FeedbackResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';

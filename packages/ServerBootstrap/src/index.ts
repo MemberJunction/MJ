@@ -51,16 +51,15 @@ export interface MJServerConfig {
    *
    * @example
    * ```typescript
-   * import { createFeedbackHandler } from '@memberjunction/feedback-server';
-   *
    * createMJServer({
    *   customMiddleware: (app) => {
-   *     app.use('/api/feedback', createFeedbackHandler({
-   *       owner: 'MemberJunction',
-   *       repo: 'MJ',
-   *       token: process.env.GITHUB_PAT!,
-   *       defaultLabels: ['user-submitted']
-   *     }));
+   *     // Add custom health check endpoint
+   *     app.get('/health', (req, res) => {
+   *       res.json({ status: 'ok', timestamp: new Date().toISOString() });
+   *     });
+   *
+   *     // Add custom API routes
+   *     app.use('/api/custom', myCustomRouter);
    *   }
    * });
    * ```
