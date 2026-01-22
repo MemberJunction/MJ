@@ -47,12 +47,6 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
     poolConfig.options!.instanceName = dbInstanceName;
 }
 
-// // Create FastMCP server instance
-// const server = new FastMCP({
-//     name: "MemberJunction",
-//     version: "1.0.0"
-// });
-
 // Create FastMCP server instance with API key authentication
 // Note: authenticate callback will be set in initializeServer after pool is created
 let server: FastMCP<{ apiKey: string; apiKeyId: string; user: UserInfo }>;
@@ -266,21 +260,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
         await loadAgentTools(contextUser);
         loadAgentRunDiagnosticTools();
         console.log("Tools loaded successfully.");
-        
-        // // Configure server options
-        // const serverOptions = {
-        //     transportType: "sse" as const,
-        //     sse: {
-        //         endpoint: "/mcp" as `/${string}`,
-        //         port: mcpServerPort
-        //     },
-        //     // Optional: Add auth configuration if needed
-        //     // auth: {
-        //     //   type: "basic",
-        //     //   username: "user",
-        //     //   password: "pass"
-        //     // }
-        // };
 
         // Configure server options with API key authentication
         const serverOptions = {
