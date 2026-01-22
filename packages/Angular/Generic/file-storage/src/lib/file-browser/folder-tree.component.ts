@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
-import { StorageAccountWithProvider } from './storage-providers-list.component';
+import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
+import { StorageAccountWithProvider } from '@memberjunction/core-entities';
 
 /**
  * Represents a breadcrumb item in the path
@@ -30,9 +30,18 @@ export interface FolderItem {
 })
 export class FolderTreeComponent {
   /**
+   * GraphQL client for file storage operations
+   */
+  private storageClient: GraphQLFileStorageClient;
+
+  /**
    * Currently selected storage account with provider details
    */
   private _account: StorageAccountWithProvider | null = null;
+
+  constructor() {
+    this.storageClient = new GraphQLFileStorageClient(GraphQLDataProvider.Instance);
+  }
 
   @Input()
   set account(value: StorageAccountWithProvider | null) {
@@ -231,64 +240,31 @@ export class FolderTreeComponent {
     this.errorMessage = null;
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
+      const listResult = await this.storageClient.ListObjects(
+        this.account.account.ID,
+        this.currentPath === '/' ? '' : this.currentPath,
+        '/'
+      );
 
-      // Use Query instead of Mutation for read operations (proper REST semantics)
-      const query = gql`
-        query ListStorageObjects($input: ListStorageObjectsInput!) {
-          ListStorageObjects(input: $input) {
-            objects {
-              name
-              fullPath
-              isDirectory
-            }
-            prefixes
-          }
-        }
-      `;
-
-      const result = await gqlProvider.ExecuteGQL(query, {
-        input: {
-          AccountID: this.account.account.ID,
-          Prefix: this.currentPath === '/' ? '' : this.currentPath,
-          Delimiter: '/'
-        }
+      console.log('[FolderTree] ListObjects result:', {
+        prefixesCount: listResult.prefixes?.length || 0,
+        prefixes: listResult.prefixes,
+        objectsCount: listResult.objects?.length || 0
       });
 
-      console.log('[FolderTree] GraphQL result:', JSON.stringify(result, null, 2));
+      // Convert prefixes to FolderItems
+      const prefixes = listResult.prefixes || [];
+      console.log('[FolderTree] Processing prefixes:', prefixes);
+      this.folders = prefixes.map((prefix: string) => {
+        // Remove trailing slash and get just the folder name
+        const cleanPath = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
+        const name = cleanPath.split('/').pop() || cleanPath;
 
-      // GraphQL result comes back directly, not wrapped in .data
-      const data = result as {
-        ListStorageObjects?: {
-          objects: Array<{ name: string; fullPath: string; isDirectory: boolean }>;
-          prefixes: string[];
+        return {
+          name,
+          fullPath: prefix
         };
-      };
-
-      console.log('[FolderTree] Parsed data:', {
-        hasListStorageObjects: !!data?.ListStorageObjects,
-        prefixesCount: data?.ListStorageObjects?.prefixes?.length || 0,
-        prefixes: data?.ListStorageObjects?.prefixes,
-        objectsCount: data?.ListStorageObjects?.objects?.length || 0
       });
-
-      if (data?.ListStorageObjects) {
-        // Convert prefixes to FolderItems
-        const prefixes = data.ListStorageObjects.prefixes || [];
-        console.log('[FolderTree] Processing prefixes:', prefixes);
-        this.folders = prefixes.map((prefix: string) => {
-          // Remove trailing slash and get just the folder name
-          const cleanPath = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
-          const name = cleanPath.split('/').pop() || cleanPath;
-
-          return {
-            name,
-            fullPath: prefix
-          };
-        });
-      } else {
-        this.folders = [];
-      }
     } catch (error) {
       console.error('Error loading folders:', error);
       this.errorMessage = error instanceof Error ? error.message : 'Failed to load folders';

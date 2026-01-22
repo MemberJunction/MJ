@@ -1,18 +1,5 @@
 import { Component, EventEmitter, OnInit, Output, ChangeDetectorRef } from '@angular/core';
-import { RunView } from '@memberjunction/core';
-import { FileStorageAccountEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
-
-/**
- * Storage account with its associated provider details for display.
- * In the enterprise model, accounts are organizational resources that link
- * to a provider type and credentials managed at the admin level.
- */
-export interface StorageAccountWithProvider {
-  /** The FileStorageAccount entity */
-  account: FileStorageAccountEntity;
-  /** The associated FileStorageProvider entity (for icon, name, capabilities) */
-  provider: FileStorageProviderEntity;
-}
+import { FileStorageEngine, StorageAccountWithProvider } from '@memberjunction/core-entities';
 
 /**
  * Displays a list of organizational file storage accounts.
@@ -60,57 +47,17 @@ export class StorageProvidersListComponent implements OnInit {
 
   /**
    * Loads all available file storage accounts with their provider details.
-   * Uses RunViews for efficient batch loading.
+   * Uses FileStorageEngine for centralized, cached access.
    */
   private async loadAccounts(): Promise<void> {
     this.isLoading = true;
     this.errorMessage = null;
 
     try {
-      const rv = new RunView();
+      const engine = FileStorageEngine.Instance;
+      await engine.Config(false);  // Use cached data if available
 
-      // Load accounts and providers in parallel using RunViews
-      const [accountsResult, providersResult] = await rv.RunViews([
-        {
-          EntityName: 'MJ: File Storage Accounts',
-          ExtraFilter: '',
-          OrderBy: 'Name ASC',
-          ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'File Storage Providers',
-          ExtraFilter: 'IsActive = 1',
-          OrderBy: 'Name ASC',
-          ResultType: 'entity_object'
-        }
-      ]);
-
-      if (!accountsResult.Success) {
-        throw new Error(accountsResult.ErrorMessage || 'Failed to load storage accounts');
-      }
-
-      if (!providersResult.Success) {
-        throw new Error(providersResult.ErrorMessage || 'Failed to load storage providers');
-      }
-
-      const accountEntities = accountsResult.Results as FileStorageAccountEntity[];
-      const providerEntities = providersResult.Results as FileStorageProviderEntity[];
-
-      // Create a map for quick provider lookup
-      const providerMap = new Map<string, FileStorageProviderEntity>();
-      providerEntities.forEach(p => providerMap.set(p.ID, p));
-
-      // Combine accounts with their providers
-      this.accounts = accountEntities
-        .map(account => {
-          const provider = providerMap.get(account.ProviderID);
-          if (!provider) {
-            console.warn(`Provider not found for account "${account.Name}" (ProviderID: ${account.ProviderID})`);
-            return null;
-          }
-          return { account, provider };
-        })
-        .filter((item): item is StorageAccountWithProvider => item !== null);
+      this.accounts = engine.AccountsWithProviders;
 
       console.log('[StorageAccountsList] Loaded accounts:', this.accounts.map(a => ({
         name: a.account.Name,
@@ -126,8 +73,8 @@ export class StorageProvidersListComponent implements OnInit {
       }
 
     } catch (error) {
-      this.errorMessage = 'An error occurred while loading storage accounts';
-      console.error('Exception loading storage accounts:', error);
+      this.errorMessage = error instanceof Error ? error.message : 'Failed to load storage accounts';
+      console.error('[StorageProvidersList] Error loading accounts:', error);
     } finally {
       this.isLoading = false;
       this.cdr.detectChanges();
@@ -175,9 +122,9 @@ export class StorageProvidersListComponent implements OnInit {
   }
 
   /**
-   * Refreshes the accounts list.
+   * Refreshes the accounts list by forcing a reload from the database.
    */
   public refresh(): void {
-    this.loadAccounts();
+    FileStorageEngine.Instance.Config(true).then(() => this.loadAccounts());
   }
 }

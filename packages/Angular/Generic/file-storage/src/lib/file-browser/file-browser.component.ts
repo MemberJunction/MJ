@@ -1,6 +1,6 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, ViewChild } from '@angular/core';
 import { FolderTreeComponent } from './folder-tree.component';
-import { StorageAccountWithProvider } from './storage-providers-list.component';
+import { StorageAccountWithProvider } from '@memberjunction/core-entities';
 
 /**
  * Mac Finder-style file browser component with three-panel layout.
@@ -14,22 +14,24 @@ import { StorageAccountWithProvider } from './storage-providers-list.component';
  * rather than connecting their own OAuth credentials.
  *
  * Features responsive design with collapsible sidebar for mobile devices.
+ * Responsive layout is handled via CSS media queries.
  */
 @Component({
   selector: 'mj-file-browser',
   templateUrl: './file-browser.component.html',
   styleUrls: ['./file-browser.component.css'],
 })
-export class FileBrowserComponent implements OnInit {
+export class FileBrowserComponent {
   /**
    * Reference to the folder tree component for programmatic navigation
    */
   @ViewChild(FolderTreeComponent) folderTree!: FolderTreeComponent;
 
   /**
-   * Controls visibility of the accounts sidebar on mobile devices.
+   * Controls manual collapse of the sidebar (toggle button on mobile).
+   * CSS media queries handle the responsive layout automatically.
    */
-  public isSidebarVisible: boolean = true;
+  public isSidebarCollapsed: boolean = false;
 
   /**
    * Currently selected storage account with its provider details.
@@ -43,25 +45,12 @@ export class FileBrowserComponent implements OnInit {
 
   constructor() {}
 
-  ngOnInit(): void {
-    this.initializeResponsiveLayout();
-  }
-
-  /**
-   * Initializes responsive layout based on screen size.
-   * Collapses sidebar on mobile devices by default.
-   */
-  private initializeResponsiveLayout(): void {
-    const isMobile = window.innerWidth < 768;
-    this.isSidebarVisible = !isMobile;
-  }
-
   /**
    * Toggles the visibility of the accounts sidebar.
-   * Used for mobile responsive design.
+   * Used for manual toggle on mobile devices.
    */
   public toggleSidebar(): void {
-    this.isSidebarVisible = !this.isSidebarVisible;
+    this.isSidebarCollapsed = !this.isSidebarCollapsed;
   }
 
   /**
@@ -104,21 +93,6 @@ export class FileBrowserComponent implements OnInit {
       // Trigger a refresh of the folder tree without changing navigation
       // This will reload the folders at the current location
       this.folderTree.refresh();
-    }
-  }
-
-  /**
-   * Window resize handler for responsive layout adjustments.
-   * Automatically shows/hides sidebar based on viewport width.
-   */
-  public onWindowResize(event: Event): void {
-    const target = event.target as Window;
-    const isMobile = target.innerWidth < 768;
-
-    if (isMobile && this.isSidebarVisible) {
-      this.isSidebarVisible = false;
-    } else if (!isMobile && !this.isSidebarVisible) {
-      this.isSidebarVisible = true;
     }
   }
 }

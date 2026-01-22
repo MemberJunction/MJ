@@ -1,26 +1,33 @@
-/**
- * MemberJunction API Server (MJ 3.0 Minimal Architecture)
- * All initialization logic is in @memberjunction/server-bootstrap
- */
-import { createMJServer } from '@memberjunction/server-bootstrap';
 import { fileURLToPath } from 'node:url';
+import { serve } from '@memberjunction/server';
 import { resolve } from 'node:path';
+import { LoadGeneratedEntities } from 'mj_generatedentities';
+LoadGeneratedEntities();
+import { LoadGeneratedActions } from 'mj_generatedactions';
+LoadGeneratedActions();
+import { LoadProvider } from '@memberjunction/communication-sendgrid';
+LoadProvider();
 
-// Import generated packages to trigger class registration
-import 'mj_generatedentities';
-import 'mj_generatedactions';
+//import './auth/exampleNewUserSubClass'; // make sure this new class gets registered
+ 
+const localPath = (p: string) => {
+  // Convert import.meta.url to a local directory path
+  const dirname = fileURLToPath(new URL('.', import.meta.url));
+  // Resolve the provided path relative to the derived directory path
+  const resolvedPath = resolve(dirname, p);
+  return resolvedPath; 
+};
 
-// Optional: Import communication providers if needed
-// import '@memberjunction/communication-sendgrid';
-// import '@memberjunction/communication-teams';
+const resolverPaths = [
+  //  'resolvers/**/*Resolver.{js,ts}',
+  'generated/generated.{js,ts}',
+];
 
-// Optional: Import custom auth/user creation logic
-// See: /docs/examples/custom-user-creation/README.md
-// import './custom/customUserCreation';
-
-// Resolve resolver paths relative to this file
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const resolverPaths = [resolve(__dirname, 'generated/generated.{js,ts}')];
-
-// Start the server
-createMJServer({ resolverPaths }).catch(console.error);
+serve(resolverPaths.map(localPath))
+  .then(() => {})
+  .catch((e: unknown) => {
+    const errorString: string = JSON.stringify(e, null, 4);
+    console.error('Error starting MJAPI server:');
+    console.error(errorString);
+    console.error(e);
+  });

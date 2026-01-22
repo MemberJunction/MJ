@@ -1,4 +1,4 @@
-<div class="file-browser" (window:resize)="onWindowResize($event)">
+<div class="file-browser">
   <!-- Mobile header with sidebar toggle -->
   <div class="mobile-header">
     <button (click)="toggleSidebar()" class="sidebar-toggle">
@@ -10,7 +10,7 @@
   <!-- Main two-panel layout -->
   <div class="browser-container">
     <!-- Left Sidebar: Accounts + Categories -->
-    <div class="sidebar" [class.collapsed]="!isSidebarVisible">
+    <div class="sidebar" [class.collapsed]="isSidebarCollapsed">
       <!-- Accounts Section -->
       <div class="sidebar-section">
         <div class="section-header">

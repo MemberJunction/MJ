@@ -1,8 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { RunView } from '@memberjunction/core';
-import { FileStorageAccountEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
-import { StorageAccountWithProvider } from './storage-providers-list.component';
+import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
+import { FileStorageEngine, StorageAccountWithProvider } from '@memberjunction/core-entities';
 
 /**
  * Represents a file or folder item in the grid
@@ -205,7 +203,14 @@ export class FileGridComponent implements OnInit, OnChanges {
   public isSearching: boolean = false;
   public multiProviderSearchResults: MultiProviderSearchResult | null = null;
 
-  constructor() {}
+  /**
+   * GraphQL client for file storage operations
+   */
+  private storageClient: GraphQLFileStorageClient;
+
+  constructor() {
+    this.storageClient = new GraphQLFileStorageClient(GraphQLDataProvider.Instance);
+  }
 
   ngOnInit(): void {
     // Don't load items here - wait for ngOnChanges when inputs are set
@@ -234,64 +239,22 @@ export class FileGridComponent implements OnInit, OnChanges {
     this.errorMessage = null;
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
-
-      const query = `
-        query ListStorageObjects($input: ListStorageObjectsInput!) {
-          ListStorageObjects(input: $input) {
-            objects {
-              name
-              path
-              fullPath
-              size
-              contentType
-              lastModified
-              isDirectory
-              etag
-              cacheControl
-            }
-            prefixes
-          }
-        }
-      `;
-
-      const variables = {
-        input: {
-          AccountID: this.account.account.ID,
-          Prefix: this.folderPath || '',
-          Delimiter: '/'
-        }
-      };
-
-      console.log('[FileGrid] Loading items with variables:', variables);
+      console.log('[FileGrid] Loading items for account:', this.account.account.ID, 'path:', this.folderPath);
       console.log('[FileGrid] Previous items:', { count: previousItemCount, names: previousItemNames });
 
-      const result = await gqlProvider.ExecuteGQL(query, variables);
+      const listResult = await this.storageClient.ListObjects(
+        this.account.account.ID,
+        this.folderPath || '',
+        '/'
+      );
 
-      console.log('[FileGrid] GraphQL result:', result);
-
-      const data = result as {
-        ListStorageObjects: {
-          objects: Array<{
-            name: string;
-            path: string;
-            fullPath: string;
-            size: number;
-            contentType: string;
-            lastModified: string;
-            isDirectory: boolean;
-            etag?: string;
-            cacheControl?: string;
-          }>;
-          prefixes: string[];
-        }
-      };
+      console.log('[FileGrid] ListObjects result:', listResult);
 
       this.items = [];
 
       // Add folders from prefixes first (so they appear before files)
-      if (data.ListStorageObjects.prefixes) {
-        for (const prefix of data.ListStorageObjects.prefixes) {
+      if (listResult.prefixes) {
+        for (const prefix of listResult.prefixes) {
           // Extract the folder name from the prefix path
           // Prefix comes as "path/to/folder/" so we need to get just "folder"
           const folderName = prefix.endsWith('/')
@@ -312,8 +275,8 @@ export class FileGridComponent implements OnInit, OnChanges {
       }
 
       // Add files from objects
-      if (data.ListStorageObjects.objects) {
-        for (const obj of data.ListStorageObjects.objects) {
+      if (listResult.objects) {
+        for (const obj of listResult.objects) {
           // Skip directories from objects - we already added them from prefixes
           if (obj.isDirectory) {
             continue;
@@ -324,7 +287,7 @@ export class FileGridComponent implements OnInit, OnChanges {
             name: obj.name,
             type: 'file',
             size: obj.size,
-            lastModified: new Date(obj.lastModified),
+            lastModified: obj.lastModified,
             contentType: obj.contentType,
             etag: obj.etag
           });
@@ -512,27 +475,12 @@ export class FileGridComponent implements OnInit, OnChanges {
     try {
       console.log('[FileGrid] Downloading file:', item.key);
 
-      const gqlProvider = GraphQLDataProvider.Instance;
+      const downloadUrl = await this.storageClient.CreatePreAuthDownloadUrl(
+        this.account.account.ID,
+        item.key
+      );
 
-      // Use the CreatePreAuthDownloadUrl mutation to get a signed URL
-      const query = `
-        query CreatePreAuthDownloadUrl($input: CreatePreAuthDownloadUrlInput!) {
-          CreatePreAuthDownloadUrl(input: $input)
-        }
-      `;
-
-      const variables = {
-        input: {
-          AccountID: this.account.account.ID,
-          ObjectName: item.key
-        }
-      };
-
-      const result = await gqlProvider.ExecuteGQL(query, variables);
-
-      console.log('[FileGrid] GraphQL result:', result);
-
-      const downloadUrl = result.CreatePreAuthDownloadUrl as string;
+      console.log('[FileGrid] Download URL created:', downloadUrl ? 'success' : 'failed');
 
       if (downloadUrl) {
         // Trigger browser download
@@ -546,7 +494,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
         console.log('[FileGrid] File download initiated:', item.name);
       } else {
-        console.error('[FileGrid] Failed to get download URL - result was:', result);
+        console.error('[FileGrid] Failed to get download URL');
         this.errorMessage = 'Failed to generate download URL';
       }
     } catch (error) {
@@ -765,8 +713,6 @@ export class FileGridComponent implements OnInit, OnChanges {
     this.uploadProgress = 0;
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
-
       // Construct the full object name with folder path
       // Remove trailing slash from folderPath to avoid double slashes
       let objectName: string;
@@ -782,30 +728,16 @@ export class FileGridComponent implements OnInit, OnChanges {
       console.log('[FileGrid] Getting upload URL for:', objectName);
 
       // Get pre-authenticated upload URL
-      const query = `
-        mutation CreatePreAuthUploadUrl($input: CreatePreAuthUploadUrlInput!) {
-          CreatePreAuthUploadUrl(input: $input) {
-            UploadUrl
-            ProviderKey
-          }
-        }
-      `;
+      const uploadData = await this.storageClient.CreatePreAuthUploadUrl(
+        this.account.account.ID,
+        objectName,
+        file.type || 'application/octet-stream'
+      );
 
-      const variables = {
-        input: {
-          AccountID: this.account.account.ID,
-          ObjectName: objectName,
-          ContentType: file.type || 'application/octet-stream'
-        }
-      };
-
-      const result = await gqlProvider.ExecuteGQL(query, variables);
-      const uploadData = result.CreatePreAuthUploadUrl as { UploadUrl: string; ProviderKey?: string };
-
-      console.log('[FileGrid] Got upload URL:', uploadData.UploadUrl);
+      console.log('[FileGrid] Got upload URL:', uploadData.uploadUrl);
 
       // Upload the file using XMLHttpRequest to track progress
-      await this.uploadFileToUrl(file, uploadData.UploadUrl);
+      await this.uploadFileToUrl(file, uploadData.uploadUrl);
 
       console.log('[FileGrid] File uploaded successfully:', file.name);
 
@@ -898,8 +830,6 @@ export class FileGridComponent implements OnInit, OnChanges {
     this.isCreatingFolder = true;
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
-
       // Construct the full folder path
       // Remove trailing slash from folderPath to avoid double slashes
       let folderPath: string;
@@ -914,22 +844,10 @@ export class FileGridComponent implements OnInit, OnChanges {
 
       console.log('[FileGrid] Creating folder:', folderPath);
 
-      // Call CreateDirectory mutation
-      const query = `
-        mutation CreateDirectory($input: CreateDirectoryInput!) {
-          CreateDirectory(input: $input)
-        }
-      `;
-
-      const variables = {
-        input: {
-          AccountID: this.account.account.ID,
-          Path: folderPath
-        }
-      };
-
-      const result = await gqlProvider.ExecuteGQL(query, variables);
-      const success = result.CreateDirectory as boolean;
+      const success = await this.storageClient.CreateDirectory(
+        this.account.account.ID,
+        folderPath
+      );
 
       if (success) {
         console.log('[FileGrid] Folder created successfully:', folderPath);
@@ -1003,30 +921,17 @@ export class FileGridComponent implements OnInit, OnChanges {
     this.isDeleting = true;
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
-
       // Construct the full path to the item
       const itemPath = this.constructItemPath(this.itemToDelete);
 
       console.log('[FileGrid] Deleting item:', itemPath);
 
-      const query = `
-        mutation DeleteStorageObject($input: DeleteStorageObjectInput!) {
-          DeleteStorageObject(input: $input)
-        }
-      `;
+      const success = await this.storageClient.DeleteObject(
+        this.account.account.ID,
+        itemPath
+      );
 
-      const variables = {
-        input: {
-          AccountID: this.account.account.ID,
-          ObjectName: itemPath
-        }
-      };
-
-      const result = await gqlProvider.ExecuteGQL(query, variables);
-      const success = result.DeleteStorageObject as boolean;
-
-      console.log('[FileGrid] Delete mutation result:', { success, result });
+      console.log('[FileGrid] Delete result:', { success });
 
       if (success) {
         console.log('[FileGrid] Item deleted successfully:', itemPath);
@@ -1126,8 +1031,6 @@ export class FileGridComponent implements OnInit, OnChanges {
     this.isRenaming = true;
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
-
       // Construct the old and new paths
       const oldPath = this.constructItemPath(this.itemToRename);
 
@@ -1138,24 +1041,13 @@ export class FileGridComponent implements OnInit, OnChanges {
 
       console.log('[FileGrid] Renaming item:', { oldPath, newPath });
 
-      const query = `
-        mutation MoveStorageObject($input: MoveStorageObjectInput!) {
-          MoveStorageObject(input: $input)
-        }
-      `;
+      const success = await this.storageClient.MoveObject(
+        this.account.account.ID,
+        oldPath,
+        newPath
+      );
 
-      const variables = {
-        input: {
-          AccountID: this.account.account.ID,
-          OldName: oldPath,
-          NewName: newPath
-        }
-      };
-
-      const result = await gqlProvider.ExecuteGQL(query, variables);
-      const success = result.MoveStorageObject as boolean;
-
-      console.log('[FileGrid] Rename mutation result:', { success, result });
+      console.log('[FileGrid] Rename result:', { success });
 
       if (success) {
         console.log('[FileGrid] Item renamed successfully:', { oldPath, newPath });
@@ -1233,26 +1125,14 @@ export class FileGridComponent implements OnInit, OnChanges {
     }
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
       const itemPath = this.constructItemPath(item);
 
       console.log('[FileGrid] Creating download URL for:', itemPath);
 
-      const query = `
-        query CreatePreAuthDownloadUrl($input: CreatePreAuthDownloadUrlInput!) {
-          CreatePreAuthDownloadUrl(input: $input)
-        }
-      `;
-
-      const variables = {
-        input: {
-          AccountID: this.account.account.ID,
-          ObjectName: itemPath
-        }
-      };
-
-      const result = await gqlProvider.ExecuteGQL(query, variables);
-      const downloadUrl = result.CreatePreAuthDownloadUrl as string;
+      const downloadUrl = await this.storageClient.CreatePreAuthDownloadUrl(
+        this.account.account.ID,
+        itemPath
+      );
 
       if (downloadUrl) {
         console.log('[FileGrid] Download URL created, initiating download');
@@ -1323,25 +1203,13 @@ export class FileGridComponent implements OnInit, OnChanges {
     this.isCopying = true;
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
       const sourcePath = this.constructItemPath(this.itemToCopy);
 
-      const query = `
-        mutation CopyStorageObject($input: CopyStorageObjectInput!) {
-          CopyStorageObject(input: $input)
-        }
-      `;
-
-      const variables = {
-        input: {
-          AccountID: this.account.account.ID,
-          SourceName: sourcePath,
-          DestinationName: this.copyDestinationPath.trim()
-        }
-      };
-
-      const result = await gqlProvider.ExecuteGQL(query, variables);
-      const success = result.CopyStorageObject as boolean;
+      const success = await this.storageClient.CopyObject(
+        this.account.account.ID,
+        sourcePath,
+        this.copyDestinationPath.trim()
+      );
 
       if (success) {
         // Close dialog
@@ -1414,28 +1282,16 @@ export class FileGridComponent implements OnInit, OnChanges {
     this.isMoving = true;
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
       const sourcePath = this.constructItemPath(this.itemToMove);
       const destPath = this.moveDestinationPath.trim().endsWith('/')
         ? this.moveDestinationPath.trim() + this.itemToMove.name
         : this.moveDestinationPath.trim();
 
-      const query = `
-        mutation MoveStorageObject($input: MoveStorageObjectInput!) {
-          MoveStorageObject(input: $input)
-        }
-      `;
-
-      const variables = {
-        input: {
-          AccountID: this.account.account.ID,
-          OldName: sourcePath,
-          NewName: destPath
-        }
-      };
-
-      const result = await gqlProvider.ExecuteGQL(query, variables);
-      const success = result.MoveStorageObject as boolean;
+      const success = await this.storageClient.MoveObject(
+        this.account.account.ID,
+        sourcePath,
+        destPath
+      );
 
       if (success) {
         const wasFolder = this.itemToMove.type === 'folder';
@@ -1527,46 +1383,13 @@ export class FileGridComponent implements OnInit, OnChanges {
       return;
     }
 
-    // Load available accounts using RunViews
     try {
-      const rv = new RunView();
-      const [accountsResult, providersResult] = await rv.RunViews([
-        {
-          EntityName: 'MJ: File Storage Accounts',
-          ExtraFilter: '',
-          OrderBy: 'Name ASC',
-          ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'File Storage Providers',
-          ExtraFilter: 'IsActive = 1',
-          OrderBy: 'Name ASC',
-          ResultType: 'entity_object'
-        }
-      ]);
-
-      if (!accountsResult.Success || !providersResult.Success) {
-        console.error('[FileGrid] Error loading accounts:', accountsResult.ErrorMessage || providersResult.ErrorMessage);
-        this.errorMessage = 'Failed to load storage accounts';
-        return;
-      }
-
-      const accounts = accountsResult.Results as FileStorageAccountEntity[];
-      const providers = providersResult.Results as FileStorageProviderEntity[];
-
-      // Create provider map for lookup
-      const providerMap = new Map<string, FileStorageProviderEntity>();
-      providers.forEach(p => providerMap.set(p.ID, p));
+      const engine = FileStorageEngine.Instance;
+      await engine.Config(false);  // Use cached data if available
 
       // Build available accounts (excluding current account)
-      this.availableAccounts = accounts
-        .filter(a => a.ID !== this.account?.account.ID)
-        .map(account => {
-          const provider = providerMap.get(account.ProviderID);
-          if (!provider) return null;
-          return { account, provider };
-        })
-        .filter((item): item is StorageAccountWithProvider => item !== null);
+      this.availableAccounts = engine.AccountsWithProviders
+        .filter(a => a.account.ID !== this.account?.account.ID);
 
       if (this.availableAccounts.length === 0) {
         this.errorMessage = 'No other storage accounts available';
@@ -1638,26 +1461,10 @@ export class FileGridComponent implements OnInit, OnChanges {
     const failedCopies: { account: string; error: string }[] = [];
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
-
       // Construct source path and normalize it
       const rawSourcePath = this.constructItemPath(this.itemToCopyToProvider);
       const sourcePath = rawSourcePath.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
       console.log('[FileGrid] Cross-account copy sourcePath:', { raw: rawSourcePath, normalized: sourcePath });
-
-      const query = `
-        mutation CopyObjectBetweenAccounts($input: CopyObjectBetweenAccountsInput!) {
-          CopyObjectBetweenAccounts(input: $input) {
-            success
-            message
-            bytesTransferred
-            sourceAccount
-            destinationAccount
-            sourcePath
-            destinationPath
-          }
-        }
-      `;
 
       // Copy to each selected account
       for (let i = 0; i < selectedAccounts.length; i++) {
@@ -1669,23 +1476,14 @@ export class FileGridComponent implements OnInit, OnChanges {
         };
 
         try {
-          const variables = {
-            input: {
-              SourceAccountID: this.account.account.ID,
-              DestinationAccountID: destAccount.account.ID,
-              SourcePath: sourcePath,
-              DestinationPath: this.copyToAccountDestinationPath
-            }
-          };
+          console.log('[FileGrid] Copying to account:', destAccount.account.Name);
 
-          console.log('[FileGrid] Copying to account:', destAccount.account.Name, variables);
-
-          const result = await gqlProvider.ExecuteGQL(query, variables);
-          const copyResult = result.CopyObjectBetweenAccounts as {
-            success: boolean;
-            message: string;
-            bytesTransferred?: number;
-          };
+          const copyResult = await this.storageClient.CopyObjectBetweenAccounts(
+            this.account.account.ID,
+            destAccount.account.ID,
+            sourcePath,
+            this.copyToAccountDestinationPath
+          );
 
           if (copyResult.success) {
             successfulCopies.push(destAccount.account.Name);
@@ -1767,37 +1565,9 @@ export class FileGridComponent implements OnInit, OnChanges {
    */
   private async loadAvailableAccountsForSearch(): Promise<void> {
     try {
-      const rv = new RunView();
-      const [accountsResult, providersResult] = await rv.RunViews([
-        {
-          EntityName: 'MJ: File Storage Accounts',
-          ExtraFilter: '',
-          OrderBy: 'Name ASC',
-          ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'File Storage Providers',
-          ExtraFilter: 'IsActive = 1',
-          OrderBy: 'Name ASC',
-          ResultType: 'entity_object'
-        }
-      ]);
-
-      if (accountsResult.Success && providersResult.Success) {
-        const accounts = accountsResult.Results as FileStorageAccountEntity[];
-        const providers = providersResult.Results as FileStorageProviderEntity[];
-
-        const providerMap = new Map<string, FileStorageProviderEntity>();
-        providers.forEach(p => providerMap.set(p.ID, p));
-
-        this.availableAccounts = accounts
-          .map(account => {
-            const provider = providerMap.get(account.ProviderID);
-            if (!provider) return null;
-            return { account, provider };
-          })
-          .filter((item): item is StorageAccountWithProvider => item !== null);
-      }
+      const engine = FileStorageEngine.Instance;
+      await engine.Config(false);  // Use cached data if available
+      this.availableAccounts = engine.AccountsWithProviders;
     } catch (error) {
       console.error('[FileGrid] Error loading accounts for search:', error);
     }
@@ -1840,57 +1610,45 @@ export class FileGridComponent implements OnInit, OnChanges {
     this.multiProviderSearchResults = null;
 
     try {
-      const gqlProvider = GraphQLDataProvider.Instance;
+      console.log('[FileGrid] Executing multi-account search:', {
+        accountIds: Array.from(this.selectedSearchProviders),
+        query: this.multiProviderSearchQuery
+      });
 
-      const query = `
-        query SearchAcrossAccounts($input: SearchAcrossAccountsInput!) {
-          SearchAcrossAccounts(input: $input) {
-            accountResults {
-              accountID
-              accountName
-              success
-              errorMessage
-              results {
-                path
-                name
-                size
-                contentType
-                lastModified
-                relevance
-                excerpt
-                matchInFilename
-                objectId
-              }
-              totalMatches
-              hasMore
-              nextPageToken
-            }
-            totalResultsReturned
-            successfulAccounts
-            failedAccounts
-          }
-        }
-      `;
+      const searchResult = await this.storageClient.SearchFiles(
+        Array.from(this.selectedSearchProviders),
+        this.multiProviderSearchQuery,
+        { maxResultsPerAccount: 50 }
+      );
 
-      const variables = {
-        input: {
-          AccountIDs: Array.from(this.selectedSearchProviders),
-          Query: this.multiProviderSearchQuery,
-          MaxResultsPerAccount: 50
-        }
+      console.log('[FileGrid] Multi-account search result:', searchResult);
+
+      // Map the client result to the component's expected format
+      this.multiProviderSearchResults = {
+        accountResults: searchResult.accountResults.map((ar: { accountId: string; accountName: string; success: boolean; errorMessage?: string; results: Array<{ path: string; name: string; size: number; contentType: string; lastModified: Date; relevance?: number; excerpt?: string; matchInFilename?: boolean; objectId?: string }>; totalMatches?: number; hasMore: boolean; nextPageToken?: string }) => ({
+          accountID: ar.accountId,
+          accountName: ar.accountName,
+          success: ar.success,
+          errorMessage: ar.errorMessage,
+          results: ar.results.map((r: { path: string; name: string; size: number; contentType: string; lastModified: Date; relevance?: number; excerpt?: string; matchInFilename?: boolean; objectId?: string }) => ({
+            path: r.path,
+            name: r.name,
+            size: r.size,
+            contentType: r.contentType,
+            lastModified: r.lastModified.toISOString(),
+            relevance: r.relevance,
+            excerpt: r.excerpt,
+            matchInFilename: r.matchInFilename,
+            objectId: r.objectId
+          })),
+          totalMatches: ar.totalMatches,
+          hasMore: ar.hasMore,
+          nextPageToken: ar.nextPageToken
+        })),
+        totalResultsReturned: searchResult.totalResultsReturned,
+        successfulAccounts: searchResult.successfulAccounts,
+        failedAccounts: searchResult.failedAccounts
       };
-
-      console.log('[FileGrid] Executing multi-account search:', variables);
-
-      const result = await gqlProvider.ExecuteGQL(query, variables);
-
-      console.log('[FileGrid] Multi-account search result:', result);
-
-      const data = result as {
-        SearchAcrossAccounts: MultiProviderSearchResult;
-      };
-
-      this.multiProviderSearchResults = data.SearchAcrossAccounts;
 
     } catch (error) {
       console.error('[FileGrid] Error executing multi-provider search:', error);

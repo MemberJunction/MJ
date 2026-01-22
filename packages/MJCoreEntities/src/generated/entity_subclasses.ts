@@ -7618,7 +7618,7 @@ export const FileStorageProviderSchema = z.object({
         * * Description: Priority order for selecting storage providers, lower numbers are preferred.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this storage provider is currently available for use.`),
@@ -7638,6 +7638,17 @@ export const FileStorageProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether this storage provider supports native full-text search across file names and content. Providers with native search APIs (Google Drive, SharePoint, Dropbox, Box) have this set to true.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON configuration for providers that don't use Credential Engine. Used as fallback when CredentialID is not set on FileStorageAccount.`),
+    RequiresOAuth: z.boolean().describe(`
+        * * Field Name: RequiresOAuth
+        * * Display Name: Requires OAuth
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If true, this provider requires OAuth authentication. Enterprise OAuth integration via Credential Engine is planned but not yet implemented.`),
 });
 
 export type FileStorageProviderEntityType = z.infer<typeof FileStorageProviderSchema>;
@@ -7706,65 +7717,6 @@ export const FileSchema = z.object({
 });
 
 export type FileEntityType = z.infer<typeof FileSchema>;
-
-/**
- * zod schema definition for the entity Flyway _schema _histories
- */
-export const flyway_schema_historySchema = z.object({
-    installed_rank: z.number().describe(`
-        * * Field Name: installed_rank
-        * * Display Name: installed _rank
-        * * SQL Data Type: int`),
-    version: z.string().nullable().describe(`
-        * * Field Name: version
-        * * Display Name: version
-        * * SQL Data Type: nvarchar(50)`),
-    description: z.string().nullable().describe(`
-        * * Field Name: description
-        * * Display Name: description
-        * * SQL Data Type: nvarchar(200)`),
-    type: z.string().describe(`
-        * * Field Name: type
-        * * Display Name: type
-        * * SQL Data Type: nvarchar(20)`),
-    script: z.string().describe(`
-        * * Field Name: script
-        * * Display Name: script
-        * * SQL Data Type: nvarchar(1000)`),
-    checksum: z.number().nullable().describe(`
-        * * Field Name: checksum
-        * * Display Name: checksum
-        * * SQL Data Type: int`),
-    installed_by: z.string().describe(`
-        * * Field Name: installed_by
-        * * Display Name: installed _by
-        * * SQL Data Type: nvarchar(100)`),
-    installed_on: z.date().describe(`
-        * * Field Name: installed_on
-        * * Display Name: installed _on
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()`),
-    execution_time: z.number().describe(`
-        * * Field Name: execution_time
-        * * Display Name: execution _time
-        * * SQL Data Type: int`),
-    success: z.boolean().describe(`
-        * * Field Name: success
-        * * Display Name: success
-        * * SQL Data Type: bit`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-});
-
-export type flyway_schema_historyEntityType = z.infer<typeof flyway_schema_historySchema>;
 
 /**
  * zod schema definition for the entity Generated Code Categories
@@ -14052,6 +14004,60 @@ export const EnvironmentSchema = z.object({
 });
 
 export type EnvironmentEntityType = z.infer<typeof EnvironmentSchema>;
+
+/**
+ * zod schema definition for the entity MJ: File Storage Accounts
+ */
+export const FileStorageAccountSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Display name for the storage account (e.g., Marketing Files, Engineering Docs). Must be unique per provider.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description providing additional context about the account purpose or contents.`),
+    ProviderID: z.string().describe(`
+        * * Field Name: ProviderID
+        * * Display Name: Provider
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: Foreign key to FileStorageProvider indicating which storage service this account uses (Dropbox, Google Drive, S3, etc.).`),
+    CredentialID: z.string().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Foreign key to Credential containing the authentication details (OAuth tokens, API keys, etc.) for this account. Credentials are decrypted at runtime by the Credential Engine.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Provider: z.string().describe(`
+        * * Field Name: Provider
+        * * Display Name: Provider Name
+        * * SQL Data Type: nvarchar(50)`),
+    Credential: z.string().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential Name
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type FileStorageAccountEntityType = z.infer<typeof FileStorageAccountSchema>;
 
 /**
  * zod schema definition for the entity MJ: List Invitations
@@ -39248,7 +39254,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this storage provider is currently available for use.
@@ -39292,6 +39298,33 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     }
     set SupportsSearch(value: boolean) {
         this.Set('SupportsSearch', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON configuration for providers that don't use Credential Engine. Used as fallback when CredentialID is not set on FileStorageAccount.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: RequiresOAuth
+    * * Display Name: Requires OAuth
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If true, this provider requires OAuth authentication. Enterprise OAuth integration via Credential Engine is planned but not yet implemented.
+    */
+    get RequiresOAuth(): boolean {
+        return this.Get('RequiresOAuth');
+    }
+    set RequiresOAuth(value: boolean) {
+        this.Set('RequiresOAuth', value);
     }
 }
 
@@ -39465,178 +39498,6 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     */
     get Provider(): string {
         return this.Get('Provider');
-    }
-}
-
-
-/**
- * Flyway _schema _histories - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: flyway_schema_history
- * * Base View: vwFlyway_schema_histories
- * * Primary Key: installed_rank
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'Flyway _schema _histories')
-export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_historyEntityType> {
-    /**
-    * Loads the Flyway _schema _histories record from the database
-    * @param installed_rank: number - primary key value to load the Flyway _schema _histories record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof flyway_schema_historyEntity
-    * @method
-    * @override
-    */
-    public async Load(installed_rank: number, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'installed_rank', Value: installed_rank });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: installed_rank
-    * * Display Name: installed _rank
-    * * SQL Data Type: int
-    */
-    get installed_rank(): number {
-        return this.Get('installed_rank');
-    }
-    set installed_rank(value: number) {
-        this.Set('installed_rank', value);
-    }
-
-    /**
-    * * Field Name: version
-    * * Display Name: version
-    * * SQL Data Type: nvarchar(50)
-    */
-    get version(): string | null {
-        return this.Get('version');
-    }
-    set version(value: string | null) {
-        this.Set('version', value);
-    }
-
-    /**
-    * * Field Name: description
-    * * Display Name: description
-    * * SQL Data Type: nvarchar(200)
-    */
-    get description(): string | null {
-        return this.Get('description');
-    }
-    set description(value: string | null) {
-        this.Set('description', value);
-    }
-
-    /**
-    * * Field Name: type
-    * * Display Name: type
-    * * SQL Data Type: nvarchar(20)
-    */
-    get type(): string {
-        return this.Get('type');
-    }
-    set type(value: string) {
-        this.Set('type', value);
-    }
-
-    /**
-    * * Field Name: script
-    * * Display Name: script
-    * * SQL Data Type: nvarchar(1000)
-    */
-    get script(): string {
-        return this.Get('script');
-    }
-    set script(value: string) {
-        this.Set('script', value);
-    }
-
-    /**
-    * * Field Name: checksum
-    * * Display Name: checksum
-    * * SQL Data Type: int
-    */
-    get checksum(): number | null {
-        return this.Get('checksum');
-    }
-    set checksum(value: number | null) {
-        this.Set('checksum', value);
-    }
-
-    /**
-    * * Field Name: installed_by
-    * * Display Name: installed _by
-    * * SQL Data Type: nvarchar(100)
-    */
-    get installed_by(): string {
-        return this.Get('installed_by');
-    }
-    set installed_by(value: string) {
-        this.Set('installed_by', value);
-    }
-
-    /**
-    * * Field Name: installed_on
-    * * Display Name: installed _on
-    * * SQL Data Type: datetime
-    * * Default Value: getdate()
-    */
-    get installed_on(): Date {
-        return this.Get('installed_on');
-    }
-    set installed_on(value: Date) {
-        this.Set('installed_on', value);
-    }
-
-    /**
-    * * Field Name: execution_time
-    * * Display Name: execution _time
-    * * SQL Data Type: int
-    */
-    get execution_time(): number {
-        return this.Get('execution_time');
-    }
-    set execution_time(value: number) {
-        this.Set('execution_time', value);
-    }
-
-    /**
-    * * Field Name: success
-    * * Display Name: success
-    * * SQL Data Type: bit
-    */
-    get success(): boolean {
-        return this.Get('success');
-    }
-    set success(value: boolean) {
-        this.Set('success', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -56294,6 +56155,144 @@ export class EnvironmentEntity extends BaseEntity<EnvironmentEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: File Storage Accounts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FileStorageAccount
+ * * Base View: vwFileStorageAccounts
+ * * @description Enterprise-level file storage accounts. Each account represents a configured connection to a storage provider (e.g., Marketing Dropbox, Engineering Google Drive) with credentials managed centrally.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: File Storage Accounts')
+export class FileStorageAccountEntity extends BaseEntity<FileStorageAccountEntityType> {
+    /**
+    * Loads the MJ: File Storage Accounts record from the database
+    * @param ID: string - primary key value to load the MJ: File Storage Accounts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof FileStorageAccountEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Display name for the storage account (e.g., Marketing Files, Engineering Docs). Must be unique per provider.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description providing additional context about the account purpose or contents.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ProviderID
+    * * Display Name: Provider
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: Foreign key to FileStorageProvider indicating which storage service this account uses (Dropbox, Google Drive, S3, etc.).
+    */
+    get ProviderID(): string {
+        return this.Get('ProviderID');
+    }
+    set ProviderID(value: string) {
+        this.Set('ProviderID', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Foreign key to Credential containing the authentication details (OAuth tokens, API keys, etc.) for this account. Credentials are decrypted at runtime by the Credential Engine.
+    */
+    get CredentialID(): string {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Provider
+    * * Display Name: Provider Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Provider(): string {
+        return this.Get('Provider');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string {
+        return this.Get('Credential');
     }
 }
 
