@@ -82,7 +82,6 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
     route: ActivatedRoute,
     protected cdr: ChangeDetectorRef,
     private testingDialogService: TestingDialogService,
-    private navigationService: NavigationService,
     private appManager: ApplicationManager,
     private viewContainerRef: ViewContainerRef
   ) {

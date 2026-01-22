@@ -18,16 +18,26 @@
             "main": "src/main.ts",
             "polyfills": ["zone.js"],
             "tsConfig": "tsconfig.app.json",
+            "allowedCommonJsDependencies": [
+              "mj_generatedentities",
+              "@memberjunction/core",
+              "@memberjunction/global",
+              "tiny-emitter"
+            ],
             "assets": [
               "src/favicon.ico",
               "src/favicon.svg",
               "src/assets",
-              "src/staticwebapp.config.json"
+              "src/staticwebapp.config.json",
+              {
+                "glob": "**/*",
+                "input": "../../node_modules/@memberjunction/ng-explorer-app/dist/assets",
+                "output": "/assets"
+              }
             ],
             "styles": [
-              {
-                "input": "src/styles/main.scss"
-              }
+              "@memberjunction/ng-explorer-app/dist/styles.scss",
+              "src/styles.css"
             ],
             "scripts": []
           },
@@ -96,7 +106,12 @@
                 "src/favicon.ico",
                 "src/favicon.svg",
                 "src/assets",
-                "src/staticwebapp.config.json"
+                "src/staticwebapp.config.json",
+                {
+                  "glob": "**/*",
+                  "input": "node_modules/@memberjunction/ng-explorer-app/dist/assets",
+                  "output": "/assets"
+                }
               ]
             }
           },
@@ -131,9 +146,19 @@
           "options": {
             "polyfills": ["zone.js", "zone.js/testing"],
             "tsConfig": "tsconfig.spec.json",
-            "assets": ["src/favicon.ico", "src/favicon.svg", "src/assets"],
+            "assets": [
+              "src/favicon.ico",
+              "src/favicon.svg",
+              "src/assets",
+              {
+                "glob": "**/*",
+                "input": "../../node_modules/@memberjunction/ng-explorer-app/dist/assets",
+                "output": "/assets"
+              }
+            ],
             "styles": [
-              "src/styles/main.scss"
+              "@memberjunction/ng-explorer-app/dist/styles.scss",
+              "src/styles.css"
             ],
             "scripts": []
           }

@@ -21,7 +21,8 @@
     "useDefineForClassFields": false,
     "lib": ["ES2022", "dom"],
     "paths": {
-      "fs": ["./src/fs.ts"]
+      "fs": ["./src/fs.ts"],
+      "@memberjunction/ng-bootstrap": ["../Angular/Bootstrap/dist"]
     }
   },
   "angularCompilerOptions": {

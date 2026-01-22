@@ -163,11 +163,15 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
     // Replace schema names with Flyway placeholders if migration format
     if (this.options.formatAsMigration) {
-      // Escape ${...} patterns within SQL string literals to prevent Flyway from treating them as placeholders
+      // Step 1: Escape ${...} patterns within SQL string literals to prevent Flyway from treating them as placeholders
       // This regex matches string literals and replaces ${...} with $' + '{...} within them
       processedQuery = this._escapeFlywaySyntaxInStrings(processedQuery);
 
-      // now, replace schema names with Flyway placeholders
+      // Step 2: Split large strings to work around SQL Server 4000/8000 character literal limits
+      // This prevents data truncation in migration files for NVARCHAR(MAX) and VARCHAR(MAX) fields
+      processedQuery = this._splitLargeStringsForSqlServer(processedQuery);
+
+      // Step 3: Replace schema names with Flyway placeholders
       const schemaName = this.options.defaultSchemaName;
       if (schemaName?.length > 0) {
         // Create a regex that matches the schema name with optional brackets
@@ -350,7 +354,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   /**
    * Escapes ${...} patterns within SQL string literals to prevent Flyway from interpreting them as placeholders.
    * Converts ${templateVariable} to $' + '{templateVariable} within string literals.
-   * 
+   *
    * @param sql - The SQL statement to process
    * @returns The SQL with escaped template syntax within strings
    */
@@ -359,7 +363,198 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     // - \$ escapes the dollar sign (which is a special regex character)
     // - \{ escapes the opening brace (also a special regex character)
     // - /g flag ensures all occurrences are replaced, not just the first one
-    // The replacement "$'+'{ " breaks up the ${ pattern so Flyway won't interpret it as a placeholder    
+    // The replacement "$'+'{ " breaks up the ${ pattern so Flyway won't interpret it as a placeholder
     return sql.replaceAll(/\$\{/g, "$$'+'{");
-  }  
+  }
+
+  /**
+   * Splits large string literals (>4000 chars for NVARCHAR, >8000 for VARCHAR) into
+   * concatenated chunks to work around SQL Server's string literal length limitations.
+   *
+   * SQL Server has hard limits on string literal sizes in SQL statements:
+   * - NVARCHAR: 4000 characters per literal
+   * - VARCHAR: 8000 characters per literal
+   *
+   * Even though NVARCHAR(MAX) fields can store 2GB, individual string literals in
+   * INSERT/UPDATE statements are still subject to these limits and will be truncated.
+   *
+   * This method splits large strings into multiple concatenated chunks:
+   * N'...4000 chars...' becomes N'...3999 chars...' + N'...remaining...'
+   *
+   * @param sql - The SQL statement to process
+   * @returns SQL with large strings split into concatenated chunks
+   */
+  private _splitLargeStringsForSqlServer(sql: string): string {
+    // Use 3999/7999 for safety margin to avoid edge cases at exactly 4000/8000
+    const MAX_NVARCHAR_CHUNK = 3999;
+    const MAX_VARCHAR_CHUNK = 7999;
+
+    // Regex to match string literals: (N)?'((?:[^']|'')*?)'
+    // - (N)? captures optional Unicode prefix (for NVARCHAR)
+    // - ' matches opening quote
+    // - ((?:[^']|'')*?) captures content, handling escaped quotes as ''
+    //   - [^'] matches any non-quote character
+    //   - '' matches escaped quote pairs
+    //   - *? makes it non-greedy (stops at first closing quote)
+    // - ' matches closing quote
+    const stringLiteralRegex = /(N)?'((?:[^']|'')*)'/g;
+
+    const replacements: Array<{start: number, end: number, replacement: string}> = [];
+    let match: RegExpExecArray | null;
+
+    // Reset regex lastIndex
+    stringLiteralRegex.lastIndex = 0;
+
+    // Find all string literals and identify those needing splitting
+    while ((match = stringLiteralRegex.exec(sql)) !== null) {
+      const fullMatch = match[0];
+      const matchStart = match.index;
+      const matchEnd = match.index + fullMatch.length;
+      const unicodePrefix = match[1] || ''; // 'N' or empty
+      const content = match[2];
+      const isUnicode = unicodePrefix === 'N';
+      const maxChunkSize = isUnicode ? MAX_NVARCHAR_CHUNK : MAX_VARCHAR_CHUNK;
+
+      // Skip if content is within limits
+      if (content.length <= maxChunkSize) {
+        continue;
+      }
+
+      // Split content into safe chunks
+      const chunks = this._splitStringContent(content, maxChunkSize);
+
+      // Build replacement with proper concatenation and formatting
+      const indent = this._getIndentForPosition(sql, matchStart);
+      const concatenated = chunks
+        .map((chunk, index) => {
+          const prefix = index === 0 ? '' : indent;
+          const literal = `${unicodePrefix}'${chunk}'`;
+          // Wrap first chunk with CAST to prevent SQL Server 4000/8000 char truncation
+          // SQL Server implicitly converts string literals to NVARCHAR(4000)/VARCHAR(8000),
+          // causing truncation even when assigning to MAX fields. Explicit CAST fixes this.
+          if (index === 0) {
+            const dataType = isUnicode ? 'NVARCHAR(MAX)' : 'VARCHAR(MAX)';
+            return `${prefix}CAST(${literal} AS ${dataType})`;
+          }
+          return `${prefix}${literal}`;
+        })
+        .join(' +\n');
+
+      replacements.push({
+        start: matchStart,
+        end: matchEnd,
+        replacement: concatenated
+      });
+    }
+
+    // Apply replacements in reverse order to maintain correct positions
+    let result = sql;
+    for (let i = replacements.length - 1; i >= 0; i--) {
+      const {start, end, replacement} = replacements[i];
+      result = result.substring(0, start) + replacement + result.substring(end);
+    }
+
+    return result;
+  }
+
+  /**
+   * Splits a string into chunks at safe boundaries, avoiding splitting in the middle of:
+   * - Escaped quote pairs ('')
+   * - Flyway escape patterns ($'+'{)
+   *
+   * @param content - The string content to split (without surrounding quotes)
+   * @param maxChunkSize - Maximum size per chunk
+   * @returns Array of string chunks
+   */
+  private _splitStringContent(content: string, maxChunkSize: number): string[] {
+    if (content.length <= maxChunkSize) {
+      return [content];
+    }
+
+    const chunks: string[] = [];
+    let position = 0;
+
+    while (position < content.length) {
+      let chunkEnd = Math.min(position + maxChunkSize, content.length);
+
+      // If not at the end, find a safe split point
+      if (chunkEnd < content.length) {
+        chunkEnd = this._findSafeSplitPoint(content, position, chunkEnd);
+      }
+
+      chunks.push(content.substring(position, chunkEnd));
+      position = chunkEnd;
+    }
+
+    return chunks;
+  }
+
+  /**
+   * Finds a safe position to split a string, avoiding breaking:
+   * - Escaped quotes ('')
+   * - Flyway escape sequences ($'+'{)
+   *
+   * @param content - The string content
+   * @param position - The current position (start of chunk)
+   * @param idealEnd - The ideal ending position
+   * @returns A safe split position at or before idealEnd
+   */
+  private _findSafeSplitPoint(content: string, position: number, idealEnd: number): number {
+    let splitPoint = idealEnd;
+
+    // Check for escaped quote at boundary: "...'" followed by "'"
+    if (splitPoint > 0 && splitPoint < content.length) {
+      if (content[splitPoint - 1] === "'" && content[splitPoint] === "'") {
+        // Back up to keep the escaped quote pair together
+        splitPoint--;
+      }
+    }
+
+    // Check for Flyway escape pattern: $'+'{
+    // Look back up to 5 characters to see if we're splitting this pattern
+    const lookbackStart = Math.max(0, splitPoint - 5);
+    const lookbackContent = content.substring(lookbackStart, Math.min(splitPoint + 1, content.length));
+    const flywayPattern = "$'+'{";
+    const patternStart = lookbackContent.indexOf(flywayPattern);
+
+    if (patternStart !== -1) {
+      // We're in or near the pattern - move split point before it
+      const patternPos = lookbackStart + patternStart;
+      if (patternPos < splitPoint && patternPos > position) {
+        splitPoint = patternPos;
+      }
+    }
+
+    // Ensure we don't have an empty chunk
+    if (splitPoint === position) {
+      // Force at least some progress to avoid infinite loop
+      splitPoint = Math.min(idealEnd, content.length);
+    }
+
+    return splitPoint;
+  }
+
+  /**
+   * Determines the indentation level at a given position in the SQL for formatting
+   *
+   * @param sql - The SQL string
+   * @param position - Position to check
+   * @returns Indentation string (spaces/tabs) for continuation lines
+   */
+  private _getIndentForPosition(sql: string, position: number): string {
+    // Find the start of the current line
+    let lineStart = position;
+    while (lineStart > 0 && sql[lineStart - 1] !== '\n') {
+      lineStart--;
+    }
+
+    // Count leading whitespace on current line
+    let indent = '';
+    for (let i = lineStart; i < position && /\s/.test(sql[i]); i++) {
+      indent += sql[i];
+    }
+
+    // Add extra indentation for continuation (4 spaces)
+    return indent + '    ';
+  }
 }

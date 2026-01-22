@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/ng-base-forms
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ng-link-directives@3.0.0
+- @memberjunction/ng-record-changes@3.0.0
+- @memberjunction/ng-shared@3.0.0
+- @memberjunction/ng-base-types@3.0.0
+- @memberjunction/ng-code-editor@3.0.0
+- @memberjunction/ng-container-directives@3.0.0
+- @memberjunction/ng-entity-viewer@3.0.0
+- @memberjunction/ng-markdown@3.0.0
+- @memberjunction/ng-tabstrip@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
