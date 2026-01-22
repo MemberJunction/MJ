@@ -10,7 +10,8 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
 import { ChatMessage } from "@memberjunction/ai";
-import { validateAPIKey } from "./auth/apiKeyAuth.js";
+import { CredentialEngine } from "@memberjunction/credentials";
+import { validateAPIKey } from "@memberjunction/encryption";
 import * as http from 'http';
 
 // Tool filtering types
@@ -192,7 +193,8 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
                     throw new Error('API key required. Provide via x-api-key header.');
                 }
 
-                const validation = await validateAPIKey(apiKey, pool, configInfo.mjCoreSchema);
+                const systemUser = UserCache.Instance.Users[0];
+                const validation = await validateAPIKey(apiKey, systemUser);
 
                 if (!validation.isValid) {
                     throw new Error(validation.error || 'Invalid API key');
@@ -208,6 +210,11 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
         const config = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
         await setupSQLServerClient(config);
         console.log("Database connection setup completed.");
+
+
+        // Load API keys into cache for fast validation
+        // await CredentialEngine.Instance.LoadAPIKeys(pool, configInfo.mjCoreSchema);
+
 
         addToolWithFilter({
             name: "Get_All_Entities",

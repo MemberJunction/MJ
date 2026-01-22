@@ -313,7 +313,7 @@ The MCP Server uses API key authentication to secure access. All requests must i
 
 - **Authentication Method**: API Key via HTTP headers
 - **Supported Headers**: `x-api-key` or `x-mj-api-key`
-- **Key Format**: `mjkey_` prefix followed by 32 random characters (e.g., `mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`)
+- **Key Format**: `mj_sk_` prefix followed by 32 random characters (e.g., `mj_sk_YOUR_API_KEY_HERE`)
 - **Storage**: Keys are stored as SHA-256 hashes in the database for security
 - **User Context**: Each API key is associated with a MemberJunction user account
 
@@ -326,12 +326,12 @@ API keys are managed through the MemberJunction database. Here's how to create a
 Use the MemberJunction Core library to generate a properly formatted key:
 
 ```typescript
-import { generateAPIKey } from '@memberjunction/core';
+import { generateAPIKey } from '@memberjunction/encryption';
 
-// Generate a new API key with mjkey_ prefix
+// Generate a new API key with mj_sk_ prefix
 const rawKey = generateAPIKey();
 console.log('Your API Key:', rawKey);
-// Example output: mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+// Example output: mj_sk_YOUR_API_KEY_HERE
 
 // IMPORTANT: Save this key immediately - it cannot be recovered once hashed!
 ```
@@ -339,7 +339,7 @@ console.log('Your API Key:', rawKey);
 #### Step 2: Hash the Key for Database Storage
 
 ```typescript
-import { hashAPIKey } from '@memberjunction/core';
+import { hashAPIKey } from '@memberjunction/encryption';
 
 const keyHash = hashAPIKey(rawKey);
 console.log('Key Hash:', keyHash);
@@ -363,7 +363,7 @@ VALUES (
 **Complete Example:**
 
 ```typescript
-import { generateAPIKey, hashAPIKey } from '@memberjunction/core';
+import { generateAPIKey, hashAPIKey } from '@memberjunction/encryption';
 import sql from 'mssql';
 
 // 1. Generate the raw key
@@ -420,11 +420,11 @@ The API Key system uses four tables:
 
 ```bash
 # Using x-api-key header
-curl -H "x-api-key: mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+curl -H "x-api-key: mj_sk_YOUR_API_KEY_HERE" \
   http://localhost:3100/mcp
 
 # Using x-mj-api-key header (alternative)
-curl -H "x-mj-api-key: mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+curl -H "x-mj-api-key: mj_sk_YOUR_API_KEY_HERE" \
   http://localhost:3100/mcp
 ```
 
@@ -437,7 +437,7 @@ Configure your MCP client to include the API key in headers:
 const client = new MCPClient({
   url: 'http://localhost:3100/mcp',
   headers: {
-    'x-api-key': 'mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6'
+    'x-api-key': 'mj_sk_YOUR_API_KEY_HERE'
   }
 });
 ```
@@ -453,7 +453,7 @@ Add to your Claude Desktop MCP server configuration:
       "command": "npx",
       "args": ["-y", "@memberjunction/ai-mcp-server"],
       "env": {
-        "X_API_KEY": "mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+        "X_API_KEY": "mj_sk_YOUR_API_KEY_HERE"
       }
     }
   }
@@ -527,7 +527,7 @@ WHERE UserID = 'your-user-id';
 ### Authentication Flow
 
 1. Client sends request with `x-api-key` header
-2. Server validates key format (must start with `mjkey_`)
+2. Server validates key format (must start with `mj_sk_`)
 3. Server hashes the key and looks up in database
 4. Server checks:
    - Key exists and hash matches
@@ -545,7 +545,7 @@ WHERE UserID = 'your-user-id';
 - Check that the header value is not empty
 
 **"Invalid API key format"**
-- Key must start with `mjkey_` prefix
+- Key must start with `mj_sk_` prefix
 - Key must be exactly 37 characters total
 
 **"API key not found"**

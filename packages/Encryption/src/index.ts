@@ -83,3 +83,6 @@ export { AzureKeyVaultKeySource } from './providers/AzureKeyVaultKeySource';
 // Actions for key management and data migration
 export { RotateEncryptionKeyAction } from './actions/RotateEncryptionKeyAction';
 export { EnableFieldEncryptionAction } from './actions/EnableFieldEncryptionAction';
+
+// API Key utilities
+export { generateAPIKey, hashAPIKey, isValidAPIKeyFormat, validateAPIKey, GeneratedAPIKey, APIKeyValidationResult } from './apiKeyUtils';

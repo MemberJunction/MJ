@@ -27,6 +27,7 @@
     "@memberjunction/core": "3.0.0",
     "@memberjunction/core-entities": "3.0.0",
     "@memberjunction/actions-base": "3.0.0",
+    "@memberjunction/credentials": "3.0.0",
     "cosmiconfig": "^9.0.0"
   },
   "optionalDependencies": {

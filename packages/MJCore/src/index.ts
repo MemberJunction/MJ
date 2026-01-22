@@ -32,8 +32,6 @@ export * from "./generic/authEvaluator";
 export * from "./generic/metadataUtil";
 export * from "./generic/authTypes";
 export * from "./generic/graphqlTypeNames";
-// Exporting the API Key utilities
-export * from "./generic/apiKeyUtils";
 
 export * from "./generic/databaseProviderBase";
 export * from "./generic/baseEngineRegistry";
