@@ -485,45 +485,7 @@ module.exports = {
 ```
 
 **⚠️ Warning**: System API key mode is for development only. Always use proper API key authentication in production.
-
-### Key Lifecycle Management
-
-#### Revoking a Key
-
-```sql
-UPDATE __mj.APIKey
-SET Status = 'Revoked'
-WHERE ID = 'key-id-guid';
-```
-
-#### Setting Expiration
-
-```sql
--- Expire in 90 days
-UPDATE __mj.APIKey
-SET ExpiresAt = DATEADD(day, 90, GETUTCDATE())
-WHERE ID = 'key-id-guid';
-```
-
-#### Monitoring Usage
-
-```sql
--- View recent usage for a key
-SELECT TOP 100
-  Endpoint,
-  Operation,
-  StatusCode,
-  ResponseTimeMs,
-  __mj_CreatedAt as UsedAt
-FROM __mj.APIKeyUsageLog
-WHERE APIKeyID = 'key-id-guid'
-ORDER BY __mj_CreatedAt DESC;
-
--- Check last usage time
-SELECT Label, LastUsedAt
-FROM __mj.APIKey
-WHERE UserID = 'your-user-id';
-```
+ 
 ### Security Best Practices
 
 1. **Never Commit Keys**: Add API keys to `.gitignore` and use environment variables
