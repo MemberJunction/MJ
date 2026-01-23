@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/config",
-  "version": "2.133.0",
+  "version": "3.2.0",
   "description": "Central configuration package for MemberJunction framework with default configurations and merge utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -29,5 +29,9 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

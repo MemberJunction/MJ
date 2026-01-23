@@ -1,5 +1,85 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 3.2.0
+
+### Minor Changes
+
+- 582ca0c: Added unified notification system with email/SMS delivery, user notification preferences, and agent completion notifications
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/ng-base-application@3.2.0
+  - @memberjunction/ng-base-forms@3.2.0
+  - @memberjunction/ng-compare-records@3.2.0
+  - @memberjunction/ng-entity-form-dialog@3.2.0
+  - @memberjunction/ng-entity-permissions@3.2.0
+  - @memberjunction/ng-shared@3.2.0
+  - @memberjunction/ng-simple-record-list@3.2.0
+  - @memberjunction/ng-user-view-grid@3.2.0
+  - @memberjunction/ng-code-editor@3.2.0
+  - @memberjunction/ng-join-grid@3.2.0
+  - @memberjunction/ng-notifications@3.2.0
+  - @memberjunction/ng-shared-generic@3.2.0
+  - @memberjunction/ng-user-avatar@3.2.0
+  - @memberjunction/ng-container-directives@3.2.0
+  - @memberjunction/ng-tabstrip@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [8c0b624]
+  - @memberjunction/graphql-dataprovider@3.1.1
+  - @memberjunction/ng-shared@3.1.1
+  - @memberjunction/ng-user-view-grid@3.1.1
+  - @memberjunction/ng-notifications@3.1.1
+  - @memberjunction/ng-base-forms@3.1.1
+  - @memberjunction/ng-entity-form-dialog@3.1.1
+  - @memberjunction/ng-entity-permissions@3.1.1
+  - @memberjunction/ng-join-grid@3.1.1
+  - @memberjunction/ng-simple-record-list@3.1.1
+  - @memberjunction/ng-base-application@3.1.1
+  - @memberjunction/ng-compare-records@3.1.1
+  - @memberjunction/ng-code-editor@3.1.1
+  - @memberjunction/ng-container-directives@3.1.1
+  - @memberjunction/ng-shared-generic@3.1.1
+  - @memberjunction/ng-tabstrip@3.1.1
+  - @memberjunction/ng-user-avatar@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/global@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ng-user-view-grid@3.0.0
+- @memberjunction/ng-base-application@3.0.0
+- @memberjunction/ng-base-forms@3.0.0
+- @memberjunction/ng-compare-records@3.0.0
+- @memberjunction/ng-entity-form-dialog@3.0.0
+- @memberjunction/ng-entity-permissions@3.0.0
+- @memberjunction/ng-shared@3.0.0
+- @memberjunction/ng-simple-record-list@3.0.0
+- @memberjunction/ng-code-editor@3.0.0
+- @memberjunction/ng-container-directives@3.0.0
+- @memberjunction/ng-join-grid@3.0.0
+- @memberjunction/ng-notifications@3.0.0
+- @memberjunction/ng-shared-generic@3.0.0
+- @memberjunction/ng-tabstrip@3.0.0
+- @memberjunction/ng-user-avatar@3.0.0
+- @memberjunction/graphql-dataprovider@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -1414,7 +1494,6 @@
   template organization
 
   **Dialog Functionality Improvements:**
-
   - Fixed role persistence bug in user dialog where roles from first
     record persisted when editing second record
   - Enhanced ApplicationEntity management with full CRUD operations and
@@ -1427,7 +1506,6 @@
     binding
 
   **Code Organization:**
-
   - Extracted all inline HTML templates to dedicated .html files for
     better separation of concerns
   - Separated TypeScript logic from HTML markup across all dialog
@@ -1437,7 +1515,6 @@
     extraction
 
   **Technical Details:**
-
   - Fixed ngModel cannot be used with FormGroup directive errors by adding
     `[ngModelOptions]="{standalone: true}"`
   - Enhanced entity-based dirty checking using MemberJunction's built-in
@@ -1448,7 +1525,6 @@
     including assigned entities list and available entities grid
 
   **Components Updated:**
-
   - Permission Dialog: Enhanced with better role permission management and
     entity change tracking
   - Application Dialog: Added comprehensive ApplicationEntity management

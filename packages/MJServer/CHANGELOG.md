@@ -1,5 +1,167 @@
 # Change Log - @memberjunction/server
 
+## 3.2.0
+
+### Minor Changes
+
+- 582ca0c: Added unified notification system with email/SMS delivery, user notification preferences, and agent completion notifications
+
+### Patch Changes
+
+- cbd2714: Improve error handling and stability across Skip integration, component artifacts, and metadata sync
+- Updated dependencies [039983c]
+- Updated dependencies [011c820]
+- Updated dependencies [6806a6c]
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-agents@3.2.0
+  - @memberjunction/core-actions@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/storage@3.2.0
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/skip-types@3.2.0
+  - @memberjunction/notifications@3.2.0
+  - @memberjunction/ai-agent-manager-actions@3.2.0
+  - @memberjunction/ai-agent-manager@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/aiengine@3.2.0
+  - @memberjunction/ai-prompts@3.2.0
+  - @memberjunction/actions-apollo@3.2.0
+  - @memberjunction/actions-bizapps-accounting@3.2.0
+  - @memberjunction/actions-bizapps-crm@3.2.0
+  - @memberjunction/actions-bizapps-formbuilders@3.2.0
+  - @memberjunction/actions-bizapps-lms@3.2.0
+  - @memberjunction/actions-bizapps-social@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/entity-communications-server@3.2.0
+  - @memberjunction/communication-ms-graph@3.2.0
+  - @memberjunction/communication-sendgrid@3.2.0
+  - @memberjunction/doc-utils@3.2.0
+  - @memberjunction/encryption@3.2.0
+  - @memberjunction/external-change-detection@3.2.0
+  - @memberjunction/core-entities-server@3.2.0
+  - @memberjunction/data-context@3.2.0
+  - @memberjunction/queue@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/scheduling-actions@3.2.0
+  - @memberjunction/scheduling-engine-base@3.2.0
+  - @memberjunction/scheduling-engine@3.2.0
+  - @memberjunction/templates@3.2.0
+  - @memberjunction/testing-engine@3.2.0
+  - @memberjunction/ai-provider-bundle@3.2.0
+  - @memberjunction/component-registry-client-sdk@3.2.0
+  - @memberjunction/ai-vectors-pinecone@3.2.0
+  - @memberjunction/data-context-server@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/config@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+  - @memberjunction/scheduling-base-types@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- 8c0b624: no migration
+- Updated dependencies [8c0b624]
+  - @memberjunction/graphql-dataprovider@3.1.1
+  - @memberjunction/ai-agent-manager-actions@3.1.1
+  - @memberjunction/ai-agent-manager@3.1.1
+  - @memberjunction/ai-agents@3.1.1
+  - @memberjunction/ai@3.1.1
+  - @memberjunction/ai-core-plus@3.1.1
+  - @memberjunction/aiengine@3.1.1
+  - @memberjunction/ai-prompts@3.1.1
+  - @memberjunction/ai-provider-bundle@3.1.1
+  - @memberjunction/ai-vectors-pinecone@3.1.1
+  - @memberjunction/actions-apollo@3.1.1
+  - @memberjunction/actions-bizapps-accounting@3.1.1
+  - @memberjunction/actions-bizapps-crm@3.1.1
+  - @memberjunction/actions-bizapps-formbuilders@3.1.1
+  - @memberjunction/actions-bizapps-lms@3.1.1
+  - @memberjunction/actions-bizapps-social@3.1.1
+  - @memberjunction/core-actions@3.1.1
+  - @memberjunction/actions@3.1.1
+  - @memberjunction/entity-communications-server@3.1.1
+  - @memberjunction/communication-ms-graph@3.1.1
+  - @memberjunction/communication-sendgrid@3.1.1
+  - @memberjunction/component-registry-client-sdk@3.1.1
+  - @memberjunction/config@3.1.1
+  - @memberjunction/doc-utils@3.1.1
+  - @memberjunction/encryption@3.1.1
+  - @memberjunction/external-change-detection@3.1.1
+  - @memberjunction/interactive-component-types@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/core-entities-server@3.1.1
+  - @memberjunction/data-context@3.1.1
+  - @memberjunction/data-context-server@3.1.1
+  - @memberjunction/global@3.1.1
+  - @memberjunction/queue@3.1.1
+  - @memberjunction/storage@3.1.1
+  - @memberjunction/sqlserver-dataprovider@3.1.1
+  - @memberjunction/scheduling-actions@3.1.1
+  - @memberjunction/scheduling-engine-base@3.1.1
+  - @memberjunction/scheduling-base-types@3.1.1
+  - @memberjunction/scheduling-engine@3.1.1
+  - @memberjunction/skip-types@3.1.1
+  - @memberjunction/templates@3.1.1
+  - @memberjunction/testing-engine@3.1.1
+
+## 3.0.0
+
+### Major Changes
+
+- f25f757: The foundation for MemberJunction v3.0's improved architecture, making it easier for developers to adopt and customize MJ for their needs.
+
+### Patch Changes
+
+- Updated dependencies [f25f757]
+  - @memberjunction/config@3.0.0
+  - @memberjunction/ai-agent-manager-actions@3.0.0
+  - @memberjunction/ai-agent-manager@3.0.0
+  - @memberjunction/ai-agents@3.0.0
+  - @memberjunction/ai@3.0.0
+  - @memberjunction/ai-core-plus@3.0.0
+  - @memberjunction/aiengine@3.0.0
+  - @memberjunction/ai-prompts@3.0.0
+  - @memberjunction/ai-provider-bundle@3.0.0
+  - @memberjunction/ai-vectors-pinecone@3.0.0
+  - @memberjunction/actions-apollo@3.0.0
+  - @memberjunction/actions-bizapps-accounting@3.0.0
+  - @memberjunction/actions-bizapps-crm@3.0.0
+  - @memberjunction/actions-bizapps-formbuilders@3.0.0
+  - @memberjunction/actions-bizapps-lms@3.0.0
+  - @memberjunction/actions-bizapps-social@3.0.0
+  - @memberjunction/core-actions@3.0.0
+  - @memberjunction/actions@3.0.0
+  - @memberjunction/entity-communications-server@3.0.0
+  - @memberjunction/communication-ms-graph@3.0.0
+  - @memberjunction/communication-sendgrid@3.0.0
+  - @memberjunction/component-registry-client-sdk@3.0.0
+  - @memberjunction/doc-utils@3.0.0
+  - @memberjunction/encryption@3.0.0
+  - @memberjunction/external-change-detection@3.0.0
+  - @memberjunction/graphql-dataprovider@3.0.0
+  - @memberjunction/interactive-component-types@3.0.0
+  - @memberjunction/core@3.0.0
+  - @memberjunction/core-entities@3.0.0
+  - @memberjunction/core-entities-server@3.0.0
+  - @memberjunction/data-context@3.0.0
+  - @memberjunction/data-context-server@3.0.0
+  - @memberjunction/global@3.0.0
+  - @memberjunction/queue@3.0.0
+  - @memberjunction/storage@3.0.0
+  - @memberjunction/sqlserver-dataprovider@3.0.0
+  - @memberjunction/scheduling-actions@3.0.0
+  - @memberjunction/scheduling-engine-base@3.0.0
+  - @memberjunction/scheduling-base-types@3.0.0
+  - @memberjunction/scheduling-engine@3.0.0
+  - @memberjunction/skip-types@3.0.0
+  - @memberjunction/templates@3.0.0
+  - @memberjunction/testing-engine@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -1689,7 +1851,6 @@
 - 4567af3: **Component Feedback System (Registry-Agnostic)**
 
   Implement comprehensive component feedback system that works across any component registry (Skip, MJ Central, etc.) with support for custom feedback handlers.
-
   - Add skip-component-feedback-panel component with sliding panel UI (444 lines CSS, 161 lines HTML, 274 lines TS)
   - Add star ratings (0-5 scale), comments, and component hierarchy visualization
   - Add FeedbackHandler interface for customizable feedback logic per registry
@@ -1706,7 +1867,6 @@
   **React Runtime Debug Logging Enhancements**
 
   Restore debug logging with production guards for better debugging capabilities.
-
   - Restore 12 debug console.log statements throughout React runtime (prop-builder, component-hierarchy)
   - Wrap all debug logs with LogStatus/GetProductionStatus checks
   - Add comprehensive README.md documentation (95 lines) for debug configuration
@@ -1716,7 +1876,6 @@
   **AI Prompt Error Handling Improvements**
 
   Replace hardcoded error truncation with configurable maxErrorLength parameter.
-
   - Add maxErrorLength?: number property to AIPromptParams class
   - Update AIPromptRunner.logError() to accept maxErrorLength in options
   - Thread maxErrorLength through 18 logError calls throughout AIPromptRunner
@@ -1725,7 +1884,6 @@
   - When set, errors are truncated with "... [truncated]" suffix
 
   **Bug Fixes**
-
   - Fix AI parameter extraction edge cases in AIPromptRunner and QueryEntity
   - Fix mj.config.cjs configuration
   - Fix component hierarchy tracking in dynamic reports
@@ -2029,7 +2187,6 @@
 
 - eb7677d: feat(ai-agents): Add ChatHandlingOption for flexible Chat step
   handling
-
   - Add ChatHandlingOption field to AIAgent table with values:
     Success, Failed, Retry
   - Implement Chat step remapping in
@@ -2242,9 +2399,7 @@
 ### Patch Changes
 
 - 4b52f29: Skip Chat UI improvements and auth provider fixes
-
   - **Skip Chat UI Enhancements**:
-
     - Fixed timer display persistence when switching between conversations
     - Prevented clock icon from disappearing when other conversations complete
     - Eliminated delay when displaying status messages on conversation switch
@@ -2254,7 +2409,6 @@
     - Fixed text overflow issues under buttons in chat input area
 
   - **Auth Provider Improvements**:
-
     - Simplified Load function implementation across auth providers (Auth0, MSAL,
       Okta)
 
@@ -2356,7 +2510,6 @@
 
 - bfcd737: Refactoring and new AI functionality
 - 103e4a9: Added comprehensive tracking fields to AI execution entities:
-
   - **AIAgentRun**: Added `RunName`, `Comment`, and `ParentID` fields for better run identification and hierarchical tracking
   - **AIPromptRun**: Added `RunName`, `Comment`, and `ParentID` fields for consistent tracking across prompt executions
   - **AIAgentRunStep**: Added `Comment` and `ParentID` fields for detailed step-level tracking
@@ -2462,7 +2615,6 @@
 ### Minor Changes
 
 - f703033: Implement extensible N-provider authentication architecture
-
   - Created shared authentication types in @memberjunction/core for use
     across frontend and backend
   - Refactored authentication to support multiple providers using MJGlobal
@@ -2626,7 +2778,6 @@
 ### Patch Changes
 
 - 56257ed: Fix RunView pagination implementation
-
   - Added StartRow parameter support for server-side pagination
   - Fixed SQL generation to prevent TOP and OFFSET/FETCH conflicts
   - Improved total row count calculation for paginated queries
@@ -2725,7 +2876,6 @@
 ### Patch Changes
 
 - 8846ccc: Add SkipQueryEntityInfo type to track entity-query relationships
-
   - Added new SkipQueryEntityInfo type to represent entities referenced by queries
   - Includes detection method tracking (AI vs Manual) and confidence scores
   - Updated SkipQueryInfo to include optional entities array
@@ -2911,7 +3061,6 @@
 ### Patch Changes
 
 - c35f869: Fix: Remove non-existent ComputationEnabled field from Query operations
-
   - Removed ComputationEnabled field from GraphQL mutations (CreateQuerySystemUser and UpdateQuerySystemUser) in GraphQLSystemUserClient
   - Removed ComputationEnabled from QueryField TypeScript interface
   - Fixed CreateQueryResolver to not set ComputationEnabled when mapping query fields
@@ -2963,7 +3112,6 @@
 
   Add comprehensive audit logging and caching capabilities to the
   MemberJunction Query system:
-
   - Add ForceAuditLog and AuditLogDescription parameters to RunQuery for
     granular audit control
   - Implement TTL-based result caching with LRU eviction strategy for
@@ -2978,7 +3126,6 @@
 ### Patch Changes
 
 - 6d2d478: feat: AI Agent UI improvements and server-side context fixes
-
   - Enhanced AI Agent dialogs with resizable and draggable functionality
     using Kendo UI Window component
   - Improved dialog positioning with consistent center placement and proper
@@ -3121,7 +3268,6 @@
 
 - ddb84c4: fix: Add error handling to CreateQuerySystemUser resolver to prevent
   server crashes
-
   - Wrap Query Categories entity creation in try/catch block
   - Add null check after GetEntityObject call
   - Improve error messages with actual error details
@@ -3260,7 +3406,6 @@
 
 - 087595d: feat: make DeleteQuery options parameter optional and refactor
   GraphQLSystemUserClient methods
-
   - Made options parameter optional in DeleteQuerySystemResolver with
     sensible defaults (SkipEntityAIActions: false, SkipEntityActions: false)
   - Refactored GraphQLSystemUserClient method names for better usability by
@@ -3324,14 +3469,12 @@
   GetQueryDataByNameSystemUser resolver.
 
   Key Features:
-
   - Parameters support for templated queries (enabling AI cost calculations)
   - MaxRows and StartRow pagination support
   - Complete resolver coverage for system user operations
   - Fixed TypeScript compilation errors with missing TotalRowCount fields
   - Updated both GetQueryDataSystemUser and GetQueryDataByNameSystemUser
     methods with full parameter support
-
     - Added missing GetQueryDataByNameSystemUser resolver with proper
       @RequireSystemUser decoration
     - Fixed error handling cases to include required TotalRowCount field
@@ -3430,7 +3573,6 @@
 - 26c2b03: Added Load function to AIEngine package and call it from MJServer to prevent tree shaking.
 - 4863660: - Replace error throwing with warning logging for entity save
   inconsistencies
-
   - Add ErrorLog table record creation for proper tracking and debugging
   - Maintain existing LogError functionality for immediate logging
   - Allow save operations to continue instead of being cancelled
@@ -3438,7 +3580,6 @@
     details
 
   **Impact:**
-
   - Users can now successfully save records that previously failed due to
     inconsistent state
   - All inconsistencies are still logged for debugging purposes
@@ -4195,7 +4336,6 @@
 ### Minor Changes
 
 - d68d3cf: fix: increase File ContentType column length to 255 characters
-
   - Updated database migration to increase ContentType column from 50 to 255 characters
   - Fixed FileResolver to properly handle file creation with updated entity
   - This allows for longer MIME type strings that were previously truncated
@@ -4518,7 +4658,6 @@
 
 - bb01fcf: bug fixes but bumping minor version here since we have a migration in this PR
 - 031e724: Implement agent architecture separation of concerns
-
   - **NEW**: Add BaseAgent class for domain-specific prompt execution
   - **NEW**: Add ConductorAgent for autonomous orchestration decisions and action planning
   - **NEW**: Add AgentRunner class to coordinate BaseAgent + ConductorAgent interactions
@@ -4533,7 +4672,6 @@
   - **NEW**: Template rendering with data context
 
   This implements clean separation of concerns:
-
   - BaseAgent: Domain-specific execution only (~500 lines)
   - ConductorAgent: Orchestration decisions with structured responses
   - AgentRunner: Coordination layer providing unified user interface
@@ -4802,7 +4940,6 @@
 ### Minor Changes
 
 - 7e0523d: Persist Skip conversation status and add completion time display
-
   - Added 'Status' column to Conversation table with 'Processing' and 'Available' states
   - Added 'CompletionTime' column to ConversationDetail table to track processing duration
   - Updated AskSkipResolver to manage conversation status and track processing time

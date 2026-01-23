@@ -1,5 +1,34 @@
 # Change Log - @memberjunction/skip-types
 
+## 3.2.0
+
+### Patch Changes
+
+- cbd2714: Improve error handling and stability across Skip integration, component artifacts, and metadata sync
+- Updated dependencies [cbd2714]
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/data-context@3.2.0
+  - @memberjunction/core@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/interactive-component-types@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/data-context@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/interactive-component-types@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/data-context@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -511,7 +540,6 @@
 ### Patch Changes
 
 - 8846ccc: Add SkipQueryEntityInfo type to track entity-query relationships
-
   - Added new SkipQueryEntityInfo type to represent entities referenced by queries
   - Includes detection method tracking (AI vs Manual) and confidence scores
   - Updated SkipQueryInfo to include optional entities array
@@ -891,7 +919,6 @@
 
 - e49a91a: rename types and clean up skip for more generalized use as a "component" generator
 - 5c72641: feat(skip-types): Enhance ComponentSpec types with comprehensive requirements support
-
   - Enhanced ComponentSpec interface with new optional properties:
     - `functionalRequirements`: Documents business requirements and user stories
     - `dataRequirements`: Specifies data sources, schemas, and integration needs

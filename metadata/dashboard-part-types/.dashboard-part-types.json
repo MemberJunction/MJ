@@ -1,0 +1,74 @@
+[
+  {
+    "fields": {
+      "Name": "View",
+      "Description": "Display data using saved views with grid, cards, or timeline layout. Supports filtering, sorting, and selection.",
+      "Icon": "fa-solid fa-table",
+      "DriverClass": "ViewPanelRenderer",
+      "ConfigDialogClass": "ViewPanelConfigDialog",
+      "SortOrder": 1,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "6C975185-297C-420D-BD59-F5402AF35399"
+    },
+    "sync": {
+      "lastModified": "2026-01-21T05:01:19.024Z",
+      "checksum": "2e817e3a4ef528b864e4ae6cb784901b1a34441fc316672a1d94f18d8d19d37b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Query",
+      "Description": "Display query results with parameter controls. Supports parameter persistence and auto-refresh.",
+      "Icon": "fa-solid fa-flask",
+      "DriverClass": "QueryPanelRenderer",
+      "ConfigDialogClass": "QueryPanelConfigDialog",
+      "SortOrder": 2,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "0EBDB415-EE18-46D4-B12E-03F3770921BA"
+    },
+    "sync": {
+      "lastModified": "2026-01-21T05:01:19.036Z",
+      "checksum": "ae585e4ac614570b7d6430d33040d6dadeae1c87004ab9a4fa23c714c914751f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifact",
+      "Description": "Display artifacts including reports, charts, and AI-generated content. Supports version selection.",
+      "Icon": "fa-solid fa-palette",
+      "DriverClass": "ArtifactPanelRenderer",
+      "ConfigDialogClass": "ArtifactPanelConfigDialog",
+      "SortOrder": 3,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "7191FBEE-C686-4D5F-94BA-1B4C6BF700C5"
+    },
+    "sync": {
+      "lastModified": "2026-01-21T05:01:19.048Z",
+      "checksum": "389a944cb9ac22ce762953606d063e9e0e065f44d0cfea860265637b8a649dde"
+    }
+  },
+  {
+    "fields": {
+      "Name": "WebURL",
+      "Description": "Embed web content via iframe with configurable sandbox permissions and refresh behavior.",
+      "Icon": "fa-solid fa-globe",
+      "DriverClass": "WebURLPanelRenderer",
+      "ConfigDialogClass": "WebURLPanelConfigDialog",
+      "SortOrder": 4,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "549188C0-01B3-453C-9985-D6B5AF8F789C"
+    },
+    "sync": {
+      "lastModified": "2026-01-21T05:01:19.057Z",
+      "checksum": "969351fa0b05ea0639652a4c3d12537aa5a396508dac4e8b5f37a43ea652f2d5"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/scheduled-actions-server",
-  "version": "2.133.0",
+  "version": "3.2.0",
   "description": "Simple application server that can be called via URL to invoke Scheduled Actions",
   "main": "src/index.ts",
   "scripts": {
@@ -19,18 +19,18 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "2.133.0",
-    "@memberjunction/actions-apollo": "2.133.0",
-    "@memberjunction/actions-content-autotag": "2.133.0",
-    "@memberjunction/ai": "2.133.0",
-    "@memberjunction/ai-mistral": "2.133.0",
-    "@memberjunction/ai-openai": "2.133.0",
-    "@memberjunction/ai-vector-sync": "2.133.0",
-    "@memberjunction/ai-vectors-pinecone": "2.133.0",
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/core-entities": "2.133.0",
-    "@memberjunction/scheduled-actions": "2.133.0",
-    "@memberjunction/sqlserver-dataprovider": "2.133.0",
+    "@memberjunction/actions": "3.2.0",
+    "@memberjunction/actions-apollo": "3.2.0",
+    "@memberjunction/actions-content-autotag": "3.2.0",
+    "@memberjunction/ai": "3.2.0",
+    "@memberjunction/ai-mistral": "3.2.0",
+    "@memberjunction/ai-openai": "3.2.0",
+    "@memberjunction/ai-vector-sync": "3.2.0",
+    "@memberjunction/ai-vectors-pinecone": "3.2.0",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/core-entities": "3.2.0",
+    "@memberjunction/scheduled-actions": "3.2.0",
+    "@memberjunction/sqlserver-dataprovider": "3.2.0",
     "@types/axios": "^0.14.0",
     "dotenv": "^16.4.1",
     "env-var": "^7.3.0",
@@ -41,7 +41,7 @@
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^18.15.11",
-    "rimraf": "^4.4.0"
+    "rimraf": "^5.0.10"
   },
   "repository": {
     "type": "git",

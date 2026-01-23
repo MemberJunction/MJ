@@ -1,5 +1,49 @@
 # @memberjunction/metadata-sync
 
+## 3.2.0
+
+### Patch Changes
+
+- cbd2714: Improve error handling and stability across Skip integration, component artifacts, and metadata sync
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/core-entities-server@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/config@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [8c0b624]
+  - @memberjunction/graphql-dataprovider@3.1.1
+  - @memberjunction/config@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/core-entities-server@3.1.1
+  - @memberjunction/global@3.1.1
+  - @memberjunction/sqlserver-dataprovider@3.1.1
+
+## 3.0.0
+
+### Major Changes
+
+- f25f757: The foundation for MemberJunction v3.0's improved architecture, making it easier for developers to adopt and customize MJ for their needs.
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/core-entities-server@3.0.0
+- @memberjunction/global@3.0.0
+- @memberjunction/sqlserver-dataprovider@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -570,7 +614,6 @@
 ### Patch Changes
 
 - d7b5647: feat(metadata-sync): add deleteRecord feature for removing records via sync
-
   - Added deleteRecord directive to mark records for deletion in JSON files
   - Records with deleteRecord.delete=true are deleted during push operations
   - After successful deletion, adds deletedAt timestamp to track when deleted
@@ -635,7 +678,6 @@
 ### Patch Changes
 
 - 103e4a9: Added comprehensive tracking fields to AI execution entities:
-
   - **AIAgentRun**: Added `RunName`, `Comment`, and `ParentID` fields for better run identification and hierarchical tracking
   - **AIPromptRun**: Added `RunName`, `Comment`, and `ParentID` fields for consistent tracking across prompt executions
   - **AIAgentRunStep**: Added `Comment` and `ParentID` fields for detailed step-level tracking
@@ -744,14 +786,12 @@
 - 7675555: Fix critical MetadataSync issues with parent-child dependencies and record processing
 
   **Fixed Issues:**
-
   1. **One Record Per Run Bug**: Fixed issue where only one new related entity was processed per sync run when multiple records were added
   2. **Parent-Child Dependencies**: Resolved "@parent:ID reference not found" errors by ensuring parents are saved before children
   3. **Complex Lookup Resolution**: Enhanced dependency analyzer to handle compound lookups with @parent references (e.g., `Name=X&AgentID=@parent:AgentID`)
   4. **Sync Metadata Regression**: Restored proper behavior where lastModified timestamps only update for actually changed records
 
   **Technical Changes:**
-
   - Use unique record IDs for batch context tracking instead of complex key building
   - Parents are now saved and added to batch context before processing children
   - Enhanced RecordDependencyAnalyzer to resolve @parent references within lookup criteria
@@ -777,20 +817,17 @@
   ## Changes
 
   ### Dependency Ordering
-
   - Added RecordDependencyAnalyzer to handle complex nested entity relationships
   - Records are now processed in correct dependency order using topological sorting
   - Supports @lookup, @parent, @root references and direct foreign keys
   - Handles circular dependencies gracefully with warnings
 
   ### Logging Improvements
-
   - Fixed confusing "Error in BaseEntity.Load" messages for missing records
   - Now shows clear messages like "Creating missing [Entity] record with primaryKey {...}"
   - Provides better visibility into what records are being created vs updated
 
   ### Code Cleanup
-
   - Removed 700+ lines of unused legacy code from PushService
   - Removed unused template processing methods from SyncEngine
   - Fixed parameter ordering in processFileContentWithIncludes method
@@ -1050,7 +1087,6 @@
 ### Patch Changes
 
 - 035690c: MetadataSync pull operations major improvements
-
   - **JSON Property Ordering**: Fixed inconsistent JSON property ordering
     across metadata files by implementing JsonWriteHelper with
     deterministic serialization
@@ -1067,7 +1103,6 @@
       pulled data
   - **ExternalizeFields Implementation**: Complete field externalization
     functionality with:
-
     - Configurable file patterns with placeholders ({Name}, {ID}, etc.)
     - Smart merge strategy support preserving existing @file: references
     - Enhanced checksum calculation including external file content
@@ -1254,7 +1289,6 @@
 ### Patch Changes
 
 - 17c7634: Integrate MetadataSync commands into MJCLI
-
   - Refactored MetadataSync from standalone CLI to reusable library
   - Moved all sync commands under `mj sync` namespace in MJCLI
   - Added service-based architecture for better modularity
@@ -1363,7 +1397,6 @@
 ### Patch Changes
 
 - 9350c54: Enhance error handling and add comprehensive user guidance
-
   - Improve error message formatting across all CLI commands to show readable errors instead of "[object
     Object]"
   - Add extensive documentation for creating error-free entity files with step-by-step guides

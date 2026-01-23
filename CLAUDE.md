@@ -137,6 +137,40 @@ If `my-feature` tracks `origin/next`:
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder
 
+### 🚨 CRITICAL: CodeGen Handles These Automatically
+**NEVER include the following in migration CREATE TABLE statements - CodeGen generates them:**
+
+1. **Timestamp Columns**: Do NOT add `__mj_CreatedAt` or `__mj_UpdatedAt` columns
+   - CodeGen automatically adds these with proper defaults and triggers
+   - Including them manually will cause conflicts
+
+2. **Foreign Key Indexes**: Do NOT create indexes for foreign key columns
+   - CodeGen creates these with the naming pattern `IDX_AUTO_MJ_FKEY_<table>_<column>`
+   - Manual FK indexes will duplicate CodeGen's work
+
+**Example - What to include vs exclude:**
+```sql
+-- ✅ CORRECT - Only include business columns and constraints
+CREATE TABLE ${flyway:defaultSchema}.DashboardPermission (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    DashboardID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL,
+    CanRead BIT NOT NULL DEFAULT 1,
+    CanEdit BIT NOT NULL DEFAULT 0,
+    SharedByUserID UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT PK_DashboardPermission PRIMARY KEY (ID),
+    CONSTRAINT FK_DashboardPermission_Dashboard FOREIGN KEY (DashboardID) REFERENCES ${flyway:defaultSchema}.Dashboard(ID),
+    CONSTRAINT FK_DashboardPermission_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.User(ID),
+    CONSTRAINT UQ_DashboardPermission UNIQUE (DashboardID, UserID)
+);
+
+-- ❌ WRONG - Don't include these (CodeGen handles them)
+-- __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- CREATE INDEX IDX_DashboardPermission_DashboardID ON DashboardPermission(DashboardID);
+-- CREATE INDEX IDX_DashboardPermission_UserID ON DashboardPermission(UserID);
+```
+
 ## Entity Version Control
 - MemberJunction includes built-in version control called "Record Changes" for all entities
 - This feature tracks all changes to entity records unless explicitly disabled
@@ -276,7 +310,9 @@ Look for packages that depend on each other:
 - Prefer object shorthand syntax
 - Follow existing naming conventions:
   - PascalCase for classes and interfaces
-  - camelCase for variables, functions, methods
+  - **PascalCase for public class members** (properties, methods, `@Input()`, `@Output()`)
+  - **camelCase for private/protected class members**
+  - camelCase for local variables and function parameters
   - Use descriptive names and avoid abbreviations
 - Imports: group imports by type (external, internal, relative)
 - Error handling: use try/catch blocks and provide meaningful error messages
@@ -286,6 +322,50 @@ Look for packages that depend on each other:
   - Functions should have a clear, single purpose
   - Break complex operations into smaller, well-named helper functions
   - Aim for functions that fit on a single screen when possible
+
+### Class Member Naming Convention (IMPORTANT)
+
+MemberJunction uses **PascalCase for all public class members** and **camelCase for private/protected members**. This applies to:
+
+```typescript
+// ✅ CORRECT - MemberJunction naming convention
+export class MyComponent {
+    // Public properties - PascalCase
+    @Input() QueryId: string | null = null;
+    @Input() AutoRun: boolean = false;
+    @Output() EntityLinkClick = new EventEmitter<EntityLinkEvent>();
+
+    public IsLoading: boolean = false;
+    public SelectedRows: Record<string, unknown>[] = [];
+
+    // Private/protected properties - camelCase
+    private destroy$ = new Subject<void>();
+    private _internalState: string = '';
+    protected cdr: ChangeDetectorRef;
+
+    // Public methods - PascalCase
+    public LoadData(): void { }
+    public OnGridReady(event: GridReadyEvent): void { }
+    public GetSelectedRows(): Record<string, unknown>[] { }
+
+    // Private/protected methods - camelCase
+    private buildColumnDefs(): void { }
+    protected applyVisualConfig(): void { }
+}
+
+// ❌ WRONG - Standard TypeScript convention (not used in MJ)
+export class MyComponent {
+    @Input() queryId: string | null = null;  // Should be PascalCase
+    public isLoading: boolean = false;        // Should be PascalCase
+    public loadData(): void { }               // Should be PascalCase
+}
+```
+
+**Why this matters:**
+- Consistency across the entire MemberJunction codebase
+- Clear visual distinction between public API and internal implementation
+- Matches the naming style used in MJ's generated entity classes
+- HTML template bindings must match the PascalCase property names
 
 ## 🚨 IMPORTANT: FUNCTIONAL DECOMPOSITION IS MANDATORY 🚨
 

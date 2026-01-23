@@ -1,0 +1,587 @@
+<!-- Dashboard Browser Component -->
+<div class="dashboard-browser" [class.loading]="IsLoading">
+    <!-- Toolbar Row: Breadcrumb + Actions -->
+    <div class="browser-toolbar">
+        <!-- Breadcrumb Navigation -->
+        <mj-dashboard-breadcrumb
+            [Categories]="Categories"
+            [CurrentCategoryId]="SelectedCategoryId"
+            [RootIcon]="IconClass"
+            [RootLabel]="Title"
+            [AllowDragDrop]="AllowDragDrop && (DraggingId !== null || IsSelectionMode)"
+            Size="large"
+            (Navigate)="NavigateToCategory($event.CategoryId)"
+            (DashboardDrop)="OnBreadcrumbDrop($event)">
+        </mj-dashboard-breadcrumb>
+
+        <!-- Right-side Actions -->
+        <div class="toolbar-actions">
+            <!-- Dashboard count -->
+            <span class="dashboard-count">{{ FilteredDashboards.length }} dashboards</span>
+
+            <!-- View Toggle -->
+            <div class="view-toggle">
+                <button
+                    class="toggle-btn"
+                    [class.active]="ViewMode === 'cards'"
+                    (click)="SetViewMode('cards')"
+                    title="Card View">
+                    <i class="fa-solid fa-grip"></i>
+                </button>
+                <button
+                    class="toggle-btn"
+                    [class.active]="ViewMode === 'list'"
+                    (click)="SetViewMode('list')"
+                    title="List View">
+                    <i class="fa-solid fa-list"></i>
+                </button>
+            </div>
+
+            <!-- Selection Mode Toggle & Bulk Actions -->
+            <ng-container *ngIf="AllowMultiSelect">
+                <!-- Enter Selection Mode Button (when not in selection mode) -->
+                <button
+                    class="select-mode-btn"
+                    *ngIf="!IsSelectionMode && FilteredDashboards.length > 0"
+                    (click)="EnterSelectionMode()"
+                    title="Select multiple dashboards">
+                    <i class="fa-solid fa-check-double"></i>
+                    Select
+                </button>
+
+                <!-- Selection Mode Toolbar (when in selection mode) -->
+                <div class="selection-toolbar" *ngIf="IsSelectionMode">
+                    <span class="selected-count">{{ SelectedCount }} selected</span>
+                    <button class="action-btn" (click)="SelectAll()" title="Select all">
+                        <i class="fa-solid fa-check-double"></i>
+                    </button>
+                    <button class="action-btn" (click)="OnMoveSelected()" title="Move to folder" [disabled]="SelectedCount === 0">
+                        <i class="fa-solid fa-folder-open"></i>
+                    </button>
+                    <button class="action-btn danger" (click)="OnDeleteSelected()" title="Delete selected" [disabled]="!CanDeleteAnySelected">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                    <button class="action-btn" (click)="ExitSelectionMode()" title="Exit selection mode">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+            </ng-container>
+
+            <!-- New Dropdown Button -->
+            <div class="new-dropdown" *ngIf="ShowCreateButton">
+                <button
+                    class="btn-primary"
+                    (click)="ToggleNewMenu(); $event.stopPropagation()">
+                    <i class="fa-solid fa-plus"></i>
+                    New
+                    <i class="fa-solid fa-caret-down dropdown-caret"></i>
+                </button>
+                <div class="dropdown-menu" *ngIf="ShowNewMenu">
+                    <button class="dropdown-item" (click)="OnCreateDashboard()">
+                        <i class="fa-solid fa-chart-line"></i>
+                        Dashboard
+                    </button>
+                    <button class="dropdown-item" (click)="OpenCreateCategoryDialog()">
+                        <i class="fa-solid fa-folder-plus"></i>
+                        Category
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Click-away overlay for dropdown -->
+    <div class="dropdown-backdrop" *ngIf="ShowNewMenu" (click)="CloseNewMenu()"></div>
+
+    <!-- Filters -->
+    <div class="browser-filters">
+        <div class="search-box">
+            <i class="fa-solid fa-search"></i>
+            <input
+                type="text"
+                [(ngModel)]="SearchText"
+                (input)="OnSearchChange()"
+                placeholder="Search dashboards...">
+            <button
+                class="clear-btn"
+                *ngIf="SearchText"
+                (click)="ClearSearch()">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+
+        <button
+            class="clear-filters-btn"
+            *ngIf="SearchText"
+            (click)="ClearSearch()">
+            <i class="fa-solid fa-filter-circle-xmark"></i>
+            Clear Search
+        </button>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" *ngIf="IsLoading">
+        <mj-loading text="Loading dashboards..."></mj-loading>
+    </div>
+
+    <!-- Card View -->
+    <div class="dashboard-grid" *ngIf="ViewMode === 'cards' && (FilteredChildCategories.length > 0 || FilteredDashboards.length > 0)">
+        <!-- Category Folders -->
+        <div
+            *ngFor="let category of FilteredChildCategories; trackBy: TrackByCategory"
+            class="dashboard-card category-card"
+            [class.drop-target]="DragOverChildCategoryId === category.ID"
+            (click)="NavigateToCategory(category.ID)"
+            (dblclick)="$event.stopPropagation()"
+            (dragover)="OnDragOverChildCategory(category.ID, $event)"
+            (dragleave)="OnDragLeaveChildCategory()"
+            (drop)="OnDropOnChildCategory(category.ID, $event)">
+            <div class="card-header">
+                <div class="card-icon folder-icon">
+                    <i class="fa-solid fa-folder"></i>
+                </div>
+                <div class="card-actions">
+                    <button
+                        class="action-btn danger"
+                        title="Delete category"
+                        (click)="OnDeleteCategory(category, $event)">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-content">
+                <h3 class="card-title" [innerHTML]="HighlightMatch(category.Name)"></h3>
+                <p class="card-description" *ngIf="category.Description" [innerHTML]="HighlightMatch(category.Description)">
+                </p>
+                <div class="card-meta">
+                    <span class="meta-item">
+                        <i class="fa-solid fa-folder-tree"></i>
+                        Category
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Cards -->
+        <div
+            *ngFor="let dashboard of FilteredDashboards; trackBy: TrackByDashboard"
+            class="dashboard-card"
+            [class.selected]="IsSelected(dashboard.ID)"
+            [class.dragging]="DraggingId === dashboard.ID"
+            [draggable]="AllowDragDrop"
+            (click)="OnDashboardClick(dashboard, $event)"
+            (dblclick)="OnDashboardDoubleClick(dashboard, $event)"
+            (dragstart)="OnDragStart(dashboard, $event)"
+            (dragend)="OnDragEnd()">
+            <!-- Selection checkbox in top-right corner -->
+            <div
+                class="card-select-area"
+                *ngIf="IsSelectionMode"
+                (click)="ToggleSelection(dashboard.ID); $event.stopPropagation()">
+                <input
+                    type="checkbox"
+                    [checked]="IsSelected(dashboard.ID)"
+                    (change)="$event.stopPropagation()">
+            </div>
+            <div class="card-header">
+                <div class="card-icon">
+                    <i class="fa-solid fa-chart-line"></i>
+                </div>
+                <div class="card-actions">
+                    <button
+                        *ngIf="CanEdit(dashboard.ID)"
+                        class="action-btn"
+                        title="Edit"
+                        (click)="OnEditDashboard(dashboard, $event)">
+                        <i class="fa-solid fa-edit"></i>
+                    </button>
+                    <button
+                        *ngIf="CanDelete(dashboard.ID)"
+                        class="action-btn danger"
+                        title="Delete"
+                        (click)="OnDeleteDashboard(dashboard, $event)">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-content">
+                <h3 class="card-title">
+                    <span [innerHTML]="HighlightMatch(dashboard.Name)"></span>
+                    <span class="shared-badge" *ngIf="IsShared(dashboard.ID)" title="Shared with you">
+                        <i class="fa-solid fa-share-nodes"></i>
+                    </span>
+                </h3>
+                <p class="card-description" *ngIf="dashboard.Description" [innerHTML]="HighlightMatch(dashboard.Description)">
+                </p>
+                <div class="card-meta">
+                    <span class="meta-item">
+                        <i class="fa-solid fa-clock"></i>
+                        {{ FormatDate(dashboard.__mj_UpdatedAt) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- List View -->
+    <div class="dashboard-list" *ngIf="ViewMode === 'list' && (FilteredChildCategories.length > 0 || FilteredDashboards.length > 0)">
+        <div class="list-header">
+            <div class="list-col checkbox-col" *ngIf="IsSelectionMode">
+                <input
+                    type="checkbox"
+                    [checked]="SelectedCount === FilteredDashboards.length && FilteredDashboards.length > 0"
+                    [indeterminate]="SelectedCount > 0 && SelectedCount < FilteredDashboards.length"
+                    (change)="SelectedCount === FilteredDashboards.length ? ClearSelection() : SelectAll()">
+            </div>
+            <div class="list-col name-col">Name</div>
+            <div class="list-col type-col">Type</div>
+            <div class="list-col date-col">Modified</div>
+            <div class="list-col actions-col">Actions</div>
+        </div>
+        <!-- Category Rows -->
+        <div
+            *ngFor="let category of FilteredChildCategories; trackBy: TrackByCategory"
+            class="list-row category-row"
+            [class.drop-target]="DragOverChildCategoryId === category.ID"
+            (click)="NavigateToCategory(category.ID)"
+            (dragover)="OnDragOverChildCategory(category.ID, $event)"
+            (dragleave)="OnDragLeaveChildCategory()"
+            (drop)="OnDropOnChildCategory(category.ID, $event)">
+            <div class="list-col checkbox-col" *ngIf="IsSelectionMode">
+                <!-- Empty placeholder for alignment -->
+            </div>
+            <div class="list-col name-col">
+                <i class="fa-solid fa-folder row-icon folder-icon"></i>
+                <span class="dashboard-name" [innerHTML]="HighlightMatch(category.Name)"></span>
+            </div>
+            <div class="list-col type-col">
+                Category
+            </div>
+            <div class="list-col date-col">
+                <!-- No date for categories -->
+            </div>
+            <div class="list-col actions-col" (click)="$event.stopPropagation()">
+                <button
+                    class="action-btn danger"
+                    title="Delete category"
+                    (click)="OnDeleteCategory(category, $event)">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        <!-- Dashboard Rows -->
+        <div
+            *ngFor="let dashboard of FilteredDashboards; trackBy: TrackByDashboard"
+            class="list-row"
+            [class.selected]="IsSelected(dashboard.ID)"
+            [class.dragging]="DraggingId === dashboard.ID"
+            [draggable]="AllowDragDrop"
+            (click)="OnDashboardClick(dashboard, $event)"
+            (dblclick)="OnDashboardDoubleClick(dashboard, $event)"
+            (dragstart)="OnDragStart(dashboard, $event)"
+            (dragend)="OnDragEnd()">
+            <div class="list-col checkbox-col" *ngIf="IsSelectionMode" (click)="$event.stopPropagation()">
+                <input
+                    type="checkbox"
+                    [checked]="IsSelected(dashboard.ID)"
+                    (change)="ToggleSelection(dashboard.ID)">
+            </div>
+            <div class="list-col name-col">
+                <i class="fa-solid fa-chart-line row-icon"></i>
+                <span class="dashboard-name" [innerHTML]="HighlightMatch(dashboard.Name)"></span>
+                <span class="shared-badge" *ngIf="IsShared(dashboard.ID)" title="Shared with you">
+                    <i class="fa-solid fa-share-nodes"></i>
+                </span>
+            </div>
+            <div class="list-col type-col">
+                Dashboard
+            </div>
+            <div class="list-col date-col">
+                {{ FormatDate(dashboard.__mj_UpdatedAt) }}
+            </div>
+            <div class="list-col actions-col" (click)="$event.stopPropagation()">
+                <button
+                    *ngIf="CanEdit(dashboard.ID)"
+                    class="action-btn"
+                    title="Edit"
+                    (click)="OnEditDashboard(dashboard, $event)">
+                    <i class="fa-solid fa-edit"></i>
+                </button>
+                <button
+                    *ngIf="CanDelete(dashboard.ID)"
+                    class="action-btn danger"
+                    title="Delete"
+                    (click)="OnDeleteDashboard(dashboard, $event)">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" *ngIf="FilteredDashboards.length === 0 && FilteredChildCategories.length === 0 && !IsLoading">
+        <div class="empty-state-content">
+            <!-- First-time user experience (no dashboards at all) -->
+            <ng-container *ngIf="IsAtRoot && Dashboards.length === 0">
+                <div class="empty-illustration">
+                    <div class="illustration-bg">
+                        <i class="fa-solid fa-gauge-high main-icon"></i>
+                    </div>
+                    <div class="illustration-accent accent-1"><i class="fa-solid fa-chart-line"></i></div>
+                    <div class="illustration-accent accent-2"><i class="fa-solid fa-chart-bar"></i></div>
+                    <div class="illustration-accent accent-3"><i class="fa-solid fa-chart-pie"></i></div>
+                </div>
+                <h2 class="empty-title">Welcome to Dashboards</h2>
+                <p class="empty-description">
+                    Create custom dashboards to visualize your data, track key metrics, and monitor important information all in one place.
+                </p>
+                <div class="empty-actions" *ngIf="ShowCreateButton">
+                    <button class="btn-primary large" (click)="OnCreateDashboard()">
+                        <i class="fa-solid fa-plus"></i>
+                        Create Your First Dashboard
+                    </button>
+                </div>
+                <div class="empty-features">
+                    <div class="feature-item">
+                        <i class="fa-solid fa-table-cells"></i>
+                        <span>Customizable layouts</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fa-solid fa-database"></i>
+                        <span>Connect to your data</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fa-solid fa-share-nodes"></i>
+                        <span>Share with your team</span>
+                    </div>
+                </div>
+            </ng-container>
+
+            <!-- Folder is empty -->
+            <ng-container *ngIf="!IsAtRoot && !SearchText">
+                <div class="empty-icon folder-empty">
+                    <i class="fa-solid fa-folder-open"></i>
+                </div>
+                <h3 class="empty-title">This folder is empty</h3>
+                <p class="empty-description">
+                    Add dashboards or create sub-folders to organize your content.
+                </p>
+                <div class="empty-actions" *ngIf="ShowCreateButton">
+                    <button class="btn-primary" (click)="OnCreateDashboard()">
+                        <i class="fa-solid fa-plus"></i>
+                        Create Dashboard
+                    </button>
+                </div>
+            </ng-container>
+
+            <!-- Root has dashboards but none uncategorized -->
+            <ng-container *ngIf="IsAtRoot && Dashboards.length > 0 && !SearchText">
+                <div class="empty-icon">
+                    <i class="fa-solid fa-folder-tree"></i>
+                </div>
+                <h3 class="empty-title">No uncategorized dashboards</h3>
+                <p class="empty-description">
+                    All your dashboards are organized into folders. Browse the folders above or create a new dashboard here.
+                </p>
+                <div class="empty-actions" *ngIf="ShowCreateButton">
+                    <button class="btn-primary" (click)="OnCreateDashboard()">
+                        <i class="fa-solid fa-plus"></i>
+                        Create Dashboard
+                    </button>
+                </div>
+            </ng-container>
+
+            <!-- Search returned no results -->
+            <ng-container *ngIf="SearchText">
+                <div class="empty-icon search-empty">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </div>
+                <h3 class="empty-title">No results found</h3>
+                <p class="empty-description">
+                    No dashboards or folders match "<strong>{{ SearchText }}</strong>". Try a different search term.
+                </p>
+                <div class="empty-actions">
+                    <button class="btn-secondary" (click)="ClearSearch()">
+                        <i class="fa-solid fa-times"></i>
+                        Clear Search
+                    </button>
+                </div>
+            </ng-container>
+        </div>
+    </div>
+
+    <!-- Category Drop Zones (for drag and drop) -->
+    <div class="category-drop-zones" *ngIf="DraggingId && Categories.length > 0">
+        <div class="drop-zone-header">Drop to move to category:</div>
+        <div class="drop-zones">
+            <div
+                class="drop-zone"
+                [class.active]="DropTargetCategoryId === null"
+                (dragover)="OnDragOverCategory(null, $event)"
+                (dragleave)="OnDragLeaveCategory()"
+                (drop)="OnDropOnCategory(null, $event)">
+                <i class="fa-solid fa-folder-open"></i>
+                Uncategorized
+            </div>
+            <div
+                *ngFor="let cat of Categories; trackBy: TrackByCategory"
+                class="drop-zone"
+                [class.active]="DropTargetCategoryId === cat.ID"
+                (dragover)="OnDragOverCategory(cat.ID, $event)"
+                (dragleave)="OnDragLeaveCategory()"
+                (drop)="OnDropOnCategory(cat.ID, $event)">
+                <i class="fa-solid fa-folder"></i>
+                {{ cat.Name }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <mj-confirm-dialog
+        [visible]="ShowDeleteConfirm"
+        type="danger"
+        title="Delete Dashboard{{ DashboardsPendingDelete.length > 1 ? 's' : '' }}"
+        [message]="DashboardsPendingDelete.length === 1
+            ? 'Are you sure you want to delete \'' + DashboardsPendingDelete[0].Name + '\'? This action cannot be undone.'
+            : 'Are you sure you want to delete ' + DashboardsPendingDelete.length + ' dashboards? This action cannot be undone.'"
+        confirmText="Delete"
+        cancelText="Cancel"
+        (confirmed)="ConfirmDelete()"
+        (cancelled)="CloseDeleteConfirm()">
+    </mj-confirm-dialog>
+
+    <!-- Move to Folder Dialog -->
+    <div class="move-dialog-overlay" *ngIf="ShowMoveDialog" (click)="CloseMoveDialog()">
+        <div class="move-dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
+                <h3>Move to Category</h3>
+                <button class="close-btn" (click)="CloseMoveDialog()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="dialog-content">
+                <p>Move {{ SelectedCount }} dashboard{{ SelectedCount > 1 ? 's' : '' }} to:</p>
+                <div class="category-list">
+                    <div
+                        class="category-option"
+                        (click)="ConfirmMove(null)">
+                        <i class="fa-solid fa-folder-open"></i>
+                        Uncategorized
+                    </div>
+                    <div
+                        *ngFor="let cat of Categories; trackBy: TrackByCategory"
+                        class="category-option"
+                        (click)="ConfirmMove(cat.ID)">
+                        <i class="fa-solid fa-folder"></i>
+                        {{ cat.Name }}
+                    </div>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button class="btn-secondary" (click)="CloseMoveDialog()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Category Dialog -->
+    <div class="create-category-dialog-overlay" *ngIf="ShowCreateCategoryDialog" (click)="CloseCreateCategoryDialog()">
+        <div class="create-category-dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
+                <h3>
+                    <i class="fa-solid fa-folder-plus"></i>
+                    Create Category
+                </h3>
+                <button class="close-btn" (click)="CloseCreateCategoryDialog()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="dialog-content">
+                <div class="form-field">
+                    <label for="category-name">Name *</label>
+                    <input
+                        type="text"
+                        id="category-name"
+                        [(ngModel)]="NewCategoryName"
+                        placeholder="Enter category name"
+                        (keyup.enter)="ConfirmCreateCategory()">
+                </div>
+                <div class="form-field">
+                    <label for="category-description">Description</label>
+                    <textarea
+                        id="category-description"
+                        [(ngModel)]="NewCategoryDescription"
+                        placeholder="Optional description"
+                        rows="3"></textarea>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button
+                    class="btn-primary"
+                    (click)="ConfirmCreateCategory()"
+                    [disabled]="!NewCategoryName.trim()">
+                    <i class="fa-solid fa-plus"></i>
+                    Create
+                </button>
+                <button class="btn-secondary" (click)="CloseCreateCategoryDialog()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Category Confirmation Dialog -->
+    <div class="delete-category-dialog-overlay" *ngIf="ShowDeleteCategoryConfirm" (click)="CloseDeleteCategoryConfirm()">
+        <div class="delete-category-dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header danger">
+                <h3>
+                    <i class="fa-solid fa-exclamation-triangle"></i>
+                    Delete Category
+                </h3>
+                <button class="close-btn" (click)="CloseDeleteCategoryConfirm()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="dialog-content" *ngIf="CategoryPendingDelete">
+                <div class="warning-message">
+                    <p>
+                        You are about to delete the category <strong>"{{ CategoryPendingDelete.Name }}"</strong>.
+                    </p>
+                    <ng-container *ngIf="GetCategoryContentCount(CategoryPendingDelete) as counts">
+                        <p *ngIf="counts.dashboards > 0 || counts.categories > 0" class="content-warning">
+                            <i class="fa-solid fa-warning"></i>
+                            This category contains:
+                        </p>
+                        <ul *ngIf="counts.dashboards > 0 || counts.categories > 0" class="content-list">
+                            <li *ngIf="counts.dashboards > 0">
+                                <i class="fa-solid fa-chart-line"></i>
+                                {{ counts.dashboards }} dashboard{{ counts.dashboards !== 1 ? 's' : '' }}
+                            </li>
+                            <li *ngIf="counts.categories > 0">
+                                <i class="fa-solid fa-folder"></i>
+                                {{ counts.categories }} sub-categor{{ counts.categories !== 1 ? 'ies' : 'y' }}
+                            </li>
+                        </ul>
+                    </ng-container>
+                </div>
+                <div class="confirmation-checkbox">
+                    <label class="checkbox-label">
+                        <input
+                            type="checkbox"
+                            [(ngModel)]="DeleteCategoryIncludeContents">
+                        <span class="checkbox-text">
+                            I understand this will permanently delete this category and all its contents. This action cannot be undone.
+                        </span>
+                    </label>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button
+                    class="btn-danger"
+                    (click)="ConfirmDeleteCategory()"
+                    [disabled]="!DeleteCategoryIncludeContents">
+                    <i class="fa-solid fa-trash"></i>
+                    Delete Category
+                </button>
+                <button class="btn-secondary" (click)="CloseDeleteCategoryConfirm()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>

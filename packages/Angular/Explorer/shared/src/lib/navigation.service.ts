@@ -6,10 +6,16 @@ import { fromEvent, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 /**
- * System application ID for non-app-specific resources
+ * System application ID for non-app-specific resources (fallback only)
  * Uses double underscore prefix to indicate system-level resource
+ * @deprecated Prefer using NavigationService.getDefaultApplicationId() instead
  */
 export const SYSTEM_APP_ID = '__explorer';
+
+/**
+ * Neutral color for fallback when no app is available
+ */
+const NEUTRAL_APP_COLOR = '#9E9E9E'; // Material Design Gray 500
 
 /**
  * Centralized navigation service that handles all navigation operations
@@ -22,6 +28,11 @@ export class NavigationService implements OnDestroy {
   private shiftKeyPressed = false;
   private subscriptions: Subscription[] = [];
 
+  /** Cached Home app ID (null means not found, undefined means not checked) */
+  private _homeAppId: string | null | undefined = undefined;
+  /** Cached Home app color */
+  private _homeAppColor: string | null = null;
+
   constructor(
     private workspaceManager: WorkspaceStateManager,
     private appManager: ApplicationManager
@@ -32,9 +43,84 @@ export class NavigationService implements OnDestroy {
   /**
    * Get the neutral color used for system-wide resources (entities, views, dashboards)
    * Returns a light neutral gray
+   * @deprecated Use getDefaultAppColor() for better UX with Home app integration
    */
   get ExplorerAppColor(): string {
-    return '#9E9E9E'; // Material Design Gray 500 - neutral, professional
+    return NEUTRAL_APP_COLOR;
+  }
+
+  /**
+   * Gets the default application ID for orphan resources.
+   * Priority: Home app > Active app > SYSTEM_APP_ID
+   *
+   * This ensures orphan resources (entity records, dashboards, views opened directly)
+   * are grouped under the Home app instead of being orphaned in the tab system.
+   */
+  private getDefaultApplicationId(): string {
+    // Check cache first
+    if (this._homeAppId !== undefined) {
+      if (this._homeAppId !== null) {
+        return this._homeAppId;
+      }
+      // Home app not found, check active app
+      const activeApp = this.appManager.GetActiveApp();
+      if (activeApp) {
+        return activeApp.ID;
+      }
+      return SYSTEM_APP_ID;
+    }
+
+    // First time - look for Home app
+    const homeApp = this.appManager.GetAppByName('Home');
+    if (homeApp) {
+      this._homeAppId = homeApp.ID;
+      this._homeAppColor = homeApp.GetColor();
+      return homeApp.ID;
+    }
+
+    // Cache that Home app doesn't exist
+    this._homeAppId = null;
+
+    // Fall back to currently active app
+    const activeApp = this.appManager.GetActiveApp();
+    if (activeApp) {
+      return activeApp.ID;
+    }
+
+    // Last resort - system app ID
+    return SYSTEM_APP_ID;
+  }
+
+  /**
+   * Gets the default app color for orphan resources.
+   * Returns Home app color if available, otherwise neutral gray.
+   */
+  private getDefaultAppColor(): string {
+    // Ensure cache is populated
+    this.getDefaultApplicationId();
+
+    // If Home app exists, use its color
+    if (this._homeAppColor) {
+      return this._homeAppColor;
+    }
+
+    // Check active app
+    const activeApp = this.appManager.GetActiveApp();
+    if (activeApp) {
+      return activeApp.GetColor();
+    }
+
+    // Fall back to neutral color
+    return NEUTRAL_APP_COLOR;
+  }
+
+  /**
+   * Clears the cached Home app info.
+   * Call this if apps are reloaded or user logs out.
+   */
+  public clearHomeAppCache(): void {
+    this._homeAppId = undefined;
+    this._homeAppColor = null;
   }
 
   ngOnDestroy(): void {
@@ -184,18 +270,21 @@ export class NavigationService implements OnDestroy {
 
   /**
    * Open an entity record view
-   * System-wide resource using __explorer app ID and neutral color
+   * Uses Home app if available, otherwise falls back to active app or system app
    */
   public OpenEntityRecord(
     entityName: string,
     recordPkey: CompositeKey,
     options?: NavigationOptions
   ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
+
     console.log('NavigationService.OpenEntityRecord called:', {
       entityName,
       recordPkey: recordPkey.ToURLSegment(),
-      systemAppId: SYSTEM_APP_ID,
-      color: this.ExplorerAppColor,
+      appId,
+      color: appColor,
       options
     });
 
@@ -203,7 +292,7 @@ export class NavigationService implements OnDestroy {
 
     const recordId = recordPkey.ToURLSegment();
     const request: TabRequest = {
-      ApplicationId: SYSTEM_APP_ID,
+      ApplicationId: appId,
       Title: `${entityName} - ${recordId}`,
       Configuration: {
         resourceType: 'Records',
@@ -220,28 +309,31 @@ export class NavigationService implements OnDestroy {
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
-      const tabId = this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      const tabId = this.workspaceManager.OpenTabForced(request, appColor);
       console.log('NavigationService.OpenEntityRecord created new tab:', tabId);
       return tabId;
     } else {
-      const tabId = this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      const tabId = this.workspaceManager.OpenTab(request, appColor);
       console.log('NavigationService.OpenEntityRecord opened tab:', tabId);
       return tabId;
     }
   }
 
   /**
-   * Open a view (system-wide resource)
+   * Open a view
+   * Uses Home app if available, otherwise falls back to active app or system app
    */
   public OpenView(
     viewId: string,
     viewName: string,
     options?: NavigationOptions
   ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
     const forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
-      ApplicationId: SYSTEM_APP_ID,
+      ApplicationId: appId,
       Title: viewName,
       Configuration: {
         resourceType: 'User Views',
@@ -256,24 +348,27 @@ export class NavigationService implements OnDestroy {
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
-      return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTabForced(request, appColor);
     } else {
-      return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTab(request, appColor);
     }
   }
 
   /**
-   * Open a dashboard (system-wide resource)
+   * Open a dashboard
+   * Uses Home app if available, otherwise falls back to active app or system app
    */
   public OpenDashboard(
     dashboardId: string,
     dashboardName: string,
     options?: NavigationOptions
   ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
     const forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
-      ApplicationId: SYSTEM_APP_ID,
+      ApplicationId: appId,
       Title: dashboardName,
       Configuration: {
         resourceType: 'Dashboards',
@@ -288,24 +383,27 @@ export class NavigationService implements OnDestroy {
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
-      return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTabForced(request, appColor);
     } else {
-      return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTab(request, appColor);
     }
   }
 
   /**
-   * Open a report (system-wide resource)
+   * Open a report
+   * Uses Home app if available, otherwise falls back to active app or system app
    */
   public OpenReport(
     reportId: string,
     reportName: string,
     options?: NavigationOptions
   ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
     const forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
-      ApplicationId: SYSTEM_APP_ID,
+      ApplicationId: appId,
       Title: reportName,
       Configuration: {
         resourceType: 'Reports',
@@ -320,25 +418,28 @@ export class NavigationService implements OnDestroy {
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
-      return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTabForced(request, appColor);
     } else {
-      return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTab(request, appColor);
     }
   }
 
   /**
-   * Open an artifact (system-wide resource)
+   * Open an artifact
    * Artifacts are versioned content containers (reports, dashboards, UI components, etc.)
+   * Uses Home app if available, otherwise falls back to active app or system app
    */
   public OpenArtifact(
     artifactId: string,
     artifactName?: string,
     options?: NavigationOptions
   ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
     const forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
-      ApplicationId: SYSTEM_APP_ID,
+      ApplicationId: appId,
       Title: artifactName || `Artifact - ${artifactId}`,
       Configuration: {
         resourceType: 'Artifacts',
@@ -353,26 +454,29 @@ export class NavigationService implements OnDestroy {
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
-      return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTabForced(request, appColor);
     } else {
-      return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTab(request, appColor);
     }
   }
 
   /**
-   * Open a dynamic view (system-wide resource)
+   * Open a dynamic view
    * Dynamic views are entity-based views with custom filters, not saved views
+   * Uses Home app if available, otherwise falls back to active app or system app
    */
   public OpenDynamicView(
     entityName: string,
     extraFilter?: string,
     options?: NavigationOptions
   ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
     const forceNew = this.shouldForceNewTab(options);
 
     const filterSuffix = extraFilter ? ' (Filtered)' : '';
     const request: TabRequest = {
-      ApplicationId: SYSTEM_APP_ID,
+      ApplicationId: appId,
       Title: `${entityName}${filterSuffix}`,
       Configuration: {
         resourceType: 'User Views',
@@ -389,24 +493,27 @@ export class NavigationService implements OnDestroy {
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
-      return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTabForced(request, appColor);
     } else {
-      return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTab(request, appColor);
     }
   }
 
   /**
-   * Open a query (system-wide resource)
+   * Open a query
+   * Uses Home app if available, otherwise falls back to active app or system app
    */
   public OpenQuery(
     queryId: string,
     queryName: string,
     options?: NavigationOptions
   ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
     const forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
-      ApplicationId: SYSTEM_APP_ID,
+      ApplicationId: appId,
       Title: queryName,
       Configuration: {
         resourceType: 'Queries',
@@ -421,15 +528,15 @@ export class NavigationService implements OnDestroy {
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
-      return this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTabForced(request, appColor);
     } else {
-      return this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      return this.workspaceManager.OpenTab(request, appColor);
     }
   }
 
   /**
    * Open a new entity record creation form
-   * System-wide resource using __explorer app ID and neutral color
+   * Uses Home app if available, otherwise falls back to active app or system app
    * @param entityName The name of the entity to create a new record for
    * @param options Navigation options including optional newRecordValues for pre-populating fields
    */
@@ -437,17 +544,20 @@ export class NavigationService implements OnDestroy {
     entityName: string,
     options?: NavigationOptions
   ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
+
     console.log('NavigationService.OpenNewEntityRecord called:', {
       entityName,
-      systemAppId: SYSTEM_APP_ID,
-      color: this.ExplorerAppColor,
+      appId,
+      color: appColor,
       options
     });
 
     const forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
-      ApplicationId: SYSTEM_APP_ID,
+      ApplicationId: appId,
       Title: `New ${entityName}`,
       Configuration: {
         resourceType: 'Records',
@@ -466,11 +576,11 @@ export class NavigationService implements OnDestroy {
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
-      const tabId = this.workspaceManager.OpenTabForced(request, this.ExplorerAppColor);
+      const tabId = this.workspaceManager.OpenTabForced(request, appColor);
       console.log('NavigationService.OpenNewEntityRecord created new tab:', tabId);
       return tabId;
     } else {
-      const tabId = this.workspaceManager.OpenTab(request, this.ExplorerAppColor);
+      const tabId = this.workspaceManager.OpenTab(request, appColor);
       console.log('NavigationService.OpenNewEntityRecord opened tab:', tabId);
       return tabId;
     }
@@ -581,5 +691,64 @@ export class NavigationService implements OnDestroy {
         this.workspaceManager.SetActiveTab(appTabs[0].id);
       }
     }
+  }
+
+  /**
+   * Update the query params for the currently active tab.
+   * This updates the tab's configuration and triggers a URL sync via the shell's
+   * workspace configuration subscription.
+   *
+   * Use this instead of directly calling router.navigate() to ensure proper
+   * URL management that respects app-scoped routes.
+   *
+   * @param queryParams Object containing query param key-value pairs.
+   *                    Use null values to remove a query param.
+   * @example
+   * // Add or update query params
+   * navigationService.UpdateActiveTabQueryParams({ category: 'abc123', dashboard: 'xyz789' });
+   *
+   * // Remove a query param
+   * navigationService.UpdateActiveTabQueryParams({ category: null });
+   */
+  UpdateActiveTabQueryParams(queryParams: Record<string, string | null>): void {
+    const activeTabId = this.workspaceManager.GetActiveTabId();
+    if (!activeTabId) {
+      console.warn('NavigationService.UpdateActiveTabQueryParams: No active tab');
+      return;
+    }
+
+    // Get the current tab to merge with existing queryParams
+    const tab = this.workspaceManager.GetTab(activeTabId);
+    if (!tab) {
+      console.warn('NavigationService.UpdateActiveTabQueryParams: Tab not found');
+      return;
+    }
+
+    // Get existing queryParams from tab configuration
+    const existingQueryParams = (tab.configuration?.['queryParams'] || {}) as Record<string, string | null>;
+
+    // Merge with new query params
+    const mergedQueryParams: Record<string, string> = {};
+
+    // Start with existing params (excluding nulls)
+    for (const [key, value] of Object.entries(existingQueryParams)) {
+      if (value !== null) {
+        mergedQueryParams[key] = value;
+      }
+    }
+
+    // Apply new params (null means remove)
+    for (const [key, value] of Object.entries(queryParams)) {
+      if (value === null) {
+        delete mergedQueryParams[key];
+      } else {
+        mergedQueryParams[key] = value;
+      }
+    }
+
+    // Update the tab configuration
+    this.workspaceManager.UpdateTabConfiguration(activeTabId, {
+      queryParams: Object.keys(mergedQueryParams).length > 0 ? mergedQueryParams : undefined
+    });
   }
 }

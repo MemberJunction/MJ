@@ -1,5 +1,56 @@
 # Change Log - @memberjunction/cli
 
+## 3.2.0
+
+### Patch Changes
+
+- 011c820: Improve migration error diagnostics and fix parent agent chat handling to respect sub-agent responses
+- Updated dependencies [cbd2714]
+- Updated dependencies [454d2dd]
+  - @memberjunction/metadata-sync@3.2.0
+  - @memberjunction/db-auto-doc@3.2.0
+  - @memberjunction/ai-cli@3.2.0
+  - @memberjunction/codegen-lib@3.2.0
+  - @memberjunction/query-gen@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/testing-cli@3.2.0
+  - @memberjunction/config@3.2.0
+  - @memberjunction/core@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/metadata-sync@3.1.1
+- @memberjunction/ai-cli@3.1.1
+- @memberjunction/codegen-lib@3.1.1
+- @memberjunction/config@3.1.1
+- @memberjunction/db-auto-doc@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/query-gen@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+- @memberjunction/testing-cli@3.1.1
+
+## 3.0.0
+
+### Major Changes
+
+- f25f757: The foundation for MemberJunction v3.0's improved architecture, making it easier for developers to adopt and customize MJ for their needs.
+
+### Patch Changes
+
+- 736e035: Point to the correct version of the v3 baseline db migration script
+- Updated dependencies [f25f757]
+  - @memberjunction/metadata-sync@3.0.0
+  - @memberjunction/codegen-lib@3.0.0
+  - @memberjunction/config@3.0.0
+  - @memberjunction/ai-cli@3.0.0
+  - @memberjunction/db-auto-doc@3.0.0
+  - @memberjunction/core@3.0.0
+  - @memberjunction/query-gen@3.0.0
+  - @memberjunction/sqlserver-dataprovider@3.0.0
+  - @memberjunction/testing-cli@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -485,7 +536,6 @@
 ### Patch Changes
 
 - 3f71ef4: Add new storage actions and external API integrations
-
   - Add 13 individual file storage actions
   - Add Gamma API integration for AI-powered presentation generation
   - Add Perplexity Search action for AI-powered web search with
@@ -585,7 +635,6 @@
 ### Patch Changes
 
 - d7b5647: feat(metadata-sync): add deleteRecord feature for removing records via sync
-
   - Added deleteRecord directive to mark records for deletion in JSON files
   - Records with deleteRecord.delete=true are deleted during push operations
   - After successful deletion, adds deletedAt timestamp to track when deleted
@@ -846,7 +895,6 @@
 ### Patch Changes
 
 - e75f0a4: Major AI Agent and AI Prompt Management Enhancements
-
   - **AI Agent Forms**: Complete redesign with comprehensive sub-agent creation, advanced settings management, and transaction-based persistence
   - **AI Prompt Forms**: Implemented atomic "Create New Prompt" feature with template linking and proper MemberJunction navigation
   - **User Permissions**: Added comprehensive user permission reflection across AI forms and dashboards
@@ -893,7 +941,6 @@
 ### Patch Changes
 
 - 035690c: MetadataSync pull operations major improvements
-
   - **JSON Property Ordering**: Fixed inconsistent JSON property ordering
     across metadata files by implementing JsonWriteHelper with
     deterministic serialization
@@ -910,7 +957,6 @@
       pulled data
   - **ExternalizeFields Implementation**: Complete field externalization
     functionality with:
-
     - Configurable file patterns with placeholders ({Name}, {ID}, etc.)
     - Smart merge strategy support preserving existing @file: references
     - Enhanced checksum calculation including external file content
@@ -1048,7 +1094,6 @@
 ### Patch Changes
 
 - 17c7634: Integrate MetadataSync commands into MJCLI
-
   - Refactored MetadataSync from standalone CLI to reusable library
   - Moved all sync commands under `mj sync` namespace in MJCLI
   - Added service-based architecture for better modularity

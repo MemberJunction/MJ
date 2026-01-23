@@ -1,0 +1,465 @@
+/* Dashboard Share Dialog - Compact Design */
+
+/* Window Styling - use specific class to override Kendo defaults */
+.mj-share-dialog-window.k-window {
+    border-radius: 12px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
+    overflow: hidden !important;
+}
+
+.mj-share-dialog-window .k-window-titlebar {
+    background: #3f51b5 !important;
+    border: none !important;
+    padding: 16px 20px !important;
+}
+
+.mj-share-dialog-window .k-window-titlebar .k-window-title {
+    display: none !important;
+}
+
+.mj-share-dialog-window .k-window-titlebar .k-window-actions .k-button {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border: none !important;
+    color: #fff !important;
+    border-radius: 4px !important;
+}
+
+.mj-share-dialog-window .k-window-titlebar .k-window-actions .k-button:hover {
+    background: rgba(255, 255, 255, 0.25) !important;
+}
+
+.mj-share-dialog-window .k-window-content {
+    padding: 0 !important;
+    background: #fff !important;
+}
+
+/* Header */
+.share-dialog-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.share-dialog-header i {
+    font-size: 18px;
+    opacity: 0.9;
+}
+
+/* Body */
+.share-dialog-body {
+    padding: 0;
+}
+
+/* Alert */
+.share-alert {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    font-size: 13px;
+}
+
+.share-alert-error {
+    background: #ffebee;
+    color: #c62828;
+    border-bottom: 1px solid #ffcdd2;
+}
+
+/* Sections */
+.share-section {
+    padding: 16px 20px;
+}
+
+.share-section:not(:last-child) {
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.share-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #757575;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+/* Search Box */
+.share-search-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #f5f5f5;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+}
+
+.share-search-box:focus-within {
+    background: #fff;
+    border-color: #3f51b5;
+    box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.1);
+}
+
+.share-search-box i {
+    color: #9e9e9e;
+    font-size: 14px;
+}
+
+.share-search-box input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    outline: none;
+}
+
+.share-search-box input::placeholder {
+    color: #9e9e9e;
+}
+
+/* User Dropdown */
+.share-user-dropdown {
+    margin-top: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fafafa;
+}
+
+.share-user-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+}
+
+.share-user-option:hover {
+    background: rgba(63, 81, 181, 0.08);
+}
+
+.share-user-option:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.share-user-option .share-user-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: #212121;
+}
+
+.share-user-option .share-user-email {
+    font-size: 12px;
+    color: #757575;
+    margin-right: auto;
+}
+
+.share-user-option i.fa-plus {
+    color: #3f51b5;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+
+.share-user-option:hover i.fa-plus {
+    opacity: 1;
+}
+
+.share-no-results {
+    padding: 16px;
+    text-align: center;
+    color: #757575;
+    font-size: 13px;
+}
+
+/* Avatar */
+.share-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #5c6bc0, #3f51b5);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.share-avatar-owner {
+    background: linear-gradient(135deg, #ffc107, #ff9800);
+    font-size: 14px;
+}
+
+.share-avatar-removed {
+    background: #bdbdbd;
+}
+
+/* Person Row */
+.share-person {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+}
+
+.share-person:not(:last-child) {
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.share-person-new {
+    background: rgba(76, 175, 80, 0.05);
+    margin: 0 -20px;
+    padding: 10px 20px;
+}
+
+.share-person-modified {
+    background: rgba(33, 150, 243, 0.05);
+    margin: 0 -20px;
+    padding: 10px 20px;
+}
+
+.share-person-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.share-person-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #212121;
+}
+
+.share-person-email {
+    font-size: 12px;
+    color: #757575;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-person-role {
+    font-size: 12px;
+    color: #ff9800;
+    font-weight: 500;
+}
+
+.share-badge-new {
+    padding: 2px 6px;
+    background: #4caf50;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 4px;
+}
+
+/* Permissions */
+.share-permissions {
+    display: flex;
+    gap: 4px;
+}
+
+.share-perm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s;
+    position: relative;
+}
+
+.share-perm input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.share-perm i {
+    font-size: 12px;
+    color: #bdbdbd;
+    transition: color 0.1s;
+}
+
+.share-perm:hover {
+    background: #f0f0f0;
+}
+
+.share-perm input:checked + i {
+    color: #3f51b5;
+}
+
+.share-perm input:disabled + i {
+    color: #3f51b5;
+    opacity: 0.7;
+}
+
+/* Remove Button */
+.share-remove-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: #bdbdbd;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.1s;
+}
+
+.share-remove-btn:hover {
+    background: #ffebee;
+    color: #f44336;
+}
+
+/* Empty State */
+.share-empty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px;
+    color: #9e9e9e;
+    font-size: 13px;
+    background: #fafafa;
+    border-radius: 8px;
+    justify-content: center;
+}
+
+.share-empty i {
+    font-size: 16px;
+}
+
+/* Removed Section */
+.share-removed-section {
+    margin-top: 12px;
+    padding: 12px;
+    background: #fff3e0;
+    border-radius: 8px;
+    border: 1px solid #ffe0b2;
+}
+
+.share-removed-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+}
+
+.share-removed-name {
+    flex: 1;
+    font-size: 13px;
+    color: #757575;
+    text-decoration: line-through;
+}
+
+.share-undo-btn {
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    color: #f57c00;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.share-undo-btn:hover {
+    text-decoration: underline;
+}
+
+/* Footer */
+.share-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #fafafa;
+    border-top: 1px solid #e0e0e0;
+}
+
+.share-changes-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #3f51b5;
+}
+
+.share-changes-hint i {
+    font-size: 6px;
+}
+
+.share-footer-actions {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.share-btn {
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.share-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.share-btn-secondary {
+    background: #fff;
+    border: 1px solid #d0d0d0;
+    color: #666;
+}
+
+.share-btn-secondary:hover:not(:disabled) {
+    background: #f5f5f5;
+    border-color: #bdbdbd;
+}
+
+.share-btn-primary {
+    background: #3f51b5;
+    border: none;
+    color: #fff;
+}
+
+.share-btn-primary:hover:not(:disabled) {
+    background: #303f9f;
+    box-shadow: 0 2px 8px rgba(63, 81, 181, 0.3);
+}
+
+/* Owner row specific styling */
+.share-owner {
+    background: linear-gradient(135deg, #fff8e1, #ffecb3);
+    margin: 0 -20px;
+    padding: 10px 20px;
+    border-radius: 0;
+}

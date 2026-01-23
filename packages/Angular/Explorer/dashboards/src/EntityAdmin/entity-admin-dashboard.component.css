@@ -1,94 +1,129 @@
+/**
+ * Entity Admin Dashboard Component - MD3 Styled
+ * Material Design 3 theming for the entity admin dashboard
+ */
+
 .entity-admin-dashboard-container {
   overflow: hidden;
-  padding: 4px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--mat-sys-surface);
 }
 
+/* Dashboard Header - MD3 Styled */
 .dashboard-header {
   margin-bottom: 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
 .dashboard-header .header-info {
   flex: 1;
   display: flex;
   align-items: center;
 }
+
+/* MD3 Badge for Visible Entities Count */
 .dashboard-header .visible-entities-count {
-  font-size: 12px;
-  color: #2196f3;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  font: var(--mat-sys-label-medium);
   font-weight: 600;
-  background: rgba(33, 150, 243, 0.1);
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(33, 150, 243, 0.2);
+  color: var(--mat-sys-on-primary-container);
+  background: var(--mat-sys-primary-container);
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 20%, transparent);
 }
+
 .dashboard-header .header-controls {
   display: flex;
   gap: 8px;
 }
+
+/* MD3 Control Buttons */
 .dashboard-header .header-controls .control-btn {
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: white;
-  cursor: pointer;
-  font-size: 12px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
+  gap: 8px;
+  padding: 8px 16px;
+  font: var(--mat-sys-label-large);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface-variant);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
-.dashboard-header .header-controls .control-btn:hover {
-  background-color: #f0f0f0;
-  border-color: #2196f3;
+
+.dashboard-header .header-controls .control-btn:hover:not(:disabled) {
+  background: var(--mat-sys-surface-container-highest);
+  border-color: var(--mat-sys-outline);
+  color: var(--mat-sys-on-surface);
 }
+
 .dashboard-header .header-controls .control-btn.active {
-  background-color: #2196f3;
-  border-color: #2196f3;
-  color: white;
+  background: var(--mat-sys-primary);
+  border-color: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
 }
+
 .dashboard-header .header-controls .control-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.38;
   cursor: not-allowed;
 }
+
 .dashboard-header .header-controls .control-btn:disabled:hover {
-  background-color: white;
-  border-color: #ccc;
+  background: var(--mat-sys-surface);
+  border-color: var(--mat-sys-outline-variant);
 }
+
+.dashboard-header .header-controls .control-btn:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
 .dashboard-header .header-controls .control-btn .fa-solid {
   font-size: 14px;
 }
 
-.loading-container, .error-container {
+/* Loading and Error Containers */
+.loading-container,
+.error-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #fafafa;
+  background: var(--mat-sys-surface-container-low);
   flex: 1;
-}
-.loading-container p, .error-container p {
-  color: #666;
-  font-size: 14px;
+  border-radius: 12px;
 }
 
+.loading-container p,
+.error-container p {
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+/* Error Message */
 .error-message {
-  color: #d32f2f;
+  color: var(--mat-sys-error);
   font-weight: 500;
 }
 
+/* Dashboard Content */
 .dashboard-content {
   overflow: hidden;
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0; /* Allow flex children to shrink below their content size */
+  min-height: 0;
 }
 
+/* Loading Spinner - MD3 Colors */
 .loading-content {
   display: flex;
   flex-direction: column;
@@ -110,24 +145,27 @@
   border-radius: 50%;
   animation: spin 1.5s linear infinite;
 }
+
 .spinner-ring:nth-child(1) {
-  border-top-color: #2196f3;
+  border-top-color: var(--mat-sys-primary);
   animation-delay: 0s;
 }
+
 .spinner-ring:nth-child(2) {
-  border-top-color: #9c27b0;
+  border-top-color: var(--mat-sys-secondary);
   animation-delay: 0.3s;
   transform: scale(0.8);
 }
+
 .spinner-ring:nth-child(3) {
-  border-top-color: #ff6b35;
+  border-top-color: var(--mat-sys-tertiary);
   animation-delay: 0.6s;
   transform: scale(0.6);
 }
 
 .loading-text {
-  font-size: 14px;
-  color: #666;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
   font-weight: 500;
   text-align: center;
 }

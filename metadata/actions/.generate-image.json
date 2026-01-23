@@ -1,0 +1,354 @@
+[
+  {
+    "fields": {
+      "Name": "Generate Image",
+      "Description": "Generates or edits images using AI image generation models (OpenAI GPT-4o Image, Google Nano Banana Pro, Black Forest Labs FLUX). Supports text-to-image generation and image-to-image editing/transformation when SourceImage is provided. Configurable size, quality, style, and output format. Returns images as base64 or URLs.",
+      "DriverClass": "Generate Image",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-image",
+      "CategoryID": "@lookup:Action Categories.Name=AI"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Prompt",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Text description of the image to generate. Be specific and descriptive for best results.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "C1F9E427-5D99-4D75-92A9-9F01B2354094"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.771Z",
+            "checksum": "17df87353f54c6c24313b48c0afdaff0b53862d95eff38f9ca05b9e5581869ef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Model",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional model name to use. Options: 'GPT-4o Image 1.5', 'GPT-4o Image 1.0', 'Nano Banana Pro', 'FLUX.2 Pro', 'FLUX 1.1 Pro'. If not specified, uses highest power-ranked available model.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F14C3292-103A-4B49-ABFD-60D9D8B87C0F"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.784Z",
+            "checksum": "edd936344e14f8cb19b0a718fcebd2001f6da522e3f54bba7fc4c0dc8cf31d8f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NumberOfImages",
+            "DefaultValue": "1",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of images to generate (1-4 depending on model). Default is 1.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F6DE574F-947E-439E-A242-142751A4D5C5"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.796Z",
+            "checksum": "35a7b59a42f8919fdb3eb89a9c38d60b63f3212166b4fb93b58efafe22ba7c90"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Size",
+            "DefaultValue": "1024x1024",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Image dimensions. Common sizes: '1024x1024', '1536x1024', '1024x1536', '2048x2048'. Supported sizes vary by model.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CF712AB2-A152-435A-8DDE-425BFA883CF6"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.808Z",
+            "checksum": "10ac4c7d22459b248afcd8c4965db8a8d70ce263e3ecdaf041d5077c42943829"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Quality",
+            "DefaultValue": "standard",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Image quality level: 'standard' or 'hd'. HD produces higher detail but costs more.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5148F7A5-EF95-4869-9152-226A2F610ED7"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.821Z",
+            "checksum": "40db328c1e2c7d890e5b624aaeab419097a1506f75e9fcb2cd628a15796fd35e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Style",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Style preset: 'natural' (realistic) or 'vivid' (hyper-real, dramatic). Not all models support this.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B9709994-289C-4A8D-9F81-12F8FE4B96AB"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.833Z",
+            "checksum": "44c2a78225833f2d47ed21f6bf43a50b9077d77655e50db5bc8611c5c614be28"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NegativePrompt",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Things to avoid in the generated image. E.g., 'blurry, low quality, text, watermark'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E2DA80B2-64A8-4858-AA58-46476DF42B4E"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.845Z",
+            "checksum": "cfa127696ab7e8adf6ce6185e3a57dd939e548324fe580ed0ebbb017a48de56a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OutputFormat",
+            "DefaultValue": "base64",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Output format: 'base64' (embedded data) or 'url' (temporary URL). Default is base64.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A60F2F32-6BF0-4B24-8824-17DA19B723D8"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.855Z",
+            "checksum": "a8dc67bb10231b2ab4f80479f28d859c9027ed706441ee75dd71fdf17e4ae39c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceImage",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional source image for image-to-image editing. Accepts base64-encoded image data or URL. When provided, the action performs image editing/transformation instead of text-to-image generation.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5C428B0C-C16C-42A9-89BE-9D12BF78CB42"
+          },
+          "sync": {
+            "lastModified": "2026-01-19T06:08:25.524Z",
+            "checksum": "40ee7daa1ee91782eb22e4530d1e340ed91fd2485229cc5f1cef41387c518d33"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Mask",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional mask image for inpainting. White or transparent areas indicate regions to regenerate. Only used when SourceImage is provided. Accepts base64-encoded image data or URL.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7BF102EF-23D3-462B-884F-C566263BBA47"
+          },
+          "sync": {
+            "lastModified": "2026-01-19T06:08:25.534Z",
+            "checksum": "8629707c92f6718384c92e36264bce0520805679199d31e6dac82587e7368099"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Images",
+            "Type": "Output",
+            "ValueType": "MediaOutput",
+            "MediaModality": "Image",
+            "IsArray": true,
+            "Description": "Array of generated images as MediaOutput objects with modality, mimeType, data/url, width, height, and label."
+          },
+          "primaryKey": {
+            "ID": "917DC4F8-8BF4-43AA-A9BC-C7EBFE692E37"
+          },
+          "sync": {
+            "lastModified": "2026-01-15T07:33:59.651Z",
+            "checksum": "9a2d2635364380339d2803cd41fcb1ecf1c33c9e5bdcfb47003bdff3d08671b1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ImageCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of images successfully generated."
+          },
+          "primaryKey": {
+            "ID": "1266996B-9C4F-44E5-A5DE-FC1C4D3ED3F1"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.874Z",
+            "checksum": "78ef42ba701cf3016f734711cd3704e86706aa150ccf08b45851fb0181ee4c7f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RevisedPrompt",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The prompt as modified by the model for safety or clarity (if applicable)."
+          },
+          "primaryKey": {
+            "ID": "1D9BC725-5886-4656-ACC0-56B24A201E3A"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.899Z",
+            "checksum": "f78d62f29740fab7dc06d89f2966c1e23cc97c098e90e547d692625288315c14"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelUsed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The name of the model that was used to generate the images."
+          },
+          "primaryKey": {
+            "ID": "45E184EF-5D5A-443B-893F-15F885CAD0A8"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.910Z",
+            "checksum": "4201c27080b5bdeacebce999c0e3f4125be6c9350185f5f08db2e46c37b4c4e6"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "IMAGES_GENERATED",
+            "IsSuccess": true,
+            "Description": "Images were successfully generated."
+          },
+          "primaryKey": {
+            "ID": "CB234CC1-1604-4890-A3A1-0B12B86EB5AB"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.927Z",
+            "checksum": "1152c77b0f1ee03658673c84c9908d892868a2adc072197bbb4aae56b8e95604"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROMPT",
+            "IsSuccess": false,
+            "Description": "The required Prompt parameter was not provided."
+          },
+          "primaryKey": {
+            "ID": "8075396E-B680-4EC5-A73F-38F19F9FF4F9"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.937Z",
+            "checksum": "3732a3e53344e84f59d71912537f1f537a7310c72cd7b08170ca16ddb06fc84f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GENERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "The image generation API returned an error."
+          },
+          "primaryKey": {
+            "ID": "C43B81E6-08CA-4A6A-AD9B-E129537105CC"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.946Z",
+            "checksum": "8593aa26e929f8792dd92cf5400303886baae89c197c1f7fa628645593946fcf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_IMAGES",
+            "IsSuccess": false,
+            "Description": "The generation completed but no images were returned."
+          },
+          "primaryKey": {
+            "ID": "111CD9C1-5CC5-4087-B277-C0E68B39AC6F"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.955Z",
+            "checksum": "2b234b502d81e01d43d3518dd1f5bbdbf2987d82d1c0df61ff51253b33917895"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ACTION_FAILED",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during action execution."
+          },
+          "primaryKey": {
+            "ID": "2A89C7BE-3922-4B89-99C4-C5FE3D735286"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T19:01:10.965Z",
+            "checksum": "88f161faab204c6c9fecc770983578681cfcc902f653000ca0a80bf875707b7c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "048FF309-C2CD-44D8-8A8E-8C771ADA8284"
+    },
+    "sync": {
+      "lastModified": "2026-01-19T06:08:25.435Z",
+      "checksum": "7dcd22e621ded27865e800d317de05d7da25ebd8f86dc5c3302dc324758f5465"
+    }
+  }
+]

@@ -1,5 +1,67 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/aiengine@3.2.0
+  - @memberjunction/ai-prompts@3.2.0
+  - @memberjunction/actions-base@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/core-entities-server@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/ai-provider-bundle@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/config@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/aiengine@3.1.1
+- @memberjunction/ai-prompts@3.1.1
+- @memberjunction/ai-provider-bundle@3.1.1
+- @memberjunction/actions-base@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/config@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/core-entities-server@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+
+## 3.0.0
+
+### Major Changes
+
+- f25f757: The foundation for MemberJunction v3.0's improved architecture, making it easier for developers to adopt and customize MJ for their needs.
+
+### Patch Changes
+
+- Updated dependencies [f25f757]
+  - @memberjunction/config@3.0.0
+  - @memberjunction/ai@3.0.0
+  - @memberjunction/ai-core-plus@3.0.0
+  - @memberjunction/aiengine@3.0.0
+  - @memberjunction/ai-prompts@3.0.0
+  - @memberjunction/ai-provider-bundle@3.0.0
+  - @memberjunction/actions-base@3.0.0
+  - @memberjunction/actions@3.0.0
+  - @memberjunction/core@3.0.0
+  - @memberjunction/core-entities@3.0.0
+  - @memberjunction/core-entities-server@3.0.0
+  - @memberjunction/global@3.0.0
+  - @memberjunction/sqlserver-dataprovider@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -868,7 +930,6 @@
 ### Patch Changes
 
 - 103e4a9: Added comprehensive tracking fields to AI execution entities:
-
   - **AIAgentRun**: Added `RunName`, `Comment`, and `ParentID` fields for better run identification and hierarchical tracking
   - **AIPromptRun**: Added `RunName`, `Comment`, and `ParentID` fields for consistent tracking across prompt executions
   - **AIAgentRunStep**: Added `Comment` and `ParentID` fields for detailed step-level tracking
@@ -920,7 +981,6 @@
 ### Patch Changes
 
 - 70bf265: Fixed CodeGen Database Schema JSON generation errors caused by unescaped control characters
-
   - Added comprehensive JSON string escaping function to handle all control characters (newlines, tabs, carriage returns, etc.)
   - Fixed null reference errors when dbSchemaJSONOutput configuration is missing or incomplete
   - Applied proper escaping to all string fields in JSON output (entity names, descriptions, field names, types, etc.)
@@ -1128,7 +1188,6 @@
 ### Patch Changes
 
 - 6d2d478: feat: AI Agent UI improvements and server-side context fixes
-
   - Enhanced AI Agent dialogs with resizable and draggable functionality
     using Kendo UI Window component
   - Improved dialog positioning with consistent center placement and proper
@@ -1228,7 +1287,6 @@
   operations need to be regenerated to include the new parameters.
   This prevents runtime failures when cascade delete operations
   reference outdated stored procedure signatures.
-
   - Track cascade delete dependencies during SQL generation
   - Detect entities with schema changes from metadata management
     phase
@@ -1261,7 +1319,6 @@
 ### Patch Changes
 
 - 8ee0d86: Fix: Query parameter validation and cascade delete transaction handling
-
   - Added validation to ensure query parameters are JSON objects rather than arrays in GraphQL system user client
   - Implemented automatic transaction wrapping for entities with CascadeDeletes enabled
   - For database providers (server-side), delete operations are wrapped in
@@ -2443,7 +2500,6 @@
   This adds the `nullable: true` flag for the type-graphql decorators on optional input type fields.
   This allows the field to be `null` or undefined. If not defined, it will not be updated. If defined as
   `null`, then it should set the value of the column to `NULL` (provided that's permitted for the column).
-
   - @memberjunction/ai@2.26.1
   - @memberjunction/actions@2.26.1
   - @memberjunction/core@2.26.1

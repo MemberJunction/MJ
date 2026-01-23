@@ -1,5 +1,97 @@
 # Change Log - @memberjunction/core-actions
 
+## 3.2.0
+
+### Minor Changes
+
+- 6806a6c: Add enterprise file storage accounts with credential-based authentication
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [011c820]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-agents@3.2.0
+  - @memberjunction/storage@3.2.0
+  - @memberjunction/ai-agent-manager@3.2.0
+  - @memberjunction/ai-engine-base@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/aiengine@3.2.0
+  - @memberjunction/ai-prompts@3.2.0
+  - @memberjunction/ai-vector-sync@3.2.0
+  - @memberjunction/actions-base@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/communication-types@3.2.0
+  - @memberjunction/communication-engine@3.2.0
+  - @memberjunction/content-autotagging@3.2.0
+  - @memberjunction/external-change-detection@3.2.0
+  - @memberjunction/core-entities-server@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/ai-betty-bot@3.2.0
+  - @memberjunction/code-execution@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/export-engine@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@3.1.1
+- @memberjunction/ai-agents@3.1.1
+- @memberjunction/ai-engine-base@3.1.1
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/aiengine@3.1.1
+- @memberjunction/ai-prompts@3.1.1
+- @memberjunction/ai-betty-bot@3.1.1
+- @memberjunction/ai-vector-sync@3.1.1
+- @memberjunction/actions-base@3.1.1
+- @memberjunction/code-execution@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/communication-types@3.1.1
+- @memberjunction/communication-engine@3.1.1
+- @memberjunction/content-autotagging@3.1.1
+- @memberjunction/external-change-detection@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/core-entities-server@3.1.1
+- @memberjunction/export-engine@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/storage@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@3.0.0
+- @memberjunction/ai-agents@3.0.0
+- @memberjunction/ai-engine-base@3.0.0
+- @memberjunction/ai@3.0.0
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/aiengine@3.0.0
+- @memberjunction/ai-prompts@3.0.0
+- @memberjunction/ai-betty-bot@3.0.0
+- @memberjunction/ai-vector-sync@3.0.0
+- @memberjunction/actions-base@3.0.0
+- @memberjunction/code-execution@3.0.0
+- @memberjunction/actions@3.0.0
+- @memberjunction/communication-types@3.0.0
+- @memberjunction/communication-engine@3.0.0
+- @memberjunction/content-autotagging@3.0.0
+- @memberjunction/external-change-detection@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/core-entities-server@3.0.0
+- @memberjunction/export-engine@3.0.0
+- @memberjunction/global@3.0.0
+- @memberjunction/storage@3.0.0
+- @memberjunction/sqlserver-dataprovider@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -929,20 +1021,17 @@
 - 8f2a4fa: Enhance Web Page Content action with comprehensive format support (resolves #1414)
 
   **New Format Support**:
-
   - JSON APIs, PDF, DOCX, XML, CSV, HTML, and images
   - Intelligent content type detection from headers and file extensions
   - New 'auto' mode for automatic format selection (default)
 
   **Improvements**:
-
   - Enhanced HTML to Markdown conversion (Turndown library)
   - Robust HTML parsing with JSDOM
   - Increased default MaxContentLength to 100,000 characters
   - Fix '[object Object]' display in Prompt Runner UI
 
 - 3f71ef4: Add new storage actions and external API integrations
-
   - Add 13 individual file storage actions
   - Add Gamma API integration for AI-powered presentation generation
   - Add Perplexity Search action for AI-powered web search with
@@ -1350,7 +1439,6 @@
 ### Patch Changes
 
 - 42a6954: Add User Onboarding Flow Agent with role assignment improvements
-
   - Add support for Flow Agent Type to execute flow-specific prompts
     instead of system prompts
   - Fix Flow Agent payload persistence across workflow steps

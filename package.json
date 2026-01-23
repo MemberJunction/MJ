@@ -62,7 +62,7 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/cli": "2.128.0",
+    "@memberjunction/cli": "3.1.1",
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",
     "simple-git": "^3.27.0"
@@ -91,6 +91,14 @@
   "overrides": {
     "@types/node": "20.14.2",
     "browserslist": "4.24.4",
-    "caniuse-lite": "1.0.30001764"
+    "caniuse-lite": "1.0.30001764",
+    "rimraf": "^5.0.10",
+    "glob": "^10.5.0",
+    "archiver": "~7.0.0",
+    "archiver-utils": "^5.0.0",
+    "inflight": "^1.0.6",
+    "fstream": "npm:tar-fs@^3.0.4",
+    "lodash.isequal": "npm:fast-deep-equal@^3.1.3",
+    "unzipper": "^0.12.3"
   }
 }

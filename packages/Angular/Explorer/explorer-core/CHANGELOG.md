@@ -1,5 +1,143 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 3.2.0
+
+### Minor Changes
+
+- 582ca0c: Added unified notification system with email/SMS delivery, user notification preferences, and agent completion notifications
+
+### Patch Changes
+
+- 293d656: fix missing comment from Soham's PR
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ng-file-storage@3.2.0
+  - @memberjunction/ng-artifacts@3.2.0
+  - @memberjunction/ng-explorer-settings@3.2.0
+  - @memberjunction/ng-dashboards@3.2.0
+  - @memberjunction/ai-engine-base@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/ng-base-application@3.2.0
+  - @memberjunction/ng-base-forms@3.2.0
+  - @memberjunction/ng-compare-records@3.2.0
+  - @memberjunction/ng-entity-form-dialog@3.2.0
+  - @memberjunction/ng-entity-permissions@3.2.0
+  - @memberjunction/ng-list-detail-grid@3.2.0
+  - @memberjunction/ng-record-changes@3.2.0
+  - @memberjunction/ng-shared@3.2.0
+  - @memberjunction/ng-user-view-grid@3.2.0
+  - @memberjunction/ng-user-view-properties@3.2.0
+  - @memberjunction/ng-ai-test-harness@3.2.0
+  - @memberjunction/ng-conversations@3.2.0
+  - @memberjunction/ng-dashboard-viewer@3.2.0
+  - @memberjunction/ng-entity-viewer@3.2.0
+  - @memberjunction/ng-notifications@3.2.0
+  - @memberjunction/ng-query-grid@3.2.0
+  - @memberjunction/ng-record-selector@3.2.0
+  - @memberjunction/ng-resource-permissions@3.2.0
+  - @memberjunction/ng-shared-generic@3.2.0
+  - @memberjunction/ng-user-avatar@3.2.0
+  - @memberjunction/communication-types@3.2.0
+  - @memberjunction/entity-communications-client@3.2.0
+  - @memberjunction/templates-base-types@3.2.0
+  - @memberjunction/ng-auth-services@3.2.0
+  - @memberjunction/ng-container-directives@3.2.0
+  - @memberjunction/ng-generic-dialog@3.2.0
+  - @memberjunction/ng-tabstrip@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ng-dashboards@3.1.1
+- @memberjunction/ng-explorer-settings@3.1.1
+- @memberjunction/ng-shared@3.1.1
+- @memberjunction/ng-user-view-grid@3.1.1
+- @memberjunction/ng-ai-test-harness@3.1.1
+- @memberjunction/ng-conversations@3.1.1
+- @memberjunction/ng-file-storage@3.1.1
+- @memberjunction/ng-notifications@3.1.1
+- @memberjunction/entity-communications-client@3.1.1
+- @memberjunction/ng-base-forms@3.1.1
+- @memberjunction/ng-entity-form-dialog@3.1.1
+- @memberjunction/ng-entity-permissions@3.1.1
+- @memberjunction/ng-list-detail-grid@3.1.1
+- @memberjunction/ng-user-view-properties@3.1.1
+- @memberjunction/ng-query-grid@3.1.1
+- @memberjunction/ng-record-selector@3.1.1
+- @memberjunction/ng-record-changes@3.1.1
+- @memberjunction/ng-artifacts@3.1.1
+- @memberjunction/ng-resource-permissions@3.1.1
+- @memberjunction/ng-dashboard-viewer@3.1.1
+- @memberjunction/ai-engine-base@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/ng-auth-services@3.1.1
+- @memberjunction/ng-base-application@3.1.1
+- @memberjunction/ng-compare-records@3.1.1
+- @memberjunction/ng-container-directives@3.1.1
+- @memberjunction/ng-entity-viewer@3.1.1
+- @memberjunction/ng-generic-dialog@3.1.1
+- @memberjunction/ng-shared-generic@3.1.1
+- @memberjunction/ng-tabstrip@3.1.1
+- @memberjunction/ng-user-avatar@3.1.1
+- @memberjunction/communication-types@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/templates-base-types@3.1.1
+
+## 3.0.0
+
+### Major Changes
+
+- f25f757: The foundation for MemberJunction v3.0's improved architecture, making it easier for developers to adopt and customize MJ for their needs.
+
+### Patch Changes
+
+- 906a21b: no migration
+- Updated dependencies [906a21b]
+- Updated dependencies [528041e]
+  - @memberjunction/ng-dashboards@3.0.0
+  - @memberjunction/ng-user-view-grid@3.0.0
+  - @memberjunction/ng-explorer-settings@3.0.0
+  - @memberjunction/ai-engine-base@3.0.0
+  - @memberjunction/ai-core-plus@3.0.0
+  - @memberjunction/ng-auth-services@3.0.0
+  - @memberjunction/ng-base-application@3.0.0
+  - @memberjunction/ng-base-forms@3.0.0
+  - @memberjunction/ng-compare-records@3.0.0
+  - @memberjunction/ng-entity-form-dialog@3.0.0
+  - @memberjunction/ng-entity-permissions@3.0.0
+  - @memberjunction/ng-list-detail-grid@3.0.0
+  - @memberjunction/ng-record-changes@3.0.0
+  - @memberjunction/ng-shared@3.0.0
+  - @memberjunction/ng-user-view-properties@3.0.0
+  - @memberjunction/ng-ai-test-harness@3.0.0
+  - @memberjunction/ng-artifacts@3.0.0
+  - @memberjunction/ng-container-directives@3.0.0
+  - @memberjunction/ng-conversations@3.0.0
+  - @memberjunction/ng-entity-viewer@3.0.0
+  - @memberjunction/ng-file-storage@3.0.0
+  - @memberjunction/ng-generic-dialog@3.0.0
+  - @memberjunction/ng-notifications@3.0.0
+  - @memberjunction/ng-query-grid@3.0.0
+  - @memberjunction/ng-record-selector@3.0.0
+  - @memberjunction/ng-resource-permissions@3.0.0
+  - @memberjunction/ng-shared-generic@3.0.0
+  - @memberjunction/ng-tabstrip@3.0.0
+  - @memberjunction/ng-user-avatar@3.0.0
+  - @memberjunction/communication-types@3.0.0
+  - @memberjunction/entity-communications-client@3.0.0
+  - @memberjunction/core@3.0.0
+  - @memberjunction/core-entities@3.0.0
+  - @memberjunction/global@3.0.0
+  - @memberjunction/templates-base-types@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -173,21 +311,18 @@
 - f0b3126: Refactor authentication system to v3.0 with proper encapsulation and eliminate leaky abstractions. This is a breaking change as the authentication provider API has been completely redesigned.
 
   **Breaking Changes:**
-
   - Removed `getUserClaims()` method - replaced with `getUserInfo()` that returns `Observable<StandardUserInfo>`
   - Removed direct access to provider-specific token structures (e.g., `claims?.__raw`, `claims?.idToken`)
   - New standardized API: `getIdToken()`, `getTokenInfo()`, `refreshToken()`, `classifyError()`, `getProfilePictureUrl()`
   - Error handling now uses semantic `AuthErrorType` enum instead of provider-specific error checking
 
   **New Features:**
-
   - Standardized `StandardUserInfo` and `StandardAuthToken` interfaces across all providers
   - Semantic error classification with user-friendly messages
   - Profile picture URL retrieval abstraction (handles Auth0 claims, Microsoft Graph API, and Okta userinfo)
   - Proper encapsulation - consumers no longer need to know which provider is being used
 
   **Migration Guide:**
-
   - Replace `getUserClaims()` with `getUserInfo()` and use async pipe in templates
   - Replace token access patterns with `getIdToken()` or `getTokenInfo()`
   - Replace provider-specific error checking with `classifyError()` and `AuthErrorType` enum
@@ -1554,7 +1689,6 @@
 ### Patch Changes
 
 - c91e416: Redesign query browser with multiple view modes and improved UX
-
   - Add three view modes: category (hierarchical folders), list (table),
     and panel (cards with SQL preview)
   - Implement breadcrumb navigation for category hierarchy with
@@ -1759,7 +1893,6 @@
 ### Patch Changes
 
 - 103e4a9: Added comprehensive tracking fields to AI execution entities:
-
   - **AIAgentRun**: Added `RunName`, `Comment`, and `ParentID` fields for better run identification and hierarchical tracking
   - **AIPromptRun**: Added `RunName`, `Comment`, and `ParentID` fields for consistent tracking across prompt executions
   - **AIAgentRunStep**: Added `Comment` and `ParentID` fields for detailed step-level tracking

@@ -224,6 +224,22 @@ export class ValidationService {
     parentContext?: { entity: string; field: string },
     depth: number = 0,
   ): Promise<void> {
+    // Skip validation for deletion records - they don't need field validation or reference checks
+    if ((entityData as any).deleteRecord?.delete === true) {
+      // Only validate that primaryKey exists for deletion records
+      if (!entityData.primaryKey) {
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: 'Deletion record is missing required "primaryKey" property',
+          suggestion: 'Add primaryKey to identify the record to delete',
+        });
+      }
+      return; // Skip all other validation for deletion records
+    }
+
     // Check nesting depth
     if (depth > this.options.maxNestingDepth) {
       this.addWarning({

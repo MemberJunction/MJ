@@ -60,7 +60,27 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
       const req = request(options, (res) => {
         const gunzip = createGunzip();
         const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
-  
+        let streamEnded = false;
+
+        const handleStreamEnd = () => {
+          if (streamEnded) return; // Prevent double-resolution
+          streamEnded = true;
+
+          // Attempt to parse any remaining data in buffer in case it's a complete JSON object
+          if (buffer.trim()) {
+            try {
+              const jsonObject = JSON.parse(buffer.trim());
+              jsonObjects.push(jsonObject);
+              streamCallback?.(jsonObject);
+            } catch (e) {
+              const err = z.object({ message: z.string() }).safeParse(e);
+              // Handle JSON parse error for the last chunk
+              console.warn(`Error in postRequest().stream(end) while parsing JSON object: ${err.success ? err.data.message : e}`);
+            }
+          }
+          resolve(jsonObjects);
+        };
+
         stream.on('data', (chunk) => {
           buffer += chunk;
           let boundary;
@@ -78,28 +98,38 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
             }
           }
         });
-  
-        stream.on('end', () => {
-          // Attempt to parse any remaining data in buffer in case it's a complete JSON object
-          if (buffer.trim()) {
-            try {
-              const jsonObject = JSON.parse(buffer.trim());
-              jsonObjects.push(jsonObject);
-              streamCallback?.(jsonObject);
-            } catch (e) {
-              const err = z.object({ message: z.string() }).safeParse(e);
-              // Handle JSON parse error for the last chunk
-              console.warn(`Error in postRequest().stream(end) while parsing JSON object: ${err.success ? err.data.message : e}`);
-            }
+
+        stream.on('end', handleStreamEnd);
+
+        // Handle premature connection close (e.g., server crashes mid-response)
+        stream.on('close', () => {
+          if (!streamEnded) {
+            console.warn(`Stream closed prematurely for ${url}`);
+            handleStreamEnd();
           }
-          resolve(jsonObjects);
+        });
+
+        // Handle stream errors (decompression failures, etc.)
+        stream.on('error', (e) => {
+          if (!streamEnded) {
+            console.error(`Stream error for ${url}:`, e);
+            reject(new Error(`Stream error: ${e.message}`));
+          }
         });
       });
   
       req.on('error', (e) => {
         const err = z.object({ message: z.string() }).safeParse(e);
-        console.error(`Error in sendPostRequest().req.on(error): ${err.success ? err.data.message : e}`);
-        reject(e);
+        const errorMessage = err.success ? err.data.message : String(e);
+        console.error(`Error in sendPostRequest().req.on(error) for ${hostname}:${port}${pathname}: ${errorMessage}`);
+
+        // Create a more informative error for the rejection
+        const contextualError = new Error(`HTTP request failed to ${url}: ${errorMessage}`);
+        // Preserve the original error as the cause
+        if (e instanceof Error) {
+          (contextualError as any).cause = e;
+        }
+        reject(contextualError);
       });
   
       req.write(data);

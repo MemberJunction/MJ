@@ -1,0 +1,87 @@
+<div class="folder-tree">
+  <!-- Navigation bar with back/forward buttons and breadcrumbs -->
+  <div class="navigation-bar" *ngIf="account">
+    <!-- Back/Forward buttons -->
+    <div class="nav-buttons">
+      <button
+        kendoButton
+        fillMode="flat"
+        size="small"
+        [disabled]="!canGoBack()"
+        (click)="navigateBack()"
+        title="Go back"
+        class="nav-button"
+      >
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+      <button
+        kendoButton
+        fillMode="flat"
+        size="small"
+        [disabled]="!canGoForward()"
+        (click)="navigateForward()"
+        title="Go forward"
+        class="nav-button"
+      >
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+    </div>
+
+    <!-- Breadcrumb path -->
+    <div class="breadcrumbs">
+      <ng-container *ngFor="let item of breadcrumbs; let last = last">
+        <button
+          kendoButton
+          fillMode="flat"
+          size="small"
+          (click)="onBreadcrumbClick(item)"
+          [class.current]="last"
+          class="breadcrumb-item"
+        >
+          {{ item.label }}
+        </button>
+        <i *ngIf="!last" class="fa-solid fa-chevron-right breadcrumb-separator"></i>
+      </ng-container>
+    </div>
+  </div>
+
+  <!-- Folder tree content -->
+  <div class="tree-content">
+    <!-- Loading state -->
+    <mj-loading *ngIf="isLoading" text="Loading folders..."></mj-loading>
+
+    <!-- Error state -->
+    <div class="tree-error" *ngIf="errorMessage && !isLoading">
+      <div class="error-icon">
+        <i class="fa-solid fa-exclamation-triangle"></i>
+      </div>
+      <p class="error-text">{{ errorMessage }}</p>
+    </div>
+
+    <!-- Folder list -->
+    <div class="folder-list" *ngIf="!isLoading && !errorMessage">
+      <div
+        *ngFor="let folder of folders"
+        class="folder-item"
+        (click)="onFolderClick(folder)"
+      >
+        <i class="fa-solid fa-folder folder-icon"></i>
+        <span class="folder-name">{{ folder.name }}</span>
+      </div>
+
+      <!-- Empty state -->
+      <div class="tree-placeholder" *ngIf="folders.length === 0">
+        <div class="placeholder-icon">
+          <i class="fa-solid fa-folder-open"></i>
+        </div>
+        <p class="placeholder-text">No folders in this location</p>
+        <p class="placeholder-hint" *ngIf="account">
+          Account: {{ account.account.Name }}
+        </p>
+        <p class="placeholder-hint">
+          Path: {{ currentPath }}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

@@ -8,11 +8,25 @@
     "Color": "#5c6bc0",
     "DefaultNavItems": [
       {
-        "Label": "Explorer",
-        "Icon": "fa-solid fa-compass",
-        "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=Data Explorer?allowDefer",
+        "Label": "Dashboards",
+        "Icon": "fa-solid fa-gauge-high",
+        "ResourceType": "Custom",
+        "DriverClass": "DashboardBrowserResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Data",
+        "Icon": "fa-solid fa-table-cells",
+        "ResourceType": "Custom",
+        "DriverClass": "DataExplorerResource",
         "isDefault": true
+      },
+      {
+        "Label": "Queries",
+        "Icon": "fa-solid fa-database",
+        "ResourceType": "Custom",
+        "DriverClass": "QueryBrowserResource",
+        "isDefault": false
       }
     ]
   },
@@ -23,7 +37,7 @@
     "ID": "867CB743-50F2-4239-AEE1-97F147C77B8F"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.167Z",
-    "checksum": "71e13e59cbc87d47a7b72f4a71fce16bcf595f0d68e8ec3133826dec63a05610"
+    "lastModified": "2026-01-21T05:01:18.819Z",
+    "checksum": "ae9520a3c9d875e35873f3758f9f2b53ce26002f0b90e8380755bbf970127ccc"
   }
 }

@@ -43,12 +43,15 @@ export type SkipRequestPhase = typeof SkipRequestPhase[keyof typeof SkipRequestP
 /**
  * Describes the different response phases that are used by the Skip API Server to respond back to the caller (usually the MJAPI server but can be anyone)
  * The response phase indicates if the Skip API server is asking for additional data, a clarifying question, or if the analysis is complete and the information has been provided
+ * * queued: The request is waiting in the queue (sent by queue infrastructure, not Skip API) - indicates queue position and estimated wait time
+ * * status_update: The Skip API server is providing a status update during processing
  * * clarifying_question: The Skip API server is asking for a clarifying question to be asked to the user - typecast the response to SkipAPIClarifyingQuestionResponse for all of the additional properties that are available in this response phase
  * * data_request: The Skip API server is asking for additional data to be gathered - typecast the response to SkipAPIDataRequestResponse for all of the additional properties that are available in this response phase
  * * analysis_complete: The Skip API server has completed the analysis and is providing the results - typecast the response to SkipAPIAnalysisCompleteResponse for all of the additional properties that are available in this response phase
  * * chat_with_a_record_complete: The Skip API server has completed the chat with a record and is providing the results - typecast the response to SkipAPIChatWithRecordResponse for all of the additional properties that are available in this response phase
  */
 export const SkipResponsePhase = {
+    queued: "queued",
     status_update: "status_update",
     clarifying_question: "clarifying_question",
     data_request: "data_request",

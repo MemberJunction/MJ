@@ -1,0 +1,432 @@
+/**
+ * Tree Component Styles
+ *
+ * Uses CSS custom properties for easy theming.
+ * Containers can override these variables to customize appearance.
+ */
+
+/* ========================================
+   CSS Variables (Theming)
+   ======================================== */
+
+:host {
+    /* Colors */
+    --tree-bg: #ffffff;
+    --tree-border-color: #e0e0e0;
+    --tree-text-color: #333333;
+    --tree-text-secondary: #666666;
+    --tree-text-muted: #999999;
+
+    /* Node Colors */
+    --tree-node-hover-bg: #f5f7fa;
+    --tree-node-selected-bg: #e3f2fd;
+    --tree-node-selected-border: #2196f3;
+    --tree-node-focused-outline: rgba(33, 150, 243, 0.5);
+    --tree-node-match-bg: #fff3cd;
+
+    /* Icon Colors */
+    --tree-icon-color: #5c6bc0;
+    --tree-icon-leaf-color: #78909c;
+    --tree-toggle-color: #9e9e9e;
+
+    /* Spacing */
+    --tree-node-padding-y: 8px;
+    --tree-node-padding-x: 12px;
+    --tree-node-gap: 8px;
+    --tree-icon-size: 16px;
+    --tree-toggle-size: 12px;
+
+    /* Animation */
+    --tree-transition-duration: 150ms;
+    --tree-animation-easing: ease-out;
+
+    /* Badge */
+    --tree-badge-bg: #e0e0e0;
+    --tree-badge-color: #666666;
+    --tree-badge-size: 12px;
+
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* ========================================
+   Container
+   ======================================== */
+
+.tree-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: var(--tree-bg);
+    border-radius: 8px;
+    overflow: hidden;
+    outline: none;
+}
+
+.tree-container:focus-visible {
+    outline: 2px solid var(--tree-node-focused-outline);
+    outline-offset: -2px;
+}
+
+/* ========================================
+   Loading State
+   ======================================== */
+
+.tree-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    gap: 12px;
+    color: var(--tree-text-muted);
+}
+
+.tree-loading__spinner {
+    font-size: 24px;
+    color: var(--tree-icon-color);
+}
+
+.tree-loading__text {
+    font-size: 14px;
+}
+
+/* ========================================
+   Error State
+   ======================================== */
+
+.tree-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    gap: 12px;
+    text-align: center;
+}
+
+.tree-error__icon {
+    font-size: 32px;
+    color: #f44336;
+}
+
+.tree-error__message {
+    font-size: 14px;
+    color: var(--tree-text-secondary);
+    max-width: 280px;
+}
+
+.tree-error__retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid var(--tree-border-color);
+    border-radius: 6px;
+    background: var(--tree-bg);
+    color: var(--tree-text-color);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all var(--tree-transition-duration) var(--tree-animation-easing);
+}
+
+.tree-error__retry:hover {
+    background: var(--tree-node-hover-bg);
+    border-color: var(--tree-icon-color);
+    color: var(--tree-icon-color);
+}
+
+/* ========================================
+   Empty State
+   ======================================== */
+
+.tree-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 16px;
+    gap: 12px;
+    color: var(--tree-text-muted);
+}
+
+.tree-empty__icon {
+    font-size: 40px;
+    opacity: 0.5;
+}
+
+.tree-empty__message {
+    font-size: 14px;
+}
+
+/* ========================================
+   Toolbar
+   ======================================== */
+
+.tree-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--tree-border-color);
+    background: var(--tree-node-hover-bg);
+}
+
+.tree-toolbar__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--tree-text-secondary);
+    cursor: pointer;
+    transition: all var(--tree-transition-duration) var(--tree-animation-easing);
+}
+
+.tree-toolbar__btn:hover {
+    background: var(--tree-bg);
+    color: var(--tree-icon-color);
+}
+
+/* ========================================
+   Tree Content
+   ======================================== */
+
+.tree-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4px 0;
+}
+
+/* ========================================
+   Tree Node
+   ======================================== */
+
+.tree-node {
+    display: flex;
+    align-items: center;
+    gap: var(--tree-node-gap);
+    padding: var(--tree-node-padding-y) var(--tree-node-padding-x);
+    cursor: pointer;
+    user-select: none;
+    border-left: 3px solid transparent;
+    transition: all var(--tree-transition-duration) var(--tree-animation-easing);
+    min-height: 36px;
+}
+
+.tree-node:hover {
+    background: var(--tree-node-hover-bg);
+}
+
+.tree-node--selected {
+    background: var(--tree-node-selected-bg);
+    border-left-color: var(--tree-node-selected-border);
+}
+
+.tree-node--selected:hover {
+    background: var(--tree-node-selected-bg);
+}
+
+.tree-node--focused {
+    outline: 2px solid var(--tree-node-focused-outline);
+    outline-offset: -2px;
+}
+
+/* Search highlight for matching text portion */
+.tree-search-highlight {
+    background: var(--tree-node-match-bg);
+    padding: 1px 2px;
+    border-radius: 2px;
+    font-weight: 500;
+}
+
+/* ========================================
+   Toggle Button
+   ======================================== */
+
+.tree-node-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    transition: all var(--tree-transition-duration) var(--tree-animation-easing);
+}
+
+.tree-node-toggle:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.tree-node-toggle__icon {
+    font-size: var(--tree-toggle-size);
+    color: var(--tree-toggle-color);
+    transition: transform var(--tree-transition-duration) var(--tree-animation-easing);
+}
+
+.tree-node--expanded .tree-node-toggle__icon {
+    color: var(--tree-icon-color);
+}
+
+.tree-node-toggle__spacer {
+    width: var(--tree-toggle-size);
+}
+
+.tree-node-leaf-spacer {
+    width: 20px;
+    flex-shrink: 0;
+}
+
+/* ========================================
+   Node Icon
+   ======================================== */
+
+.tree-node-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tree-icon-size);
+    flex-shrink: 0;
+    font-size: var(--tree-icon-size);
+    color: var(--tree-icon-color);
+}
+
+.tree-node--leaf .tree-node-icon {
+    color: var(--tree-icon-leaf-color);
+}
+
+/* ========================================
+   Node Content
+   ======================================== */
+
+.tree-node-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tree-node-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--tree-text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-node--leaf .tree-node-label {
+    font-weight: 400;
+}
+
+.tree-node-description {
+    font-size: 12px;
+    color: var(--tree-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ========================================
+   Node Badge
+   ======================================== */
+
+.tree-node-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--tree-badge-bg);
+    color: var(--tree-badge-color);
+    font-size: var(--tree-badge-size);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+/* ========================================
+   Selection Indicator
+   ======================================== */
+
+.tree-node-selected-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--tree-node-selected-border);
+    color: white;
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
+/* ========================================
+   Children Container
+   ======================================== */
+
+.tree-node-children {
+    overflow: hidden;
+}
+
+.tree-node-children--animated {
+    animation: tree-expand var(--tree-transition-duration) var(--tree-animation-easing);
+}
+
+@keyframes tree-expand {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========================================
+   Scrollbar Styling
+   ======================================== */
+
+.tree-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tree-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tree-content::-webkit-scrollbar-thumb {
+    background: var(--tree-border-color);
+    border-radius: 4px;
+}
+
+.tree-content::-webkit-scrollbar-thumb:hover {
+    background: var(--tree-toggle-color);
+}
+
+/* ========================================
+   Responsive Adjustments
+   ======================================== */
+
+@media (max-width: 480px) {
+    :host {
+        --tree-node-padding-y: 10px;
+        --tree-node-padding-x: 10px;
+        --tree-icon-size: 18px;
+    }
+
+    .tree-node-label {
+        font-size: 15px;
+    }
+}

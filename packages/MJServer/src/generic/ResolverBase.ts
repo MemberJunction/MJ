@@ -891,8 +891,12 @@ export class ResolverBase {
         // MapFieldNamesToCodeNames now handles encryption filtering as well
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
       }
-      // save failed, return null
-      else throw entityObject.LatestResult?.Message;
+      // save failed, throw error with message
+      else {
+        throw new GraphQLError(entityObject.LatestResult?.CompleteMessage ?? 'Unknown error creating record', {
+          extensions: { code: 'CREATE_ENTITY_ERROR', entityName },
+        });
+      }
     } else return null;
   }
 
