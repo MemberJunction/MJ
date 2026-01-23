@@ -56,7 +56,7 @@ export const getUserPayload = async (
 
     // Check for user API key first (X-API-Key header with mj_sk_* format)
     // This authenticates as the specific user who owns the API key
-    if (userApiKey && userApiKey != String(undefined)) {
+    if (userApiKey && userApiKey !== String(undefined)) {
       // Use system user as context for validation operations
       const systemUser = await getSystemUser(readOnlyDataSource);
       const validationResult = await EncryptionEngine.Instance.ValidateAPIKey(userApiKey, systemUser);
