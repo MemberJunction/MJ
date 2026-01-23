@@ -913,10 +913,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             const currentUserId = md.CurrentUser.ID;
 
             // Get data from engine - sort dashboards by updated date, categories by name
-            this.dashboards = [...engine.Dashboards].sort((a, b) =>
+            // Filter dashboards to only those accessible to the current user
+            this.dashboards = [...engine.GetAccessibleDashboards(currentUserId)].sort((a, b) =>
                 new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime()
             );
-            this.categories = [...engine.DashboardCategories].sort((a, b) =>
+            // Filter categories to only those owned by or shared with the current user
+            this.categories = [...engine.GetAccessibleCategories(currentUserId)].sort((a, b) =>
                 a.Name.localeCompare(b.Name)
             );
 
