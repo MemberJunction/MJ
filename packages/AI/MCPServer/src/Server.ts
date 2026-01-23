@@ -18,7 +18,7 @@ import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@m
 import { FastMCP } from "fastmcp";
 import sql from "mssql";
 import { z } from "zod";
-import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerSettings } from './config.js';
+import { initConfig, ConfigInfo } from './config.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
 import { AIAgentEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
@@ -68,8 +68,12 @@ const registeredToolNames: string[] = [];
 /** Currently active filter options for tool registration */
 let activeFilterOptions: ToolFilterOptions = {};
 
-/** MCP server port from configuration or default */
-const mcpServerPort = mcpServerSettings?.port || 3100;
+/** Configuration loaded from initConfig() - populated in initializeServer()
+ * Uses definite assignment assertion (!) because it's assigned before use in initializeServer() */
+let _config!: ConfigInfo;
+
+/** MCP server port - populated after config is loaded */
+let mcpServerPort!: number;
 
 /** FastMCP server instance - initialized in initializeServer() */
 let server: FastMCP<MCPSessionContext>;
@@ -79,27 +83,27 @@ let server: FastMCP<MCPSessionContext>;
  ******************************************************************************/
 
 /**
- * Builds the SQL Server connection pool configuration from environment/config settings.
+ * Builds the SQL Server connection pool configuration from the loaded config.
  * @returns The mssql connection pool configuration object
  */
 function buildPoolConfig(): sql.config {
     const config: sql.config = {
-        server: dbHost,
-        port: dbPort,
-        user: dbUsername,
-        password: dbPassword,
-        database: dbDatabase,
-        requestTimeout: configInfo.databaseSettings.requestTimeout,
-        connectionTimeout: configInfo.databaseSettings.connectionTimeout,
+        server: _config.dbHost,
+        port: _config.dbPort,
+        user: _config.dbUsername,
+        password: _config.dbPassword,
+        database: _config.dbDatabase,
+        requestTimeout: _config.databaseSettings.requestTimeout,
+        connectionTimeout: _config.databaseSettings.connectionTimeout,
         options: {
             encrypt: true,
             enableArithAbort: true,
-            trustServerCertificate: dbTrustServerCertificate === 'Y'
+            trustServerCertificate: _config.dbTrustServerCertificate === 'Y'
         },
     };
 
-    if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
-        config.options!.instanceName = dbInstanceName;
+    if (_config.dbInstanceName !== null && _config.dbInstanceName !== undefined && _config.dbInstanceName.trim().length > 0) {
+        config.options!.instanceName = _config.dbInstanceName;
     }
 
     return config;
@@ -165,7 +169,7 @@ async function authenticateRequest(request: http.IncomingMessage): Promise<MCPSe
     console.log(`[Auth] API key found: ${apiKey ? 'yes' : 'no'}`);
 
     // Backward compatibility: if no API key but systemApiKey configured, use system user
-    if (!apiKey && mcpServerSettings?.systemApiKey) {
+    if (!apiKey && _config.mcpServerSettings?.systemApiKey) {
         const systemUser = UserCache.Instance.GetSystemUser();
         if (!systemUser) {
             throw new Error('System user not found in UserCache');
@@ -381,13 +385,17 @@ function truncateText(text: string | null | undefined, maxChars: number): { valu
  */
 export async function initializeServer(filterOptions: ToolFilterOptions = {}): Promise<void> {
     try {
+        // Initialize configuration (loads .env and mj.config.cjs)
+        _config = await initConfig();
+        mcpServerPort = _config.mcpServerSettings?.port || 3100;
+
         // Store filter options for use by addToolWithFilter
         activeFilterOptions = filterOptions;
 
         // Clear any previously registered tool names
         registeredToolNames.length = 0;
 
-        if (!mcpServerSettings?.enableMCPServer) {
+        if (!_config.mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
             throw new Error("MCP Server is disabled in the configuration.");
         }
@@ -405,7 +413,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         });
 
         // Setup SQL Server client
-        const sqlConfig = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
+        const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
         await setupSQLServerClient(sqlConfig);
         console.log("Database connection setup completed.");
 
@@ -468,7 +476,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
  * @param _systemUser - System user for context (reserved for future use)
  */
 async function loadActionTools(_systemUser: UserInfo): Promise<void> {
-    const actionTools = mcpServerSettings?.actionTools;
+    const actionTools = _config.mcpServerSettings?.actionTools;
     if (actionTools && actionTools.length > 0) {
         console.warn("Action tools are not yet supported");
     }
@@ -487,7 +495,7 @@ async function loadActionTools(_systemUser: UserInfo): Promise<void> {
  * @param systemUser - System user for context when discovering and configuring agents
  */
 async function loadAgentTools(systemUser: UserInfo): Promise<void> {
-    const agentTools = mcpServerSettings?.agentTools;
+    const agentTools = _config.mcpServerSettings?.agentTools;
     
     if (agentTools && agentTools.length > 0) {
         // Ensure AIEngine is configured
@@ -1092,7 +1100,7 @@ function addAgentExecuteTool(agent: AIAgentEntityExtended): void {
  * Entity matching supports wildcards in both entityName and schemaName.
  */
 async function loadEntityTools(): Promise<void> {
-    const entityTools = mcpServerSettings?.entityTools;
+    const entityTools = _config.mcpServerSettings?.entityTools;
 
     if (entityTools && entityTools.length > 0) {
         const md = new Metadata();
@@ -1537,7 +1545,10 @@ function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: EntityToolC
  */
 export async function listAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
     try {
-        if (!mcpServerSettings?.enableMCPServer) {
+        // Initialize configuration (loads .env and mj.config.cjs)
+        _config = await initConfig();
+
+        if (!_config.mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
             return;
         }
@@ -1551,7 +1562,7 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
         const pool = new sql.ConnectionPool(poolConfig);
         await pool.connect();
 
-        const sqlConfig = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
+        const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
         await setupSQLServerClient(sqlConfig);
 
         // Register all tools (they won't actually be added to server, just tracked)
@@ -1633,7 +1644,7 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
  * @param _systemUser - System user for context (unused in this function but kept for API consistency)
  */
 async function loadEntityToolsForListing(_systemUser: UserInfo): Promise<void> {
-    const entityTools = mcpServerSettings?.entityTools;
+    const entityTools = _config.mcpServerSettings?.entityTools;
 
     if (entityTools && entityTools.length > 0) {
         const md = new Metadata();
@@ -1668,7 +1679,7 @@ async function loadEntityToolsForListing(_systemUser: UserInfo): Promise<void> {
  * @param systemUser - System user for context when discovering agents
  */
 async function loadAgentToolsForListing(systemUser: UserInfo): Promise<void> {
-    const agentTools = mcpServerSettings?.agentTools;
+    const agentTools = _config.mcpServerSettings?.agentTools;
 
     if (agentTools && agentTools.length > 0) {
         const aiEngine = AIEngine.Instance;
