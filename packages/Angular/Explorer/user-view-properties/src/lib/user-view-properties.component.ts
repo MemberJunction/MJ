@@ -17,7 +17,9 @@ import { TextBoxComponent, TextAreaComponent } from '@progress/kendo-angular-inp
 import { FindRecordDialogComponent } from '@memberjunction/ng-find-record';
 import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
 
-
+/**
+ * @deprecated
+ */
 @Component({
   selector: 'mj-user-view-properties-dialog',
   templateUrl: './user-view-properties.component.html',
@@ -191,7 +193,6 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   }
 
   async Load() {
-    await ResourcePermissionEngine.Instance.Config(); // make sure our permissions engine is loaded, this will do nothing if it's already loaded
     this._userCanEdit = undefined; // reset this so it recalculates on the next call to UserCanEdit
 
     const md = new Metadata();
@@ -293,7 +294,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     // we go through our EntityFields and add any that aren't already in the columnSettings
     // this is so that we can add new columns to the view that were not previously used in this view
     const unusedFields = this.ViewEntityInfo?.Fields.filter(f => {
-      if (gridState.columnSettings.find((col: any) => col.Name.trim().toLowerCase() === f.Name.trim().toLowerCase())) 
+      if (gridState.columnSettings?.find((col: any) => col.Name.trim().toLowerCase() === f.Name.trim().toLowerCase())) 
         return false; // this entity field is already in the columnSettings
       else
         return true; // this entity field is not in the columnSettings
@@ -301,13 +302,13 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
     // now we add the unused fields to the columnSettings
     unusedFields?.forEach((f: EntityFieldInfo) => {
-      gridState.columnSettings.push({
+      gridState.columnSettings?.push({
         ID: f.ID,
         DisplayName: f.DisplayName,
         Name: f.Name,
         orderIndex: gridState.columnSettings.length,
         width: f.DefaultColumnWidth ? f.DefaultColumnWidth : 100,
-        EntityField: f,
+        //EntityField: f,
         hidden: true
       });
     });
@@ -493,6 +494,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   }
 
   addSort() {
+    console.log('[VIEW-PROPS] addSort called - NEW CODE LOADED');
     this.sortState = this.sortState.concat({field: this.ViewEntityInfo?.Fields[0], direction: this.sortDirections[0]}); // add a new sort item
   }
 
@@ -500,13 +502,22 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     this.sortState = this.sortState.filter((i) => i !== item);
   }
  
-  sortColumnValueChange(sortItem: any, newValue: EntityFieldInfo) { 
-    const idx = this.sortState.findIndex((i: any) => i === sortItem);
-
-    console.log(this.sortState)
-    console.log(newValue)
+  sortColumnValueChange(sortItem: any, newValue: EntityFieldInfo) {
+    // Value is already bound via ngModel, nothing else needed
   }
+
   sortDirectionValueChange(sortItem: any, newValue: any) {
+    // Value is already bound via ngModel, nothing else needed
+  }
+
+  /**
+   * Handle drag-drop reordering of sort levels.
+   * Kendo Sortable updates the array order automatically, we just need to detect it.
+   */
+  onSortDragEnd(e: DragEndEvent): void {
+    // The kendo-sortable already reorders the array in place when dragging
+    // Nothing additional needed here - the array order is automatically updated
+    // and will be saved when the user clicks Save
   }
 
 

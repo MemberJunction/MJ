@@ -367,12 +367,12 @@ export const ActionParamSchema = z.object({
         * * Default Value: newsequentialid()`),
     ActionID: z.string().describe(`
         * * Field Name: ActionID
-        * * Display Name: Action ID
+        * * Display Name: Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Actions (vwActions.ID)`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: Parameter Name
         * * SQL Data Type: nvarchar(255)`),
     DefaultValue: z.string().nullable().describe(`
         * * Field Name: DefaultValue
@@ -381,7 +381,7 @@ export const ActionParamSchema = z.object({
         * * Description: The default value for this parameter if not provided during action execution, can be a literal value or JSON for complex types.`),
     Type: z.union([z.literal('Both'), z.literal('Input'), z.literal('Output')]).describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Parameter Direction
         * * SQL Data Type: nchar(10)
     * * Value List Type: List
     * * Possible Values 
@@ -389,7 +389,7 @@ export const ActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Other'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -398,8 +398,9 @@ export const ActionParamSchema = z.object({
     *   * BaseEntity Sub-Class
     *   * BaseEntity Sub-Class
     *   * Other
-    *   * Other
+    *   * MediaOutput
     *   * Scalar
+    *   * Other
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
@@ -430,6 +431,16 @@ export const ActionParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    MediaModality: z.union([z.literal('Audio'), z.literal('Image'), z.literal('Video')]).nullable().describe(`
+        * * Field Name: MediaModality
+        * * Display Name: Media Modality
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * Image
+    *   * Video
+        * * Description: Specifies the type of media this parameter outputs when ValueType is MediaOutput. Used for action discovery and validation.`),
     Action: z.string().describe(`
         * * Field Name: Action
         * * Display Name: Action
@@ -1239,7 +1250,7 @@ export const AIAgentSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
         * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.`),
@@ -1278,7 +1289,7 @@ export const AIAgentSchema = z.object({
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Context Compression Prompt ID
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
@@ -1288,7 +1299,7 @@ export const AIAgentSchema = z.object({
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Agent Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
@@ -1441,13 +1452,13 @@ if this limit is exceeded.`),
         * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
     DefaultArtifactTypeID: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactTypeID
-        * * Display Name: Default Artifact Type ID
+        * * Display Name: Default Artifact Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner User ID
+        * * Display Name: Owner User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -1553,6 +1564,27 @@ if this limit is exceeded.`),
         * * Display Name: Max Messages
         * * SQL Data Type: int
         * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
+    AttachmentStorageProviderID: z.string().nullable().describe(`
+        * * Field Name: AttachmentStorageProviderID
+        * * Display Name: Attachment Storage Provider
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.`),
+    AttachmentRootPath: z.string().nullable().describe(`
+        * * Field Name: AttachmentRootPath
+        * * Display Name: Attachment Root Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
+    InlineStorageThresholdBytes: z.number().nullable().describe(`
+        * * Field Name: InlineStorageThresholdBytes
+        * * Display Name: Inline Storage Threshold Bytes
+        * * SQL Data Type: int
+        * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
+    AgentTypePromptParams: z.string().nullable().describe(`
+        * * Field Name: AgentTypePromptParams
+        * * Display Name: Agent Type Prompt Params
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1573,6 +1605,10 @@ if this limit is exceeded.`),
         * * Field Name: OwnerUser
         * * Display Name: Owner User
         * * SQL Data Type: nvarchar(100)`),
+    AttachmentStorageProvider: z.string().nullable().describe(`
+        * * Field Name: AttachmentStorageProvider
+        * * Display Name: Attachment Storage Provider
+        * * SQL Data Type: nvarchar(50)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -1655,6 +1691,26 @@ export const AIModelTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultInputModalityID: z.string().describe(`
+        * * Field Name: DefaultInputModalityID
+        * * Display Name: Default Input Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+        * * Description: Default input modality for this model type. Models of this type inherit this as their primary input modality unless overridden.`),
+    DefaultOutputModalityID: z.string().describe(`
+        * * Field Name: DefaultOutputModalityID
+        * * Display Name: Default Output Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+        * * Description: Default output modality for this model type. Models of this type inherit this as their primary output modality unless overridden.`),
+    DefaultInputModality: z.string().describe(`
+        * * Field Name: DefaultInputModality
+        * * Display Name: Default Input Modality
+        * * SQL Data Type: nvarchar(50)`),
+    DefaultOutputModality: z.string().describe(`
+        * * Field Name: DefaultOutputModality
+        * * Display Name: Default Output Modality
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AIModelTypeEntityType = z.infer<typeof AIModelTypeSchema>;
@@ -1678,7 +1734,7 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     AIModelTypeID: z.string().describe(`
         * * Field Name: AIModelTypeID
-        * * Display Name: AI Model Type ID
+        * * Display Name: AI Model Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)`),
     PowerRank: z.number().nullable().describe(`
@@ -1689,7 +1745,7 @@ export const AIModelSchema = z.object({
         * * Description: Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Controls whether this AI model is available for use in the system.`),
@@ -1720,9 +1776,21 @@ export const AIModelSchema = z.object({
         * * Display Name: Model Selection Insights
         * * SQL Data Type: nvarchar(MAX)
         * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
+    InheritTypeModalities: z.boolean().describe(`
+        * * Field Name: InheritTypeModalities
+        * * Display Name: Inherit Type Modalities
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When TRUE (default), the model inherits default input/output modalities from its AIModelType AND can extend with additional modalities via AIModelModality records. When FALSE, only modalities explicitly defined in AIModelModality are used.`),
+    PriorVersionID: z.string().nullable().describe(`
+        * * Field Name: PriorVersionID
+        * * Display Name: Prior Version
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+        * * Description: Reference to the previous version of this model, creating a version lineage chain. For example, GPT-4 Turbo might reference GPT-4 as its prior version.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
-        * * Display Name: AIModel Type
+        * * Display Name: AI Model Type
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
@@ -1738,7 +1806,7 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     APIName: z.string().nullable().describe(`
         * * Field Name: APIName
-        * * Display Name: APIName
+        * * Display Name: API Name
         * * SQL Data Type: nvarchar(100)`),
     InputTokenLimit: z.number().nullable().describe(`
         * * Field Name: InputTokenLimit
@@ -4924,11 +4992,11 @@ export const DuplicateRunDetailMatchSchema = z.object({
         * * Default Value: getutcdate()`),
     DuplicateRunDetail: z.string().describe(`
         * * Field Name: DuplicateRunDetail
-        * * Display Name: Duplicate Run Detail Text
+        * * Display Name: Duplicate Run Detail
         * * SQL Data Type: nvarchar(500)`),
     RecordMergeLog: z.string().nullable().describe(`
         * * Field Name: RecordMergeLog
-        * * Display Name: Record Merge Log Text
+        * * Display Name: Record Merge Log
         * * SQL Data Type: nvarchar(450)`),
 });
 
@@ -6385,7 +6453,7 @@ export const EntityFieldValueSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityFieldID: z.string().describe(`
         * * Field Name: EntityFieldID
-        * * Display Name: Entity Field
+        * * Display Name: Entity Field ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)`),
     Sequence: z.number().describe(`
@@ -6409,12 +6477,12 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
+        * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
+        * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EntityField: z.string().describe(`
@@ -6427,7 +6495,7 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -7550,7 +7618,7 @@ export const FileStorageProviderSchema = z.object({
         * * Description: Priority order for selecting storage providers, lower numbers are preferred.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this storage provider is currently available for use.`),
@@ -7570,6 +7638,17 @@ export const FileStorageProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether this storage provider supports native full-text search across file names and content. Providers with native search APIs (Google Drive, SharePoint, Dropbox, Box) have this set to true.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON configuration for providers that don't use Credential Engine. Used as fallback when CredentialID is not set on FileStorageAccount.`),
+    RequiresOAuth: z.boolean().describe(`
+        * * Field Name: RequiresOAuth
+        * * Display Name: Requires OAuth
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If true, this provider requires OAuth authentication. Enterprise OAuth integration via Credential Engine is planned but not yet implemented.`),
 });
 
 export type FileStorageProviderEntityType = z.infer<typeof FileStorageProviderSchema>;
@@ -8709,6 +8788,72 @@ export const AIAgentExampleSchema = z.object({
 export type AIAgentExampleEntityType = z.infer<typeof AIAgentExampleSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Modalities
+ */
+export const AIAgentModalitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
+    Direction: z.union([z.literal('Input'), z.literal('Output')]).describe(`
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+        * * Description: Whether this is an Input or Output modality for the agent.`),
+    IsAllowed: z.boolean().describe(`
+        * * Field Name: IsAllowed
+        * * Display Name: Allowed
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this modality is allowed for this agent. Set to FALSE to disable a modality even if the underlying model supports it.`),
+    MaxSizeBytes: z.number().nullable().describe(`
+        * * Field Name: MaxSizeBytes
+        * * Display Name: Max Size (Bytes)
+        * * SQL Data Type: int
+        * * Description: Agent-specific maximum size in bytes. Overrides model and system defaults. Must be less than or equal to model limit.`),
+    MaxCountPerMessage: z.number().nullable().describe(`
+        * * Field Name: MaxCountPerMessage
+        * * Display Name: Max Count Per Message
+        * * SQL Data Type: int
+        * * Description: Agent-specific maximum count per message. Overrides model and system defaults. Must be less than or equal to model limit.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type AIAgentModalityEntityType = z.infer<typeof AIAgentModalitySchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Permissions
  */
 export const AIAgentPermissionSchema = z.object({
@@ -8969,6 +9114,115 @@ export const AIAgentRelationshipSchema = z.object({
 });
 
 export type AIAgentRelationshipEntityType = z.infer<typeof AIAgentRelationshipSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Run Medias
+ */
+export const AIAgentRunMediaSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentRunID: z.string().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)`),
+    SourcePromptRunMediaID: z.string().nullable().describe(`
+        * * Field Name: SourcePromptRunMediaID
+        * * Display Name: Source Prompt Run Media
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Run Medias (vwAIPromptRunMedias.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
+    MimeType: z.string().describe(`
+        * * Field Name: MimeType
+        * * Display Name: Mime Type
+        * * SQL Data Type: nvarchar(100)`),
+    FileName: z.string().nullable().describe(`
+        * * Field Name: FileName
+        * * Display Name: File Name
+        * * SQL Data Type: nvarchar(255)`),
+    FileSizeBytes: z.number().nullable().describe(`
+        * * Field Name: FileSizeBytes
+        * * Display Name: File Size Bytes
+        * * SQL Data Type: int`),
+    Width: z.number().nullable().describe(`
+        * * Field Name: Width
+        * * Display Name: Width
+        * * SQL Data Type: int`),
+    Height: z.number().nullable().describe(`
+        * * Field Name: Height
+        * * Display Name: Height
+        * * SQL Data Type: int`),
+    DurationSeconds: z.number().nullable().describe(`
+        * * Field Name: DurationSeconds
+        * * Display Name: Duration Seconds
+        * * SQL Data Type: decimal(10, 2)`),
+    InlineData: z.string().nullable().describe(`
+        * * Field Name: InlineData
+        * * Display Name: Inline Data
+        * * SQL Data Type: nvarchar(MAX)`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Files (vwFiles.ID)`),
+    ThumbnailBase64: z.string().nullable().describe(`
+        * * Field Name: ThumbnailBase64
+        * * Display Name: Thumbnail Base64
+        * * SQL Data Type: nvarchar(MAX)`),
+    Label: z.string().nullable().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(255)`),
+    Metadata: z.string().nullable().describe(`
+        * * Field Name: Metadata
+        * * Display Name: Metadata
+        * * SQL Data Type: nvarchar(MAX)`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Agent notes describing what this media represents. Used for internal tracking and can be displayed in UI.`),
+    AgentRun: z.string().nullable().describe(`
+        * * Field Name: AgentRun
+        * * Display Name: Agent Run
+        * * SQL Data Type: nvarchar(255)`),
+    SourcePromptRunMedia: z.string().nullable().describe(`
+        * * Field Name: SourcePromptRunMedia
+        * * Display Name: Source Prompt Run Media
+        * * SQL Data Type: nvarchar(255)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(50)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type AIAgentRunMediaEntityType = z.infer<typeof AIAgentRunMediaSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Run Steps
@@ -9684,13 +9938,13 @@ export const AIAgentTypeSchema = z.object({
         * * Description: Detailed description of the agent type, its purpose, and typical use cases`),
     SystemPromptID: z.string().nullable().describe(`
         * * Field Name: SystemPromptID
-        * * Display Name: System Prompt ID
+        * * Display Name: System Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: Reference to the AI Prompt that contains the system-level instructions for all agents of this type. This prompt will be blended with individual agent prompts.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether this agent type is available for use. Inactive types cannot be assigned to new agents.`),
@@ -9730,6 +9984,11 @@ export const AIAgentTypeSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`),
+    PromptParamsSchema: z.string().nullable().describe(`
+        * * Field Name: PromptParamsSchema
+        * * Display Name: Prompt Params Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
         * * Display Name: System Prompt
@@ -9737,6 +9996,73 @@ export const AIAgentTypeSchema = z.object({
 });
 
 export type AIAgentTypeEntityType = z.infer<typeof AIAgentTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Architectures
+ */
+export const AIArchitectureSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Architecture Name
+        * * SQL Data Type: nvarchar(100)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Category: z.union([z.literal('Core'), z.literal('Hybrid'), z.literal('Optimization'), z.literal('Specialized')]).describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Core
+    *   * Hybrid
+    *   * Optimization
+    *   * Specialized`),
+    ParentArchitectureID: z.string().nullable().describe(`
+        * * Field Name: ParentArchitectureID
+        * * Display Name: Parent Architecture ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Architectures (vwAIArchitectures.ID)
+        * * Description: Hierarchical relationship to parent architecture. Used for variants like Sparse Transformer being a child of Transformer.`),
+    WikipediaURL: z.string().nullable().describe(`
+        * * Field Name: WikipediaURL
+        * * Display Name: Wikipedia URL
+        * * SQL Data Type: nvarchar(500)`),
+    YearIntroduced: z.number().nullable().describe(`
+        * * Field Name: YearIntroduced
+        * * Display Name: Year Introduced
+        * * SQL Data Type: int`),
+    KeyPaper: z.string().nullable().describe(`
+        * * Field Name: KeyPaper
+        * * Display Name: Key Paper
+        * * SQL Data Type: nvarchar(500)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ParentArchitecture: z.string().nullable().describe(`
+        * * Field Name: ParentArchitecture
+        * * Display Name: Parent Architecture
+        * * SQL Data Type: nvarchar(100)`),
+    RootParentArchitectureID: z.string().nullable().describe(`
+        * * Field Name: RootParentArchitectureID
+        * * Display Name: Root Parent Architecture ID
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type AIArchitectureEntityType = z.infer<typeof AIArchitectureSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Configuration Params
@@ -9837,13 +10163,13 @@ export const AIConfigurationSchema = z.object({
         * * Description: The current status of the configuration. Values include Active, Inactive, Deprecated, and Preview.`),
     DefaultPromptForContextCompressionID: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextCompressionID
-        * * Display Name: Default Prompt For Context Compression ID
+        * * Display Name: Default Prompt For Context Compression
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt to use for context compression when not specified at the agent level.`),
     DefaultPromptForContextSummarizationID: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextSummarizationID
-        * * Display Name: Default Prompt For Context Summarization ID
+        * * Display Name: Default Prompt For Context Summarization
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt to use for context summarization when not specified at the agent level.`),
@@ -9857,6 +10183,23 @@ export const AIConfigurationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultStorageProviderID: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageProviderID
+        * * Display Name: Default Storage Provider
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: Default file storage provider for agent attachments. Used when an agent does not specify its own AttachmentStorageProviderID.`),
+    DefaultStorageRootPath: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageRootPath
+        * * Display Name: Default Storage Root Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Default root path within the storage provider for agent attachments. Used when an agent does not specify its own AttachmentRootPath.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Optional reference to a parent configuration. When set, this configuration inherits prompt-model mappings and parameters from its parent. Child configurations can override specific settings while inheriting defaults from the parent chain. Supports N-level deep inheritance.`),
     DefaultPromptForContextCompression: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextCompression
         * * Display Name: Default Prompt For Context Compression
@@ -9865,9 +10208,240 @@ export const AIConfigurationSchema = z.object({
         * * Field Name: DefaultPromptForContextSummarization
         * * Display Name: Default Prompt For Context Summarization
         * * SQL Data Type: nvarchar(255)`),
+    DefaultStorageProvider: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageProvider
+        * * Display Name: Default Storage Provider
+        * * SQL Data Type: nvarchar(50)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIConfigurationEntityType = z.infer<typeof AIConfigurationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Credential Bindings
+ */
+export const AICredentialBindingSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CredentialID: z.string().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Reference to the credential being bound.`),
+    BindingType: z.union([z.literal('ModelVendor'), z.literal('PromptModel'), z.literal('Vendor')]).describe(`
+        * * Field Name: BindingType
+        * * Display Name: Binding Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ModelVendor
+    *   * PromptModel
+    *   * Vendor
+        * * Description: The type of AI entity this credential is bound to: Vendor (broadest), ModelVendor (model+vendor specific), or PromptModel (most specific). Resolution follows prompt → model → vendor hierarchy.`),
+    AIVendorID: z.string().nullable().describe(`
+        * * Field Name: AIVendorID
+        * * Display Name: AI Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+        * * Description: Reference to AIVendor when BindingType is Vendor. NULL otherwise.`),
+    AIModelVendorID: z.string().nullable().describe(`
+        * * Field Name: AIModelVendorID
+        * * Display Name: AI Model Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Model Vendors (vwAIModelVendors.ID)
+        * * Description: Reference to AIModelVendor when BindingType is ModelVendor. NULL otherwise.`),
+    AIPromptModelID: z.string().nullable().describe(`
+        * * Field Name: AIPromptModelID
+        * * Display Name: AI Prompt Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Models (vwAIPromptModels.ID)
+        * * Description: Reference to AIPromptModel when BindingType is PromptModel. NULL otherwise.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Priority for credential selection when multiple bindings exist at the same level. Lower values have higher priority (0 is highest). Enables failover when primary credentials are unavailable.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When false, this binding is ignored during credential resolution. Allows temporary disabling without deletion.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Credential: z.string().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+    AIVendor: z.string().nullable().describe(`
+        * * Field Name: AIVendor
+        * * Display Name: AI Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    AIModelVendor: z.string().nullable().describe(`
+        * * Field Name: AIModelVendor
+        * * Display Name: AI Model Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    AIPromptModel: z.string().nullable().describe(`
+        * * Field Name: AIPromptModel
+        * * Display Name: AI Prompt Model
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AICredentialBindingEntityType = z.infer<typeof AICredentialBindingSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Modalities
+ */
+export const AIModalitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Display name of the modality (e.g., Text, Image, Audio, Video, File, Embedding).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Detailed description of this modality and its use cases.`),
+    ContentBlockType: z.union([z.literal('audio_url'), z.literal('embedding'), z.literal('file_url'), z.literal('image_url'), z.literal('text'), z.literal('video_url')]).describe(`
+        * * Field Name: ContentBlockType
+        * * Display Name: Content Block Type
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio_url
+    *   * embedding
+    *   * file_url
+    *   * image_url
+    *   * text
+    *   * video_url
+        * * Description: Maps to ChatMessageContentBlock.type values: text, image_url, video_url, audio_url, file_url, embedding. Must match the TypeScript type definition.`),
+    MIMETypePattern: z.string().nullable().describe(`
+        * * Field Name: MIMETypePattern
+        * * Display Name: MIME Type Pattern
+        * * SQL Data Type: nvarchar(100)
+        * * Description: MIME type pattern for this modality (e.g., image/*, audio/*, video/*, text/*, application/*). Used for file type validation.`),
+    Type: z.union([z.literal('Binary'), z.literal('Content'), z.literal('Structured')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Content
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Binary
+    *   * Content
+    *   * Structured
+        * * Description: Classification type: Content (human-readable text), Structured (JSON/embeddings), Binary (media files like images, audio, video).`),
+    DefaultMaxSizeBytes: z.number().nullable().describe(`
+        * * Field Name: DefaultMaxSizeBytes
+        * * Display Name: Default Max Size (Bytes)
+        * * SQL Data Type: int
+        * * Description: System-wide default maximum size in bytes for this modality. Can be overridden at model or agent level. NULL means no size limit.`),
+    DefaultMaxCountPerMessage: z.number().nullable().describe(`
+        * * Field Name: DefaultMaxCountPerMessage
+        * * Display Name: Default Max Count Per Message
+        * * SQL Data Type: int
+        * * Description: System-wide default maximum count per message for this modality. Can be overridden at model or agent level. NULL means no count limit.`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order for UI presentation. Lower numbers appear first.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIModalityEntityType = z.infer<typeof AIModalitySchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Model Architectures
+ */
+export const AIModelArchitectureSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)`),
+    ArchitectureID: z.string().describe(`
+        * * Field Name: ArchitectureID
+        * * Display Name: Architecture
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Architectures (vwAIArchitectures.ID)`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Ranking of this architecture for the model. 1=Primary architecture, 2=Secondary, etc. Lower numbers indicate more dominant role.`),
+    Weight: z.number().nullable().describe(`
+        * * Field Name: Weight
+        * * Display Name: Weight
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Optional weight (0.0-1.0) indicating the mix ratio for hybrid architectures. E.g., 0.7 for 70% contribution.`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(500)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model Name
+        * * SQL Data Type: nvarchar(50)`),
+    Architecture: z.string().describe(`
+        * * Field Name: Architecture
+        * * Display Name: Architecture Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIModelArchitectureEntityType = z.infer<typeof AIModelArchitectureSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Costs
@@ -9980,6 +10554,93 @@ export const AIModelCostSchema = z.object({
 export type AIModelCostEntityType = z.infer<typeof AIModelCostSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Model Modalities
+ */
+export const AIModelModalitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
+    Direction: z.union([z.literal('Input'), z.literal('Output')]).describe(`
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+        * * Description: Whether this is an Input or Output modality for the model.`),
+    IsSupported: z.boolean().describe(`
+        * * Field Name: IsSupported
+        * * Display Name: Is Supported
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this modality is supported. Can be set to FALSE to explicitly disable an inherited modality.`),
+    IsRequired: z.boolean().describe(`
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: For input modalities: whether this modality is required (e.g., text is usually required for LLMs). For outputs: not typically applicable.`),
+    SupportedFormats: z.string().nullable().describe(`
+        * * Field Name: SupportedFormats
+        * * Display Name: Supported Formats
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Comma-separated list of supported file formats/extensions (e.g., png,jpg,webp,gif for images or mp3,wav,m4a for audio).`),
+    MaxSizeBytes: z.number().nullable().describe(`
+        * * Field Name: MaxSizeBytes
+        * * Display Name: Maximum Size (Bytes)
+        * * SQL Data Type: int
+        * * Description: Model-specific maximum size in bytes. Overrides AIModality.DefaultMaxSizeBytes. NULL means use system default.`),
+    MaxCountPerMessage: z.number().nullable().describe(`
+        * * Field Name: MaxCountPerMessage
+        * * Display Name: Maximum Count per Message
+        * * SQL Data Type: int
+        * * Description: Model-specific maximum count per message. Overrides AIModality.DefaultMaxCountPerMessage. NULL means use system default.`),
+    MaxDimension: z.number().nullable().describe(`
+        * * Field Name: MaxDimension
+        * * Display Name: Maximum Dimension (px)
+        * * SQL Data Type: int
+        * * Description: For image/video modalities: maximum dimension (width or height) in pixels supported by this model.`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Additional notes or documentation about this model-modality configuration.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type AIModelModalityEntityType = z.infer<typeof AIModelModalitySchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Model Price Types
  */
 export const AIModelPriceTypeSchema = z.object({
@@ -10061,12 +10722,12 @@ export const AIModelVendorSchema = z.object({
         * * Default Value: newsequentialid()`),
     ModelID: z.string().describe(`
         * * Field Name: ModelID
-        * * Display Name: Model
+        * * Display Name: Model ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)`),
     VendorID: z.string().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor
+        * * Display Name: Vendor ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
     Priority: z.number().describe(`
@@ -10142,16 +10803,10 @@ export const AIModelVendorSchema = z.object({
         * * Default Value: getutcdate()`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type
+        * * Display Name: Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
         * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)`),
-    CredentialID: z.string().nullable().describe(`
-        * * Field Name: CredentialID
-        * * Display Name: Credential
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
-        * * Description: Optional reference to a credential specific to this model-vendor combination. Takes precedence over AIVendor.CredentialID. Useful for scenarios where a model requires different credentials per vendor (e.g., Azure OpenAI vs direct OpenAI). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.`),
     Model: z.string().describe(`
         * * Field Name: Model
         * * Display Name: Model
@@ -10164,10 +10819,6 @@ export const AIModelVendorSchema = z.object({
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
-    Credential: z.string().nullable().describe(`
-        * * Field Name: Credential
-        * * Display Name: Credential
-        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type AIModelVendorEntityType = z.infer<typeof AIModelVendorSchema>;
@@ -10183,25 +10834,25 @@ export const AIPromptModelSchema = z.object({
         * * Default Value: newsequentialid()`),
     PromptID: z.string().describe(`
         * * Field Name: PromptID
-        * * Display Name: Prompt
+        * * Display Name: Prompt ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: References the AI prompt this model association applies to.`),
     ModelID: z.string().describe(`
         * * Field Name: ModelID
-        * * Display Name: Model
+        * * Display Name: Model ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         * * Description: References the AI model to use for this prompt.`),
     VendorID: z.string().nullable().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor
+        * * Display Name: Vendor ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
         * * Description: Optional reference to a specific vendor for the model. If NULL, uses the highest priority vendor for the model.`),
     ConfigurationID: z.string().nullable().describe(`
         * * Field Name: ConfigurationID
-        * * Display Name: Configuration
+        * * Display Name: Configuration ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
         * * Description: Optional reference to a specific configuration. If NULL, this model is available in all configurations.`),
@@ -10271,12 +10922,6 @@ export const AIPromptModelSchema = z.object({
         * * Display Name: Effort Level
         * * SQL Data Type: int
         * * Description: Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.`),
-    CredentialID: z.string().nullable().describe(`
-        * * Field Name: CredentialID
-        * * Display Name: Credential
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
-        * * Description: Optional reference to a credential specific to this prompt-model configuration. Takes precedence over AIModelVendor.CredentialID and AIVendor.CredentialID. Useful for prompts that require dedicated credentials (e.g., high-rate-limit keys for critical prompts). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -10293,13 +10938,105 @@ export const AIPromptModelSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(100)`),
-    Credential: z.string().nullable().describe(`
-        * * Field Name: Credential
-        * * Display Name: Credential
-        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type AIPromptModelEntityType = z.infer<typeof AIPromptModelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Prompt Run Medias
+ */
+export const AIPromptRunMediaSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    PromptRunID: z.string().describe(`
+        * * Field Name: PromptRunID
+        * * Display Name: Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
+    MimeType: z.string().describe(`
+        * * Field Name: MimeType
+        * * Display Name: MIME Type
+        * * SQL Data Type: nvarchar(100)`),
+    FileName: z.string().nullable().describe(`
+        * * Field Name: FileName
+        * * Display Name: File Name
+        * * SQL Data Type: nvarchar(255)`),
+    FileSizeBytes: z.number().nullable().describe(`
+        * * Field Name: FileSizeBytes
+        * * Display Name: File Size (Bytes)
+        * * SQL Data Type: int`),
+    Width: z.number().nullable().describe(`
+        * * Field Name: Width
+        * * Display Name: Width
+        * * SQL Data Type: int`),
+    Height: z.number().nullable().describe(`
+        * * Field Name: Height
+        * * Display Name: Height
+        * * SQL Data Type: int`),
+    DurationSeconds: z.number().nullable().describe(`
+        * * Field Name: DurationSeconds
+        * * Display Name: Duration (Seconds)
+        * * SQL Data Type: decimal(10, 2)`),
+    InlineData: z.string().nullable().describe(`
+        * * Field Name: InlineData
+        * * Display Name: Inline Data
+        * * SQL Data Type: nvarchar(MAX)`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Files (vwFiles.ID)`),
+    ThumbnailBase64: z.string().nullable().describe(`
+        * * Field Name: ThumbnailBase64
+        * * Display Name: Thumbnail (Base64)
+        * * SQL Data Type: nvarchar(MAX)`),
+    Metadata: z.string().nullable().describe(`
+        * * Field Name: Metadata
+        * * Display Name: Metadata
+        * * SQL Data Type: nvarchar(MAX)`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the media generated during prompt execution. Provides context for audit trail.`),
+    PromptRun: z.string().nullable().describe(`
+        * * Field Name: PromptRun
+        * * Display Name: Prompt Run
+        * * SQL Data Type: nvarchar(255)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(50)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type AIPromptRunMediaEntityType = z.infer<typeof AIPromptRunMediaSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Prompt Runs
@@ -10944,19 +11681,241 @@ export const AIVendorSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CredentialID: z.string().nullable().describe(`
-        * * Field Name: CredentialID
-        * * Display Name: Credential ID
+    CredentialTypeID: z.string().nullable().describe(`
+        * * Field Name: CredentialTypeID
+        * * Display Name: Credential Type ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
-        * * Description: Optional reference to a default credential for this vendor. When set, all models using this vendor will use this credential unless overridden at a higher priority level (AIModelVendor or AIPromptModel). When any credential is configured in the hierarchy, legacy authentication methods (environment variables, apiKeys parameter) are bypassed in favor of the Credentials system.`),
-    Credential: z.string().nullable().describe(`
-        * * Field Name: Credential
-        * * Display Name: Credential
-        * * SQL Data Type: nvarchar(200)`),
+        * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+        * * Description: Reference to the type of credential this vendor expects (e.g., API Key, GCP Service Account, Azure Service Principal). Used for type-based default credential resolution when no explicit binding exists, and for UI guidance when creating credentials.`),
+    CredentialType: z.string().nullable().describe(`
+        * * Field Name: CredentialType
+        * * Display Name: Credential Type
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AIVendorEntityType = z.infer<typeof AIVendorSchema>;
+
+/**
+ * zod schema definition for the entity MJ: API Key Scopes
+ */
+export const APIKeyScopeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    APIKeyID: z.string().describe(`
+        * * Field Name: APIKeyID
+        * * Display Name: API Key
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)`),
+    ScopeID: z.string().describe(`
+        * * Field Name: ScopeID
+        * * Display Name: Scope
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    APIKey: z.string().describe(`
+        * * Field Name: APIKey
+        * * Display Name: API Key
+        * * SQL Data Type: nvarchar(255)`),
+    Scope: z.string().describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type APIKeyScopeEntityType = z.infer<typeof APIKeyScopeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: API Key Usage Logs
+ */
+export const APIKeyUsageLogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    APIKeyID: z.string().describe(`
+        * * Field Name: APIKeyID
+        * * Display Name: API Key
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)`),
+    Endpoint: z.string().describe(`
+        * * Field Name: Endpoint
+        * * Display Name: Endpoint
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The API endpoint path that was accessed (e.g., /mcp, /graphql, /api/v1/entities).`),
+    Operation: z.string().nullable().describe(`
+        * * Field Name: Operation
+        * * Display Name: Operation
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The specific operation performed, such as the GraphQL operation name or MCP tool invoked (e.g., Get_Users_Record, Run_Agent).`),
+    Method: z.string().describe(`
+        * * Field Name: Method
+        * * Display Name: Method
+        * * SQL Data Type: nvarchar(10)
+        * * Description: HTTP method used for the request (GET, POST, PUT, DELETE, etc.).`),
+    StatusCode: z.number().describe(`
+        * * Field Name: StatusCode
+        * * Display Name: Status Code
+        * * SQL Data Type: int
+        * * Description: HTTP response status code returned to the client (e.g., 200 for success, 401 for unauthorized, 500 for server error).`),
+    ResponseTimeMs: z.number().nullable().describe(`
+        * * Field Name: ResponseTimeMs
+        * * Display Name: Response Time (ms)
+        * * SQL Data Type: int
+        * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.`),
+    IPAddress: z.string().nullable().describe(`
+        * * Field Name: IPAddress
+        * * Display Name: IP Address
+        * * SQL Data Type: nvarchar(45)
+        * * Description: Client IP address that made the request. Supports both IPv4 and IPv6 addresses (up to 45 characters).`),
+    UserAgent: z.string().nullable().describe(`
+        * * Field Name: UserAgent
+        * * Display Name: User Agent
+        * * SQL Data Type: nvarchar(500)
+        * * Description: User-Agent header from the HTTP request, identifying the client application or library making the API call.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    APIKey: z.string().describe(`
+        * * Field Name: APIKey
+        * * Display Name: API Key
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type APIKeyUsageLogEntityType = z.infer<typeof APIKeyUsageLogSchema>;
+
+/**
+ * zod schema definition for the entity MJ: API Keys
+ */
+export const APIKeySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Hash: z.string().describe(`
+        * * Field Name: Hash
+        * * Display Name: Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the raw API key (64 hexadecimal characters). The raw key is only shown once at creation time and cannot be recovered.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    Label: z.string().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(255)
+        * * Description: User-friendly name for identifying the key purpose (e.g., Cowork Integration, CI/CD Pipeline, Mobile App).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Optional detailed description of the key's intended use, integration details, or other notes.`),
+    Status: z.union([z.literal('Active'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Revoked
+        * * Description: Current lifecycle status of the key. Active keys can be used for authentication; Revoked keys are permanently disabled.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional expiration timestamp. Keys with NULL expiration never expire. Expired keys are rejected during authentication.`),
+    LastUsedAt: z.date().nullable().describe(`
+        * * Field Name: LastUsedAt
+        * * Display Name: Last Used At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the most recent successful authentication using this key. Updated on each valid API request.`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedByUser: z.string().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type APIKeyEntityType = z.infer<typeof APIKeySchema>;
+
+/**
+ * zod schema definition for the entity MJ: API Scopes
+ */
+export const APIScopeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Scope Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique scope identifier following the pattern category:permission (e.g., entities:read, agents:execute, admin:*). Supports wildcard (*) for broad permissions.`),
+    Category: z.string().describe(`
+        * * Field Name: Category
+        * * Display Name: Scope Category
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Grouping category for the scope (e.g., Entities, Agents, Admin). Used for organizing and filtering scopes in the UI.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Human-readable description explaining what permissions this scope grants.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type APIScopeEntityType = z.infer<typeof APIScopeSchema>;
 
 /**
  * zod schema definition for the entity MJ: Artifact Permissions
@@ -12247,6 +13206,109 @@ export const ConversationDetailArtifactSchema = z.object({
 export type ConversationDetailArtifactEntityType = z.infer<typeof ConversationDetailArtifactSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Conversation Detail Attachments
+ */
+export const ConversationDetailAttachmentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConversationDetailID: z.string().describe(`
+        * * Field Name: ConversationDetailID
+        * * Display Name: Conversation Detail
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+        * * Description: The modality type of this attachment (Image, Audio, Video, File, etc.). References the AIModality table.`),
+    MimeType: z.string().describe(`
+        * * Field Name: MimeType
+        * * Display Name: MIME Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: MIME type of the attachment (e.g., image/png, video/mp4, audio/mp3).`),
+    FileName: z.string().nullable().describe(`
+        * * Field Name: FileName
+        * * Display Name: File Name
+        * * SQL Data Type: nvarchar(4000)
+        * * Description: Original filename of the attachment. Supports long cloud storage paths up to 4000 characters.`),
+    FileSizeBytes: z.number().describe(`
+        * * Field Name: FileSizeBytes
+        * * Display Name: File Size (Bytes)
+        * * SQL Data Type: int
+        * * Description: Size of the attachment in bytes.`),
+    Width: z.number().nullable().describe(`
+        * * Field Name: Width
+        * * Display Name: Width
+        * * SQL Data Type: int
+        * * Description: Width in pixels for images and videos.`),
+    Height: z.number().nullable().describe(`
+        * * Field Name: Height
+        * * Display Name: Height
+        * * SQL Data Type: int
+        * * Description: Height in pixels for images and videos.`),
+    DurationSeconds: z.number().nullable().describe(`
+        * * Field Name: DurationSeconds
+        * * Display Name: Duration (Seconds)
+        * * SQL Data Type: int
+        * * Description: Duration in seconds for audio and video files.`),
+    InlineData: z.string().nullable().describe(`
+        * * Field Name: InlineData
+        * * Display Name: Inline Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Base64-encoded file data for small attachments stored inline. Mutually exclusive with FileID - exactly one must be populated.`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Files (vwFiles.ID)
+        * * Description: Reference to File entity for large attachments stored in MJStorage. Mutually exclusive with InlineData - exactly one must be populated.`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order for multiple attachments in a message. Lower numbers appear first.`),
+    ThumbnailBase64: z.string().nullable().describe(`
+        * * Field Name: ThumbnailBase64
+        * * Display Name: Thumbnail
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Base64-encoded thumbnail image for quick preview display. Max 200px on longest side.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the attachment providing context about its content and purpose.`),
+    ConversationDetail: z.string().describe(`
+        * * Field Name: ConversationDetail
+        * * Display Name: Conversation Detail
+        * * SQL Data Type: nvarchar(MAX)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(50)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type ConversationDetailAttachmentEntityType = z.infer<typeof ConversationDetailAttachmentSchema>;
+
+/**
  * zod schema definition for the entity MJ: Conversation Detail Ratings
  */
 export const ConversationDetailRatingSchema = z.object({
@@ -12503,6 +13565,284 @@ export const CredentialSchema = z.object({
 export type CredentialEntityType = z.infer<typeof CredentialSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Dashboard Category Links
+ */
+export const DashboardCategoryLinkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    DashboardID: z.string().describe(`
+        * * Field Name: DashboardID
+        * * Display Name: Dashboard
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    DashboardCategoryID: z.string().nullable().describe(`
+        * * Field Name: DashboardCategoryID
+        * * Display Name: Dashboard Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
+        * * Description: The category in the user's personal folder structure. NULL means the dashboard appears at root level.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional user-friendly alias for the dashboard within this user's view. If NULL, uses the original dashboard name.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order of this dashboard within the user's category. Lower values appear first.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Dashboard: z.string().describe(`
+        * * Field Name: Dashboard
+        * * Display Name: Dashboard Name
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    DashboardCategory: z.string().nullable().describe(`
+        * * Field Name: DashboardCategory
+        * * Display Name: Category Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type DashboardCategoryLinkEntityType = z.infer<typeof DashboardCategoryLinkSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Dashboard Category Permissions
+ */
+export const DashboardCategoryPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    DashboardCategoryID: z.string().describe(`
+        * * Field Name: DashboardCategoryID
+        * * Display Name: Dashboard Category ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    CanRead: z.boolean().describe(`
+        * * Field Name: CanRead
+        * * Display Name: Can Read
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the user can view dashboards within this category`),
+    CanEdit: z.boolean().describe(`
+        * * Field Name: CanEdit
+        * * Display Name: Can Edit
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can modify dashboards within this category`),
+    CanAddRemove: z.boolean().describe(`
+        * * Field Name: CanAddRemove
+        * * Display Name: Can Add/Remove
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can add new dashboards to or remove dashboards from this category`),
+    CanShare: z.boolean().describe(`
+        * * Field Name: CanShare
+        * * Display Name: Can Share
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can share this category with other users`),
+    SharedByUserID: z.string().nullable().describe(`
+        * * Field Name: SharedByUserID
+        * * Display Name: Shared By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who granted this permission. NULL if shared by the category owner.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    DashboardCategory: z.string().describe(`
+        * * Field Name: DashboardCategory
+        * * Display Name: Dashboard Category
+        * * SQL Data Type: nvarchar(100)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    SharedByUser: z.string().nullable().describe(`
+        * * Field Name: SharedByUser
+        * * Display Name: Shared By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type DashboardCategoryPermissionEntityType = z.infer<typeof DashboardCategoryPermissionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Dashboard Part Types
+ */
+export const DashboardPartTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name for the panel type (e.g., View, Query, Artifact, WebURL, Custom)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of what this panel type displays and its capabilities`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class for the panel type (e.g., fa-solid fa-table)`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The @RegisterClass name for the panel renderer component that extends DashboardBasePanelRenderer`),
+    ConfigDialogClass: z.string().nullable().describe(`
+        * * Field Name: ConfigDialogClass
+        * * Display Name: Configuration Dialog Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The @RegisterClass name for the configuration dialog component that extends DashboardBasePanelConfigDialog`),
+    DefaultConfig: z.string().nullable().describe(`
+        * * Field Name: DefaultConfig
+        * * Display Name: Default Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing default configuration values for new panels of this type`),
+    SortOrder: z.number().describe(`
+        * * Field Name: SortOrder
+        * * Display Name: Sort Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order in panel type selection UI (lower numbers appear first)`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this panel type is currently available for use`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type DashboardPartTypeEntityType = z.infer<typeof DashboardPartTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Dashboard Permissions
+ */
+export const DashboardPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    DashboardID: z.string().describe(`
+        * * Field Name: DashboardID
+        * * Display Name: Dashboard ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    CanRead: z.boolean().describe(`
+        * * Field Name: CanRead
+        * * Display Name: Can Read
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the user can view the dashboard and its contents`),
+    CanEdit: z.boolean().describe(`
+        * * Field Name: CanEdit
+        * * Display Name: Can Edit
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can modify the dashboard layout, add/remove parts, or change settings`),
+    CanDelete: z.boolean().describe(`
+        * * Field Name: CanDelete
+        * * Display Name: Can Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can delete the dashboard entirely`),
+    CanShare: z.boolean().describe(`
+        * * Field Name: CanShare
+        * * Display Name: Can Share
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the user can share the dashboard with other users`),
+    SharedByUserID: z.string().nullable().describe(`
+        * * Field Name: SharedByUserID
+        * * Display Name: Shared By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who granted this permission. NULL if shared by the dashboard owner.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Dashboard: z.string().describe(`
+        * * Field Name: Dashboard
+        * * Display Name: Dashboard
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    SharedByUser: z.string().nullable().describe(`
+        * * Field Name: SharedByUser
+        * * Display Name: Shared By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type DashboardPermissionEntityType = z.infer<typeof DashboardPermissionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Dashboard User Preferences
  */
 export const DashboardUserPreferenceSchema = z.object({
@@ -12644,23 +13984,23 @@ export const EncryptionAlgorithmSchema = z.object({
         * * Description: Node.js crypto module algorithm identifier (e.g., aes-256-gcm).`),
     KeyLengthBits: z.number().describe(`
         * * Field Name: KeyLengthBits
-        * * Display Name: Key Length (Bits)
+        * * Display Name: Key Length Bits
         * * SQL Data Type: int
         * * Description: Required key length in bits (e.g., 256 for AES-256).`),
     IVLengthBytes: z.number().describe(`
         * * Field Name: IVLengthBytes
-        * * Display Name: IV Length (Bytes)
+        * * Display Name: IV Length Bytes
         * * SQL Data Type: int
         * * Description: Required initialization vector length in bytes (e.g., 12 for GCM, 16 for CBC).`),
     IsAEAD: z.boolean().describe(`
         * * Field Name: IsAEAD
-        * * Display Name: AEAD
+        * * Display Name: Is AEAD
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this algorithm provides Authenticated Encryption with Associated Data (AEAD). AEAD algorithms like GCM detect tampering.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this algorithm is available for use.`),
@@ -12715,7 +14055,7 @@ export const EncryptionKeySourceSchema = z.object({
         * * Description: JSON template describing the configuration options for this key source.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this key source is available for use.`),
@@ -12766,19 +14106,19 @@ export const EncryptionKeySchema = z.object({
         * * Description: Description of this key purpose and scope.`),
     EncryptionKeySourceID: z.string().describe(`
         * * Field Name: EncryptionKeySourceID
-        * * Display Name: Key Source
+        * * Display Name: Encryption Key Source ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Encryption Key Sources (vwEncryptionKeySources.ID)
         * * Description: References the key source that provides the key material.`),
     EncryptionAlgorithmID: z.string().describe(`
         * * Field Name: EncryptionAlgorithmID
-        * * Display Name: Encryption Algorithm
+        * * Display Name: Encryption Algorithm ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Encryption Algorithms (vwEncryptionAlgorithms.ID)
         * * Description: References the algorithm to use for encryption/decryption.`),
     KeyLookupValue: z.string().describe(`
         * * Field Name: KeyLookupValue
-        * * Display Name: Lookup Value
+        * * Display Name: Key Lookup Value
         * * SQL Data Type: nvarchar(500)
         * * Description: Source-specific lookup value (e.g., environment variable name, vault path).`),
     KeyVersion: z.string().describe(`
@@ -12795,7 +14135,7 @@ export const EncryptionKeySchema = z.object({
         * * Description: Prefix marker for encrypted values (default: $ENC$).`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this key can be used for new encryption operations.`),
@@ -12833,11 +14173,11 @@ export const EncryptionKeySchema = z.object({
         * * Default Value: getutcdate()`),
     EncryptionKeySource: z.string().describe(`
         * * Field Name: EncryptionKeySource
-        * * Display Name: Key Source Name
+        * * Display Name: Encryption Key Source
         * * SQL Data Type: nvarchar(100)`),
     EncryptionAlgorithm: z.string().describe(`
         * * Field Name: EncryptionAlgorithm
-        * * Display Name: Algorithm Name
+        * * Display Name: Encryption Algorithm
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -12886,6 +14226,203 @@ export const EnvironmentSchema = z.object({
 });
 
 export type EnvironmentEntityType = z.infer<typeof EnvironmentSchema>;
+
+/**
+ * zod schema definition for the entity MJ: File Storage Accounts
+ */
+export const FileStorageAccountSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Display name for the storage account (e.g., Marketing Files, Engineering Docs). Must be unique per provider.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description providing additional context about the account purpose or contents.`),
+    ProviderID: z.string().describe(`
+        * * Field Name: ProviderID
+        * * Display Name: Provider
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: Foreign key to FileStorageProvider indicating which storage service this account uses (Dropbox, Google Drive, S3, etc.).`),
+    CredentialID: z.string().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Foreign key to Credential containing the authentication details (OAuth tokens, API keys, etc.) for this account. Credentials are decrypted at runtime by the Credential Engine.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Provider: z.string().describe(`
+        * * Field Name: Provider
+        * * Display Name: Provider Name
+        * * SQL Data Type: nvarchar(50)`),
+    Credential: z.string().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential Name
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type FileStorageAccountEntityType = z.infer<typeof FileStorageAccountSchema>;
+
+/**
+ * zod schema definition for the entity MJ: List Invitations
+ */
+export const ListInvitationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the invitation.`),
+    ListID: z.string().describe(`
+        * * Field Name: ListID
+        * * Display Name: List
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Lists (vwLists.ID)
+        * * Description: The list the user is being invited to.`),
+    Email: z.string().describe(`
+        * * Field Name: Email
+        * * Display Name: Email Address
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Email address of the invitee.`),
+    Role: z.union([z.literal('Editor'), z.literal('Viewer')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Editor
+    *   * Viewer
+        * * Description: The role to be assigned upon acceptance (Editor or Viewer).`),
+    Token: z.string().describe(`
+        * * Field Name: Token
+        * * Display Name: Token
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Security token for validating the invitation.`),
+    ExpiresAt: z.date().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetime
+        * * Description: When the invitation expires.`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who created the invitation.`),
+    Status: z.union([z.literal('Accepted'), z.literal('Expired'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Accepted
+    *   * Expired
+    *   * Pending
+    *   * Revoked
+        * * Description: Status of the invitation (Pending, Accepted, Expired, Revoked).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    List: z.string().describe(`
+        * * Field Name: List
+        * * Display Name: List Name
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedByUser: z.string().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type ListInvitationEntityType = z.infer<typeof ListInvitationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: List Shares
+ */
+export const ListShareSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the share record.`),
+    ListID: z.string().describe(`
+        * * Field Name: ListID
+        * * Display Name: List
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Lists (vwLists.ID)
+        * * Description: The list being shared.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user receiving access to the list.`),
+    Role: z.union([z.literal('Editor'), z.literal('Viewer')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Editor
+    *   * Viewer
+        * * Description: The permission level granted (Editor or Viewer).`),
+    Status: z.union([z.literal('Active'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+        * * Description: Current status of the share (Active or Pending).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    List: z.string().describe(`
+        * * Field Name: List
+        * * Display Name: List Name
+        * * SQL Data Type: nvarchar(100)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type ListShareEntityType = z.infer<typeof ListShareSchema>;
 
 /**
  * zod schema definition for the entity MJ: Projects
@@ -13975,7 +15512,7 @@ export const TestRunFeedbackSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ReviewerUser: z.string().describe(`
         * * Field Name: ReviewerUser
-        * * Display Name: Reviewer Name
+        * * Display Name: Reviewer User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -14004,7 +15541,7 @@ export const TestRunSchema = z.object({
         * * Description: Foreign Key - Optional parent suite run if this test was part of a suite execution. NULL for standalone test runs.`),
     RunByUserID: z.string().describe(`
         * * Field Name: RunByUserID
-        * * Display Name: Run By User ID
+        * * Display Name: Run By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: Foreign Key - The user who triggered the test run (could be system user for automated runs)`),
@@ -14017,13 +15554,13 @@ export const TestRunSchema = z.object({
         * * Field Name: TargetType
         * * Display Name: Target Type
         * * SQL Data Type: nvarchar(100)
-        * * Description: Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.`),
+        * * Description: Optional sub-category or variant label for the test target. Use this to distinguish between different test scenarios within the same entity type (e.g., "Summarization", "Classification", "Code Review" for AI Agent tests). The entity type itself should be specified via TargetLogEntityID.`),
     TargetLogID: z.string().nullable().describe(`
         * * Field Name: TargetLogID
-        * * Display Name: Target Log ID
+        * * Display Name: Target Log
         * * SQL Data Type: uniqueidentifier
         * * Description: ID of the target execution log (e.g., AIAgentRun.ID, WorkflowRun.ID). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.`),
-    Status: z.union([z.literal('Error'), z.literal('Failed'), z.literal('Passed'), z.literal('Pending'), z.literal('Running'), z.literal('Skipped')]).describe(`
+    Status: z.union([z.literal('Error'), z.literal('Failed'), z.literal('Passed'), z.literal('Pending'), z.literal('Running'), z.literal('Skipped'), z.literal('Timeout')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -14036,7 +15573,8 @@ export const TestRunSchema = z.object({
     *   * Pending
     *   * Running
     *   * Skipped
-        * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation)`),
+    *   * Timeout
+        * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation), Timeout (execution exceeded time limit and was cancelled)`),
     StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
@@ -14049,7 +15587,7 @@ export const TestRunSchema = z.object({
         * * Description: Timestamp when the test run completed`),
     DurationSeconds: z.number().nullable().describe(`
         * * Field Name: DurationSeconds
-        * * Display Name: Duration (seconds)
+        * * Display Name: Duration Seconds
         * * SQL Data Type: decimal(10, 3)
         * * Description: Execution time in seconds for this test`),
     InputData: z.string().nullable().describe(`
@@ -14112,9 +15650,55 @@ export const TestRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Log: z.string().nullable().describe(`
+        * * Field Name: Log
+        * * Display Name: Log
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed execution log capturing status messages, diagnostic output, and driver-specific information streamed during test execution. Format is timestamped log lines.`),
+    Tags: z.string().nullable().describe(`
+        * * Field Name: Tags
+        * * Display Name: Tags
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of user-assigned tags/labels for this test run. Used for categorization, filtering, and comparing runs with different configurations. Inherits from parent suite run tags if not explicitly set.`),
+    MachineName: z.string().nullable().describe(`
+        * * Field Name: MachineName
+        * * Display Name: Machine Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Hostname of the machine that executed this test. Used for identifying the execution environment and debugging infrastructure-specific issues.`),
+    MachineID: z.string().nullable().describe(`
+        * * Field Name: MachineID
+        * * Display Name: Machine ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of test execution across different machines.`),
+    RunByUserName: z.string().nullable().describe(`
+        * * Field Name: RunByUserName
+        * * Display Name: Run By User Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized user name who ran the test. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.`),
+    RunByUserEmail: z.string().nullable().describe(`
+        * * Field Name: RunByUserEmail
+        * * Display Name: Run By User Email
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized email address of the user who ran the test. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.`),
+    RunContextDetails: z.string().nullable().describe(`
+        * * Field Name: RunContextDetails
+        * * Display Name: Run Context Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
+    TargetLogEntityID: z.string().nullable().describe(`
+        * * Field Name: TargetLogEntityID
+        * * Display Name: Target Log Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.`),
+    ResolvedVariables: z.string().nullable().describe(`
+        * * Field Name: ResolvedVariables
+        * * Display Name: Resolved Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing the final resolved variable values used during test execution. Includes both the resolved values and the source of each value (run, suite, test, or type level). Stored for reproducibility and auditing.`),
     Test: z.string().describe(`
         * * Field Name: Test
-        * * Display Name: Test
+        * * Display Name: Test Name
         * * SQL Data Type: nvarchar(255)`),
     TestSuiteRun: z.string().nullable().describe(`
         * * Field Name: TestSuiteRun
@@ -14124,6 +15708,10 @@ export const TestRunSchema = z.object({
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)`),
+    TargetLogEntity: z.string().nullable().describe(`
+        * * Field Name: TargetLogEntity
+        * * Display Name: Target Log Entity Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type TestRunEntityType = z.infer<typeof TestRunSchema>;
@@ -14145,7 +15733,7 @@ export const TestSuiteRunSchema = z.object({
         * * Description: Foreign Key - The test suite that was executed`),
     RunByUserID: z.string().describe(`
         * * Field Name: RunByUserID
-        * * Display Name: Run By User
+        * * Display Name: Run By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: Foreign Key - The user who triggered the suite run (could be system user for automated runs)`),
@@ -14252,13 +15840,48 @@ export const TestSuiteRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Tags: z.string().nullable().describe(`
+        * * Field Name: Tags
+        * * Display Name: Tags
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of user-assigned tags/labels for this suite run. Used for categorization, filtering, and comparing runs with different configurations (e.g., ["Opus 4.5", "New Prompt v3", "Production Config"]).`),
+    MachineName: z.string().nullable().describe(`
+        * * Field Name: MachineName
+        * * Display Name: Machine Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Hostname of the machine that executed this suite. Used for identifying the execution environment and debugging infrastructure-specific issues.`),
+    MachineID: z.string().nullable().describe(`
+        * * Field Name: MachineID
+        * * Display Name: Machine ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of suite execution across different machines.`),
+    RunByUserName: z.string().nullable().describe(`
+        * * Field Name: RunByUserName
+        * * Display Name: Run By User Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized user name who ran the suite. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.`),
+    RunByUserEmail: z.string().nullable().describe(`
+        * * Field Name: RunByUserEmail
+        * * Display Name: Run By User Email
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized email address of the user who ran the suite. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.`),
+    RunContextDetails: z.string().nullable().describe(`
+        * * Field Name: RunContextDetails
+        * * Display Name: Run Context Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
+    ResolvedVariables: z.string().nullable().describe(`
+        * * Field Name: ResolvedVariables
+        * * Display Name: Resolved Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun.ResolvedVariables with source="suite".`),
     Suite: z.string().describe(`
         * * Field Name: Suite
-        * * Display Name: Suite Name
+        * * Display Name: Suite
         * * SQL Data Type: nvarchar(255)`),
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
-        * * Display Name: Run By User Name
+        * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -14385,6 +16008,16 @@ export const TestSuiteSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    MaxExecutionTimeMS: z.number().nullable().describe(`
+        * * Field Name: MaxExecutionTimeMS
+        * * Display Name: Max Execution Time (ms)
+        * * SQL Data Type: int
+        * * Description: Maximum total execution time in milliseconds for the entire suite. If NULL, no suite-level timeout applies (individual test timeouts still apply). When exceeded, current test is cancelled and remaining tests are skipped.`),
+    Variables: z.string().nullable().describe(`
+        * * Field Name: Variables
+        * * Display Name: Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing variable values to apply to all tests in this suite. These values override test-level defaults but can be overridden by run-level values.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -14442,6 +16075,11 @@ export const TestTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    VariablesSchema: z.string().nullable().describe(`
+        * * Field Name: VariablesSchema
+        * * Display Name: Variables Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON schema defining the variables available for tests of this type. Contains schemaVersion and array of variable definitions with name, displayName, description, dataType, valueSource, possibleValues, defaultValue, and required fields.`),
 });
 
 export type TestTypeEntityType = z.infer<typeof TestTypeSchema>;
@@ -14457,7 +16095,7 @@ export const TestSchema = z.object({
         * * Default Value: newsequentialid()`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Test Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Types (vwTestTypes.ID)
         * * Description: Foreign Key - The type of test (e.g., Agent Eval, Workflow Test). Determines which driver class handles execution.`),
@@ -14510,12 +16148,12 @@ export const TestSchema = z.object({
         * * Description: Priority for execution ordering. Lower numbers run first. Useful for dependencies or critical path tests.`),
     EstimatedDurationSeconds: z.number().nullable().describe(`
         * * Field Name: EstimatedDurationSeconds
-        * * Display Name: Estimated Duration Seconds
+        * * Display Name: Estimated Duration (seconds)
         * * SQL Data Type: int
         * * Description: Estimated execution time in seconds. Used for scheduling and timeout calculations.`),
     EstimatedCostUSD: z.number().nullable().describe(`
         * * Field Name: EstimatedCostUSD
-        * * Display Name: Estimated Cost USD
+        * * Display Name: Estimated Cost (USD)
         * * SQL Data Type: decimal(10, 6)
         * * Description: Estimated cost in USD for running this test (e.g., LLM token costs, compute resources). Used for budgeting and optimization.`),
     __mj_CreatedAt: z.date().describe(`
@@ -14533,6 +16171,16 @@ export const TestSchema = z.object({
         * * Display Name: Repeat Count
         * * SQL Data Type: int
         * * Description: Number of times to repeat this test execution. NULL or 1 = single execution. Values > 1 will create multiple test runs for statistical analysis.`),
+    MaxExecutionTimeMS: z.number().nullable().describe(`
+        * * Field Name: MaxExecutionTimeMS
+        * * Display Name: Max Execution Time (ms)
+        * * SQL Data Type: int
+        * * Description: Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.`),
+    Variables: z.string().nullable().describe(`
+        * * Field Name: Variables
+        * * Display Name: Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType.VariablesSchema.`),
     Type: z.string().describe(`
         * * Field Name: Type
         * * Display Name: Type
@@ -14540,6 +16188,158 @@ export const TestSchema = z.object({
 });
 
 export type TestEntityType = z.infer<typeof TestSchema>;
+
+/**
+ * zod schema definition for the entity MJ: User Notification Preferences
+ */
+export const UserNotificationPreferenceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    NotificationTypeID: z.string().describe(`
+        * * Field Name: NotificationTypeID
+        * * Display Name: Notification Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: User Notification Types (vwUserNotificationTypes.ID)`),
+    InAppEnabled: z.boolean().nullable().describe(`
+        * * Field Name: InAppEnabled
+        * * Display Name: In-App Enabled
+        * * SQL Data Type: bit
+        * * Description: User preference for in-app notifications (NULL = use default)`),
+    EmailEnabled: z.boolean().nullable().describe(`
+        * * Field Name: EmailEnabled
+        * * Display Name: Email Enabled
+        * * SQL Data Type: bit
+        * * Description: User preference for email notifications (NULL = use default)`),
+    SMSEnabled: z.boolean().nullable().describe(`
+        * * Field Name: SMSEnabled
+        * * Display Name: SMS Enabled
+        * * SQL Data Type: bit
+        * * Description: User preference for SMS notifications (NULL = use default)`),
+    Enabled: z.boolean().nullable().describe(`
+        * * Field Name: Enabled
+        * * Display Name: Overall Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 1`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    NotificationType: z.string().describe(`
+        * * Field Name: NotificationType
+        * * Display Name: Notification Type Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type UserNotificationPreferenceEntityType = z.infer<typeof UserNotificationPreferenceSchema>;
+
+/**
+ * zod schema definition for the entity MJ: User Notification Types
+ */
+export const UserNotificationTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name for the notification type (e.g., 'Agent Completion')`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(500)`),
+    DefaultInApp: z.boolean().describe(`
+        * * Field Name: DefaultInApp
+        * * Display Name: Default In-App
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether in-app notifications are enabled by default for this type`),
+    DefaultEmail: z.boolean().describe(`
+        * * Field Name: DefaultEmail
+        * * Display Name: Default Email
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether email notifications are enabled by default for this type`),
+    DefaultSMS: z.boolean().describe(`
+        * * Field Name: DefaultSMS
+        * * Display Name: Default SMS
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether SMS notifications are enabled by default for this type`),
+    AllowUserPreference: z.boolean().nullable().describe(`
+        * * Field Name: AllowUserPreference
+        * * Display Name: Allow User Preference
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether users can override the default delivery method`),
+    EmailTemplateID: z.string().nullable().describe(`
+        * * Field Name: EmailTemplateID
+        * * Display Name: Email Template
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Templates (vwTemplates.ID)`),
+    SMSTemplateID: z.string().nullable().describe(`
+        * * Field Name: SMSTemplateID
+        * * Display Name: SMS Template
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Templates (vwTemplates.ID)`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)`),
+    Color: z.string().nullable().describe(`
+        * * Field Name: Color
+        * * Display Name: Color
+        * * SQL Data Type: nvarchar(50)`),
+    AutoExpireDays: z.number().nullable().describe(`
+        * * Field Name: AutoExpireDays
+        * * Display Name: Auto Expire Days
+        * * SQL Data Type: int`),
+    Priority: z.number().nullable().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EmailTemplate: z.string().nullable().describe(`
+        * * Field Name: EmailTemplate
+        * * Display Name: Email Template Name
+        * * SQL Data Type: nvarchar(255)`),
+    SMSTemplate: z.string().nullable().describe(`
+        * * Field Name: SMSTemplate
+        * * Display Name: SMS Template Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type UserNotificationTypeEntityType = z.infer<typeof UserNotificationTypeSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Settings
@@ -14697,7 +16497,7 @@ export const QuerySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category ID
+        * * Display Name: Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)`),
     UserQuestion: z.string().nullable().describe(`
@@ -14753,12 +16553,12 @@ export const QuerySchema = z.object({
         * * Description: Higher numbers indicate more execution overhead/time required. Useful for planning which queries to use in various scenarios.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     UsesTemplate: z.boolean().nullable().describe(`
@@ -14778,7 +16578,7 @@ export const QuerySchema = z.object({
         * * Display Name: Cache Enabled
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: When true, query results will be cached in memory with TTL expiration`),
+        * * Description: When true, enables query result caching. Caching behavior depends on CacheValidationSQL: (1) If CacheValidationSQL is NULL, uses simple server-side TTL caching based on CacheTTLMinutes - results are cached on the server and expire after the TTL period. (2) If CacheValidationSQL is set, enables smart client-side caching with freshness validation - client sends cache fingerprint (maxUpdatedAt + rowCount) to server, server validates using CacheValidationSQL and returns 'current' (use cached) or 'stale' (with fresh data). Smart caching provides real-time accuracy while minimizing data transfer.`),
     CacheTTLMinutes: z.number().nullable().describe(`
         * * Field Name: CacheTTLMinutes
         * * Display Name: Cache TTL Minutes
@@ -14796,10 +16596,15 @@ export const QuerySchema = z.object({
         * * Description: Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis`),
     EmbeddingModelID: z.string().nullable().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model ID
+        * * Display Name: Embedding Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         * * Description: The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.`),
+    CacheValidationSQL: z.string().nullable().describe(`
+        * * Field Name: CacheValidationSQL
+        * * Display Name: Cache Validation SQL
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -17283,6 +19088,12 @@ export const UserNotificationSchema = z.object({
         * * Display Name: Resource Record
         * * SQL Data Type: uniqueidentifier
         * * Description: ID of the specific record this notification is about.`),
+    NotificationTypeID: z.string().nullable().describe(`
+        * * Field Name: NotificationTypeID
+        * * Display Name: Notification Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: User Notification Types (vwUserNotificationTypes.ID)
+        * * Description: Optional reference to notification type for categorization and delivery preferences`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -17291,6 +19102,10 @@ export const UserNotificationSchema = z.object({
         * * Field Name: ResourceType
         * * Display Name: Resource Type
         * * SQL Data Type: nvarchar(255)`),
+    NotificationType: z.string().nullable().describe(`
+        * * Field Name: NotificationType
+        * * Display Name: Notification Type
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type UserNotificationEntityType = z.infer<typeof UserNotificationSchema>;
@@ -19234,7 +21049,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
 
     /**
     * * Field Name: ActionID
-    * * Display Name: Action ID
+    * * Display Name: Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Actions (vwActions.ID)
     */
@@ -19247,7 +21062,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: Parameter Name
     * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {
@@ -19272,7 +21087,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Parameter Direction
     * * SQL Data Type: nchar(10)
     * * Value List Type: List
     * * Possible Values 
@@ -19297,17 +21112,18 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     *   * BaseEntity Sub-Class
     *   * BaseEntity Sub-Class
     *   * Other
-    *   * Other
+    *   * MediaOutput
     *   * Scalar
+    *   * Other
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -19369,6 +21185,24 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MediaModality
+    * * Display Name: Media Modality
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * Image
+    *   * Video
+    * * Description: Specifies the type of media this parameter outputs when ValueType is MediaOutput. Used for action discovery and validation.
+    */
+    get MediaModality(): 'Audio' | 'Image' | 'Video' | null {
+        return this.Get('MediaModality');
+    }
+    set MediaModality(value: 'Audio' | 'Image' | 'Video' | null) {
+        this.Set('MediaModality', value);
     }
 
     /**
@@ -20071,6 +21905,7 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     /**
     * Validate() method override for AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CompactLength: This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
+    * * CompactMode: CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
     * * MaxExecutionsPerRun: This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
     * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
     * * ResultExpirationTurns: This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
@@ -20085,6 +21920,7 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateCompactLengthGreaterThanZero(result);
+        this.ValidateCompactModeAllowedValues(result);
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
         this.ValidateMinExecutionsPerRunIsNonNegative(result);
         this.ValidateResultExpirationTurnsNonNegative(result);
@@ -20106,6 +21942,24 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     public ValidateCompactLengthGreaterThanZero(result: ValidationResult) {
     	if (this.CompactLength != null && this.CompactLength <= 0) {
     		result.Errors.push(new ValidationErrorInfo("CompactLength", "CompactLength must be greater than zero if specified.", this.CompactLength, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactModeAllowedValues(result: ValidationResult) {
+    	// CompactMode is optional; if set, it must be one of the allowed options
+    	if (this.CompactMode != null && this.CompactMode !== 'AI Summary' && this.CompactMode !== 'First N Chars') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			'CompactMode',
+    			"CompactMode must be either 'AI Summary' or 'First N Chars' when provided.",
+    			this.CompactMode,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -21600,7 +23454,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.
@@ -21687,7 +23541,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Context Compression Prompt ID
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     */
@@ -21713,7 +23567,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Agent Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
@@ -22050,7 +23904,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultArtifactTypeID
-    * * Display Name: Default Artifact Type ID
+    * * Display Name: Default Artifact Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
     * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.
@@ -22064,7 +23918,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner User ID
+    * * Display Name: Owner User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -22283,6 +24137,59 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: AttachmentStorageProviderID
+    * * Display Name: Attachment Storage Provider
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.
+    */
+    get AttachmentStorageProviderID(): string | null {
+        return this.Get('AttachmentStorageProviderID');
+    }
+    set AttachmentStorageProviderID(value: string | null) {
+        this.Set('AttachmentStorageProviderID', value);
+    }
+
+    /**
+    * * Field Name: AttachmentRootPath
+    * * Display Name: Attachment Root Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder
+    */
+    get AttachmentRootPath(): string | null {
+        return this.Get('AttachmentRootPath');
+    }
+    set AttachmentRootPath(value: string | null) {
+        this.Set('AttachmentRootPath', value);
+    }
+
+    /**
+    * * Field Name: InlineStorageThresholdBytes
+    * * Display Name: Inline Storage Threshold Bytes
+    * * SQL Data Type: int
+    * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
+    */
+    get InlineStorageThresholdBytes(): number | null {
+        return this.Get('InlineStorageThresholdBytes');
+    }
+    set InlineStorageThresholdBytes(value: number | null) {
+        this.Set('InlineStorageThresholdBytes', value);
+    }
+
+    /**
+    * * Field Name: AgentTypePromptParams
+    * * Display Name: Agent Type Prompt Params
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.
+    */
+    get AgentTypePromptParams(): string | null {
+        return this.Get('AgentTypePromptParams');
+    }
+    set AgentTypePromptParams(value: string | null) {
+        this.Set('AgentTypePromptParams', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -22325,6 +24232,15 @@ if this limit is exceeded.
     */
     get OwnerUser(): string {
         return this.Get('OwnerUser');
+    }
+
+    /**
+    * * Field Name: AttachmentStorageProvider
+    * * Display Name: Attachment Storage Provider
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AttachmentStorageProvider(): string | null {
+        return this.Get('AttachmentStorageProvider');
     }
 
     /**
@@ -22548,6 +24464,52 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: DefaultInputModalityID
+    * * Display Name: Default Input Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    * * Description: Default input modality for this model type. Models of this type inherit this as their primary input modality unless overridden.
+    */
+    get DefaultInputModalityID(): string {
+        return this.Get('DefaultInputModalityID');
+    }
+    set DefaultInputModalityID(value: string) {
+        this.Set('DefaultInputModalityID', value);
+    }
+
+    /**
+    * * Field Name: DefaultOutputModalityID
+    * * Display Name: Default Output Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    * * Description: Default output modality for this model type. Models of this type inherit this as their primary output modality unless overridden.
+    */
+    get DefaultOutputModalityID(): string {
+        return this.Get('DefaultOutputModalityID');
+    }
+    set DefaultOutputModalityID(value: string) {
+        this.Set('DefaultOutputModalityID', value);
+    }
+
+    /**
+    * * Field Name: DefaultInputModality
+    * * Display Name: Default Input Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get DefaultInputModality(): string {
+        return this.Get('DefaultInputModality');
+    }
+
+    /**
+    * * Field Name: DefaultOutputModality
+    * * Display Name: Default Output Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get DefaultOutputModality(): string {
+        return this.Get('DefaultOutputModality');
+    }
 }
 
 
@@ -22675,7 +24637,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * * Field Name: AIModelTypeID
-    * * Display Name: AI Model Type ID
+    * * Display Name: AI Model Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)
     */
@@ -22702,7 +24664,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Controls whether this AI model is available for use in the system.
@@ -22776,8 +24738,36 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
+    * * Field Name: InheritTypeModalities
+    * * Display Name: Inherit Type Modalities
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When TRUE (default), the model inherits default input/output modalities from its AIModelType AND can extend with additional modalities via AIModelModality records. When FALSE, only modalities explicitly defined in AIModelModality are used.
+    */
+    get InheritTypeModalities(): boolean {
+        return this.Get('InheritTypeModalities');
+    }
+    set InheritTypeModalities(value: boolean) {
+        this.Set('InheritTypeModalities', value);
+    }
+
+    /**
+    * * Field Name: PriorVersionID
+    * * Display Name: Prior Version
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: Reference to the previous version of this model, creating a version lineage chain. For example, GPT-4 Turbo might reference GPT-4 as its prior version.
+    */
+    get PriorVersionID(): string | null {
+        return this.Get('PriorVersionID');
+    }
+    set PriorVersionID(value: string | null) {
+        this.Set('PriorVersionID', value);
+    }
+
+    /**
     * * Field Name: AIModelType
-    * * Display Name: AIModel Type
+    * * Display Name: AI Model Type
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string {
@@ -22813,7 +24803,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * * Field Name: APIName
-    * * Display Name: APIName
+    * * Display Name: API Name
     * * SQL Data Type: nvarchar(100)
     */
     get APIName(): string | null {
@@ -31057,7 +33047,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
 
     /**
     * * Field Name: DuplicateRunDetail
-    * * Display Name: Duplicate Run Detail Text
+    * * Display Name: Duplicate Run Detail
     * * SQL Data Type: nvarchar(500)
     */
     get DuplicateRunDetail(): string {
@@ -31066,7 +33056,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
 
     /**
     * * Field Name: RecordMergeLog
-    * * Display Name: Record Merge Log Text
+    * * Display Name: Record Merge Log
     * * SQL Data Type: nvarchar(450)
     */
     get RecordMergeLog(): string | null {
@@ -34774,7 +36764,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityFieldID
-    * * Display Name: Entity Field
+    * * Display Name: Entity Field ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)
     */
@@ -34838,7 +36828,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
+    * * Display Name: __mj _Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34848,7 +36838,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
+    * * Display Name: __mj _Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34876,7 +36866,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     */
     get EntityID(): string {
@@ -37648,7 +39638,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this storage provider is currently available for use.
@@ -37692,6 +39682,33 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     }
     set SupportsSearch(value: boolean) {
         this.Set('SupportsSearch', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON configuration for providers that don't use Credential Engine. Used as fallback when CredentialID is not set on FileStorageAccount.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: RequiresOAuth
+    * * Display Name: Requires OAuth
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If true, this provider requires OAuth authentication. Enterprise OAuth integration via Credential Engine is planned but not yet implemented.
+    */
+    get RequiresOAuth(): boolean {
+        return this.Get('RequiresOAuth');
+    }
+    set RequiresOAuth(value: boolean) {
+        this.Set('RequiresOAuth', value);
     }
 }
 
@@ -39859,6 +41876,7 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
 
     /**
     * Validate() method override for MJ: AI Agent Data Sources entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ResultType: Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
     * * Table-Level: This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
     * * Table-Level: This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
     * * Table-Level: This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
@@ -39868,12 +41886,31 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateResultTypeAllowedValues(result);
         this.ValidateCacheTimeoutSecondsRequiredForPerAgentPolicy(result);
         this.ValidateEntityNameRequiredWhenSourceTypeRunView(result);
         this.ValidateQueryNameRequiredWhenSourceTypeIsRunQuery(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultTypeAllowedValues(result: ValidationResult) {
+    	// If ResultType has a value, ensure it is one of the permitted options
+    	if (this.ResultType != null && this.ResultType !== 'entity_object' && this.ResultType !== 'simple') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ResultType",
+    			"Result Type must be either 'entity_object' or 'simple' when specified",
+    			this.ResultType,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -40572,6 +42609,172 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
     */
     get EmbeddingModel(): string | null {
         return this.Get('EmbeddingModel');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Modalities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentModality
+ * * Base View: vwAIAgentModalities
+ * * @description Agent-level modality configuration. Allows agents to restrict or customize modality settings beyond what the model supports. Absence of a record means the agent uses model defaults (Text in/out assumed if no records exist).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Modalities')
+export class AIAgentModalityEntity extends BaseEntity<AIAgentModalityEntityType> {
+    /**
+    * Loads the MJ: AI Agent Modalities record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Modalities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentModalityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: Direction
+    * * Display Name: Direction
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+    * * Description: Whether this is an Input or Output modality for the agent.
+    */
+    get Direction(): 'Input' | 'Output' {
+        return this.Get('Direction');
+    }
+    set Direction(value: 'Input' | 'Output') {
+        this.Set('Direction', value);
+    }
+
+    /**
+    * * Field Name: IsAllowed
+    * * Display Name: Allowed
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this modality is allowed for this agent. Set to FALSE to disable a modality even if the underlying model supports it.
+    */
+    get IsAllowed(): boolean {
+        return this.Get('IsAllowed');
+    }
+    set IsAllowed(value: boolean) {
+        this.Set('IsAllowed', value);
+    }
+
+    /**
+    * * Field Name: MaxSizeBytes
+    * * Display Name: Max Size (Bytes)
+    * * SQL Data Type: int
+    * * Description: Agent-specific maximum size in bytes. Overrides model and system defaults. Must be less than or equal to model limit.
+    */
+    get MaxSizeBytes(): number | null {
+        return this.Get('MaxSizeBytes');
+    }
+    set MaxSizeBytes(value: number | null) {
+        this.Set('MaxSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: MaxCountPerMessage
+    * * Display Name: Max Count Per Message
+    * * SQL Data Type: int
+    * * Description: Agent-specific maximum count per message. Overrides model and system defaults. Must be less than or equal to model limit.
+    */
+    get MaxCountPerMessage(): number | null {
+        return this.Get('MaxCountPerMessage');
+    }
+    set MaxCountPerMessage(value: number | null) {
+        this.Set('MaxCountPerMessage', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
     }
 }
 
@@ -41285,6 +43488,304 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
 
 
 /**
+ * MJ: AI Agent Run Medias - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentRunMedia
+ * * Base View: vwAIAgentRunMedias
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Run Medias')
+export class AIAgentRunMediaEntity extends BaseEntity<AIAgentRunMediaEntityType> {
+    /**
+    * Loads the MJ: AI Agent Run Medias record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Run Medias record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentRunMediaEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    */
+    get AgentRunID(): string {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: SourcePromptRunMediaID
+    * * Display Name: Source Prompt Run Media
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Run Medias (vwAIPromptRunMedias.ID)
+    */
+    get SourcePromptRunMediaID(): string | null {
+        return this.Get('SourcePromptRunMediaID');
+    }
+    set SourcePromptRunMediaID(value: string | null) {
+        this.Set('SourcePromptRunMediaID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: Mime Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get MimeType(): string {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: FileName
+    * * Display Name: File Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get FileName(): string | null {
+        return this.Get('FileName');
+    }
+    set FileName(value: string | null) {
+        this.Set('FileName', value);
+    }
+
+    /**
+    * * Field Name: FileSizeBytes
+    * * Display Name: File Size Bytes
+    * * SQL Data Type: int
+    */
+    get FileSizeBytes(): number | null {
+        return this.Get('FileSizeBytes');
+    }
+    set FileSizeBytes(value: number | null) {
+        this.Set('FileSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: Width
+    * * Display Name: Width
+    * * SQL Data Type: int
+    */
+    get Width(): number | null {
+        return this.Get('Width');
+    }
+    set Width(value: number | null) {
+        this.Set('Width', value);
+    }
+
+    /**
+    * * Field Name: Height
+    * * Display Name: Height
+    * * SQL Data Type: int
+    */
+    get Height(): number | null {
+        return this.Get('Height');
+    }
+    set Height(value: number | null) {
+        this.Set('Height', value);
+    }
+
+    /**
+    * * Field Name: DurationSeconds
+    * * Display Name: Duration Seconds
+    * * SQL Data Type: decimal(10, 2)
+    */
+    get DurationSeconds(): number | null {
+        return this.Get('DurationSeconds');
+    }
+    set DurationSeconds(value: number | null) {
+        this.Set('DurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: InlineData
+    * * Display Name: Inline Data
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get InlineData(): string | null {
+        return this.Get('InlineData');
+    }
+    set InlineData(value: string | null) {
+        this.Set('InlineData', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Files (vwFiles.ID)
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: ThumbnailBase64
+    * * Display Name: Thumbnail Base64
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ThumbnailBase64(): string | null {
+        return this.Get('ThumbnailBase64');
+    }
+    set ThumbnailBase64(value: string | null) {
+        this.Set('ThumbnailBase64', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Label(): string | null {
+        return this.Get('Label');
+    }
+    set Label(value: string | null) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Metadata
+    * * Display Name: Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Metadata(): string | null {
+        return this.Get('Metadata');
+    }
+    set Metadata(value: string | null) {
+        this.Set('Metadata', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Agent notes describing what this media represents. Used for internal tracking and can be displayed in UI.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: AgentRun
+    * * Display Name: Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRun(): string | null {
+        return this.Get('AgentRun');
+    }
+
+    /**
+    * * Field Name: SourcePromptRunMedia
+    * * Display Name: Source Prompt Run Media
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourcePromptRunMedia(): string | null {
+        return this.Get('SourcePromptRunMedia');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
+    }
+}
+
+
+/**
  * MJ: AI Agent Run Steps - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentRunStep
@@ -41316,6 +43817,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * FinalPayloadValidationResult: The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -41323,10 +43825,33 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateFinalPayloadValidationResultAllowedValues(result);
         this.ValidateStepNumberGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
+    	// Ensure the value is either null or one of the permitted statuses
+    	if (this.FinalPayloadValidationResult != null &&
+    		!(this.FinalPayloadValidationResult === 'Warn' ||
+    		  this.FinalPayloadValidationResult === 'Fail' ||
+    		  this.FinalPayloadValidationResult === 'Retry' ||
+    		  this.FinalPayloadValidationResult === 'Pass')) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FinalPayloadValidationResult",
+    			"FinalPayloadValidationResult must be one of: Warn, Fail, Retry, Pass, or left empty.",
+    			this.FinalPayloadValidationResult,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -41718,6 +44243,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     /**
     * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * EffortLevel: This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
+    * * FinalStep: The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
     * @public
     * @method
     * @override
@@ -41725,6 +44251,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateEffortLevelBetween1And100(result);
+        this.ValidateFinalStepAllowedValues(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -41739,6 +44266,28 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     public ValidateEffortLevelBetween1And100(result: ValidationResult) {
     	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
     		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFinalStepAllowedValues(result: ValidationResult) {
+    	// If FinalStep has a value, it must be one of the permitted options
+    	if (this.FinalStep != null) {
+    		const allowed = ["While", "ForEach", "Chat", "Sub-Agent", "Actions", "Retry", "Failed", "Success"];
+    		const allowedValues = allowed.join(", ");
+    		if (!allowed.includes(this.FinalStep)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"FinalStep",
+    				"FinalStep must be one of the allowed values: " + allowedValues + ".",
+    				this.FinalStep,
+    				ValidationErrorType.Failure
+    			));
+    		}
     	}
     }
 
@@ -43113,7 +45662,7 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
 
     /**
     * * Field Name: SystemPromptID
-    * * Display Name: System Prompt ID
+    * * Display Name: System Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Reference to the AI Prompt that contains the system-level instructions for all agents of this type. This prompt will be blended with individual agent prompts.
@@ -43127,7 +45676,7 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates whether this agent type is available for use. Inactive types cannot be assigned to new agents.
@@ -43226,12 +45775,200 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
     }
 
     /**
+    * * Field Name: PromptParamsSchema
+    * * Display Name: Prompt Params Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.
+    */
+    get PromptParamsSchema(): string | null {
+        return this.Get('PromptParamsSchema');
+    }
+    set PromptParamsSchema(value: string | null) {
+        this.Set('PromptParamsSchema', value);
+    }
+
+    /**
     * * Field Name: SystemPrompt
     * * Display Name: System Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get SystemPrompt(): string | null {
         return this.Get('SystemPrompt');
+    }
+}
+
+
+/**
+ * MJ: AI Architectures - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIArchitecture
+ * * Base View: vwAIArchitectures
+ * * @description Master table of AI model architectures (Transformer, Diffusion, MoE, etc.) for model catalog enrichment and eval reporting.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Architectures')
+export class AIArchitectureEntity extends BaseEntity<AIArchitectureEntityType> {
+    /**
+    * Loads the MJ: AI Architectures record from the database
+    * @param ID: string - primary key value to load the MJ: AI Architectures record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIArchitectureEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Architecture Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Core
+    *   * Hybrid
+    *   * Optimization
+    *   * Specialized
+    */
+    get Category(): 'Core' | 'Hybrid' | 'Optimization' | 'Specialized' {
+        return this.Get('Category');
+    }
+    set Category(value: 'Core' | 'Hybrid' | 'Optimization' | 'Specialized') {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: ParentArchitectureID
+    * * Display Name: Parent Architecture ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Architectures (vwAIArchitectures.ID)
+    * * Description: Hierarchical relationship to parent architecture. Used for variants like Sparse Transformer being a child of Transformer.
+    */
+    get ParentArchitectureID(): string | null {
+        return this.Get('ParentArchitectureID');
+    }
+    set ParentArchitectureID(value: string | null) {
+        this.Set('ParentArchitectureID', value);
+    }
+
+    /**
+    * * Field Name: WikipediaURL
+    * * Display Name: Wikipedia URL
+    * * SQL Data Type: nvarchar(500)
+    */
+    get WikipediaURL(): string | null {
+        return this.Get('WikipediaURL');
+    }
+    set WikipediaURL(value: string | null) {
+        this.Set('WikipediaURL', value);
+    }
+
+    /**
+    * * Field Name: YearIntroduced
+    * * Display Name: Year Introduced
+    * * SQL Data Type: int
+    */
+    get YearIntroduced(): number | null {
+        return this.Get('YearIntroduced');
+    }
+    set YearIntroduced(value: number | null) {
+        this.Set('YearIntroduced', value);
+    }
+
+    /**
+    * * Field Name: KeyPaper
+    * * Display Name: Key Paper
+    * * SQL Data Type: nvarchar(500)
+    */
+    get KeyPaper(): string | null {
+        return this.Get('KeyPaper');
+    }
+    set KeyPaper(value: string | null) {
+        this.Set('KeyPaper', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ParentArchitecture
+    * * Display Name: Parent Architecture
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ParentArchitecture(): string | null {
+        return this.Get('ParentArchitecture');
+    }
+
+    /**
+    * * Field Name: RootParentArchitectureID
+    * * Display Name: Root Parent Architecture ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentArchitectureID(): string | null {
+        return this.Get('RootParentArchitectureID');
     }
 }
 
@@ -43488,7 +46225,7 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
 
     /**
     * * Field Name: DefaultPromptForContextCompressionID
-    * * Display Name: Default Prompt For Context Compression ID
+    * * Display Name: Default Prompt For Context Compression
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Default prompt to use for context compression when not specified at the agent level.
@@ -43502,7 +46239,7 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
 
     /**
     * * Field Name: DefaultPromptForContextSummarizationID
-    * * Display Name: Default Prompt For Context Summarization ID
+    * * Display Name: Default Prompt For Context Summarization
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Default prompt to use for context summarization when not specified at the agent level.
@@ -43535,6 +46272,47 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     }
 
     /**
+    * * Field Name: DefaultStorageProviderID
+    * * Display Name: Default Storage Provider
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: Default file storage provider for agent attachments. Used when an agent does not specify its own AttachmentStorageProviderID.
+    */
+    get DefaultStorageProviderID(): string | null {
+        return this.Get('DefaultStorageProviderID');
+    }
+    set DefaultStorageProviderID(value: string | null) {
+        this.Set('DefaultStorageProviderID', value);
+    }
+
+    /**
+    * * Field Name: DefaultStorageRootPath
+    * * Display Name: Default Storage Root Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Default root path within the storage provider for agent attachments. Used when an agent does not specify its own AttachmentRootPath.
+    */
+    get DefaultStorageRootPath(): string | null {
+        return this.Get('DefaultStorageRootPath');
+    }
+    set DefaultStorageRootPath(value: string | null) {
+        this.Set('DefaultStorageRootPath', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional reference to a parent configuration. When set, this configuration inherits prompt-model mappings and parameters from its parent. Child configurations can override specific settings while inheriting defaults from the parent chain. Supports N-level deep inheritance.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
     * * Field Name: DefaultPromptForContextCompression
     * * Display Name: Default Prompt For Context Compression
     * * SQL Data Type: nvarchar(255)
@@ -43550,6 +46328,735 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     */
     get DefaultPromptForContextSummarization(): string | null {
         return this.Get('DefaultPromptForContextSummarization');
+    }
+
+    /**
+    * * Field Name: DefaultStorageProvider
+    * * Display Name: Default Storage Provider
+    * * SQL Data Type: nvarchar(50)
+    */
+    get DefaultStorageProvider(): string | null {
+        return this.Get('DefaultStorageProvider');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: AI Credential Bindings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AICredentialBinding
+ * * Base View: vwAICredentialBindings
+ * * @description Junction table that binds credentials to AI entities (Vendors, ModelVendors, PromptModels). Decouples credential assignments from core AI entities to prevent MJ updates from overwriting customer configurations. Supports priority-based failover with multiple credentials per binding level.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Credential Bindings')
+export class AICredentialBindingEntity extends BaseEntity<AICredentialBindingEntityType> {
+    /**
+    * Loads the MJ: AI Credential Bindings record from the database
+    * @param ID: string - primary key value to load the MJ: AI Credential Bindings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AICredentialBindingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Credential Bindings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that the type of binding specified in the record matches exactly one related ID column: when BindingType is 'Vendor' an AIVendorID must be provided and the other two IDs must be empty; when BindingType is 'ModelVendor' an AIModelVendorID must be provided and the other IDs must be empty; when BindingType is 'PromptModel' an AIPromptModelID must be provided and the other IDs must be empty. This prevents ambiguous or missing references.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateBindingTypeAndRelatedIds(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that the type of binding specified in the record matches exactly one related ID column: when BindingType is 'Vendor' an AIVendorID must be provided and the other two IDs must be empty; when BindingType is 'ModelVendor' an AIModelVendorID must be provided and the other IDs must be empty; when BindingType is 'PromptModel' an AIPromptModelID must be provided and the other IDs must be empty. This prevents ambiguous or missing references.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateBindingTypeAndRelatedIds(result: ValidationResult) {
+    	// Validate that the ID fields correspond to the selected BindingType
+    	if (this.BindingType === 'Vendor') {
+    		// AIVendorID must be present
+    		if (this.AIVendorID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIVendorID",
+    				"When BindingType is 'Vendor', AIVendorID must be provided.",
+    				this.AIVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		// The other IDs must be empty
+    		if (this.AIModelVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIModelVendorID",
+    				"When BindingType is 'Vendor', AIModelVendorID must be empty.",
+    				this.AIModelVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.AIPromptModelID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIPromptModelID",
+    				"When BindingType is 'Vendor', AIPromptModelID must be empty.",
+    				this.AIPromptModelID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.BindingType === 'ModelVendor') {
+    		// AIModelVendorID must be present
+    		if (this.AIModelVendorID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIModelVendorID",
+    				"When BindingType is 'ModelVendor', AIModelVendorID must be provided.",
+    				this.AIModelVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		// The other IDs must be empty
+    		if (this.AIVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIVendorID",
+    				"When BindingType is 'ModelVendor', AIVendorID must be empty.",
+    				this.AIVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.AIPromptModelID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIPromptModelID",
+    				"When BindingType is 'ModelVendor', AIPromptModelID must be empty.",
+    				this.AIPromptModelID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.BindingType === 'PromptModel') {
+    		// AIPromptModelID must be present
+    		if (this.AIPromptModelID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIPromptModelID",
+    				"When BindingType is 'PromptModel', AIPromptModelID must be provided.",
+    				this.AIPromptModelID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		// The other IDs must be empty
+    		if (this.AIVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIVendorID",
+    				"When BindingType is 'PromptModel', AIVendorID must be empty.",
+    				this.AIVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.AIModelVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIModelVendorID",
+    				"When BindingType is 'PromptModel', AIModelVendorID must be empty.",
+    				this.AIModelVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else {
+    		// Unexpected BindingType value
+    		result.Errors.push(new ValidationErrorInfo(
+    			"BindingType",
+    			"BindingType must be one of 'Vendor', 'ModelVendor', or 'PromptModel'.",
+    			this.BindingType,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Reference to the credential being bound.
+    */
+    get CredentialID(): string {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: BindingType
+    * * Display Name: Binding Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ModelVendor
+    *   * PromptModel
+    *   * Vendor
+    * * Description: The type of AI entity this credential is bound to: Vendor (broadest), ModelVendor (model+vendor specific), or PromptModel (most specific). Resolution follows prompt → model → vendor hierarchy.
+    */
+    get BindingType(): 'ModelVendor' | 'PromptModel' | 'Vendor' {
+        return this.Get('BindingType');
+    }
+    set BindingType(value: 'ModelVendor' | 'PromptModel' | 'Vendor') {
+        this.Set('BindingType', value);
+    }
+
+    /**
+    * * Field Name: AIVendorID
+    * * Display Name: AI Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: Reference to AIVendor when BindingType is Vendor. NULL otherwise.
+    */
+    get AIVendorID(): string | null {
+        return this.Get('AIVendorID');
+    }
+    set AIVendorID(value: string | null) {
+        this.Set('AIVendorID', value);
+    }
+
+    /**
+    * * Field Name: AIModelVendorID
+    * * Display Name: AI Model Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Model Vendors (vwAIModelVendors.ID)
+    * * Description: Reference to AIModelVendor when BindingType is ModelVendor. NULL otherwise.
+    */
+    get AIModelVendorID(): string | null {
+        return this.Get('AIModelVendorID');
+    }
+    set AIModelVendorID(value: string | null) {
+        this.Set('AIModelVendorID', value);
+    }
+
+    /**
+    * * Field Name: AIPromptModelID
+    * * Display Name: AI Prompt Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Models (vwAIPromptModels.ID)
+    * * Description: Reference to AIPromptModel when BindingType is PromptModel. NULL otherwise.
+    */
+    get AIPromptModelID(): string | null {
+        return this.Get('AIPromptModelID');
+    }
+    set AIPromptModelID(value: string | null) {
+        this.Set('AIPromptModelID', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Priority for credential selection when multiple bindings exist at the same level. Lower values have higher priority (0 is highest). Enables failover when primary credentials are unavailable.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When false, this binding is ignored during credential resolution. Allows temporary disabling without deletion.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string {
+        return this.Get('Credential');
+    }
+
+    /**
+    * * Field Name: AIVendor
+    * * Display Name: AI Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIVendor(): string | null {
+        return this.Get('AIVendor');
+    }
+
+    /**
+    * * Field Name: AIModelVendor
+    * * Display Name: AI Model Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModelVendor(): string | null {
+        return this.Get('AIModelVendor');
+    }
+
+    /**
+    * * Field Name: AIPromptModel
+    * * Display Name: AI Prompt Model
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIPromptModel(): string | null {
+        return this.Get('AIPromptModel');
+    }
+}
+
+
+/**
+ * MJ: AI Modalities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModality
+ * * Base View: vwAIModalities
+ * * @description Master list of AI content modalities (Text, Image, Audio, Video, etc.) that models can accept as input or produce as output. New modalities can be added via INSERT without schema changes.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Modalities')
+export class AIModalityEntity extends BaseEntity<AIModalityEntityType> {
+    /**
+    * Loads the MJ: AI Modalities record from the database
+    * @param ID: string - primary key value to load the MJ: AI Modalities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModalityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Display name of the modality (e.g., Text, Image, Audio, Video, File, Embedding).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Detailed description of this modality and its use cases.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ContentBlockType
+    * * Display Name: Content Block Type
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio_url
+    *   * embedding
+    *   * file_url
+    *   * image_url
+    *   * text
+    *   * video_url
+    * * Description: Maps to ChatMessageContentBlock.type values: text, image_url, video_url, audio_url, file_url, embedding. Must match the TypeScript type definition.
+    */
+    get ContentBlockType(): 'audio_url' | 'embedding' | 'file_url' | 'image_url' | 'text' | 'video_url' {
+        return this.Get('ContentBlockType');
+    }
+    set ContentBlockType(value: 'audio_url' | 'embedding' | 'file_url' | 'image_url' | 'text' | 'video_url') {
+        this.Set('ContentBlockType', value);
+    }
+
+    /**
+    * * Field Name: MIMETypePattern
+    * * Display Name: MIME Type Pattern
+    * * SQL Data Type: nvarchar(100)
+    * * Description: MIME type pattern for this modality (e.g., image/*, audio/*, video/*, text/*, application/*). Used for file type validation.
+    */
+    get MIMETypePattern(): string | null {
+        return this.Get('MIMETypePattern');
+    }
+    set MIMETypePattern(value: string | null) {
+        this.Set('MIMETypePattern', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Content
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Binary
+    *   * Content
+    *   * Structured
+    * * Description: Classification type: Content (human-readable text), Structured (JSON/embeddings), Binary (media files like images, audio, video).
+    */
+    get Type(): 'Binary' | 'Content' | 'Structured' {
+        return this.Get('Type');
+    }
+    set Type(value: 'Binary' | 'Content' | 'Structured') {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: DefaultMaxSizeBytes
+    * * Display Name: Default Max Size (Bytes)
+    * * SQL Data Type: int
+    * * Description: System-wide default maximum size in bytes for this modality. Can be overridden at model or agent level. NULL means no size limit.
+    */
+    get DefaultMaxSizeBytes(): number | null {
+        return this.Get('DefaultMaxSizeBytes');
+    }
+    set DefaultMaxSizeBytes(value: number | null) {
+        this.Set('DefaultMaxSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: DefaultMaxCountPerMessage
+    * * Display Name: Default Max Count Per Message
+    * * SQL Data Type: int
+    * * Description: System-wide default maximum count per message for this modality. Can be overridden at model or agent level. NULL means no count limit.
+    */
+    get DefaultMaxCountPerMessage(): number | null {
+        return this.Get('DefaultMaxCountPerMessage');
+    }
+    set DefaultMaxCountPerMessage(value: number | null) {
+        this.Set('DefaultMaxCountPerMessage', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order for UI presentation. Lower numbers appear first.
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: AI Model Architectures - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelArchitecture
+ * * Base View: vwAIModelArchitectures
+ * * @description Junction table linking AI models to their underlying architectures. Supports multiple architectures per model with ranking.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Architectures')
+export class AIModelArchitectureEntity extends BaseEntity<AIModelArchitectureEntityType> {
+    /**
+    * Loads the MJ: AI Model Architectures record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Architectures record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelArchitectureEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Architectures entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rank: Rank must be greater than zero, ensuring that every item has a positive ranking value.
+    * * Weight: Weight must be between 0 and 1 when a value is provided; if no weight is entered, it may be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRankGreaterThanZero(result);
+        this.ValidateWeightRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Rank must be greater than zero, ensuring that every item has a positive ranking value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRankGreaterThanZero(result: ValidationResult) {
+    	if (this.Rank <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Rank",
+    			"Rank must be greater than 0.",
+    			this.Rank,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Weight must be between 0 and 1 when a value is provided; if no weight is entered, it may be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateWeightRange(result: ValidationResult) {
+    	// Ensure Weight is within the allowed range when it is provided
+    	if (this.Weight != null && (this.Weight < 0 || this.Weight > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Weight",
+    			"Weight must be between 0 and 1.",
+    			this.Weight,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: ArchitectureID
+    * * Display Name: Architecture
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Architectures (vwAIArchitectures.ID)
+    */
+    get ArchitectureID(): string {
+        return this.Get('ArchitectureID');
+    }
+    set ArchitectureID(value: string) {
+        this.Set('ArchitectureID', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Ranking of this architecture for the model. 1=Primary architecture, 2=Secondary, etc. Lower numbers indicate more dominant role.
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: Weight
+    * * Display Name: Weight
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Optional weight (0.0-1.0) indicating the mix ratio for hybrid architectures. E.g., 0.7 for 70% contribution.
+    */
+    get Weight(): number | null {
+        return this.Get('Weight');
+    }
+    set Weight(value: number | null) {
+        this.Set('Weight', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Architecture
+    * * Display Name: Architecture Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Architecture(): string {
+        return this.Get('Architecture');
     }
 }
 
@@ -43889,6 +47396,225 @@ export class AIModelCostEntity extends BaseEntity<AIModelCostEntityType> {
     */
     get UnitType(): string {
         return this.Get('UnitType');
+    }
+}
+
+
+/**
+ * MJ: AI Model Modalities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelModality
+ * * Base View: vwAIModelModalities
+ * * @description Junction table linking AI models to their supported input and output modalities with model-specific configuration. Used to extend beyond the default modalities inherited from AIModelType.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Modalities')
+export class AIModelModalityEntity extends BaseEntity<AIModelModalityEntityType> {
+    /**
+    * Loads the MJ: AI Model Modalities record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Modalities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelModalityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: Direction
+    * * Display Name: Direction
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+    * * Description: Whether this is an Input or Output modality for the model.
+    */
+    get Direction(): 'Input' | 'Output' {
+        return this.Get('Direction');
+    }
+    set Direction(value: 'Input' | 'Output') {
+        this.Set('Direction', value);
+    }
+
+    /**
+    * * Field Name: IsSupported
+    * * Display Name: Is Supported
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this modality is supported. Can be set to FALSE to explicitly disable an inherited modality.
+    */
+    get IsSupported(): boolean {
+        return this.Get('IsSupported');
+    }
+    set IsSupported(value: boolean) {
+        this.Set('IsSupported', value);
+    }
+
+    /**
+    * * Field Name: IsRequired
+    * * Display Name: Is Required
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: For input modalities: whether this modality is required (e.g., text is usually required for LLMs). For outputs: not typically applicable.
+    */
+    get IsRequired(): boolean {
+        return this.Get('IsRequired');
+    }
+    set IsRequired(value: boolean) {
+        this.Set('IsRequired', value);
+    }
+
+    /**
+    * * Field Name: SupportedFormats
+    * * Display Name: Supported Formats
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-separated list of supported file formats/extensions (e.g., png,jpg,webp,gif for images or mp3,wav,m4a for audio).
+    */
+    get SupportedFormats(): string | null {
+        return this.Get('SupportedFormats');
+    }
+    set SupportedFormats(value: string | null) {
+        this.Set('SupportedFormats', value);
+    }
+
+    /**
+    * * Field Name: MaxSizeBytes
+    * * Display Name: Maximum Size (Bytes)
+    * * SQL Data Type: int
+    * * Description: Model-specific maximum size in bytes. Overrides AIModality.DefaultMaxSizeBytes. NULL means use system default.
+    */
+    get MaxSizeBytes(): number | null {
+        return this.Get('MaxSizeBytes');
+    }
+    set MaxSizeBytes(value: number | null) {
+        this.Set('MaxSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: MaxCountPerMessage
+    * * Display Name: Maximum Count per Message
+    * * SQL Data Type: int
+    * * Description: Model-specific maximum count per message. Overrides AIModality.DefaultMaxCountPerMessage. NULL means use system default.
+    */
+    get MaxCountPerMessage(): number | null {
+        return this.Get('MaxCountPerMessage');
+    }
+    set MaxCountPerMessage(value: number | null) {
+        this.Set('MaxCountPerMessage', value);
+    }
+
+    /**
+    * * Field Name: MaxDimension
+    * * Display Name: Maximum Dimension (px)
+    * * SQL Data Type: int
+    * * Description: For image/video modalities: maximum dimension (width or height) in pixels supported by this model.
+    */
+    get MaxDimension(): number | null {
+        return this.Get('MaxDimension');
+    }
+    set MaxDimension(value: number | null) {
+        this.Set('MaxDimension', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Additional notes or documentation about this model-modality configuration.
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
     }
 }
 
@@ -44256,7 +47982,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
 
     /**
     * * Field Name: ModelID
-    * * Display Name: Model
+    * * Display Name: Model ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     */
@@ -44269,7 +47995,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor
+    * * Display Name: Vendor ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     */
@@ -44443,7 +48169,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type
+    * * Display Name: Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
     * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)
@@ -44453,20 +48179,6 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     }
     set TypeID(value: string) {
         this.Set('TypeID', value);
-    }
-
-    /**
-    * * Field Name: CredentialID
-    * * Display Name: Credential
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
-    * * Description: Optional reference to a credential specific to this model-vendor combination. Takes precedence over AIVendor.CredentialID. Useful for scenarios where a model requires different credentials per vendor (e.g., Azure OpenAI vs direct OpenAI). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.
-    */
-    get CredentialID(): string | null {
-        return this.Get('CredentialID');
-    }
-    set CredentialID(value: string | null) {
-        this.Set('CredentialID', value);
     }
 
     /**
@@ -44494,15 +48206,6 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     */
     get Type(): string {
         return this.Get('Type');
-    }
-
-    /**
-    * * Field Name: Credential
-    * * Display Name: Credential
-    * * SQL Data Type: nvarchar(200)
-    */
-    get Credential(): string | null {
-        return this.Get('Credential');
     }
 }
 
@@ -44647,7 +48350,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * * Field Name: PromptID
-    * * Display Name: Prompt
+    * * Display Name: Prompt ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: References the AI prompt this model association applies to.
@@ -44661,7 +48364,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * * Field Name: ModelID
-    * * Display Name: Model
+    * * Display Name: Model ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     * * Description: References the AI model to use for this prompt.
@@ -44675,7 +48378,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor
+    * * Display Name: Vendor ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     * * Description: Optional reference to a specific vendor for the model. If NULL, uses the highest priority vendor for the model.
@@ -44689,7 +48392,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * * Field Name: ConfigurationID
-    * * Display Name: Configuration
+    * * Display Name: Configuration ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
     * * Description: Optional reference to a specific configuration. If NULL, this model is available in all configurations.
@@ -44842,20 +48545,6 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     }
 
     /**
-    * * Field Name: CredentialID
-    * * Display Name: Credential
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
-    * * Description: Optional reference to a credential specific to this prompt-model configuration. Takes precedence over AIModelVendor.CredentialID and AIVendor.CredentialID. Useful for prompts that require dedicated credentials (e.g., high-rate-limit keys for critical prompts). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.
-    */
-    get CredentialID(): string | null {
-        return this.Get('CredentialID');
-    }
-    set CredentialID(value: string | null) {
-        this.Set('CredentialID', value);
-    }
-
-    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -44890,14 +48579,269 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     get Configuration(): string | null {
         return this.Get('Configuration');
     }
+}
+
+
+/**
+ * MJ: AI Prompt Run Medias - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPromptRunMedia
+ * * Base View: vwAIPromptRunMedias
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Prompt Run Medias')
+export class AIPromptRunMediaEntity extends BaseEntity<AIPromptRunMediaEntityType> {
+    /**
+    * Loads the MJ: AI Prompt Run Medias record from the database
+    * @param ID: string - primary key value to load the MJ: AI Prompt Run Medias record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIPromptRunMediaEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
 
     /**
-    * * Field Name: Credential
-    * * Display Name: Credential
-    * * SQL Data Type: nvarchar(200)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
     */
-    get Credential(): string | null {
-        return this.Get('Credential');
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: PromptRunID
+    * * Display Name: Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    */
+    get PromptRunID(): string {
+        return this.Get('PromptRunID');
+    }
+    set PromptRunID(value: string) {
+        this.Set('PromptRunID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: MIME Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get MimeType(): string {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: FileName
+    * * Display Name: File Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get FileName(): string | null {
+        return this.Get('FileName');
+    }
+    set FileName(value: string | null) {
+        this.Set('FileName', value);
+    }
+
+    /**
+    * * Field Name: FileSizeBytes
+    * * Display Name: File Size (Bytes)
+    * * SQL Data Type: int
+    */
+    get FileSizeBytes(): number | null {
+        return this.Get('FileSizeBytes');
+    }
+    set FileSizeBytes(value: number | null) {
+        this.Set('FileSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: Width
+    * * Display Name: Width
+    * * SQL Data Type: int
+    */
+    get Width(): number | null {
+        return this.Get('Width');
+    }
+    set Width(value: number | null) {
+        this.Set('Width', value);
+    }
+
+    /**
+    * * Field Name: Height
+    * * Display Name: Height
+    * * SQL Data Type: int
+    */
+    get Height(): number | null {
+        return this.Get('Height');
+    }
+    set Height(value: number | null) {
+        this.Set('Height', value);
+    }
+
+    /**
+    * * Field Name: DurationSeconds
+    * * Display Name: Duration (Seconds)
+    * * SQL Data Type: decimal(10, 2)
+    */
+    get DurationSeconds(): number | null {
+        return this.Get('DurationSeconds');
+    }
+    set DurationSeconds(value: number | null) {
+        this.Set('DurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: InlineData
+    * * Display Name: Inline Data
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get InlineData(): string | null {
+        return this.Get('InlineData');
+    }
+    set InlineData(value: string | null) {
+        this.Set('InlineData', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Files (vwFiles.ID)
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: ThumbnailBase64
+    * * Display Name: Thumbnail (Base64)
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ThumbnailBase64(): string | null {
+        return this.Get('ThumbnailBase64');
+    }
+    set ThumbnailBase64(value: string | null) {
+        this.Set('ThumbnailBase64', value);
+    }
+
+    /**
+    * * Field Name: Metadata
+    * * Display Name: Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Metadata(): string | null {
+        return this.Get('Metadata');
+    }
+    set Metadata(value: string | null) {
+        this.Set('Metadata', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of the media generated during prompt execution. Provides context for audit trail.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PromptRun
+    * * Display Name: Prompt Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PromptRun(): string | null {
+        return this.Get('PromptRun');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
     }
 }
 
@@ -46594,26 +50538,609 @@ export class AIVendorEntity extends BaseEntity<AIVendorEntityType> {
     }
 
     /**
-    * * Field Name: CredentialID
-    * * Display Name: Credential ID
+    * * Field Name: CredentialTypeID
+    * * Display Name: Credential Type ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
-    * * Description: Optional reference to a default credential for this vendor. When set, all models using this vendor will use this credential unless overridden at a higher priority level (AIModelVendor or AIPromptModel). When any credential is configured in the hierarchy, legacy authentication methods (environment variables, apiKeys parameter) are bypassed in favor of the Credentials system.
+    * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+    * * Description: Reference to the type of credential this vendor expects (e.g., API Key, GCP Service Account, Azure Service Principal). Used for type-based default credential resolution when no explicit binding exists, and for UI guidance when creating credentials.
     */
-    get CredentialID(): string | null {
-        return this.Get('CredentialID');
+    get CredentialTypeID(): string | null {
+        return this.Get('CredentialTypeID');
     }
-    set CredentialID(value: string | null) {
-        this.Set('CredentialID', value);
+    set CredentialTypeID(value: string | null) {
+        this.Set('CredentialTypeID', value);
     }
 
     /**
-    * * Field Name: Credential
-    * * Display Name: Credential
-    * * SQL Data Type: nvarchar(200)
+    * * Field Name: CredentialType
+    * * Display Name: Credential Type
+    * * SQL Data Type: nvarchar(100)
     */
-    get Credential(): string | null {
-        return this.Get('Credential');
+    get CredentialType(): string | null {
+        return this.Get('CredentialType');
+    }
+}
+
+
+/**
+ * MJ: API Key Scopes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIKeyScope
+ * * Base View: vwAPIKeyScopes
+ * * @description Junction table linking API keys to their assigned permission scopes. Each key can have multiple scopes, and scopes can be shared across multiple keys.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Key Scopes')
+export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
+    /**
+    * Loads the MJ: API Key Scopes record from the database
+    * @param ID: string - primary key value to load the MJ: API Key Scopes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIKeyScopeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: APIKeyID
+    * * Display Name: API Key
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)
+    */
+    get APIKeyID(): string {
+        return this.Get('APIKeyID');
+    }
+    set APIKeyID(value: string) {
+        this.Set('APIKeyID', value);
+    }
+
+    /**
+    * * Field Name: ScopeID
+    * * Display Name: Scope
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
+    */
+    get ScopeID(): string {
+        return this.Get('ScopeID');
+    }
+    set ScopeID(value: string) {
+        this.Set('ScopeID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: APIKey
+    * * Display Name: API Key
+    * * SQL Data Type: nvarchar(255)
+    */
+    get APIKey(): string {
+        return this.Get('APIKey');
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Scope(): string {
+        return this.Get('Scope');
+    }
+}
+
+
+/**
+ * MJ: API Key Usage Logs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIKeyUsageLog
+ * * Base View: vwAPIKeyUsageLogs
+ * * @description Audit log tracking all API key usage for analytics, debugging, and security monitoring. Records each request including endpoint, response status, timing, and client information.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Key Usage Logs')
+export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
+    /**
+    * Loads the MJ: API Key Usage Logs record from the database
+    * @param ID: string - primary key value to load the MJ: API Key Usage Logs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIKeyUsageLogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: APIKeyID
+    * * Display Name: API Key
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)
+    */
+    get APIKeyID(): string {
+        return this.Get('APIKeyID');
+    }
+    set APIKeyID(value: string) {
+        this.Set('APIKeyID', value);
+    }
+
+    /**
+    * * Field Name: Endpoint
+    * * Display Name: Endpoint
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The API endpoint path that was accessed (e.g., /mcp, /graphql, /api/v1/entities).
+    */
+    get Endpoint(): string {
+        return this.Get('Endpoint');
+    }
+    set Endpoint(value: string) {
+        this.Set('Endpoint', value);
+    }
+
+    /**
+    * * Field Name: Operation
+    * * Display Name: Operation
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The specific operation performed, such as the GraphQL operation name or MCP tool invoked (e.g., Get_Users_Record, Run_Agent).
+    */
+    get Operation(): string | null {
+        return this.Get('Operation');
+    }
+    set Operation(value: string | null) {
+        this.Set('Operation', value);
+    }
+
+    /**
+    * * Field Name: Method
+    * * Display Name: Method
+    * * SQL Data Type: nvarchar(10)
+    * * Description: HTTP method used for the request (GET, POST, PUT, DELETE, etc.).
+    */
+    get Method(): string {
+        return this.Get('Method');
+    }
+    set Method(value: string) {
+        this.Set('Method', value);
+    }
+
+    /**
+    * * Field Name: StatusCode
+    * * Display Name: Status Code
+    * * SQL Data Type: int
+    * * Description: HTTP response status code returned to the client (e.g., 200 for success, 401 for unauthorized, 500 for server error).
+    */
+    get StatusCode(): number {
+        return this.Get('StatusCode');
+    }
+    set StatusCode(value: number) {
+        this.Set('StatusCode', value);
+    }
+
+    /**
+    * * Field Name: ResponseTimeMs
+    * * Display Name: Response Time (ms)
+    * * SQL Data Type: int
+    * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.
+    */
+    get ResponseTimeMs(): number | null {
+        return this.Get('ResponseTimeMs');
+    }
+    set ResponseTimeMs(value: number | null) {
+        this.Set('ResponseTimeMs', value);
+    }
+
+    /**
+    * * Field Name: IPAddress
+    * * Display Name: IP Address
+    * * SQL Data Type: nvarchar(45)
+    * * Description: Client IP address that made the request. Supports both IPv4 and IPv6 addresses (up to 45 characters).
+    */
+    get IPAddress(): string | null {
+        return this.Get('IPAddress');
+    }
+    set IPAddress(value: string | null) {
+        this.Set('IPAddress', value);
+    }
+
+    /**
+    * * Field Name: UserAgent
+    * * Display Name: User Agent
+    * * SQL Data Type: nvarchar(500)
+    * * Description: User-Agent header from the HTTP request, identifying the client application or library making the API call.
+    */
+    get UserAgent(): string | null {
+        return this.Get('UserAgent');
+    }
+    set UserAgent(value: string | null) {
+        this.Set('UserAgent', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: APIKey
+    * * Display Name: API Key
+    * * SQL Data Type: nvarchar(255)
+    */
+    get APIKey(): string {
+        return this.Get('APIKey');
+    }
+}
+
+
+/**
+ * MJ: API Keys - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIKey
+ * * Base View: vwAPIKeys
+ * * @description Stores API keys for programmatic access to MemberJunction services. Keys are stored as SHA-256 hashes for security. Each key is associated with a user context and can have multiple permission scopes assigned.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Keys')
+export class APIKeyEntity extends BaseEntity<APIKeyEntityType> {
+    /**
+    * Loads the MJ: API Keys record from the database
+    * @param ID: string - primary key value to load the MJ: API Keys record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIKeyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Hash
+    * * Display Name: Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the raw API key (64 hexadecimal characters). The raw key is only shown once at creation time and cannot be recovered.
+    */
+    get Hash(): string {
+        return this.Get('Hash');
+    }
+    set Hash(value: string) {
+        this.Set('Hash', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    * * Description: User-friendly name for identifying the key purpose (e.g., Cowork Integration, CI/CD Pipeline, Mobile App).
+    */
+    get Label(): string {
+        return this.Get('Label');
+    }
+    set Label(value: string) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Optional detailed description of the key's intended use, integration details, or other notes.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Revoked
+    * * Description: Current lifecycle status of the key. Active keys can be used for authentication; Revoked keys are permanently disabled.
+    */
+    get Status(): 'Active' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional expiration timestamp. Keys with NULL expiration never expire. Expired keys are rejected during authentication.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: LastUsedAt
+    * * Display Name: Last Used At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the most recent successful authentication using this key. Updated on each valid API request.
+    */
+    get LastUsedAt(): Date | null {
+        return this.Get('LastUsedAt');
+    }
+    set LastUsedAt(value: Date | null) {
+        this.Set('LastUsedAt', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string {
+        return this.Get('CreatedByUser');
+    }
+}
+
+
+/**
+ * MJ: API Scopes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIScope
+ * * Base View: vwAPIScopes
+ * * @description Defines reusable permission scopes that can be assigned to API keys. Scopes follow a hierarchical naming convention (e.g., entities:read, agents:execute, admin:*) and are grouped by category for organizational purposes.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Scopes')
+export class APIScopeEntity extends BaseEntity<APIScopeEntityType> {
+    /**
+    * Loads the MJ: API Scopes record from the database
+    * @param ID: string - primary key value to load the MJ: API Scopes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIScopeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Scope Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique scope identifier following the pattern category:permission (e.g., entities:read, agents:execute, admin:*). Supports wildcard (*) for broad permissions.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Scope Category
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Grouping category for the scope (e.g., Entities, Agents, Admin). Used for organizing and filtering scopes in the UI.
+    */
+    get Category(): string {
+        return this.Get('Category');
+    }
+    set Category(value: string) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Human-readable description explaining what permissions this scope grants.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -49920,6 +54447,303 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
 
 
 /**
+ * MJ: Conversation Detail Attachments - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationDetailAttachment
+ * * Base View: vwConversationDetailAttachments
+ * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Detail Attachments')
+export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationDetailAttachmentEntityType> {
+    /**
+    * Loads the MJ: Conversation Detail Attachments record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Detail Attachments record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ConversationDetailAttachmentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Conversation Detail Attachments entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Each record must include content either directly (InlineData) or by reference (FileID); they cannot both be empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateInlineDataOrFileIDPresence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Each record must include content either directly (InlineData) or by reference (FileID); they cannot both be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInlineDataOrFileIDPresence(result: ValidationResult) {
+    	// Ensure that at least one source of content is supplied
+    	if (this.InlineData == null && this.FileID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"InlineDataOrFileID",
+    			"Either InlineData or FileID must be provided; both cannot be empty.",
+    			null,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ConversationDetailID
+    * * Display Name: Conversation Detail
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+    */
+    get ConversationDetailID(): string {
+        return this.Get('ConversationDetailID');
+    }
+    set ConversationDetailID(value: string) {
+        this.Set('ConversationDetailID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    * * Description: The modality type of this attachment (Image, Audio, Video, File, etc.). References the AIModality table.
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: MIME Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: MIME type of the attachment (e.g., image/png, video/mp4, audio/mp3).
+    */
+    get MimeType(): string {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: FileName
+    * * Display Name: File Name
+    * * SQL Data Type: nvarchar(4000)
+    * * Description: Original filename of the attachment. Supports long cloud storage paths up to 4000 characters.
+    */
+    get FileName(): string | null {
+        return this.Get('FileName');
+    }
+    set FileName(value: string | null) {
+        this.Set('FileName', value);
+    }
+
+    /**
+    * * Field Name: FileSizeBytes
+    * * Display Name: File Size (Bytes)
+    * * SQL Data Type: int
+    * * Description: Size of the attachment in bytes.
+    */
+    get FileSizeBytes(): number {
+        return this.Get('FileSizeBytes');
+    }
+    set FileSizeBytes(value: number) {
+        this.Set('FileSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: Width
+    * * Display Name: Width
+    * * SQL Data Type: int
+    * * Description: Width in pixels for images and videos.
+    */
+    get Width(): number | null {
+        return this.Get('Width');
+    }
+    set Width(value: number | null) {
+        this.Set('Width', value);
+    }
+
+    /**
+    * * Field Name: Height
+    * * Display Name: Height
+    * * SQL Data Type: int
+    * * Description: Height in pixels for images and videos.
+    */
+    get Height(): number | null {
+        return this.Get('Height');
+    }
+    set Height(value: number | null) {
+        this.Set('Height', value);
+    }
+
+    /**
+    * * Field Name: DurationSeconds
+    * * Display Name: Duration (Seconds)
+    * * SQL Data Type: int
+    * * Description: Duration in seconds for audio and video files.
+    */
+    get DurationSeconds(): number | null {
+        return this.Get('DurationSeconds');
+    }
+    set DurationSeconds(value: number | null) {
+        this.Set('DurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: InlineData
+    * * Display Name: Inline Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Base64-encoded file data for small attachments stored inline. Mutually exclusive with FileID - exactly one must be populated.
+    */
+    get InlineData(): string | null {
+        return this.Get('InlineData');
+    }
+    set InlineData(value: string | null) {
+        this.Set('InlineData', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Files (vwFiles.ID)
+    * * Description: Reference to File entity for large attachments stored in MJStorage. Mutually exclusive with InlineData - exactly one must be populated.
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order for multiple attachments in a message. Lower numbers appear first.
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: ThumbnailBase64
+    * * Display Name: Thumbnail
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Base64-encoded thumbnail image for quick preview display. Max 200px on longest side.
+    */
+    get ThumbnailBase64(): string | null {
+        return this.Get('ThumbnailBase64');
+    }
+    set ThumbnailBase64(value: string | null) {
+        this.Set('ThumbnailBase64', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of the attachment providing context about its content and purpose.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ConversationDetail
+    * * Display Name: Conversation Detail
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ConversationDetail(): string {
+        return this.Get('ConversationDetail');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
+    }
+}
+
+
+/**
  * MJ: Conversation Detail Ratings - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ConversationDetailRating
@@ -50601,6 +55425,713 @@ export class CredentialEntity extends BaseEntity<CredentialEntityType> {
 
 
 /**
+ * MJ: Dashboard Category Links - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardCategoryLink
+ * * Base View: vwDashboardCategoryLinks
+ * * @description Allows users to organize shared dashboards into their own category structure. Creates a link/reference to a dashboard without duplicating it. Users can optionally provide a custom display name and control ordering within their folders.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard Category Links')
+export class DashboardCategoryLinkEntity extends BaseEntity<DashboardCategoryLinkEntityType> {
+    /**
+    * Loads the MJ: Dashboard Category Links record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard Category Links record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardCategoryLinkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: DashboardID
+    * * Display Name: Dashboard
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)
+    */
+    get DashboardID(): string {
+        return this.Get('DashboardID');
+    }
+    set DashboardID(value: string) {
+        this.Set('DashboardID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: DashboardCategoryID
+    * * Display Name: Dashboard Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
+    * * Description: The category in the user's personal folder structure. NULL means the dashboard appears at root level.
+    */
+    get DashboardCategoryID(): string | null {
+        return this.Get('DashboardCategoryID');
+    }
+    set DashboardCategoryID(value: string | null) {
+        this.Set('DashboardCategoryID', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional user-friendly alias for the dashboard within this user's view. If NULL, uses the original dashboard name.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order of this dashboard within the user's category. Lower values appear first.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Dashboard
+    * * Display Name: Dashboard Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Dashboard(): string {
+        return this.Get('Dashboard');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: DashboardCategory
+    * * Display Name: Category Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DashboardCategory(): string | null {
+        return this.Get('DashboardCategory');
+    }
+}
+
+
+/**
+ * MJ: Dashboard Category Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardCategoryPermission
+ * * Base View: vwDashboardCategoryPermissions
+ * * @description Manages user permissions for dashboard categories (folders). Permissions cascade to all dashboards within the category. Enables sharing entire folders of dashboards with granular access control.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard Category Permissions')
+export class DashboardCategoryPermissionEntity extends BaseEntity<DashboardCategoryPermissionEntityType> {
+    /**
+    * Loads the MJ: Dashboard Category Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard Category Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardCategoryPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: DashboardCategoryID
+    * * Display Name: Dashboard Category ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
+    */
+    get DashboardCategoryID(): string {
+        return this.Get('DashboardCategoryID');
+    }
+    set DashboardCategoryID(value: string) {
+        this.Set('DashboardCategoryID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: CanRead
+    * * Display Name: Can Read
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the user can view dashboards within this category
+    */
+    get CanRead(): boolean {
+        return this.Get('CanRead');
+    }
+    set CanRead(value: boolean) {
+        this.Set('CanRead', value);
+    }
+
+    /**
+    * * Field Name: CanEdit
+    * * Display Name: Can Edit
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can modify dashboards within this category
+    */
+    get CanEdit(): boolean {
+        return this.Get('CanEdit');
+    }
+    set CanEdit(value: boolean) {
+        this.Set('CanEdit', value);
+    }
+
+    /**
+    * * Field Name: CanAddRemove
+    * * Display Name: Can Add/Remove
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can add new dashboards to or remove dashboards from this category
+    */
+    get CanAddRemove(): boolean {
+        return this.Get('CanAddRemove');
+    }
+    set CanAddRemove(value: boolean) {
+        this.Set('CanAddRemove', value);
+    }
+
+    /**
+    * * Field Name: CanShare
+    * * Display Name: Can Share
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can share this category with other users
+    */
+    get CanShare(): boolean {
+        return this.Get('CanShare');
+    }
+    set CanShare(value: boolean) {
+        this.Set('CanShare', value);
+    }
+
+    /**
+    * * Field Name: SharedByUserID
+    * * Display Name: Shared By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who granted this permission. NULL if shared by the category owner.
+    */
+    get SharedByUserID(): string | null {
+        return this.Get('SharedByUserID');
+    }
+    set SharedByUserID(value: string | null) {
+        this.Set('SharedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DashboardCategory
+    * * Display Name: Dashboard Category
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DashboardCategory(): string {
+        return this.Get('DashboardCategory');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: SharedByUser
+    * * Display Name: Shared By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SharedByUser(): string | null {
+        return this.Get('SharedByUser');
+    }
+}
+
+
+/**
+ * MJ: Dashboard Part Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardPartType
+ * * Base View: vwDashboardPartTypes
+ * * @description Stores available panel types for metadata-driven dashboards. Each panel type defines a driver class for rendering content and an optional config dialog for setup UI.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard Part Types')
+export class DashboardPartTypeEntity extends BaseEntity<DashboardPartTypeEntityType> {
+    /**
+    * Loads the MJ: Dashboard Part Types record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard Part Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardPartTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name for the panel type (e.g., View, Query, Artifact, WebURL, Custom)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this panel type displays and its capabilities
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class for the panel type (e.g., fa-solid fa-table)
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The @RegisterClass name for the panel renderer component that extends DashboardBasePanelRenderer
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: ConfigDialogClass
+    * * Display Name: Configuration Dialog Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The @RegisterClass name for the configuration dialog component that extends DashboardBasePanelConfigDialog
+    */
+    get ConfigDialogClass(): string | null {
+        return this.Get('ConfigDialogClass');
+    }
+    set ConfigDialogClass(value: string | null) {
+        this.Set('ConfigDialogClass', value);
+    }
+
+    /**
+    * * Field Name: DefaultConfig
+    * * Display Name: Default Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing default configuration values for new panels of this type
+    */
+    get DefaultConfig(): string | null {
+        return this.Get('DefaultConfig');
+    }
+    set DefaultConfig(value: string | null) {
+        this.Set('DefaultConfig', value);
+    }
+
+    /**
+    * * Field Name: SortOrder
+    * * Display Name: Sort Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order in panel type selection UI (lower numbers appear first)
+    */
+    get SortOrder(): number {
+        return this.Get('SortOrder');
+    }
+    set SortOrder(value: number) {
+        this.Set('SortOrder', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this panel type is currently available for use
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Dashboard Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardPermission
+ * * Base View: vwDashboardPermissions
+ * * @description Manages user permissions for dashboards with granular access control (Read, Edit, Delete, Share). Each record grants a specific user access to a dashboard with configurable permission levels.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard Permissions')
+export class DashboardPermissionEntity extends BaseEntity<DashboardPermissionEntityType> {
+    /**
+    * Loads the MJ: Dashboard Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: DashboardID
+    * * Display Name: Dashboard ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)
+    */
+    get DashboardID(): string {
+        return this.Get('DashboardID');
+    }
+    set DashboardID(value: string) {
+        this.Set('DashboardID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: CanRead
+    * * Display Name: Can Read
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the user can view the dashboard and its contents
+    */
+    get CanRead(): boolean {
+        return this.Get('CanRead');
+    }
+    set CanRead(value: boolean) {
+        this.Set('CanRead', value);
+    }
+
+    /**
+    * * Field Name: CanEdit
+    * * Display Name: Can Edit
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can modify the dashboard layout, add/remove parts, or change settings
+    */
+    get CanEdit(): boolean {
+        return this.Get('CanEdit');
+    }
+    set CanEdit(value: boolean) {
+        this.Set('CanEdit', value);
+    }
+
+    /**
+    * * Field Name: CanDelete
+    * * Display Name: Can Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can delete the dashboard entirely
+    */
+    get CanDelete(): boolean {
+        return this.Get('CanDelete');
+    }
+    set CanDelete(value: boolean) {
+        this.Set('CanDelete', value);
+    }
+
+    /**
+    * * Field Name: CanShare
+    * * Display Name: Can Share
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the user can share the dashboard with other users
+    */
+    get CanShare(): boolean {
+        return this.Get('CanShare');
+    }
+    set CanShare(value: boolean) {
+        this.Set('CanShare', value);
+    }
+
+    /**
+    * * Field Name: SharedByUserID
+    * * Display Name: Shared By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who granted this permission. NULL if shared by the dashboard owner.
+    */
+    get SharedByUserID(): string | null {
+        return this.Get('SharedByUserID');
+    }
+    set SharedByUserID(value: string | null) {
+        this.Set('SharedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Dashboard
+    * * Display Name: Dashboard
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Dashboard(): string {
+        return this.Get('Dashboard');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: SharedByUser
+    * * Display Name: Shared By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SharedByUser(): string | null {
+        return this.Get('SharedByUser');
+    }
+}
+
+
+/**
  * MJ: Dashboard User Preferences - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: DashboardUserPreference
@@ -51000,7 +56531,7 @@ export class EncryptionAlgorithmEntity extends BaseEntity<EncryptionAlgorithmEnt
 
     /**
     * * Field Name: KeyLengthBits
-    * * Display Name: Key Length (Bits)
+    * * Display Name: Key Length Bits
     * * SQL Data Type: int
     * * Description: Required key length in bits (e.g., 256 for AES-256).
     */
@@ -51013,7 +56544,7 @@ export class EncryptionAlgorithmEntity extends BaseEntity<EncryptionAlgorithmEnt
 
     /**
     * * Field Name: IVLengthBytes
-    * * Display Name: IV Length (Bytes)
+    * * Display Name: IV Length Bytes
     * * SQL Data Type: int
     * * Description: Required initialization vector length in bytes (e.g., 12 for GCM, 16 for CBC).
     */
@@ -51026,7 +56557,7 @@ export class EncryptionAlgorithmEntity extends BaseEntity<EncryptionAlgorithmEnt
 
     /**
     * * Field Name: IsAEAD
-    * * Display Name: AEAD
+    * * Display Name: Is AEAD
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this algorithm provides Authenticated Encryption with Associated Data (AEAD). AEAD algorithms like GCM detect tampering.
@@ -51040,7 +56571,7 @@ export class EncryptionAlgorithmEntity extends BaseEntity<EncryptionAlgorithmEnt
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this algorithm is available for use.
@@ -51185,7 +56716,7 @@ export class EncryptionKeySourceEntity extends BaseEntity<EncryptionKeySourceEnt
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this key source is available for use.
@@ -51310,7 +56841,7 @@ export class EncryptionKeyEntity extends BaseEntity<EncryptionKeyEntityType> {
 
     /**
     * * Field Name: EncryptionKeySourceID
-    * * Display Name: Key Source
+    * * Display Name: Encryption Key Source ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Encryption Key Sources (vwEncryptionKeySources.ID)
     * * Description: References the key source that provides the key material.
@@ -51324,7 +56855,7 @@ export class EncryptionKeyEntity extends BaseEntity<EncryptionKeyEntityType> {
 
     /**
     * * Field Name: EncryptionAlgorithmID
-    * * Display Name: Encryption Algorithm
+    * * Display Name: Encryption Algorithm ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Encryption Algorithms (vwEncryptionAlgorithms.ID)
     * * Description: References the algorithm to use for encryption/decryption.
@@ -51338,7 +56869,7 @@ export class EncryptionKeyEntity extends BaseEntity<EncryptionKeyEntityType> {
 
     /**
     * * Field Name: KeyLookupValue
-    * * Display Name: Lookup Value
+    * * Display Name: Key Lookup Value
     * * SQL Data Type: nvarchar(500)
     * * Description: Source-specific lookup value (e.g., environment variable name, vault path).
     */
@@ -51379,7 +56910,7 @@ export class EncryptionKeyEntity extends BaseEntity<EncryptionKeyEntityType> {
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this key can be used for new encryption operations.
@@ -51459,7 +56990,7 @@ export class EncryptionKeyEntity extends BaseEntity<EncryptionKeyEntityType> {
 
     /**
     * * Field Name: EncryptionKeySource
-    * * Display Name: Key Source Name
+    * * Display Name: Encryption Key Source
     * * SQL Data Type: nvarchar(100)
     */
     get EncryptionKeySource(): string {
@@ -51468,7 +56999,7 @@ export class EncryptionKeyEntity extends BaseEntity<EncryptionKeyEntityType> {
 
     /**
     * * Field Name: EncryptionAlgorithm
-    * * Display Name: Algorithm Name
+    * * Display Name: Encryption Algorithm
     * * SQL Data Type: nvarchar(50)
     */
     get EncryptionAlgorithm(): string {
@@ -51591,6 +57122,479 @@ export class EnvironmentEntity extends BaseEntity<EnvironmentEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: File Storage Accounts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FileStorageAccount
+ * * Base View: vwFileStorageAccounts
+ * * @description Enterprise-level file storage accounts. Each account represents a configured connection to a storage provider (e.g., Marketing Dropbox, Engineering Google Drive) with credentials managed centrally.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: File Storage Accounts')
+export class FileStorageAccountEntity extends BaseEntity<FileStorageAccountEntityType> {
+    /**
+    * Loads the MJ: File Storage Accounts record from the database
+    * @param ID: string - primary key value to load the MJ: File Storage Accounts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof FileStorageAccountEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Display name for the storage account (e.g., Marketing Files, Engineering Docs). Must be unique per provider.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description providing additional context about the account purpose or contents.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ProviderID
+    * * Display Name: Provider
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: Foreign key to FileStorageProvider indicating which storage service this account uses (Dropbox, Google Drive, S3, etc.).
+    */
+    get ProviderID(): string {
+        return this.Get('ProviderID');
+    }
+    set ProviderID(value: string) {
+        this.Set('ProviderID', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Foreign key to Credential containing the authentication details (OAuth tokens, API keys, etc.) for this account. Credentials are decrypted at runtime by the Credential Engine.
+    */
+    get CredentialID(): string {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Provider
+    * * Display Name: Provider Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Provider(): string {
+        return this.Get('Provider');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string {
+        return this.Get('Credential');
+    }
+}
+
+
+/**
+ * MJ: List Invitations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ListInvitation
+ * * Base View: vwListInvitations
+ * * @description Tracks pending invitations for users to access lists, including external users via email.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: List Invitations')
+export class ListInvitationEntity extends BaseEntity<ListInvitationEntityType> {
+    /**
+    * Loads the MJ: List Invitations record from the database
+    * @param ID: string - primary key value to load the MJ: List Invitations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ListInvitationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the invitation.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ListID
+    * * Display Name: List
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Lists (vwLists.ID)
+    * * Description: The list the user is being invited to.
+    */
+    get ListID(): string {
+        return this.Get('ListID');
+    }
+    set ListID(value: string) {
+        this.Set('ListID', value);
+    }
+
+    /**
+    * * Field Name: Email
+    * * Display Name: Email Address
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Email address of the invitee.
+    */
+    get Email(): string {
+        return this.Get('Email');
+    }
+    set Email(value: string) {
+        this.Set('Email', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Editor
+    *   * Viewer
+    * * Description: The role to be assigned upon acceptance (Editor or Viewer).
+    */
+    get Role(): 'Editor' | 'Viewer' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Editor' | 'Viewer') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: Token
+    * * Display Name: Token
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Security token for validating the invitation.
+    */
+    get Token(): string {
+        return this.Get('Token');
+    }
+    set Token(value: string) {
+        this.Set('Token', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetime
+    * * Description: When the invitation expires.
+    */
+    get ExpiresAt(): Date {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who created the invitation.
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Accepted
+    *   * Expired
+    *   * Pending
+    *   * Revoked
+    * * Description: Status of the invitation (Pending, Accepted, Expired, Revoked).
+    */
+    get Status(): 'Accepted' | 'Expired' | 'Pending' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Accepted' | 'Expired' | 'Pending' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: List
+    * * Display Name: List Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get List(): string {
+        return this.Get('List');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string {
+        return this.Get('CreatedByUser');
+    }
+}
+
+
+/**
+ * MJ: List Shares - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ListShare
+ * * Base View: vwListShares
+ * * @description Manages user access and permissions for shared lists.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: List Shares')
+export class ListShareEntity extends BaseEntity<ListShareEntityType> {
+    /**
+    * Loads the MJ: List Shares record from the database
+    * @param ID: string - primary key value to load the MJ: List Shares record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ListShareEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the share record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ListID
+    * * Display Name: List
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Lists (vwLists.ID)
+    * * Description: The list being shared.
+    */
+    get ListID(): string {
+        return this.Get('ListID');
+    }
+    set ListID(value: string) {
+        this.Set('ListID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user receiving access to the list.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Editor
+    *   * Viewer
+    * * Description: The permission level granted (Editor or Viewer).
+    */
+    get Role(): 'Editor' | 'Viewer' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Editor' | 'Viewer') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    * * Description: Current status of the share (Active or Pending).
+    */
+    get Status(): 'Active' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: List
+    * * Display Name: List Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get List(): string {
+        return this.Get('List');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
     }
 }
 
@@ -54522,7 +60526,7 @@ export class TestRunFeedbackEntity extends BaseEntity<TestRunFeedbackEntityType>
 
     /**
     * * Field Name: ReviewerUser
-    * * Display Name: Reviewer Name
+    * * Display Name: Reviewer User
     * * SQL Data Type: nvarchar(100)
     */
     get ReviewerUser(): string {
@@ -54604,7 +60608,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: RunByUserID
-    * * Display Name: Run By User ID
+    * * Display Name: Run By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: Foreign Key - The user who triggered the test run (could be system user for automated runs)
@@ -54633,7 +60637,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     * * Field Name: TargetType
     * * Display Name: Target Type
     * * SQL Data Type: nvarchar(100)
-    * * Description: Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.
+    * * Description: Optional sub-category or variant label for the test target. Use this to distinguish between different test scenarios within the same entity type (e.g., "Summarization", "Classification", "Code Review" for AI Agent tests). The entity type itself should be specified via TargetLogEntityID.
     */
     get TargetType(): string | null {
         return this.Get('TargetType');
@@ -54644,7 +60648,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: TargetLogID
-    * * Display Name: Target Log ID
+    * * Display Name: Target Log
     * * SQL Data Type: uniqueidentifier
     * * Description: ID of the target execution log (e.g., AIAgentRun.ID, WorkflowRun.ID). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.
     */
@@ -54668,12 +60672,13 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     *   * Pending
     *   * Running
     *   * Skipped
-    * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation)
+    *   * Timeout
+    * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation), Timeout (execution exceeded time limit and was cancelled)
     */
-    get Status(): 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped' {
+    get Status(): 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped' | 'Timeout' {
         return this.Get('Status');
     }
-    set Status(value: 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped') {
+    set Status(value: 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped' | 'Timeout') {
         this.Set('Status', value);
     }
 
@@ -54705,7 +60710,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: DurationSeconds
-    * * Display Name: Duration (seconds)
+    * * Display Name: Duration Seconds
     * * SQL Data Type: decimal(10, 3)
     * * Description: Execution time in seconds for this test
     */
@@ -54867,8 +60872,126 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     }
 
     /**
+    * * Field Name: Log
+    * * Display Name: Log
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed execution log capturing status messages, diagnostic output, and driver-specific information streamed during test execution. Format is timestamped log lines.
+    */
+    get Log(): string | null {
+        return this.Get('Log');
+    }
+    set Log(value: string | null) {
+        this.Set('Log', value);
+    }
+
+    /**
+    * * Field Name: Tags
+    * * Display Name: Tags
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of user-assigned tags/labels for this test run. Used for categorization, filtering, and comparing runs with different configurations. Inherits from parent suite run tags if not explicitly set.
+    */
+    get Tags(): string | null {
+        return this.Get('Tags');
+    }
+    set Tags(value: string | null) {
+        this.Set('Tags', value);
+    }
+
+    /**
+    * * Field Name: MachineName
+    * * Display Name: Machine Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Hostname of the machine that executed this test. Used for identifying the execution environment and debugging infrastructure-specific issues.
+    */
+    get MachineName(): string | null {
+        return this.Get('MachineName');
+    }
+    set MachineName(value: string | null) {
+        this.Set('MachineName', value);
+    }
+
+    /**
+    * * Field Name: MachineID
+    * * Display Name: Machine ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of test execution across different machines.
+    */
+    get MachineID(): string | null {
+        return this.Get('MachineID');
+    }
+    set MachineID(value: string | null) {
+        this.Set('MachineID', value);
+    }
+
+    /**
+    * * Field Name: RunByUserName
+    * * Display Name: Run By User Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized user name who ran the test. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.
+    */
+    get RunByUserName(): string | null {
+        return this.Get('RunByUserName');
+    }
+    set RunByUserName(value: string | null) {
+        this.Set('RunByUserName', value);
+    }
+
+    /**
+    * * Field Name: RunByUserEmail
+    * * Display Name: Run By User Email
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized email address of the user who ran the test. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.
+    */
+    get RunByUserEmail(): string | null {
+        return this.Get('RunByUserEmail');
+    }
+    set RunByUserEmail(value: string | null) {
+        this.Set('RunByUserEmail', value);
+    }
+
+    /**
+    * * Field Name: RunContextDetails
+    * * Display Name: Run Context Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.
+    */
+    get RunContextDetails(): string | null {
+        return this.Get('RunContextDetails');
+    }
+    set RunContextDetails(value: string | null) {
+        this.Set('RunContextDetails', value);
+    }
+
+    /**
+    * * Field Name: TargetLogEntityID
+    * * Display Name: Target Log Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.
+    */
+    get TargetLogEntityID(): string | null {
+        return this.Get('TargetLogEntityID');
+    }
+    set TargetLogEntityID(value: string | null) {
+        this.Set('TargetLogEntityID', value);
+    }
+
+    /**
+    * * Field Name: ResolvedVariables
+    * * Display Name: Resolved Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing the final resolved variable values used during test execution. Includes both the resolved values and the source of each value (run, suite, test, or type level). Stored for reproducibility and auditing.
+    */
+    get ResolvedVariables(): string | null {
+        return this.Get('ResolvedVariables');
+    }
+    set ResolvedVariables(value: string | null) {
+        this.Set('ResolvedVariables', value);
+    }
+
+    /**
     * * Field Name: Test
-    * * Display Name: Test
+    * * Display Name: Test Name
     * * SQL Data Type: nvarchar(255)
     */
     get Test(): string {
@@ -54891,6 +61014,15 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     */
     get RunByUser(): string {
         return this.Get('RunByUser');
+    }
+
+    /**
+    * * Field Name: TargetLogEntity
+    * * Display Name: Target Log Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetLogEntity(): string | null {
+        return this.Get('TargetLogEntity');
     }
 }
 
@@ -54954,7 +61086,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: RunByUserID
-    * * Display Name: Run By User
+    * * Display Name: Run By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: Foreign Key - The user who triggered the suite run (could be system user for automated runs)
@@ -55216,8 +61348,99 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
     }
 
     /**
+    * * Field Name: Tags
+    * * Display Name: Tags
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of user-assigned tags/labels for this suite run. Used for categorization, filtering, and comparing runs with different configurations (e.g., ["Opus 4.5", "New Prompt v3", "Production Config"]).
+    */
+    get Tags(): string | null {
+        return this.Get('Tags');
+    }
+    set Tags(value: string | null) {
+        this.Set('Tags', value);
+    }
+
+    /**
+    * * Field Name: MachineName
+    * * Display Name: Machine Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Hostname of the machine that executed this suite. Used for identifying the execution environment and debugging infrastructure-specific issues.
+    */
+    get MachineName(): string | null {
+        return this.Get('MachineName');
+    }
+    set MachineName(value: string | null) {
+        this.Set('MachineName', value);
+    }
+
+    /**
+    * * Field Name: MachineID
+    * * Display Name: Machine ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of suite execution across different machines.
+    */
+    get MachineID(): string | null {
+        return this.Get('MachineID');
+    }
+    set MachineID(value: string | null) {
+        this.Set('MachineID', value);
+    }
+
+    /**
+    * * Field Name: RunByUserName
+    * * Display Name: Run By User Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized user name who ran the suite. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.
+    */
+    get RunByUserName(): string | null {
+        return this.Get('RunByUserName');
+    }
+    set RunByUserName(value: string | null) {
+        this.Set('RunByUserName', value);
+    }
+
+    /**
+    * * Field Name: RunByUserEmail
+    * * Display Name: Run By User Email
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized email address of the user who ran the suite. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.
+    */
+    get RunByUserEmail(): string | null {
+        return this.Get('RunByUserEmail');
+    }
+    set RunByUserEmail(value: string | null) {
+        this.Set('RunByUserEmail', value);
+    }
+
+    /**
+    * * Field Name: RunContextDetails
+    * * Display Name: Run Context Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.
+    */
+    get RunContextDetails(): string | null {
+        return this.Get('RunContextDetails');
+    }
+    set RunContextDetails(value: string | null) {
+        this.Set('RunContextDetails', value);
+    }
+
+    /**
+    * * Field Name: ResolvedVariables
+    * * Display Name: Resolved Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun.ResolvedVariables with source="suite".
+    */
+    get ResolvedVariables(): string | null {
+        return this.Get('ResolvedVariables');
+    }
+    set ResolvedVariables(value: string | null) {
+        this.Set('ResolvedVariables', value);
+    }
+
+    /**
     * * Field Name: Suite
-    * * Display Name: Suite Name
+    * * Display Name: Suite
     * * SQL Data Type: nvarchar(255)
     */
     get Suite(): string {
@@ -55226,7 +61449,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: RunByUser
-    * * Display Name: Run By User Name
+    * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
     */
     get RunByUser(): string {
@@ -55541,6 +61764,32 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
     }
 
     /**
+    * * Field Name: MaxExecutionTimeMS
+    * * Display Name: Max Execution Time (ms)
+    * * SQL Data Type: int
+    * * Description: Maximum total execution time in milliseconds for the entire suite. If NULL, no suite-level timeout applies (individual test timeouts still apply). When exceeded, current test is cancelled and remaining tests are skipped.
+    */
+    get MaxExecutionTimeMS(): number | null {
+        return this.Get('MaxExecutionTimeMS');
+    }
+    set MaxExecutionTimeMS(value: number | null) {
+        this.Set('MaxExecutionTimeMS', value);
+    }
+
+    /**
+    * * Field Name: Variables
+    * * Display Name: Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing variable values to apply to all tests in this suite. These values override test-level defaults but can be overridden by run-level values.
+    */
+    get Variables(): string | null {
+        return this.Get('Variables');
+    }
+    set Variables(value: string | null) {
+        this.Set('Variables', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -55680,6 +61929,19 @@ export class TestTypeEntity extends BaseEntity<TestTypeEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: VariablesSchema
+    * * Display Name: Variables Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON schema defining the variables available for tests of this type. Contains schemaVersion and array of variable definitions with name, displayName, description, dataType, valueSource, possibleValues, defaultValue, and required fields.
+    */
+    get VariablesSchema(): string | null {
+        return this.Get('VariablesSchema');
+    }
+    set VariablesSchema(value: string | null) {
+        this.Set('VariablesSchema', value);
+    }
 }
 
 
@@ -55761,7 +62023,7 @@ export class TestEntity extends BaseEntity<TestEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Test Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Types (vwTestTypes.ID)
     * * Description: Foreign Key - The type of test (e.g., Agent Eval, Workflow Test). Determines which driver class handles execution.
@@ -55886,7 +62148,7 @@ export class TestEntity extends BaseEntity<TestEntityType> {
 
     /**
     * * Field Name: EstimatedDurationSeconds
-    * * Display Name: Estimated Duration Seconds
+    * * Display Name: Estimated Duration (seconds)
     * * SQL Data Type: int
     * * Description: Estimated execution time in seconds. Used for scheduling and timeout calculations.
     */
@@ -55899,7 +62161,7 @@ export class TestEntity extends BaseEntity<TestEntityType> {
 
     /**
     * * Field Name: EstimatedCostUSD
-    * * Display Name: Estimated Cost USD
+    * * Display Name: Estimated Cost (USD)
     * * SQL Data Type: decimal(10, 6)
     * * Description: Estimated cost in USD for running this test (e.g., LLM token costs, compute resources). Used for budgeting and optimization.
     */
@@ -55944,12 +62206,438 @@ export class TestEntity extends BaseEntity<TestEntityType> {
     }
 
     /**
+    * * Field Name: MaxExecutionTimeMS
+    * * Display Name: Max Execution Time (ms)
+    * * SQL Data Type: int
+    * * Description: Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.
+    */
+    get MaxExecutionTimeMS(): number | null {
+        return this.Get('MaxExecutionTimeMS');
+    }
+    set MaxExecutionTimeMS(value: number | null) {
+        this.Set('MaxExecutionTimeMS', value);
+    }
+
+    /**
+    * * Field Name: Variables
+    * * Display Name: Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType.VariablesSchema.
+    */
+    get Variables(): string | null {
+        return this.Get('Variables');
+    }
+    set Variables(value: string | null) {
+        this.Set('Variables', value);
+    }
+
+    /**
     * * Field Name: Type
     * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {
         return this.Get('Type');
+    }
+}
+
+
+/**
+ * MJ: User Notification Preferences - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: UserNotificationPreference
+ * * Base View: vwUserNotificationPreferences
+ * * @description Per-user preferences for each notification type (delivery method overrides)
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: User Notification Preferences')
+export class UserNotificationPreferenceEntity extends BaseEntity<UserNotificationPreferenceEntityType> {
+    /**
+    * Loads the MJ: User Notification Preferences record from the database
+    * @param ID: string - primary key value to load the MJ: User Notification Preferences record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof UserNotificationPreferenceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: NotificationTypeID
+    * * Display Name: Notification Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: User Notification Types (vwUserNotificationTypes.ID)
+    */
+    get NotificationTypeID(): string {
+        return this.Get('NotificationTypeID');
+    }
+    set NotificationTypeID(value: string) {
+        this.Set('NotificationTypeID', value);
+    }
+
+    /**
+    * * Field Name: InAppEnabled
+    * * Display Name: In-App Enabled
+    * * SQL Data Type: bit
+    * * Description: User preference for in-app notifications (NULL = use default)
+    */
+    get InAppEnabled(): boolean | null {
+        return this.Get('InAppEnabled');
+    }
+    set InAppEnabled(value: boolean | null) {
+        this.Set('InAppEnabled', value);
+    }
+
+    /**
+    * * Field Name: EmailEnabled
+    * * Display Name: Email Enabled
+    * * SQL Data Type: bit
+    * * Description: User preference for email notifications (NULL = use default)
+    */
+    get EmailEnabled(): boolean | null {
+        return this.Get('EmailEnabled');
+    }
+    set EmailEnabled(value: boolean | null) {
+        this.Set('EmailEnabled', value);
+    }
+
+    /**
+    * * Field Name: SMSEnabled
+    * * Display Name: SMS Enabled
+    * * SQL Data Type: bit
+    * * Description: User preference for SMS notifications (NULL = use default)
+    */
+    get SMSEnabled(): boolean | null {
+        return this.Get('SMSEnabled');
+    }
+    set SMSEnabled(value: boolean | null) {
+        this.Set('SMSEnabled', value);
+    }
+
+    /**
+    * * Field Name: Enabled
+    * * Display Name: Overall Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    */
+    get Enabled(): boolean | null {
+        return this.Get('Enabled');
+    }
+    set Enabled(value: boolean | null) {
+        this.Set('Enabled', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: NotificationType
+    * * Display Name: Notification Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get NotificationType(): string {
+        return this.Get('NotificationType');
+    }
+}
+
+
+/**
+ * MJ: User Notification Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: UserNotificationType
+ * * Base View: vwUserNotificationTypes
+ * * @description Defines categories of notifications with delivery configuration and template associations
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: User Notification Types')
+export class UserNotificationTypeEntity extends BaseEntity<UserNotificationTypeEntityType> {
+    /**
+    * Loads the MJ: User Notification Types record from the database
+    * @param ID: string - primary key value to load the MJ: User Notification Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof UserNotificationTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name for the notification type (e.g., 'Agent Completion')
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DefaultInApp
+    * * Display Name: Default In-App
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether in-app notifications are enabled by default for this type
+    */
+    get DefaultInApp(): boolean {
+        return this.Get('DefaultInApp');
+    }
+    set DefaultInApp(value: boolean) {
+        this.Set('DefaultInApp', value);
+    }
+
+    /**
+    * * Field Name: DefaultEmail
+    * * Display Name: Default Email
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether email notifications are enabled by default for this type
+    */
+    get DefaultEmail(): boolean {
+        return this.Get('DefaultEmail');
+    }
+    set DefaultEmail(value: boolean) {
+        this.Set('DefaultEmail', value);
+    }
+
+    /**
+    * * Field Name: DefaultSMS
+    * * Display Name: Default SMS
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether SMS notifications are enabled by default for this type
+    */
+    get DefaultSMS(): boolean {
+        return this.Get('DefaultSMS');
+    }
+    set DefaultSMS(value: boolean) {
+        this.Set('DefaultSMS', value);
+    }
+
+    /**
+    * * Field Name: AllowUserPreference
+    * * Display Name: Allow User Preference
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether users can override the default delivery method
+    */
+    get AllowUserPreference(): boolean | null {
+        return this.Get('AllowUserPreference');
+    }
+    set AllowUserPreference(value: boolean | null) {
+        this.Set('AllowUserPreference', value);
+    }
+
+    /**
+    * * Field Name: EmailTemplateID
+    * * Display Name: Email Template
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
+    */
+    get EmailTemplateID(): string | null {
+        return this.Get('EmailTemplateID');
+    }
+    set EmailTemplateID(value: string | null) {
+        this.Set('EmailTemplateID', value);
+    }
+
+    /**
+    * * Field Name: SMSTemplateID
+    * * Display Name: SMS Template
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
+    */
+    get SMSTemplateID(): string | null {
+        return this.Get('SMSTemplateID');
+    }
+    set SMSTemplateID(value: string | null) {
+        this.Set('SMSTemplateID', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Color
+    * * Display Name: Color
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Color(): string | null {
+        return this.Get('Color');
+    }
+    set Color(value: string | null) {
+        this.Set('Color', value);
+    }
+
+    /**
+    * * Field Name: AutoExpireDays
+    * * Display Name: Auto Expire Days
+    * * SQL Data Type: int
+    */
+    get AutoExpireDays(): number | null {
+        return this.Get('AutoExpireDays');
+    }
+    set AutoExpireDays(value: number | null) {
+        this.Set('AutoExpireDays', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    */
+    get Priority(): number | null {
+        return this.Get('Priority');
+    }
+    set Priority(value: number | null) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EmailTemplate
+    * * Display Name: Email Template Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EmailTemplate(): string | null {
+        return this.Get('EmailTemplate');
+    }
+
+    /**
+    * * Field Name: SMSTemplate
+    * * Display Name: SMS Template Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SMSTemplate(): string | null {
+        return this.Get('SMSTemplate');
     }
 }
 
@@ -56443,7 +63131,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category ID
+    * * Display Name: Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
     */
@@ -56579,7 +63267,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -56589,7 +63277,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -56630,7 +63318,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Display Name: Cache Enabled
     * * SQL Data Type: bit
     * * Default Value: 0
-    * * Description: When true, query results will be cached in memory with TTL expiration
+    * * Description: When true, enables query result caching. Caching behavior depends on CacheValidationSQL: (1) If CacheValidationSQL is NULL, uses simple server-side TTL caching based on CacheTTLMinutes - results are cached on the server and expire after the TTL period. (2) If CacheValidationSQL is set, enables smart client-side caching with freshness validation - client sends cache fingerprint (maxUpdatedAt + rowCount) to server, server validates using CacheValidationSQL and returns 'current' (use cached) or 'stale' (with fresh data). Smart caching provides real-time accuracy while minimizing data transfer.
     */
     get CacheEnabled(): boolean {
         return this.Get('CacheEnabled');
@@ -56680,7 +63368,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model ID
+    * * Display Name: Embedding Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     * * Description: The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.
@@ -56690,6 +63378,19 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     }
     set EmbeddingModelID(value: string | null) {
         this.Set('EmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: CacheValidationSQL
+    * * Display Name: Cache Validation SQL
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'
+    */
+    get CacheValidationSQL(): string | null {
+        return this.Get('CacheValidationSQL');
+    }
+    set CacheValidationSQL(value: string | null) {
+        this.Set('CacheValidationSQL', value);
     }
 
     /**
@@ -63219,6 +69920,20 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     }
 
     /**
+    * * Field Name: NotificationTypeID
+    * * Display Name: Notification Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: User Notification Types (vwUserNotificationTypes.ID)
+    * * Description: Optional reference to notification type for categorization and delivery preferences
+    */
+    get NotificationTypeID(): string | null {
+        return this.Get('NotificationTypeID');
+    }
+    set NotificationTypeID(value: string | null) {
+        this.Set('NotificationTypeID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -63234,6 +69949,15 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     */
     get ResourceType(): string | null {
         return this.Get('ResourceType');
+    }
+
+    /**
+    * * Field Name: NotificationType
+    * * Display Name: Notification Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get NotificationType(): string | null {
+        return this.Get('NotificationType');
     }
 }
 

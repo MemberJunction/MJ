@@ -1,5 +1,86 @@
 # @memberjunction/ai-vertex
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [cbd2714]
+  - @memberjunction/ai-gemini@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-gemini@3.1.1
+- @memberjunction/global@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.0.0
+- @memberjunction/ai-gemini@3.0.0
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.133.0
+- @memberjunction/ai-gemini@2.133.0
+- @memberjunction/global@2.133.0
+
+## 2.132.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.132.0
+- @memberjunction/ai-gemini@2.132.0
+- @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.131.0
+- @memberjunction/ai-gemini@2.131.0
+- @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.130.1
+- @memberjunction/ai-gemini@2.130.1
+- @memberjunction/global@2.130.1
+
+## 2.130.0
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+  - @memberjunction/ai@2.130.0
+  - @memberjunction/ai-gemini@2.130.0
+  - @memberjunction/global@2.130.0
+
+## 2.129.0
+
+### Minor Changes
+
+- c7e38aa: migration
+
+### Patch Changes
+
+- 7a39231: Add Vertex AI provider with Google GenAI SDK integration, resolve database connection timeout, and improve conversation UI
+- Updated dependencies [fbae243]
+- Updated dependencies [c7e38aa]
+  - @memberjunction/global@2.129.0
+  - @memberjunction/ai@2.129.0
+  - @memberjunction/ai-gemini@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes

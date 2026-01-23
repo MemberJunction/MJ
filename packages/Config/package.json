@@ -1,0 +1,37 @@
+{
+  "name": "@memberjunction/config",
+  "version": "3.2.0",
+  "description": "Central configuration package for MemberJunction framework with default configurations and merge utilities",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "jest"
+  },
+  "keywords": [
+    "memberjunction",
+    "configuration",
+    "config"
+  ],
+  "author": "MemberJunction",
+  "license": "MIT",
+  "dependencies": {
+    "cosmiconfig": "^9.0.0",
+    "lodash.mergewith": "^4.6.2",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/lodash.mergewith": "^4.6.9",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

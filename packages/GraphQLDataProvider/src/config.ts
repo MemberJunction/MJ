@@ -1,4 +1,4 @@
-import { RunReport, BaseEntity, Metadata, RunView, RunQuery, SetProvider } from "@memberjunction/core";
+import { RunReport, BaseEntity, Metadata, RunView, RunQuery, SetProvider, StartupManager } from "@memberjunction/core";
 import { GraphQLDataProvider, GraphQLProviderConfigData } from "./graphQLDataProvider";
 import { MJGlobal, MJEventType } from "@memberjunction/global";
 
@@ -15,6 +15,8 @@ export async function setupGraphQLClient(config: GraphQLProviderConfigData): Pro
     await provider.Config(config);
 
     // fire off the logged in event if we get here
+    await StartupManager.Instance.Startup();
+    
     MJGlobal.Instance.RaiseEvent({ event: MJEventType.LoggedIn, eventCode: null, component: this, args: null });
 
     return provider;

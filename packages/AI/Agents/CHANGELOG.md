@@ -1,5 +1,174 @@
 # @memberjunction/ai-agents
 
+## 3.2.0
+
+### Patch Changes
+
+- 011c820: Improve migration error diagnostics and fix parent agent chat handling to respect sub-agent responses
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-engine-base@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/aiengine@3.2.0
+  - @memberjunction/ai-prompts@3.2.0
+  - @memberjunction/actions-base@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@3.1.1
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/aiengine@3.1.1
+- @memberjunction/ai-prompts@3.1.1
+- @memberjunction/actions-base@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@3.0.0
+- @memberjunction/ai@3.0.0
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/aiengine@3.0.0
+- @memberjunction/ai-prompts@3.0.0
+- @memberjunction/actions-base@3.0.0
+- @memberjunction/actions@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ai-engine-base@2.133.0
+  - @memberjunction/ai-core-plus@2.133.0
+  - @memberjunction/aiengine@2.133.0
+  - @memberjunction/ai-prompts@2.133.0
+  - @memberjunction/actions-base@2.133.0
+  - @memberjunction/actions@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/ai@2.133.0
+  - @memberjunction/global@2.133.0
+
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ai-engine-base@2.132.0
+  - @memberjunction/ai-core-plus@2.132.0
+  - @memberjunction/aiengine@2.132.0
+  - @memberjunction/ai-prompts@2.132.0
+  - @memberjunction/actions-base@2.132.0
+  - @memberjunction/actions@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/ai@2.132.0
+  - @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Minor Changes
+
+- d3d2926: migration
+
+### Patch Changes
+
+- 3604aa1: Fix Conversations Performance: Replace Timer Polling with PubSub + Fix Race Conditions
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ai-engine-base@2.131.0
+  - @memberjunction/ai-core-plus@2.131.0
+  - @memberjunction/aiengine@2.131.0
+  - @memberjunction/ai-prompts@2.131.0
+  - @memberjunction/actions-base@2.131.0
+  - @memberjunction/actions@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/ai@2.131.0
+  - @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.130.1
+- @memberjunction/ai@2.130.1
+- @memberjunction/ai-core-plus@2.130.1
+- @memberjunction/aiengine@2.130.1
+- @memberjunction/ai-prompts@2.130.1
+- @memberjunction/actions-base@2.130.1
+- @memberjunction/actions@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+
+## 2.130.0
+
+### Minor Changes
+
+- 83ae347: migrations
+
+### Patch Changes
+
+- f4e1f05: Fix Conversation UI issue after browser refresh
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+  - @memberjunction/ai-engine-base@2.130.0
+  - @memberjunction/ai@2.130.0
+  - @memberjunction/ai-core-plus@2.130.0
+  - @memberjunction/aiengine@2.130.0
+  - @memberjunction/ai-prompts@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/actions@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/actions-base@2.130.0
+  - @memberjunction/global@2.130.0
+
+## 2.129.0
+
+### Minor Changes
+
+- c7e38aa: migration
+
+### Patch Changes
+
+- 573179f: Fix Conversation UI issues with Browser Refresh
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [fbae243]
+- Updated dependencies [6ce6e67]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/global@2.129.0
+  - @memberjunction/ai-core-plus@2.129.0
+  - @memberjunction/ai-prompts@2.129.0
+  - @memberjunction/ai-engine-base@2.129.0
+  - @memberjunction/aiengine@2.129.0
+  - @memberjunction/core-entities@2.129.0
+  - @memberjunction/actions-base@2.129.0
+  - @memberjunction/actions@2.129.0
+  - @memberjunction/ai@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes
@@ -280,14 +449,12 @@
 - 36db9d9: Fix agent failure propagation and Flow agent error handling
 
   **Flow Agent Improvements:**
-
   - Handle 'Failed' steps in PreProcessNextStep to enable conditional failure path navigation
   - Properly terminate when step fails with no recovery path
   - Navigate to failure handler steps when recovery paths exist
   - Add logging for failure recovery path evaluation
 
   **Base Agent Improvements:**
-
   - Capture error messages from child and related sub-agent failures
   - Extract errorMessage from subAgentResult.agentRun.ErrorMessage
   - Prioritize finalStep.errorMessage over finalStep.message in finalizeAgentRun
@@ -391,7 +558,6 @@
   ## New Features
 
   ### Parallel ForEach Execution
-
   - Added `executionMode` field to `ForEachOperation` interface ('sequential' | 'parallel')
   - Added `maxConcurrency` field to control batch size for parallel execution (default: 10)
   - Implemented batched parallel execution with sequential result application
@@ -399,21 +565,18 @@
   - Provides 5-10x performance improvement for I/O-bound operations
 
   ### Performance Improvements
-
   - Web scraping: 10x faster for independent URL fetching
   - Document processing: 10x faster for batch file operations
   - API calls: Dramatic speedup for independent requests
   - Maintains correctness through sequential payload updates
 
   ### Safety Features
-
   - Default executionMode is 'sequential' for backward compatibility
   - Parallel execution collects results concurrently but applies payload changes sequentially
   - Order preservation ensures output mapping works correctly
   - Error handling respects `continueOnError` flag
 
   ## Updated Documentation
-
   - Comprehensive guide in `guide-to-iterative-operations-in-agents.md`
   - Updated TypeScript interfaces with new fields
   - Added usage examples for both Flow and Loop agents
@@ -689,7 +852,6 @@
 
 - eb7677d: feat(ai-agents): Add ChatHandlingOption for flexible Chat step
   handling
-
   - Add ChatHandlingOption field to AIAgent table with values:
     Success, Failed, Retry
   - Implement Chat step remapping in
@@ -801,7 +963,6 @@
 ### Patch Changes
 
 - 103e4a9: Added comprehensive tracking fields to AI execution entities:
-
   - **AIAgentRun**: Added `RunName`, `Comment`, and `ParentID` fields for better run identification and hierarchical tracking
   - **AIPromptRun**: Added `RunName`, `Comment`, and `ParentID` fields for consistent tracking across prompt executions
   - **AIAgentRunStep**: Added `Comment` and `ParentID` fields for detailed step-level tracking
@@ -1009,7 +1170,6 @@
 ### Patch Changes
 
 - 42a6954: Add User Onboarding Flow Agent with role assignment improvements
-
   - Add support for Flow Agent Type to execute flow-specific prompts
     instead of system prompts
   - Fix Flow Agent payload persistence across workflow steps
@@ -1197,7 +1357,6 @@
   errors.
 
   **New Features:**
-
   - **ContextLengthExceeded Error Type**: New error classification for
     context length exceeded errors
   - **Smart Failover Logic**: Automatically switches to models with larger
@@ -1208,7 +1367,6 @@
     during failover
 
   **Enhanced Components:**
-
   - **ErrorAnalyzer**: Detects context_length_exceeded errors from
     provider codes, error messages, and JSON objects
   - **AIPromptRunner**: Adds token estimation, context validation, and
@@ -1217,7 +1375,6 @@
     logging
 
   **Key Improvements:**
-
   - Prevents infinite agent stalling on context length exceeded errors
   - Reduces API costs by avoiding repeated failed attempts with
     insufficient context models
@@ -1225,11 +1382,9 @@
   - Provides detailed logging for monitoring and debugging
 
   **Breaking Changes:**
-
   - None - all changes are backward compatible
 
   **Migration Notes:**
-
   - No migration required - existing code will automatically benefit from
     enhanced context handling
   - Models with MaxInputTokens/MaxOutputTokens configured will be
@@ -1701,19 +1856,16 @@
   building during `npm install`.
 
   **Root Cause:**
-
   - `@memberjunction/aiengine` imported `AIPromptRunResult` from `@memberjunction/ai-prompts`
   - `@memberjunction/ai-prompts` depended on `@memberjunction/aiengine` in package.json
   - This circular dependency blocked the build chain
 
   **Solution:**
-
   - Moved `AIPromptRunResult` and related types to `@memberjunction/ai` as shared types
   - Updated all packages to import from the shared location instead of creating circular references
   - Added comprehensive build failure debugging guide to development documentation
 
   **Packages Fixed:**
-
   - `@memberjunction/core-entities-server` now builds successfully
   - All AI packages (`aiengine`, `ai-prompts`, `ai-agents`) build without circular dependency issues
   - Build order now resolves properly in the monorepo
@@ -1754,7 +1906,6 @@
 ### Patch Changes
 
 - 9350c54: Enhance error handling and add comprehensive user guidance
-
   - Improve error message formatting across all CLI commands to show readable errors instead of "[object
     Object]"
   - Add extensive documentation for creating error-free entity files with step-by-step guides
@@ -1782,7 +1933,6 @@
 ### Minor Changes
 
 - 031e724: Implement agent architecture separation of concerns
-
   - **NEW**: Add BaseAgent class for domain-specific prompt execution
   - **NEW**: Add ConductorAgent for autonomous orchestration decisions and action planning
   - **NEW**: Add AgentRunner class to coordinate BaseAgent + ConductorAgent interactions
@@ -1797,7 +1947,6 @@
   - **NEW**: Template rendering with data context
 
   This implements clean separation of concerns:
-
   - BaseAgent: Domain-specific execution only (~500 lines)
   - ConductorAgent: Orchestration decisions with structured responses
   - AgentRunner: Coordination layer providing unified user interface

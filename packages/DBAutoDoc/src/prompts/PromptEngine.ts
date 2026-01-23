@@ -4,10 +4,10 @@
 
 import * as nunjucks from 'nunjucks';
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { MJGlobal } from '@memberjunction/global';
 import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig } from '../types/config.js';
 import { PromptExecutionResult } from '../types/prompts.js';
+import { createLLMInstance } from '../utils/llm-factory.js';
 
 export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };
 
@@ -58,36 +58,8 @@ export class PromptEngine {
    * Uses MJ ClassFactory pattern for BaseLLM instantiation
    */
   private createLLM(): BaseLLM {
-    const { provider, apiKey } = this.config;
-
-    // Map provider name to driver class name
-    const providerToDriverClass: Record<string, string> = {
-      'openai': 'OpenAILLM',
-      'anthropic': 'AnthropicLLM',
-      'groq': 'GroqLLM',
-      'mistral': 'MistralLLM',
-      'gemini': 'GeminiLLM',
-      'azure': 'AzureLLM',
-      'lmstudio': 'LMStudioLLM'
-    };
-
-    const driverClass = providerToDriverClass[provider.toLowerCase()];
-    if (!driverClass) {
-      throw new Error(`Unknown provider: ${provider}. Supported providers: ${Object.keys(providerToDriverClass).join(', ')}`);
-    }
-
-    // Use MJ ClassFactory to create BaseLLM instance
-    const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-      BaseLLM,
-      driverClass,
-      apiKey
-    );
-
-    if (!llm) {
-      throw new Error(`Failed to create LLM instance for provider: ${provider} (driver class: ${driverClass}). Check that the provider is installed.`);
-    }
-
-    return llm;
+    // Use shared factory (DRY principle)
+    return createLLMInstance(this.config.provider, this.config.apiKey);
   }
 
   /**

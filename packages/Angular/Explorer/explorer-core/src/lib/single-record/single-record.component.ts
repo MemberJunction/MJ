@@ -17,7 +17,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild(Container, {static: true}) formContainer!: Container;
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
-  @Input() public newRecordValues: string | null = '';
+  @Input() public newRecordValues: string | Record<string, unknown> | null = '';
 
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
@@ -112,8 +112,16 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   protected SetNewRecordValues(record: BaseEntity) {
-    if (this.newRecordValues && this.newRecordValues.length > 0) {
-      // we have some provided new record values to apply
+    if (!this.newRecordValues) {
+      return;
+    }
+
+    // Handle both object and string (URL segment) formats
+    if (typeof this.newRecordValues === 'string') {
+      if (this.newRecordValues.length === 0) {
+        return;
+      }
+      // we have a URL segment string format: "field1|value1||field2|value2"
       const fv = new FieldValueCollection();
       fv.SimpleLoadFromURLSegment(this.newRecordValues);
       // now apply the values to the record
@@ -140,7 +148,45 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
           }
         }
       });
-    }    
+    }
+    else {
+      // we have a plain object format: { field1: value1, field2: value2 }
+      const recordValues = this.newRecordValues as Record<string, unknown>;
+      Object.keys(recordValues)
+        .filter(key => recordValues[key] !== null && recordValues[key] !== undefined)
+        .forEach(key => {
+          const f = record.Fields.find(f => f.Name.trim().toLowerCase() === key.trim().toLowerCase());
+          if (f) {
+            const value = recordValues[key];
+            // Set the value with proper type conversion
+            switch (f.EntityFieldInfo.TSType) {
+              case EntityFieldTSType.String:
+                record.Set(key, value?.toString() || '');
+                break;
+              case EntityFieldTSType.Number:
+                record.Set(key, typeof value === 'number' ? value : parseFloat(value?.toString() || '0'));
+                break;
+              case EntityFieldTSType.Boolean:
+                if (typeof value === 'boolean') {
+                  record.Set(key, value);
+                }
+                else if (typeof value === 'string') {
+                  record.Set(key, value !== 'false' && value !== '0' && value.trim().length > 0);
+                }
+                else {
+                  record.Set(key, !!value);
+                }
+                break;
+              case EntityFieldTSType.Date:
+                record.Set(key, value instanceof Date ? value : new Date(value?.toString() || ''));
+                break;
+              default:
+                record.Set(key, value);
+                break;
+            }
+          }
+        });
+    }
   }
 
   ngOnDestroy(): void {

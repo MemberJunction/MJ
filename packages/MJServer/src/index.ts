@@ -10,7 +10,7 @@ import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
-import express from 'express';
+import express, { Application } from 'express';
 import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
@@ -69,13 +69,15 @@ LoadSendGridProvider();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
+import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
+import { getSystemUser } from './auth/index.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
 export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
-export { configInfo } from './config.js';
+export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export * from './directives/index.js';
 export * from './entitySubclasses/entityPermissions.server.js';
 export * from './types.js';
@@ -110,6 +112,7 @@ export * from './resolvers/GetDataResolver.js';
 export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
 export * from './resolvers/CreateQueryResolver.js';
+export * from './resolvers/TelemetryResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
@@ -128,9 +131,9 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const createApp = () => express();
+export const createApp = (): Application => express();
 
-export const serve = async (resolverPaths: Array<string>, app = createApp(), options?: MJServerOptions) => {
+export const serve = async (resolverPaths: Array<string>, app: Application = createApp(), options?: MJServerOptions): Promise<void> => {
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
@@ -146,11 +149,6 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   const pool = new sql.ConnectionPool(createMSSQLConfig());
   const setupComplete$ = new ReplaySubject(1);
   await pool.connect();
-
-  const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
-  await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
-  const md = new Metadata();
-  console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 
   const dataSources = [new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername})];
   
@@ -169,6 +167,28 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
     console.log('Read-only Connection Pool has been initialized.');
   }
+
+  const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
+  await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
+  const md = new Metadata();
+  console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+
+  // Initialize server telemetry based on config
+  const tm = TelemetryManager.Instance;
+  if (configInfo.telemetry?.enabled) {
+    tm.SetEnabled(true);
+    if (configInfo.telemetry?.level) {
+      tm.UpdateSettings({ level: configInfo.telemetry.level as TelemetryLevel });
+    }
+    console.log(`Server telemetry enabled with level: ${configInfo.telemetry.level || 'standard'}`);
+  } else {
+    tm.SetEnabled(false);
+    console.log('Server telemetry disabled');
+  }
+
+  // Initialize LocalCacheManager with the server-side storage provider (in-memory)
+  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
+  console.log('LocalCacheManager initialized');
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);
@@ -386,4 +406,12 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
 
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+  // Handle unhandled promise rejections to prevent server crashes
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Promise Rejection:', reason);
+    console.error('   Promise:', promise);
+    // Log the error but DO NOT crash the server
+    // This is critical for server stability when downstream dependencies fail
+  });
 };

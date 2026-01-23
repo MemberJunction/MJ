@@ -39,12 +39,87 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 - **Remove** `standalone: true` and `imports: [...]` from ALL `@Component` decorators
 - This is **non-negotiable** - standalone components are strictly forbidden
 
+### 5. NO RE-EXPORTS BETWEEN PACKAGES
+- **NEVER re-export types, classes, or interfaces from other packages**
+- **ALWAYS** import directly from the source package that defines them
+- **Why**: Re-exports create confusing dependency chains, obscure the true source of types, and can cause issues with tree-shaking and bundle sizes
+- Each package's `public-api.ts` or `index.ts` should only export:
+  - Code defined within that package
+  - Angular module, services, and components it provides
+- Example:
+  ```typescript
+  // ❌ BAD - Re-exporting from another package
+  export { ExportFormat, ExportOptions } from '@memberjunction/export-engine';
+
+  // ✅ GOOD - Only export what this package defines
+  export * from './lib/module';
+  export * from './lib/export.service';
+  export * from './lib/export-dialog.component';
+  // NOTE: For export types, import directly from @memberjunction/export-engine
+  ```
+- Consumers should import types from their original source package
+- Add comments directing users to the correct import location when helpful
+
 ---
 
 **VERY IMPORTANT** We want you to be a high performance agent. Therefore whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization
 
 ## IMPORTANT
 - Before starting a new line of work always check the local branch we're on and see if it is (a) separate from the default branch in the remote repo - we always want to work in local feature branches and (b) if we aren't in such a feature branch that is named for the work being requested and empty, cut a new one but ask first and then switch to it
+
+## 🚨 CRITICAL: Git Branch Tracking Rules 🚨
+
+### Feature Branches MUST Track Same-Named Remote Branches
+When creating or working with feature branches, **ALWAYS** ensure the local branch tracks a remote branch **with the same name**. Never track `next`, `main`, or other permanent branches.
+
+**Why this matters**: If a feature branch tracks `origin/next` instead of `origin/feature-branch`, pushes will accidentally go to `next` directly, bypassing PR review and potentially breaking the main branch.
+
+### Creating New Feature Branches
+```bash
+# ✅ CORRECT - Create branch and push with upstream tracking to same-named remote
+git checkout -b my-feature-branch
+git push -u origin my-feature-branch
+
+# ❌ WRONG - Branch created from next will track origin/next by default!
+git checkout next
+git checkout -b my-feature-branch
+# Now my-feature-branch tracks origin/next - DANGEROUS!
+```
+
+### Verify Branch Tracking
+**ALWAYS check tracking before pushing:**
+```bash
+# Check what remote branch your local branch tracks
+git branch -vv
+
+# Example output:
+# * my-feature [origin/my-feature] Good - tracks same name  ✅
+# * my-feature [origin/next] BAD - tracks next!            ❌
+```
+
+### Fix Incorrect Tracking
+If a branch is tracking the wrong remote:
+```bash
+# Fix tracking to point to same-named remote branch
+git branch --set-upstream-to=origin/my-feature-branch my-feature-branch
+
+# Verify the fix
+git branch -vv
+```
+
+### Before Every Push
+1. Run `git branch -vv` to verify tracking
+2. Ensure your branch tracks `origin/<same-branch-name>`
+3. If tracking is wrong, fix it before pushing
+
+### The Danger of Wrong Tracking
+If `my-feature` tracks `origin/next`:
+- `git push` sends commits directly to `next`
+- Bypasses pull request review process
+- Can break the main branch for everyone
+- Requires reverts and cleanup to fix
+
+**This is a non-negotiable safety requirement.**
 
 ## Build Commands
 - Build all packages: `npm run build` - from repo root
@@ -61,6 +136,40 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
   - Always use hardcoded UUIDs (not NEWID())
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder
+
+### 🚨 CRITICAL: CodeGen Handles These Automatically
+**NEVER include the following in migration CREATE TABLE statements - CodeGen generates them:**
+
+1. **Timestamp Columns**: Do NOT add `__mj_CreatedAt` or `__mj_UpdatedAt` columns
+   - CodeGen automatically adds these with proper defaults and triggers
+   - Including them manually will cause conflicts
+
+2. **Foreign Key Indexes**: Do NOT create indexes for foreign key columns
+   - CodeGen creates these with the naming pattern `IDX_AUTO_MJ_FKEY_<table>_<column>`
+   - Manual FK indexes will duplicate CodeGen's work
+
+**Example - What to include vs exclude:**
+```sql
+-- ✅ CORRECT - Only include business columns and constraints
+CREATE TABLE ${flyway:defaultSchema}.DashboardPermission (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    DashboardID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL,
+    CanRead BIT NOT NULL DEFAULT 1,
+    CanEdit BIT NOT NULL DEFAULT 0,
+    SharedByUserID UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT PK_DashboardPermission PRIMARY KEY (ID),
+    CONSTRAINT FK_DashboardPermission_Dashboard FOREIGN KEY (DashboardID) REFERENCES ${flyway:defaultSchema}.Dashboard(ID),
+    CONSTRAINT FK_DashboardPermission_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.User(ID),
+    CONSTRAINT UQ_DashboardPermission UNIQUE (DashboardID, UserID)
+);
+
+-- ❌ WRONG - Don't include these (CodeGen handles them)
+-- __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- CREATE INDEX IDX_DashboardPermission_DashboardID ON DashboardPermission(DashboardID);
+-- CREATE INDEX IDX_DashboardPermission_UserID ON DashboardPermission(UserID);
+```
 
 ## Entity Version Control
 - MemberJunction includes built-in version control called "Record Changes" for all entities
@@ -201,7 +310,9 @@ Look for packages that depend on each other:
 - Prefer object shorthand syntax
 - Follow existing naming conventions:
   - PascalCase for classes and interfaces
-  - camelCase for variables, functions, methods
+  - **PascalCase for public class members** (properties, methods, `@Input()`, `@Output()`)
+  - **camelCase for private/protected class members**
+  - camelCase for local variables and function parameters
   - Use descriptive names and avoid abbreviations
 - Imports: group imports by type (external, internal, relative)
 - Error handling: use try/catch blocks and provide meaningful error messages
@@ -211,6 +322,50 @@ Look for packages that depend on each other:
   - Functions should have a clear, single purpose
   - Break complex operations into smaller, well-named helper functions
   - Aim for functions that fit on a single screen when possible
+
+### Class Member Naming Convention (IMPORTANT)
+
+MemberJunction uses **PascalCase for all public class members** and **camelCase for private/protected members**. This applies to:
+
+```typescript
+// ✅ CORRECT - MemberJunction naming convention
+export class MyComponent {
+    // Public properties - PascalCase
+    @Input() QueryId: string | null = null;
+    @Input() AutoRun: boolean = false;
+    @Output() EntityLinkClick = new EventEmitter<EntityLinkEvent>();
+
+    public IsLoading: boolean = false;
+    public SelectedRows: Record<string, unknown>[] = [];
+
+    // Private/protected properties - camelCase
+    private destroy$ = new Subject<void>();
+    private _internalState: string = '';
+    protected cdr: ChangeDetectorRef;
+
+    // Public methods - PascalCase
+    public LoadData(): void { }
+    public OnGridReady(event: GridReadyEvent): void { }
+    public GetSelectedRows(): Record<string, unknown>[] { }
+
+    // Private/protected methods - camelCase
+    private buildColumnDefs(): void { }
+    protected applyVisualConfig(): void { }
+}
+
+// ❌ WRONG - Standard TypeScript convention (not used in MJ)
+export class MyComponent {
+    @Input() queryId: string | null = null;  // Should be PascalCase
+    public isLoading: boolean = false;        // Should be PascalCase
+    public loadData(): void { }               // Should be PascalCase
+}
+```
+
+**Why this matters:**
+- Consistency across the entire MemberJunction codebase
+- Clear visual distinction between public API and internal implementation
+- Matches the naming style used in MJ's generated entity classes
+- HTML template bindings must match the PascalCase property names
 
 ## 🚨 IMPORTANT: FUNCTIONAL DECOMPOSITION IS MANDATORY 🚨
 
@@ -338,6 +493,80 @@ const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent 
 - Use shareReplay(1) for caching data streams
 - Implement proper loading states with BehaviorSubject
 - Ensure streams are reactive to parameter changes
+
+### RunView ResultType and Fields Optimization
+
+Understanding when to use `ResultType: 'entity_object'` vs `ResultType: 'simple'` is critical for performance:
+
+#### When to Use `entity_object` (Full BaseEntity Objects)
+- When you need to **mutate and save** the records
+- When you need access to BaseEntity methods (`Save()`, `Delete()`, `Validate()`, etc.)
+- When the records will be stored and used across multiple operations
+- **DO NOT** use `Fields` parameter with `entity_object` - it is **automatically ignored**
+  - `ProviderBase.PreRunView()` ([providerBase.ts:470-477](packages/MJCore/src/generic/providerBase.ts#L470-L477)) overrides `Fields` with ALL entity fields
+  - This is by design: entity objects need all fields to be valid for mutation/validation
+
+```typescript
+// ✅ GOOD - Need to modify and save records
+const rv = new RunView();
+const result = await rv.RunView<UserEntity>({
+    EntityName: 'Users',
+    ExtraFilter: `Status='Active'`,
+    ResultType: 'entity_object'  // Full BaseEntity objects for mutation
+});
+for (const user of result.Results) {
+    user.LastLoginAt = new Date();
+    await user.Save();  // Can save because it's a real entity object
+}
+```
+
+#### When to Use `simple` (Plain JavaScript Objects)
+- When you only need to **read/display** data (no mutation)
+- When doing lookups or validation checks
+- When the results are temporary and won't be stored
+- **USE `Fields` parameter** to narrow the query scope and improve performance
+
+```typescript
+// ✅ GOOD - Read-only lookup, narrow field scope
+const rv = new RunView();
+const result = await rv.RunView<{ID: string; Name: string; Status: string}>({
+    EntityName: 'MJ: AI Agent Runs',
+    Fields: ['ID', 'Name', 'Status', 'ConversationID'],  // Only fields we need
+    ExtraFilter: `Status='Running' AND UserID='${userId}'`,
+    ResultType: 'simple'  // Plain objects, no BaseEntity overhead
+});
+// result.Results is plain objects, cannot call .Save()
+```
+
+#### Performance Impact
+- **`entity_object`**: Creates full BaseEntity subclass instances with getters/setters, validation, dirty tracking
+- **`simple`**: Returns plain JavaScript objects with just the data - much faster for read-only operations
+- **`Fields` parameter**: Reduces data transfer by excluding large columns (JSON blobs, text fields)
+
+#### Anti-Patterns
+```typescript
+// ❌ BAD - Using entity_object when only reading
+const result = await rv.RunView<SomeEntity>({
+    EntityName: 'Some Entity',
+    ResultType: 'entity_object'  // Unnecessary overhead
+});
+const ids = result.Results.map(r => r.ID);  // Only needed IDs!
+
+// ❌ BAD - Using Fields with entity_object (Fields IS IGNORED - ProviderBase overrides it)
+const result = await rv.RunView<SomeEntity>({
+    EntityName: 'Some Entity',
+    Fields: ['ID', 'Name'],  // IGNORED! ProviderBase.PreRunView() overrides with ALL fields
+    ResultType: 'entity_object'
+});
+
+// ✅ GOOD - Simple type for read-only with narrow fields
+const result = await rv.RunView<{ID: string}>({
+    EntityName: 'Some Entity',
+    Fields: ['ID'],
+    ResultType: 'simple'
+});
+const ids = result.Results.map(r => r.ID);
+```
 
 ### Efficient Data Loading with RunViews
 
@@ -837,6 +1066,43 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Group related components in dedicated directories
 - Export shared components (like dialogs) for reuse
 - Maintain clear separation between container and presentational components
+
+### Dialog Button Placement
+- **Confirm/Submit buttons go on the LEFT**, Cancel buttons on the RIGHT
+- This is the opposite of Windows convention but matches MemberJunction's design system
+- Example: `[Save] [Update] [Cancel]` or `[Submit] [Cancel]`
+- Apply this to all dialogs, modals, and action button groups
+
+### Input Properties - Use Getter/Setters
+- **ALWAYS** use getter/setter pattern for `@Input()` properties that need reactive behavior
+- **NEVER** rely solely on `ngOnChanges` - it's less precise and harder to debug
+- Getter/setters provide exact control over when values change and enable immediate reactions
+- Example:
+  ```typescript
+  // ✅ GOOD - Precise control with getter/setter
+  private _myInput: string | null = null;
+
+  @Input()
+  set myInput(value: string | null) {
+    const previousValue = this._myInput;
+    this._myInput = value;
+    if (value && value !== previousValue) {
+      this.onMyInputChanged(value);
+    }
+  }
+  get myInput(): string | null {
+    return this._myInput;
+  }
+
+  // ❌ BAD - Direct property with ngOnChanges
+  @Input() myInput: string | null = null;
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['myInput']) {
+      // Less precise, timing issues possible
+    }
+  }
+  ```
 
 ### Loading Indicators
 - **ALWAYS** use the `<mj-loading>` component from `@memberjunction/ng-shared-generic` for all loading states

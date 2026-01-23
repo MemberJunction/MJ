@@ -1,7 +1,8 @@
 import { AIEngine } from "@memberjunction/aiengine";
 import { BaseEntity, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult, LogError } from "@memberjunction/core";
-import { AIModelEntityExtended, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { PageRecordsParams } from "../generic/VectorCore.types";
+import { AIModelEntityExtended } from "@memberjunction/ai-core-plus";
 
 export class VectorBase {
     _runView: RunView;

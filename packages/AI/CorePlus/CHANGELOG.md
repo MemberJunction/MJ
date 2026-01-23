@@ -1,5 +1,130 @@
 # @memberjunction/ai-core-plus
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/actions-base@3.2.0
+  - @memberjunction/templates-base-types@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai@3.1.1
+- @memberjunction/actions-base@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/templates-base-types@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.0.0
+- @memberjunction/actions-base@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+- @memberjunction/templates-base-types@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/actions-base@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/templates-base-types@2.133.0
+  - @memberjunction/ai@2.133.0
+  - @memberjunction/global@2.133.0
+
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/actions-base@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/templates-base-types@2.132.0
+  - @memberjunction/ai@2.132.0
+  - @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/actions-base@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/templates-base-types@2.131.0
+  - @memberjunction/ai@2.131.0
+  - @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.130.1
+- @memberjunction/actions-base@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+- @memberjunction/templates-base-types@2.130.1
+
+## 2.130.0
+
+### Minor Changes
+
+- 83ae347: migrations
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+  - @memberjunction/ai@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/actions-base@2.130.0
+  - @memberjunction/templates-base-types@2.130.0
+  - @memberjunction/global@2.130.0
+
+## 2.129.0
+
+### Minor Changes
+
+- 6ce6e67: migration
+- c7e38aa: migration
+
+### Patch Changes
+
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [fbae243]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/global@2.129.0
+  - @memberjunction/core-entities@2.129.0
+  - @memberjunction/actions-base@2.129.0
+  - @memberjunction/templates-base-types@2.129.0
+  - @memberjunction/ai@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes
@@ -246,7 +371,6 @@
   ## New Features
 
   ### Parallel ForEach Execution
-
   - Added `executionMode` field to `ForEachOperation` interface ('sequential' | 'parallel')
   - Added `maxConcurrency` field to control batch size for parallel execution (default: 10)
   - Implemented batched parallel execution with sequential result application
@@ -254,21 +378,18 @@
   - Provides 5-10x performance improvement for I/O-bound operations
 
   ### Performance Improvements
-
   - Web scraping: 10x faster for independent URL fetching
   - Document processing: 10x faster for batch file operations
   - API calls: Dramatic speedup for independent requests
   - Maintains correctness through sequential payload updates
 
   ### Safety Features
-
   - Default executionMode is 'sequential' for backward compatibility
   - Parallel execution collects results concurrently but applies payload changes sequentially
   - Order preservation ensures output mapping works correctly
   - Error handling respects `continueOnError` flag
 
   ## Updated Documentation
-
   - Comprehensive guide in `guide-to-iterative-operations-in-agents.md`
   - Updated TypeScript interfaces with new fields
   - Added usage examples for both Flow and Loop agents
@@ -409,7 +530,6 @@
 - 4567af3: **Component Feedback System (Registry-Agnostic)**
 
   Implement comprehensive component feedback system that works across any component registry (Skip, MJ Central, etc.) with support for custom feedback handlers.
-
   - Add skip-component-feedback-panel component with sliding panel UI (444 lines CSS, 161 lines HTML, 274 lines TS)
   - Add star ratings (0-5 scale), comments, and component hierarchy visualization
   - Add FeedbackHandler interface for customizable feedback logic per registry
@@ -426,7 +546,6 @@
   **React Runtime Debug Logging Enhancements**
 
   Restore debug logging with production guards for better debugging capabilities.
-
   - Restore 12 debug console.log statements throughout React runtime (prop-builder, component-hierarchy)
   - Wrap all debug logs with LogStatus/GetProductionStatus checks
   - Add comprehensive README.md documentation (95 lines) for debug configuration
@@ -436,7 +555,6 @@
   **AI Prompt Error Handling Improvements**
 
   Replace hardcoded error truncation with configurable maxErrorLength parameter.
-
   - Add maxErrorLength?: number property to AIPromptParams class
   - Update AIPromptRunner.logError() to accept maxErrorLength in options
   - Thread maxErrorLength through 18 logError calls throughout AIPromptRunner
@@ -445,7 +563,6 @@
   - When set, errors are truncated with "... [truncated]" suffix
 
   **Bug Fixes**
-
   - Fix AI parameter extraction edge cases in AIPromptRunner and QueryEntity
   - Fix mj.config.cjs configuration
   - Fix component hierarchy tracking in dynamic reports

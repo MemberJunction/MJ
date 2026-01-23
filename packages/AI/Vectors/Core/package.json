@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-vectors",
-  "version": "2.128.0",
+  "version": "3.2.0",
   "description": "MemberJunction: AI Vectors Module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,12 +15,13 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "2.128.0",
-    "@memberjunction/global": "2.128.0",
-    "@memberjunction/core-entities": "2.128.0",
-    "@memberjunction/aiengine": "2.128.0",
-    "@memberjunction/ai": "2.128.0",
-    "@memberjunction/ai-vectordb": "2.128.0",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/global": "3.2.0",
+    "@memberjunction/core-entities": "3.2.0",
+    "@memberjunction/aiengine": "3.2.0",
+    "@memberjunction/ai": "3.2.0",
+    "@memberjunction/ai-core-plus": "3.2.0",
+    "@memberjunction/ai-vectordb": "3.2.0",
     "dotenv": "^16.4.1",
     "openai": "^4.28.4"
   },

@@ -11,8 +11,8 @@ import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashbo
 // ERDCompositeComponent, EntityFilterPanelComponent, EntityDetailsComponent are now in
 // @memberjunction/ng-entity-relationship-diagram and imported via EntityRelationshipDiagramModule
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
-import { ModelManagementV2Component } from './AI/components/models/model-management-v2.component';
-import { PromptManagementV2Component } from './AI/components/prompts/prompt-management-v2.component';
+import { ModelManagementComponent } from './AI/components/models/model-management.component';
+import { PromptManagementComponent } from './AI/components/prompts/prompt-management.component';
 import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
 import { AgentConfigurationComponent } from './AI/components/agents/agent-configuration.component';
 import { AgentFilterPanelComponent } from './AI/components/agents/agent-filter-panel.component';
@@ -89,9 +89,10 @@ import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 // Data Explorer Dashboard Components
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
+import { DataExplorerResourceComponent } from './DataExplorer/data-explorer-resource.component';
 import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
 import { ViewSelectorComponent } from './DataExplorer/components/view-selector/view-selector.component';
-import { ViewConfigPanelComponent } from './DataExplorer/components/view-config-panel/view-config-panel.component';
+// ViewConfigPanelComponent now imported from @memberjunction/ng-entity-viewer via EntityViewerModule
 import { FilterDialogComponent } from './DataExplorer/components/filter-dialog/filter-dialog.component';
 import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
 // Home Dashboard Components
@@ -99,6 +100,8 @@ import { HomeDashboardComponent } from './Home/home-dashboard.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
+import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { CommunicationDashboardComponent } from './Communication/communication-dashboard.component';
 import { CommunicationMonitorResourceComponent } from './Communication/communication-monitor-resource.component';
 import { CommunicationLogsResourceComponent } from './Communication/communication-logs-resource.component';
@@ -115,6 +118,24 @@ import { CredentialEditPanelComponent } from './Credentials/components/credentia
 import { CredentialTypeEditPanelComponent } from './Credentials/components/credential-type-edit-panel.component';
 import { CredentialCategoryEditPanelComponent } from './Credentials/components/credential-category-edit-panel.component';
 import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
+// System Diagnostics Components
+import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
+// Lists Dashboard Components
+import { ListsMyListsResource } from './Lists/components/lists-my-lists-resource.component';
+import { ListsBrowseResource } from './Lists/components/lists-browse-resource.component';
+import { ListsCategoriesResource } from './Lists/components/lists-categories-resource.component';
+import { ListsOperationsResource } from './Lists/components/lists-operations-resource.component';
+import { VennDiagramComponent } from './Lists/components/venn-diagram/venn-diagram.component';
+import { ListSetOperationsService } from './Lists/services/list-set-operations.service';
+// Query Browser Components
+import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
+// Dashboard Browser Components (Coming Soon Placeholder)
+import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
+import { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
+// Query Viewer Module
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
+// Dashboard Viewer Module
+import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 
 
 
@@ -122,8 +143,8 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
   declarations: [
     EntityAdminDashboardComponent,
     // ERDCompositeComponent, EntityFilterPanelComponent, EntityDetailsComponent now in Generic package
-    ModelManagementV2Component,
-    PromptManagementV2Component,
+    ModelManagementComponent,
+    PromptManagementComponent,
     PromptFilterPanelComponent,
     AgentConfigurationComponent,
     AgentFilterPanelComponent,
@@ -182,9 +203,10 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     TestRunDetailPanelComponent,
     // Data Explorer Dashboard Components
     DataExplorerDashboardComponent,
+    DataExplorerResourceComponent,
     ExplorerNavigationPanelComponent,
     ViewSelectorComponent,
-    ViewConfigPanelComponent,
+    // ViewConfigPanelComponent now comes from EntityViewerModule
     FilterDialogComponent,
     // Home Dashboard Components
     HomeDashboardComponent,
@@ -204,7 +226,20 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     CredentialEditPanelComponent,
     CredentialTypeEditPanelComponent,
     CredentialCategoryEditPanelComponent,
-    GroupByPipe
+    GroupByPipe,
+    // System Diagnostics Components
+    SystemDiagnosticsComponent,
+    // Lists Dashboard Components
+    ListsMyListsResource,
+    ListsBrowseResource,
+    ListsCategoriesResource,
+    ListsOperationsResource,
+    VennDiagramComponent,
+    // Query Browser Components
+    QueryBrowserResourceComponent,
+    // Dashboard Browser Components
+    DashboardBrowserResourceComponent,
+    DashboardShareDialogComponent
   ],
   imports: [
     CommonModule,
@@ -237,13 +272,18 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     ExplorerSettingsModule,
     SharedGenericModule,
     FilterBuilderModule,
-    EntityRelationshipDiagramModule
+    EntityRelationshipDiagramModule,
+    ListManagementModule,
+    ExportServiceModule,
+    QueryViewerModule,
+    DashboardViewerModule
   ],
   providers: [
     AIInstrumentationService,
     SchedulingInstrumentationService,
     TestingInstrumentationService,
-    ExplorerStateService
+    ExplorerStateService,
+    ListSetOperationsService
   ],
   exports: [
     EntityAdminDashboardComponent,
@@ -252,9 +292,9 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     TestingDashboardComponent,
     // Export AI components (now BaseResourceComponent-based)
     ExecutionMonitoringComponent,
-    PromptManagementV2Component,
+    PromptManagementComponent,
     AgentConfigurationComponent,
-    ModelManagementV2Component,
+    ModelManagementComponent,
     SystemConfigurationComponent,
     // Export Actions components (now BaseResourceComponent-based)
     ActionsOverviewComponent,
@@ -275,8 +315,9 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     TestingAnalyticsResourceComponent,
     TestingVersionResourceComponent,
     TestingFeedbackResourceComponent,
-    // Export Data Explorer Dashboard
+    // Export Data Explorer Dashboard and Resource
     DataExplorerDashboardComponent,
+    DataExplorerResourceComponent,
     // Export Home Dashboard
     HomeDashboardComponent,
     // Export Communication Dashboard
@@ -295,7 +336,20 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     CredentialEditPanelComponent,
     CredentialTypeEditPanelComponent,
     CredentialCategoryEditPanelComponent,
-    GroupByPipe
+    GroupByPipe,
+    // System Diagnostics Components
+    SystemDiagnosticsComponent,
+    // Lists Dashboard Components
+    ListsMyListsResource,
+    ListsBrowseResource,
+    ListsCategoriesResource,
+    ListsOperationsResource,
+    VennDiagramComponent,
+    // Query Browser Components
+    QueryBrowserResourceComponent,
+    // Dashboard Browser Components
+    DashboardBrowserResourceComponent,
+    DashboardShareDialogComponent
   ]
 })
 export class DashboardsModule { }

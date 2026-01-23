@@ -1,14 +1,21 @@
-/* Golden Layout CSS - Required for tab system */
-@import 'golden-layout/dist/css/goldenlayout-base.css';
-@import 'golden-layout/dist/css/themes/goldenlayout-light-theme.css';
+/**
+ * MJExplorer Application-Specific Styles
+ *
+ * The MJ Explorer design system is now imported from @memberjunction/ng-explorer-app
+ * This file should only contain MJExplorer-specific customizations and overrides.
+ *
+ * Core styles (Golden Layout, Kendo theme, MJ components) are in the package.
+ * MD3 design tokens are now in @memberjunction/ng-explorer-app styles/_md3-theme.scss
+ */
 
+/* Application-specific layout adjustments */
 html,
 body,
 my-app {
     padding: 0;
     height: 100%;
     overflow: hidden;
-} 
+}
 
 my-app {
     display: flex;
@@ -24,7 +31,7 @@ kendo-drawer-container {
     font-size: 20px;
 }
 
-
+/* Application-specific toolbar styles */
 .custom-toolbar {
     width: 100%;
     background-color: #f6f6f6;
@@ -35,9 +42,9 @@ kendo-drawer-container {
     color: #656565;
 }
 
-.mail-box{
+.mail-box {
     margin-left: 20px;
     font-weight: bold;
     font-size: 17px;
-} 
- 
+}
+

@@ -62,15 +62,7 @@
     "ID": "40736BED-8E59-43F7-BF3A-E64992B4B6C4"
   },
   "sync": {
-    "lastModified": "2025-11-11T11:33:01.665Z",
-    "checksum": "5b16a17d21cb5257f36b0e296465c8f56ef987db313025c0b291d0ab6fea591d"
-  },
-  "__mj_sync_notes": [
-    {
-      "type": "lookup",
-      "field": "fields.TypeID",
-      "expression": "@lookup:MJ: Test Types.Name=Agent Eval",
-      "resolved": "BE78D976-2AE2-46B1-8E10-2EB6D8A4C8EB"
-    }
-  ]
+    "lastModified": "2025-12-30T23:07:38.499Z",
+    "checksum": "e1975af358740109b3870c001ca1c572842bc0af9b27df711d2b3dfa6029a528"
+  }
 }

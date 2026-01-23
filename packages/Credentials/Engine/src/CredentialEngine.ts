@@ -1,18 +1,21 @@
 import {
     BaseEngine,
+    EntityInfo,
     IMetadataProvider,
     LogError,
     LogStatus,
     Metadata,
-    RunView,
     UserInfo
 } from "@memberjunction/core";
+
 import {
     AuditLogEntity,
     CredentialCategoryEntity,
     CredentialEntity,
     CredentialTypeEntity,
-    EntityEntity
+    APIKeyEntity,
+    APIScopeEntity,
+    APIKeyScopeEntity
 } from "@memberjunction/core-entities";
 import {
     CredentialResolutionOptions,
@@ -21,6 +24,9 @@ import {
     CredentialValidationResult,
     CredentialAccessDetails
 } from "./types";
+
+
+
 
 // Hardcoded ID for the "Credential Access" AuditLogType
 // This matches the ID in /metadata/audit-log-types/.credential-audit-types.json
@@ -61,6 +67,9 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     private _credentials: CredentialEntity[] = [];
     private _credentialTypes: CredentialTypeEntity[] = [];
     private _credentialCategories: CredentialCategoryEntity[] = [];
+    private _apiKeys: APIKeyEntity[] = [];
+    private _apiScopes: APIScopeEntity[] = [];
+    private _apiKeyScopes: APIKeyScopeEntity[] = []; // No entity class yet
 
     // Cached entity ID for audit logging
     private _credentialsEntityId: string | null = null;
@@ -78,41 +87,52 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             {
                 PropertyName: '_credentials',
                 EntityName: 'MJ: Credentials',
-                Filter: 'IsActive = 1'
+                CacheLocal: true
             },
             {
                 PropertyName: '_credentialTypes',
-                EntityName: 'MJ: Credential Types'
+                EntityName: 'MJ: Credential Types',
+                CacheLocal: true
             },
             {
                 PropertyName: '_credentialCategories',
-                EntityName: 'MJ: Credential Categories'
-            }
+                EntityName: 'MJ: Credential Categories',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_apiScopes',
+                EntityName: 'MJ: API Scopes',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_apiKeys',
+                EntityName: 'MJ: API Keys',
+                CacheLocal: true
+            },           
+            {
+                PropertyName: '_apiKeyScopes',
+                EntityName: 'MJ: API Key Scopes',
+                CacheLocal: true
+            }      
         ];
-        return await this.Load(params, provider, forceRefresh, contextUser);
-    }
 
-    /**
-     * Additional loading after main entities are cached.
-     * Looks up the Credentials entity ID for audit logging.
-     */
-    protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        // Get the entity ID for "MJ: Credentials" entity - needed for audit logging
-        try {
-            const rv = new RunView();
-            const result = await rv.RunView<EntityEntity>({
-                EntityName: 'Entities',
-                ExtraFilter: `Name = 'MJ: Credentials'`,
-                ResultType: 'entity_object'
-            }, contextUser);
-
-            if (result.Success && result.Results.length > 0) {
-                this._credentialsEntityId = result.Results[0].ID;
-            }
-        } catch (e) {
-            LogError(e);
-            // Non-fatal - audit logging will work without entity ID
+        // get the entity ID for MJ: Credentials
+        let entityMatch: EntityInfo;
+        if (provider) {
+            entityMatch = provider.Entities.find(e => e.Name?.trim().toLowerCase() === 'mj: credentials')
         }
+        else {
+            const md = new Metadata();
+            entityMatch = md.EntityByName("MJ: Credentials");
+        }
+        if (entityMatch) {
+            this._credentialsEntityId = entityMatch.ID;
+        }
+        else {
+            throw new Error("Entity not found for MJ: Credentials!")
+        }
+
+        return await this.Load(params, provider, forceRefresh, contextUser);
     }
 
     /**
@@ -146,6 +166,38 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     public get CredentialCategories(): CredentialCategoryEntity[] {
         return this._credentialCategories;
     }
+
+
+    /**
+     * Returns all cached API keys.
+     */
+    public get APIKeys(): APIKeyEntity[] {
+        return this._apiKeys;
+    }
+    /**
+     * Returns all cached API key scopes.
+     */
+    public get APIKeyScopes(): APIKeyScopeEntity[] {
+        return this._apiKeyScopes;
+    }
+    /**
+     * Returns all cached API scopes.
+     */
+    public get APIScopes(): APIScopeEntity[] {
+        return this._apiScopes;
+    }
+
+    /**
+     * Finds an API key by its hash.
+     * This is the primary lookup method for API key validation.
+     * 
+     * @param hash - The SHA-256 hash of the API key
+     * @returns The cached API key or undefined if not found
+     */
+    public getAPIKeyByHash(hash: string): APIKeyEntity | undefined {
+        return this._apiKeys.find(k => k.Hash === hash);
+    }
+
 
     // ====================================
     // Lookup Methods

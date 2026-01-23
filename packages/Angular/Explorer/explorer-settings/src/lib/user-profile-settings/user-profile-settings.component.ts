@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
@@ -6,6 +6,8 @@ import { UserEntity } from '@memberjunction/core-entities';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
+import { BehaviorSubject, Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 
 interface IconCategory {
   name: string;
@@ -17,7 +19,7 @@ interface IconCategory {
   templateUrl: './user-profile-settings.component.html',
   styleUrls: ['./user-profile-settings.component.css']
 })
-export class UserProfileSettingsComponent implements OnInit {
+export class UserProfileSettingsComponent implements OnInit, OnDestroy {
   currentUser!: UserEntity;
   selectedTab: 'upload' | 'url' | 'icon' | 'provider' = 'url';
 
@@ -33,6 +35,15 @@ export class UserProfileSettingsComponent implements OnInit {
   isSaving = false;
   showSuccessMessage = false;
   errorMessage = '';
+
+  // Icon search state
+  iconSearchTerm = '';
+  iconSearch$ = new BehaviorSubject<string>('');
+  filteredIconCategories: IconCategory[] = [];
+  totalFilteredIcons = 0;
+
+  // Cleanup
+  private destroy$ = new Subject<void>();
 
   // Icon picker data
   iconCategories: IconCategory[] = [
@@ -126,7 +137,104 @@ export class UserProfileSettingsComponent implements OnInit {
     this.currentUser = await md.GetEntityObject<UserEntity>('Users');
     await this.currentUser.Load(currentUserInfo.ID);
 
+    // Initialize filtered icons
+    this.filteredIconCategories = [...this.iconCategories];
+    this.totalFilteredIcons = this.iconCategories.reduce(
+      (sum, cat) => sum + cat.icons.length,
+      0
+    );
+
+    // Setup icon search subscription
+    this.setupIconSearchSubscription();
+
     this.loadCurrentAvatar();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  /**
+   * Initializes the icon search subscription with debounce
+   */
+  private setupIconSearchSubscription(): void {
+    this.iconSearch$
+      .pipe(
+        debounceTime(200), // Faster debounce for local filtering
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((searchTerm) => {
+        this.filterIcons(searchTerm);
+      });
+  }
+
+  /**
+   * Handles icon search input changes
+   */
+  onIconSearchChange(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.iconSearchTerm = value;
+    this.iconSearch$.next(value);
+  }
+
+  /**
+   * Filters icons based on search term
+   * Matches icon class name parts (e.g., "user" matches "fa-user-tie")
+   */
+  private filterIcons(searchTerm: string): void {
+    if (!searchTerm || searchTerm.trim() === '') {
+      // Show all icons
+      this.filteredIconCategories = [...this.iconCategories];
+      this.totalFilteredIcons = this.iconCategories.reduce(
+        (sum, cat) => sum + cat.icons.length,
+        0
+      );
+      return;
+    }
+
+    const term = searchTerm.toLowerCase().trim();
+    this.filteredIconCategories = [];
+    this.totalFilteredIcons = 0;
+
+    for (const category of this.iconCategories) {
+      const matchingIcons = category.icons.filter((icon) => {
+        // Extract icon name from class (e.g., "fa-solid fa-user-tie" -> "user-tie")
+        const iconName = this.extractIconName(icon);
+        return iconName.includes(term);
+      });
+
+      if (matchingIcons.length > 0) {
+        this.filteredIconCategories.push({
+          name: category.name,
+          icons: matchingIcons
+        });
+        this.totalFilteredIcons += matchingIcons.length;
+      }
+    }
+  }
+
+  /**
+   * Extracts the icon name from a Font Awesome class string
+   * e.g., "fa-solid fa-user-tie" -> "user-tie"
+   */
+  extractIconName(iconClass: string): string {
+    const parts = iconClass.split(' ');
+    for (const part of parts) {
+      if (part.startsWith('fa-') && !['fa-solid', 'fa-regular', 'fa-light', 'fa-brands'].includes(part)) {
+        return part.substring(3); // Remove "fa-" prefix
+      }
+    }
+    return iconClass.toLowerCase();
+  }
+
+  /**
+   * Clears the icon search
+   */
+  clearIconSearch(): void {
+    this.iconSearchTerm = '';
+    this.iconSearch$.next('');
   }
 
   /**

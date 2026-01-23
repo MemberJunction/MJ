@@ -1,9 +1,8 @@
-import { BaseEntity, Metadata, RunView, LogError, LogStatus, RunReport, RunQuery, SetProvider } from "@memberjunction/core";
+import { BaseEntity, Metadata, RunView, LogError, LogStatus, RunReport, RunQuery, SetProvider, StartupManager } from "@memberjunction/core";
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
 import { SQLServerProviderConfigData } from "./types";
 import * as sql from 'mssql';
 import { UserCache } from "./UserCache";
-
 
 
 export async function setupSQLServerClient(config: SQLServerProviderConfigData): Promise<SQLServerDataProvider> {
@@ -31,8 +30,12 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData):
                     }
                 }, config.CheckRefreshIntervalSeconds * 1000)
             }
+
+            const sysUser = UserCache.Instance.GetSystemUser();
+            const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type==='Owner');
+            await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider);
     
-            return provider
+            return provider;
         }
         else {
             //pool is not connected, so wait for it

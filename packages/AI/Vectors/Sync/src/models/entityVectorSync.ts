@@ -147,7 +147,7 @@ export class EntityVectorSyncer extends VectorBase {
 
         if(params.listID){
           const coreSchema: string = md.ConfigData.MJCoreSchemaName;
-          pageRecordRequest.Filter = `${entity.FirstPrimaryKey.Name} IN (SELECT RecordID FROM ${coreSchema}.vwListDetails WHERE ListID = '${params.listID}')`;
+          pageRecordRequest.Filter = this.buildListFilter(entity, coreSchema, params.listID);
         }
 
         const recordsPage: unknown[] = await super.PageRecordsByEntityID<unknown>(pageRecordRequest);
@@ -410,7 +410,7 @@ export class EntityVectorSyncer extends VectorBase {
     const templateEntitySaveResult = await super.SaveEntity(templateEntity);
     if(!templateEntitySaveResult){
       LogError('Error saving Template Entity', undefined, templateEntity.LatestResult);
-      throw new Error(templateEntity.LatestResult.Message);
+      throw new Error(templateEntity.LatestResult.CompleteMessage);
     }
     LogStatus(`Successfully created new Template Entity ${templateEntity.ID}`);
 
@@ -434,7 +434,7 @@ export class EntityVectorSyncer extends VectorBase {
     const templateContentsEntitySaveResult = await super.SaveEntity(templateContentsEntity);
     if(!templateContentsEntitySaveResult){
       LogError('Error saving Template Entity', undefined, templateContentsEntity.LatestResult);
-      throw new Error(templateContentsEntity.LatestResult.Message);
+      throw new Error(templateContentsEntity.LatestResult.CompleteMessage);
     }
     LogStatus(`Successfully created new Template Content Entity ${templateContentsEntity.ID}`);
 
@@ -456,7 +456,7 @@ export class EntityVectorSyncer extends VectorBase {
     const templateParamsEntitySaveResult = await super.SaveEntity(templateParamsEntity);
     if(!templateParamsEntitySaveResult){
       LogError('Error saving Template Entity', undefined, templateParamsEntity.LatestResult);
-      throw new Error(templateParamsEntity.LatestResult.Message);
+      throw new Error(templateParamsEntity.LatestResult.CompleteMessage);
     }
     LogStatus(`Successfully created new Template Param Entity ${templateParamsEntity.ID}`);
     
@@ -618,7 +618,7 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
-   * This method is resposnible for determining if the template(s) given have aligned parameters, meaning they don't have overlapping parameter names that have 
+   * This method is resposnible for determining if the template(s) given have aligned parameters, meaning they don't have overlapping parameter names that have
    * different meanings. It is okay for scenarios where there are > 1 template in use for a message to have different parameter names, but if they have the SAME parameter names
    * they must not have different settings.
    */
@@ -638,5 +638,43 @@ export class EntityVectorSyncer extends VectorBase {
 
     // if we get here, we are good, otherwise we will have thrown an exception
     return true;
+  }
+
+  /**
+   * Build the SQL filter to select records that are in the given list.
+   * For single PK entities, uses a simple IN clause.
+   * For composite PK entities, uses an EXISTS clause that concatenates PK columns to match the RecordID format.
+   */
+  protected buildListFilter(entity: EntityInfo, listDetailsSchema: string, listId: string): string {
+    const primaryKeys = entity.PrimaryKeys;
+
+    if (primaryKeys.length === 1) {
+      // Simple case: single primary key
+      // Use a simple IN clause matching the first PK field
+      const pkField = primaryKeys[0].Name;
+      return `${pkField} IN (SELECT RecordID FROM ${listDetailsSchema}.vwListDetails WHERE ListID = '${listId}')`;
+    } else {
+      // Composite key case: need to match concatenated key format
+      // RecordID format is "Field1|Value1||Field2|Value2" (using CompositeKey delimiters)
+      // Build SQL expression that concatenates the PK fields in the same format
+      // Format: 'Field1|' + CAST(Value1 AS NVARCHAR(MAX)) + '||' + 'Field2|' + CAST(Value2 AS NVARCHAR(MAX))
+      const concatParts = primaryKeys.map((pk, index) => {
+        const fieldNameLiteral = `'${pk.Name}|'`;
+        const fieldValue = `CAST([${pk.Name}] AS NVARCHAR(MAX))`;
+        if (index === 0) {
+          return `${fieldNameLiteral} + ${fieldValue}`;
+        } else {
+          return `'||' + ${fieldNameLiteral} + ${fieldValue}`;
+        }
+      });
+      const compositeKeyExpr = concatParts.join(' + ');
+
+      // Use EXISTS with a subquery that matches the concatenated key against RecordID
+      return `EXISTS (
+        SELECT 1 FROM ${listDetailsSchema}.vwListDetails ld
+        WHERE ld.ListID = '${listId}'
+        AND ld.RecordID = (${compositeKeyExpr})
+      )`;
+    }
   }
 }

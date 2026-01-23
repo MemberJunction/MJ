@@ -1,121 +1,96 @@
 /**
  * @fileoverview Type definitions for AI Agent execution results.
- * 
+ *
  * This module contains type definitions for agent execution results that are
  * shared between server and client code. These types provide strongly-typed
  * interfaces for agent execution results and the complete execution history.
- * 
+ *
  * @module @memberjunction/aiengine
  * @author MemberJunction.com
  * @since 2.50.0
  */
 
-import { AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
-import { AIAgentEntityExtended } from '@memberjunction/core-entities';
+import {  } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
+import { AIAgentRunEntityExtended } from './AIAgentRunExtended';
+import { AIAgentEntityExtended } from './AIAgentExtended';
+import { AIPromptEntityExtended } from './AIPromptExtended';
+import { MediaModality } from './prompt.types';
+
+// Import loop operation types from their dedicated modules
+// These are in separate files so they can be @include'd in prompt templates
+// Exported directly from index.ts, not re-exported here
+import type { ForEachOperation } from './foreach-operation';
+import type { WhileOperation } from './while-operation';
 
 /**
- * Universal ForEach loop configuration used by all agent types.
- * Flow agents convert AIAgentStep configuration to this format.
- * Loop agents receive this from LLM responses.
- * @since 2.112.0
+ * Represents a media output that an agent has explicitly promoted to its outputs.
+ * This is the interface used in ExecuteAgentResult.mediaOutputs.
+ *
+ * Media can come from two sources:
+ * 1. Promoted from a prompt run (has promptRunMediaId)
+ * 2. Generated directly by agent code (has data or url)
+ *
+ * @since 3.1.0
  */
-export interface ForEachOperation {
-    /** Path in payload to array to iterate over */
-    collectionPath: string;
-    /** Variable name for current item (default: "item") */
-    itemVariable?: string;
-    /** Variable name for loop index (default: "index") */
-    indexVariable?: string;
-    /** Maximum iterations (undefined=1000, 0=unlimited, >0=limit) */
-    maxIterations?: number;
-    /** Continue processing if an iteration fails (default: false) */
-    continueOnError?: boolean;
-    /** Delay between iterations in milliseconds (default: 0) */
-    delayBetweenIterationsMs?: number;
+export interface MediaOutput {
+    /** Reference to source AIPromptRunMedia (if promoted from prompt execution) */
+    promptRunMediaId?: string;
+
+    /** The modality type */
+    modality: MediaModality;
+
+    /** MIME type of the media (e.g., 'image/png', 'audio/mp3') */
+    mimeType: string;
+
+    /** Base64 encoded data (only if NOT from prompt run) */
+    data?: string;
+
+    /** URL if available (some providers return URLs) */
+    url?: string;
+
+    /** Width in pixels (for images/video) */
+    width?: number;
+
+    /** Height in pixels (for images/video) */
+    height?: number;
+
+    /** Duration in seconds (for audio/video) */
+    durationSeconds?: number;
+
+    /** Agent-provided label for UI display */
+    label?: string;
+
+    /** Provider-specific metadata */
+    metadata?: Record<string, unknown>;
+
     /**
-     * Execution mode for iterations (default: 'sequential')
-     * - 'sequential': Process iterations one at a time in order (safest, maintains order, good for state accumulation)
-     * - 'parallel': Process multiple iterations concurrently (faster for independent operations like web scraping, API calls)
-     * @since 2.113.0
+     * Placeholder reference ID for the ${media:xxx} pattern.
+     * Used to look up media when resolving placeholders in agent output.
+     * @since 3.1.0
      */
-    executionMode?: 'sequential' | 'parallel';
+    refId?: string;
+
     /**
-     * Maximum number of iterations to process concurrently when executionMode='parallel' (default: 10)
-     * Only applies when executionMode='parallel'. Controls batch size to prevent resource exhaustion.
-     * Recommended values:
-     * - I/O-bound operations (API calls, web scraping): 10-20
-     * - CPU-bound operations (data processing): CPU core count
-     * - Sub-agent spawning: 2-5 (agents are resource-intensive)
-     * @since 2.113.0
+     * Controls whether this media should be persisted to the database.
+     * Default behavior (undefined or true): media is persisted to AIAgentRunMedia and ConversationDetailAttachment.
+     * Set to false for intercepted/working media that shouldn't be saved (e.g., generated but not used in output).
+     * @since 3.1.0
      */
-    maxConcurrency?: number;
+    persist?: boolean;
 
-    /** Execute action per iteration */
-    action?: {
-        name: string;
-        params: Record<string, unknown>;
-        outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
-    };
-
-    /** Execute sub-agent per iteration */
-    subAgent?: {
-        name: string;
-        message: string;
-        templateParameters?: Record<string, string>;
-        /**
-         * Runtime context propagated to the sub-agent.
-         * Allows sub-agents to access API keys, environment settings, and other
-         * runtime configuration from the parent agent.
-         * @since 2.127.0
-         */
-        context?: unknown;
-    };
-}
-
-/**
- * Universal While loop configuration used by all agent types.
- * Flow agents convert AIAgentStep configuration to this format.
- * Loop agents receive this from LLM responses.
- * @since 2.112.0
- */
-export interface WhileOperation {
-    /** Boolean expression evaluated before each iteration */
-    condition: string;
-    /** Variable name for attempt context (default: "attempt") */
-    itemVariable?: string;
-    /** Maximum iterations (undefined=100, 0=unlimited, >0=limit) */
-    maxIterations?: number;
-    /** Continue processing if an iteration fails (default: false) */
-    continueOnError?: boolean;
-    /** Delay between iterations in milliseconds (default: 0) */
-    delayBetweenIterationsMs?: number;
-
-    /** Execute action per iteration */
-    action?: {
-        name: string;
-        params: Record<string, unknown>;
-        outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
-    };
-
-    /** Execute sub-agent per iteration */
-    subAgent?: {
-        name: string;
-        message: string;
-        templateParameters?: Record<string, string>;
-        /**
-         * Runtime context propagated to the sub-agent.
-         * Allows sub-agents to access API keys, environment settings, and other
-         * runtime configuration from the parent agent.
-         * @since 2.127.0
-         */
-        context?: unknown;
-    };
+    /**
+     * Agent notes describing what this media represents.
+     * Used for internal tracking, debugging, and can be persisted for audit purposes.
+     * @since 3.1.0
+     */
+    description?: string;
 }
 
 
@@ -272,6 +247,13 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     forEach?: ForEachOperation;
     /** While operation details when step is 'While' (v2.112+) */
     while?: WhileOperation;
+    /**
+     * Media outputs to promote to the agent's final outputs.
+     * When set, these media items will be added to the agent's mediaOutputs collection
+     * and stored in AIAgentRunMedia.
+     * @since 3.1.0
+     */
+    promoteMediaOutputs?: MediaOutput[];
 }
 
 /**
@@ -332,6 +314,19 @@ export type ExecuteAgentResult<P = any> = {
         notes: any[]; // AIAgentNoteEntity[] - using any to avoid circular dependency
         examples: any[]; // AIAgentExampleEntity[] - using any to avoid circular dependency
     };
+
+    /**
+     * Multi-modal outputs generated by the agent.
+     * Contains media that the agent explicitly promoted to its outputs.
+     * This flows to ConversationDetailAttachment for UI display.
+     *
+     * Media items with `refId` are used for placeholder resolution (${media:xxx}).
+     * Media items with `persist: false` are excluded from database persistence.
+     * Sub-agents return their mediaOutputs to parents for bubbling up.
+     *
+     * @since 3.1.0
+     */
+    mediaOutputs?: MediaOutput[];
 }
 
 /**

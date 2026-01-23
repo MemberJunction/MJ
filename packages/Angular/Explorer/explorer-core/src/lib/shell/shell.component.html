@@ -166,7 +166,8 @@
   <!-- Tab Container - with dynamic tab bar visibility -->
   <mj-tab-container
     [class.hide-tab-bar]="!tabBarVisible"
-    (firstResourceLoadComplete)="onFirstResourceLoadComplete()">
+    (firstResourceLoadComplete)="onFirstResourceLoadComplete()"
+    (layoutInitError)="handleLayoutError()">
   </mj-tab-container>
 </div>
 
@@ -181,3 +182,9 @@
     size="large">
   </mj-loading>
 </div>
+
+<!-- App Access Error Dialog -->
+<mj-app-access-dialog
+  #appAccessDialog
+  (result)="onAppAccessDialogResult($event)">
+</mj-app-access-dialog>

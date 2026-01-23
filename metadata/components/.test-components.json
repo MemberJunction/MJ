@@ -3,22 +3,38 @@
     "fields": {
       "Name": "TestEntityDataGrid",
       "Namespace": "Testing/DataGrid",
-      "Description": "Test harness for EntityDataGrid component using Action Params entity (~1800 rows). Demonstrates both full cache mode (with filter) and partial cache mode (no filter) for testing pagination, sorting, filtering, and cache behavior.",
       "Title": "EntityDataGrid Test Harness",
       "Type": "Other",
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/test-entity-data-grid.spec.json",
-      "FunctionalRequirements": "Test component to validate EntityDataGrid functionality with real MJ data. Two side-by-side grids: LEFT GRID (Partial Cache Mode) shows ALL Action Params (~1800 rows) with no extraFilter, enters partial cache mode (maxCachedRows=1000), tests server-side pagination/sorting/caching. RIGHT GRID (Full Cache Mode) shows filtered Action Params (Type='User Defined'), should have < 1000 rows entering full cache mode, tests client-side instant sort/filter/pagination. Includes test controls for toggling indicators/warnings, adjusting cache limits, and event log for monitoring cache hits, page loads, and mode transitions.",
-      "TechnicalDesign": "React component with two EntityDataGrid instances and test controls. State management for showIndicators, showWarnings, cacheLimit. Two-column layout with EntityDataGrid instances. Controls panel with toggles and cache limit input. Event logging to console and display panel showing cache mode changes, page loads, and cache hit/miss status. Left grid: entityName='Action Params', no extraFilter. Right grid: entityName='Action Params', extraFilter=\"Type='User Defined'\". Both grids expose all test-relevant events and props."
+      "Specification": "@file:spec/test-entity-data-grid.spec.json"
     },
     "primaryKey": {
       "ID": "88E31796-27C7-481D-9621-8D5D4143A976"
     },
     "sync": {
-      "lastModified": "2025-12-25T20:56:22.427Z",
-      "checksum": "84ca80767329951bbe7e064b0c15f14c13136f9c6a5294f169140f0e2ff9a605"
+      "lastModified": "2026-01-21T05:01:18.699Z",
+      "checksum": "a3b878d6c7e066e87a5c252da7544366781b83568f88eac2191782aa7bcb7c28"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TestSimpleChart",
+      "Namespace": "Testing/Chart",
+      "Title": "SimpleChart Test Harness",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/test-simple-chart.spec.json"
+    },
+    "primaryKey": {
+      "ID": "4FA39CF8-F887-4287-859E-DAB2809FC66B"
+    },
+    "sync": {
+      "lastModified": "2026-01-08T14:33:08.685Z",
+      "checksum": "4dad4efe53bf8545e7994c06f0af47f43a03b837c88764c3d908ae7d67eb14cb"
     }
   }
 ]

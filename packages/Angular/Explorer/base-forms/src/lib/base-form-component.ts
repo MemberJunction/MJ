@@ -12,7 +12,7 @@ import { BaseRecordComponent } from './base-record-component';
 import { BaseFormSectionInfo } from './base-form-section-info';
 import { BaseFormContext } from './base-form-context';
 import { CollapsiblePanelComponent } from './collapsible-panel.component';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
@@ -45,6 +45,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /** Form state service for persisting section states to User Settings */
   protected formStateService = inject(FormStateService);
+
+  /** Navigation service for URL management */
+  protected navigationService = inject(NavigationService);
 
   /** Subscription to form state changes */
   private formStateSubscription?: Subscription;
@@ -187,9 +190,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public onTabSelect(e: TabEvent) {
     this.sharedService.InvokeManualResize();
 
-    // now that we've updated our state and re-sized, also update the browser URL to add the tab name as a query parameter to the URL
+    // Update the browser URL to add the tab name as a query parameter
+    // Use NavigationService to properly update query params while respecting app-scoped routes
     this._updatingBrowserUrl = true;
-    this.router.navigate([], { queryParams: { tab: e.tab?.Name }, queryParamsHandling: 'merge' });
+    this.navigationService.UpdateActiveTabQueryParams({
+      tab: e.tab?.Name || null
+    });
     this._updatingBrowserUrl = false;
   }
 
@@ -718,16 +724,17 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * Checks if a section is expanded.
    * Uses FormStateService for persisted state.
    * @param sectionKey The section key
+   * @param defaultExpanded Optional default value to use when no persisted state exists
    * @returns True if expanded, false otherwise
    */
-  public IsSectionExpanded(sectionKey: string): boolean {
+  public IsSectionExpanded(sectionKey: string, defaultExpanded?: boolean): boolean {
     const entityName = this.getEntityName();
     if (entityName) {
-      return this.formStateService.isSectionExpanded(entityName, sectionKey);
+      return this.formStateService.isSectionExpanded(entityName, sectionKey, defaultExpanded);
     }
     // Fallback to in-memory state if no entity name
     const section = this.sectionMap.get(sectionKey);
-    return section ? section.isExpanded : true;
+    return section ? section.isExpanded : (defaultExpanded !== undefined ? defaultExpanded : true);
   }
 
   /**

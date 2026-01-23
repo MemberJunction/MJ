@@ -30,9 +30,7 @@ export async function initializeDatabase(): Promise<void> {
     return;
   }
 
-  console.log(`🔄 Initializing database connection...`);
-  console.log(`   Host: ${process.env.DB_HOST}`);
-  console.log(`   Database: ${process.env.DB_DATABASE}`);
+  console.log(`🔄 Initializing database connection --- Host: ${process.env.DB_HOST}; Database: ${process.env.DB_DATABASE}`);
 
   // Create SQL Server connection pool configuration
   const mssqlConfig: sql.config = {
@@ -138,9 +136,7 @@ export async function initializeComponentEngine(contextUser: UserInfo): Promise<
   }
 
   try {
-    console.log(`🔄 Initializing ComponentMetadataEngine...`);
     await ComponentMetadataEngine.Instance.Config(false, contextUser, Metadata.Provider);
-    console.log(`✅ ComponentMetadataEngine initialized with ${ComponentMetadataEngine.Instance.Components.length} components`);
   } catch (error) {
     console.warn(`⚠️  ComponentMetadataEngine initialization failed:`, error);
     console.warn(`   Dependency validation rules may not work correctly`);

@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { AIModelEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'AI Models') // Tell MemberJunction about this class
 @Component({
@@ -28,6 +28,8 @@ export class AIModelFormComponent extends BaseFormComponent {
             { sectionKey: 'contentTypes', sectionName: 'Content Types', isExpanded: false },
             { sectionKey: 'entityAIActions', sectionName: 'Entity AI Actions', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },
+            { sectionKey: 'mJAIModelArchitectures', sectionName: 'MJ: AI Model Architectures', isExpanded: false },
+            { sectionKey: 'mJAIModelModalities', sectionName: 'MJ: AI Model Modalities', isExpanded: false },
             { sectionKey: 'aIAgentModels', sectionName: 'AIAgent Models', isExpanded: false },
             { sectionKey: 'mJAIModelVendors', sectionName: 'MJ: AI Model Vendors', isExpanded: false },
             { sectionKey: 'generatedCodes', sectionName: 'Generated Codes', isExpanded: false },
@@ -35,7 +37,8 @@ export class AIModelFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptModels', sectionName: 'MJ: AI Prompt Models', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
-            { sectionKey: 'queries', sectionName: 'Queries', isExpanded: false }
+            { sectionKey: 'queries', sectionName: 'Queries', isExpanded: false },
+            { sectionKey: 'aIModels', sectionName: 'AI Models', isExpanded: false }
         ]);
     }
 }

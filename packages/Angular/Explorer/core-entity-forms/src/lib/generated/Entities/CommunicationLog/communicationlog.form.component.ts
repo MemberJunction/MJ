@@ -16,6 +16,7 @@ export class CommunicationLogFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'messageIdentification', sectionName: 'Message Identification', isExpanded: true },
             { sectionKey: 'messageDetails', sectionName: 'Message Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

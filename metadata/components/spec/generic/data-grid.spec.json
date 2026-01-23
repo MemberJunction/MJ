@@ -1,0 +1,283 @@
+{
+  "name": "DataGrid",
+  "title": "Data Grid",
+  "description": "@file:../../descriptions/generic/data-grid.md",
+  "type": "table",
+  "location": "embedded",
+  "functionalRequirements": "@file:../../functional-requirements/generic/data-grid.md",
+  "technicalDesign": "@file:../../technical-design/generic/data-grid.md",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Component is data-agnostic and works with any entity data passed via props"
+  },
+  "typeDefinitions": {
+    "ColumnDef": {
+      "description": "Column definition object for advanced column configuration",
+      "properties": {
+        "field": {
+          "type": "string",
+          "required": true,
+          "description": "Field name from data object"
+        },
+        "header": {
+          "type": "string",
+          "required": false,
+          "description": "Display header text (defaults to field DisplayName or field name)"
+        },
+        "render": {
+          "type": "function",
+          "signature": "(value: any, record: object, fieldInfo?: object) => ReactNode",
+          "required": false,
+          "description": "Custom render function for cell content"
+        },
+        "width": {
+          "type": "string | number",
+          "required": false,
+          "description": "Column width (e.g., '200px' or 200)"
+        },
+        "sortable": {
+          "type": "boolean",
+          "required": false,
+          "description": "Override global sorting setting for this column"
+        }
+      }
+    }
+  },
+  "properties": [
+    {
+      "name": "data",
+      "type": "Array<object>",
+      "description": "Array of records to display. Can be from any source: single entity, joined tables, aggregated results, or any array of objects.",
+      "required": true
+    },
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Optional entity name for metadata lookup (enables smart formatting for dates, money, value lists) and OpenEntityRecord integration. If omitted, component uses basic type detection and does not support record opening.",
+      "required": false
+    },
+    {
+      "name": "entityPrimaryKeys",
+      "type": "Array<string>",
+      "description": "Array of field names that constitute the primary key(s) for opening entity records. Required for OpenEntityRecord integration. When provided with entityName, clicking a row will open the entity record using these fields. Use for 1:1 record-to-row scenarios (not aggregated data). Example: ['ID'] for single key, ['OrderID', 'LineNumber'] for composite key.",
+      "required": false,
+      "exampleValue": "[\"ID\"]",
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that primary key field names exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": true
+          },
+          "errorTemplate": "Primary key field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
+    },
+    {
+      "name": "columns",
+      "type": "Array<string | ColumnDef>",
+      "description": "Array of column definitions. Can be simple strings (field names) for default behavior, or ColumnDef objects for advanced configuration. If not provided, all fields will be displayed. When using ColumnDef objects, the 'field' property is validated against entity fields.",
+      "required": false,
+      "exampleValue": "[\"Name\", { field: \"Price\", header: \"Unit Price\", render: (v) => `$${v}`, width: \"120px\", sortable: true }]",
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that column field names (strings or ColumnDef.field properties) exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "Column field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
+    },
+    {
+      "name": "sorting",
+      "type": "boolean",
+      "description": "Enable/disable column sorting",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "paging",
+      "type": "boolean",
+      "description": "Enable/disable pagination",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "pageSize",
+      "type": "number",
+      "description": "Number of rows per page when paging is enabled",
+      "required": false,
+      "defaultValue": 10
+    },
+    {
+      "name": "showPageSizeChanger",
+      "type": "boolean",
+      "description": "Show the page size selector when paging is enabled",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "filtering",
+      "type": "boolean",
+      "description": "Enable/disable text filtering",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "highlightFilterMatches",
+      "type": "boolean",
+      "description": "Highlight matching text when filtering",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "filterFields",
+      "type": "Array<string>",
+      "description": "Fields to search when filtering. If not specified, searches all fields",
+      "required": false,
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that filter field names exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "Filter field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
+    },
+    {
+      "name": "filterDebounceTime",
+      "type": "number",
+      "description": "Debounce time in ms for filter input",
+      "required": false,
+      "defaultValue": 300
+    },
+    {
+      "name": "selectionMode",
+      "type": "'none' | 'checkbox' | 'radio' | 'row'",
+      "description": "Row selection mode: 'none', 'checkbox', 'radio', or 'row'",
+      "required": false,
+      "defaultValue": "none",
+      "possibleValues": [
+        "none",
+        "checkbox",
+        "radio",
+        "row"
+      ]
+    },
+    {
+      "name": "longTextDisplay",
+      "type": "'truncate' | 'expand' | 'tooltip' | 'wrap' | 'none'",
+      "description": "How to display long text that exceeds the threshold: 'truncate' shows ellipsis, 'expand' allows click to expand/collapse, 'tooltip' shows full text on hover, 'wrap' shows all text with wrapping, 'none' uses default behavior",
+      "required": false,
+      "defaultValue": "expand",
+      "possibleValues": [
+        "truncate",
+        "expand",
+        "tooltip",
+        "wrap",
+        "none"
+      ]
+    },
+    {
+      "name": "longTextThreshold",
+      "type": "number",
+      "description": "Number of characters before long text display behavior is triggered",
+      "required": false,
+      "defaultValue": 100
+    },
+    {
+      "name": "autoFitColumns",
+      "type": "boolean",
+      "description": "When true, columns auto-fit to container width. When false, columns use fixed widths with horizontal scrolling",
+      "required": false,
+      "defaultValue": true
+    }
+  ],
+  "events": [
+    {
+      "name": "rowClick",
+      "description": "Fired when a row is clicked. Uses cancelable event pattern - set event.cancel = true to prevent default OpenEntityRecord behavior.",
+      "parameters": [
+        {
+          "name": "event",
+          "type": "{ record: object, cancel: boolean }",
+          "description": "Event object containing the clicked row record and cancel flag. Set cancel = true to prevent default behavior (OpenEntityRecord when entityName and entityPrimaryKeys are provided)."
+        }
+      ]
+    },
+    {
+      "name": "selectionChanged",
+      "description": "Fired when row selection changes",
+      "parameters": [
+        {
+          "name": "selectedRows",
+          "type": "Array<object>",
+          "description": "Array of selected entity objects"
+        }
+      ]
+    },
+    {
+      "name": "pageChanged",
+      "description": "Fired when page changes",
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "type": "number",
+          "description": "Current page number (0-based)"
+        },
+        {
+          "name": "visibleRows",
+          "type": "Array<object>",
+          "description": "Array of entity objects visible on current page"
+        }
+      ]
+    },
+    {
+      "name": "sortChanged",
+      "description": "Fired when sort configuration changes",
+      "parameters": [
+        {
+          "name": "sortState",
+          "type": "{column: string, direction: 'asc' | 'desc'}",
+          "description": "Object with 'column' and 'direction' properties"
+        }
+      ]
+    },
+    {
+      "name": "filterChanged",
+      "description": "Fired when filter changes",
+      "parameters": [
+        {
+          "name": "filterValue",
+          "type": "string",
+          "description": "Current filter text"
+        },
+        {
+          "name": "matchingData",
+          "type": "Array<object>",
+          "description": "Array of all matching entity objects"
+        }
+      ]
+    }
+  ],
+  "libraries": [
+    {
+      "name": "antd",
+      "version": "5.12.0",
+      "globalVariable": "antd"
+    }
+  ],
+  "dependencies": [],
+  "code": "@file:../../code/generic/data-grid.js",
+  "exampleUsage": "// Simple column configuration (backward compatible)\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={['Name', 'SKU', 'Price', 'Category', 'InStock']}\n  onRowClick={handleRowClick}\n/>\n\n// Advanced column configuration with custom rendering\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={[\n    { field: 'Name', header: 'Product Name', width: '200px' },\n    { \n      field: 'Price',\n      header: 'Unit Price',\n      render: (value) => (\n        <span style={{ fontWeight: 'bold', color: '#059669' }}>\n          {value >= 1000 ? `$${(value/1000).toFixed(1)}K` : `$${value}`}\n        </span>\n      ),\n      width: '120px',\n      sortable: true\n    },\n    {\n      field: 'InStock',\n      header: 'Availability',\n      render: (value) => (\n        <span style={{ \n          padding: '2px 8px',\n          borderRadius: '12px',\n          backgroundColor: value ? '#D1FAE5' : '#FEE2E2',\n          color: value ? '#065F46' : '#991B1B'\n        }}>\n          {value ? 'In Stock' : 'Out of Stock'}\n        </span>\n      ),\n      width: '130px',\n      sortable: false\n    },\n    'Category'  // Simple string still works\n  ]}\n  sorting={true}\n  paging={true}\n  pageSize={20}\n  filtering={true}\n  filterFields={['Name', 'SKU', 'Category']}\n  selectionMode=\"none\"\n  onRowClick={handleRowClick}\n  onSelectionChanged={handleSelection}\n  onPageChanged={handlePageChange}\n  onSortChanged={handleSortChange}\n  onFilterChanged={handleFilterChange}\n/>"
+}

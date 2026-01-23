@@ -54,7 +54,6 @@ import {
   RecordMergeResult,
   RecordMergeDetailResult,
   EntityDependency,
-  IRunQueryProvider,
   RunQueryResult,
   RunQueryParams,
   PotentialDuplicateRequest,
@@ -70,6 +69,12 @@ import {
   QueryInfo,
   QueryCategoryInfo,
   QueryCache,
+  RunViewWithCacheCheckParams,
+  RunViewsWithCacheCheckResponse,
+  RunViewWithCacheCheckResult,
+  RunQueryWithCacheCheckParams,
+  RunQueriesWithCacheCheckResponse,
+  RunQueryWithCacheCheckResult,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from './queryParameterProcessor';
 
@@ -106,6 +111,7 @@ import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
+import { MJGlobal } from '@memberjunction/global';
 
 /**
  * Represents a single field change in the DiffObjects comparison result
@@ -237,7 +243,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends DatabaseProviderBase
-  implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider
+  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider
 {
   private _pool: sql.ConnectionPool;
   
@@ -246,18 +252,29 @@ export class SQLServerDataProvider
   private _transactionDepth: number = 0;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
-  
+
   // Query cache instance
   private queryCache = new QueryCache();
-  
+
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
-  private _sqlLoggingSessions: Map<string, SqlLoggingSessionImpl> = new Map();
-  
+  private static _sqlLoggingSessionsKey: string = 'MJ_SQLServerDataProvider_SqlLoggingSessions';
+  private get _sqlLoggingSessions(): Map<string, SqlLoggingSessionImpl> {
+    const g = MJGlobal.Instance.GetGlobalObjectStore();
+    if (g) {
+      if (!g[SQLServerDataProvider._sqlLoggingSessionsKey]) {
+        g[SQLServerDataProvider._sqlLoggingSessionsKey] = new Map<string, SqlLoggingSessionImpl>();
+      }
+      return g[SQLServerDataProvider._sqlLoggingSessionsKey];
+    } else {
+      throw new Error('No global object store available for SQL logging session');
+    }
+  }
+
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
   private _sqlQueue$ = new Subject<{
@@ -515,6 +532,17 @@ export class SQLServerDataProvider
       statementCount: session.statementCount,
       options: session.options,
     }));
+  }
+
+  /**
+   * Gets a specific SQL logging session by its ID.
+   * Returns the session if found, or undefined if not found.
+   *
+   * @param sessionId - The unique identifier of the session to retrieve
+   * @returns The SqlLoggingSession if found, undefined otherwise
+   */
+  public GetSqlLoggingSessionById(sessionId: string): SqlLoggingSession | undefined {
+    return this._sqlLoggingSessions.get(sessionId);
   }
 
   /**
@@ -787,7 +815,8 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // START ---- IRunQueryProvider
   /**************************************************************************/
-  public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+  protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
     try {
       // Find and validate query
       const query = await this.findAndValidateQuery(params, contextUser);
@@ -1025,6 +1054,284 @@ export class SQLServerDataProvider
     LogStatus(`Cached results for query ${query.Name} (${query.ID})`);
   }
 
+  /**
+   * Internal implementation of batch query execution.
+   * Runs multiple queries in parallel for efficiency.
+   * @param params - Array of query parameters
+   * @param contextUser - Optional user context for permissions
+   * @returns Array of query results
+   */
+  protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQueries()
+    // Run all queries in parallel
+    const promises = params.map((p) => this.InternalRunQuery(p, contextUser));
+    return Promise.all(promises);
+  }
+
+  /**
+   * RunQueriesWithCacheCheck - Smart cache validation for batch RunQueries.
+   * For each query request, if cacheStatus is provided, uses the Query's CacheValidationSQL
+   * to check if the cached data is still current by comparing MAX(__mj_UpdatedAt) and COUNT(*)
+   * with client's values. Returns 'current' if cache is valid (no data), or 'stale' with fresh data.
+   *
+   * Queries without CacheValidationSQL configured will return 'no_validation' status with full data.
+   */
+  public async RunQueriesWithCacheCheck<T = unknown>(
+    params: RunQueryWithCacheCheckParams[],
+    contextUser?: UserInfo
+  ): Promise<RunQueriesWithCacheCheckResponse<T>> {
+    try {
+      const user = contextUser || this.CurrentUser;
+      if (!user) {
+        return {
+          success: false,
+          results: [],
+          errorMessage: 'No user context available',
+        };
+      }
+
+      // Separate items that need cache check from those that don't
+      const itemsNeedingCacheCheck: Array<{
+        index: number;
+        item: RunQueryWithCacheCheckParams;
+        queryInfo: QueryInfo;
+      }> = [];
+      const itemsWithoutCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams }> = [];
+      const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }> = [];
+      const errorResults: RunQueryWithCacheCheckResult<T>[] = [];
+
+      // Pre-process all items to resolve query info and validate
+      for (let i = 0; i < params.length; i++) {
+        const item = params[i];
+
+        // Resolve query info
+        const queryInfo = this.resolveQueryInfo(item.params);
+        if (!queryInfo) {
+          errorResults.push({
+            queryIndex: i,
+            queryId: item.params.QueryID || '',
+            status: 'error',
+            errorMessage: `Query not found: ${item.params.QueryID || item.params.QueryName}`,
+          });
+          continue;
+        }
+
+        // Check permissions
+        if (!queryInfo.UserCanRun(user)) {
+          errorResults.push({
+            queryIndex: i,
+            queryId: queryInfo.ID,
+            status: 'error',
+            errorMessage: `User does not have permission to run query: ${queryInfo.Name}`,
+          });
+          continue;
+        }
+
+        if (!item.cacheStatus) {
+          // No cache status provided - will run full query
+          itemsWithoutCacheCheck.push({ index: i, item });
+          continue;
+        }
+
+        // Check if query has CacheValidationSQL
+        if (!queryInfo.CacheValidationSQL) {
+          // No validation SQL configured - will run full query and return 'no_validation'
+          itemsWithoutValidationSQL.push({ index: i, item, queryInfo });
+          continue;
+        }
+
+        itemsNeedingCacheCheck.push({ index: i, item, queryInfo });
+      }
+
+      // Execute batched cache status check for all items that need it
+      const cacheStatusResults = await this.getBatchedQueryCacheStatus(itemsNeedingCacheCheck, contextUser);
+
+      // Determine which items are current vs stale
+      const staleItems: Array<{ index: number; params: RunQueryParams; queryInfo: QueryInfo }> = [];
+      const currentResults: RunQueryWithCacheCheckResult<T>[] = [];
+
+      for (const { index, item, queryInfo } of itemsNeedingCacheCheck) {
+        const serverStatus = cacheStatusResults.get(index);
+        if (!serverStatus || !serverStatus.success) {
+          errorResults.push({
+            queryIndex: index,
+            queryId: queryInfo.ID,
+            status: 'error',
+            errorMessage: serverStatus?.errorMessage || 'Failed to get cache status',
+          });
+          continue;
+        }
+
+        const isCurrent = this.isCacheCurrent(item.cacheStatus!, serverStatus);
+        if (isCurrent) {
+          currentResults.push({
+            queryIndex: index,
+            queryId: queryInfo.ID,
+            status: 'current',
+          });
+        } else {
+          staleItems.push({ index, params: item.params, queryInfo });
+        }
+      }
+
+      // Run full queries in parallel for:
+      // 1. Items without cache status (no fingerprint from client)
+      // 2. Items without CacheValidationSQL (always return data with 'no_validation' status)
+      // 3. Items with stale cache
+      const fullQueryPromises: Promise<RunQueryWithCacheCheckResult<T>>[] = [
+        ...itemsWithoutCacheCheck.map(({ index, item }) =>
+          this.runFullQueryAndReturnForQuery<T>(item.params, index, 'stale', contextUser)
+        ),
+        ...itemsWithoutValidationSQL.map(({ index, item, queryInfo }) =>
+          this.runFullQueryAndReturnForQuery<T>(item.params, index, 'no_validation', contextUser, queryInfo.ID)
+        ),
+        ...staleItems.map(({ index, params: queryParams, queryInfo }) =>
+          this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, queryInfo.ID)
+        ),
+      ];
+
+      const fullQueryResults = await Promise.all(fullQueryPromises);
+
+      // Combine all results and sort by queryIndex
+      const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
+      allResults.sort((a, b) => a.queryIndex - b.queryIndex);
+
+      return {
+        success: true,
+        results: allResults,
+      };
+    } catch (e) {
+      LogError(e);
+      return {
+        success: false,
+        results: [],
+        errorMessage: e instanceof Error ? e.message : String(e),
+      };
+    }
+  }
+
+  /**
+   * Resolves QueryInfo from RunQueryParams (by ID or Name+CategoryPath).
+   */
+  protected resolveQueryInfo(params: RunQueryParams): QueryInfo | undefined {
+    if (params.QueryID) {
+      return this.Queries.find((q) => q.ID === params.QueryID);
+    }
+
+    if (params.QueryName) {
+      // Match by name and optional category path
+      const matchingQueries = this.Queries.filter(
+        (q) => q.Name.trim().toLowerCase() === params.QueryName?.trim().toLowerCase()
+      );
+
+      if (matchingQueries.length === 0) return undefined;
+      if (matchingQueries.length === 1) return matchingQueries[0];
+
+      // Multiple matches - use CategoryPath or CategoryID to disambiguate
+      if (params.CategoryPath) {
+        const byPath = matchingQueries.find(
+          (q) => q.CategoryPath.toLowerCase() === params.CategoryPath?.toLowerCase()
+        );
+        if (byPath) return byPath;
+      }
+
+      if (params.CategoryID) {
+        const byId = matchingQueries.find((q) => q.CategoryID === params.CategoryID);
+        if (byId) return byId;
+      }
+
+      // Return first match if no category disambiguation
+      return matchingQueries[0];
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Executes a batched cache status check for multiple queries using their CacheValidationSQL.
+   */
+  protected async getBatchedQueryCacheStatus(
+    items: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }>,
+    contextUser?: UserInfo
+  ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
+    const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
+
+    if (items.length === 0) {
+      return results;
+    }
+
+    // Build array of SQL statements for batch execution
+    const sqlStatements: string[] = [];
+    for (const { queryInfo } of items) {
+      // CacheValidationSQL should return MaxUpdatedAt and RowCount
+      sqlStatements.push(queryInfo.CacheValidationSQL!);
+    }
+
+    try {
+      // Execute the batched SQL
+      const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
+
+      // Process each result set and map to the corresponding item index
+      for (let i = 0; i < items.length; i++) {
+        const { index } = items[i];
+        const resultSet = resultSets[i];
+
+        if (resultSet && resultSet.length > 0) {
+          const row = resultSet[0] as { MaxUpdatedAt: Date | string | null; RowCount: number };
+          results.set(index, {
+            success: true,
+            rowCount: row.RowCount,
+            maxUpdatedAt: row.MaxUpdatedAt ? new Date(row.MaxUpdatedAt).toISOString() : undefined,
+          });
+        } else {
+          results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
+        }
+      }
+    } catch (e) {
+      // If batch fails, mark all items as failed
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      for (const { index } of items) {
+        results.set(index, { success: false, errorMessage });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Runs the full query and returns results with cache metadata.
+   */
+  protected async runFullQueryAndReturnForQuery<T = unknown>(
+    params: RunQueryParams,
+    queryIndex: number,
+    status: 'stale' | 'no_validation',
+    contextUser?: UserInfo,
+    queryId?: string
+  ): Promise<RunQueryWithCacheCheckResult<T>> {
+    const result = await this.InternalRunQuery(params, contextUser);
+
+    if (!result.Success) {
+      return {
+        queryIndex,
+        queryId: queryId || result.QueryID || '',
+        status: 'error',
+        errorMessage: result.ErrorMessage || 'Unknown error executing query',
+      };
+    }
+
+    // Extract maxUpdatedAt from results
+    const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
+
+    return {
+      queryIndex,
+      queryId: result.QueryID,
+      status,
+      results: result.Results as T[],
+      maxUpdatedAt,
+      rowCount: result.Results.length,
+    };
+  }
+
   /**************************************************************************/
   // END ---- IRunQueryProvider
   /**************************************************************************/
@@ -1089,10 +1396,8 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // START ---- IRunViewProvider
   /**************************************************************************/
-  public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-    // add call to pre-processor that was previously in the @memberjunction/core RunView class but now
-    // is handled in ProviderBase when sub-classes like this one invoke the pre/post process properly
-    await this.PreProcessRunView(params, contextUser);
+  protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
 
     const startTime = new Date();
     try {
@@ -1321,10 +1626,6 @@ export class SQLServerDataProvider
           ErrorMessage: null,
         };
 
-        // add call to post-processor that was previously in the @memberjunction/core RunView class but now
-        // is handled in ProviderBase when sub-classes like this one invoke the post process properly
-        await this.PostProcessRunView(result, params, contextUser); 
-
         return result;
       } 
       else {
@@ -1345,18 +1646,547 @@ export class SQLServerDataProvider
     }
   }
 
-  public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-    // pre-process in base class
-    await this.PreProcessRunViews(params, contextUser);
-
-    // do the work
-    const promises = params.map((p) => this.RunView<T>(p, contextUser));
+  protected async InternalRunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunViews()
+    // Note: We call InternalRunView directly since we're already inside the internal flow
+    const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
     const results = await Promise.all(promises);
+    return results;
+  }
 
-    // post-process in base class
-    await this.PostProcessRunViews(results, params, contextUser);
+  /**
+   * RunViewsWithCacheCheck - Smart cache validation for batch RunViews.
+   * For each view request, if cacheStatus is provided, first checks if the cache is current
+   * by comparing MAX(__mj_UpdatedAt) and COUNT(*) with client's values.
+   * Returns 'current' if cache is valid (no data), or 'stale' with fresh data if cache is outdated.
+   *
+   * Optimized to batch all cache status checks into a single SQL call with multiple result sets.
+   */
+  public async RunViewsWithCacheCheck<T = unknown>(
+    params: RunViewWithCacheCheckParams[],
+    contextUser?: UserInfo
+  ): Promise<RunViewsWithCacheCheckResponse<T>> {
+    try {
+      const user = contextUser || this.CurrentUser;
+      if (!user) {
+        return {
+          success: false,
+          results: [],
+          errorMessage: 'No user context available',
+        };
+      }
+
+      // Separate items that need cache check from those that don't
+      const itemsNeedingCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+      const itemsWithoutCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
+      const errorResults: RunViewWithCacheCheckResult<T>[] = [];
+
+      // Pre-process all items to build WHERE clauses and validate
+      for (let i = 0; i < params.length; i++) {
+        const item = params[i];
+        if (!item.cacheStatus) {
+          // No cache status - will run full query
+          itemsWithoutCacheCheck.push({ index: i, item });
+          continue;
+        }
+
+        // Get entity info
+        const entityInfo = this.Entities.find(
+          (e) => e.Name.trim().toLowerCase() === item.params.EntityName?.trim().toLowerCase()
+        );
+        if (!entityInfo) {
+          errorResults.push({
+            viewIndex: i,
+            status: 'error',
+            errorMessage: `Entity ${item.params.EntityName} not found in metadata`,
+          });
+          continue;
+        }
+
+        try {
+          // Check permissions
+          this.CheckUserReadPermissions(entityInfo.Name, user);
+          // Build WHERE clause
+          const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
+          itemsNeedingCacheCheck.push({ index: i, item, entityInfo, whereSQL });
+        } catch (e) {
+          errorResults.push({
+            viewIndex: i,
+            status: 'error',
+            errorMessage: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      // Execute batched cache status check for all items that need it
+      const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsNeedingCacheCheck, contextUser);
+
+      // Determine which items are current vs stale, and whether they support differential updates
+      const differentialItems: Array<{
+        index: number;
+        params: RunViewParams;
+        entityInfo: EntityInfo;
+        whereSQL: string;
+        clientMaxUpdatedAt: string;
+        clientRowCount: number;
+        serverStatus: { maxUpdatedAt?: string; rowCount?: number };
+      }> = [];
+      const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
+      const currentResults: RunViewWithCacheCheckResult<T>[] = [];
+
+      for (const { index, item, entityInfo, whereSQL } of itemsNeedingCacheCheck) {
+        const serverStatus = cacheStatusResults.get(index);
+        if (!serverStatus || !serverStatus.success) {
+          errorResults.push({
+            viewIndex: index,
+            status: 'error',
+            errorMessage: serverStatus?.errorMessage || 'Failed to get cache status',
+          });
+          continue;
+        }
+
+        const isCurrent = this.isCacheCurrent(item.cacheStatus!, serverStatus);
+        if (isCurrent) {
+          currentResults.push({
+            viewIndex: index,
+            status: 'current',
+          });
+        } else {
+          // Cache is stale - check if entity supports differential updates
+          if (entityInfo.TrackRecordChanges) {
+            // Entity tracks record changes - we can do differential update
+            differentialItems.push({
+              index,
+              params: item.params,
+              entityInfo,
+              whereSQL,
+              clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
+              clientRowCount: item.cacheStatus!.rowCount,
+              serverStatus,
+            });
+          } else {
+            // Entity doesn't track record changes - fall back to full refresh
+            staleItemsNoTracking.push({ index, params: item.params });
+          }
+        }
+      }
+
+      // Run queries in parallel:
+      // 1. Items without cache status (no fingerprint from client) - full query
+      // 2. Items with stale cache but no tracking - full query
+      // 3. Items with stale cache and tracking - differential query
+      const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
+        // Full queries for items without cache status
+        ...itemsWithoutCacheCheck.map(({ index, item }) =>
+          this.runFullQueryAndReturn<T>(item.params, index, contextUser)
+        ),
+        // Full queries for entities that don't track record changes
+        ...staleItemsNoTracking.map(({ index, params: viewParams }) =>
+          this.runFullQueryAndReturn<T>(viewParams, index, contextUser)
+        ),
+        // Differential queries for entities that track record changes
+        ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
+          this.runDifferentialQueryAndReturn<T>(
+            viewParams,
+            entityInfo,
+            clientMaxUpdatedAt,
+            clientRowCount,
+            serverStatus,
+            whereSQL,
+            index,
+            contextUser
+          )
+        ),
+      ];
+
+      const fullQueryResults = await Promise.all(queryPromises);
+
+      // Combine all results and sort by viewIndex
+      const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
+      allResults.sort((a, b) => a.viewIndex - b.viewIndex);
+
+      return {
+        success: true,
+        results: allResults,
+      };
+    } catch (e) {
+      LogError(e);
+      return {
+        success: false,
+        results: [],
+        errorMessage: e instanceof Error ? e.message : String(e),
+      };
+    }
+  }
+
+  /**
+   * Executes a batched cache status check for multiple views in a single SQL call.
+   * Uses multiple result sets to return status for each view efficiently.
+   */
+  protected async getBatchedServerCacheStatus(
+    items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>,
+    contextUser?: UserInfo
+  ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
+    const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
+
+    if (items.length === 0) {
+      return results;
+    }
+
+    // Build array of SQL statements for batch execution
+    const sqlStatements: string[] = [];
+    for (const { entityInfo, whereSQL } of items) {
+      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+      sqlStatements.push(statusSQL);
+    }
+
+    try {
+      // Execute the batched SQL using existing ExecuteSQLBatch method
+      const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
+
+      // Process each result set and map to the corresponding item index
+      for (let i = 0; i < items.length; i++) {
+        const { index } = items[i];
+        const resultSet = resultSets[i];
+
+        if (resultSet && resultSet.length > 0) {
+          const row = resultSet[0] as { TotalRows: number; MaxUpdatedAt: Date | string | null };
+          results.set(index, {
+            success: true,
+            rowCount: row.TotalRows,
+            maxUpdatedAt: row.MaxUpdatedAt ? new Date(row.MaxUpdatedAt).toISOString() : undefined,
+          });
+        } else {
+          results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
+        }
+      }
+    } catch (e) {
+      // If batch fails, mark all items as failed
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      for (const { index } of items) {
+        results.set(index, { success: false, errorMessage });
+      }
+    }
 
     return results;
+  }
+
+  /**
+   * Builds the WHERE clause for cache status check, using same logic as InternalRunView.
+   */
+  protected async buildWhereClauseForCacheCheck(
+    params: RunViewParams,
+    entityInfo: EntityInfo,
+    user: UserInfo
+  ): Promise<string> {
+    let whereSQL = '';
+    let bHasWhere = false;
+
+    // Extra filter
+    if (params.ExtraFilter && params.ExtraFilter.length > 0) {
+      if (!this.validateUserProvidedSQLClause(params.ExtraFilter)) {
+        throw new Error(`Invalid Extra Filter: ${params.ExtraFilter}`);
+      }
+      whereSQL = `(${params.ExtraFilter})`;
+      bHasWhere = true;
+    }
+
+    // User search string
+    if (params.UserSearchString && params.UserSearchString.length > 0) {
+      if (!this.validateUserProvidedSQLClause(params.UserSearchString)) {
+        throw new Error(`Invalid User Search SQL clause: ${params.UserSearchString}`);
+      }
+      const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString);
+      if (sUserSearchSQL.length > 0) {
+        if (bHasWhere) {
+          whereSQL += ` AND (${sUserSearchSQL})`;
+        } else {
+          whereSQL = `(${sUserSearchSQL})`;
+          bHasWhere = true;
+        }
+      }
+    }
+
+    // Row Level Security
+    if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+      const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+      if (rlsWhereClause && rlsWhereClause.length > 0) {
+        if (bHasWhere) {
+          whereSQL += ` AND (${rlsWhereClause})`;
+        } else {
+          whereSQL = `(${rlsWhereClause})`;
+        }
+      }
+    }
+
+    return whereSQL;
+  }
+
+  /**
+   * Compares client cache status with server status to determine if cache is current.
+   */
+  protected isCacheCurrent(
+    clientStatus: { maxUpdatedAt: string; rowCount: number },
+    serverStatus: { maxUpdatedAt?: string; rowCount?: number }
+  ): boolean {
+    // Row count must match
+    if (clientStatus.rowCount !== serverStatus.rowCount) {
+      return false;
+    }
+
+    // Compare maxUpdatedAt dates
+    const clientDate = new Date(clientStatus.maxUpdatedAt);
+    const serverDate = serverStatus.maxUpdatedAt ? new Date(serverStatus.maxUpdatedAt) : null;
+
+    if (!serverDate) {
+      // No records on server, so if client has any, it's stale
+      return clientStatus.rowCount === 0;
+    }
+
+    // Dates must match (compare as ISO strings for precision)
+    return clientDate.toISOString() === serverDate.toISOString();
+  }
+
+  /**
+   * Runs the full query and returns results with cache metadata.
+   */
+  protected async runFullQueryAndReturn<T = unknown>(
+    params: RunViewParams,
+    viewIndex: number,
+    contextUser?: UserInfo
+  ): Promise<RunViewWithCacheCheckResult<T>> {
+    const result = await this.InternalRunView<T>(params, contextUser);
+
+    if (!result.Success) {
+      return {
+        viewIndex,
+        status: 'error',
+        errorMessage: result.ErrorMessage || 'Unknown error executing view',
+      };
+    }
+
+    // Extract maxUpdatedAt from results
+    const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
+
+    return {
+      viewIndex,
+      status: 'stale',
+      results: result.Results,
+      maxUpdatedAt,
+      rowCount: result.Results.length,
+    };
+  }
+
+  /**
+   * Extracts the maximum __mj_UpdatedAt value from a result set.
+   * @param results - Array of result objects that may contain __mj_UpdatedAt
+   * @returns ISO string of the max timestamp, or current time if none found
+   */
+  protected extractMaxUpdatedAt(results: unknown[]): string {
+    if (!results || results.length === 0) {
+      return new Date().toISOString();
+    }
+
+    let maxDate: Date | null = null;
+    for (const row of results) {
+      const rowObj = row as Record<string, unknown>;
+      const updatedAt = rowObj['__mj_UpdatedAt'];
+      if (updatedAt) {
+        const date = new Date(updatedAt as string);
+        if (!isNaN(date.getTime()) && (!maxDate || date > maxDate)) {
+          maxDate = date;
+        }
+      }
+    }
+
+    return maxDate ? maxDate.toISOString() : new Date().toISOString();
+  }
+
+  /**
+   * Gets the IDs of records that have been deleted since a given timestamp.
+   * Uses the RecordChange table which tracks all deletions for entities with TrackRecordChanges enabled.
+   * @param entityID - The entity ID to check deletions for
+   * @param sinceTimestamp - ISO timestamp to check deletions since
+   * @param contextUser - Optional user context for permissions
+   * @returns Array of record IDs (in CompositeKey concatenated string format)
+   */
+  protected async getDeletedRecordIDsSince(
+    entityID: string,
+    sinceTimestamp: string,
+    contextUser?: UserInfo
+  ): Promise<string[]> {
+    try {
+      const sql = `
+        SELECT DISTINCT RecordID
+        FROM [${this.MJCoreSchemaName}].vwRecordChanges
+        WHERE EntityID = '${entityID}'
+          AND Type = 'Delete'
+          AND ChangedAt > '${sinceTimestamp}'
+      `;
+      const results = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
+      return results.map(r => r.RecordID);
+    } catch (e) {
+      LogError(e);
+      return [];
+    }
+  }
+
+  /**
+   * Gets rows that have been created or updated since a given timestamp.
+   * @param params - RunView parameters (used for entity, filter, etc.)
+   * @param entityInfo - Entity metadata
+   * @param sinceTimestamp - ISO timestamp to check updates since
+   * @param whereSQL - Pre-built WHERE clause from the original query
+   * @param contextUser - Optional user context for permissions
+   * @returns Array of updated/created rows
+   */
+  protected async getUpdatedRowsSince<T = unknown>(
+    params: RunViewParams,
+    entityInfo: EntityInfo,
+    sinceTimestamp: string,
+    whereSQL: string,
+    contextUser?: UserInfo
+  ): Promise<T[]> {
+    try {
+      // Add the timestamp filter to the existing WHERE clause
+      const timestampFilter = `__mj_UpdatedAt > '${sinceTimestamp}'`;
+      const combinedWhere = whereSQL
+        ? `(${whereSQL}) AND ${timestampFilter}`
+        : timestampFilter;
+
+      // Build field list
+      const fields = params.Fields && params.Fields.length > 0
+        ? params.Fields.map(f => `[${f}]`).join(', ')
+        : '*';
+
+      // Build the query
+      let sql = `SELECT ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView} WHERE ${combinedWhere}`;
+
+      // Add ORDER BY if specified
+      if (params.OrderBy && params.OrderBy.length > 0) {
+        if (!this.validateUserProvidedSQLClause(params.OrderBy)) {
+          throw new Error(`Invalid OrderBy clause: ${params.OrderBy}`);
+        }
+        sql += ` ORDER BY ${params.OrderBy}`;
+      }
+
+      const results = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
+      return results;
+    } catch (e) {
+      LogError(e);
+      return [];
+    }
+  }
+
+  /**
+   * Runs a differential query and returns only changes since the client's cached state.
+   * This includes updated/created rows and deleted record IDs.
+   *
+   * Validates that the differential can be safely applied by checking for "hidden" deletes
+   * (rows deleted outside of MJ's RecordChanges tracking, e.g., direct SQL deletes).
+   * If hidden deletes are detected, falls back to a full query with 'stale' status.
+   *
+   * @param params - RunView parameters
+   * @param entityInfo - Entity metadata
+   * @param clientMaxUpdatedAt - Client's cached maxUpdatedAt timestamp
+   * @param clientRowCount - Client's cached row count
+   * @param serverStatus - Current server status (for new row count)
+   * @param whereSQL - Pre-built WHERE clause
+   * @param viewIndex - Index for correlation in batch operations
+   * @param contextUser - Optional user context
+   * @returns RunViewWithCacheCheckResult with differential data, or falls back to full query if unsafe
+   */
+  protected async runDifferentialQueryAndReturn<T = unknown>(
+    params: RunViewParams,
+    entityInfo: EntityInfo,
+    clientMaxUpdatedAt: string,
+    clientRowCount: number,
+    serverStatus: { maxUpdatedAt?: string; rowCount?: number },
+    whereSQL: string,
+    viewIndex: number,
+    contextUser?: UserInfo
+  ): Promise<RunViewWithCacheCheckResult<T>> {
+    try {
+      // Get updated/created rows since client's timestamp
+      const updatedRows = await this.getUpdatedRowsSince<T>(
+        params,
+        entityInfo,
+        clientMaxUpdatedAt,
+        whereSQL,
+        contextUser
+      );
+
+      // Get deleted record IDs since client's timestamp
+      const deletedRecordIDs = await this.getDeletedRecordIDsSince(
+        entityInfo.ID,
+        clientMaxUpdatedAt,
+        contextUser
+      );
+
+      // === VALIDATION: Detect "hidden" deletes not tracked in RecordChanges ===
+      // Count how many returned rows are NEW (created after client's cache timestamp)
+      // vs rows that already existed and were just updated
+      const clientMaxUpdatedDate = new Date(clientMaxUpdatedAt);
+      const newInserts = updatedRows.filter(row => {
+        const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
+        if (!createdAt) return false;
+        return new Date(String(createdAt)) > clientMaxUpdatedDate;
+      }).length;
+
+      // Calculate implied deletes using the algebra:
+      // serverRowCount = clientRowCount - deletes + inserts
+      // Therefore: impliedDeletes = clientRowCount + newInserts - serverRowCount
+      const serverRowCount = serverStatus.rowCount ?? 0;
+      const impliedDeletes = clientRowCount + newInserts - serverRowCount;
+      const actualDeletes = deletedRecordIDs.length;
+
+      // Validate: if impliedDeletes < 0, there are unexplained rows on the server
+      // This could happen with direct SQL inserts that bypassed MJ's tracking
+      if (impliedDeletes < 0) {
+        LogStatus(
+          `Differential validation failed for ${entityInfo.Name}: impliedDeletes=${impliedDeletes} (negative). ` +
+          `clientRowCount=${clientRowCount}, newInserts=${newInserts}, serverRowCount=${serverRowCount}. ` +
+          `Falling back to full refresh.`
+        );
+        return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+      }
+
+      // Validate: if impliedDeletes > actualDeletes, there are "hidden" deletes
+      // not tracked in RecordChanges (e.g., direct SQL deletes)
+      if (impliedDeletes > actualDeletes) {
+        LogStatus(
+          `Differential validation failed for ${entityInfo.Name}: hidden deletes detected. ` +
+          `impliedDeletes=${impliedDeletes}, actualDeletes=${actualDeletes}. ` +
+          `clientRowCount=${clientRowCount}, newInserts=${newInserts}, serverRowCount=${serverRowCount}. ` +
+          `Falling back to full refresh.`
+        );
+        return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+      }
+
+      // Validation passed - safe to apply differential
+      // Extract maxUpdatedAt from the updated rows (or use server status)
+      const newMaxUpdatedAt = updatedRows.length > 0
+        ? this.extractMaxUpdatedAt(updatedRows)
+        : serverStatus.maxUpdatedAt || new Date().toISOString();
+
+      return {
+        viewIndex,
+        status: 'differential',
+        differentialData: {
+          updatedRows,
+          deletedRecordIDs,
+        },
+        maxUpdatedAt: newMaxUpdatedAt,
+        rowCount: serverStatus.rowCount,
+      };
+    } catch (e) {
+      LogError(e);
+      return {
+        viewIndex,
+        status: 'error',
+        errorMessage: e instanceof Error ? e.message : String(e),
+      };
+    }
   }
 
   protected validateUserProvidedSQLClause(clause: string): boolean {
@@ -4526,8 +5356,7 @@ export class SQLServerDataProvider
     const e = this.Entities.find((e) => e.Name === entityName);
     if (!e) throw new Error(`Entity ${entityName} not found`);
     else {
-      let f = e.Fields.find((f) => f.IsNameField);
-      if (!f) f = e.Fields.find((f) => f.Name === 'Name');
+      const f = e.NameField;
       if (!f) {
         LogError(`Entity ${entityName} does not have an IsNameField or a field with the column name of Name, returning null, use recordId`);
         return null;
@@ -4558,28 +5387,53 @@ export class SQLServerDataProvider
   }
 }
 
-// This implementation is purely in memory and doesn't bother to persist to a file. It is fine to load it once per server instance load
+/**
+ * In-memory storage provider for Node.js server-side usage.
+ * Uses a Map of Maps structure for category isolation:
+ * Map<category, Map<key, value>>
+ *
+ * This implementation is purely in-memory and doesn't persist to disk.
+ * Data is retained for the lifetime of the server process.
+ */
 class NodeLocalStorageProvider implements ILocalStorageProvider {
-  private _localStorage: any = {};
+  private static readonly DEFAULT_CATEGORY = 'default';
+  private _storage: Map<string, Map<string, string>> = new Map();
 
-  public async GetItem(key: string): Promise<string | null> {
-    return new Promise((resolve) => {
-      if (this._localStorage.hasOwnProperty(key)) resolve(this._localStorage[key]);
-      else resolve(null);
-    });
+  /**
+   * Gets or creates a category map
+   */
+  private getCategoryMap(category: string): Map<string, string> {
+    const cat = category || NodeLocalStorageProvider.DEFAULT_CATEGORY;
+    let categoryMap = this._storage.get(cat);
+    if (!categoryMap) {
+      categoryMap = new Map();
+      this._storage.set(cat, categoryMap);
+    }
+    return categoryMap;
   }
 
-  public async SetItem(key: string, value: string): Promise<void> {
-    return new Promise((resolve) => {
-      this._localStorage[key] = value;
-      resolve();
-    });
+  public async GetItem(key: string, category?: string): Promise<string | null> {
+    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
+    return categoryMap.get(key) ?? null;
   }
 
-  public async Remove(key: string): Promise<void> {
-    return new Promise((resolve) => {
-      if (this._localStorage.hasOwnProperty(key)) delete this._localStorage[key];
-      resolve();
-    });
+  public async SetItem(key: string, value: string, category?: string): Promise<void> {
+    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
+    categoryMap.set(key, value);
+  }
+
+  public async Remove(key: string, category?: string): Promise<void> {
+    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
+    categoryMap.delete(key);
+  }
+
+  public async ClearCategory(category: string): Promise<void> {
+    const cat = category || NodeLocalStorageProvider.DEFAULT_CATEGORY;
+    this._storage.delete(cat);
+  }
+
+  public async GetCategoryKeys(category: string): Promise<string[]> {
+    const categoryMap = this._storage.get(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
+    return categoryMap ? Array.from(categoryMap.keys()) : [];
   }
 }

@@ -11,7 +11,8 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity,  TemplateParamEntity, ActionParamEntity, AIAgentRelationshipEntity, AIAgentNoteEntity, AIAgentExampleEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
@@ -40,9 +41,10 @@ import {
     AIModelSelectionInfo,
     ConversationUtility,
     ActionChange,
-    ActionChangeScope
+    ActionChangeScope,
+    MediaOutput
 } from '@memberjunction/ai-core-plus';
-import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
+import { ActionEntityExtended, ActionResult, ActionParam } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
@@ -259,6 +261,318 @@ export class BaseAgent {
     }
 
     /**
+     * Promotes media outputs to the agent's final outputs.
+     * Call this method to add generated images, audio, or video to the agent's outputs.
+     * These will be saved to AIAgentRunMedia and flow to ConversationDetailAttachment.
+     *
+     * @param mediaOutputs - Array of media outputs to promote
+     * @since 3.1.0
+     *
+     * @example
+     * ```typescript
+     * // Promote images from action result
+     * this.promoteMediaOutputs([{
+     *   modality: 'Image',
+     *   mimeType: 'image/png',
+     *   data: base64Data,
+     *   label: 'Generated Product Image'
+     * }]);
+     *
+     * // Promote from prompt run media reference
+     * this.promoteMediaOutputs([{
+     *   promptRunMediaId: 'prompt-run-media-uuid',
+     *   modality: 'Image',
+     *   mimeType: 'image/png',
+     *   label: 'AI Generated Visualization'
+     * }]);
+     * ```
+     */
+    public promoteMediaOutputs(mediaOutputs: MediaOutput[]): void {
+        if (mediaOutputs && mediaOutputs.length > 0) {
+            this._mediaOutputs.push(...mediaOutputs);
+            this.logStatus(`📎 Promoted ${mediaOutputs.length} media output(s) to agent results`, true);
+        }
+    }
+
+    /**
+     * Gets the currently accumulated media outputs for this agent run.
+     * @returns Array of promoted media outputs
+     * @since 3.1.0
+     */
+    public get MediaOutputs(): MediaOutput[] {
+        return [...this._mediaOutputs];
+    }
+
+    /**
+     * Minimum size in characters for binary content to be extracted as a media reference.
+     * Content smaller than this threshold is kept inline in action results.
+     * Default: 10000 (~7.5KB when decoded from base64)
+     * @private
+     */
+    private static readonly LARGE_BINARY_THRESHOLD = 10000;
+
+    /**
+     * Intercepts large media content in action results and replaces with placeholder references.
+     * This prevents context overflow when action results contain large base64 data (images, audio, video).
+     *
+     * Uses generic ValueType=MediaOutput detection from action metadata to identify media output params.
+     * Intercepted media is stored in _mediaOutputs with refId and persist=false (not saved unless used).
+     *
+     * @param actionParams - The output parameters from an action result
+     * @param actionEntity - Optional action entity metadata for ValueType checking
+     * @returns Sanitized parameters with large media content replaced by ${media:ref-id} placeholders
+     * @private
+     * @since 3.1.0
+     */
+    private interceptLargeBinaryContent(actionParams: ActionParam[], actionEntity?: ActionEntityExtended): ActionParam[] {
+        if (!actionParams || actionParams.length === 0) {
+            return actionParams;
+        }
+
+        const sanitizedParams: ActionParam[] = [];
+
+        for (const param of actionParams) {
+            // Only process output params
+            if (param.Type !== 'Output' && param.Type !== 'Both') {
+                sanitizedParams.push(param);
+                continue;
+            }
+
+            // Check if this param is marked as MediaOutput in action metadata
+            // Note: 'MediaOutput' ValueType is added in v3.1.x migration.
+            // Before CodeGen runs, this property may not exist on the entity type.
+            const paramMetadata = actionEntity?.Params?.find(p => p.Name === param.Name);
+            const valueType = paramMetadata?.ValueType as string | undefined;
+            const isMediaOutputParam = valueType === 'MediaOutput';
+
+            // Handle MediaOutput params (e.g., Generate Image action)
+            if (isMediaOutputParam && Array.isArray(param.Value)) {
+                const mediaItems = param.Value as MediaOutput[];
+                const references: string[] = [];
+                let extractedCount = 0;
+
+                for (let i = 0; i < mediaItems.length; i++) {
+                    const media = mediaItems[i];
+                    // Only intercept if there's substantial data
+                    if (media.data && media.data.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
+                        // Generate unique reference ID
+                        const refId = `media-${Date.now().toString(36)}-${i}-${Math.random().toString(36).substring(2, 8)}`;
+
+                        // Store in unified media outputs with persist=false (won't be saved unless placeholder is used)
+                        this._mediaOutputs.push({
+                            ...media,
+                            refId,
+                            persist: false  // Not persisted unless placeholder is resolved in final output
+                        });
+
+                        references.push(`\${media:${refId}}`);
+                        extractedCount++;
+                    }
+                }
+
+                if (extractedCount > 0) {
+                    // Replace array with references
+                    sanitizedParams.push({
+                        Name: param.Name,
+                        Type: param.Type,
+                        Value: {
+                            mediaReferences: references,
+                            count: mediaItems.length,
+                            note: `${extractedCount} media item(s) extracted. Use placeholder syntax in your response: <img src="${references[0]}" alt="description" />`
+                        }
+                    });
+                    this.logStatus(`📦 Extracted ${extractedCount} ${param.Name} item(s) to media references`, true);
+                    continue;
+                }
+            }
+
+            // Fallback: Check for standalone Base64 strings in MediaOutput or other params
+            if (typeof param.Value === 'string' && param.Value.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
+                // Check if it looks like base64 (no spaces, alphanumeric with +/=)
+                const base64Pattern = /^[A-Za-z0-9+/]+=*$/;
+                if (isMediaOutputParam || base64Pattern.test(param.Value.substring(0, 1000))) {
+                    const refId = `data-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`;
+
+                    // Store in unified media outputs with persist=false
+                    this._mediaOutputs.push({
+                        modality: 'Image', // Default to image, could be enhanced with mime detection
+                        mimeType: 'application/octet-stream',
+                        data: param.Value,
+                        label: `Media data from ${param.Name}`,
+                        refId,
+                        persist: false
+                    });
+
+                    sanitizedParams.push({
+                        Name: param.Name,
+                        Type: param.Type,
+                        Value: `\${media:${refId}}`
+                    });
+                    this.logStatus(`📦 Extracted large binary content from '${param.Name}' to media reference`, true);
+                    continue;
+                }
+            }
+
+            // Keep param as-is if no extraction needed
+            sanitizedParams.push(param);
+        }
+
+        return sanitizedParams;
+    }
+
+    /**
+     * Resolves media placeholders in a string.
+     * Replaces ${media:ref-id} with actual data URIs (data:mime;base64,...).
+     * Sets persist=true on resolved media so it will be saved to AIAgentRunMedia.
+     *
+     * @param text - The string that may contain media placeholders
+     * @returns String with placeholders resolved to actual data URIs
+     * @private
+     * @since 3.1.0
+     */
+    private resolveMediaPlaceholdersInString(text: string): string {
+        // Check if any media has a refId (meaning we have intercepted media to resolve)
+        const hasRefIds = this._mediaOutputs.some(m => m.refId);
+        if (!text || !hasRefIds) {
+            return text;
+        }
+
+        // Match ${media:ref-id} pattern
+        const placeholderRegex = /\$\{media:([a-z0-9-]+)\}/g;
+
+        return text.replace(placeholderRegex, (match, refId: string) => {
+            const media = this._mediaOutputs.find(m => m.refId === refId);
+            if (media?.data) {
+                // Mark for persistence since it's being used in final output
+                media.persist = true;
+                return `data:${media.mimeType};base64,${media.data}`;
+            }
+            // Keep placeholder if not found (shouldn't happen in normal flow)
+            this.logStatus(`⚠️ Media reference '${refId}' not found in registry`, true);
+            return match;
+        });
+    }
+
+    /**
+     * Resolves media placeholders in a payload of any type.
+     * - For strings: resolves placeholders directly
+     * - For objects: recursively processes all string properties
+     * - For arrays: recursively processes all elements
+     *
+     * @param payload - The payload that may contain media placeholders in string values
+     * @returns Payload with all placeholders resolved to actual data URIs
+     * @private
+     * @since 3.1.0
+     */
+    private resolveMediaPlaceholdersInPayload<T>(payload: T): T {
+        // Check if any media has a refId (meaning we have intercepted media to resolve)
+        const hasRefIds = this._mediaOutputs.some(m => m.refId);
+        if (!hasRefIds) {
+            return payload;
+        }
+
+        // Count how many media items have persist=false before resolution
+        const unpersisted = this._mediaOutputs.filter(m => m.refId && m.persist === false).length;
+        const resolved = this.resolveMediaPlaceholdersRecursive(payload);
+        // Count how many were marked for persistence (persist changed from false to true)
+        const persistedAfter = this._mediaOutputs.filter(m => m.refId && m.persist === true).length;
+        const resolvedCount = persistedAfter - (unpersisted - this._mediaOutputs.filter(m => m.refId && m.persist === false).length);
+
+        if (resolvedCount > 0) {
+            this.logStatus(`✅ Resolved ${resolvedCount} media placeholder(s) in final payload`, true);
+        }
+
+        return resolved;
+    }
+
+    /**
+     * Recursively resolves media placeholders in any value.
+     * @private
+     */
+    private resolveMediaPlaceholdersRecursive<T>(value: T): T {
+        if (value === null || value === undefined) {
+            return value;
+        }
+
+        // Handle strings directly
+        if (typeof value === 'string') {
+            return this.resolveMediaPlaceholdersInString(value) as T;
+        }
+
+        // Handle arrays
+        if (Array.isArray(value)) {
+            return value.map(item => this.resolveMediaPlaceholdersRecursive(item)) as T;
+        }
+
+        // Handle objects
+        if (typeof value === 'object') {
+            const result: Record<string, unknown> = {};
+            for (const key of Object.keys(value as object)) {
+                result[key] = this.resolveMediaPlaceholdersRecursive((value as Record<string, unknown>)[key]);
+            }
+            return result as T;
+        }
+
+        // Return primitives (numbers, booleans) as-is
+        return value;
+    }
+
+    /**
+     * Processes media placeholders in agent messages for conversational agents.
+     *
+     * Unlike artifact-based agents (which embed images in HTML payload), conversational agents
+     * should display images via ConversationDetailAttachment. This method:
+     * 1. Detects ${media:xxx} placeholders in the message
+     * 2. Sets persist=true on referenced media (triggers save to AIAgentRunMedia)
+     * 3. Strips media HTML tags from the message (images display via attachment instead)
+     *
+     * @param message - The message that may contain media placeholders
+     * @returns Cleaned message with media tags stripped
+     * @private
+     * @since 3.1.0
+     */
+    private processMessageMediaPlaceholders(message: string): string {
+        if (!message) {
+            return message;
+        }
+
+        // Check if any media has a refId (meaning we have intercepted media)
+        const hasRefIds = this._mediaOutputs.some(m => m.refId);
+        if (!hasRefIds) {
+            return message;
+        }
+
+        // Find all ${media:xxx} placeholders and mark referenced media for persistence
+        const placeholderRegex = /\$\{media:([a-zA-Z0-9_-]+)\}/g;
+        let match;
+        let promotedCount = 0;
+
+        while ((match = placeholderRegex.exec(message)) !== null) {
+            const refId = match[1];
+            const media = this._mediaOutputs.find(m => m.refId === refId);
+            if (media && media.persist !== true) {
+                media.persist = true;  // Triggers save to AIAgentRunMedia
+                promotedCount++;
+            }
+        }
+
+        if (promotedCount > 0) {
+            this.logStatus(`📎 Auto-promoted ${promotedCount} media output(s) from message placeholders`, true);
+        }
+
+        // Strip <img>, <audio>, <video> tags containing media placeholders
+        // The media will display via ConversationDetailAttachment instead
+        let cleanedMessage = message
+            .replace(/<img[^>]*src=["']\$\{media:[^}]+\}["'][^>]*\/?>/gi, '')
+            .replace(/<audio[^>]*src=["']\$\{media:[^}]+\}["'][^>]*>.*?<\/audio>/gi, '')
+            .replace(/<video[^>]*src=["']\$\{media:[^}]+\}["'][^>]*>.*?<\/video>/gi, '')
+            .replace(/\n\s*\n\s*\n/g, '\n\n')  // Clean up excessive newlines
+            .trim();
+
+        return cleanedMessage;
+    }
+
+    /**
      * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
      * Tracked separately as it's display-only and doesn't need persistence.
      * @private
@@ -298,7 +612,17 @@ export class BaseAgent {
      * @private
      */
     private _subAgentRuns: ExecuteAgentResult[] = [];
-    
+
+    /**
+     * Accumulated media outputs that agents have explicitly promoted.
+     * These are collected during agent execution and returned in ExecuteAgentResult.mediaOutputs.
+     * Stored to AIAgentRunMedia when the agent completes.
+     * @private
+     * @since 3.1.0
+     */
+    private _mediaOutputs: MediaOutput[] = [];
+
+
     /**
      * Payload manager for handling payload access control.
      * @private
@@ -641,6 +965,10 @@ export class BaseAgent {
             this._effectiveActions = [];
             this._dynamicActionLimits = {};
 
+            // Reset media outputs accumulator for this run
+            // (unified array now includes both promoted media and intercepted binary with refIds)
+            this._mediaOutputs = [];
+
             // Store message lifecycle callback if provided
             this._messageLifecycleCallback = params.onMessageLifecycle;
 
@@ -803,7 +1131,12 @@ export class BaseAgent {
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
             const nextStep = await this.executeNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
-            
+
+            // Promote any media outputs from this step to the agent's outputs
+            if (nextStep.promoteMediaOutputs && nextStep.promoteMediaOutputs.length > 0) {
+                this.promoteMediaOutputs(nextStep.promoteMediaOutputs);
+            }
+
             // Check if we should continue or terminate
             if (nextStep.terminate) {
                 continueExecution = false;
@@ -3095,6 +3428,15 @@ The context is now within limits. Please retry your request with the recovered c
             const activeActions = actions.filter(a => a.Status === 'Active');
             this._effectiveActions = activeActions;
 
+            // Build agent type prompt params (merged from schema defaults, agent config, and runtime overrides)
+            const agentType = engine.AgentTypes.find(at => at.ID === agent.TypeID);
+            const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
+            const agentTypePromptParams = this.buildAgentTypePromptParams(
+                agentType,
+                agent,
+                runtimePromptParamOverrides
+            );
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -3105,17 +3447,178 @@ The context is now within limits. Please retry your request with the recovered c
                 actionDetails: this.formatActionDetails(activeActions),
             };
 
+            // Build the final result with __agentTypePromptParams injected
+            // Note: extraData can override contextData properties, but __agentTypePromptParams
+            // is built separately with proper merge precedence (schema < agent < runtime)
+            const result: AgentContextData & Record<string, unknown> = {
+                ...contextData,
+                __agentTypePromptParams: agentTypePromptParams
+            };
+
             if (extraData) {
+                // Spread extraData but don't let it override __agentTypePromptParams
+                // (which was already built with runtime overrides included)
+                const { __agentTypePromptParams: _ignored, ...restExtraData } = extraData;
                 return {
-                    ...contextData,
-                    ...extraData
-                }
+                    ...result,
+                    ...restExtraData
+                };
             }
             else {
-                return contextData;
+                return result;
             }
         } catch (error) {
             throw new Error(`Error gathering context data: ${error.message}`);
+        }
+    }
+
+    /**
+     * Builds merged agent type prompt params from schema defaults,
+     * agent config, and runtime overrides.
+     *
+     * Merge precedence (lowest to highest):
+     * 1. Schema defaults (from AgentType.PromptParamsSchema)
+     * 2. Agent config (from AIAgent.AgentTypePromptParams)
+     * 3. Runtime overrides (from ExecuteAgentParams.data.__agentTypePromptParams)
+     *
+     * @param agentType - The agent type entity with schema definition
+     * @param agent - The agent entity with configured values
+     * @param runtimeOverrides - Optional runtime overrides from ExecuteAgentParams.data
+     * @returns Merged prompt params object
+     *
+     * @protected
+     * @since 2.131.0
+     */
+    protected buildAgentTypePromptParams(
+        agentType: AIAgentTypeEntity | undefined,
+        agent: AIAgentEntityExtended,
+        runtimeOverrides?: Record<string, unknown>
+    ): Record<string, unknown> {
+        // 1. Extract defaults from schema
+        const schemaJson = agentType?.PromptParamsSchema;
+        const schemaDefaults = this.extractSchemaDefaults(schemaJson);
+
+        // 2. Parse agent-level config
+        const agentParamsJson = agent.AgentTypePromptParams;
+        let agentParams: Record<string, unknown> = {};
+        if (agentParamsJson) {
+            try {
+                agentParams = JSON.parse(agentParamsJson);
+            } catch (e) {
+                LogError(`Failed to parse AgentTypePromptParams for agent ${agent.Name}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+
+        // 3. Merge all layers (lowest to highest precedence)
+        const merged = {
+            ...schemaDefaults,
+            ...agentParams,
+            ...(runtimeOverrides || {})
+        };
+
+        // 4. Apply auto-alignment for includeResponseTypeDefinition
+        // Pass in the explicit response type config from agent/runtime (not schema defaults)
+        // to distinguish between explicit user settings and schema defaults
+        const explicitResponseType = (runtimeOverrides?.includeResponseTypeDefinition as Record<string, unknown> | undefined) ||
+                                     (agentParams.includeResponseTypeDefinition as Record<string, unknown> | undefined);
+        this.applyResponseTypeAutoAlignment(merged, explicitResponseType);
+
+        return merged;
+    }
+
+    /**
+     * Applies auto-alignment rules to includeResponseTypeDefinition based on other flags.
+     *
+     * When a documentation flag (e.g., includeForEachDocs) is explicitly set to false,
+     * the corresponding response type section (e.g., forEach) should also be excluded
+     * unless explicitly set otherwise.
+     *
+     * Auto-alignment mappings:
+     * - includePayloadInPrompt → includeResponseTypeDefinition.payload
+     * - includeResponseFormDocs → includeResponseTypeDefinition.responseForms
+     * - includeCommandDocs → includeResponseTypeDefinition.commands
+     * - includeForEachDocs → includeResponseTypeDefinition.forEach
+     * - includeWhileDocs → includeResponseTypeDefinition.while
+     *
+     * @param params - The merged params object to modify in place
+     * @param explicitResponseType - The explicitly set response type config from agent/runtime (not schema defaults)
+     * @protected
+     * @since 2.132.0
+     */
+    protected applyResponseTypeAutoAlignment(
+        params: Record<string, unknown>,
+        explicitResponseType?: Record<string, unknown>
+    ): void {
+        // Ensure includeResponseTypeDefinition is an object
+        if (!params.includeResponseTypeDefinition || typeof params.includeResponseTypeDefinition !== 'object') {
+            params.includeResponseTypeDefinition = {
+                payload: true,
+                responseForms: true,
+                commands: true,
+                forEach: true,
+                while: true
+            };
+        }
+
+        const responseType = params.includeResponseTypeDefinition as Record<string, unknown>;
+
+        // Auto-alignment mappings: docs flag → response type property
+        const alignmentMappings: Array<{ docsFlag: string; responseTypeKey: string }> = [
+            { docsFlag: 'includePayloadInPrompt', responseTypeKey: 'payload' },
+            { docsFlag: 'includeResponseFormDocs', responseTypeKey: 'responseForms' },
+            { docsFlag: 'includeCommandDocs', responseTypeKey: 'commands' },
+            { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
+            { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' }
+        ];
+
+        for (const { docsFlag, responseTypeKey } of alignmentMappings) {
+            // Check if the user explicitly set this response type property
+            // (not from schema defaults, which always provide true)
+            const wasExplicitlySet = explicitResponseType &&
+                Object.prototype.hasOwnProperty.call(explicitResponseType, responseTypeKey);
+
+            // Auto-align: if docs flag is false AND user didn't explicitly set the response type
+            // then auto-align the response type to false
+            if (params[docsFlag] === false && !wasExplicitlySet) {
+                responseType[responseTypeKey] = false;
+            }
+            // If user explicitly set the value, respect it regardless of docs flag
+            // Otherwise default to true if not set
+            else if (responseType[responseTypeKey] === undefined) {
+                responseType[responseTypeKey] = true;
+            }
+        }
+    }
+
+    /**
+     * Extracts default values from a JSON Schema definition.
+     *
+     * @param schemaJson - JSON string containing the schema
+     * @returns Object with property names and their default values
+     *
+     * @protected
+     * @since 2.131.0
+     */
+    protected extractSchemaDefaults(schemaJson: string | null | undefined): Record<string, unknown> {
+        if (!schemaJson) return {};
+
+        try {
+            const schema = JSON.parse(schemaJson);
+            const defaults: Record<string, unknown> = {};
+
+            if (schema.properties) {
+                for (const [key, prop] of Object.entries(schema.properties)) {
+                    const propDef = prop as { default?: unknown };
+                    if (propDef.default !== undefined) {
+                        defaults[key] = propDef.default;
+                    }
+                }
+            }
+
+            return defaults;
+        } catch (e) {
+            LogError(`Failed to parse PromptParamsSchema: ${e instanceof Error ? e.message : String(e)}`);
+            return {};
         }
     }
 
@@ -3755,6 +4258,11 @@ The context is now within limits. Please retry your request with the recovered c
         this._agentRun.AgentID = params.agent.ID;
         if (params.conversationDetailId) {
             this._agentRun.ConversationDetailID = params.conversationDetailId;
+        }
+        // Use conversationId from data if available (already passed by AgentRunner)
+        // This avoids a redundant network lookup since AgentRunner already loaded this
+        if (params.data?.conversationId) {
+            this._agentRun.ConversationID = params.data.conversationId;
         }
         this._agentRun.Status = 'Running';
         this._agentRun.StartedAt = new Date();
@@ -4963,7 +5471,17 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Store sub-agent run for complete tracking
             this._subAgentRuns.push(subAgentResult);
-            
+
+            // Merge sub-agent's media outputs into parent's array.
+            // This includes both promoted media and intercepted binary (with refIds) for placeholder resolution.
+            if (subAgentResult.mediaOutputs?.length) {
+                this._mediaOutputs.push(...subAgentResult.mediaOutputs);
+                const refCount = subAgentResult.mediaOutputs.filter(m => m.refId).length;
+                if (refCount > 0) {
+                    this.logStatus(`📦 Collected ${refCount} media reference(s) from sub-agent '${subAgentRequest.name}'`, true);
+                }
+            }
+
             // Determine if we should terminate after sub-agent
             const shouldTerminate = subAgentRequest.terminateAfter;
             
@@ -4988,16 +5506,16 @@ The context is now within limits. Please retry your request with the recovered c
             }; 
 
             // Finalize step entity
-            await this.finalizeStepEntity(stepEntity, subAgentResult.success, 
+            await this.finalizeStepEntity(stepEntity, subAgentResult.success,
                 subAgentResult.agentRun?.ErrorMessage, outputData);
-            
+
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Return the Chat step, including responseForm and commands from sub-agent
-                // Use mergedPayload to preserve sub-agent payload changes (e.g., PRD from Requirements Expert)
-                return {
+                // Create Chat nextStep but validate it through parent's ChatHandlingOption
+                // This allows parent agents to remap Chat -> Success/Failed/Retry if configured
+                const chatStep: BaseAgentNextStep<SR, SC> = {
                     step: 'Chat',
-                    terminate: true, // Bubble up to the main loop to handle Chat
+                    terminate: true,
                     message: subAgentResult.agentRun?.Message || null,
                     previousPayload: previousDecision?.newPayload,
                     newPayload: mergedPayload, // Preserve sub-agent payload changes
@@ -5005,6 +5523,10 @@ The context is now within limits. Please retry your request with the recovered c
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands
                 };
+
+                // Validate through parent's ChatHandlingOption (if configured)
+                // This ensures parent agents can override child Chat steps
+                return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
             }
             
             // Build a clean summary of sub-agent result
@@ -5273,6 +5795,16 @@ The context is now within limits. Please retry your request with the recovered c
                 stepCount
             );
 
+            // Merge sub-agent's media outputs into parent's array.
+            // This includes both promoted media and intercepted binary (with refIds) for placeholder resolution.
+            if (subAgentResult.mediaOutputs?.length) {
+                this._mediaOutputs.push(...subAgentResult.mediaOutputs);
+                const refCount = subAgentResult.mediaOutputs.filter(m => m.refId).length;
+                if (refCount > 0) {
+                    this.logStatus(`📦 Collected ${refCount} media reference(s) from related sub-agent '${subAgentRequest.name}'`, true);
+                }
+            }
+
             let mergedPayload = previousDecision.newPayload; // Start with parent's payload
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
 
@@ -5344,9 +5876,9 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Return the Chat step, including responseForm and commands from sub-agent
-                // Use mergedPayload to preserve sub-agent payload changes (e.g., PRD from Requirements Expert)
-                return {
+                // Create Chat nextStep but validate it through parent's ChatHandlingOption
+                // This allows parent agents to remap Chat -> Success/Failed/Retry if configured
+                const chatStep: BaseAgentNextStep<SR, SC> = {
                     step: 'Chat',
                     terminate: true,
                     message: subAgentResult.agentRun?.Message || null,
@@ -5356,6 +5888,10 @@ The context is now within limits. Please retry your request with the recovered c
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands
                 };
+
+                // Validate through parent's ChatHandlingOption (if configured)
+                // This ensures parent agents can override child Chat steps
+                return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
             }
 
             // Add sub-agent result to conversation as user message
@@ -5849,13 +6385,22 @@ The context is now within limits. Please retry your request with the recovered c
             }
             
             // Build a clean summary of action results
+            // Apply large binary content interception to prevent context overflow
             const actionSummaries = actionResults.map(result => {
                 const actionResult = result.success ? result.result : null;
-                
+
+                // Filter to output params only
+                const outputParams = result.result?.Params?.filter(p => p.Type === 'Both' || p.Type === 'Output') || [];
+
+                // Intercept large media content (images, audio, video) and replace with placeholders
+                // This prevents context overflow from base64 data (~700K tokens per 1024x1024 image)
+                // Pass actionEntity for generic ValueType=MediaOutput detection from metadata
+                const sanitizedParams = this.interceptLargeBinaryContent(outputParams, result.actionEntity);
+
                 return {
                     actionName: result.action.name,
                     success: result.success,
-                    params: result.result?.Params.filter(p => p.Type ==='Both' || p.Type ==='Output'), // only emit the output params which are type of output or both. This reduces tokens going back to LLM
+                    params: sanitizedParams,
                     resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
                     message: result.success ? actionResult?.Message || 'Action completed' : result.error
                 };
@@ -6795,6 +7340,21 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
+        // Only resolve media placeholders for ROOT agents (depth === 0)
+        // Sub-agents keep placeholders intact so parent agents don't get huge base64 in their context
+        // The root agent resolves all placeholders when returning the final result to the UI
+        const isRootAgent = this._depth === 0;
+        const resolvedPayload = (payload && isRootAgent)
+            ? this.resolveMediaPlaceholdersInPayload(payload)
+            : payload;
+
+        // For root agents: process message for media placeholders
+        // This promotes referenced media (sets persist=true) and strips media HTML tags
+        // so images display via ConversationDetailAttachment instead of embedded in message
+        const processedMessage = (finalStep.message && isRootAgent)
+            ? this.processMessageMediaPlaceholders(finalStep.message)
+            : finalStep.message;
+
         if (this._agentRun) {
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
@@ -6813,14 +7373,14 @@ The context is now within limits. Please retry your request with the recovered c
             else {
                 this._agentRun.Status = 'Completed';
             }
-        
-            this._agentRun.Result = payload ? JSON.stringify(payload) : null;
+
+            this._agentRun.Result = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
             this._agentRun.FinalStep = finalStep.step;
-            this._agentRun.Message = finalStep.message;
+            this._agentRun.Message = processedMessage;
 
             // Set the FinalPayloadObject - this will automatically stringify for the DB
-            this._agentRun.FinalPayloadObject = payload;
-            this._agentRun.FinalPayload = payload ? JSON.stringify(payload) : null;
+            this._agentRun.FinalPayloadObject = resolvedPayload;
+            this._agentRun.FinalPayload = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
             
             // Calculate total tokens from all prompts and sub-agents
             const tokenStats = this.calculateTokenStats();
@@ -6835,16 +7395,26 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
         
+        // Also promote any media from the final step's promoteMediaOutputs
+        if (finalStep.promoteMediaOutputs && finalStep.promoteMediaOutputs.length > 0) {
+            this.promoteMediaOutputs(finalStep.promoteMediaOutputs);
+        }
+
+        // Return unified media outputs array which includes:
+        // - Explicitly promoted media (persist defaults to true)
+        // - Intercepted binary with refIds (persist=false unless placeholder was resolved)
+        // Sub-agents pass their full mediaOutputs to parent for merging and placeholder resolution.
         return {
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
-            payload,
+            payload: resolvedPayload,
             agentRun: this._agentRun!,
             responseForm: finalStep.responseForm,
             actionableCommands: finalStep.actionableCommands,
             automaticCommands: finalStep.automaticCommands,
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
-                : undefined
+                : undefined,
+            mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined
         };
     }
 

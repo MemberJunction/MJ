@@ -11,12 +11,16 @@
     "credential-categories",
     "credential-types",
     "resource-types",
+    "ai-vendors",
+    "ai-models",
     "ai-configurations",
     "artifact-types",
     "action-categories",
     "actions",
     "prompt-categories",
     "prompts",
+    "templates",
+    "notifications",
     "agent-types",
     "agents",
     "scheduled-jobs",
@@ -26,6 +30,7 @@
     "component-libraries",
     "components",
     "applications",
+    "dashboard-part-types",
     "dashboards",
     "test-types",
     "tests",
@@ -38,5 +43,6 @@
     "filterPatterns": ["*spCreateAIPromptRun*", "*spUpdateAIPromptRun*"],
     "filterType": "exclude",
     "formatAsMigration": true
-  }
+  },
+  "emitSyncNotes": false
 }

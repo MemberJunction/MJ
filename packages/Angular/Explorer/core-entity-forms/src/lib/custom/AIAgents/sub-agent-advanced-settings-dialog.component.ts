@@ -3,8 +3,9 @@ import { FormGroup, FormBuilder, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView } from '@memberjunction/core';
-import { AIAgentEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 export interface SubAgentAdvancedSettingsFormData {
   executionOrder: number;

@@ -1,0 +1,52 @@
+{
+  "name": "@memberjunction/ng-list-management",
+  "version": "3.2.0",
+  "description": "MemberJunction: Angular Components for managing entity list membership with beautiful, responsive UI",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "ngc"
+  },
+  "keywords": [
+    "MemberJunction",
+    "Angular",
+    "Lists",
+    "Entity Management"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14"
+  },
+  "peerDependencies": {
+    "@angular/common": "18.2.14",
+    "@angular/core": "18.2.14",
+    "@angular/forms": "18.2.14",
+    "@angular/router": "18.2.14",
+    "@progress/kendo-angular-buttons": "16.2.0",
+    "@progress/kendo-angular-dialog": "16.2.0",
+    "@progress/kendo-angular-inputs": "16.2.0",
+    "@progress/kendo-angular-layout": "16.2.0",
+    "@progress/kendo-angular-dropdowns": "16.2.0",
+    "rxjs": "^7.8.1"
+  },
+  "dependencies": {
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/core-entities": "3.2.0",
+    "@memberjunction/global": "3.2.0",
+    "@memberjunction/ng-container-directives": "3.2.0",
+    "@memberjunction/ng-shared": "3.2.0",
+    "@memberjunction/ng-shared-generic": "3.2.0",
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

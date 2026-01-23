@@ -10,17 +10,9 @@
       "ID": "7CE1C185-A2DC-4642-A680-B87034BEB439"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:28.074Z",
-      "checksum": "e54f879a2e8722710e199ff865196f8776f59ef7850b750a323ed4c50a8d2afc"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
-        "resolved": "0DC7433E-F36B-1410-8DB6-00021F8B792E"
-      }
-    ]
+      "lastModified": "2025-12-30T23:06:46.466Z",
+      "checksum": "08f866bc71b4ef542dc6f201ff9d366664f4966cbf601df99ff0c48737ce4da2"
+    }
   },
   {
     "fields": {
@@ -33,17 +25,9 @@
       "ID": "6F9D27D2-D604-4C27-B290-B51A7DD63F41"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:28.079Z",
-      "checksum": "a82e3327222c523c292c2bdbfc7c55e37b2f675bc3172e58fb0fad6980f30da1"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+      "lastModified": "2025-12-30T23:06:46.468Z",
+      "checksum": "a574f475f8177be937e3fb36fb46c045a333b275b0531532d0edb93e14e570ac"
+    }
   },
   {
     "fields": {
@@ -56,17 +40,9 @@
       "ID": "ADC4AFE8-50BF-4F38-B254-3FE01C4A4933"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:28.083Z",
-      "checksum": "230e9e63f9e157f414ff140c15bd3ae0807cb204489268640a880c626b429764"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+      "lastModified": "2025-12-30T23:06:46.469Z",
+      "checksum": "1cdbf9aaa7856a441de450e01dfcae3db353f60ce53adda74f71087cb794f724"
+    }
   },
   {
     "fields": {
@@ -79,17 +55,9 @@
       "ID": "DDDA7F84-A16A-4BAB-A473-66776D19F8A9"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:28.088Z",
-      "checksum": "ac122fad47d5c8d933b0d5ccc5b6874749a76c5c452c7c1bf72092512b40fe62"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+      "lastModified": "2025-12-30T23:06:46.471Z",
+      "checksum": "d406c459849cfc25a492ba151234a618c8cc228ba9ac8649ce85a830b4030e10"
+    }
   },
   {
     "fields": {
@@ -102,17 +70,9 @@
       "ID": "ECC0F88F-7E71-4AD7-9F5E-64AE0DFC2D29"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:28.094Z",
-      "checksum": "9b7ec3a7767b78ff499d1e8f347e90b2e879e11245680b34b0a2e169bcd242ac"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+      "lastModified": "2025-12-30T23:06:46.472Z",
+      "checksum": "21c8d70f7da620c5c1c07419e98c343894f9b5eba426adea548774fd70631b4f"
+    }
   },
   {
     "fields": {
@@ -125,17 +85,9 @@
       "ID": "BF28FDF8-19B3-4705-BAD0-60E2FB26FE39"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:28.099Z",
-      "checksum": "74b0e6db003b10afccf3176b285cd459b77502ad728ef795583d0e4836576883"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+      "lastModified": "2025-12-30T23:06:46.474Z",
+      "checksum": "6e1975c85d4f3f07f8dd9aec5429e326de7c7222a0d39bfb167265317adebe5d"
+    }
   },
   {
     "fields": {
@@ -148,17 +100,9 @@
       "ID": "F33E4A1E-2BDC-4B10-98A3-BC7D25F86A2E"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:28.104Z",
-      "checksum": "c50a12a452ff32c1f5b7bb3308789f96807f58911e82ce4b2427fc64b3687084"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+      "lastModified": "2025-12-30T23:06:46.475Z",
+      "checksum": "b8aae964f4128e1e9f0e4bef68ef1cff44c16ead58325cf40bff4c852501288d"
+    }
   },
   {
     "fields": {
@@ -171,17 +115,9 @@
       "ID": "190DB532-16F4-469C-B55B-B927EADC8489"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:28.109Z",
-      "checksum": "0ca20b49066c3d23e4e9828acafd97b21670649f14d78fa1bf457bb56b3e3134"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+      "lastModified": "2025-12-30T23:06:46.476Z",
+      "checksum": "302c46a992361c52baec7d5bc58107684b2499406743cfdd4a2c125d413895a3"
+    }
   },
   {
     "fields": {
@@ -194,16 +130,8 @@
       "ID": "AE1E4000-96BF-4BCC-A7A3-5F12AAABD515"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:28.115Z",
-      "checksum": "6b1f11212dda730e23de7b52fb5a0df5bd4f1708269190c19b2f0c53a8e819e5"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+      "lastModified": "2025-12-30T23:06:46.477Z",
+      "checksum": "b43b8a483db90b0882a8b986f623ecc2172065a654a254fd20215ed1f8d16714"
+    }
   }
 ]

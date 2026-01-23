@@ -6811,6 +6811,8 @@ Correct pattern:
             '{' + globalVar, // In object literal
             '<' + globalVar, // JSX component
             globalVar + ' ', // Followed by space (various uses)
+            'unwrapLibraryComponents(' + globalVar, // unwrapLibraryComponents(antd, ...)
+            'unwrapLibraryComponents( ' + globalVar, // unwrapLibraryComponents( antd, ...)
           ];
 
           const isUsed = usagePatterns.some((pattern) => functionBody.includes(pattern));

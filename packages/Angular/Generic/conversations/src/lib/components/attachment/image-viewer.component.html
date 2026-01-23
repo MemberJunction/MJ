@@ -1,0 +1,63 @@
+<div class="image-viewer-backdrop"
+     *ngIf="visible"
+     (click)="onBackdropClick($event)">
+
+  <!-- Toolbar -->
+  <div class="viewer-toolbar">
+    <div class="toolbar-left">
+      <span class="file-name" *ngIf="fileName">{{ fileName }}</span>
+    </div>
+
+    <div class="toolbar-center">
+      <button class="toolbar-btn" (click)="zoomOut()" title="Zoom Out">
+        <i class="fa-solid fa-minus"></i>
+      </button>
+
+      <span class="zoom-display">{{ zoomPercentage }}</span>
+
+      <button class="toolbar-btn" (click)="zoomIn()" title="Zoom In">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+
+      <div class="toolbar-separator"></div>
+
+      <button class="toolbar-btn" (click)="resetZoom()" title="Reset Zoom (100%)">
+        <i class="fa-solid fa-expand"></i>
+      </button>
+
+      <button class="toolbar-btn" (click)="fitToScreen()" title="Fit to Screen">
+        <i class="fa-solid fa-compress"></i>
+      </button>
+    </div>
+
+    <div class="toolbar-right">
+      <button class="toolbar-btn" (click)="downloadImage()" title="Download">
+        <i class="fa-solid fa-download"></i>
+      </button>
+
+      <button class="toolbar-btn close-btn" (click)="close()" title="Close (Esc)">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Image Container -->
+  <div class="image-container"
+       (mousedown)="onMouseDown($event)"
+       [style.cursor]="zoomLevel > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'">
+    <img [src]="imageUrl"
+         [alt]="alt"
+         class="viewer-image"
+         [style.transform]="imageTransform"
+         draggable="false">
+  </div>
+
+  <!-- Instructions -->
+  <div class="viewer-instructions">
+    <span>Scroll to zoom</span>
+    <span class="separator">|</span>
+    <span>Drag to pan when zoomed</span>
+    <span class="separator">|</span>
+    <span>Esc to close</span>
+  </div>
+</div>

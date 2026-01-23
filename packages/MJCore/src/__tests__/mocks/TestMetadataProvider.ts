@@ -84,11 +84,19 @@ export class TestMetadataProvider extends ProviderBase {
         // No-op
     }
 
-    public async RunView(): Promise<any> {
-        return { Success: true, Results: [] };
+    protected async InternalRunView(): Promise<any> {
+        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
     }
 
-    public async RunViews(): Promise<any[]> {
+    protected async InternalRunViews(): Promise<any[]> {
+        return [];
+    }
+
+    protected async InternalRunQuery(): Promise<any> {
+        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', QueryID: '', QueryName: '' };
+    }
+
+    protected async InternalRunQueries(): Promise<any[]> {
         return [];
     }
 

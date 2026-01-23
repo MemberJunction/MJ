@@ -1,5 +1,6 @@
 import { ActionResultSimple } from "@memberjunction/actions-base";
-import { AIAgentEntityExtended, AIAgentTypeEntity } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { AIAgentTypeEntity } from "@memberjunction/core-entities";
 
 /**
  * Result type for parameter extraction operations

@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 
-export type TestStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Pending';
+export type TestStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Pending' | 'Timeout';
 
 @Component({
   selector: 'app-test-status-badge',
@@ -13,6 +13,7 @@ export type TestStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' |
       [class.test-status-badge--error]="status === 'Error'"
       [class.test-status-badge--running]="status === 'Running'"
       [class.test-status-badge--pending]="status === 'Pending'"
+      [class.test-status-badge--timeout]="status === 'Timeout'"
     >
       <i [class]="getIcon()" *ngIf="showIcon"></i>
       <span class="badge-text">{{ status }}</span>
@@ -72,6 +73,12 @@ export type TestStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' |
       border: 1px solid rgba(255, 193, 7, 0.2);
     }
 
+    .test-status-badge--timeout {
+      background: rgba(255, 152, 0, 0.15);
+      color: #e65100;
+      border: 1px solid rgba(255, 152, 0, 0.3);
+    }
+
     .badge-text {
       line-height: 1;
     }
@@ -102,6 +109,8 @@ export class TestStatusBadgeComponent {
         return 'fa-solid fa-spinner fa-spin';
       case 'Pending':
         return 'fa-solid fa-clock';
+      case 'Timeout':
+        return 'fa-solid fa-stopwatch';
       default:
         return 'fa-solid fa-question-circle';
     }

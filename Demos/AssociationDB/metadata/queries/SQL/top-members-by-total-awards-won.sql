@@ -1,0 +1,1 @@
+SELECT TOP {{ topN | sqlNumber }} m.ID, m.FirstName, m.LastName, m.Email, m.Organization, SUM(p.AwardCount) AS TotalAwards, COUNT(DISTINCT p.ID) AS ProductCount FROM [AssociationDemo].[vwMembers] m INNER JOIN [AssociationDemo].[vwProducts] p ON m.ID = p.MemberID WHERE p.AwardCount > 0 GROUP BY m.ID, m.FirstName, m.LastName, m.Email, m.Organization ORDER BY TotalAwards DESC

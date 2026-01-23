@@ -15,22 +15,8 @@
       "ID": "A829FAAC-9E64-440C-B650-83F92A37E990"
     },
     "sync": {
-      "lastModified": "2025-10-14T04:02:49.424Z",
-      "checksum": "cb3b37125aeff53aa04eadaa7812842663a010f4e7f122e6a09d5e0d47484995"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.DefaultArtifactTypeID",
-        "expression": "@lookup:MJ: Artifact Types.Name=Component",
-        "resolved": "E8BA10A3-019F-4C51-A8AA-397AB124F212"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:35.720Z",
+      "checksum": "86bdc799e6519aea95298474d6e2b7575d0438e4efa7835713f558588b1339a4"
+    }
   }
 ]

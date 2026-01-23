@@ -1,19 +1,13 @@
 import { BaseAgent } from './base-agent';
 import { UserInfo, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import {
-    ConversationEntity,
     ConversationDetailEntity,
-    ConversationDetailRatingEntity,
     AIAgentRunEntity,
     AIAgentNoteEntity,
-    AIAgentExampleEntity,
-    AIAgentNoteTypeEntity,
-    ArtifactUseEntity,
-    ArtifactVersionEntity,
-    AIAgentEntityExtended
+    AIAgentExampleEntity
 } from '@memberjunction/core-entities';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 /**

@@ -109,6 +109,8 @@ export interface SyncConfig {
      * - 'include': If ANY pattern matches, the SQL IS logged
      */
     filterType?: 'exclude' | 'include';
+    /** Whether to output verbose debug information to console (default: false) */
+    verboseOutput?: boolean;
   };
   /** Watch command configuration */
   watch?: {
@@ -126,6 +128,12 @@ export interface SyncConfig {
     /** Whether to allow users without any roles (defaults to false) */
     allowUsersWithoutRoles?: boolean;
   };
+  /**
+   * Whether to emit __mj_sync_notes in record files during push operations.
+   * When enabled, resolution information for @lookup and @parent references is written to files.
+   * Defaults to false. Entity-level .mj-sync.json files can override this setting.
+   */
+  emitSyncNotes?: boolean;
 }
 
 /**
@@ -258,6 +266,12 @@ export interface EntityConfig {
     /** Whether to ignore virtual fields during pull (defaults to false) */
     ignoreVirtualFields?: boolean;
   };
+  /**
+   * Whether to emit __mj_sync_notes in record files during push operations.
+   * When enabled, resolution information for @lookup and @parent references is written to files.
+   * If not specified, inherits from root .mj-sync.json. Defaults to false if not set anywhere.
+   */
+  emitSyncNotes?: boolean;
 }
 
 /**

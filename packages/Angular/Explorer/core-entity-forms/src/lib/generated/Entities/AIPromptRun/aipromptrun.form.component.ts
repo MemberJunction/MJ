@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { AIPromptRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs') // Tell MemberJunction about this class
 @Component({
@@ -22,6 +22,7 @@ export class AIPromptRunFormComponent extends BaseFormComponent {
             { sectionKey: 'validationRetryDetails', sectionName: 'Validation & Retry Details', isExpanded: false },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIPromptRunMedias', sectionName: 'MJ: AI Prompt Run Medias', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },
             { sectionKey: 'aIResultCache', sectionName: 'AI Result Cache', isExpanded: false }
         ]);

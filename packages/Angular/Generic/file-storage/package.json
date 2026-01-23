@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-file-storage",
-  "version": "2.128.0",
+  "version": "3.2.0",
   "description": "MemberJunction: Angular components for managing files, and related components.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -16,24 +16,25 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2"
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2",
-    "@angular/router": "18.0.2"
+    "@angular/common": "18.2.14",
+    "@angular/core": "18.2.14",
+    "@angular/forms": "18.2.14",
+    "@angular/router": "18.2.14"
   },
   "dependencies": {
-    "@angular/platform-browser": "18.0.2",
-    "@memberjunction/core": "2.128.0",
-    "@memberjunction/core-entities": "2.128.0",
-    "@memberjunction/global": "2.128.0",
-    "@memberjunction/graphql-dataprovider": "2.128.0",
-    "@memberjunction/ng-compare-records": "2.128.0",
-    "@memberjunction/ng-container-directives": "2.128.0",
-    "@memberjunction/ng-shared": "2.128.0",
+    "@angular/platform-browser": "18.2.14",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/core-entities": "3.2.0",
+    "@memberjunction/global": "3.2.0",
+    "@memberjunction/graphql-dataprovider": "3.2.0",
+    "@memberjunction/ng-compare-records": "3.2.0",
+    "@memberjunction/ng-container-directives": "3.2.0",
+    "@memberjunction/ng-shared": "3.2.0",
+    "@memberjunction/ng-shared-generic": "3.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",

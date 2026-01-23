@@ -1,0 +1,17 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# GCP Service Account Keys (exclude all JSON except config files)
+skip-brain-*.json
+
+# Test coverage
+coverage/
+
+# Build output
+dist/
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,25 @@
+{
+  "name": "@memberjunction/export-engine",
+  "version": "3.2.0",
+  "description": "MemberJunction: Export Engine for Excel, CSV, and JSON export with sampling and formatting options",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

@@ -2,7 +2,7 @@ import { AdvancedGenerationFeature, configInfo } from "../Config/config";
 import { LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
-import { AIPromptEntityExtended } from "@memberjunction/core-entities";
+import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 
 export type EntityNameResult = { entityName: string, tableName: string }

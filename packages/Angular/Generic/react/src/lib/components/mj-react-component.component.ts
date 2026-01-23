@@ -147,12 +147,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         previousComponent.version !== value.version;
 
       if (isDifferent) {
-        console.log(`🔄 [MJReactComponent] Component input changed, reinitializing:`, {
-          previous: previousComponent?.name,
-          new: value.name,
-          previousVersion: previousComponent?.version,
-          newVersion: value.version
-        });
         this.reinitializeComponent();
       }
     }
@@ -303,8 +297,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    console.log(`🔄 [reinitializeComponent] Cleaning up and reinitializing for ${this.component?.name}`);
-
     // Clear cached state from previous component
     this.compiledComponent = null;
     this.resolvedComponentSpec = null;
@@ -333,14 +325,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   private async initializeComponent() {
     try {
-      console.log(`🔄 [initializeComponent] Starting initialization for ${this.component?.name}:`, {
-        location: this.component?.location,
-        registry: this.component?.registry,
-        hasCode: !!this.component?.code,
-        browserRefreshed: performance.navigation.type === 1,
-        performanceType: performance.navigation.type
-      });
-      
       // Ensure React is loaded
       await this.reactBridge.getReactContext();
       

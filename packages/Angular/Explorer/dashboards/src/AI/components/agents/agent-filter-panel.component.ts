@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { AIAgentEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface AgentFilter {
   searchTerm: string;

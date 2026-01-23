@@ -75,6 +75,14 @@ interface PendingFieldNotFoundWarning {
 }
 
 /**
+ * Represents a pending redundant load warning
+ */
+interface PendingRedundantLoadWarning {
+    entityName: string;
+    engines: Set<string>;
+}
+
+/**
  * Singleton class that manages warnings across the entire application session.
  * Tracks which warnings have been shown and batches them for clean, grouped output.
  */
@@ -88,10 +96,14 @@ export class WarningManager {
     // Tracking for field-not-found warnings
     private warnedFieldNotFound: Map<string, Set<string>> = new Map(); // entityName -> Set<fieldName>
 
+    // Tracking for redundant load warnings
+    private warnedRedundantLoads: Set<string> = new Set(); // "entityName" keys that have already triggered warnings
+
     // Pending warnings by type
     private pendingEntityDeprecationWarnings: Map<string, PendingEntityDeprecationWarning> = new Map();
     private pendingFieldDeprecationWarnings: Map<string, PendingFieldDeprecationWarning[]> = new Map();
     private pendingFieldNotFoundWarnings: Map<string, PendingFieldNotFoundWarning[]> = new Map();
+    private pendingRedundantLoadWarnings: Map<string, PendingRedundantLoadWarning> = new Map();
 
     private debounceTimer: NodeJS.Timeout | null = null;
 
@@ -325,6 +337,61 @@ export class WarningManager {
     }
 
     /**
+     * Records a warning when multiple engines load the same entity data.
+     * This helps developers identify redundant data loading that could be optimized.
+     *
+     * @param entityName - The name of the entity being loaded
+     * @param engines - Array of engine class names that have loaded this entity
+     * @returns true if this is a new warning that will be emitted
+     */
+    public RecordRedundantLoadWarning(entityName: string, engines: string[]): boolean {
+        if (this.config.DisableWarnings) {
+            return false;
+        }
+
+        // Only warn if there are 2+ engines loading the same entity
+        if (engines.length < 2) {
+            return false;
+        }
+
+        const key = entityName;
+        const alreadyWarned = this.warnedRedundantLoads.has(key);
+
+        if (this.config.ShowAll) {
+            // Emit immediately, don't track or queue
+            console.warn(`Redundant data loading: Entity "${entityName}" was loaded by multiple engines: ${engines.join(', ')}`);
+            return true;
+        }
+
+        if (!this.config.GroupWarnings) {
+            // Emit immediately if not grouping, but still track to avoid duplicates
+            if (!alreadyWarned) {
+                console.warn(`Redundant data loading: Entity "${entityName}" was loaded by multiple engines: ${engines.join(', ')}`);
+                this.warnedRedundantLoads.add(key);
+            }
+            return !alreadyWarned;
+        }
+
+        // Group warnings
+        this.warnedRedundantLoads.add(key);
+
+        // Add/update pending warning
+        if (!this.pendingRedundantLoadWarnings.has(key)) {
+            this.pendingRedundantLoadWarnings.set(key, {
+                entityName,
+                engines: new Set(engines)
+            });
+        } else {
+            // Add any new engines to the existing warning
+            const existing = this.pendingRedundantLoadWarnings.get(key)!;
+            engines.forEach(e => existing.engines.add(e));
+        }
+
+        this.scheduleFlush();
+        return true;
+    }
+
+    /**
      * Schedules a flush of pending warnings after the debounce period.
      * Resets the timer if new warnings arrive.
      */
@@ -359,8 +426,9 @@ export class WarningManager {
         const hasEntityDeprecationWarnings = this.pendingEntityDeprecationWarnings.size > 0;
         const hasFieldDeprecationWarnings = this.pendingFieldDeprecationWarnings.size > 0;
         const hasFieldNotFoundWarnings = this.pendingFieldNotFoundWarnings.size > 0;
+        const hasRedundantLoadWarnings = this.pendingRedundantLoadWarnings.size > 0;
 
-        if (!hasEntityDeprecationWarnings && !hasFieldDeprecationWarnings && !hasFieldNotFoundWarnings) {
+        if (!hasEntityDeprecationWarnings && !hasFieldDeprecationWarnings && !hasFieldNotFoundWarnings && !hasRedundantLoadWarnings) {
             return; // Nothing to flush
         }
 
@@ -465,6 +533,43 @@ export class WarningManager {
             lines.push('');
         }
 
+        // Output redundant load warnings if any
+        if (hasRedundantLoadWarnings) {
+            lines.push('');
+            lines.push('⚠️  REDUNDANT DATA LOADING - Multiple engines loaded the same entity data:');
+            lines.push('');
+            lines.push('📊 REDUNDANT LOADS:');
+
+            const sortedEntities = Array.from(this.pendingRedundantLoadWarnings.values())
+                .sort((a, b) => a.entityName.localeCompare(b.entityName));
+
+            for (let i = 0; i < sortedEntities.length; i++) {
+                const warning = sortedEntities[i];
+                const isLast = i === sortedEntities.length - 1;
+                const entityPrefix = isLast ? '└─' : '├─';
+
+                lines.push(`  ${entityPrefix} "${warning.entityName}" entity`);
+
+                const sortedEngines = Array.from(warning.engines).sort();
+                for (let j = 0; j < sortedEngines.length; j++) {
+                    const engine = sortedEngines[j];
+                    const isLastEngine = j === sortedEngines.length - 1;
+                    const enginePrefix = isLastEngine ? '└─' : '├─';
+                    const continuation = isLast ? ' ' : '│';
+
+                    lines.push(`  ${continuation}  ${enginePrefix} ${engine}`);
+                }
+
+                if (!isLast) {
+                    lines.push(`  │`);
+                }
+            }
+
+            lines.push('');
+            lines.push('💡 Consider consolidating data loading or using shared engine dependencies.');
+            lines.push('');
+        }
+
         // Output all lines at once
         console.warn(lines.join('\n'));
 
@@ -472,6 +577,7 @@ export class WarningManager {
         this.pendingEntityDeprecationWarnings.clear();
         this.pendingFieldDeprecationWarnings.clear();
         this.pendingFieldNotFoundWarnings.clear();
+        this.pendingRedundantLoadWarnings.clear();
     }
 
     /**
@@ -482,9 +588,11 @@ export class WarningManager {
         this.warnedDeprecatedEntities.clear();
         this.warnedDeprecatedFields.clear();
         this.warnedFieldNotFound.clear();
+        this.warnedRedundantLoads.clear();
         this.pendingEntityDeprecationWarnings.clear();
         this.pendingFieldDeprecationWarnings.clear();
         this.pendingFieldNotFoundWarnings.clear();
+        this.pendingRedundantLoadWarnings.clear();
 
         if (this.debounceTimer) {
             clearTimeout(this.debounceTimer);

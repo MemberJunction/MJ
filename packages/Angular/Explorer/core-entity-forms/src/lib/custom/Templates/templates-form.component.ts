@@ -227,7 +227,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
                     );
                 } else {
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        `Failed to create new category. ${newCategory.LatestResult?.Message || ''}`, 
+                        `Failed to create new category. ${newCategory.LatestResult?.CompleteMessage || ''}`, 
                         'error'
                     );
                 }
@@ -297,7 +297,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
                         console.log('Content deleted successfully');
                     } else {
                         console.error('Delete returned false');
-                        MJNotificationService.Instance.CreateSimpleNotification(`Failed to delete template content. ${contentToDelete.LatestResult.Message}`, 'error');
+                        MJNotificationService.Instance.CreateSimpleNotification(`Failed to delete template content. ${contentToDelete.LatestResult.CompleteMessage}`, 'error');
                     }
                 } catch (error) {
                     console.error('Error deleting template content:', error);
@@ -466,7 +466,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
                     } else {
                         console.error('Failed to create new category');
                         MJNotificationService.Instance.CreateSimpleNotification(
-                            `Failed to create new category. ${newCategory.LatestResult?.Message || ''}`, 
+                            `Failed to create new category. ${newCategory.LatestResult?.CompleteMessage || ''}`, 
                             'error'
                         );
                         return false;

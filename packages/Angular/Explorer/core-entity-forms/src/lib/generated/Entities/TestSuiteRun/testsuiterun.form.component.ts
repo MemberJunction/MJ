@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { TestSuiteRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Suite Runs') // Tell MemberJunction about this class
 @Component({
@@ -19,6 +19,8 @@ export class TestSuiteRunFormComponent extends BaseFormComponent {
             { sectionKey: 'executionTimelineStatus', sectionName: 'Execution Timeline & Status', isExpanded: true },
             { sectionKey: 'testMetrics', sectionName: 'Test Metrics', isExpanded: false },
             { sectionKey: 'technicalOutput', sectionName: 'Technical Output', isExpanded: false },
+            { sectionKey: 'executionHost', sectionName: 'Execution Host', isExpanded: false },
+            { sectionKey: 'userDetails', sectionName: 'User Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'MJ: Test Runs', isExpanded: false }
         ]);

@@ -11,97 +11,113 @@ import { TestEngineBase } from '@memberjunction/testing-engine-base';
   selector: 'app-testing-overview',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="testing-overview">
-      <div class="overview-header">
-        <h2>
-          <i class="fa-solid fa-chart-line"></i>
-          Testing Overview
-        </h2>
-        <div class="header-controls">
-          <button class="refresh-btn" (click)="refreshData()" [disabled]="isLoading">
-            <i class="fa-solid fa-refresh" [class.spinning]="isLoading"></i>
-            Refresh
-          </button>
-        </div>
+    <!-- Full-page loading state - show nothing until loaded -->
+    @if (isLoading) {
+      <div class="full-page-loading">
+        <mj-loading text="Loading Testing Dashboard..."></mj-loading>
       </div>
-
-      <!-- KPI Cards -->
-      <div class="kpi-section">
-        @for (kpi of kpiCards$ | async; track kpi.title) {
-          <app-kpi-card [data]="kpi"></app-kpi-card>
-        }
-      </div>
-
-      <!-- Main Content Grid -->
-      <div class="content-grid">
-        <!-- Suite Hierarchy -->
-        <div class="grid-item suite-panel">
-          <app-suite-tree
-            [suites]="(suiteHierarchy$ | async) ?? []"
-            [selectedSuiteId]="selectedSuiteId"
-            (suiteSelect)="onSuiteSelect($event)"
-          ></app-suite-tree>
-        </div>
-
-        <!-- Recent Test Runs -->
-        <div class="grid-item recent-runs-panel">
-          <div class="panel-header">
-            <h3>
-              <i class="fa-solid fa-history"></i>
-              Recent Test Runs
-            </h3>
+    } @else {
+      <div class="testing-overview">
+        <div class="overview-header">
+          <h2>
+            <i class="fa-solid fa-chart-line"></i>
+            Testing Overview
+          </h2>
+          <div class="header-controls">
+            <button class="refresh-btn" (click)="refreshData()" [disabled]="isLoading">
+              <i class="fa-solid fa-refresh" [class.spinning]="isLoading"></i>
+              Refresh
+            </button>
           </div>
-          <div class="runs-list">
-            @for (run of (recentRuns$ | async) ?? []; track run.id) {
-              <div class="run-item">
-                <div class="run-info" (click)="viewRunDetail(run)">
-                  <div class="run-name">{{ run.testName }}</div>
-                  <div class="run-meta">
-                    {{ run.runDateTime | date:'short' }} • {{ run.testType }}
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-section">
+          @for (kpi of kpiCards$ | async; track kpi.title) {
+            <app-kpi-card [data]="kpi"></app-kpi-card>
+          }
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="content-grid">
+          <!-- Suite Hierarchy -->
+          <div class="grid-item suite-panel">
+            <app-suite-tree
+              [suites]="(suiteHierarchy$ | async) ?? []"
+              [selectedSuiteId]="selectedSuiteId"
+              (suiteSelect)="onSuiteSelect($event)"
+            ></app-suite-tree>
+          </div>
+
+          <!-- Recent Test Runs -->
+          <div class="grid-item recent-runs-panel">
+            <div class="panel-header">
+              <h3>
+                <i class="fa-solid fa-history"></i>
+                Recent Test Runs
+              </h3>
+            </div>
+            <div class="runs-list">
+              @for (run of (recentRuns$ | async) ?? []; track run.id) {
+                <div class="run-item">
+                  <div class="run-info" (click)="viewRunDetail(run)">
+                    <div class="run-name">{{ run.testName }}</div>
+                    <div class="run-meta">
+                      {{ run.runDateTime | date:'short' }} • {{ run.testType }}
+                    </div>
+                  </div>
+                  <div class="run-actions">
+                    <div class="run-metrics">
+                      <app-test-status-badge [status]="run.status" [showIcon]="false"></app-test-status-badge>
+                      <app-score-indicator [score]="run.score" [showBar]="false" [showIcon]="false"></app-score-indicator>
+                    </div>
                   </div>
                 </div>
-                <div class="run-actions">
-                  <div class="run-metrics">
-                    <app-test-status-badge [status]="run.status" [showIcon]="false"></app-test-status-badge>
-                    <app-score-indicator [score]="run.score" [showBar]="false" [showIcon]="false"></app-score-indicator>
-                  </div>
-                </div>
-              </div>
-            } @empty {
-              <div class="no-data">No recent test runs</div>
-            }
+              } @empty {
+                <div class="no-data">No recent test runs</div>
+              }
+            </div>
           </div>
-        </div>
 
-        <!-- Quick Stats -->
-        <div class="grid-item stats-panel">
-          <div class="panel-header">
-            <h3>
-              <i class="fa-solid fa-chart-bar"></i>
-              Quick Stats
-            </h3>
-          </div>
-          <div class="stats-content">
-            @if (kpis$ | async; as kpis) {
-              <div class="stat-item">
-                <div class="stat-label">Failed Tests</div>
-                <div class="stat-value failed">{{ kpis.failedTests }}</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-label">Skipped Tests</div>
-                <div class="stat-value skipped">{{ kpis.skippedTests }}</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-label">Avg Duration</div>
-                <div class="stat-value">{{ formatDuration(kpis.averageDuration) }}</div>
-              </div>
-            }
+          <!-- Quick Stats -->
+          <div class="grid-item stats-panel">
+            <div class="panel-header">
+              <h3>
+                <i class="fa-solid fa-chart-bar"></i>
+                Quick Stats
+              </h3>
+            </div>
+            <div class="stats-content">
+              @if (kpis$ | async; as kpis) {
+                <div class="stat-item">
+                  <div class="stat-label">Failed Tests</div>
+                  <div class="stat-value failed">{{ kpis.failedTests }}</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-label">Skipped Tests</div>
+                  <div class="stat-value skipped">{{ kpis.skippedTests }}</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-label">Avg Duration</div>
+                  <div class="stat-value">{{ formatDuration(kpis.averageDuration) }}</div>
+                </div>
+              }
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    }
   `,
   styles: [`
+    .full-page-loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      min-height: 400px;
+      background: #f8f9fa;
+    }
+
     .testing-overview {
       padding: 20px;
       height: 100%;

@@ -20,6 +20,13 @@ export class TabService {
   private queuedRequests: TabRequest[] = [];
 
   /**
+   * Flag to suppress the next ResourceResolver processing.
+   * Used when URL changes are just syncing to the current active tab,
+   * not actual navigation requests that should create/focus tabs.
+   */
+  private _suppressNextResolve = false;
+
+  /**
    * Observable of tab open requests
    */
   get TabRequests(): Observable<TabRequest> {
@@ -30,15 +37,8 @@ export class TabService {
    * Request that a new tab be opened
    */
   OpenTab(request: TabRequest): void {
-    console.log('[TabService.OpenTab] Tab request queued:', {
-      appId: request.ApplicationId,
-      title: request.Title,
-      config: request.Configuration
-    });
-
     // Store in queue for replay
     this.queuedRequests.push(request);
-    console.log('[TabService.OpenTab] Queue size:', this.queuedRequests.length);
 
     // Emit to current subscribers
     this.tabRequest$.next(request);
@@ -48,7 +48,6 @@ export class TabService {
    * Get all queued tab requests (for replay on subscription)
    */
   GetQueuedRequests(): TabRequest[] {
-    console.log('[TabService.GetQueuedRequests] Returning', this.queuedRequests.length, 'queued requests');
     return [...this.queuedRequests];
   }
 
@@ -56,7 +55,6 @@ export class TabService {
    * Clear the queue after requests have been processed
    */
   ClearQueue(): void {
-    console.log('[TabService.ClearQueue] Clearing', this.queuedRequests.length, 'processed requests');
     this.queuedRequests = [];
   }
 
@@ -134,5 +132,46 @@ export class TabService {
         queryId
       }
     });
+  }
+
+  /**
+   * Helper method to open a list in a tab
+   */
+  OpenList(listId: string, listName: string, applicationId: string): void {
+    this.OpenTab({
+      ApplicationId: applicationId,
+      Title: listName,
+      ResourceRecordId: listId,
+      Configuration: {
+        resourceType: 'Custom',
+        driverClass: 'ListDetailResource',
+        recordId: listId
+      }
+    });
+  }
+
+  /**
+   * Signal that the next ResourceResolver call should be suppressed.
+   * Call this before navigating when the URL change is just syncing
+   * to the current active tab, not a real navigation request.
+   */
+  SuppressNextResolve(): void {
+    this._suppressNextResolve = true;
+  }
+
+  /**
+   * Check if the current resolve should be suppressed.
+   * Returns true if SuppressNextResolve() was called and the flag hasn't been cleared.
+   */
+  ShouldSuppressResolve(): boolean {
+    return this._suppressNextResolve;
+  }
+
+  /**
+   * Clear the suppress flag. Call this after checking ShouldSuppressResolve()
+   * to reset the flag for future navigations.
+   */
+  ClearSuppressFlag(): void {
+    this._suppressNextResolve = false;
   }
 }

@@ -2,10 +2,10 @@ import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, ElementRef 
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata } from '@memberjunction/core';
-import { AIAgentRunEntityExtended, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentRunEntityExtended, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { TimelineItem, AIAgentRunTimelineComponent } from './ai-agent-run-timeline.component';
 import { AIAgentRunFormComponent } from '../../generated/Entities/AIAgentRun/aiagentrun.form.component';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
@@ -13,6 +13,7 @@ import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component
 import { AIAgentRunVisualizationComponent } from './ai-agent-run-visualization.component';
 import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
@@ -61,7 +62,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     protected router: Router,
     route: ActivatedRoute,
     cdr: ChangeDetectorRef,
-    private costService: AIAgentRunCostService
+    private costService: AIAgentRunCostService,
+    private appManager: ApplicationManager
   ) {
     super(elementRef, sharedService, router, route, cdr);
     this.dataHelper = new AIAgentRunDataHelper();
@@ -182,6 +184,27 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   
   navigateToEntityRecord(event: { entityName: string; recordId: string }) {
     SharedService.Instance.OpenEntityRecord(event.entityName, CompositeKey.FromID(event.recordId));
+  }
+
+  /**
+   * Navigate to the conversation in the Chat application
+   */
+  navigateToConversation() {
+    if (!this.record?.ConversationID) return;
+
+    // Find the Chat app
+    const chatApp = this.appManager.GetAllApps().find(app => app.Name === 'Chat');
+    if (!chatApp) {
+      console.warn('Chat application not found');
+      return;
+    }
+
+    // Navigate to the Conversations nav item with the conversationId parameter
+    this.navigationService.OpenNavItemByName(
+      'Conversations',
+      { conversationId: this.record.ConversationID },
+      chatApp.ID
+    );
   }
   
   refreshData() {

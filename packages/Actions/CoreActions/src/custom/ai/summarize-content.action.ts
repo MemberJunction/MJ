@@ -5,7 +5,7 @@ import { LogError, RunView } from "@memberjunction/core";
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import type { AIPromptEntityExtended } from '@memberjunction/core-entities';
+import type { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface SummaryCitation {
     text: string;           // Exact quote from content

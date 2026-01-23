@@ -96,42 +96,50 @@ export class FileWriteBatch {
   private async applyChanges(): Promise<void> {
     for (const [filePath, changes] of this.changes) {
       await this.ensureFileLoaded(filePath);
-      
+
+      // Start with existing file content or empty array
       let currentContent: RecordData | RecordData[] = this.fileContents.get(filePath) || [];
-      
+
       for (const change of changes) {
         switch (change.operation) {
           case 'write':
             // Complete overwrite
             currentContent = change.data;
             break;
-            
-          case 'update-array':
-            // Update a specific record in an array
-            if (Array.isArray(currentContent) && change.primaryKeyLookup) {
-              const index = currentContent.findIndex(r => 
+
+          case 'update-array': {
+            // Ensure content is an array
+            const contentArray = Array.isArray(currentContent) ? currentContent : [];
+
+            if (change.primaryKeyLookup) {
+              // Find existing record with matching primary key
+              const index = contentArray.findIndex(r =>
                 this.createPrimaryKeyLookup(r.primaryKey || {}) === change.primaryKeyLookup
               );
-              
+
               if (index >= 0) {
-                currentContent[index] = change.data as RecordData;
+                // Update existing record
+                contentArray[index] = change.data as RecordData;
               } else {
                 // Record not found, append it
-                currentContent.push(change.data as RecordData);
+                contentArray.push(change.data as RecordData);
               }
             } else {
-              // File doesn't contain an array, make it one
-              currentContent = [change.data as RecordData];
+              // No lookup key, just append
+              contentArray.push(change.data as RecordData);
             }
+
+            currentContent = contentArray;
             break;
-            
+          }
+
           case 'update-single':
             // Replace the entire file content with a single record
             currentContent = change.data;
             break;
         }
       }
-      
+
       // Update the in-memory content
       if (currentContent !== undefined) {
         this.fileContents.set(filePath, currentContent);

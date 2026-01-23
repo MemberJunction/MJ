@@ -1,0 +1,366 @@
+/* MJ Export Dialog - Modern, gorgeous pure Angular styling */
+
+/* Backdrop */
+.mj-export-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+/* Dialog Container */
+.mj-export-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  width: 480px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  z-index: 1001;
+  animation: slideIn 0.2s ease-out;
+}
+
+/* Header */
+.mj-export-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.mj-export-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mj-export-close {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  color: #6b7280;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.mj-export-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Content */
+.mj-export-content {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Sections */
+.mj-export-section {
+  margin-bottom: 24px;
+}
+
+.mj-export-section:last-child {
+  margin-bottom: 0;
+}
+
+.mj-export-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+/* Format Selection Buttons */
+.mj-export-formats {
+  display: flex;
+  gap: 12px;
+}
+
+.mj-export-format-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mj-export-format-btn:hover {
+  border-color: #3b82f6;
+  background: #f0f9ff;
+}
+
+.mj-export-format-btn.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.mj-export-format-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+  color: #6b7280;
+}
+
+.mj-export-format-btn.selected .mj-export-format-icon {
+  color: #3b82f6;
+}
+
+.mj-export-format-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.mj-export-format-desc {
+  font-size: 11px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* Input Group */
+.mj-export-input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.mj-export-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #111827;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.mj-export-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.mj-export-input-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+/* Checkbox */
+.mj-export-checkbox-section {
+  padding: 12px 0;
+}
+
+.mj-export-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+}
+
+.mj-export-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+/* Select Dropdown */
+.mj-export-select {
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #111827;
+  background: #ffffff;
+  cursor: pointer;
+  min-width: 160px;
+  transition: all 0.15s ease;
+}
+
+.mj-export-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Sampling Row */
+.mj-export-sampling-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.mj-export-number-input {
+  width: 100px;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #111827;
+  transition: all 0.15s ease;
+}
+
+.mj-export-number-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.mj-export-sampling-desc {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Summary Section */
+.mj-export-summary {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.mj-export-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.mj-export-summary-label {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.mj-export-summary-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mj-export-highlight {
+  color: #3b82f6;
+  font-size: 16px;
+}
+
+/* Error Message */
+.mj-export-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  margin-top: 16px;
+}
+
+/* Footer Actions */
+.mj-export-actions {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0 0 12px 12px;
+}
+
+.mj-export-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.mj-export-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mj-export-btn-primary {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.mj-export-btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.mj-export-btn-secondary {
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.mj-export-btn-secondary:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* Spinner animation */
+.fa-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

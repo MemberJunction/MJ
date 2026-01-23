@@ -1,12 +1,12 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewContainerRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewContainerRef } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
+import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { AIAgentEntityExtended, AIAgentTypeEntity, AIAgentPromptEntity, AIAgentActionEntity, AIPromptEntityExtended, ActionEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity, AIAgentPromptEntity, AIAgentActionEntity, ActionEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentManagementService } from './ai-agent-management.service';
-
+import { AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 export interface CreateSubAgentConfig {
   /** Title for the dialog */
   title?: string;

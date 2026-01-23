@@ -1,0 +1,106 @@
+{
+  "name": "OpenRecordButton",
+  "title": "Open Record Button",
+  "description": "@file:../../descriptions/generic/open-record-button.md",
+  "type": "navigation",
+  "location": "embedded",
+  "functionalRequirements": "@file:../../functional-requirements/generic/open-record-button.md",
+  "technicalDesign": "@file:../../technical-design/generic/open-record-button.md",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives record data through props, uses metadata for key information"
+  },
+  "properties": [
+    {
+      "name": "record",
+      "type": "Record<string, any>",
+      "description": "The entity record to open (must contain primary key fields)",
+      "required": true
+    },
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Name of the entity (used to look up metadata)",
+      "required": true
+    },
+    {
+      "name": "text",
+      "type": "string",
+      "description": "Button text",
+      "required": false,
+      "defaultValue": "Open Record"
+    },
+    {
+      "name": "variant",
+      "type": "'primary' | 'default' | 'text' | 'link'",
+      "description": "Button style variant",
+      "required": false,
+      "defaultValue": "default",
+      "possibleValues": [
+        "primary",
+        "default",
+        "text",
+        "link"
+      ]
+    },
+    {
+      "name": "size",
+      "type": "'small' | 'medium' | 'large'",
+      "description": "Button size",
+      "required": false,
+      "defaultValue": "medium",
+      "possibleValues": [
+        "small",
+        "medium",
+        "large"
+      ]
+    },
+    {
+      "name": "icon",
+      "type": "string",
+      "description": "Icon to show (emoji or unicode)",
+      "required": false,
+      "defaultValue": "📂"
+    },
+    {
+      "name": "showIcon",
+      "type": "boolean",
+      "description": "Whether to show the icon",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "fullWidth",
+      "type": "boolean",
+      "description": "Whether button takes full width",
+      "required": false,
+      "defaultValue": false
+    }
+  ],
+  "events": [
+    {
+      "name": "recordOpened",
+      "description": "Fired after record is successfully opened",
+      "parameters": [
+        {
+          "name": "record",
+          "type": "Record<string, any>",
+          "description": "The opened record"
+        },
+        {
+          "name": "entityName",
+          "type": "string",
+          "description": "Entity name"
+        },
+        {
+          "name": "primaryKeys",
+          "type": "Array<{ FieldName: string; Value: any }>",
+          "description": "Primary key field/value pairs used to open"
+        }
+      ]
+    }
+  ],
+  "dependencies": [],
+  "code": "@file:../../code/generic/open-record-button.js",
+  "exampleUsage": "<OpenRecordButton\n  record={selectedDeal}\n  entityName=\"Deals\"\n  text=\"View Deal\"\n  variant=\"primary\"\n/>"
+}

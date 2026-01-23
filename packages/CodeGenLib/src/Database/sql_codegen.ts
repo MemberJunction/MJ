@@ -100,9 +100,8 @@ export class SQLCodeGenBase {
             succeedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
 
             // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
-            // Sort entities by name for deterministic processing order (workaround until MJCore fix in issue #1436)
-            const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
-            const baselineEntities = sortedEntities.filter(e => e.IncludeInAPI);
+            // Entities are already sorted by name in PostProcessEntityMetadata (see providerBase.ts)
+            const baselineEntities = entities.filter(e => e.IncludeInAPI);
             const includedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
             const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
 

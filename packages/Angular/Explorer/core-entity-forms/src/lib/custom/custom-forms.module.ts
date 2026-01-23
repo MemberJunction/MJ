@@ -42,6 +42,7 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { DeepDiffModule } from "@memberjunction/ng-deep-diff";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
 import { ChatMessageViewerComponent } from "./AIPromptRuns/chat-message-viewer.component";
@@ -70,6 +71,8 @@ import { TestSuiteRunFormComponentExtended, LoadTestSuiteRunFormComponentExtende
 import { TestSuiteFormComponentExtended, LoadTestSuiteFormComponentExtended } from "./Tests/test-suite-form.component";
 import { TestRunFeedbackFormComponentExtended, LoadTestRunFeedbackFormComponentExtended } from "./Tests/test-run-feedback-form.component";
 import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } from "./Tests/test-rubric-form.component";
+import { EntityLinkPillComponent, LoadEntityLinkPillComponent } from "./Tests/entity-link-pill.component";
+import { ListFormComponentExtended, LoadListFormComponentExtended } from "./Lists/list-form.component";
 
 @NgModule({
     declarations: [
@@ -117,6 +120,8 @@ import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } 
         TestSuiteFormComponentExtended,
         TestRunFeedbackFormComponentExtended,
         TestRubricFormComponentExtended,
+        EntityLinkPillComponent,
+        ListFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -159,7 +164,8 @@ import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } 
         TestingModule,
         MJIntegratedFlowEditorComponent,
         SharedGenericModule,
-        EntityRelationshipDiagramModule
+        EntityRelationshipDiagramModule,
+        ListManagementModule
     ],
     exports: [
         EntityFormComponentExtended,
@@ -188,7 +194,9 @@ import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } 
         TestSuiteRunFormComponentExtended,
         TestSuiteFormComponentExtended,
         TestRunFeedbackFormComponentExtended,
-        TestRubricFormComponentExtended
+        TestRubricFormComponentExtended,
+        EntityLinkPillComponent,
+        ListFormComponentExtended
     ],
     providers: [
         NewAgentDialogService,
@@ -213,4 +221,6 @@ export function LoadCoreCustomForms() {
     LoadTestSuiteFormComponentExtended();
     LoadTestRunFeedbackFormComponentExtended();
     LoadTestRubricFormComponentExtended();
+    LoadEntityLinkPillComponent();
+    LoadListFormComponentExtended();
 }

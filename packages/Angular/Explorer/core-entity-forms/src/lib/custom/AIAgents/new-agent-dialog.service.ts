@@ -1,7 +1,7 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
 import { DialogService, DialogRef, DialogSettings } from '@progress/kendo-angular-dialog';
 import { NewAgentDialogComponent, NewAgentConfig } from './new-agent-dialog.component';
-import { AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { Observable, Subject } from 'rxjs';
 
 export interface NewAgentDialogResult {

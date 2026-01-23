@@ -161,36 +161,18 @@
 
     </mj-collapsible-panel>
 
-    <!-- Effort & Credential Settings Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="effortCredentialSettings"
-        sectionName="Effort & Credential Settings"
-        icon="fa fa-key"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="EffortLevel"
             Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CredentialID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Credential"
-            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -221,6 +203,31 @@
             [formContext]="formContext"
         ></mj-form-field>
 
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
+
+    <!-- MJ: AI Credential Bindings Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAICredentialBindings"
+        sectionName="MJ: AI Credential Bindings"
+        icon="fa fa-table"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAICredentialBindings')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Credential Bindings','AIPromptModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Credential Bindings')"
+                [AllowLoad]="IsSectionExpanded('mJAICredentialBindings')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJAICredentialBindings', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
     </mj-collapsible-panel>
 </mj-record-form-container>
         

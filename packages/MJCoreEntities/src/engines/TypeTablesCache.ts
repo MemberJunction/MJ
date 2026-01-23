@@ -10,7 +10,8 @@ export class TypeTablesCache extends BaseEngine<TypeTablesCache> {
             {
                 Type: 'entity',
                 EntityName: 'Entity Relationship Display Components',
-                PropertyName: '_EntityRelationshipDisplayComponents'
+                PropertyName: '_EntityRelationshipDisplayComponents',
+                CacheLocal: true
             }
         ];
         await this.Load(c, provider, forceRefresh, contextUser);

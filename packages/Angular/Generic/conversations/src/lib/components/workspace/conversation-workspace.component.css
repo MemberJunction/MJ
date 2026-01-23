@@ -42,31 +42,43 @@
   overflow: hidden;
 }
 
-/* Sidebar expand handle (only visible when sidebar is collapsed) */
-.sidebar-expand-handle {
-  flex-shrink: 0;
-  width: 24px;
+/* Floating toggle button (only visible when sidebar is collapsed) */
+.sidebar-floating-toggle {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 100;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
   background: #092340;
-  border-right: 1px solid rgba(255, 255, 255, 0.15);
-  transition: background 0.15s ease;
-  z-index: 10;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
 }
 
-.sidebar-expand-handle:hover {
-  background: #1a3a5c;
+.sidebar-floating-toggle:hover {
+  background: #0a2d4d;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: scale(1.05);
 }
 
-.sidebar-expand-handle i {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 11px;
+.sidebar-floating-toggle:active {
+  transform: scale(0.98);
+}
+
+.sidebar-floating-toggle i {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 16px;
   transition: color 0.15s ease;
 }
 
-.sidebar-expand-handle:hover i {
+.sidebar-floating-toggle:hover i {
   color: white;
 }
 
@@ -249,7 +261,7 @@
 
   .sidebar-resize-handle,
   .artifact-panel-resize-handle,
-  .sidebar-expand-handle {
+  .sidebar-floating-toggle {
     display: none;
   }
 

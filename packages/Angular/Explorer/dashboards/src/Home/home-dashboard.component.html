@@ -63,7 +63,13 @@
           <i class="fa-solid fa-folder-open"></i>
         </div>
         <h3>No Applications Available</h3>
-        <p>You don't have any applications configured yet. Use the app switcher to configure your applications.</p>
+        <p>You don't have any applications configured yet.</p>
+        <button kendoButton
+                themeColor="primary"
+                (click)="openConfigDialog()">
+          <i class="fa-solid fa-gear"></i>
+          Configure Applications
+        </button>
       </div>
     </div>
   </div>
@@ -169,4 +175,11 @@
     <i class="fa-solid fa-bolt"></i>
     <span class="fab-badge" *ngIf="unreadNotifications.length > 0">{{ unreadNotifications.length }}</span>
   </button>
+
+  <!-- App Configuration Dialog -->
+  <mj-user-app-config
+    #appConfigDialog
+    [(showDialog)]="showConfigDialog"
+    (configSaved)="onConfigSaved()">
+  </mj-user-app-config>
 </div>

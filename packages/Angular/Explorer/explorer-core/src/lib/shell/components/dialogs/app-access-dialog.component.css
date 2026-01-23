@@ -1,0 +1,208 @@
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001; /* Higher than loading screen (10000) */
+  animation: fadeIn 0.2s ease-out;
+  padding: 16px; /* Ensure padding on small screens */
+  box-sizing: border-box;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.dialog-container {
+  background: white;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dialog-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.dialog-title {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.dialog-message {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #4a4a4a;
+}
+
+.dialog-help {
+  margin: 0 0 20px 0;
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.dialog-btn {
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  min-width: 100px;
+}
+
+.dialog-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dialog-btn.primary {
+  background: #2196F3;
+  color: white;
+}
+
+.dialog-btn.primary:hover:not(:disabled) {
+  background: #1976D2;
+}
+
+.dialog-btn.primary:active:not(:disabled) {
+  background: #1565C0;
+}
+
+.dialog-btn.secondary,
+.dialog-btn:not(.primary):not(.secondary) {
+  background: #f5f5f5;
+  color: #333;
+  border: 1px solid #ddd;
+}
+
+.dialog-btn.secondary:hover:not(:disabled),
+.dialog-btn:not(.primary):not(.secondary):hover:not(:disabled) {
+  background: #e0e0e0;
+}
+
+.dialog-btn.secondary:active:not(:disabled),
+.dialog-btn:not(.primary):not(.secondary):active:not(:disabled) {
+  background: #d0d0d0;
+}
+
+/* Spinner animation */
+.fa-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive - Tablet */
+@media (max-width: 768px) {
+  .dialog-container {
+    max-width: 380px;
+  }
+
+  .dialog-message {
+    font-size: 13px;
+  }
+}
+
+/* Responsive - Mobile */
+@media (max-width: 480px) {
+  .dialog-container {
+    padding: 20px;
+    margin: 0;
+    max-width: none;
+    width: 100%;
+    border-radius: 8px;
+  }
+
+  .dialog-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+  }
+
+  .dialog-title {
+    font-size: 17px;
+    margin-bottom: 10px;
+  }
+
+  .dialog-message {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .dialog-help {
+    font-size: 11px;
+    margin-bottom: 16px;
+  }
+
+  .dialog-actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .dialog-btn {
+    width: 100%;
+    padding: 12px 20px;
+    font-size: 15px;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+  .dialog-container {
+    padding: 16px;
+  }
+
+  .dialog-icon {
+    font-size: 32px;
+  }
+
+  .dialog-title {
+    font-size: 16px;
+  }
+}

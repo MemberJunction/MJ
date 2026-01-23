@@ -22,7 +22,7 @@
  * @module @memberjunction/core-entities
  */
 
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, RegisterForStartup } from "@memberjunction/core";
 import { ENCRYPTION_MARKER } from "@memberjunction/global";
 import {
     EncryptionKeyEntity,
@@ -64,6 +64,7 @@ export interface EncryptionKeyConfiguration {
  * For actual encryption/decryption operations, use or extend the EncryptionEngine
  * class in the @memberjunction/encryption package, which extends this base class.
  */
+@RegisterForStartup()
 export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
     /**
      * Cached array of encryption keys loaded from the database.
@@ -120,15 +121,18 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 PropertyName: '_encryptionKeys',
-                EntityName: 'MJ: Encryption Keys'
+                EntityName: 'MJ: Encryption Keys',
+                CacheLocal: true
             },
             {
                 PropertyName: '_encryptionAlgorithms',
-                EntityName: 'MJ: Encryption Algorithms'
+                EntityName: 'MJ: Encryption Algorithms',
+                CacheLocal: true
             },
             {
                 PropertyName: '_encryptionKeySources',
-                EntityName: 'MJ: Encryption Key Sources'
+                EntityName: 'MJ: Encryption Key Sources',
+                CacheLocal: true
             }
         ];
 

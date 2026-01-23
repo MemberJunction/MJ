@@ -2,14 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, from, combineLatest } from 'rxjs';
 import { map, switchMap, shareReplay, tap } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import {
-  TestRunEntity,
-  TestSuiteRunEntity,
-  TestRunFeedbackEntity,
-  TestSuiteEntity,
-  TestEntity,
-  TestTypeEntity
-} from '@memberjunction/core-entities';
+import { TestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 
 export interface TestingDashboardKPIs {
@@ -30,7 +23,7 @@ export interface TestRunSummary {
   testName: string;
   suiteName: string;
   testType: string;
-  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running';
+  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Timeout';
   score: number; // 0-1.0000
   duration: number; // milliseconds
   cost: number; // USD
@@ -103,6 +96,78 @@ export interface FeedbackStats {
   agreementRate: number;
   disagreementRate: number;
   accuracyRate: number;
+}
+
+/**
+ * Extended test run summary with human feedback data included
+ */
+export interface TestRunWithFeedbackSummary extends TestRunSummary {
+  // Human feedback
+  humanRating: number | null;
+  humanIsCorrect: boolean | null;
+  humanComments: string | null;
+  hasHumanFeedback: boolean;
+  feedbackId: string | null;
+  // Checks (from automated evaluation)
+  passedChecks: number | null;
+  failedChecks: number | null;
+  totalChecks: number | null;
+}
+
+/**
+ * Aggregated evaluation metrics
+ */
+export interface EvaluationSummaryMetrics {
+  totalRuns: number;
+  // Execution
+  execCompletedCount: number;
+  execErrorCount: number;
+  execSuccessRate: number;
+  // Human
+  humanReviewedCount: number;
+  humanPendingCount: number;
+  humanAvgRating: number;
+  humanCorrectRate: number;
+  // Auto
+  autoEvaluatedCount: number;
+  autoAvgScore: number;
+  autoPassRate: number;
+  // Agreement
+  agreementRate: number;
+}
+
+// Simple result types for optimized queries (only fields needed for display)
+interface TestRunSimple {
+  ID: string;
+  TestID: string;
+  Test: string;
+  Status: string;
+  Score: number;
+  CostUSD: number;
+  StartedAt: Date;
+  CompletedAt: Date | null;
+  TargetType: string;
+  TargetLogID: string;
+}
+
+interface TestSuiteRunSimple {
+  ID: string;
+  TestSuiteID: string;
+  TotalTests: number;
+  PassedTests: number;
+  TotalCostUSD: number;
+  StartedAt: Date;
+  GitCommit: string;
+  AgentVersion: string;
+}
+
+interface TestRunFeedbackSimple {
+  ID: string;
+  TestRunID: string;
+  Rating: number;
+  IsCorrect: boolean;
+  Comments: string;
+  CreatedAt: Date;
 }
 
 @Injectable({
@@ -181,6 +246,29 @@ export class TestingInstrumentationService {
     shareReplay(1)
   );
 
+  /**
+   * Test runs with feedback data joined - for evaluation display
+   */
+  readonly testRunsWithFeedback$ = combineLatest([
+    this._refreshTrigger$,
+    this._dateRange$,
+    this._suiteFilter$,
+    this._testTypeFilter$
+  ]).pipe(
+    tap(() => this._isLoading$.next(true)),
+    switchMap(() => from(this.loadTestRunsWithFeedback())),
+    tap(() => this.checkLoadingComplete()),
+    shareReplay(1)
+  );
+
+  /**
+   * Aggregated evaluation metrics from test runs with feedback
+   */
+  readonly evaluationMetrics$ = this.testRunsWithFeedback$.pipe(
+    map(runs => this.calculateEvaluationMetrics(runs)),
+    shareReplay(1)
+  );
+
   private checkLoadingComplete(): void {
     setTimeout(() => {
       this._isLoading$.next(false);
@@ -211,22 +299,18 @@ export class TestingInstrumentationService {
     const engine = TestEngineBase.Instance;
     const activeTests = engine.Tests.filter(t => t.Status === 'Active');
 
-    // Only load runs via RunView (not cached in engine)
-    const [testRunsResult, suiteRunsResult] = await rv.RunViews([
+    // Only load runs via RunView (not cached in engine) - use simple result type with only needed fields
+    const [testRunsResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Test Runs',
         ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-        ResultType: 'entity_object'
-      },
-      {
-        EntityName: 'MJ: Test Suite Runs',
-        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-        ResultType: 'entity_object'
+        Fields: ['ID', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt'],
+        ResultType: 'simple',
+        CacheLocal: true
       }
     ]);
 
-    const testRuns = testRunsResult.Results as TestRunEntity[];
-    const suiteRuns = suiteRunsResult.Results as TestSuiteRunEntity[];
+    const testRuns = testRunsResult.Results as TestRunSimple[];
 
     // Calculate KPIs
     const totalTestsActive = activeTests.length;
@@ -243,23 +327,27 @@ export class TestingInstrumentationService {
     const completedRuns = testRuns.filter(r => r.CompletedAt != null && r.StartedAt != null);
     const averageDuration = completedRuns.length > 0
       ? completedRuns.reduce((sum, r) => {
-          const duration = new Date(r.CompletedAt!).getTime() - new Date(r.StartedAt!).getTime();
-          return sum + duration;
+          const startTime = r.StartedAt instanceof Date ? r.StartedAt.getTime() : new Date(r.StartedAt).getTime();
+          const endTime = r.CompletedAt instanceof Date ? r.CompletedAt.getTime() : new Date(r.CompletedAt!).getTime();
+          return sum + (endTime - startTime);
         }, 0) / completedRuns.length
       : 0;
 
     // Count tests pending review (no feedback)
-    const testsPendingReview = await this.countTestsPendingReview(testRuns);
+    const testRunIDs = testRuns.map(r => r.ID);
+    const testsPendingReview = await this.countTestsPendingReview(testRunIDs);
 
     // Calculate trend (compare to previous period)
     const periodDuration = end.getTime() - start.getTime();
     const previousStart = new Date(start.getTime() - periodDuration);
     const previousEnd = new Date(start.getTime());
 
-    const previousRunsResult = await rv.RunView<TestRunEntity>({
+    const previousRunsResult = await rv.RunView<TestRunSimple>({
       EntityName: 'MJ: Test Runs',
       ExtraFilter: `StartedAt >= '${previousStart.toISOString()}' AND StartedAt < '${previousEnd.toISOString()}'`,
-      ResultType: 'entity_object'
+      Fields: ['ID', 'Status'],
+      ResultType: 'simple',
+      CacheLocal: true
     });
 
     const previousRuns = previousRunsResult.Results || [];
@@ -282,21 +370,23 @@ export class TestingInstrumentationService {
     };
   }
 
-  private async countTestsPendingReview(testRuns: TestRunEntity[]): Promise<number> {
-    if (testRuns.length === 0) return 0;
+  private async countTestsPendingReview(testRunIDs: string[]): Promise<number> {
+    if (testRunIDs.length === 0) return 0;
 
     const rv = new RunView();
-    const testRunIDs = testRuns.map(r => r.ID).join("','");
+    const idList = testRunIDs.join("','");
 
-    const feedbackResult = await rv.RunView<TestRunFeedbackEntity>({
+    const feedbackResult = await rv.RunView<{TestRunID: string}>({
       EntityName: 'MJ: Test Run Feedbacks',
-      ExtraFilter: `TestRunID IN ('${testRunIDs}')`,
-      ResultType: 'entity_object'
+      ExtraFilter: `TestRunID IN ('${idList}')`,
+      Fields: ['TestRunID'],
+      ResultType: 'simple',
+      CacheLocal: true
     });
 
     const feedbackTestRunIDs = new Set((feedbackResult.Results || []).map(f => f.TestRunID));
 
-    return testRuns.filter(r => !feedbackTestRunIDs.has(r.ID)).length;
+    return testRunIDs.filter(id => !feedbackTestRunIDs.has(id)).length;
   }
 
   private async loadTestRuns(): Promise<TestRunSummary[]> {
@@ -316,32 +406,41 @@ export class TestingInstrumentationService {
     }
 
     const rv = new RunView();
-    const result = await rv.RunView<TestRunEntity>({
+    const result = await rv.RunView<TestRunSimple>({
       EntityName: 'MJ: Test Runs',
       ExtraFilter: filter,
       OrderBy: 'StartedAt DESC',
       MaxRows: 1000,
-      ResultType: 'entity_object'
+      Fields: ['ID', 'TestID', 'Test', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt', 'TargetType', 'TargetLogID'],
+      ResultType: 'simple',
+      CacheLocal: true
     });
 
     const testRuns = result.Results || [];
 
-    return testRuns.map(run => ({
-      id: run.ID,
-      testId: run.TestID || '',
-      testName: run.Test || 'Unknown Test',
-      suiteName: '', // Will be populated from join
-      testType: run.Test || 'Unknown',
-      status: run.Status as 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running',
-      score: run.Score || 0,
-      duration: run.CompletedAt && run.StartedAt
-        ? new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime()
-        : (run.StartedAt ? Date.now() - new Date(run.StartedAt).getTime() : 0),
-      cost: run.CostUSD || 0,
-      runDateTime: run.StartedAt ? new Date(run.StartedAt) : new Date(),
-      targetType: run.TargetType || '',
-      targetLogID: run.TargetLogID || ''
-    }));
+    return testRuns.map(run => {
+      const startedAt = run.StartedAt instanceof Date ? run.StartedAt : new Date(run.StartedAt);
+      const completedAt = run.CompletedAt
+        ? (run.CompletedAt instanceof Date ? run.CompletedAt : new Date(run.CompletedAt))
+        : null;
+
+      return {
+        id: run.ID,
+        testId: run.TestID || '',
+        testName: run.Test || 'Unknown Test',
+        suiteName: '', // Will be populated from join
+        testType: run.Test || 'Unknown',
+        status: run.Status as 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running',
+        score: run.Score || 0,
+        duration: completedAt && startedAt
+          ? completedAt.getTime() - startedAt.getTime()
+          : (startedAt ? Date.now() - startedAt.getTime() : 0),
+        cost: run.CostUSD || 0,
+        runDateTime: startedAt,
+        targetType: run.TargetType || '',
+        targetLogID: run.TargetLogID || ''
+      };
+    });
   }
 
   private async loadSuiteHierarchy(): Promise<SuiteHierarchyNode[]> {
@@ -352,11 +451,13 @@ export class TestingInstrumentationService {
     const engine = TestEngineBase.Instance;
     const suites = engine.TestSuites.filter(s => s.Status === 'Active');
 
-    // Only load test runs via RunView (not cached in engine)
-    const testRunsResult = await rv.RunView<TestRunEntity>({
+    // Only load test runs via RunView (not cached in engine) - use simple result type
+    const testRunsResult = await rv.RunView<{ID: string; TestID: string; Status: string; Score: number; CostUSD: number}>({
       EntityName: 'MJ: Test Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-      ResultType: 'entity_object'
+      Fields: ['ID', 'TestID', 'Status', 'Score', 'CostUSD'],
+      ResultType: 'simple',
+      CacheLocal: true
     });
 
     const testRuns = testRunsResult.Results || [];
@@ -376,7 +477,8 @@ export class TestingInstrumentationService {
     }));
 
     // Calculate metrics for each suite (simplified - would need TestSuiteTest join for accuracy)
-    const suiteTestRuns = new Map<string, TestRunEntity[]>();
+    type SimpleTestRun = {ID: string; TestID: string; Status: string; Score: number; CostUSD: number};
+    const suiteTestRuns = new Map<string, SimpleTestRun[]>();
 
     testRuns.forEach(run => {
       // This is simplified - would need to query TestSuiteTest to get actual suite membership
@@ -429,12 +531,15 @@ export class TestingInstrumentationService {
     const buckets = this.createTimeBuckets(start, end);
     const rv = new RunView();
 
-    // Load all test runs for the period
-    const result = await rv.RunView<TestRunEntity>({
+    // Load all test runs for the period - use simple result type with only needed fields
+    type TrendRun = {Status: string; Score: number; CostUSD: number; StartedAt: string | Date; CompletedAt: string | Date | null};
+    const result = await rv.RunView<TrendRun>({
       EntityName: 'MJ: Test Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
       OrderBy: 'StartedAt',
-      ResultType: 'entity_object'
+      Fields: ['Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt'],
+      ResultType: 'simple',
+      CacheLocal: true
     });
 
     const allRuns = result.Results || [];
@@ -445,7 +550,7 @@ export class TestingInstrumentationService {
 
       const bucketRuns = allRuns.filter(r => {
         if (!r.StartedAt) return false;
-        const runTime = new Date(r.StartedAt);
+        const runTime = r.StartedAt instanceof Date ? r.StartedAt : new Date(r.StartedAt);
         return runTime >= bucketStart && runTime < bucketEnd;
       });
 
@@ -463,8 +568,9 @@ export class TestingInstrumentationService {
       const completedRuns = bucketRuns.filter(r => r.CompletedAt != null && r.StartedAt != null);
       const averageDuration = completedRuns.length > 0
         ? completedRuns.reduce((sum, r) => {
-            const duration = new Date(r.CompletedAt!).getTime() - new Date(r.StartedAt!).getTime();
-            return sum + duration;
+            const startTime = r.StartedAt instanceof Date ? r.StartedAt.getTime() : new Date(r.StartedAt).getTime();
+            const endTime = r.CompletedAt instanceof Date ? r.CompletedAt.getTime() : new Date(r.CompletedAt!).getTime();
+            return sum + (endTime - startTime);
           }, 0) / completedRuns.length
         : 0;
 
@@ -488,16 +594,20 @@ export class TestingInstrumentationService {
     const { start, end } = this._dateRange$.value;
     const rv = new RunView();
 
-    const result = await rv.RunView<TestRunEntity>({
+    // Use simple result type with only needed fields
+    type AnalyticsRun = {Test: string; Status: string; Score: number; CostUSD: number; StartedAt: string | Date; CompletedAt: string | Date | null};
+    const result = await rv.RunView<AnalyticsRun>({
       EntityName: 'MJ: Test Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-      ResultType: 'entity_object'
+      Fields: ['Test', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt'],
+      ResultType: 'simple',
+      CacheLocal: true
     });
 
     const testRuns = result.Results || [];
 
     // Group by test name
-    const testMetrics = new Map<string, { runs: TestRunEntity[], failures: number }>();
+    const testMetrics = new Map<string, { runs: AnalyticsRun[], failures: number }>();
 
     testRuns.forEach(run => {
       const testName = run.Test || 'Unknown';
@@ -536,7 +646,11 @@ export class TestingInstrumentationService {
       .map(([testName, metrics]) => {
         const durations = metrics.runs
           .filter(r => r.CompletedAt != null && r.StartedAt != null)
-          .map(r => new Date(r.CompletedAt!).getTime() - new Date(r.StartedAt!).getTime());
+          .map(r => {
+            const startTime = r.StartedAt instanceof Date ? r.StartedAt.getTime() : new Date(r.StartedAt).getTime();
+            const endTime = r.CompletedAt instanceof Date ? r.CompletedAt.getTime() : new Date(r.CompletedAt!).getTime();
+            return endTime - startTime;
+          });
 
         const avgDuration = durations.length > 0
           ? durations.reduce((sum, d) => sum + d, 0) / durations.length
@@ -604,29 +718,37 @@ export class TestingInstrumentationService {
     const { start, end } = this._dateRange$.value;
     const rv = new RunView();
 
+    // Use simple result types with only needed fields
+    type FeedbackTestRun = {ID: string; Test: string; Score: number; Status: string; StartedAt: string | Date};
+    type FeedbackItem = {TestRunID: string};
+
     const [testRunsResult, feedbackResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Test Runs',
         ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-        ResultType: 'entity_object'
+        Fields: ['ID', 'Test', 'Score', 'Status', 'StartedAt'],
+        ResultType: 'simple',
+        CacheLocal: true
       },
       {
         EntityName: 'MJ: Test Run Feedbacks',
         ExtraFilter: `CreatedAt >= '${start.toISOString()}'`,
-        ResultType: 'entity_object'
+        Fields: ['TestRunID'],
+        ResultType: 'simple',
+        CacheLocal: true
       }
     ]);
 
-    const testRuns = testRunsResult.Results as TestRunEntity[];
-    const feedbacks = feedbackResult.Results as TestRunFeedbackEntity[];
+    const testRuns = testRunsResult.Results as FeedbackTestRun[];
+    const feedbacks = feedbackResult.Results as FeedbackItem[];
 
-    const feedbackMap = new Map<string, TestRunFeedbackEntity>();
-    feedbacks.forEach(f => feedbackMap.set(f.TestRunID, f));
+    const feedbackTestRunIDs = new Set(feedbacks.map(f => f.TestRunID));
 
     const pending: FeedbackPending[] = [];
 
     testRuns.forEach(run => {
-      const hasFeedback = feedbackMap.has(run.ID);
+      const hasFeedback = feedbackTestRunIDs.has(run.ID);
+      const runDateTime = run.StartedAt instanceof Date ? run.StartedAt : new Date(run.StartedAt);
 
       if (!hasFeedback) {
         pending.push({
@@ -634,11 +756,10 @@ export class TestingInstrumentationService {
           testName: run.Test || 'Unknown',
           automatedScore: run.Score || 0,
           automatedStatus: run.Status,
-          runDateTime: run.StartedAt ? new Date(run.StartedAt) : new Date(),
+          runDateTime,
           reason: 'no-feedback'
         });
       } else {
-        const feedback = feedbackMap.get(run.ID)!;
         // Check for discrepancies
         if (run.Status === 'Failed' && run.Score != null && run.Score >= 0.8) {
           pending.push({
@@ -646,7 +767,7 @@ export class TestingInstrumentationService {
             testName: run.Test || 'Unknown',
             automatedScore: run.Score,
             automatedStatus: run.Status,
-            runDateTime: run.StartedAt ? new Date(run.StartedAt) : new Date(),
+            runDateTime,
             reason: 'high-score-failed'
           });
         } else if (run.Status === 'Passed' && run.Score != null && run.Score < 0.5) {
@@ -655,7 +776,7 @@ export class TestingInstrumentationService {
             testName: run.Test || 'Unknown',
             automatedScore: run.Score,
             automatedStatus: run.Status,
-            runDateTime: run.StartedAt ? new Date(run.StartedAt) : new Date(),
+            runDateTime,
             reason: 'low-score-passed'
           });
         }
@@ -669,11 +790,14 @@ export class TestingInstrumentationService {
     const { start, end } = this._dateRange$.value;
     const rv = new RunView();
 
-    // Load all feedback for the period
-    const feedbackResult = await rv.RunView<TestRunFeedbackEntity>({
+    // Load all feedback for the period - use simple result type with only needed fields
+    type FeedbackStatItem = {Rating: number; IsCorrect: boolean};
+    const feedbackResult = await rv.RunView<FeedbackStatItem>({
       EntityName: 'MJ: Test Run Feedbacks',
       ExtraFilter: `CreatedAt >= '${start.toISOString()}' AND CreatedAt <= '${end.toISOString()}'`,
-      ResultType: 'entity_object'
+      Fields: ['Rating', 'IsCorrect'],
+      ResultType: 'simple',
+      CacheLocal: true
     });
 
     const feedbacks = feedbackResult.Results || [];
@@ -736,18 +860,22 @@ export class TestingInstrumentationService {
   async getVersionMetrics(): Promise<VersionMetrics[]> {
     const rv = new RunView();
 
-    const result = await rv.RunView<TestSuiteRunEntity>({
+    // Use simple result type with only needed fields
+    type VersionRun = {TotalTests: number; PassedTests: number; TotalCostUSD: number; StartedAt: string | Date; GitCommit: string; AgentVersion: string};
+    const result = await rv.RunView<VersionRun>({
       EntityName: 'MJ: Test Suite Runs',
       ExtraFilter: '',
       OrderBy: 'StartedAt DESC',
       MaxRows: 100,
-      ResultType: 'entity_object'
+      Fields: ['TotalTests', 'PassedTests', 'TotalCostUSD', 'StartedAt', 'GitCommit', 'AgentVersion'],
+      ResultType: 'simple',
+      CacheLocal: true
     });
 
     const suiteRuns = result.Results || [];
 
     // Group by version combination
-    const versionMap = new Map<string, TestSuiteRunEntity[]>();
+    const versionMap = new Map<string, VersionRun[]>();
 
     suiteRuns.forEach(run => {
       const key = `${run.GitCommit || 'unknown'}_${run.AgentVersion || 'unknown'}`;
@@ -765,11 +893,13 @@ export class TestingInstrumentationService {
       const totalPassed = runs.reduce((sum, r) => sum + (r.PassedTests || 0), 0);
       const totalCost = runs.reduce((sum, r) => sum + (r.TotalCostUSD || 0), 0);
 
+      const runDate = latest.StartedAt instanceof Date ? latest.StartedAt : new Date(latest.StartedAt);
+
       return {
         version: `${gitCommit.substring(0, 7)} / ${agentVersion}`,
         gitCommit,
         agentVersion,
-        runDate: latest.StartedAt ? new Date(latest.StartedAt) : new Date(),
+        runDate,
         totalTests,
         passRate: totalTests > 0 ? (totalPassed / totalTests) * 100 : 0,
         averageScore: 0, // Would need to calculate from test runs
@@ -809,5 +939,193 @@ export class TestingInstrumentationService {
     } else {
       return 7 * 24 * 60 * 60 * 1000; // 1 week
     }
+  }
+
+  /**
+   * Load test runs with feedback data joined for evaluation display
+   */
+  private async loadTestRunsWithFeedback(): Promise<TestRunWithFeedbackSummary[]> {
+    const { start, end } = this._dateRange$.value;
+    const suiteFilter = this._suiteFilter$.value;
+    const typeFilter = this._testTypeFilter$.value;
+
+    let filter = `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`;
+
+    if (suiteFilter) {
+      filter += ` AND TestID IN (SELECT TestID FROM [__mj].[vwTestSuiteTests] WHERE TestSuiteID = '${suiteFilter}')`;
+    }
+
+    if (typeFilter) {
+      filter += ` AND TestID IN (SELECT ID FROM [__mj].[vwTests] WHERE TypeID = '${typeFilter}')`;
+    }
+
+    const rv = new RunView();
+
+    // Load test runs with additional fields for evaluation
+    type TestRunExtended = {
+      ID: string;
+      TestID: string;
+      Test: string;
+      Status: string;
+      Score: number;
+      CostUSD: number;
+      StartedAt: Date;
+      CompletedAt: Date | null;
+      TargetType: string;
+      TargetLogID: string;
+      PassedChecks: number | null;
+      FailedChecks: number | null;
+      TotalChecks: number | null;
+    };
+
+    const [testRunsResult, feedbackResult] = await rv.RunViews([
+      {
+        EntityName: 'MJ: Test Runs',
+        ExtraFilter: filter,
+        OrderBy: 'StartedAt DESC',
+        MaxRows: 1000,
+        Fields: ['ID', 'TestID', 'Test', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt', 'TargetType', 'TargetLogID', 'PassedChecks', 'FailedChecks', 'TotalChecks'],
+        ResultType: 'simple',
+        CacheLocal: true
+      },
+      {
+        EntityName: 'MJ: Test Run Feedbacks',
+        ExtraFilter: `CreatedAt >= '${start.toISOString()}'`,
+        Fields: ['ID', 'TestRunID', 'Rating', 'IsCorrect', 'Comments'],
+        ResultType: 'simple',
+        CacheLocal: true
+      }
+    ]);
+
+    const testRuns = (testRunsResult.Results || []) as TestRunExtended[];
+    const feedbacks = (feedbackResult.Results || []) as TestRunFeedbackSimple[];
+
+    // Create feedback lookup map
+    const feedbackMap = new Map<string, TestRunFeedbackSimple>();
+    feedbacks.forEach(f => {
+      feedbackMap.set(f.TestRunID, f);
+    });
+
+    // Map test runs with feedback
+    return testRuns.map(run => {
+      const startedAt = run.StartedAt instanceof Date ? run.StartedAt : new Date(run.StartedAt);
+      const completedAt = run.CompletedAt
+        ? (run.CompletedAt instanceof Date ? run.CompletedAt : new Date(run.CompletedAt))
+        : null;
+
+      const feedback = feedbackMap.get(run.ID);
+
+      return {
+        id: run.ID,
+        testId: run.TestID || '',
+        testName: run.Test || 'Unknown Test',
+        suiteName: '',
+        testType: run.Test || 'Unknown',
+        status: run.Status as 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Timeout',
+        score: run.Score || 0,
+        duration: completedAt && startedAt
+          ? completedAt.getTime() - startedAt.getTime()
+          : (startedAt ? Date.now() - startedAt.getTime() : 0),
+        cost: run.CostUSD || 0,
+        runDateTime: startedAt,
+        targetType: run.TargetType || '',
+        targetLogID: run.TargetLogID || '',
+        // Checks
+        passedChecks: run.PassedChecks,
+        failedChecks: run.FailedChecks,
+        totalChecks: run.TotalChecks,
+        // Human feedback
+        humanRating: feedback?.Rating ?? null,
+        humanIsCorrect: feedback?.IsCorrect ?? null,
+        humanComments: feedback?.Comments ?? null,
+        hasHumanFeedback: !!feedback,
+        feedbackId: feedback?.ID ?? null
+      };
+    });
+  }
+
+  /**
+   * Calculate aggregated evaluation metrics from test runs with feedback
+   */
+  private calculateEvaluationMetrics(runs: TestRunWithFeedbackSummary[]): EvaluationSummaryMetrics {
+    const totalRuns = runs.length;
+
+    if (totalRuns === 0) {
+      return {
+        totalRuns: 0,
+        execCompletedCount: 0,
+        execErrorCount: 0,
+        execSuccessRate: 0,
+        humanReviewedCount: 0,
+        humanPendingCount: 0,
+        humanAvgRating: 0,
+        humanCorrectRate: 0,
+        autoEvaluatedCount: 0,
+        autoAvgScore: 0,
+        autoPassRate: 0,
+        agreementRate: 0
+      };
+    }
+
+    // Execution metrics
+    const execCompleted = runs.filter(r =>
+      r.status === 'Passed' || r.status === 'Failed'
+    );
+    const execErrors = runs.filter(r =>
+      r.status === 'Error' || r.status === 'Timeout'
+    );
+    const execSuccessRate = totalRuns > 0 ? (execCompleted.length / totalRuns) * 100 : 0;
+
+    // Human feedback metrics
+    const reviewed = runs.filter(r => r.hasHumanFeedback);
+    const pending = runs.filter(r => !r.hasHumanFeedback);
+    const withRating = reviewed.filter(r => r.humanRating != null);
+    const humanAvgRating = withRating.length > 0
+      ? withRating.reduce((sum, r) => sum + (r.humanRating || 0), 0) / withRating.length
+      : 0;
+    const correct = reviewed.filter(r => r.humanIsCorrect === true);
+    const humanCorrectRate = reviewed.length > 0 ? (correct.length / reviewed.length) * 100 : 0;
+
+    // Auto score metrics
+    const evaluated = runs.filter(r => r.score > 0);
+    const autoAvgScore = evaluated.length > 0
+      ? evaluated.reduce((sum, r) => sum + r.score, 0) / evaluated.length
+      : 0;
+    const autoPass = evaluated.filter(r => r.score >= 0.8);
+    const autoPassRate = evaluated.length > 0 ? (autoPass.length / evaluated.length) * 100 : 0;
+
+    // Agreement metrics
+    const bothEvaluated = runs.filter(r =>
+      r.hasHumanFeedback && r.score > 0 && r.humanIsCorrect != null
+    );
+    let agreementCount = 0;
+
+    bothEvaluated.forEach(r => {
+      const autoConsideredPass = r.score >= 0.5;
+      const humanConsideredPass = r.humanIsCorrect === true;
+
+      if (autoConsideredPass === humanConsideredPass) {
+        agreementCount++;
+      }
+    });
+
+    const agreementRate = bothEvaluated.length > 0
+      ? (agreementCount / bothEvaluated.length) * 100
+      : 0;
+
+    return {
+      totalRuns,
+      execCompletedCount: execCompleted.length,
+      execErrorCount: execErrors.length,
+      execSuccessRate,
+      humanReviewedCount: reviewed.length,
+      humanPendingCount: pending.length,
+      humanAvgRating,
+      humanCorrectRate,
+      autoEvaluatedCount: evaluated.length,
+      autoAvgScore,
+      autoPassRate,
+      agreementRate
+    };
   }
 }

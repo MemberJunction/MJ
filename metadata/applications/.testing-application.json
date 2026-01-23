@@ -33,7 +33,8 @@
         "Icon": "fa-solid fa-code-compare",
         "ResourceType": "Custom",
         "DriverClass": "TestingVersionResource",
-        "isDefault": false
+        "isDefault": false,
+        "Status": "Pending"
       },
       {
         "Label": "Feedback",
@@ -57,23 +58,9 @@
           "ID": "E0BD9634-6C52-4B4B-BED9-553696470E50"
         },
         "sync": {
-          "lastModified": "2025-11-10T02:03:43.153Z",
-          "checksum": "6525a95c697a268036a93a645e02dcfd7ce5200a67f343c41f8422256ac52921"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.ApplicationID",
-            "expression": "@parent:ID",
-            "resolved": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.EntityID",
-            "expression": "@lookup:Entities.Name=MJ: Test Types",
-            "resolved": "885C7B1F-57BA-4BD1-B2FD-0D47AAC56FDA"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.253Z",
+          "checksum": "01c0e6aab8c3557a729dfc0998680e9032d196307da12f11af37a1a193c0f6fb"
+        }
       },
       {
         "fields": {
@@ -86,23 +73,9 @@
           "ID": "B90C960B-E411-4C18-9376-3E3961C2C2C8"
         },
         "sync": {
-          "lastModified": "2025-11-10T02:03:43.165Z",
-          "checksum": "8a413518ac806cb24b39fd016062b680ca0e4591998ff209552c75906324d10d"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.ApplicationID",
-            "expression": "@parent:ID",
-            "resolved": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.EntityID",
-            "expression": "@lookup:Entities.Name=MJ: Tests",
-            "resolved": "1F949AD0-8C72-4846-8A0B-0B3D9F644231"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.254Z",
+          "checksum": "6d84cf098ebeac4430fada7292e2369e786719cb263f75c7e3e10f0d68286295"
+        }
       },
       {
         "fields": {
@@ -115,23 +88,9 @@
           "ID": "00DC4190-9485-4BDA-8E8B-F5A74AE662A0"
         },
         "sync": {
-          "lastModified": "2025-11-10T02:03:43.176Z",
-          "checksum": "5f6a4785b4ac65ed81eb775455b798cfc05f1e8beac72f31eb3fdcbf27451884"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.ApplicationID",
-            "expression": "@parent:ID",
-            "resolved": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.EntityID",
-            "expression": "@lookup:Entities.Name=MJ: Test Suites",
-            "resolved": "8FC868B5-778D-4282-BBAB-91C01F863C83"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.256Z",
+          "checksum": "d10c415516154408f0c470e2215a9c5b9ea99d7f0f946e8f751d3d1ccd0d0362"
+        }
       },
       {
         "fields": {
@@ -144,23 +103,9 @@
           "ID": "2C8EC61E-B12A-4A92-971F-6327628CBDC2"
         },
         "sync": {
-          "lastModified": "2025-11-10T02:03:43.187Z",
-          "checksum": "f7e67fbfcc7303244276570833e940712420164d0521d1958331e2efdf344f42"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.ApplicationID",
-            "expression": "@parent:ID",
-            "resolved": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.EntityID",
-            "expression": "@lookup:Entities.Name=MJ: Test Suite Tests",
-            "resolved": "0325A316-D1DC-4DC7-947B-358C96860725"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.257Z",
+          "checksum": "f49a0413d04668579c8e6946201e061b22f9163c006db949685ed5c12a4b59c1"
+        }
       },
       {
         "fields": {
@@ -173,23 +118,9 @@
           "ID": "3E4C05EA-CB2B-4192-8DDE-8B03FA234E1F"
         },
         "sync": {
-          "lastModified": "2025-11-10T02:03:43.198Z",
-          "checksum": "0f1376ffaf15efd9dd0e742ff432132b0a14cdfed814855dadf6b51701bb9827"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.ApplicationID",
-            "expression": "@parent:ID",
-            "resolved": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.EntityID",
-            "expression": "@lookup:Entities.Name=MJ: Test Runs",
-            "resolved": "5DFD821D-E23E-43D3-8A41-60A7D36AE1BA"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.258Z",
+          "checksum": "f57af4788d79f9fd7ba327cc56882183bcf3ed0b2a4b843202350e5701d9f80c"
+        }
       },
       {
         "fields": {
@@ -202,23 +133,9 @@
           "ID": "D67C40D7-AC10-4C4A-8619-902C4101A263"
         },
         "sync": {
-          "lastModified": "2025-11-10T02:03:43.210Z",
-          "checksum": "6c5a1554fe13b80b55a5768eaaad6bbe8b81eaeb15e9b685475a6518cb6eea10"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.ApplicationID",
-            "expression": "@parent:ID",
-            "resolved": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.EntityID",
-            "expression": "@lookup:Entities.Name=MJ: Test Suite Runs",
-            "resolved": "61438D17-BE0C-4BFF-A1B3-C014279A3BA7"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.259Z",
+          "checksum": "38135ab7bb25cce8c21593203107aa6f6a3c3b6b7482989a14b8c88ac770b1f7"
+        }
       },
       {
         "fields": {
@@ -231,23 +148,9 @@
           "ID": "15FBB64B-7173-40CB-8DA9-488CB20B669D"
         },
         "sync": {
-          "lastModified": "2025-11-10T02:03:43.222Z",
-          "checksum": "f0dd56fccb1c755a67cd816f7309221fe79a29da3754695ea14fccad74c61b25"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.ApplicationID",
-            "expression": "@parent:ID",
-            "resolved": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.EntityID",
-            "expression": "@lookup:Entities.Name=MJ: Test Run Feedbacks",
-            "resolved": "99B00220-BABA-4C42-BC7C-00E1EE14651C"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.260Z",
+          "checksum": "93e39d05821f435ee661d46f731596f1c5520f61e04d005cf16553ed22d003d9"
+        }
       },
       {
         "fields": {
@@ -260,23 +163,9 @@
           "ID": "F3DC86D9-5698-4492-A5D9-FC6EA8C65024"
         },
         "sync": {
-          "lastModified": "2025-11-10T02:03:43.234Z",
-          "checksum": "b8b6dfc9b602c9585e08f56f4a7f6f2beb201c47030d27ea69bb47ce1b86e79b"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.ApplicationID",
-            "expression": "@parent:ID",
-            "resolved": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.EntityID",
-            "expression": "@lookup:Entities.Name=MJ: Test Rubrics",
-            "resolved": "FC9FC6E4-D9D3-4D3F-A0AE-46A10B11034B"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.261Z",
+          "checksum": "07f7baf57c63108e28816f132cb3e785a7cb908c58adaf8feae3e0642bf94882"
+        }
       }
     ]
   },
@@ -284,7 +173,7 @@
     "ID": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
   },
   "sync": {
-    "lastModified": "2025-11-28T02:04:46.098Z",
-    "checksum": "7f940c9ffb5c4c548ec24263406bb1c4c62b05f0ce1860c09766d106bdf96d37"
+    "lastModified": "2026-01-06T15:18:04.175Z",
+    "checksum": "f150fafe7fcaa7f04eafb3e1a573b416b0601aec5ba6331b5fbfd6fac1605e0c"
   }
 }

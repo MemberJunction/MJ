@@ -54,7 +54,7 @@ export class MJGlobal extends BaseSingleton<MJGlobal> {
 
     /**
      * Use this method to raise an event to all component who are listening for the event.
-     * @param event 
+     * @param event
      */
     public RaiseEvent(event: MJ.MJEvent) {
         this._eventsSubject.next(event);
@@ -63,8 +63,8 @@ export class MJGlobal extends BaseSingleton<MJGlobal> {
 
     /**
      * Use this method to get an observable that will fire when an event is raised.
-     * @param withReplay 
-     * @returns 
+     * @param withReplay
+     * @returns
      */
     public GetEventListener(withReplay: boolean = false): Observable<MJ.MJEvent> {
         return withReplay ? this._eventsReplay$ : this._events$;

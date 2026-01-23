@@ -9,24 +9,106 @@
       "IsActive": true,
       "UIFormSectionKey": null,
       "UIFormKey": null,
-      "UIFormSectionExpandedByDefault": false
+      "UIFormSectionExpandedByDefault": false,
+      "PromptParamsSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "description": "Prompt parameters for Loop Agent Type. Controls which sections are included in the system prompt to optimize token usage.",
+        "properties": {
+          "includeResponseTypeDefinition": {
+            "type": "object",
+            "description": "Control response type definition inclusion. Sections auto-align with their corresponding docs flags unless explicitly set.",
+            "default": {
+              "payload": true,
+              "responseForms": true,
+              "commands": true,
+              "forEach": true,
+              "while": true
+            },
+            "properties": {
+              "payload": {
+                "type": "boolean",
+                "default": true,
+                "description": "Include payloadChangeRequest type. Auto-aligns with includePayloadInPrompt."
+              },
+              "responseForms": {
+                "type": "boolean",
+                "default": true,
+                "description": "Include responseForm type. Auto-aligns with includeResponseFormDocs."
+              },
+              "commands": {
+                "type": "boolean",
+                "default": true,
+                "description": "Include actionableCommands/automaticCommands types. Auto-aligns with includeCommandDocs."
+              },
+              "forEach": {
+                "type": "boolean",
+                "default": true,
+                "description": "Include ForEach in nextStep.type union. Auto-aligns with includeForEachDocs."
+              },
+              "while": {
+                "type": "boolean",
+                "default": true,
+                "description": "Include While in nextStep.type union. Auto-aligns with includeWhileDocs."
+              }
+            }
+          },
+          "includeForEachDocs": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include ForEach operation documentation and examples. ForEach enables efficient batch processing of collections (e.g., processing all items in an array with a single LLM decision). Disable for agents that never need to iterate over collections."
+          },
+          "includeWhileDocs": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include While loop documentation and examples. While loops enable polling, retrying, and conditional iteration (e.g., waiting for a job to complete). Disable for agents that never need polling or conditional loops."
+          },
+          "includeResponseFormDocs": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include response form documentation for collecting structured user input. Response forms allow agents to request specific information from users via text fields, dropdowns, buttons, etc. Disable for agents that only output results and never need user input."
+          },
+          "includeCommandDocs": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include actionable and automatic commands documentation. Actionable commands create clickable buttons (e.g., 'Open Record'), automatic commands trigger UI updates (e.g., refresh cache, show notification). Disable for agents that don't need to provide navigation or trigger UI actions."
+          },
+          "includeMessageExpansionDocs": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include message expansion documentation. Message expansion allows agents to request full content from previously compacted messages. Disable for agents that don't use message compaction or don't need to access compacted content."
+          },
+          "includeVariableRefsDocs": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include variable references documentation (payload.*, item.*, index, etc.). These explain how to reference data in action parameters and loop contexts. Disable if your agent's custom examples already demonstrate variable usage patterns."
+          },
+          "includePayloadInPrompt": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include current payload state in the prompt. The payload is the agent's working memory that persists across iterations. Disable for agents that don't use the payload pattern or work purely from conversation context. Can save significant tokens for agents with large payloads."
+          },
+          "maxSubAgentsInPrompt": {
+            "type": "integer",
+            "default": -1,
+            "description": "Maximum number of sub-agents to include in the prompt's capabilities section. Use -1 to include all available sub-agents, 0 to hide sub-agent capabilities entirely, or a positive number to limit to the first N sub-agents. Useful for agents with many sub-agents where only a few are commonly used."
+          },
+          "maxActionsInPrompt": {
+            "type": "integer",
+            "default": -1,
+            "description": "Maximum number of actions to include in the prompt's capabilities section. Use -1 to include all available actions, 0 to hide action capabilities entirely, or a positive number to limit to the first N actions. Useful for agents with many actions where only a few are commonly used."
+          }
+        }
+      }
     },
     "relatedEntities": {},
     "primaryKey": {
       "ID": "F7926101-5099-4FA5-836A-479D9707C818"
     },
     "sync": {
-      "lastModified": "2025-08-19T16:17:50.974Z",
-      "checksum": "049bd9d3ed38d19fabeb3b890e6965ab7f9e5319a92e9bdfbc7be076535dee2b"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.SystemPromptID",
-        "expression": "@lookup:AI Prompts.Name=Loop Agent Type: System Prompt",
-        "resolved": "FF7D441F-36E1-458A-B548-0FC2208923BE"
-      }
-    ]
+      "lastModified": "2026-01-20T17:25:39.956Z",
+      "checksum": "e61c116632b2d6e8be71476051052ef573d85fd0abb65960009243b0f8849d17"
+    }
   },
   {
     "fields": {
@@ -44,8 +126,8 @@
       "ID": "4F6A189B-C068-4736-9F23-3FF540B40FDD"
     },
     "sync": {
-      "lastModified": "2025-08-19T16:17:50.964Z",
-      "checksum": "258749c212a25d38d0b03bc4fb41b63c15593192ff3827f0cc022b99752df5cb"
+      "lastModified": "2025-12-30T23:07:33.547Z",
+      "checksum": "a76eb179f00dcf192c1a97ce2de365403f7e47a77b90a1ef7c475ae83f27d8b2"
     }
   }
 ]

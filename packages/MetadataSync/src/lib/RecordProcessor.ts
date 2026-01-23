@@ -215,18 +215,21 @@ export class RecordProcessor {
     verbose?: boolean
   ): Promise<any> {
     let processedValue = fieldValue;
-    
+
+    // Convert Date objects to ISO strings
+    processedValue = this.serializeDateValue(processedValue);
+
     // Apply lookup field conversion if configured
     processedValue = await this.applyLookupFieldConversion(
-      fieldName, 
-      processedValue, 
-      entityConfig, 
+      fieldName,
+      processedValue,
+      entityConfig,
       verbose
     );
-    
+
     // Trim string values
     processedValue = this.trimStringValue(processedValue);
-    
+
     // Apply field externalization if configured
     processedValue = await this.applyFieldExternalization(
       fieldName,
@@ -237,8 +240,22 @@ export class RecordProcessor {
       existingRecordData,
       verbose
     );
-    
+
     return processedValue;
+  }
+
+  /**
+   * Serializes Date objects to ISO strings for JSON storage
+   */
+  private serializeDateValue(value: any): any {
+    if (value instanceof Date) {
+      // Check if the date is valid
+      if (isNaN(value.getTime())) {
+        return null; // Invalid dates become null
+      }
+      return value.toISOString();
+    }
+    return value;
   }
 
   /**
@@ -428,32 +445,40 @@ export class RecordProcessor {
   ): Promise<{ lastModified: string; checksum: string }> {
     // Determine if we should include external file content in checksum
     const hasExternalizedFields = this.hasExternalizedFields(fields, entityConfig);
-    
+
     const checksum = hasExternalizedFields
       ? await this.syncEngine.calculateChecksumWithFileContent(fields, targetDir)
       : this.syncEngine.calculateChecksum(fields);
-    
+
     if (verbose && hasExternalizedFields) {
       console.log(`Calculated checksum including external file content for record`);
     }
-    
+
     // Compare with existing checksum to determine if data changed
-    if (existingRecordData?.sync?.checksum === checksum) {
+    const existingChecksum = existingRecordData?.sync?.checksum;
+    const existingTimestamp = existingRecordData?.sync?.lastModified;
+
+    if (existingChecksum === checksum) {
       // No change detected - preserve existing sync metadata
       if (verbose) {
         console.log(`No changes detected for record, preserving existing timestamp`);
       }
       return {
-        lastModified: existingRecordData.sync.lastModified,
+        lastModified: existingTimestamp!,
         checksum: checksum
       };
     } else {
       // Change detected - update timestamp
-      if (verbose && existingRecordData?.sync?.checksum) {
-        console.log(`Changes detected for record, updating timestamp`);
+      const newTimestamp = new Date().toISOString();
+      if (verbose) {
+        if (existingChecksum) {
+          console.log(`Changes detected for record, updating timestamp`);
+        } else {
+          console.log(`New record, generating initial timestamp`);
+        }
       }
       return {
-        lastModified: new Date().toISOString(),
+        lastModified: newTimestamp,
         checksum: checksum
       };
     }

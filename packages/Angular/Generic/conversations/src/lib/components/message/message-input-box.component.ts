@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { MentionSuggestion } from '../../services/mention-autocomplete.service';
-import { MentionEditorComponent } from '../mention/mention-editor.component';
+import { MentionEditorComponent, PendingAttachment } from '../mention/mention-editor.component';
 
 /**
  * Reusable message input box component (presentational)
@@ -34,11 +34,22 @@ export class MessageInputBoxComponent {
   @Input() currentUser?: UserInfo;
   @Input() rows: number = 3;
 
+  // Attachment settings
+  @Input() enableAttachments: boolean = true;
+  @Input() maxAttachments: number = 10;
+  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB
+  @Input() acceptedFileTypes: string = 'image/*';
+
   @Output() textSubmitted = new EventEmitter<string>();
   @Output() valueChange = new EventEmitter<string>();
+  @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
+  @Output() attachmentError = new EventEmitter<string>();
+  @Output() attachmentClicked = new EventEmitter<PendingAttachment>();
 
   get canSend(): boolean {
-    return !this.disabled && this.value.trim().length > 0;
+    const hasText = this.value.trim().length > 0;
+    const hasAttachments = this.mentionEditor?.hasAttachments() || false;
+    return !this.disabled && (hasText || hasAttachments);
   }
 
   /**
@@ -47,6 +58,27 @@ export class MessageInputBoxComponent {
   onValueChange(newValue: string): void {
     this.value = newValue;
     this.valueChange.emit(this.value);
+  }
+
+  /**
+   * Handle attachment changes from MentionEditorComponent
+   */
+  onAttachmentsChanged(attachments: PendingAttachment[]): void {
+    this.attachmentsChanged.emit(attachments);
+  }
+
+  /**
+   * Handle attachment errors from MentionEditorComponent
+   */
+  onAttachmentError(error: string): void {
+    this.attachmentError.emit(error);
+  }
+
+  /**
+   * Handle attachment click from MentionEditorComponent
+   */
+  onAttachmentClicked(attachment: PendingAttachment): void {
+    this.attachmentClicked.emit(attachment);
   }
 
   /**
@@ -63,7 +95,6 @@ export class MessageInputBoxComponent {
   onMentionSelected(suggestion: MentionSuggestion): void {
     // MentionEditorComponent already inserts the mention chip
     // This is just for additional tracking/analytics if needed
-    console.log('[MessageInputBox] Mention selected:', suggestion);
   }
 
   /**
@@ -134,5 +165,19 @@ export class MessageInputBoxComponent {
    */
   getMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
     return this.mentionEditor?.getMentionChipsData() || [];
+  }
+
+  /**
+   * Get pending attachments from the editor
+   */
+  getPendingAttachments(): PendingAttachment[] {
+    return this.mentionEditor?.getPendingAttachments() || [];
+  }
+
+  /**
+   * Open file picker programmatically
+   */
+  openFilePicker(): void {
+    this.mentionEditor?.openFilePicker();
   }
 }

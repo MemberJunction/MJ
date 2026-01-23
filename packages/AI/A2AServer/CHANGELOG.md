@@ -1,5 +1,158 @@
 # Change Log - @memberjunction/a2aserver
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [011c820]
+- Updated dependencies [6806a6c]
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-agents@3.2.0
+  - @memberjunction/server@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/aiengine@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/config@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [8c0b624]
+  - @memberjunction/server@3.1.1
+  - @memberjunction/ai-agents@3.1.1
+  - @memberjunction/ai@3.1.1
+  - @memberjunction/ai-core-plus@3.1.1
+  - @memberjunction/aiengine@3.1.1
+  - @memberjunction/config@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/global@3.1.1
+  - @memberjunction/sqlserver-dataprovider@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [f25f757]
+  - @memberjunction/server@3.0.0
+  - @memberjunction/config@3.0.0
+  - @memberjunction/ai-agents@3.0.0
+  - @memberjunction/ai@3.0.0
+  - @memberjunction/ai-core-plus@3.0.0
+  - @memberjunction/aiengine@3.0.0
+  - @memberjunction/core@3.0.0
+  - @memberjunction/core-entities@3.0.0
+  - @memberjunction/global@3.0.0
+  - @memberjunction/sqlserver-dataprovider@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ai-agents@2.133.0
+  - @memberjunction/ai-core-plus@2.133.0
+  - @memberjunction/aiengine@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/sqlserver-dataprovider@2.133.0
+  - @memberjunction/ai@2.133.0
+  - @memberjunction/global@2.133.0
+
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ai-agents@2.132.0
+  - @memberjunction/ai-core-plus@2.132.0
+  - @memberjunction/aiengine@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/sqlserver-dataprovider@2.132.0
+  - @memberjunction/ai@2.132.0
+  - @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [3604aa1]
+- Updated dependencies [81598e3]
+- Updated dependencies [d3d2926]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ai-agents@2.131.0
+  - @memberjunction/ai-core-plus@2.131.0
+  - @memberjunction/aiengine@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/sqlserver-dataprovider@2.131.0
+  - @memberjunction/ai@2.131.0
+  - @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.130.1
+- @memberjunction/ai@2.130.1
+- @memberjunction/ai-core-plus@2.130.1
+- @memberjunction/aiengine@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+- @memberjunction/sqlserver-dataprovider@2.130.1
+
+## 2.130.0
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+- Updated dependencies [f4e1f05]
+  - @memberjunction/ai-agents@2.130.0
+  - @memberjunction/ai@2.130.0
+  - @memberjunction/ai-core-plus@2.130.0
+  - @memberjunction/aiengine@2.130.0
+  - @memberjunction/sqlserver-dataprovider@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/global@2.130.0
+
+## 2.129.0
+
+### Minor Changes
+
+- c7e38aa: migration
+
+### Patch Changes
+
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [fbae243]
+- Updated dependencies [573179f]
+- Updated dependencies [6ce6e67]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/global@2.129.0
+  - @memberjunction/sqlserver-dataprovider@2.129.0
+  - @memberjunction/ai-agents@2.129.0
+  - @memberjunction/ai-core-plus@2.129.0
+  - @memberjunction/aiengine@2.129.0
+  - @memberjunction/core-entities@2.129.0
+  - @memberjunction/ai@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes
@@ -380,7 +533,6 @@
 - 7980171: entity name corrections
 
   ### Features
-
   - **Resizable & Draggable Dialogs**: Converted all AI Agent dialog
     types from DialogService to WindowService
     - Added corner resizing and drag-and-drop movement capabilities for
@@ -392,7 +544,6 @@
     styling
 
   ### Bug Fixes
-
   - **Critical Entity Name Corrections**: Fixed entity references to use
     proper "MJ: " prefix for newer core entities
     - Fixed 'AI Agent Prompts' → 'MJ: AI Agent Prompts' (3 occurrences)
@@ -401,14 +552,12 @@
       MemberJunction framework and prevents runtime errors
 
   ### Documentation
-
   - Updated CLAUDE.md with comprehensive entity naming guidelines
   - Added complete list of all 23 core entities requiring "MJ: " prefix
   - Added warning section with code examples to prevent future entity
     naming issues
 
   ### Impact
-
   - **Enhanced User Experience**: All AI Agent dialogs now provide
     modern, resizable, and draggable interfaces
   - **Database Compatibility**: Ensures proper entity schema compliance

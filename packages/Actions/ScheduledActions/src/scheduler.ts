@@ -19,11 +19,13 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'Scheduled Actions',
-                PropertyName: '_scheduledActions'
+                PropertyName: '_scheduledActions',
+                CacheLocal: true
             },
             {
                 EntityName: 'Scheduled Action Params',
-                PropertyName: '_scheduledActionParams'
+                PropertyName: '_scheduledActionParams',
+                CacheLocal: true
             },
         ];
         return await this.Load(configs, provider, forceRefresh, contextUser);

@@ -478,6 +478,145 @@ export class GraphQLAIClient {
     }
 
     /**
+     * Run an AI agent using an existing conversation detail ID.
+     * This is an optimized method that loads conversation history server-side,
+     * avoiding the need to send large attachment data from client to server.
+     *
+     * Use this method when:
+     * - The user's message has already been saved as a ConversationDetail
+     * - The conversation may have attachments (images, documents, etc.)
+     * - You want optimal performance by loading history on the server
+     *
+     * @param params The parameters for running the AI agent from conversation detail
+     * @returns A Promise that resolves to an ExecuteAgentResult object
+     *
+     * @example
+     * ```typescript
+     * const result = await aiClient.RunAIAgentFromConversationDetail({
+     *   conversationDetailId: "detail-id-123",
+     *   agentId: "agent-id",
+     *   maxHistoryMessages: 20,
+     *   createArtifacts: true,
+     *   onProgress: (progress) => {
+     *     console.log(`Progress: ${progress.message}`);
+     *   }
+     * });
+     * ```
+     */
+    public async RunAIAgentFromConversationDetail(
+        params: RunAIAgentFromConversationDetailParams
+    ): Promise<ExecuteAgentResult> {
+        let subscription: ReturnType<typeof this._dataProvider.PushStatusUpdates.prototype.subscribe> | undefined;
+
+        try {
+            // Subscribe to progress updates if callback provided
+            if (params.onProgress) {
+                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
+                    .subscribe((message: string) => {
+                        try {
+                            const parsed = JSON.parse(message);
+
+                            // Filter for ExecutionProgress messages from RunAIAgentResolver
+                            if (parsed.resolver === 'RunAIAgentResolver' &&
+                                parsed.type === 'ExecutionProgress' &&
+                                parsed.status === 'ok' &&
+                                parsed.data?.progress) {
+
+                                // Forward progress to callback with agentRunId in metadata
+                                const progressWithRunId = {
+                                    ...parsed.data.progress,
+                                    metadata: {
+                                        ...(parsed.data.progress.metadata || {}),
+                                        agentRunId: parsed.data.agentRunId
+                                    }
+                                };
+                                params.onProgress!(progressWithRunId);
+                            }
+                        } catch (e) {
+                            console.error('[GraphQLAIClient] Failed to parse progress message:', e);
+                        }
+                    });
+            }
+
+            // Build the mutation
+            const mutation = gql`
+                mutation RunAIAgentFromConversationDetail(
+                    $conversationDetailId: String!,
+                    $agentId: String!,
+                    $sessionId: String!,
+                    $maxHistoryMessages: Int,
+                    $data: String,
+                    $payload: String,
+                    $lastRunId: String,
+                    $autoPopulateLastRunPayload: Boolean,
+                    $configurationId: String,
+                    $createArtifacts: Boolean,
+                    $createNotification: Boolean,
+                    $sourceArtifactId: String,
+                    $sourceArtifactVersionId: String
+                ) {
+                    RunAIAgentFromConversationDetail(
+                        conversationDetailId: $conversationDetailId,
+                        agentId: $agentId,
+                        sessionId: $sessionId,
+                        maxHistoryMessages: $maxHistoryMessages,
+                        data: $data,
+                        payload: $payload,
+                        lastRunId: $lastRunId,
+                        autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
+                        configurationId: $configurationId,
+                        createArtifacts: $createArtifacts,
+                        createNotification: $createNotification,
+                        sourceArtifactId: $sourceArtifactId,
+                        sourceArtifactVersionId: $sourceArtifactVersionId
+                    ) {
+                        success
+                        errorMessage
+                        executionTimeMs
+                        result
+                    }
+                }
+            `;
+
+            // Prepare variables
+            const variables: Record<string, unknown> = {
+                conversationDetailId: params.conversationDetailId,
+                agentId: params.agentId,
+                sessionId: this._dataProvider.sessionId
+            };
+
+            // Add optional parameters
+            if (params.maxHistoryMessages !== undefined) variables.maxHistoryMessages = params.maxHistoryMessages;
+            if (params.data !== undefined) {
+                variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
+            }
+            if (params.payload !== undefined) {
+                variables.payload = typeof params.payload === 'object' ? JSON.stringify(params.payload) : params.payload;
+            }
+            if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
+            if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
+            if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
+            if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
+            if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
+            if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
+            if (params.sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = params.sourceArtifactVersionId;
+
+            // Execute the mutation
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+
+            // Process and return the result
+            return this.processAgentResult(result.RunAIAgentFromConversationDetail?.result);
+        } catch (e) {
+            return this.handleAgentError(e);
+        } finally {
+            // Always clean up subscription
+            if (subscription) {
+                subscription.unsubscribe();
+            }
+        }
+    }
+
+    /**
      * Execute a simple prompt without requiring a stored AI Prompt entity.
      * This method is designed for interactive components that need quick AI responses.
      * 
@@ -941,4 +1080,79 @@ export interface RunAIPromptResult {
      */
     chatResult?: any;
 }
- 
+
+/**
+ * Parameters for running an AI agent from an existing conversation detail.
+ * This is the optimized method that loads conversation history server-side.
+ */
+export interface RunAIAgentFromConversationDetailParams {
+    /**
+     * The ID of the conversation detail (user's message) to use as context
+     */
+    conversationDetailId: string;
+
+    /**
+     * The ID of the AI agent to run
+     */
+    agentId: string;
+
+    /**
+     * Maximum number of history messages to include (default: 20)
+     */
+    maxHistoryMessages?: number;
+
+    /**
+     * Data context to pass to the agent (will be JSON serialized)
+     */
+    data?: Record<string, unknown>;
+
+    /**
+     * Payload to pass to the agent (will be JSON serialized)
+     */
+    payload?: Record<string, unknown> | string;
+
+    /**
+     * ID of the last agent run for continuity
+     */
+    lastRunId?: string;
+
+    /**
+     * Whether to auto-populate payload from last run
+     */
+    autoPopulateLastRunPayload?: boolean;
+
+    /**
+     * Configuration ID to use
+     */
+    configurationId?: string;
+
+    /**
+     * Whether to create artifacts from the agent's payload
+     */
+    createArtifacts?: boolean;
+
+    /**
+     * Whether to create a user notification on completion
+     */
+    createNotification?: boolean;
+
+    /**
+     * Source artifact ID for versioning
+     */
+    sourceArtifactId?: string;
+
+    /**
+     * Source artifact version ID for versioning
+     */
+    sourceArtifactVersionId?: string;
+
+    /**
+     * Optional callback for progress updates
+     */
+    onProgress?: (progress: {
+        currentStep: string;
+        percentage?: number;
+        message: string;
+        metadata?: Record<string, unknown>;
+    }) => void;
+}

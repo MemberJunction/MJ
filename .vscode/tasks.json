@@ -100,6 +100,38 @@
         "reveal": "silent",
         "panel": "shared"
       }
+    },
+    {
+      "label": "Kill Port 4001",
+      "type": "shell",
+      "command": "kill -9 $(lsof -i :4001 -t) 2>/dev/null || true",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build MJCLI",
+      "type": "shell",
+      "command": "npm run build --workspace=@memberjunction/cli",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Build MetadataSync with SQLLogger",
+      "type": "shell",
+      "command": "npm run build --workspace=@memberjunction/sqlserver-dataprovider && npm run build --workspace=@memberjunction/metadata-sync && npm run build --workspace=@memberjunction/cli",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
     }
   ]
 }

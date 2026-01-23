@@ -1,5 +1,175 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/aiengine@3.2.0
+  - @memberjunction/ai-vector-dupe@3.2.0
+  - @memberjunction/actions-base@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/encryption@3.2.0
+  - @memberjunction/queue@3.2.0
+  - @memberjunction/ai-provider-bundle@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai@3.1.1
+- @memberjunction/aiengine@3.1.1
+- @memberjunction/ai-provider-bundle@3.1.1
+- @memberjunction/ai-vector-dupe@3.1.1
+- @memberjunction/actions-base@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/encryption@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/queue@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.0.0
+- @memberjunction/aiengine@3.0.0
+- @memberjunction/ai-provider-bundle@3.0.0
+- @memberjunction/ai-vector-dupe@3.0.0
+- @memberjunction/actions-base@3.0.0
+- @memberjunction/actions@3.0.0
+- @memberjunction/encryption@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+- @memberjunction/queue@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/aiengine@2.133.0
+  - @memberjunction/ai-vector-dupe@2.133.0
+  - @memberjunction/actions-base@2.133.0
+  - @memberjunction/actions@2.133.0
+  - @memberjunction/encryption@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/queue@2.133.0
+  - @memberjunction/ai-provider-bundle@2.133.0
+  - @memberjunction/ai@2.133.0
+  - @memberjunction/global@2.133.0
+
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/aiengine@2.132.0
+  - @memberjunction/ai-vector-dupe@2.132.0
+  - @memberjunction/actions-base@2.132.0
+  - @memberjunction/actions@2.132.0
+  - @memberjunction/encryption@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/queue@2.132.0
+  - @memberjunction/ai-provider-bundle@2.132.0
+  - @memberjunction/ai@2.132.0
+  - @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/aiengine@2.131.0
+  - @memberjunction/ai-vector-dupe@2.131.0
+  - @memberjunction/actions-base@2.131.0
+  - @memberjunction/actions@2.131.0
+  - @memberjunction/encryption@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/queue@2.131.0
+  - @memberjunction/ai-provider-bundle@2.131.0
+  - @memberjunction/ai@2.131.0
+  - @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.130.1
+- @memberjunction/aiengine@2.130.1
+- @memberjunction/ai-provider-bundle@2.130.1
+- @memberjunction/ai-vector-dupe@2.130.1
+- @memberjunction/actions-base@2.130.1
+- @memberjunction/actions@2.130.1
+- @memberjunction/encryption@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+- @memberjunction/queue@2.130.1
+
+## 2.130.0
+
+### Minor Changes
+
+- 83ae347: migrations
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+  - @memberjunction/ai@2.130.0
+  - @memberjunction/aiengine@2.130.0
+  - @memberjunction/ai-provider-bundle@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/ai-vector-dupe@2.130.0
+  - @memberjunction/actions@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/queue@2.130.0
+  - @memberjunction/actions-base@2.130.0
+  - @memberjunction/encryption@2.130.0
+  - @memberjunction/global@2.130.0
+
+## 2.129.0
+
+### Minor Changes
+
+- fbae243: migration
+- c7e38aa: migration
+
+### Patch Changes
+
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [fbae243]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/encryption@2.129.0
+  - @memberjunction/global@2.129.0
+  - @memberjunction/aiengine@2.129.0
+  - @memberjunction/ai-provider-bundle@2.129.0
+  - @memberjunction/core-entities@2.129.0
+  - @memberjunction/ai-vector-dupe@2.129.0
+  - @memberjunction/actions-base@2.129.0
+  - @memberjunction/actions@2.129.0
+  - @memberjunction/queue@2.129.0
+  - @memberjunction/ai@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes
@@ -721,7 +891,6 @@
 ### Patch Changes
 
 - 56257ed: Fix RunView pagination implementation
-
   - Added StartRow parameter support for server-side pagination
   - Fixed SQL generation to prevent TOP and OFFSET/FETCH conflicts
   - Improved total row count calculation for paginated queries
@@ -839,7 +1008,6 @@
 
   Add comprehensive audit logging and caching capabilities to the
   MemberJunction Query system:
-
   - Add ForceAuditLog and AuditLogDescription parameters to RunQuery for
     granular audit control
   - Implement TTL-based result caching with LRU eviction strategy for
@@ -959,7 +1127,6 @@
   relationships.
 
   ### New Features
-
   - **Hierarchical Path Resolution**: CategoryName now supports paths like
     "/MJ/AI/Agents/" that are parsed by splitting on "/" and walking down the
     category hierarchy using ParentID relationships
@@ -1323,7 +1490,6 @@
 ### Patch Changes
 
 - dfca664: **SQLServerDataProvider Changes:**
-
   - SQLServerTransactionGroup now immediately rolls back and stops processing on first operation failure
   - Enhanced error handling to prevent double rollback attempts
   - Improved error messages to clearly indicate when transactions are rolled back
@@ -3476,7 +3642,6 @@ Sat, 13 Apr 2024 02:32:44 GMT
 ### Patch Changes
 
 - dfca664: **SQLServerDataProvider Changes:**
-
   - SQLServerTransactionGroup now immediately rolls back and stops processing on first operation failure
   - Enhanced error handling to prevent double rollback attempts
   - Improved error messages to clearly indicate when transactions are rolled back

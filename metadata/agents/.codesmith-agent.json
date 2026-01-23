@@ -27,23 +27,9 @@
             "ID": "C2854FC4-5A06-4A9A-A6A8-E0DB10175DB7"
           },
           "sync": {
-            "lastModified": "2025-10-19T19:24:53.931Z",
-            "checksum": "aef84cc88b4a365061a8fde426dd45c975f9fe7fb27127c635fe1cfc260fff6d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Codesmith Agent Prompt",
-              "resolved": "A948FDCD-CB38-49EA-8480-6CC8AAFC0BE8"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:34.871Z",
+            "checksum": "eee48159a5e01a6573678e03dced15bda27c6ce8e73f6f7d37648038a3bc0070"
+          }
         }
       ],
       "AI Agent Actions": [
@@ -57,23 +43,9 @@
             "ID": "A67BA225-1F18-4FBA-976A-67762319074E"
           },
           "sync": {
-            "lastModified": "2025-10-19T19:24:53.942Z",
-            "checksum": "36e26f29dad3c3d85fd9b8755617c63d0a26589a26aec5fa4d2ddf4925971f55"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Execute Code",
-              "resolved": "F3BA81B8-1D89-4B13-A417-B32D8E8A6F88"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:34.873Z",
+            "checksum": "0cc749ba8ac80e0804109db9bd315c0f0079001dcd341c4386f77b157eb188b0"
+          }
         }
       ]
     },
@@ -81,16 +53,8 @@
       "ID": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
     },
     "sync": {
-      "lastModified": "2025-10-19T19:24:53.894Z",
-      "checksum": "ed3f978f73841fd9c86365c20e7e6af876694ba66e137fd884db2d918391dd8a"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:34.847Z",
+      "checksum": "2d8fdcb5f5a92ccfbc5f86ab07f185714d6a25dada9155b21e8cd64fad196ba5"
+    }
   }
 ]

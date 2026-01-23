@@ -1,0 +1,34 @@
+{
+  "entity": "Queries",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "Status": "Pending"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".queries.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "Query Categories",
+        "field": "ID"
+      }
+    },
+    "relatedEntities": {
+      "MJ: Query Parameters": {
+        "entity": "MJ: Query Parameters",
+        "foreignKey": "QueryID"
+      }
+    }
+  }
+}

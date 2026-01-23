@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Entities') // Tell MemberJunction about this class
 @Component({
@@ -61,7 +61,8 @@ export class EntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJRecordLinks', sectionName: 'MJ: Record Links', isExpanded: false },
             { sectionKey: 'queryEntities', sectionName: 'Query Entities', isExpanded: false },
             { sectionKey: 'generatedCodes', sectionName: 'Generated Codes', isExpanded: false },
-            { sectionKey: 'mJRecordLinks1', sectionName: 'MJ: Record Links', isExpanded: false }
+            { sectionKey: 'mJRecordLinks1', sectionName: 'MJ: Record Links', isExpanded: false },
+            { sectionKey: 'mJTestRuns', sectionName: 'MJ: Test Runs', isExpanded: false }
         ]);
     }
 }

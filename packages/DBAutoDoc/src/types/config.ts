@@ -31,7 +31,7 @@ export interface DatabaseConfig {
 }
 
 export interface AIConfig {
-  provider: 'openai' | 'anthropic' | 'groq' | 'mistral' | 'gemini';
+  provider: 'gemini' | 'openai' | 'anthropic' | 'groq' | 'mistral' | 'vertex' | 'azure' | 'cerebras' | 'openrouter' | 'xai' | 'bedrock';
   model: string;
   apiKey: string;
   temperature?: number;

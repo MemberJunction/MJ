@@ -91,6 +91,41 @@
   opacity: 0.5;
 }
 
+/* Attach button */
+.attach-button-icon {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 3rem;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-secondary, #666);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.attach-button-icon i {
+  font-size: 1rem;
+}
+.attach-button-icon:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--primary-color, #007bff);
+  transform: scale(1.05);
+}
+.attach-button-icon:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.attach-button-icon:disabled {
+  color: var(--text-disabled, #999);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 /* Mobile adjustments: 481px - 768px */
 @media (max-width: 768px) {
   .message-input-box-container {
@@ -112,6 +147,15 @@
     border-radius: 6px;
   }
   .send-button-icon i {
+    font-size: 0.875rem;
+  }
+  .attach-button-icon {
+    width: 32px;
+    height: 32px;
+    bottom: 0.625rem;
+    right: 2.75rem;
+  }
+  .attach-button-icon i {
     font-size: 0.875rem;
   }
 }
@@ -136,6 +180,15 @@
     border-radius: 6px;
   }
   .send-button-icon i {
+    font-size: 0.875rem;
+  }
+  .attach-button-icon {
+    width: 32px;
+    height: 32px;
+    bottom: 0.5rem;
+    right: 2.75rem;
+  }
+  .attach-button-icon i {
     font-size: 0.875rem;
   }
 }

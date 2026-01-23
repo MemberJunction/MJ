@@ -637,6 +637,9 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     const width = container.clientWidth;
     const height = container.clientHeight;
 
+    // Guard against zero container dimensions (container not laid out yet)
+    if (width === 0 || height === 0) return;
+
     // Calculate bounds
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     this.visibleNodes.forEach(node => {
@@ -648,8 +651,15 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       maxY = Math.max(maxY, (node.y || 0) + halfHeight);
     });
 
+    // Guard against invalid bounds (nodes without valid positions)
+    if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) return;
+
     const boundsWidth = maxX - minX + padding * 2;
     const boundsHeight = maxY - minY + padding * 2;
+
+    // Guard against zero-dimension bounds
+    if (boundsWidth <= 0 || boundsHeight <= 0) return;
+
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
 
@@ -658,6 +668,9 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       height / boundsHeight,
       this.mergedConfig.maxZoom
     );
+
+    // Final sanity check before applying transform
+    if (!isFinite(scale) || scale <= 0) return;
 
     const translateX = width / 2 - centerX * scale;
     const translateY = height / 2 - centerY * scale;

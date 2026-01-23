@@ -3,12 +3,14 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
-import { ChatMessage } from '@memberjunction/ai';
+import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { AIAgentEntityExtended, AIAgentRunEntityExtended, ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity, ConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
+import { MentionParserService } from './mention-parser.service';
 
 /**
  * Context for artifact lookups - provides pre-loaded data from conversation
@@ -47,7 +49,7 @@ export class ConversationAgentService {
    */
   public readonly isProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
 
-  constructor() {
+  constructor(private mentionParser: MentionParserService) {
     this.initializeAIClient();
   }
 
@@ -105,9 +107,12 @@ export class ConversationAgentService {
    * Process a message through the ambient Sage Agent.
    * This should be called for every message sent in a conversation.
    *
+   * Uses the optimized RunAIAgentFromConversationDetail mutation which loads
+   * conversation history (including attachments) server-side for better performance.
+   *
    * @param conversationId The conversation ID
    * @param message The message that was just sent
-   * @param conversationHistory Recent messages in the conversation for context
+   * @param conversationHistory Recent messages in the conversation for context (kept for backwards compatibility but not used)
    * @param conversationDetailId The ID of the conversation detail record to link to the agent run
    * @param onProgress Optional callback for receiving progress updates during execution
    * @returns The agent's response, or null if the agent chooses not to respond
@@ -141,10 +146,6 @@ export class ConversationAgentService {
       // Indicate agent is processing
       this._isProcessing$.next(true);
 
-      // Build conversation messages for the agent
-      // Note: conversationHistory already includes the current message
-      const conversationMessages = await this.buildAgentMessages(conversationHistory);
-
       // Get current user for permission filtering
       const currentUser = Metadata.Provider.CurrentUser;
       if (!currentUser) {
@@ -153,9 +154,9 @@ export class ConversationAgentService {
 
       // Filter agents by status and hierarchy first
       const candidateAgents = AIEngineBase.Instance.Agents.filter(
-        a => a.ID !== agent.ID && 
-             !a.ParentID && 
-             a.Status === 'Active' && 
+        a => a.ID !== agent.ID &&
+             !a.ParentID &&
+             a.Status === 'Active' &&
              a.InvocationMode !== 'Sub-Agent' // ensure that the agent is intended to run as top-level
       );
 
@@ -166,27 +167,33 @@ export class ConversationAgentService {
 
       console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
 
-      // Prepare parameters using the correct ExecuteAgentParams type
-      const params: ExecuteAgentParams = {
-        agent: agent,
-        conversationMessages: conversationMessages,
+      // Use optimized mutation that loads conversation history server-side
+      // This avoids sending large attachment data from client to server
+      const result = await this._aiClient.RunAIAgentFromConversationDetail({
         conversationDetailId: conversationDetailId,
+        agentId: agent.ID,
+        maxHistoryMessages: 20,
         data: {
-          ALL_AVAILABLE_AGENTS: availAgents.map(a => {
-            return {
-              ID: a.ID,
-              Name: a.Name,
-              Description: a.Description
-            }
-          }),
+          ALL_AVAILABLE_AGENTS: availAgents.map(a => ({
+            ID: a.ID,
+            Name: a.Name,
+            Description: a.Description
+          })),
           conversationId: conversationId,
           latestMessageId: message.ID
         },
-        onProgress: onProgress
-      };
-
-      // Run the agent
-      const result = await this._aiClient.RunAIAgent(params);
+        createArtifacts: true,
+        createNotification: true,
+        // Adapt progress callback format: GraphQL uses currentStep, AgentExecutionProgressCallback uses step
+        onProgress: onProgress ? (progress) => {
+          onProgress({
+            step: progress.currentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
+            percentage: progress.percentage,
+            message: progress.message,
+            metadata: progress.metadata
+          });
+        } : undefined
+      });
 
       return result;
     } catch (error) {
@@ -201,9 +208,56 @@ export class ConversationAgentService {
   }
 
   /**
-   * Build the message array for the agent from conversation history
-   * Note: conversationHistory already includes the current message, so we don't add it separately
-   * IMPORTANT: This method loads artifacts for each message and appends them to the content
+   * Find the configuration preset ID from a previous @mention of an agent in conversation history.
+   * Searches backwards through User messages to find the most recent @mention of the specified agent
+   * that includes a configId.
+   *
+   * @param agentId The agent ID to search for
+   * @param conversationHistory The conversation history to search through
+   * @returns The configuration preset ID if found, undefined otherwise
+   */
+  public findConfigurationPresetFromHistory(
+    agentId: string,
+    conversationHistory: ConversationDetailEntity[]
+  ): string | undefined {
+    // Search backwards through history for User messages that @mention this agent with a configId
+    const userMentionWithConfig = conversationHistory
+      .slice()
+      .reverse()
+      .find(msg => {
+        if (msg.Role !== 'User' || !msg.Message) return false;
+        // Parse the message to check for an @mention of this agent with a configId
+        const mentionResult = this.mentionParser.parseMentions(
+          msg.Message,
+          AIEngineBase.Instance.Agents,
+          []
+        );
+        return mentionResult.agentMention?.id === agentId && mentionResult.agentMention?.configurationId;
+      });
+
+    if (userMentionWithConfig) {
+      const mentionResult = this.mentionParser.parseMentions(
+        userMentionWithConfig.Message,
+        AIEngineBase.Instance.Agents,
+        []
+      );
+      if (mentionResult.agentMention?.configurationId) {
+        console.log(`🎯 Found configuration preset from @mention: ${mentionResult.agentMention.configurationId}`);
+        return mentionResult.agentMention.configurationId;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Build the message array for the agent from conversation history.
+   * Note: conversationHistory already includes the current message, so we don't add it separately.
+   * IMPORTANT: This method loads artifacts and attachments for each message.
+   *
+   * @deprecated This method is no longer used by processMessage() which now uses the optimized
+   * RunAIAgentFromConversationDetail mutation that loads history server-side. Kept for backwards
+   * compatibility with other callers that may need client-side message building.
    */
   private async buildAgentMessages(
     history: ConversationDetailEntity[]
@@ -217,66 +271,65 @@ export class ConversationAgentService {
     // Get IDs of all messages in history
     const messageIds = recentHistory.map(msg => msg.ID).filter(id => id); // Filter out any undefined IDs
 
-    // Create lookup map for artifacts by conversation detail ID
+    // Create lookup maps
     const artifactsByDetailId = new Map<string, string[]>(); // DetailID -> array of artifact JSON strings
+    const attachmentsByDetailId = new Map<string, AttachmentData[]>(); // DetailID -> array of AttachmentData
 
     if (messageIds.length > 0) {
-      try {
-        // Batch load all artifact junctions for these messages (OUTPUT only)
-        const rv = new RunView();
-        const junctionResult = await rv.RunView<ConversationDetailArtifactEntity>({
-          EntityName: 'MJ: Conversation Detail Artifacts',
-          ExtraFilter: `ConversationDetailID IN ('${messageIds.join("','")}') AND Direction='Output'`,
-          ResultType: 'entity_object'
-        });
+      const rv = new RunView();
 
-        if (junctionResult.Success && junctionResult.Results && junctionResult.Results.length > 0) {
-          // Collect unique version IDs
-          const versionIds = new Set<string>();
-          for (const junction of junctionResult.Results) {
-            versionIds.add(junction.ArtifactVersionID);
-          }
+      // Load artifacts and attachments in parallel
+      const [artifactsLoaded, attachmentsLoaded] = await Promise.all([
+        this.loadArtifactsForMessages(rv, messageIds, artifactsByDetailId),
+        this.loadAttachmentsForMessages(rv, messageIds, attachmentsByDetailId)
+      ]);
 
-          // Batch load all artifact versions
-          const versionResult = await rv.RunView<ArtifactVersionEntity>({
-            EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
-            ResultType: 'entity_object'
-          });
-
-          if (versionResult.Success && versionResult.Results) {
-            // Create lookup map for O(1) access
-            const versionMap = new Map(versionResult.Results.map(v => [v.ID, v]));
-
-            // Group artifacts by conversation detail ID
-            for (const junction of junctionResult.Results) {
-              const version = versionMap.get(junction.ArtifactVersionID);
-              if (version && version.Content) {
-                const existing = artifactsByDetailId.get(junction.ConversationDetailID) || [];
-                existing.push(version.Content);
-                artifactsByDetailId.set(junction.ConversationDetailID, existing);
-              }
-            }
-
-            console.log(`📦 Loaded ${artifactsByDetailId.size} artifact groups for ${messageIds.length} messages in conversation context`);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading artifacts for conversation context:', error);
-        // Continue without artifacts rather than failing
+      if (artifactsLoaded) {
+        console.log(`📦 Loaded ${artifactsByDetailId.size} artifact groups for ${messageIds.length} messages`);
+      }
+      if (attachmentsLoaded) {
+        console.log(`🖼️ Loaded ${attachmentsByDetailId.size} attachment groups for ${messageIds.length} messages`);
       }
     }
 
-    // Build messages with artifacts appended
+    // Build messages with proper multimodal content
     for (const msg of recentHistory) {
-      let content = msg.Message || '';
-
-      // Check if this message has artifacts
+      const messageText = msg.Message || '';
       const artifacts = artifactsByDetailId.get(msg.ID);
-      if (artifacts && artifacts.length > 0) {
-        // Append artifacts to message content in the expected format
-        for (const artifactJson of artifacts) {
-          content += `\n\n# Artifact\n${artifactJson}\n`;
+      const attachments = attachmentsByDetailId.get(msg.ID);
+
+      // Build content - may be string or ChatMessageContentBlock[]
+      let content: ChatMessageContent;
+
+      if (attachments && attachments.length > 0) {
+        // Use BuildChatMessageContent to create proper content blocks for multimodal
+        content = ConversationUtility.BuildChatMessageContent(messageText, attachments);
+
+        // Append artifacts to text content if present
+        if (artifacts && artifacts.length > 0) {
+          const artifactText = artifacts.map(json => `\n\n# Artifact\n${json}\n`).join('');
+
+          if (typeof content === 'string') {
+            content = content + artifactText;
+          } else if (Array.isArray(content)) {
+            // Find or create text block and append artifacts
+            const textBlock = content.find(b => b.type === 'text');
+            if (textBlock && textBlock.content) {
+              textBlock.content += artifactText;
+            } else {
+              content.push({ type: 'text', content: artifactText });
+            }
+          }
+        }
+      } else {
+        // No attachments - use simple string content
+        content = messageText;
+
+        // Append artifacts
+        if (artifacts && artifacts.length > 0) {
+          for (const artifactJson of artifacts) {
+            content += `\n\n# Artifact\n${artifactJson}\n`;
+          }
         }
       }
 
@@ -287,6 +340,142 @@ export class ConversationAgentService {
     }
 
     return messages;
+  }
+
+  /**
+   * Load artifacts for messages (OUTPUT direction only)
+   */
+  private async loadArtifactsForMessages(
+    rv: RunView,
+    messageIds: string[],
+    artifactsByDetailId: Map<string, string[]>
+  ): Promise<boolean> {
+    try {
+      const junctionResult = await rv.RunView<ConversationDetailArtifactEntity>({
+        EntityName: 'MJ: Conversation Detail Artifacts',
+        ExtraFilter: `ConversationDetailID IN ('${messageIds.join("','")}') AND Direction='Output'`,
+        ResultType: 'entity_object'
+      });
+
+      if (junctionResult.Success && junctionResult.Results && junctionResult.Results.length > 0) {
+        // Collect unique version IDs
+        const versionIds = new Set<string>();
+        for (const junction of junctionResult.Results) {
+          versionIds.add(junction.ArtifactVersionID);
+        }
+
+        // Batch load all artifact versions
+        const versionResult = await rv.RunView<ArtifactVersionEntity>({
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
+          ResultType: 'entity_object'
+        });
+
+        if (versionResult.Success && versionResult.Results) {
+          const versionMap = new Map(versionResult.Results.map(v => [v.ID, v]));
+
+          for (const junction of junctionResult.Results) {
+            const version = versionMap.get(junction.ArtifactVersionID);
+            if (version && version.Content) {
+              const existing = artifactsByDetailId.get(junction.ConversationDetailID) || [];
+              existing.push(version.Content);
+              artifactsByDetailId.set(junction.ConversationDetailID, existing);
+            }
+          }
+          return true;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading artifacts for conversation context:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Load attachments for messages and convert to AttachmentData format
+   */
+  private async loadAttachmentsForMessages(
+    rv: RunView,
+    messageIds: string[],
+    attachmentsByDetailId: Map<string, AttachmentData[]>
+  ): Promise<boolean> {
+    console.log('[AgentService] loadAttachmentsForMessages - querying for messageIds:', messageIds);
+    try {
+      const filter = `ConversationDetailID IN ('${messageIds.join("','")}')`;
+      console.log('[AgentService] loadAttachmentsForMessages - filter:', filter);
+
+      const attachmentResult = await rv.RunView<ConversationDetailAttachmentEntity>({
+        EntityName: 'MJ: Conversation Detail Attachments',
+        ExtraFilter: filter,
+        OrderBy: 'DisplayOrder ASC, __mj_CreatedAt ASC',
+        ResultType: 'entity_object'
+      });
+
+      console.log('[AgentService] loadAttachmentsForMessages - query result:', {
+        success: attachmentResult.Success,
+        count: attachmentResult.Results?.length || 0,
+        error: attachmentResult.ErrorMessage
+      });
+
+      if (attachmentResult.Success && attachmentResult.Results && attachmentResult.Results.length > 0) {
+        for (const att of attachmentResult.Results) {
+          console.log('[AgentService] loadAttachmentsForMessages - processing attachment:', {
+            id: att.ID,
+            detailId: att.ConversationDetailID,
+            mimeType: att.MimeType,
+            hasInlineData: !!att.InlineData,
+            hasFileID: !!att.FileID
+          });
+          // Convert to AttachmentData format
+          const attachmentData = this.convertToAttachmentData(att);
+          if (attachmentData) {
+            const existing = attachmentsByDetailId.get(att.ConversationDetailID) || [];
+            existing.push(attachmentData);
+            attachmentsByDetailId.set(att.ConversationDetailID, existing);
+          }
+        }
+        return true;
+      }
+    } catch (error) {
+      console.error('Error loading attachments for conversation context:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Convert a ConversationDetailAttachmentEntity to AttachmentData format
+   */
+  private convertToAttachmentData(att: ConversationDetailAttachmentEntity): AttachmentData | null {
+    // Get the content - either inline data or file URL
+    let content: string | null = null;
+
+    if (att.InlineData) {
+      // Create data URL from inline base64 data
+      content = `data:${att.MimeType};base64,${att.InlineData}`;
+    } else if (att.FileID) {
+      // TODO: Get pre-authenticated URL from MJStorage
+      // For now, skip attachments stored in external storage
+      console.warn(`Attachment ${att.ID} uses FileID storage - external URLs not yet supported`);
+      return null;
+    }
+
+    if (!content) {
+      return null;
+    }
+
+    // Determine attachment type from modality or MIME type
+    const attachmentType = ConversationUtility.GetAttachmentTypeFromMime(att.MimeType);
+
+    return {
+      type: attachmentType,
+      mimeType: att.MimeType,
+      fileName: att.FileName ?? undefined,
+      sizeBytes: att.FileSizeBytes ?? undefined,
+      width: att.Width ?? undefined,
+      height: att.Height ?? undefined,
+      durationSeconds: att.DurationSeconds ?? undefined,
+      content: content
+    };
   }
 
   /**

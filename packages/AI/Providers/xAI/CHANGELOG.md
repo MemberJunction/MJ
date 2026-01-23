@@ -1,5 +1,80 @@
 # @memberjunction/ai-xai
 
+## 3.2.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.2.0
+- @memberjunction/ai-openai@3.2.0
+- @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-openai@3.1.1
+- @memberjunction/global@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.0.0
+- @memberjunction/ai-openai@3.0.0
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.133.0
+- @memberjunction/ai-openai@2.133.0
+- @memberjunction/global@2.133.0
+
+## 2.132.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.132.0
+- @memberjunction/ai-openai@2.132.0
+- @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.131.0
+- @memberjunction/ai-openai@2.131.0
+- @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.130.1
+- @memberjunction/ai-openai@2.130.1
+- @memberjunction/global@2.130.1
+
+## 2.130.0
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+  - @memberjunction/ai@2.130.0
+  - @memberjunction/ai-openai@2.130.0
+  - @memberjunction/global@2.130.0
+
+## 2.129.0
+
+### Patch Changes
+
+- Updated dependencies [fbae243]
+- Updated dependencies [c7e38aa]
+  - @memberjunction/global@2.129.0
+  - @memberjunction/ai-openai@2.129.0
+  - @memberjunction/ai@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes

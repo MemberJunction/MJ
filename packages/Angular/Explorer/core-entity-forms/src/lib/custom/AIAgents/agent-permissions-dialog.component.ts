@@ -1,6 +1,7 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
-import { AIAgentPermissionEntity, AIAgentEntityExtended, RoleEntity, UserEntity } from '@memberjunction/core-entities';
+import { AIAgentPermissionEntity, UserEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { Metadata, RoleInfo, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { GridDataResult, DataStateChangeEvent, GridComponent } from '@progress/kendo-angular-grid';
@@ -24,7 +25,7 @@ import { State, SortDescriptor, CompositeFilterDescriptor, process } from '@prog
                 <div class="dialog-header">
                     <div class="agent-info">
                         <h3>{{ agent.Name }}</h3>
-                        <p class="agent-description" *ngIf="agent?.Description">{{ agent.Description }}</p>
+                        <p class="agent-description" *ngIf="agent.Description">{{ agent.Description }}</p>
                         <div class="owner-info">
                             <i class="fas fa-crown"></i>
                             <span>Owner: {{ ownerName || 'Not Set' }}</span>

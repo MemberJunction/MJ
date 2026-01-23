@@ -146,16 +146,83 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('fileEntityRecordLinks')">
+        [badgeCount]="GetSectionRowCount('fileEntityRecordLinks')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('File Entity Record Links','FileID')"
                 [NewRecordValues]="NewRecordValues('File Entity Record Links')"
                 [AllowLoad]="IsSectionExpanded('fileEntityRecordLinks')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('fileEntityRecordLinks', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('fileEntityRecordLinks', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Prompt Run Medias Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIPromptRunMedias"
+        sectionName="MJ: AI Prompt Run Medias"
+        icon="fa fa-image"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIPromptRunMedias')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Run Medias','FileID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
+                [AllowLoad]="IsSectionExpanded('mJAIPromptRunMedias')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunMedias', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Conversation Detail Attachments Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJConversationDetailAttachments"
+        sectionName="MJ: Conversation Detail Attachments"
+        icon="fa fa-paperclip"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJConversationDetailAttachments')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Attachments','FileID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments')"
+                [AllowLoad]="IsSectionExpanded('mJConversationDetailAttachments')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationDetailAttachments', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Agent Run Medias Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentRunMedias"
+        sectionName="MJ: AI Agent Run Medias"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentRunMedias')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Medias','FileID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunMedias', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

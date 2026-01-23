@@ -1,168 +1,364 @@
-.app-container {
-    padding: 20px;
+.list-detail-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px;
+  background: #fafafa;
 }
 
-.flex-display-row-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 10px;
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  flex-shrink: 0;
 }
 
-.title-wrapper {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 0;
-    border-bottom: 1px solid var(--med-gray);
+.list-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
 }
 
-.title-wrapper h4 {
-    margin: 0;
-    font-size: 24px;
-    line-height: 28px;
+/* Custom Toolbar */
+.custom-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  flex-shrink: 0;
 }
 
-.title-wrapper .search input {
-    width: 100%;
-    height: 100%;
-    font-size: 16px;
-    background: transparent;
-    border: none;
-    box-sizing: border-box;
-    padding-left: 40px;
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
- .title-wrapper .search  {
-    background: var(--light-shade);
-    width: 360px;
-    height: 44px;
-    position: relative;
-    border-radius: 10px;
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.title-wrapper .search svg {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    left: 12px;
+.row-count {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
 }
 
+.selection-count {
+  font-size: 14px;
+  color: #666;
+}
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.toolbar-button span {
+  font-size: 14px;
+}
+
+.remove-btn {
+  color: #d32f2f;
+}
+
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 200px;
+}
+
+.grid-container {
+  flex: 1;
+  min-height: 0;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+}
+
+/* Add Button */
 .add-btn {
-    padding: 10px 30px;
-    border-radius: 10px;
-    color: white;
-    background-color: var(--border-blue);
-    font-size: initial;
-    cursor: pointer;
+  padding: 10px 30px;
+  border-radius: 10px;
+  color: white;
+  background-color: var(--border-blue, #0078d4);
+  font-size: initial;
+  cursor: pointer;
 }
 
 .add-btn:hover {
-    filter: brightness(85%);
+  filter: brightness(85%);
 }
 
-.margin-left-small {
-    margin-left: 10px;
+::ng-deep .k-dropdown-button .k-button {
+  background: var(--border-blue, #0078d4) !important;
+  color: white !important;
+  font-size: 16px;
+  border: none;
+  padding: 8px 25px;
+  border-radius: 10px;
 }
 
-
-.overflow-y-scroll {
-    overflow-y: auto;
-    max-height: 300px;
+::ng-deep .k-dropdown-button .k-button:hover {
+  background: var(--border-blue, #0078d4) !important;
+  filter: brightness(85%);
 }
 
-.padding-bottom-small {
-    padding-bottom: 10px;
+::ng-deep .k-dropdown-button .k-button .k-button-text {
+  color: white !important;
 }
 
-.list-item {
-    display: flex;
-    justify-content: space-between;
-    padding-bottom: 5px;
-    align-items: center;
+::ng-deep .k-dropdown-button .k-button .fa-plus {
+  color: white !important;
 }
 
-.btn-no-border {
-    border: none;
-    background: none;
-    color: var(--border-blue);
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
+/* ==========================================
+   Dialog Styles
+   ========================================== */
+
+.dialog-content {
+  padding: 8px 0;
 }
 
-.btn-selected {
-    font-weight: bold;
+.dialog-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  gap: 20px;
 }
 
-.list-text {
-    font-size: large;
-}
-.list-selected {
-    font-weight: bold;
-    color: var(--border-blue);
+.dialog-message {
+  text-align: center;
+  padding: 20px;
 }
 
-.btn-margin-right {
-    margin-right: 35px;
+.warning-icon {
+  font-size: 48px;
+  color: #f57c00;
+  margin-bottom: 16px;
+  display: block;
 }
 
-.divider {
-    color: lightgray
+.dialog-message p {
+  margin: 8px 0;
+  font-size: 15px;
+  color: #333;
 }
 
-.search-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 0;
+.dialog-note {
+  color: #666 !important;
+  font-size: 13px !important;
 }
 
-.search-bar {
-    width: 65%;
-    padding-bottom: 10px;
+.progress-bar {
+  width: 100%;
+  max-width: 300px;
 }
 
-.dialog-wrapper {
-    padding: 15px 25px;
+/* ==========================================
+   Add Records Dialog
+   ========================================== */
+
+.add-records-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-.btn-outline {
-    border: 2px solid var(--border-blue);
-    border-radius: 8px;
-    padding: 5px 30px;
-
-    background: none;
-    color: var(--border-blue);
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
+.search-section {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 12px;
 }
 
-.k-dropdown-button .k-button {
-    background: var(--border-blue);
-    color: var(--white-color);
-    font-size: 16px;
-    border: none;
-    padding: 8px 25px;
-    border-radius: 10px;
+.search-input {
+  width: 100%;
 }
 
-.k-dropdown-button .k-button .k-button-text .card-header-entity .add-item .k-button .k-button-text {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+.search-icon {
+  color: #999;
+  padding-left: 8px;
 }
 
-.btn-cmn {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    background: transparent;
-    border-radius: 8px;
-    border: 1px solid var(--gray-color);
+.search-hint {
+  display: block;
+  font-size: 12px;
+  color: #999;
+  margin-top: 6px;
 }
 
-.btn-cmn.active {
-    border: 1px solid var(--border-blue);
+.records-list {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.list-loading {
+  display: flex;
+  justify-content: center;
+  padding: 40px;
+}
+
+.empty-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #999;
+}
+
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  color: #ccc;
+}
+
+.empty-results p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.selection-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 8px;
+}
+
+.selection-info {
+  margin-left: auto;
+  font-size: 13px;
+  color: #666;
+}
+
+.records-scroll {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 280px;
+}
+
+.record-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  gap: 12px;
+}
+
+.record-item:hover:not(.in-list) {
+  background: #f5f5f5;
+}
+
+.record-item.selected {
+  background: #e3f2fd;
+}
+
+.record-item.in-list {
+  background: #f9f9f9;
+  cursor: default;
+  opacity: 0.7;
+}
+
+.record-checkbox {
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.record-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.in-list-icon {
+  color: #4caf50;
+  font-size: 14px;
+}
+
+.record-name {
+  flex: 1;
+  font-size: 14px;
+  color: #333;
+}
+
+.in-list-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+/* ==========================================
+   Add From View Dialog
+   ========================================== */
+
+.dialog-instruction {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.views-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.view-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  gap: 12px;
+}
+
+.view-item:hover {
+  background: #f5f5f5;
+}
+
+.view-item.selected {
+  background: #e3f2fd;
+}
+
+.view-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.view-icon {
+  color: #666;
+  font-size: 16px;
+}
+
+.view-name {
+  flex: 1;
+  font-size: 14px;
+  color: #333;
 }

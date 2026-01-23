@@ -30,7 +30,7 @@ import { BaseAction } from "@memberjunction/actions";
  *     Name: 'Query',
  *     Value: 'quarterly report'
  *   }, {
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'Google Drive - Marketing'
  *   }]
  * });
@@ -42,7 +42,7 @@ import { BaseAction } from "@memberjunction/actions";
  *     Name: 'Query',
  *     Value: 'budget 2024'
  *   }, {
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'SharePoint - Finance'
  *   }, {
  *     Name: 'FileTypes',
@@ -70,7 +70,7 @@ export class SearchStorageFilesAction extends BaseFileStorageAction {
             return this.createErrorResult("Query parameter is required", "MISSING_QUERY");
         }
 
-        // Get storage driver (uses StorageProvider parameter via base class)
+        // Get storage driver (uses StorageAccount parameter via base class)
         const { driver, error } = await this.getDriverFromParams(params);
         if (error) {
             return error;

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 

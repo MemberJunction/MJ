@@ -13,6 +13,7 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 
 import { SectionLoaderComponent } from './lib/section-loader-component';
 import { MJFormField } from './lib/base-field-component';
@@ -25,29 +26,17 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { MJLinkField } from './lib/link-field.component';
 import { FormSectionControlsComponent } from './lib/form-section-controls.component';
 import { CollapsiblePanelComponent } from './lib/collapsible-panel.component';
+import { ExplorerEntityDataGridComponent } from './lib/explorer-entity-data-grid.component';
 
-// Encryption engine initialization
-import { EncryptionEngineBase } from '@memberjunction/core-entities';
-
-/**
- * Initializes the EncryptionEngineBase for client-side use.
- * Called automatically when the module loads.
- * Client-side doesn't need contextUser since the user context is already established.
- */
-export function initializeEncryptionEngine(): void {
-  // Config with forceRefresh=false, no contextUser needed on client side
-  EncryptionEngineBase.Instance.Config(false).catch(err => {
-    console.warn('EncryptionEngineBase initialization deferred - metadata not yet available:', err?.message || err);
-  });
-}
-
+ 
 @NgModule({
   declarations: [
     SectionLoaderComponent,
     MJFormField,
     MJLinkField,
     FormSectionControlsComponent,
-    CollapsiblePanelComponent
+    CollapsiblePanelComponent,
+    ExplorerEntityDataGridComponent
   ],
   imports: [
     CommonModule,
@@ -64,17 +53,16 @@ export function initializeEncryptionEngine(): void {
     ContainerDirectivesModule,
     MemberJunctionSharedModule,
     CodeEditorModule,
-    MarkdownModule
+    MarkdownModule,
+    EntityViewerModule
   ],
   exports: [
     SectionLoaderComponent,
     MJFormField,
     MJLinkField,
     FormSectionControlsComponent,
-    CollapsiblePanelComponent
+    CollapsiblePanelComponent,
+    ExplorerEntityDataGridComponent
   ]
 })
 export class BaseFormsModule { }
-
-// Initialize EncryptionEngineBase when module loads
-initializeEncryptionEngine();

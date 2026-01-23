@@ -184,21 +184,21 @@
                       <!-- Card Actions -->
                       <div class="card-actions">
                         @if (UserCanReadAgents) {
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             class="action-btn"
-                            (click)="openAgentRecord(agent.ID)"
-                            title="Open Agent">
-                            <i class="fa-solid fa-external-link-alt"></i>
-                            Open
+                            (click)="showAgentDetails(agent, $event)"
+                            title="View Details">
+                            <i class="fa-solid fa-eye"></i>
+                            Details
                           </button>
                         }
-                        
+
                         @if (agent.Status === 'Active' && UserCanReadAgents) {
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             class="action-btn action-btn-primary"
-                            (click)="runAgent(agent)"
+                            (click)="runAgent(agent); $event.stopPropagation()"
                             title="Run Agent">
                             <i class="fa-solid fa-play"></i>
                             Run
@@ -216,9 +216,30 @@
                   <table class="agents-table">
                     <thead>
                       <tr>
-                        <th>Name</th>
-                        <th>Status</th>
-                        <th>Execution Mode</th>
+                        <th (click)="sortBy('Name')"
+                            [class.sorted]="sortColumn === 'Name'"
+                            [class.desc]="sortColumn === 'Name' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Name
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Status')"
+                            [class.sorted]="sortColumn === 'Status'"
+                            [class.desc]="sortColumn === 'Status' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Status
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('ExecutionMode')"
+                            [class.sorted]="sortColumn === 'ExecutionMode'"
+                            [class.desc]="sortColumn === 'ExecutionMode' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Execution Mode
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -256,17 +277,17 @@
                           <td>
                             <div class="table-actions">
                               @if (UserCanReadAgents) {
-                                <button 
-                                  type="button" 
+                                <button
+                                  type="button"
                                   class="action-btn-small"
-                                  (click)="openAgentRecord(agent.ID)"
-                                  title="Open Agent">
-                                  <i class="fa-solid fa-external-link-alt"></i>
+                                  (click)="showAgentDetails(agent)"
+                                  title="View Details">
+                                  <i class="fa-solid fa-eye"></i>
                                 </button>
                               }
                               @if (agent.Status === 'Active' && UserCanReadAgents) {
-                                <button 
-                                  type="button" 
+                                <button
+                                  type="button"
                                   class="action-btn-small primary"
                                   (click)="runAgent(agent)"
                                   title="Run Agent">
@@ -286,6 +307,151 @@
         </div>
       </kendo-splitter-pane>
     </kendo-splitter>
+  </div>
+
+  <!-- Detail Panel Overlay -->
+  @if (detailPanelVisible) {
+    <div class="detail-panel-overlay" (click)="closeDetailPanel()"></div>
+  }
+
+  <!-- Detail Panel -->
+  <div class="detail-panel" [class.visible]="detailPanelVisible">
+    @if (selectedAgent) {
+      <!-- Panel Header -->
+      <div class="detail-panel-header">
+        <div class="detail-panel-title">
+          <div class="detail-icon" [style.background-color]="getAgentIconColor(selectedAgent)">
+            @if (hasLogoURL(selectedAgent)) {
+              <img [src]="selectedAgent.LogoURL" [alt]="selectedAgent.Name + ' logo'" class="detail-logo">
+            } @else {
+              <i [class]="getAgentIcon(selectedAgent)"></i>
+            }
+          </div>
+          <div class="detail-title-info">
+            <h3>{{ selectedAgent.Name }}</h3>
+            <span class="detail-subtitle">{{ getAgentTypeName(selectedAgent) }}</span>
+          </div>
+        </div>
+        <button class="detail-panel-close" (click)="closeDetailPanel()">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+
+      <!-- Panel Content -->
+      <div class="detail-panel-content">
+        <!-- Status Section -->
+        <div class="detail-section">
+          <div class="detail-badges">
+            <span class="status-badge" [class]="'status-' + (selectedAgent.Status || 'unknown').toLowerCase()">
+              <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
+              {{ selectedAgent.Status || 'Unknown' }}
+            </span>
+            @if (selectedAgent.ExposeAsAction) {
+              <span class="feature-badge">
+                <i class="fa-solid fa-bolt"></i>
+                Exposed as Action
+              </span>
+            }
+          </div>
+        </div>
+
+        <!-- Description -->
+        @if (selectedAgent.Description) {
+          <div class="detail-section">
+            <h4 class="detail-section-title">
+              <i class="fa-solid fa-align-left"></i>
+              Description
+            </h4>
+            <p class="detail-description">{{ selectedAgent.Description }}</p>
+          </div>
+        }
+
+        <!-- Configuration Details -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">
+            <i class="fa-solid fa-cog"></i>
+            Configuration
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Execution Mode</span>
+              <span class="detail-value">
+                <i [class]="getExecutionModeIcon(selectedAgent.ExecutionMode)"></i>
+                {{ selectedAgent.ExecutionMode }}
+              </span>
+            </div>
+            @if (getParentAgentName(selectedAgent)) {
+              <div class="detail-item">
+                <span class="detail-label">Parent Agent</span>
+                <span class="detail-value">{{ getParentAgentName(selectedAgent) }}</span>
+              </div>
+            }
+            <div class="detail-item">
+              <span class="detail-label">Context Compression</span>
+              <span class="detail-value">
+                @if (selectedAgent.EnableContextCompression) {
+                  <i class="fa-solid fa-check" style="color: #10b981;"></i> Enabled
+                } @else {
+                  <i class="fa-solid fa-times" style="color: #ef4444;"></i> Disabled
+                }
+              </span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Exposed as Action</span>
+              <span class="detail-value">
+                @if (selectedAgent.ExposeAsAction) {
+                  <i class="fa-solid fa-check" style="color: #10b981;"></i> Yes
+                } @else {
+                  <i class="fa-solid fa-times" style="color: #ef4444;"></i> No
+                }
+              </span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Model Selection</span>
+              <span class="detail-value">{{ selectedAgent.ModelSelectionMode }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timestamps -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">
+            <i class="fa-solid fa-clock"></i>
+            Timestamps
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Created</span>
+              <span class="detail-value">{{ selectedAgent.__mj_CreatedAt | date:'medium' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Updated</span>
+              <span class="detail-value">{{ selectedAgent.__mj_UpdatedAt | date:'medium' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel Actions -->
+      <div class="detail-panel-actions">
+        @if (selectedAgent.Status === 'Active') {
+          <button
+            type="button"
+            class="detail-action-btn secondary"
+            (click)="runAgent(selectedAgent)">
+            <i class="fa-solid fa-play"></i>
+            Run Agent
+          </button>
+        }
+        <button
+          type="button"
+          class="detail-action-btn primary"
+          (click)="openAgentFromPanel()">
+          <i class="fa-solid fa-external-link-alt"></i>
+          Open Full Record
+        </button>
+      </div>
+    }
   </div>
 </div>
 

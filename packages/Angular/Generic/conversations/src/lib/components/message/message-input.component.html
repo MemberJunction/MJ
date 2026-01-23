@@ -12,9 +12,15 @@
     [disabled]="disabled || isProcessing"
     [showCharacterCount]="false"
     [enableMentions]="true"
+    [enableAttachments]="enableAttachments"
+    [maxAttachments]="maxAttachments"
+    [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+    [acceptedFileTypes]="acceptedFileTypes"
     [currentUser]="currentUser"
     [rows]="3"
     [(value)]="messageText"
-    (textSubmitted)="onTextSubmitted($event)">
+    (textSubmitted)="onTextSubmitted($event)"
+    (attachmentsChanged)="onAttachmentsChanged($event)"
+    (attachmentError)="onAttachmentError($event)">
   </mj-message-input-box>
 </div>

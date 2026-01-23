@@ -71,6 +71,7 @@ import { UserPickerComponent } from './components/shared/user-picker.component';
 import { ArtifactCollectionPickerModalComponent } from './components/collection/artifact-collection-picker-modal.component';
 import { ArtifactShareModalComponent } from './components/artifact/artifact-share-modal.component';
 import { GlobalTasksPanelComponent } from './components/global-tasks/global-tasks-panel.component';
+import { ImageViewerComponent } from './components/attachment/image-viewer.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -118,7 +119,8 @@ const COMPONENTS = [
   ActivityIndicatorComponent,
   ToastComponent,
   InputDialogComponent,
-  GlobalTasksPanelComponent
+  GlobalTasksPanelComponent,
+  ImageViewerComponent
 ];
 
 @NgModule({

@@ -1,0 +1,52 @@
+{
+  "name": "@memberjunction/ng-bootstrap",
+  "version": "3.2.0",
+  "description": "MemberJunction Angular Bootstrap - Encapsulates all Angular authentication and initialization logic",
+  "main": "./dist/fesm2022/memberjunction-ng-bootstrap.mjs",
+  "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "directory": "dist",
+    "main": "./fesm2022/memberjunction-ng-bootstrap.mjs",
+    "types": "./index.d.ts"
+  },
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json && node scripts/fix-dist-package.js",
+    "watch": "ng-packagr -p ng-package.json --watch",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "memberjunction",
+    "angular",
+    "bootstrap",
+    "authentication"
+  ],
+  "author": "MemberJunction",
+  "license": "MIT",
+  "peerDependencies": {
+    "@angular/common": "^18.0.0",
+    "@angular/core": "^18.0.0",
+    "@angular/router": "^18.0.0",
+    "rxjs": "^7.8.1"
+  },
+  "dependencies": {
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/graphql-dataprovider": "3.2.0",
+    "@memberjunction/ng-auth-services": "3.2.0",
+    "@memberjunction/ng-shared": "3.2.0",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@angular/common": "^18.2.13",
+    "@angular/core": "^18.2.13",
+    "@angular/router": "^18.2.13",
+    "ng-packagr": "^18.2.1",
+    "typescript": "~5.5.4"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

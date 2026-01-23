@@ -228,7 +228,7 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
      * @throws Error if the specified display component cannot be found or instantiated
      */
     public static async GetComponent(relationshipInfo: EntityRelationshipInfo, contextUser: UserInfo, ...params: any[]): Promise<RelatedEntityDisplayComponentGeneratorBase> {
-        let key = "UserViewGrid"; // default key/name of component
+        let key = "EntityDataGrid"; // default key/name of component
         if (relationshipInfo.DisplayComponentID && relationshipInfo.DisplayComponentID.length > 0) {
             // get the component from the component info provided
             await TypeTablesCache.Instance.Config(false, contextUser);

@@ -1,10 +1,13 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult } from "./interfaces";
+import { RunQueryParams } from "./runQuery";
+import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
+import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
@@ -96,7 +99,7 @@ export const AllMetadataArrays = [
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
  */
-export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider {
+export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider {
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
@@ -167,19 +170,175 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
 
 
-    /**
-     * Force sub-classes to implement RunView, base class doesn't provide an implementation
-     * @param params 
-     * @param contextUser 
-     */
-    public abstract RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>>;
+    // ========================================================================
+    // INTERNAL ABSTRACT METHODS - Subclasses must implement these
+    // ========================================================================
 
     /**
-     * Force sub-classes to implement RunViews, base class doesn't provide an implementation
-     * @param params 
-     * @param contextUser 
+     * Internal implementation of RunView that subclasses must provide.
+     * This method should ONLY contain the data fetching logic - no pre/post processing.
+     * The base class handles all orchestration (telemetry, caching, transformation).
+     * @param params - The view parameters
+     * @param contextUser - Optional user context for permissions
      */
-    public abstract RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]>;
+    protected abstract InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>>;
+
+    /**
+     * Internal implementation of RunViews that subclasses must provide.
+     * This method should ONLY contain the batch data fetching logic - no pre/post processing.
+     * The base class handles all orchestration (telemetry, caching, transformation).
+     * @param params - Array of view parameters
+     * @param contextUser - Optional user context for permissions
+     */
+    protected abstract InternalRunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]>;
+
+    /**
+     * Internal implementation of RunQuery that subclasses must provide.
+     * This method should ONLY contain the query execution logic - no pre/post processing.
+     * The base class handles all orchestration (telemetry, caching).
+     * @param params - The query parameters
+     * @param contextUser - Optional user context for permissions
+     */
+    protected abstract InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult>;
+
+    /**
+     * Internal implementation of RunQueries that subclasses must provide.
+     * This method should ONLY contain the batch query execution logic - no pre/post processing.
+     * The base class handles all orchestration (telemetry, caching).
+     * @param params - Array of query parameters
+     * @param contextUser - Optional user context for permissions
+     */
+    protected abstract InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]>;
+
+    // ========================================================================
+    // PUBLIC API METHODS - Orchestrate Pre → Cache → Internal → Post flow
+    // ========================================================================
+
+    /**
+     * Runs a view based on the provided parameters.
+     * This method orchestrates the full execution flow: pre-processing, cache check,
+     * internal execution, post-processing, and cache storage.
+     * @param params - The view parameters
+     * @param contextUser - Optional user context for permissions (required server-side)
+     * @returns The view results
+     */
+    public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        // Delegate to RunViews with a single-element array to ensure smart cache check is used
+        // This guarantees that CacheLocal uses server-side validation (maxUpdatedAt + rowCount check)
+        // rather than blindly accepting stale local cache
+        const results = await this.RunViews<T>([params], contextUser);
+        return results[0];
+    }
+
+    /**
+     * Runs multiple views based on the provided parameters.
+     * This method orchestrates the full execution flow for batch operations.
+     * @param params - Array of view parameters
+     * @param contextUser - Optional user context for permissions (required server-side)
+     * @returns Array of view results
+     */
+    public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        // Pre-processing for batch
+        const preResult = await this.PreRunViews(params, contextUser);
+
+        // Check for smart cache check mode
+        if (preResult.useSmartCacheCheck && preResult.smartCacheCheckParams) {
+            return this.executeSmartCacheCheck<T>(params, preResult, contextUser);
+        }
+
+        // Check for cached results - if all are cached, end telemetry and return early
+        if (preResult.allCached && preResult.cachedResults) {
+            const totalResults = preResult.cachedResults.reduce((sum, r) => sum + (r.Results?.length ?? 0), 0);
+            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+                cacheHit: true,
+                allCached: true,
+                batchSize: params.length,
+                totalResultCount: totalResults
+            });
+            return preResult.cachedResults as RunViewResult<T>[];
+        }
+
+        // Execute the internal implementation for non-cached items
+        const results = await this.InternalRunViews<T>(preResult.uncachedParams || params, contextUser);
+
+        // Merge cached and fresh results if needed
+        const finalResults = preResult.cachedResults
+            ? this.mergeCachedAndFreshResults(preResult, results)
+            : results;
+
+        // Post-processing for batch
+        await this.PostRunViews(finalResults, params, preResult, contextUser);
+
+        return finalResults as RunViewResult<T>[];
+    }
+
+    /**
+     * Runs a query based on the provided parameters.
+     * This method orchestrates the full execution flow: pre-processing, cache check,
+     * internal execution, post-processing, and cache storage.
+     * @param params - The query parameters
+     * @param contextUser - Optional user context for permissions (required server-side)
+     * @returns The query results
+     */
+    public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        // Pre-processing: telemetry, cache check
+        const preResult = await this.PreRunQuery(params, contextUser);
+
+        // Check for cached result - end telemetry with cache hit info
+        if (preResult.cachedResult) {
+            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+                cacheHit: true,
+                cacheStatus: preResult.cacheStatus,
+                resultCount: preResult.cachedResult.Results?.length ?? 0
+            });
+            return preResult.cachedResult;
+        }
+
+        // Execute the internal implementation
+        const result = await this.InternalRunQuery(params, contextUser);
+
+        // Post-processing: cache storage, telemetry end
+        await this.PostRunQuery(result, params, preResult, contextUser);
+
+        return result;
+    }
+
+    /**
+     * Runs multiple queries based on the provided parameters.
+     * This method orchestrates the full execution flow for batch query operations.
+     * @param params - Array of query parameters
+     * @param contextUser - Optional user context for permissions (required server-side)
+     * @returns Array of query results
+     */
+    public async RunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+        // Pre-processing for batch
+        const preResult = await this.PreRunQueries(params, contextUser);
+
+        // Check for cached results - if all are cached, end telemetry and return early
+        if (preResult.allCached && preResult.cachedResults) {
+            const totalResults = preResult.cachedResults.reduce((sum, r) => sum + (r.Results?.length ?? 0), 0);
+            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+                cacheHit: true,
+                allCached: true,
+                batchSize: params.length,
+                totalResultCount: totalResults
+            });
+            return preResult.cachedResults;
+        }
+
+        // Execute the internal implementation for non-cached items
+        const results = await this.InternalRunQueries(preResult.uncachedParams || params, contextUser);
+
+        // Merge cached and fresh results if needed
+        const finalResults = preResult.cachedResults
+            ? this.mergeQueryCachedAndFreshResults(preResult, results)
+            : results;
+
+        // Post-processing for batch
+        await this.PostRunQueries(finalResults, params, preResult, contextUser);
+
+        return finalResults;
+    }
 
     /**
      * Used to check to see if the entity in question is active or not
@@ -197,12 +356,847 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         EntityInfo.AssertEntityActiveStatus(entity, callerName);
     }
 
+    // ========================================================================
+    // PRE/POST HOOK RESULT TYPES
+    // ========================================================================
+
     /**
-     * Base class pre-processor that all sub-classes should call before they start their RunView process
-     * @param params 
-     * @param contextUser 
+     * Result from PreRunView hook containing cache status and optional cached result
+     */
+    protected _preRunViewResultType: {
+        telemetryEventId?: string;
+        cacheStatus: 'hit' | 'miss' | 'disabled' | 'expired';
+        cachedResult?: RunViewResult;
+        fingerprint?: string;
+    };
+
+    /**
+     * Result from PreRunViews hook containing cache status for batch operations
+     */
+    protected _preRunViewsResultType: {
+        telemetryEventId?: string;
+        allCached: boolean;
+        cachedResults?: RunViewResult[];
+        uncachedParams?: RunViewParams[];
+        cacheStatusMap?: Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunViewResult }>;
+        /** When CacheLocal is enabled, contains the cache check params to send to server */
+        smartCacheCheckParams?: RunViewWithCacheCheckParams[];
+        /** When CacheLocal is enabled, indicates we should use smart cache check */
+        useSmartCacheCheck?: boolean;
+    };
+
+    /**
+     * Result from PreRunQuery hook containing cache status and optional cached result
+     */
+    protected _preRunQueryResultType: {
+        telemetryEventId?: string;
+        cacheStatus: 'hit' | 'miss' | 'disabled' | 'expired';
+        cachedResult?: RunQueryResult;
+        fingerprint?: string;
+    };
+
+    /**
+     * Result from PreRunQueries hook containing cache status for batch operations
+     */
+    protected _preRunQueriesResultType: {
+        telemetryEventId?: string;
+        allCached: boolean;
+        cachedResults?: RunQueryResult[];
+        uncachedParams?: RunQueryParams[];
+        cacheStatusMap?: Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunQueryResult }>;
+    };
+
+    // Type aliases for cleaner code
+    protected get PreRunViewResult(): typeof this._preRunViewResultType { return this._preRunViewResultType; }
+    protected get PreRunViewsResult(): typeof this._preRunViewsResultType { return this._preRunViewsResultType; }
+    protected get PreRunQueryResult(): typeof this._preRunQueryResultType { return this._preRunQueryResultType; }
+    protected get PreRunQueriesResult(): typeof this._preRunQueriesResultType { return this._preRunQueriesResultType; }
+
+    // ========================================================================
+    // PRE-PROCESSING HOOKS
+    // ========================================================================
+
+    /**
+     * Pre-processing hook for RunView.
+     * Handles telemetry, validation, entity status check, and cache lookup.
+     * @param params - The view parameters
+     * @param contextUser - Optional user context
+     * @returns Pre-processing result with cache status and optional cached result
+     */
+    protected async PreRunView(params: RunViewParams, contextUser?: UserInfo): Promise<typeof this._preRunViewResultType> {
+        const preViewStart = performance.now();
+
+        // Start telemetry tracking
+        const telemetryStart = performance.now();
+        const telemetryEventId = TelemetryManager.Instance.StartEvent(
+            'RunView',
+            'ProviderBase.RunView',
+            {
+                EntityName: params.EntityName,
+                ViewID: params.ViewID,
+                ViewName: params.ViewName,
+                ExtraFilter: params.ExtraFilter,
+                OrderBy: params.OrderBy,
+                ResultType: params.ResultType,
+                MaxRows: params.MaxRows,
+                StartRow: params.StartRow,
+                CacheLocal: params.CacheLocal,
+                _fromEngine: params._fromEngine
+            },
+            contextUser?.ID
+        );
+        const telemetryTime = performance.now() - telemetryStart;
+
+        // Entity status check
+        const entityCheckStart = performance.now();
+        await this.EntityStatusCheck(params, 'PreRunView');
+        const entityCheckTime = performance.now() - entityCheckStart;
+
+        // Handle entity_object result type - need all fields
+        const entityLookupStart = performance.now();
+        if (params.ResultType === 'entity_object') {
+            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
+            if (!entity)
+                throw new Error(`Entity ${params.EntityName} not found in metadata`);
+            params.Fields = entity.Fields.map(f => f.Name);
+        }
+        const entityLookupTime = performance.now() - entityLookupStart;
+
+        // Check local cache if enabled
+        const cacheCheckStart = performance.now();
+        let cacheStatus: 'hit' | 'miss' | 'disabled' | 'expired' = 'disabled';
+        let cachedResult: RunViewResult | undefined;
+        let fingerprint: string | undefined;
+
+        if (params.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
+            fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
+            const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+            if (cached) {
+                // Reconstruct RunViewResult from cached data
+                cachedResult = {
+                    Success: true,
+                    Results: cached.results,
+                    RowCount: cached.results.length,
+                    TotalRowCount: cached.results.length,
+                    ExecutionTime: 0, // Cached, no execution time
+                    ErrorMessage: '',
+                    UserViewRunID: ''
+                };
+                cacheStatus = 'hit';
+            } else {
+                cacheStatus = 'miss';
+            }
+        }
+        const cacheCheckTime = performance.now() - cacheCheckStart;
+
+        const totalPreTime = performance.now() - preViewStart;
+        if (totalPreTime > 50) {
+            console.log(`[PERF-PRE] PreRunView ${params.EntityName}: ${totalPreTime.toFixed(1)}ms (telemetry=${telemetryTime.toFixed(1)}ms, entityCheck=${entityCheckTime.toFixed(1)}ms, entityLookup=${entityLookupTime.toFixed(1)}ms, cache=${cacheCheckTime.toFixed(1)}ms)`);
+        }
+
+        return {
+            telemetryEventId,
+            cacheStatus,
+            cachedResult,
+            fingerprint
+        };
+    }
+
+    /**
+     * Pre-processing hook for RunViews (batch).
+     * Handles telemetry, validation, and cache lookup for multiple views.
+     * @param params - Array of view parameters
+     * @param contextUser - Optional user context
+     * @returns Pre-processing result with cache status for each view
+     */
+    protected async PreRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
+        // Start telemetry tracking for batch operation
+        const fromEngine = params.some(p => p._fromEngine);
+        const telemetryEventId = TelemetryManager.Instance.StartEvent(
+            'RunView',
+            'ProviderBase.RunViews',
+            {
+                BatchSize: params.length,
+                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
+                _fromEngine: fromEngine
+            },
+            contextUser?.ID
+        );
+
+        // Check if any params have CacheLocal enabled - smart caching is always used when caching locally
+        const useSmartCacheCheck = params.some(p => p.CacheLocal);
+
+        // If local caching is enabled, use smart cache check flow
+        if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
+            return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
+        }
+
+        // Traditional caching flow
+        const cacheStatusMap = new Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunViewResult }>();
+        const uncachedParams: RunViewParams[] = [];
+        const cachedResults: (RunViewResult | null)[] = [];
+        let allCached = true;
+
+        for (let i = 0; i < params.length; i++) {
+            const param = params[i];
+
+            // Entity status check
+            await this.EntityStatusCheck(param, 'PreRunViews');
+
+            // Handle entity_object result type - need all fields
+            if (param.ResultType === 'entity_object') {
+                const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
+                if (!entity) {
+                    throw new Error(`Entity ${param.EntityName} not found in metadata`);
+                }
+                param.Fields = entity.Fields.map(f => f.Name);
+            }
+
+            // Check local cache if enabled
+            if (param.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+                if (cached) {
+                    const cachedViewResult: RunViewResult = {
+                        Success: true,
+                        Results: cached.results,
+                        RowCount: cached.results.length,
+                        TotalRowCount: cached.results.length,
+                        ExecutionTime: 0,
+                        ErrorMessage: '',
+                        UserViewRunID: ''
+                    };
+                    // if needed this will transform each result into an entity object
+                    await this.TransformSimpleObjectToEntityObject(param, cachedViewResult, contextUser);
+
+                    cacheStatusMap.set(i, { status: 'hit', result: cachedViewResult });
+                    cachedResults.push(cachedViewResult);
+                    continue;
+                }
+                cacheStatusMap.set(i, { status: 'miss' });
+            } else {
+                cacheStatusMap.set(i, { status: 'disabled' });
+            }
+
+            allCached = false;
+            uncachedParams.push(param);
+            cachedResults.push(null); // Placeholder for uncached
+        }
+
+        return {
+            telemetryEventId,
+            allCached,
+            cachedResults: allCached ? cachedResults.filter(r => r !== null) as RunViewResult[] : undefined,
+            uncachedParams: allCached ? undefined : uncachedParams,
+            cacheStatusMap
+        };
+    }
+
+    /**
+     * Prepares smart cache check parameters for RunViews when CacheLocal is enabled.
+     * Instead of returning cached data immediately, this builds params to send to the server
+     * which will validate if the cache is current or return fresh data.
+     */
+    private async prepareSmartCacheCheckParams(
+        params: RunViewParams[],
+        telemetryEventId: string,
+        contextUser?: UserInfo
+    ): Promise<typeof this._preRunViewsResultType> {
+        const smartCacheCheckParams: RunViewWithCacheCheckParams[] = [];
+
+        for (const param of params) {
+            // Entity status check
+            await this.EntityStatusCheck(param, 'PreRunViews');
+
+            // Handle entity_object result type - need all fields
+            if (param.ResultType === 'entity_object') {
+                const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName?.trim().toLowerCase());
+                if (!entity) {
+                    throw new Error(`Entity ${param.EntityName} not found in metadata`);
+                }
+                param.Fields = entity.Fields.map(f => f.Name);
+            }
+
+            // Build the cache check param with optional cache status
+            let cacheStatus: RunViewCacheStatus | undefined;
+
+            if (param.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+                if (cached) {
+                    cacheStatus = {
+                        maxUpdatedAt: cached.maxUpdatedAt,
+                        rowCount: cached.rowCount
+                    };
+                }
+            }
+
+            smartCacheCheckParams.push({
+                params: param,
+                cacheStatus
+            });
+        }
+
+        return {
+            telemetryEventId,
+            allCached: false, // Don't return cached directly - let server validate
+            useSmartCacheCheck: true,
+            smartCacheCheckParams,
+            cacheStatusMap: new Map()
+        };
+    }
+
+    /**
+     * Executes the smart cache check flow for RunViews.
+     * Calls RunViewsWithCacheCheck on the provider (if available) and processes the results,
+     * using cached data for 'current' items and fresh data for 'stale' items.
+     *
+     * Optimized to process all results in parallel using Promise.all for cache lookups,
+     * cache updates, and entity transformations.
+     */
+    private async executeSmartCacheCheck<T>(
+        params: RunViewParams[],
+        preResult: typeof this._preRunViewsResultType,
+        contextUser?: UserInfo
+    ): Promise<RunViewResult<T>[]> {
+        // Cast to access RunViewsWithCacheCheck method
+        const provider = this as unknown as { RunViewsWithCacheCheck: <U>(params: RunViewWithCacheCheckParams[], contextUser?: UserInfo) => Promise<RunViewsWithCacheCheckResponse<U>> };
+
+        // Execute the smart cache check
+        const response = await provider.RunViewsWithCacheCheck<T>(preResult.smartCacheCheckParams!, contextUser);
+
+        if (!response.success) {
+            // If the smart cache check failed, log and return empty results
+            LogError(`SmartCacheCheck failed: ${response.errorMessage}`);
+            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+                smartCacheCheck: true,
+                success: false,
+                errorMessage: response.errorMessage
+            });
+            return params.map(() => ({
+                Success: false,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: response.errorMessage || 'SmartCacheCheck failed',
+                UserViewRunID: ''
+            }));
+        }
+
+        // Process all results in parallel
+        const processingPromises = params.map((param, i) =>
+            this.processSingleSmartCacheResult<T>(param, i, response.results, contextUser)
+        );
+
+        const processedResults = await Promise.all(processingPromises);
+
+        // Aggregate telemetry stats
+        let cacheHits = 0;
+        let cacheMisses = 0;
+        for (const result of processedResults) {
+            if (result.cacheHit) cacheHits++;
+            if (result.cacheMiss) cacheMisses++;
+        }
+
+        // End telemetry
+        TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+            smartCacheCheck: true,
+            success: true,
+            cacheHits,
+            cacheMisses,
+            batchSize: params.length
+        });
+
+        return processedResults.map(r => r.result);
+    }
+
+    /**
+     * Processes a single smart cache check result.
+     * Handles cache lookup for 'current' items and cache update for 'stale' items.
+     */
+    private async processSingleSmartCacheResult<T>(
+        param: RunViewParams,
+        index: number,
+        serverResults: RunViewWithCacheCheckResult<T>[],
+        contextUser?: UserInfo
+    ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean }> {
+        const checkResult = serverResults.find(r => r.viewIndex === index);
+
+        if (!checkResult) {
+            return {
+                result: {
+                    Success: false,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: 'No result returned from server',
+                    UserViewRunID: ''
+                },
+                cacheHit: false,
+                cacheMiss: false
+            };
+        }
+
+        if (checkResult.status === 'current') {
+            // Cache is current - use cached data
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+            const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+
+            if (cached) {
+                const cachedResult: RunViewResult<T> = {
+                    Success: true,
+                    Results: cached.results as T[],
+                    RowCount: cached.rowCount,
+                    TotalRowCount: cached.rowCount,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    UserViewRunID: ''
+                };
+                // Transform to entity objects if needed
+                await this.TransformSimpleObjectToEntityObject(param, cachedResult, contextUser);
+                return { result: cachedResult, cacheHit: true, cacheMiss: false };
+            } else {
+                // Cache miss - shouldn't happen but handle gracefully
+                return {
+                    result: {
+                        Success: false,
+                        Results: [],
+                        RowCount: 0,
+                        TotalRowCount: 0,
+                        ExecutionTime: 0,
+                        ErrorMessage: 'Cache marked current but no cached data found',
+                        UserViewRunID: ''
+                    },
+                    cacheHit: false,
+                    cacheMiss: false
+                };
+            }
+        } else if (checkResult.status === 'differential') {
+            // Cache is stale but we have differential data - merge with cached data
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+
+            // Get entity info for primary key field name
+            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName?.trim().toLowerCase());
+            const primaryKeyFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
+
+            // Apply differential update to cache
+            if (param.CacheLocal && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
+                const merged = await LocalCacheManager.Instance.ApplyDifferentialUpdate(
+                    fingerprint,
+                    param,
+                    checkResult.differentialData.updatedRows,
+                    checkResult.differentialData.deletedRecordIDs,
+                    primaryKeyFieldName,
+                    checkResult.maxUpdatedAt || new Date().toISOString(),
+                    checkResult.rowCount || 0
+                );
+
+                if (merged) {
+                    const mergedResult: RunViewResult<T> = {
+                        Success: true,
+                        Results: merged.results as T[],
+                        RowCount: merged.rowCount,
+                        TotalRowCount: merged.rowCount,
+                        ExecutionTime: 0,
+                        ErrorMessage: '',
+                        UserViewRunID: ''
+                    };
+                    // Transform to entity objects if needed
+                    await this.TransformSimpleObjectToEntityObject(param, mergedResult, contextUser);
+                    return { result: mergedResult, cacheHit: true, cacheMiss: false };
+                }
+            }
+
+            // Differential merge failed - this should not happen normally
+            // Throwing an exception rather than returning partial data which would be dangerous
+            // as the caller would have no way of knowing the data is incomplete
+            throw new Error(
+                `Differential cache merge failed for entity '${param.EntityName}'. ` +
+                `Cache fingerprint may be invalid or cache data corrupted. ` +
+                `Consider clearing the local cache and retrying.`
+            );
+        } else if (checkResult.status === 'stale') {
+            // Cache is stale - use fresh data and update cache (entity doesn't support differential)
+            const freshResult: RunViewResult<T> = {
+                Success: true,
+                Results: checkResult.results || [],
+                RowCount: checkResult.rowCount || 0,
+                TotalRowCount: checkResult.rowCount || 0,
+                ExecutionTime: 0,
+                ErrorMessage: '',
+                UserViewRunID: ''
+            };
+
+            // Update the local cache with fresh data (don't await - fire and forget for performance)
+            if (param.CacheLocal && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                // Note: We don't await here to avoid blocking the response
+                // Cache update happens in background
+                LocalCacheManager.Instance.SetRunViewResult(
+                    fingerprint,
+                    param,
+                    checkResult.results || [],
+                    checkResult.maxUpdatedAt,
+                    checkResult.rowCount
+                ).catch(e => LogError(`Failed to update cache: ${e}`));
+            }
+
+            // Transform to entity objects if needed
+            await this.TransformSimpleObjectToEntityObject(param, freshResult, contextUser);
+            return { result: freshResult, cacheHit: false, cacheMiss: true };
+        } else {
+            // Error status
+            return {
+                result: {
+                    Success: false,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: checkResult.errorMessage || 'Unknown error',
+                    UserViewRunID: ''
+                },
+                cacheHit: false,
+                cacheMiss: false
+            };
+        }
+    }
+
+    /**
+     * Pre-processing hook for RunQuery.
+     * Handles telemetry and cache lookup.
+     * @param params - The query parameters
+     * @param contextUser - Optional user context
+     * @returns Pre-processing result with cache status and optional cached result
+     */
+    protected async PreRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<typeof this._preRunQueryResultType> {
+        // Start telemetry tracking
+        const telemetryEventId = TelemetryManager.Instance.StartEvent(
+            'RunQuery',
+            'ProviderBase.RunQuery',
+            {
+                QueryID: params.QueryID,
+                QueryName: params.QueryName,
+                CategoryPath: params.CategoryPath,
+                CategoryID: params.CategoryID,
+                MaxRows: params.MaxRows,
+                StartRow: params.StartRow,
+                HasParameters: params.Parameters ? Object.keys(params.Parameters).length > 0 : false
+            },
+            contextUser?.ID
+        );
+
+        // Query caching is handled internally by the provider's query cache mechanism
+        // We just return the telemetry info here - actual cache check happens in InternalRunQuery
+        return {
+            telemetryEventId,
+            cacheStatus: 'disabled', // Query caching is handled differently
+            cachedResult: undefined,
+            fingerprint: undefined
+        };
+    }
+
+    /**
+     * Pre-processing hook for RunQueries (batch).
+     * Handles telemetry for batch query operations.
+     * @param params - Array of query parameters
+     * @param contextUser - Optional user context
+     * @returns Pre-processing result
+     */
+    protected async PreRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<typeof this._preRunQueriesResultType> {
+        // Start telemetry tracking for batch operation
+        const telemetryEventId = TelemetryManager.Instance.StartEvent(
+            'RunQuery',
+            'ProviderBase.RunQueries',
+            {
+                BatchSize: params.length,
+                Queries: params.map(p => p.QueryName || p.QueryID).filter(Boolean)
+            },
+            contextUser?.ID
+        );
+
+        // Query caching is handled internally by each query execution
+        return {
+            telemetryEventId,
+            allCached: false,
+            cachedResults: undefined,
+            uncachedParams: params,
+            cacheStatusMap: undefined
+        };
+    }
+
+    // ========================================================================
+    // POST-PROCESSING HOOKS
+    // ========================================================================
+
+    /**
+     * Post-processing hook for RunView.
+     * Handles result transformation, cache storage, and telemetry end.
+     * @param result - The view result
+     * @param params - The view parameters
+     * @param preResult - The pre-processing result
+     * @param contextUser - Optional user context
+     */
+    protected async PostRunView(
+        result: RunViewResult,
+        params: RunViewParams,
+        preResult: typeof this._preRunViewResultType,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        // Transform the result set into BaseEntity-derived objects, if needed
+        await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
+
+        // Store in local cache if enabled and we have a successful result
+        if (params.CacheLocal && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
+            // Extract maxUpdatedAt from results if available
+            const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
+            await LocalCacheManager.Instance.SetRunViewResult(
+                preResult.fingerprint,
+                params,
+                result.Results,
+                maxUpdatedAt
+            );
+        }
+
+        // End telemetry tracking with cache miss info
+        if (preResult.telemetryEventId) {
+            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+                cacheHit: false,
+                cacheStatus: preResult.cacheStatus,
+                resultCount: result.Results?.length ?? 0,
+                success: result.Success
+            });
+        }
+    }
+
+    /**
+     * Post-processing hook for RunViews (batch).
+     * Handles result transformation, cache storage, and telemetry end.
+     * @param results - Array of view results
+     * @param params - Array of view parameters
+     * @param preResult - The pre-processing result
+     * @param contextUser - Optional user context
+     */
+    protected async PostRunViews(
+        results: RunViewResult[],
+        params: RunViewParams[],
+        preResult: typeof this._preRunViewsResultType,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        // Transform results in parallel
+        const promises: Promise<void>[] = [];
+        for (let i = 0; i < results.length; i++) {
+            promises.push(this.TransformSimpleObjectToEntityObject(params[i], results[i], contextUser));
+
+            // Store in local cache if enabled
+            if (params[i].CacheLocal && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
+                const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
+                promises.push(LocalCacheManager.Instance.SetRunViewResult(
+                    fingerprint,
+                    params[i],
+                    results[i].Results,
+                    maxUpdatedAt
+                ));
+            }
+        }
+        await Promise.all(promises);
+
+        // End telemetry tracking with batch info
+        if (preResult.telemetryEventId) {
+            const totalResults = results.reduce((sum, r) => sum + (r.Results?.length ?? 0), 0);
+            const cachedCount = preResult.cacheStatusMap
+                ? [...preResult.cacheStatusMap.values()].filter(s => s.status === 'hit').length
+                : 0;
+            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+                cacheHit: false,
+                allCached: false,
+                batchSize: params.length,
+                cachedCount,
+                fetchedCount: params.length - cachedCount,
+                totalResultCount: totalResults
+            });
+        }
+    }
+
+    /**
+     * Post-processing hook for RunQuery.
+     * Handles cache storage and telemetry end.
+     * @param result - The query result
+     * @param params - The query parameters
+     * @param preResult - The pre-processing result
+     * @param contextUser - Optional user context
+     */
+    protected async PostRunQuery(
+        result: RunQueryResult,
+        params: RunQueryParams,
+        preResult: typeof this._preRunQueryResultType,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        // Query caching is handled internally by the provider
+
+        // End telemetry tracking with cache miss info
+        if (preResult.telemetryEventId) {
+            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+                cacheHit: false,
+                cacheStatus: preResult.cacheStatus,
+                resultCount: result.Results?.length ?? 0,
+                success: result.Success
+            });
+        }
+    }
+
+    /**
+     * Post-processing hook for RunQueries (batch).
+     * Handles telemetry end.
+     * @param results - Array of query results
+     * @param params - Array of query parameters
+     * @param preResult - The pre-processing result
+     * @param contextUser - Optional user context
+     */
+    protected async PostRunQueries(
+        results: RunQueryResult[],
+        params: RunQueryParams[],
+        preResult: typeof this._preRunQueriesResultType,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        // Query caching is handled internally by each query execution
+
+        // End telemetry tracking with batch info
+        if (preResult.telemetryEventId) {
+            const totalResults = results.reduce((sum, r) => sum + (r.Results?.length ?? 0), 0);
+            const cachedCount = preResult.cacheStatusMap
+                ? [...preResult.cacheStatusMap.values()].filter(s => s.status === 'hit').length
+                : 0;
+            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+                cacheHit: false,
+                allCached: false,
+                batchSize: params.length,
+                cachedCount,
+                fetchedCount: params.length - cachedCount,
+                totalResultCount: totalResults
+            });
+        }
+    }
+
+    // ========================================================================
+    // CACHE HELPERS
+    // ========================================================================
+
+    /**
+     * Extracts the maximum __mj_UpdatedAt timestamp from a set of results.
+     * This is used for cache freshness checking.
+     * @param results - Array of result objects that may contain __mj_UpdatedAt
+     * @returns ISO string of the max timestamp, or current time if none found
+     */
+    protected extractMaxUpdatedAt(results: unknown[]): string {
+        let maxDate: Date | null = null;
+
+        for (const item of results) {
+            if (item && typeof item === 'object') {
+                const record = item as Record<string, unknown>;
+                // Check for __mj_UpdatedAt field (standard MJ timestamp field)
+                const updatedAt = record['__mj_UpdatedAt'] || record['UpdatedAt'];
+                if (updatedAt) {
+                    const date = updatedAt instanceof Date ? updatedAt : new Date(updatedAt as string);
+                    if (!isNaN(date.getTime()) && (!maxDate || date > maxDate)) {
+                        maxDate = date;
+                    }
+                }
+            }
+        }
+
+        return maxDate ? maxDate.toISOString() : new Date().toISOString();
+    }
+
+    /**
+     * Merges cached and fresh results for RunViews, maintaining original order.
+     * @param preResult - The pre-processing result with cache info
+     * @param freshResults - The fresh results from InternalRunViews
+     * @returns Combined results in original order
+     */
+    protected mergeCachedAndFreshResults(
+        preResult: typeof this._preRunViewsResultType,
+        freshResults: RunViewResult[]
+    ): RunViewResult[] {
+        if (!preResult.cacheStatusMap) {
+            return freshResults;
+        }
+
+        const merged: RunViewResult[] = [];
+        let freshIndex = 0;
+
+        for (let i = 0; i < preResult.cacheStatusMap.size; i++) {
+            const cacheInfo = preResult.cacheStatusMap.get(i);
+            if (cacheInfo?.status === 'hit' && cacheInfo.result) {
+                merged.push(cacheInfo.result);
+            } else {
+                merged.push(freshResults[freshIndex++]);
+            }
+        }
+
+        return merged;
+    }
+
+    /**
+     * Merges cached and fresh results for RunQueries, maintaining original order.
+     * @param preResult - The pre-processing result with cache info
+     * @param freshResults - The fresh results from InternalRunQueries
+     * @returns Combined results in original order
+     */
+    protected mergeQueryCachedAndFreshResults(
+        preResult: typeof this._preRunQueriesResultType,
+        freshResults: RunQueryResult[]
+    ): RunQueryResult[] {
+        if (!preResult.cacheStatusMap) {
+            return freshResults;
+        }
+
+        const merged: RunQueryResult[] = [];
+        let freshIndex = 0;
+
+        for (let i = 0; i < preResult.cacheStatusMap.size; i++) {
+            const cacheInfo = preResult.cacheStatusMap.get(i);
+            if (cacheInfo?.status === 'hit' && cacheInfo.result) {
+                merged.push(cacheInfo.result);
+            } else {
+                merged.push(freshResults[freshIndex++]);
+            }
+        }
+
+        return merged;
+    }
+
+    // ========================================================================
+    // LEGACY METHODS (kept for backward compatibility, will be removed)
+    // ========================================================================
+
+    /**
+     * @deprecated Use PreRunView instead. This method is kept for backward compatibility.
      */
     protected async PreProcessRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<void> {
+        // Start telemetry tracking
+        const eventId = TelemetryManager.Instance.StartEvent(
+            'RunView',
+            'ProviderBase.RunView',
+            {
+                EntityName: params.EntityName,
+                ViewID: params.ViewID,
+                ViewName: params.ViewName,
+                ExtraFilter: params.ExtraFilter,
+                OrderBy: params.OrderBy,
+                ResultType: params.ResultType,
+                MaxRows: params.MaxRows,
+                StartRow: params.StartRow,
+                _fromEngine: params._fromEngine
+            },
+            contextUser?.ID
+        );
+        // Store on params object for retrieval in PostProcessRunView
+        (params as Record<string, unknown>)._telemetryEventId = eventId;
+
         await this.EntityStatusCheck(params, 'PreProcessRunView');
 
         // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
@@ -218,23 +1212,47 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Base class post-processor that all sub-classes should call after they finish their RunView process
-     * @param params 
-     * @param contextUser 
-     * @returns 
+     * @param params
+     * @param contextUser
+     * @returns
      */
     protected async PostProcessRunView(result: RunViewResult, params: RunViewParams, contextUser?: UserInfo): Promise<void> {
         // Transform the result set into BaseEntity-derived objects, if needed
         await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
+
+        // End telemetry tracking
+        const eventId = (params as Record<string, unknown>)._telemetryEventId as string | undefined;
+        if (eventId) {
+            TelemetryManager.Instance.EndEvent(eventId);
+            delete (params as Record<string, unknown>)._telemetryEventId;
+        }
     }
 
     /**
-     * Base class implementation for handling pre-processing of RunViews() each sub-class should call this 
+     * Base class implementation for handling pre-processing of RunViews() each sub-class should call this
      * within their RunViews() method implementation
-     * @param params 
-     * @param contextUser 
-     * @returns 
+     * @param params
+     * @param contextUser
+     * @returns
      */
     protected async PreProcessRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<void> {
+        // Start telemetry tracking for batch operation
+        const fromEngine = params.some(p => p._fromEngine);
+        const eventId = TelemetryManager.Instance.StartEvent(
+            'RunView',
+            'ProviderBase.RunViews',
+            {
+                BatchSize: params.length,
+                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
+                _fromEngine: fromEngine
+            },
+            contextUser?.ID
+        );
+        // Store on first param for retrieval in PostProcessRunViews (using a special key to avoid collision)
+        if (params.length > 0) {
+            (params[0] as Record<string, unknown>)._telemetryBatchEventId = eventId;
+        }
+
         if (params && params.length > 0) {
             for (const param of params) {
                 this.EntityStatusCheck(param, 'PreProcessRunViews');
@@ -255,11 +1273,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Base class utilty method that should be called after each sub-class handles its internal RunViews() process before returning results
-     * This handles the optional conversion of simple objects to entity objects for each requested view depending on if the params requests 
+     * This handles the optional conversion of simple objects to entity objects for each requested view depending on if the params requests
      * a result_type === 'entity_object'
-     * @param results 
-     * @param params 
-     * @param contextUser 
+     * @param results
+     * @param params
+     * @param contextUser
      */
     protected async PostProcessRunViews(results: RunViewResult[], params: RunViewParams[], contextUser?: UserInfo): Promise<void> {
         if (params && params.length > 0) {
@@ -269,6 +1287,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
             // await the promises for all transformations
             await Promise.all(promises);
+
+            // End telemetry tracking for batch operation
+            const eventId = (params[0] as Record<string, unknown>)._telemetryBatchEventId as string | undefined;
+            if (eventId) {
+                TelemetryManager.Instance.EndEvent(eventId);
+                delete (params[0] as Record<string, unknown>)._telemetryBatchEventId;
+            }
         }
     }
 
@@ -281,7 +1306,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
         // only if needed (e.g. ResultType==='entity_object'), transform the result set into BaseEntity-derived objects
-        if (param.ResultType === 'entity_object' && result && result.Success){
+        if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0){
             // we need to transform each of the items in the result set into a BaseEntity-derived object
             // Create entities and load data in parallel for better performance
             const entityPromises = result.Results.map(async (item) => {
@@ -501,13 +1526,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[]): any[] {
         const result: any[] = [];
+
+        // Sort entities alphabetically by name to ensure deterministic ordering
+        // This prevents non-deterministic output in CodeGen and other metadata consumers
+        const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
+
         if (fieldValues && fieldValues.length > 0)
             for (let f of fields) {
                 // populate the field values for each field, if we have them
                 f.EntityFieldValues = fieldValues.filter(fv => fv.EntityFieldID === f.ID);
             }
-            
-        for (let e of entities) {
+
+        for (let e of sortedEntities) {
             e.EntityFields = fields.filter(f => f.EntityID === e.ID).sort((a, b) => a.Sequence - b.Sequence);
             e.EntityPermissions = permissions.filter(p => p.EntityID === e.ID);
             e.EntityRelationships = relationships.filter(r => r.EntityID === e.ID);
@@ -1191,7 +2221,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const temp = JSON.parse(await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey)); // we now have a simple object for all the metadata
                 if (temp) {
                     // we have local metadata
-                    LogStatus('Metadata loaded from local storage')
                     const metadata = MetadataFromSimpleObject(temp, this); // create a new object to start this up
                     this.UpdateLocalMetadata(metadata);
                 }

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-timeline",
-  "version": "2.128.0",
+  "version": "3.2.0",
   "description": "MemberJunction: Responsive timeline component for Angular. Works with MemberJunction entities or plain JavaScript objects. No external dependencies.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -22,12 +22,12 @@
   "author": "MemberJunction",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2"
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2"
+    "@angular/common": "18.2.14",
+    "@angular/core": "18.2.14"
   },
   "peerDependenciesMeta": {
     "@memberjunction/core": {
@@ -35,7 +35,7 @@
     }
   },
   "dependencies": {
-    "@memberjunction/core": "2.128.0",
+    "@memberjunction/core": "3.2.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

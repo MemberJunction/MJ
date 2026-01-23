@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'AI Agents') // Tell MemberJunction about this class
 @Component({
@@ -20,6 +20,7 @@ export class AIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'contextCompression', sectionName: 'Context Compression', isExpanded: false },
             { sectionKey: 'payloadDataFlow', sectionName: 'Payload & Data Flow', isExpanded: false },
             { sectionKey: 'runtimeLimitsExecutionSettings', sectionName: 'Runtime Limits & Execution Settings', isExpanded: false },
+            { sectionKey: 'attachmentStorage', sectionName: 'Attachment Storage', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'aIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
             { sectionKey: 'aIAgentLearningCycles', sectionName: 'AIAgent Learning Cycles', isExpanded: false },
@@ -27,6 +28,7 @@ export class AIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'aIAgentRequests', sectionName: 'AI Agent Requests', isExpanded: false },
             { sectionKey: 'mJAIAgentArtifactTypes', sectionName: 'MJ: AI Agent Artifact Types', isExpanded: false },
             { sectionKey: 'mJAIAgentDataSources', sectionName: 'MJ: AI Agent Data Sources', isExpanded: false },
+            { sectionKey: 'mJAIAgentModalities', sectionName: 'MJ: AI Agent Modalities', isExpanded: false },
             { sectionKey: 'mJAIAgentPermissions', sectionName: 'MJ: AI Agent Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentRelationships', sectionName: 'MJ: AI Agent Relationships', isExpanded: false },
             { sectionKey: 'mJAIAgentSteps', sectionName: 'MJ: AI Agent Steps', isExpanded: false },

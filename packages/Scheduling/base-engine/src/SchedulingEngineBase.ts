@@ -42,11 +42,13 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'MJ: Scheduled Job Types',
-                PropertyName: '_scheduledJobTypes'
+                PropertyName: '_scheduledJobTypes',
+                CacheLocal: true
             },
             {
                 EntityName: 'MJ: Scheduled Jobs',
-                PropertyName: '_scheduledJobs'
+                PropertyName: '_scheduledJobs',
+                CacheLocal: true
             }
         ];
 

@@ -1,0 +1,230 @@
+{
+  "name": "SimpleDrilldownChart",
+  "title": "Simple Drilldown Chart",
+  "description": "@file:../../descriptions/generic/simple-drilldown-chart.md",
+  "type": "chart",
+  "location": "embedded",
+  "functionalRequirements": "@file:../../functional-requirements/generic/simple-drilldown-chart.md",
+  "technicalDesign": "@file:../../technical-design/generic/simple-drilldown-chart.md",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives DETAIL-LEVEL RECORDS through data prop. Component aggregates records for chart display and filters them for drill-down grid. Do NOT pass pre-aggregated query results."
+  },
+  "properties": [
+    {
+      "name": "data",
+      "type": "Array<object>",
+      "description": "⚠️ DETAIL RECORDS REQUIRED: Array of individual records (NOT pre-aggregated data). This component performs client-side aggregation internally - you provide raw records, it groups them. ANTI-PATTERN: Passing results from aggregate queries (GROUP BY, monthly totals, category sums) - drill-down won't work because there are no detail records to show. CORRECT PATTERN: Pass all raw entity records (invoices, transactions, line items) with a field to group by. Example: For 'Revenue by Month' chart, pass ALL invoice records (not 12 monthly summary rows), add a computed Month field, and let this component aggregate and enable drill-down to individual invoices.",
+      "required": true
+    },
+    {
+      "name": "groupBy",
+      "type": "string",
+      "description": "Field name to group data by",
+      "required": true,
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "Validates that the groupBy field exists on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "groupBy field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
+    },
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Entity name for metadata lookup. Enables: (1) Smart formatting in chart and grid (dates, money, value lists), (2) Open Record functionality when combined with entityPrimaryKeys, (3) SingleRecordView panel when showSingleRecordView=true. REQUIRED if you want users to open records by clicking drill-down grid rows - must provide both entityName AND entityPrimaryKeys. If omitted, component still works but with basic formatting and no record opening capability.",
+      "required": false
+    },
+    {
+      "name": "entityPrimaryKeys",
+      "type": "Array<string>",
+      "description": "REQUIRED TO ENABLE OPEN RECORD: Array of field names that constitute the primary key(s) for the entity. When provided along with entityName (and showSingleRecordView is false), this ENABLES the 'Open Record' feature - clicking any row in the drill-down grid will open the full entity record form via OpenEntityRecord callback. Without this property, rows are NOT clickable for record opening. Example: ['ID'] for single-key entities, ['OrderID', 'LineNumber'] for composite keys. If showSingleRecordView is true, this property is ignored and SingleRecordView panel displays instead.",
+      "required": false,
+      "exampleValue": "[\"ID\"]",
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that primary key field names exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": true
+          },
+          "errorTemplate": "Primary key field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
+    },
+    {
+      "name": "valueField",
+      "type": "string",
+      "description": "Field name to aggregate for chart values. REQUIRED when using aggregateMethod 'sum', 'average', 'min', or 'max'. OMIT when using 'count' (counts records regardless of field values). Examples: 'Total' for revenue, 'Amount' for sales, 'Quantity' for inventory. The component will group records by groupBy field and aggregate this valueField according to aggregateMethod.",
+      "required": false,
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When provided, validates that the valueField exists on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "valueField '{field}' does not exist on entity '{entityName}'"
+        },
+        {
+          "type": "required-when",
+          "dependsOn": "aggregateMethod",
+          "description": "valueField is required when aggregateMethod is sum, average, min, or max",
+          "config": {
+            "condition": "siblingProp === 'sum' || siblingProp === 'average' || siblingProp === 'min' || siblingProp === 'max'"
+          },
+          "errorTemplate": "valueField is required when aggregateMethod is '{aggregateMethod}'"
+        }
+      ]
+    },
+    {
+      "name": "aggregateMethod",
+      "type": "'count' | 'sum' | 'average' | 'min' | 'max'",
+      "description": "How to aggregate records within each group. CRITICAL: Choose based on what you're measuring. Use 'count' ONLY when counting records (omit valueField). Use 'sum' for totals (revenue, sales, costs - REQUIRES valueField). Use 'average' for means (average deal size, average rating). Use 'min'/'max' for extremes. COMMON MISTAKE: Using default 'count' when valueField is specified - this counts records instead of summing values! Example: For 'revenue by month', use aggregateMethod='sum' with valueField='Total', NOT count.",
+      "required": false,
+      "defaultValue": "count"
+    },
+    {
+      "name": "chartType",
+      "type": "'auto' | 'bar' | 'line' | 'pie' | 'doughnut' | 'area'",
+      "description": "Chart type to render",
+      "required": false,
+      "defaultValue": "auto"
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "description": "Chart title",
+      "required": false
+    },
+    {
+      "name": "gridFields",
+      "type": "Array<string>",
+      "description": "Fields to show in drill-down grid",
+      "required": false,
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that grid field names exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "Grid field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
+    },
+    {
+      "name": "showDrilldown",
+      "type": "boolean",
+      "description": "Whether to enable drill-down functionality",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "drilldownHeight",
+      "type": "number",
+      "description": "Height of drill-down panel in pixels",
+      "required": false,
+      "defaultValue": 300
+    },
+    {
+      "name": "showSingleRecordView",
+      "type": "boolean",
+      "description": "Whether to show SingleRecordView when a row is selected in the grid",
+      "required": false,
+      "defaultValue": false
+    },
+    {
+      "name": "singleRecordViewFields",
+      "type": "Array<string>",
+      "description": "Fields to display in the SingleRecordView",
+      "required": false,
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that SingleRecordView field names exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "SingleRecordView field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "segmentSelected",
+      "description": "Fired when a chart segment is selected",
+      "parameters": [
+        {
+          "name": "segment",
+          "type": "{ segment: { label: string; value: number; records: Array<object>; percentage?: number } }",
+          "description": "Selected segment info including label, value, and records"
+        }
+      ]
+    },
+    {
+      "name": "selectionCleared",
+      "description": "Fired when selection is cleared",
+      "parameters": []
+    },
+    {
+      "name": "dataPointClick",
+      "description": "Bubbled event from chart when any data point is clicked",
+      "parameters": [
+        {
+          "name": "clickData",
+          "type": "{ seriesName: string; value: number; label: string; records: Array<object>; chartType: string; percentage?: number }",
+          "description": "Click data from the chart including label, value, and records"
+        }
+      ]
+    },
+    {
+      "name": "rowSelected",
+      "description": "Fired when a row is selected in the drill-down grid",
+      "parameters": [
+        {
+          "name": "selectionData",
+          "type": "{ record: object; segment: { label: string; value: number; records: Array<object> } }",
+          "description": "Object containing selected record and current segment context"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry",
+      "description": "Chart component for visualization"
+    },
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry",
+      "description": "Generic data grid for drill-down display"
+    },
+    {
+      "name": "SingleRecordView",
+      "namespace": "Generic/UI/Form",
+      "location": "registry",
+      "description": "Single record display component for selected row details"
+    }
+  ],
+  "code": "@file:../../code/generic/simple-drilldown-chart.js",
+  "exampleUsage": "<!-- ❌ ANTI-PATTERN: Pre-aggregated data breaks drill-down functionality -->\n<!-- \nconst monthlyTotals = await utilities.rq.RunQuery({\n  QueryName: 'MonthlyRevenueTotals'  // Returns: [{Month: 1, Revenue: 5000}, {Month: 2, Revenue: 6200}, ...]\n});\n\n<SimpleDrilldownChart \n  data={monthlyTotals.Results}  // ❌ WRONG: Only 12 summary rows, no detail records to drill into!\n  groupBy=\"Month\"\n  valueField=\"Revenue\"\n/>\n-->\n\n<!-- ✅ CORRECT PATTERN: Detail records with computed grouping field -->\n<!-- Load ALL detail records and add computed field for grouping -->\nconst invoices = await utilities.rv.RunView({\n  EntityName: 'Invoices',\n  ExtraFilter: 'YEAR(InvoiceDate) = 2025'\n});\n\n// Add computed Month field to each invoice\nconst invoicesWithMonth = invoices.Results.map(inv => ({\n  ...inv,\n  Month: new Date(inv.InvoiceDate).getMonth() + 1,  // 1-12\n  MonthName: new Date(inv.InvoiceDate).toLocaleString('default', { month: 'short' })\n}));\n\n<SimpleDrilldownChart\n  entityName=\"Invoices\"\n  data={invoicesWithMonth}  // ✅ CORRECT: All invoice records, component will aggregate by Month\n  groupBy=\"Month\"  // Component aggregates internally\n  valueField=\"Total\"  // Sum this field\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Monthly Revenue - Click to see invoices\"\n  gridFields={['InvoiceNumber', 'InvoiceDate', 'Member', 'Total', 'Status']}\n  entityPrimaryKeys={['ID']}\n  showSingleRecordView={false}\n/>\n\n<!-- Another example: Revenue by Product Category -->\n<SimpleDrilldownChart\n  entityName=\"Invoice Line Items\"\n  data={invoiceItems}  // All line item detail records\n  groupBy=\"ProductCategory\"\n  valueField=\"TotalAmount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Revenue by Category - Click to drill down\"\n  gridFields={['ProductName', 'Quantity', 'TotalAmount', 'InvoiceDate']}\n  entityPrimaryKeys={['ID']}\n  showSingleRecordView={false}\n  onDataPointClick={handleChartClick}\n/>\n\n<!-- With SingleRecordView instead of OpenEntityRecord -->\n<SimpleDrilldownChart\n  entityName=\"Invoice Line Items\"\n  data={invoiceItems}  // Detail records, not aggregates\n  groupBy=\"ProductCategory\"\n  valueField=\"TotalAmount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Revenue by Category - Click to drill down\"\n  gridFields={['ProductName', 'Quantity', 'TotalAmount', 'InvoiceDate']}\n  showSingleRecordView={true}\n  singleRecordViewFields={['ProductName', 'Description', 'Quantity', 'UnitPrice', 'TotalAmount']}\n  onDataPointClick={handleChartClick}\n  onRowSelected={handleRowSelection}\n/>"
+}

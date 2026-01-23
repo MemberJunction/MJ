@@ -1,7 +1,13 @@
 <div class="chat-area">
     <!-- Fixed Header -->
     <div class="chat-header" *ngIf="conversation">
-    <div class="chat-info">
+    <div class="chat-info" [class.with-sidebar-toggle]="showSidebarToggle">
+        <button class="sidebar-toggle-btn"
+                *ngIf="showSidebarToggle"
+                (click)="sidebarToggleClicked.emit()"
+                title="Show conversations">
+          <i class="fas fa-table-columns"></i>
+        </button>
         <div class="chat-title">{{ conversation.Name }}</div>
         <button class="project-tag" (click)="openProjectSelector()" title="Assign to project" *ngIf="conversation.ProjectID">
         <i class="fas fa-folder"></i>
@@ -58,6 +64,8 @@
           <mj-conversation-empty-state
             [currentUser]="currentUser"
             [disabled]="isProcessing"
+            [showSidebarToggle]="showSidebarToggle"
+            (sidebarToggleClicked)="sidebarToggleClicked.emit()"
             (messageSent)="onEmptyStateMessageSent($event)">
           </mj-conversation-empty-state>
         } @else if (isLoadingConversation) {
@@ -68,6 +76,12 @@
         } @else {
           <!-- Normal Message View -->
           <div class="chat-messages-wrapper">
+          <!-- Upload Indicator Overlay (centered in conversation area) -->
+          @if (isUploadingAttachments) {
+            <div class="upload-indicator-overlay">
+              <mj-loading [text]="uploadingMessage" size="medium"></mj-loading>
+            </div>
+          }
           <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
               <mj-conversation-message-list
               [messages]="messages"
@@ -78,6 +92,7 @@
               [agentRunMap]="agentRunsByDetailId"
               [ratingsMap]="ratingsByDetailId"
               [userAvatarMap]="userAvatarMap"
+              [attachmentsMap]="attachmentsByDetailId"
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
               (retryMessage)="onRetryMessage($event)"
@@ -85,7 +100,8 @@
               (artifactClicked)="onArtifactClicked($event)"
               (messageEdited)="onMessageEdited($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
-              (suggestedResponseSelected)="onSuggestedResponseSelected($event)">
+              (suggestedResponseSelected)="onSuggestedResponseSelected($event)"
+              (attachmentClicked)="onAttachmentClicked($event)">
               </mj-conversation-message-list>
 
               <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
@@ -119,7 +135,12 @@
                       [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
                       [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                       [disabled]="isProcessing"
+                      [enableAttachments]="enableAttachments"
+                      [maxAttachments]="maxAttachments"
+                      [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+                      [acceptedFileTypes]="acceptedFileTypes"
                       [initialMessage]="inputRef.conversationId === conversationId ? pendingMessage : null"
+                      [initialAttachments]="inputRef.conversationId === conversationId ? pendingAttachments : null"
                       (messageSent)="onMessageSent($event)"
                       (agentResponse)="onAgentResponse($event)"
                       (agentRunDetected)="onAgentRunDetected($event)"
@@ -128,7 +149,8 @@
                       (artifactCreated)="onArtifactCreated($event)"
                       (conversationRenamed)="onConversationRenamed($event)"
                       (intentCheckStarted)="onIntentCheckStarted()"
-                      (intentCheckCompleted)="onIntentCheckCompleted()">
+                      (intentCheckCompleted)="onIntentCheckCompleted()"
+                      (uploadStateChanged)="onUploadStateChanged($event)">
                     </mj-message-input>
                   }
                 </div>
@@ -315,4 +337,15 @@
     (saved)="onCollectionPickerSaved($event)"
     (cancelled)="onCollectionPickerCancelled()">
   </mj-artifact-collection-picker-modal>
+}
+
+<!-- Image Viewer Modal -->
+@if (showImageViewer) {
+  <mj-image-viewer
+    [imageUrl]="selectedImageUrl"
+    [alt]="selectedImageAlt"
+    [fileName]="selectedImageFileName"
+    [visible]="showImageViewer"
+    (closed)="onImageViewerClosed()">
+  </mj-image-viewer>
 }

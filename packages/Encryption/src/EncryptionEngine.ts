@@ -47,13 +47,22 @@
 
 import * as crypto from 'crypto';
 import { MJGlobal, ENCRYPTION_MARKER, IsValueEncrypted } from '@memberjunction/global';
-import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
-import { EncryptionEngineBase } from '@memberjunction/core-entities';
+import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { APIKeyEntity, APIKeyUsageLogEntity, EncryptionEngineBase, UserEntity } from '@memberjunction/core-entities';
 import { EncryptionKeySourceBase } from './EncryptionKeySourceBase';
 import {
     EncryptedValueParts,
-    KeyConfiguration
+    KeyConfiguration,
+    CreateAPIKeyParams,
+    CreateAPIKeyResult,
+    APIKeyValidationResult,
+    ValidateAPIKeyOptions,
+    GeneratedAPIKey
 } from './interfaces';
+import { CredentialEngine } from '@memberjunction/credentials';
+
+/** Regular expression pattern for validating API key format */
+const API_KEY_FORMAT_REGEX = /^mj_sk_[a-f0-9]{64}$/;
 
 /**
  * Cache entry with TTL for key material.
@@ -490,6 +499,311 @@ export class EncryptionEngine extends EncryptionEngineBase {
     async ClearAllCaches(): Promise<void> {
         this._keyMaterialCache.clear();
         await this.RefreshAllItems();
+    }
+
+    // ========================================================================
+    // API KEY MANAGEMENT METHODS
+    // ========================================================================
+
+    /**
+     * Generates a new API key with the standard MemberJunction format.
+     *
+     * The key consists of:
+     * - Prefix: `mj_sk_`
+     * - Random data: 64 hexadecimal characters (32 bytes)
+     *
+     * Returns both the raw key (to show user once) and the hash (for storage).
+     *
+     * @returns Object containing the raw key and its SHA-256 hash
+     *
+     * @example
+     * ```typescript
+     * const { raw, hash } = EncryptionEngine.Instance.GenerateAPIKey();
+     * console.log('Give this to the user (once!):', raw);
+     * // Store hash in database, never store raw
+     * ```
+     */
+    GenerateAPIKey(): GeneratedAPIKey {
+        // Generate 32 bytes of cryptographically secure random data
+        const randomData = crypto.randomBytes(32);
+        const hexString = randomData.toString('hex'); // 64 hex chars
+
+        const raw = `mj_sk_${hexString}`;
+        const hash = crypto.createHash('sha256').update(raw).digest('hex');
+
+        return { raw, hash };
+    }
+
+    /**
+     * Hashes an API key for storage or comparison.
+     *
+     * Uses SHA-256 to create a one-way hash of the key.
+     * This is what gets stored in the database.
+     *
+     * @param key - The raw API key to hash
+     * @returns The SHA-256 hash as a 64-character hexadecimal string
+     *
+     * @example
+     * ```typescript
+     * const hash = EncryptionEngine.Instance.HashAPIKey(rawKey);
+     * // Compare with stored hash for validation
+     * ```
+     */
+    HashAPIKey(key: string): string {
+        return crypto.createHash('sha256').update(key).digest('hex');
+    }
+
+    /**
+     * Validates that an API key has the correct format.
+     *
+     * Valid format: `mj_sk_` followed by exactly 64 hexadecimal characters.
+     * Total length: 70 characters.
+     *
+     * @param key - The API key to validate
+     * @returns `true` if the key format is valid
+     *
+     * @example
+     * ```typescript
+     * if (!EncryptionEngine.Instance.IsValidAPIKeyFormat(key)) {
+     *   throw new Error('Invalid API key format');
+     * }
+     * ```
+     */
+    IsValidAPIKeyFormat(key: string): boolean {
+        return API_KEY_FORMAT_REGEX.test(key);
+    }
+
+    /**
+     * Creates a new API key and stores it in the database.
+     *
+     * This method:
+     * 1. Generates a new cryptographically secure API key
+     * 2. Hashes the key for secure storage
+     * 3. Creates an APIKey entity record in the database
+     * 4. Returns the raw key (shown once) and the database ID
+     *
+     * **CRITICAL**: The raw key is only returned once and cannot be recovered.
+     * Instruct users to save it immediately in a secure location.
+     *
+     * @param params - Configuration for the new API key
+     * @param contextUser - User context for database operations (typically the creator)
+     * @returns Result with the raw key (show once!) and database ID
+     *
+     * @example
+     * ```typescript
+     * const result = await EncryptionEngine.Instance.CreateAPIKey({
+     *   userId: 'user-guid-here',
+     *   label: 'MCP Server Integration',
+     *   description: 'Used for Claude Desktop connections',
+     *   expiresAt: new Date('2025-12-31')
+     * }, currentUser);
+     *
+     * if (result.success) {
+     *   console.log('Save this key now!', result.rawKey);
+     * }
+     * ```
+     */
+    async CreateAPIKey(
+        params: CreateAPIKeyParams,
+        contextUser: UserInfo
+    ): Promise<CreateAPIKeyResult> {
+        try {
+            // Generate the key
+            const { raw, hash } = this.GenerateAPIKey();
+
+            // Create the entity record
+            const md = new Metadata();
+            const apiKey = await md.GetEntityObject<APIKeyEntity>('MJ: API Keys', contextUser);
+
+            apiKey.Hash = hash;
+            apiKey.UserID = params.userId;
+            apiKey.Label = params.label;
+            apiKey.Description = params.description ?? null;
+            apiKey.ExpiresAt = params.expiresAt ?? null;
+            apiKey.Status = 'Active';
+            apiKey.CreatedByUserID = contextUser.ID;
+
+            const success = await apiKey.Save();
+
+            if (!success) {
+                return {
+                    success: false,
+                    error: 'Failed to save API key to database'
+                };
+            }
+
+            return {
+                success: true,
+                rawKey: raw,
+                apiKeyId: apiKey.ID
+            };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return {
+                success: false,
+                error: `Failed to create API key: ${message}`
+            };
+        }
+    }
+
+    /**
+     * Validates an API key and returns the associated user context.
+     *
+     * This method:
+     * 1. Validates the key format
+     * 2. Hashes the key and looks it up in the CredentialEngine cache
+     * 3. Checks the key is active and not expired
+     * 4. Loads the associated user from the database
+     * 5. Updates LastUsedAt and logs usage (logging failures cause validation to fail)
+     *
+     * For best performance, ensure CredentialEngine is configured before calling.
+     *
+     * @param options - Validation options including the raw key and request context for logging
+     * @param contextUser - System user context for database operations
+     * @returns Validation result with user context if valid
+     *
+     * @example
+     * ```typescript
+     * const result = await EncryptionEngine.Instance.ValidateAPIKey(
+     *   {
+     *     rawKey: request.headers['x-api-key'],
+     *     endpoint: '/graphql',
+     *     method: 'POST',
+     *     operation: 'GetUsers',
+     *     statusCode: 200,
+     *     responseTimeMs: 150,
+     *     ipAddress: request.ip,
+     *     userAgent: request.headers['user-agent']
+     *   },
+     *   systemUser
+     * );
+     *
+     * if (result.isValid) {
+     *   // Use result.user for authorized operations
+     *   await doSomething(result.user);
+     * } else {
+     *   throw new Error(result.error);
+     * }
+     * ```
+     */
+    async ValidateAPIKey(
+        options: ValidateAPIKeyOptions,
+        contextUser: UserInfo
+    ): Promise<APIKeyValidationResult> {
+        const { rawKey, endpoint, method, operation, statusCode, responseTimeMs, ipAddress, userAgent } = options;
+
+        // 1. Validate format first (fast fail)
+        if (!this.IsValidAPIKeyFormat(rawKey)) {
+            return { isValid: false, error: 'Invalid API key format' };
+        }
+
+        // 2. Hash the key for cache lookup
+        const keyHash = this.HashAPIKey(rawKey);
+
+        // 3. Look up in CredentialEngine cache (fast!)
+        const cachedKey = CredentialEngine.Instance.getAPIKeyByHash(keyHash);
+
+        if (!cachedKey) {
+            return { isValid: false, error: 'API key not found' };
+        }
+
+        // 4. Check if key is active
+        if (cachedKey.Status !== 'Active') {
+            return { isValid: false, error: 'API key has been revoked' };
+        }
+
+        // 5. Check expiration
+        if (cachedKey.ExpiresAt && cachedKey.ExpiresAt < new Date()) {
+            return { isValid: false, error: 'API key has expired' };
+        }
+
+        // 6. Get the user from RunView
+        const rv = new RunView();
+        const result = await rv.RunView<UserEntity>({
+            EntityName: 'Users',
+            ExtraFilter: `ID = '${cachedKey.UserID}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        const userRecord = result.Results ? result.Results[0] : null;
+        if (!userRecord) {
+            return { isValid: false, error: 'User not found for API key' };
+        }
+
+        if (!userRecord.IsActive) {
+            return { isValid: false, error: 'User account is inactive' };
+        }
+
+        // 7. Update LastUsedAt on the cached key entity
+        cachedKey.LastUsedAt = new Date();
+        const lastUsedSaved = await cachedKey.Save();
+        if (!lastUsedSaved) {
+            LogError(`Failed to update LastUsedAt for API key ${cachedKey.ID}`);
+            return { isValid: false, error: 'Failed to update API key usage timestamp' };
+        }
+
+        // 8. Log usage - logging failures cause validation to fail
+        const md = new Metadata();
+        const usageLog = await md.GetEntityObject<APIKeyUsageLogEntity>(
+            'MJ: API Key Usage Logs',
+            contextUser
+        );
+        usageLog.APIKeyID = cachedKey.ID;
+        usageLog.Endpoint = endpoint;
+        usageLog.Method = method;
+        usageLog.Operation = operation ?? null;
+        usageLog.StatusCode = statusCode;
+        usageLog.ResponseTimeMs = responseTimeMs ?? null;
+        usageLog.IPAddress = ipAddress ?? null;
+        usageLog.UserAgent = userAgent ?? null;
+
+        const logSaved = await usageLog.Save();
+        if (!logSaved) {
+            LogError(`Failed to save API key usage log for key ${cachedKey.ID}: ${usageLog.LatestResult?.Message}`);
+            return { isValid: false, error: 'Failed to log API key usage' };
+        }
+
+        // 9. Create UserInfo from the entity
+        const user = new UserInfo(undefined, userRecord.GetAll());
+
+        return {
+            isValid: true,
+            user,
+            apiKeyId: cachedKey.ID
+        };
+    }
+
+    /**
+     * Revokes an API key, permanently disabling it.
+     *
+     * Once revoked, an API key cannot be reactivated. Create a new key if needed.
+     *
+     * @param apiKeyId - The database ID of the API key to revoke
+     * @param contextUser - User context for the operation
+     * @returns `true` if successfully revoked
+     *
+     * @example
+     * ```typescript
+     * const revoked = await EncryptionEngine.Instance.RevokeAPIKey(
+     *   keyId,
+     *   currentUser
+     * );
+     * if (revoked) {
+     *   console.log('API key has been revoked');
+     * }
+     * ```
+     */
+    async RevokeAPIKey(apiKeyId: string, contextUser: UserInfo): Promise<boolean> {
+        const md = new Metadata();
+        const apiKey = await md.GetEntityObject<APIKeyEntity>('MJ: API Keys', contextUser);
+
+        const loaded = await apiKey.Load(apiKeyId);
+        if (!loaded) {
+            return false;
+        }
+
+        apiKey.Status = 'Revoked';
+        return await apiKey.Save();
     }
 
     // ========================================================================

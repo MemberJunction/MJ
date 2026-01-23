@@ -734,8 +734,27 @@ export class SyncEngine {
    */
   calculateChecksum(data: any): string {
     const hash = crypto.createHash('sha256');
-    hash.update(JSON.stringify(data, null, 2));
+    // Use a replacer function to ensure consistent key ordering for deterministic checksums
+    const sortedJson = JSON.stringify(data, this.sortedReplacer, 2);
+    hash.update(sortedJson);
     return hash.digest('hex');
+  }
+
+  /**
+   * Replacer function for JSON.stringify that sorts object keys alphabetically
+   * Ensures deterministic checksums regardless of property order
+   */
+  private sortedReplacer(key: string, value: any): any {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      // Sort object keys alphabetically
+      return Object.keys(value)
+        .sort()
+        .reduce((sorted: any, key: string) => {
+          sorted[key] = value[key];
+          return sorted;
+        }, {});
+    }
+    return value;
   }
 
   /**
@@ -786,21 +805,30 @@ export class SyncEngine {
           if (await fs.pathExists(fullPath)) {
             let processedContent: string;
             
-            // Check if this is a JSON file that might contain @include directives
+            // Check if this is a JSON file that might contain @include directives or nested @file references
             if (fullPath.endsWith('.json')) {
               try {
                 const jsonContent = await fs.readJson(fullPath);
                 const jsonString = JSON.stringify(jsonContent);
                 const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
-                
+
+                let resolvedJsonContent: any;
                 if (hasIncludes) {
-                  // Process @include directives
+                  // Process @include directives first
                   const preprocessor = new JsonPreprocessor();
-                  const processedJson = await preprocessor.processFile(fullPath);
-                  processedContent = JSON.stringify(processedJson, null, 2);
+                  resolvedJsonContent = await preprocessor.processFile(fullPath);
                 } else {
-                  processedContent = JSON.stringify(jsonContent, null, 2);
+                  resolvedJsonContent = jsonContent;
                 }
+
+                // Recursively resolve any nested @file references in the loaded JSON
+                // Use the JSON file's directory as the base for resolving relative paths
+                const fullyResolvedContent = await this.resolveFileReferencesForChecksum(
+                  resolvedJsonContent,
+                  path.dirname(fullPath)
+                );
+
+                processedContent = JSON.stringify(fullyResolvedContent, null, 2);
               } catch {
                 // Not valid JSON, process as text
                 const content = await fs.readFile(fullPath, 'utf-8');

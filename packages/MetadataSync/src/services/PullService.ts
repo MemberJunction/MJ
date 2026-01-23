@@ -720,20 +720,23 @@ export class PullService {
   
   private async findExistingFiles(dir: string, pattern: string): Promise<string[]> {
     const files: string[] = [];
-    
+
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
-      
+
       for (const entry of entries) {
         if (entry.isFile()) {
           const fileName = entry.name;
-          
+
+          // Normalize pattern by removing leading **/ (glob recursion prefix)
+          const normalizedPattern = pattern.startsWith('**/') ? pattern.substring(3) : pattern;
+
           // Simple pattern matching
-          if (pattern === '*.json' && fileName.endsWith('.json')) {
+          if (normalizedPattern === '*.json' && fileName.endsWith('.json')) {
             files.push(path.join(dir, fileName));
-          } else if (pattern === '.*.json' && fileName.startsWith('.') && fileName.endsWith('.json')) {
+          } else if (normalizedPattern === '.*.json' && fileName.startsWith('.') && fileName.endsWith('.json')) {
             files.push(path.join(dir, fileName));
-          } else if (pattern === fileName) {
+          } else if (normalizedPattern === fileName) {
             files.push(path.join(dir, fileName));
           }
         }
@@ -744,7 +747,7 @@ export class PullService {
         throw error;
       }
     }
-    
+
     return files;
   }
   
@@ -787,14 +790,13 @@ export class PullService {
     if (strategy === 'skip') {
       return existing;
     }
-    
+
     if (strategy === 'overwrite') {
+      // Create result with correct property order: fields, relatedEntities, primaryKey, sync
       const result: RecordData = {
-        fields: { ...newData.fields },
-        primaryKey: newData.primaryKey,
-        sync: newData.sync
-      };
-      
+        fields: { ...newData.fields }
+      } as RecordData;
+
       // Restore preserved fields from existing
       if (preserveFields.length > 0 && existing.fields) {
         for (const field of preserveFields) {
@@ -803,21 +805,23 @@ export class PullService {
           }
         }
       }
-      
+
+      // Add relatedEntities before primaryKey and sync
       if (newData.relatedEntities) {
         result.relatedEntities = newData.relatedEntities;
       }
-      
+
+      result.primaryKey = newData.primaryKey;
+      result.sync = newData.sync;
+
       return result;
     }
-    
-    // Default 'merge' strategy
+
+    // Default 'merge' strategy - create with correct property order
     const result: RecordData = {
-      fields: { ...existing.fields, ...newData.fields },
-      primaryKey: newData.primaryKey || existing.primaryKey,
-      sync: newData.sync
-    };
-    
+      fields: { ...existing.fields, ...newData.fields }
+    } as RecordData;
+
     // Restore preserved fields
     if (preserveFields.length > 0 && existing.fields) {
       for (const field of preserveFields) {
@@ -826,14 +830,18 @@ export class PullService {
         }
       }
     }
-    
+
+    // Add relatedEntities before primaryKey and sync
     if (existing.relatedEntities || newData.relatedEntities) {
       result.relatedEntities = {
         ...existing.relatedEntities,
         ...newData.relatedEntities
       };
     }
-    
+
+    result.primaryKey = newData.primaryKey || existing.primaryKey;
+    result.sync = newData.sync;
+
     return result;
   }
   

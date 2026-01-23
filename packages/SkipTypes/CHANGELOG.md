@@ -1,5 +1,103 @@
 # Change Log - @memberjunction/skip-types
 
+## 3.2.0
+
+### Patch Changes
+
+- cbd2714: Improve error handling and stability across Skip integration, component artifacts, and metadata sync
+- Updated dependencies [cbd2714]
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/data-context@3.2.0
+  - @memberjunction/core@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/interactive-component-types@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/data-context@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/interactive-component-types@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/data-context@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ai-core-plus@2.133.0
+  - @memberjunction/interactive-component-types@2.133.0
+  - @memberjunction/data-context@2.133.0
+
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ai-core-plus@2.132.0
+  - @memberjunction/interactive-component-types@2.132.0
+  - @memberjunction/data-context@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ai-core-plus@2.131.0
+  - @memberjunction/interactive-component-types@2.131.0
+  - @memberjunction/data-context@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.130.1
+- @memberjunction/interactive-component-types@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/data-context@2.130.1
+
+## 2.130.0
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+  - @memberjunction/ai-core-plus@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/interactive-component-types@2.130.0
+  - @memberjunction/data-context@2.130.0
+
+## 2.129.0
+
+### Patch Changes
+
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [fbae243]
+- Updated dependencies [6ce6e67]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/ai-core-plus@2.129.0
+  - @memberjunction/interactive-component-types@2.129.0
+  - @memberjunction/data-context@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes
@@ -442,7 +540,6 @@
 ### Patch Changes
 
 - 8846ccc: Add SkipQueryEntityInfo type to track entity-query relationships
-
   - Added new SkipQueryEntityInfo type to represent entities referenced by queries
   - Includes detection method tracking (AI vs Manual) and confidence scores
   - Updated SkipQueryInfo to include optional entities array
@@ -822,7 +919,6 @@
 
 - e49a91a: rename types and clean up skip for more generalized use as a "component" generator
 - 5c72641: feat(skip-types): Enhance ComponentSpec types with comprehensive requirements support
-
   - Enhanced ComponentSpec interface with new optional properties:
     - `functionalRequirements`: Documents business requirements and user stories
     - `dataRequirements`: Specifies data sources, schemas, and integration needs

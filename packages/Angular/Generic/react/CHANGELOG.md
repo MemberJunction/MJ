@@ -1,5 +1,146 @@
 # @memberjunction/ng-react
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/ng-notifications@3.2.0
+  - @memberjunction/react-runtime@3.2.0
+  - @memberjunction/ai-vectors-memory@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [8c0b624]
+  - @memberjunction/graphql-dataprovider@3.1.1
+  - @memberjunction/ng-notifications@3.1.1
+  - @memberjunction/react-runtime@3.1.1
+  - @memberjunction/ai-vectors-memory@3.1.1
+  - @memberjunction/interactive-component-types@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/global@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@3.0.0
+- @memberjunction/ng-notifications@3.0.0
+- @memberjunction/graphql-dataprovider@3.0.0
+- @memberjunction/interactive-component-types@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+- @memberjunction/react-runtime@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ai-vectors-memory@2.133.0
+  - @memberjunction/ng-notifications@2.133.0
+  - @memberjunction/graphql-dataprovider@2.133.0
+  - @memberjunction/interactive-component-types@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/react-runtime@2.133.0
+  - @memberjunction/global@2.133.0
+
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ai-vectors-memory@2.132.0
+  - @memberjunction/ng-notifications@2.132.0
+  - @memberjunction/graphql-dataprovider@2.132.0
+  - @memberjunction/interactive-component-types@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/react-runtime@2.132.0
+  - @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ai-vectors-memory@2.131.0
+  - @memberjunction/ng-notifications@2.131.0
+  - @memberjunction/graphql-dataprovider@2.131.0
+  - @memberjunction/interactive-component-types@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/react-runtime@2.131.0
+  - @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@2.130.1
+- @memberjunction/ng-notifications@2.130.1
+- @memberjunction/graphql-dataprovider@2.130.1
+- @memberjunction/interactive-component-types@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+- @memberjunction/react-runtime@2.130.1
+
+## 2.130.0
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+  - @memberjunction/graphql-dataprovider@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/ng-notifications@2.130.0
+  - @memberjunction/react-runtime@2.130.0
+  - @memberjunction/ai-vectors-memory@2.130.0
+  - @memberjunction/interactive-component-types@2.130.0
+  - @memberjunction/global@2.130.0
+
+## 2.129.0
+
+### Minor Changes
+
+- f7267c3: migration
+
+### Patch Changes
+
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [f7267c3]
+- Updated dependencies [fbae243]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/react-runtime@2.129.0
+  - @memberjunction/global@2.129.0
+  - @memberjunction/graphql-dataprovider@2.129.0
+  - @memberjunction/core-entities@2.129.0
+  - @memberjunction/ai-vectors-memory@2.129.0
+  - @memberjunction/ng-notifications@2.129.0
+  - @memberjunction/interactive-component-types@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes
@@ -325,7 +466,6 @@
 - 4567af3: **Component Feedback System (Registry-Agnostic)**
 
   Implement comprehensive component feedback system that works across any component registry (Skip, MJ Central, etc.) with support for custom feedback handlers.
-
   - Add skip-component-feedback-panel component with sliding panel UI (444 lines CSS, 161 lines HTML, 274 lines TS)
   - Add star ratings (0-5 scale), comments, and component hierarchy visualization
   - Add FeedbackHandler interface for customizable feedback logic per registry
@@ -342,7 +482,6 @@
   **React Runtime Debug Logging Enhancements**
 
   Restore debug logging with production guards for better debugging capabilities.
-
   - Restore 12 debug console.log statements throughout React runtime (prop-builder, component-hierarchy)
   - Wrap all debug logs with LogStatus/GetProductionStatus checks
   - Add comprehensive README.md documentation (95 lines) for debug configuration
@@ -352,7 +491,6 @@
   **AI Prompt Error Handling Improvements**
 
   Replace hardcoded error truncation with configurable maxErrorLength parameter.
-
   - Add maxErrorLength?: number property to AIPromptParams class
   - Update AIPromptRunner.logError() to accept maxErrorLength in options
   - Thread maxErrorLength through 18 logError calls throughout AIPromptRunner
@@ -361,7 +499,6 @@
   - When set, errors are truncated with "... [truncated]" suffix
 
   **Bug Fixes**
-
   - Fix AI parameter extraction edge cases in AIPromptRunner and QueryEntity
   - Fix mj.config.cjs configuration
   - Fix component hierarchy tracking in dynamic reports
@@ -380,7 +517,6 @@
 
 - bd75336: ix: Improve React component system registry handling and chart
   flexibility
-
   - Enhanced component manager to optimize pre-registered component loading
     by skipping redundant fetches
   - Fixed SimpleChart component to accept any field for grouping, not just

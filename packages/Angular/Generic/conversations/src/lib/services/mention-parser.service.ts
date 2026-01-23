@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Mention, MentionParseResult } from '../models/conversation-state.model';
-import { AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, ConversationUtility } from '@memberjunction/ai-core-plus';
 import { UserInfo } from '@memberjunction/core';
 
 /**
@@ -262,5 +262,41 @@ export class MentionParserService {
     }
 
     return formattedText;
+  }
+
+  /**
+   * Convert a message with JSON-encoded mentions to plain text.
+   * Replaces @{...} JSON mentions with simple @Name format.
+   * This is a wrapper around ConversationUtility.ToPlainText() for Angular injection.
+   *
+   * @param text - The message text containing JSON mentions
+   * @param agents - Optional array of agents for name lookup
+   * @param users - Optional array of users for name lookup
+   * @returns Plain text with mentions converted to @Name format
+   *
+   * @example
+   * // Input: '@{"type":"agent","id":"123","name":"Sage"} help me'
+   * // Output: '@Sage help me'
+   */
+  toPlainText(
+    text: string,
+    agents?: AIAgentEntityExtended[],
+    users?: UserInfo[]
+  ): string {
+    if (!text) return '';
+
+    // Convert agents to the AgentInfo format expected by ConversationUtility
+    const agentInfos = agents?.map(a => ({
+      ID: a.ID,
+      Name: a.Name || 'Unknown'
+    }));
+
+    // Convert users to the UserInfo format expected by ConversationUtility
+    const userInfos = users?.map(u => ({
+      ID: u.ID,
+      Name: u.Name
+    }));
+
+    return ConversationUtility.ToPlainText(text, agentInfos, userInfos);
   }
 }

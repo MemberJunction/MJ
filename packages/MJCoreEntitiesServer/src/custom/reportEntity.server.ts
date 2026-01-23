@@ -97,7 +97,7 @@ export class ReportEntity_Server extends ReportEntity  {
                         reportVersion.Configuration = JSON.stringify(this.Configuration);
                         success = success && await reportVersion.Save();
                         if (!success) {
-                            console.error('ReportEntity_Server.Save(): Error saving report version\n' + reportVersion.LatestResult.Message);
+                            console.error('ReportEntity_Server.Save(): Error saving report version\n' + reportVersion.LatestResult.CompleteMessage);
                         }
                     }
 

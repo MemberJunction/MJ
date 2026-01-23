@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-user-avatar",
-  "version": "2.128.0",
+  "version": "3.2.0",
   "description": "MemberJunction: Angular User Avatar Service - Manages user avatar synchronization from auth providers and avatar operations",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -21,18 +21,18 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2"
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
+    "@angular/common": "18.2.14",
+    "@angular/core": "18.2.14",
     "rxjs": "^7.5.0"
   },
   "dependencies": {
-    "@memberjunction/core": "2.128.0",
-    "@memberjunction/core-entities": "2.128.0",
-    "@memberjunction/global": "2.128.0",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/core-entities": "3.2.0",
+    "@memberjunction/global": "3.2.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

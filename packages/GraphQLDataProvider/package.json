@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/graphql-dataprovider",
-  "version": "2.128.0",
+  "version": "3.2.0",
   "description": "MemberJunction: GraphQL Client Data Provider",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -34,12 +34,12 @@
     "@esbuild/win32-x64": "0.24.0"
   },
   "dependencies": {
-    "@memberjunction/actions-base": "2.128.0",
-    "@memberjunction/ai-core-plus": "2.128.0",
-    "@memberjunction/core": "2.128.0",
-    "@memberjunction/core-entities": "2.128.0",
-    "@memberjunction/global": "2.128.0",
-    "@memberjunction/interactive-component-types": "2.128.0",
+    "@memberjunction/actions-base": "3.2.0",
+    "@memberjunction/ai-core-plus": "3.2.0",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/core-entities": "3.2.0",
+    "@memberjunction/global": "3.2.0",
+    "@memberjunction/interactive-component-types": "3.2.0",
     "@tempfix/idb": "^8.0.3",
     "graphql": "^16.8.0",
     "graphql-request": "^5.2.0",

@@ -1,11 +1,11 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, Injector } from '@angular/core';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { AIAgentEntityExtended, AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { SharedService } from '@memberjunction/ng-shared';
-import { MJIntegratedFlowEditorComponent } from './mj-integrated-flow-editor.component';
+import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 @Component({
     selector: 'mj-flow-agent-form-section',

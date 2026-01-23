@@ -1,0 +1,71 @@
+{
+  "fields": {
+    "Name": "Admin",
+    "Description": "MemberJunction Administration",
+    "Icon": "fa-solid fa-screwdriver-wrench",
+    "DefaultForNewUser": false,
+    "Color": "#4caf50",
+    "DefaultSequence": 999,
+    "DefaultNavItems": [
+      {
+        "Label": "ERD",
+        "Icon": "fa-solid fa-database",
+        "ResourceType": "Dashboards",
+        "RecordID": "@lookup:Dashboards.Name=ERD?allowDefer",
+        "isDefault": true
+      },
+      {
+        "Label": "Diagnostics",
+        "Icon": "fa-solid fa-stethoscope",
+        "ResourceType": "Custom",
+        "DriverClass": "SystemDiagnosticsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Permissions",
+        "Icon": "fa-solid fa-lock",
+        "ResourceType": "Dashboards",
+        "RecordID": "@lookup:Dashboards.Name=Entity Permissions?allowDefer",
+        "isDefault": true
+      },
+      {
+        "Label": "Roles",
+        "Icon": "fa-solid fa-shield-halved",
+        "ResourceType": "Dashboards",
+        "RecordID": "@lookup:Dashboards.Name=Role Management?allowDefer",
+        "isDefault": true
+      },
+      {
+        "Label": "Users",
+        "Icon": "fa-solid fa-users",
+        "ResourceType": "Dashboards",
+        "RecordID": "@lookup:Dashboards.Name=User Management?allowDefer",
+        "isDefault": true
+      },
+      {
+        "Label": "Apps",
+        "Icon": "fa-solid fa-th-large",
+        "ResourceType": "Dashboards",
+        "RecordID": "@lookup:Dashboards.Name=Application Management?allowDefer",
+        "isDefault": true
+      },
+      {
+        "Label": "SQL Logging",
+        "Icon": "fa-solid fa-file-code",
+        "ResourceType": "Dashboards",
+        "RecordID": "@lookup:Dashboards.Name=SQL Logging?allowDefer",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
+  },
+  "sync": {
+    "lastModified": "2026-01-21T05:01:18.770Z",
+    "checksum": "4966da5f2d377469c0b5436ce7014d206a566b60d1ee12c51a9823a4f306762d"
+  }
+}

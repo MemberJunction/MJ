@@ -1,15 +1,18 @@
-import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID } from 'type-graphql';
+import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { DatabaseProviderBase, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
-import { AIAgentEntityExtended, ConversationDetailEntity, UserNotificationEntity, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { ConversationDetailEntity, ConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import { AIAgentEntityExtended, AIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import { ChatMessage } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SafeJSONParse } from '@memberjunction/global';
+import { getAttachmentService } from '@memberjunction/aiengine';
+import { NotificationEngine } from '@memberjunction/notifications';
 
 @ObjectType()
 export class AIAgentRunResult {
@@ -123,9 +126,12 @@ export class AgentExecutionStreamMessage {
 
     @Field()
     timestamp: Date;
-    
+
     // Not a GraphQL field - used internally for streaming
     agentRun?: any;
+
+    // Not a GraphQL field - used for completion routing to correct conversation detail
+    conversationDetailId?: string;
 }
 
 
@@ -513,12 +519,13 @@ export class RunAIAgentResolver extends ResolverBase {
             this.PublishStreamingUpdate(pubSub, partialMsg, userPayload);
         }
 
-        // Publish completion
+        // Publish completion with conversationDetailId for client-side routing
         const completeMsg: AgentExecutionStreamMessage = {
             sessionId,
             agentRunId: result.agentRun?.ID || 'unknown',
             type: 'complete',
-            timestamp: new Date()
+            timestamp: new Date(),
+            conversationDetailId: result.agentRun?.ConversationDetailID
         };
         this.PublishStreamingUpdate(pubSub, completeMsg, userPayload);
     }
@@ -644,59 +651,254 @@ export class RunAIAgentResolver extends ResolverBase {
                 throw new Error(`Failed to load conversation detail ${conversationDetailId}`);
             }
 
-            // Create notification entity
-            const notification = await md.GetEntityObject<UserNotificationEntity>(
-                'User Notifications',
-                contextUser
-            );
-
-            notification.UserID = contextUser.ID;
-            notification.Title = `${agentName} completed your request`;
+            // Build conversation URL for email/SMS templates
+            const baseUrl = process.env.APP_BASE_URL || 'http://localhost:4201';
+            const conversationUrl = `${baseUrl}/conversations/${detail.ConversationID}?artifact=${artifactInfo.artifactId}`;
 
             // Craft message based on versioning
-            if (artifactInfo.versionNumber > 1) {
-                notification.Message = `${agentName} has finished processing and created version ${artifactInfo.versionNumber}`;
-            } else {
-                notification.Message = `${agentName} has finished processing and created a new artifact`;
+            const message = artifactInfo.versionNumber > 1
+                ? `${agentName} has finished processing and created version ${artifactInfo.versionNumber}`
+                : `${agentName} has finished processing and created a new artifact`;
+
+            // Use unified notification engine (Config called to ensure loaded)
+            const notificationEngine = NotificationEngine.Instance;
+            await notificationEngine.Config(false, contextUser);
+            const result = await notificationEngine.SendNotification({
+                userId: contextUser.ID,
+                typeNameOrId: 'Agent Completion',
+                title: `${agentName} completed your request`,
+                message: message,
+                resourceConfiguration: {
+                    type: 'conversation',
+                    conversationId: detail.ConversationID,
+                    messageId: conversationDetailId,
+                    artifactId: artifactInfo.artifactId,
+                    versionId: artifactInfo.versionId,
+                    versionNumber: artifactInfo.versionNumber
+                },
+                templateData: {
+                    agentName: agentName,
+                    artifactTitle: artifactInfo.artifactId,
+                    conversationUrl: conversationUrl,
+                    versionNumber: artifactInfo.versionNumber > 1 ? artifactInfo.versionNumber : undefined
+                }
+            }, contextUser);
+
+            if (result.success && result.inAppNotificationId) {
+                const channels = [];
+                if (result.deliveryChannels.inApp) channels.push('InApp');
+                if (result.deliveryChannels.email) channels.push('Email');
+                if (result.deliveryChannels.sms) channels.push('SMS');
+                const channelList = channels.length > 0 ? channels.join(', ') : 'None';
+                LogStatus(`📬 Notification sent via ${channelList} (ID: ${result.inAppNotificationId})`);
+
+                // Publish real-time notification event so client updates immediately
+                pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+                    userPayload: JSON.stringify(userPayload),
+                    message: JSON.stringify({
+                        type: 'notification',
+                        notificationId: result.inAppNotificationId,
+                        action: 'create',
+                        title: `${agentName} completed your request`,
+                        message: message
+                    })
+                });
+
+                LogStatus(`📡 Published notification event to client`);
+            } else if (!result.success) {
+                LogError(`Notification failed: ${result.errors?.join(', ')}`);
             }
-
-            // Store navigation configuration as JSON
-            // Client will parse this to navigate to the conversation with artifact visible
-            notification.ResourceConfiguration = JSON.stringify({
-                type: 'conversation',
-                conversationId: detail.ConversationID,
-                messageId: conversationDetailId,
-                artifactId: artifactInfo.artifactId,
-                versionNumber: artifactInfo.versionNumber
-            });
-
-            notification.Unread = true;  // Default unread
-            // ResourceTypeID and ResourceRecordID left null - using custom navigation
-
-            if (!(await notification.Save())) {
-                throw new Error('Failed to save notification');
-            }
-
-            LogStatus(`📬 Created notification ${notification.ID} for user ${contextUser.ID}`);
-
-            // Publish real-time notification event so client updates immediately
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                userPayload: JSON.stringify(userPayload),
-                message: JSON.stringify({
-                    type: 'notification',
-                    notificationId: notification.ID,
-                    action: 'create',
-                    title: notification.Title,
-                    message: notification.Message
-                })
-            });
-
-            LogStatus(`📡 Published notification event to client`);
 
         } catch (error) {
             LogError(`Failed to create completion notification: ${(error as Error).message}`);
             // Don't throw - notification failure shouldn't fail the agent run
         }
+    }
+
+    /**
+     * Optimized mutation that loads conversation history server-side.
+     * This avoids sending large attachment data from client to server.
+     *
+     * @param conversationDetailId - The conversation detail ID (user's message already saved)
+     * @param agentId - The agent to execute
+     * @param maxHistoryMessages - Maximum number of history messages to include (default: 20)
+     */
+    @Mutation(() => AIAgentRunResult)
+    async RunAIAgentFromConversationDetail(
+        @Arg('conversationDetailId') conversationDetailId: string,
+        @Arg('agentId') agentId: string,
+        @Ctx() { userPayload, providers, dataSource }: AppContext,
+        @Arg('sessionId') sessionId: string,
+        @PubSub() pubSub: PubSubEngine,
+        @Arg('maxHistoryMessages', () => Int, { nullable: true }) maxHistoryMessages?: number,
+        @Arg('data', { nullable: true }) data?: string,
+        @Arg('payload', { nullable: true }) payload?: string,
+        @Arg('lastRunId', { nullable: true }) lastRunId?: string,
+        @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
+        @Arg('configurationId', { nullable: true }) configurationId?: string,
+        @Arg('createArtifacts', { nullable: true }) createArtifacts?: boolean,
+        @Arg('createNotification', { nullable: true }) createNotification?: boolean,
+        @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
+        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
+    ): Promise<AIAgentRunResult> {
+        const p = GetReadWriteProvider(providers);
+        const currentUser = this.GetUserFromPayload(userPayload);
+
+        if (!currentUser) {
+            return {
+                success: false,
+                errorMessage: 'Unable to determine current user',
+                result: JSON.stringify({ success: false, errorMessage: 'Unable to determine current user' })
+            };
+        }
+
+        try {
+            // Load conversation history with attachments from DB
+            const messages = await this.loadConversationHistoryWithAttachments(
+                conversationDetailId,
+                currentUser,
+                maxHistoryMessages || 20
+            );
+
+            // Convert to JSON string for the existing executeAIAgent method
+            const messagesJson = JSON.stringify(messages);
+
+            // Delegate to existing implementation
+            return this.executeAIAgent(
+                p,
+                dataSource,
+                agentId,
+                userPayload,
+                messagesJson,
+                sessionId,
+                pubSub,
+                data,
+                payload,
+                undefined, // templateData
+                lastRunId,
+                autoPopulateLastRunPayload,
+                configurationId,
+                conversationDetailId,
+                createArtifacts || false,
+                createNotification || false,
+                sourceArtifactId,
+                sourceArtifactVersionId
+            );
+        } catch (error) {
+            const errorMessage = (error as Error).message || 'Unknown error loading conversation history';
+            LogError(`RunAIAgentFromConversationDetail failed: ${errorMessage}`, undefined, error);
+            return {
+                success: false,
+                errorMessage,
+                result: JSON.stringify({ success: false, errorMessage })
+            };
+        }
+    }
+
+    /**
+     * Load conversation history with attachments from database.
+     * Builds ChatMessage[] with multimodal content blocks for attachments.
+     */
+    private async loadConversationHistoryWithAttachments(
+        conversationDetailId: string,
+        contextUser: UserInfo,
+        maxMessages: number
+    ): Promise<ChatMessage[]> {
+        const md = new Metadata();
+        const rv = new RunView();
+        const attachmentService = getAttachmentService();
+
+        // Load the current conversation detail to get the conversation ID
+        const currentDetail = await md.GetEntityObject<ConversationDetailEntity>(
+            'Conversation Details',
+            contextUser
+        );
+        if (!await currentDetail.Load(conversationDetailId)) {
+            throw new Error(`Conversation detail ${conversationDetailId} not found`);
+        }
+
+        const conversationId = currentDetail.ConversationID;
+
+        // Load recent conversation details (messages) for this conversation
+        const detailsResult = await rv.RunView<ConversationDetailEntity>({
+            EntityName: 'Conversation Details',
+            ExtraFilter: `ConversationID='${conversationId}'`,
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: maxMessages,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!detailsResult.Success || !detailsResult.Results) {
+            throw new Error('Failed to load conversation history');
+        }
+
+        // Reverse to get chronological order (oldest first)
+        const details = detailsResult.Results.reverse();
+
+        // Get all message IDs for batch loading attachments
+        const messageIds = details.map(d => d.ID);
+
+        // Batch load all attachments for these messages
+        const attachmentsByDetailId = await attachmentService.getAttachmentsBatch(messageIds, contextUser);
+
+        // Build ChatMessage array with attachments
+        const messages: ChatMessage[] = [];
+
+        for (const detail of details) {
+            const role = this.mapDetailRoleToMessageRole(detail.Role);
+            const attachments = attachmentsByDetailId.get(detail.ID) || [];
+
+            // Get attachment data with content URLs (handles both inline and FileID storage)
+            const attachmentDataPromises = attachments.map(att =>
+                attachmentService.getAttachmentData(att, contextUser)
+            );
+            const attachmentDataResults = await Promise.all(attachmentDataPromises);
+
+            // Filter out nulls and convert to AttachmentData format
+            const validAttachments: AttachmentData[] = attachmentDataResults
+                .filter((result): result is NonNullable<typeof result> => result !== null)
+                .map(result => ({
+                    type: ConversationUtility.GetAttachmentTypeFromMime(result.attachment.MimeType),
+                    mimeType: result.attachment.MimeType,
+                    fileName: result.attachment.FileName ?? undefined,
+                    sizeBytes: result.attachment.FileSizeBytes ?? undefined,
+                    width: result.attachment.Width ?? undefined,
+                    height: result.attachment.Height ?? undefined,
+                    durationSeconds: result.attachment.DurationSeconds ?? undefined,
+                    content: result.contentUrl
+                }));
+
+            // Build message content (with or without attachments)
+            let content: string | ReturnType<typeof ConversationUtility.BuildChatMessageContent>;
+
+            if (validAttachments.length > 0) {
+                // Use ConversationUtility to build multimodal content blocks
+                content = ConversationUtility.BuildChatMessageContent(
+                    detail.Message || '',
+                    validAttachments
+                );
+            } else {
+                content = detail.Message || '';
+            }
+
+            messages.push({
+                role,
+                content
+            });
+        }
+
+        return messages;
+    }
+
+    /**
+     * Map ConversationDetail Role to ChatMessage role
+     */
+    private mapDetailRoleToMessageRole(role: string): 'user' | 'assistant' | 'system' {
+        const roleLower = (role || '').toLowerCase();
+        if (roleLower === 'user') return 'user';
+        if (roleLower === 'assistant' || roleLower === 'agent') return 'assistant';
+        if (roleLower === 'system') return 'system';
+        return 'user'; // Default to user
     }
 
 }

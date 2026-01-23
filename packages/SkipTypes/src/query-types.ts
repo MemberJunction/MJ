@@ -265,6 +265,11 @@ export class SkipQueryInfo implements IQueryInfoBase {
      * Entities referenced by this query
      */
     Entities?: SkipQueryEntityInfo[];
+
+    CacheEnabled: boolean = false;
+    CacheMaxSize: number;
+    CacheTTLMinutes: number;
+    CacheValidationSQL: string;
 }
 
 /**

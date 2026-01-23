@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
-import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 
 @Component({
     selector: 'mj-execution-node',

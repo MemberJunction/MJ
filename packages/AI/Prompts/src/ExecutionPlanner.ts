@@ -1,8 +1,8 @@
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntityExtended, AIModelVendorEntity } from '@memberjunction/core-entities';
+import { AIPromptModelEntity } from '@memberjunction/core-entities';
 import { ExecutionTask, ParallelizationStrategy } from './ParallelExecution';
 import { ChatMessage } from '@memberjunction/ai';
-import { TemplateMessageRole } from '@memberjunction/ai-core-plus';
+import { AIModelEntityExtended, AIPromptEntityExtended, TemplateMessageRole } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { v4 as uuidv4 } from 'uuid';

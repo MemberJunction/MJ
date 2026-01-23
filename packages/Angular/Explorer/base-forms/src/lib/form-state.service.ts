@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
-import { UserSettingEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { FormState, FormSectionState, DEFAULT_FORM_STATE, DEFAULT_SECTION_STATE } from './form-state.interface';
 
 const SETTING_KEY_PREFIX = 'Form.State.';
@@ -95,10 +95,17 @@ export class FormStateService {
      * Check if a section is expanded.
      * @param entityName The entity name
      * @param sectionKey The section key
+     * @param defaultExpanded Optional default value to use when no persisted state exists (defaults to DEFAULT_SECTION_STATE.isExpanded)
      * @returns True if expanded
      */
-    isSectionExpanded(entityName: string, sectionKey: string): boolean {
-        return this.getSectionState(entityName, sectionKey).isExpanded;
+    isSectionExpanded(entityName: string, sectionKey: string, defaultExpanded?: boolean): boolean {
+        const state = this.getCurrentState(entityName);
+        const sectionState = state.sections[sectionKey];
+        if (sectionState) {
+            return sectionState.isExpanded;
+        }
+        // No persisted state - use provided default or fall back to DEFAULT_SECTION_STATE
+        return defaultExpanded !== undefined ? defaultExpanded : DEFAULT_SECTION_STATE.isExpanded;
     }
 
     /**
@@ -306,7 +313,7 @@ export class FormStateService {
     }
 
     /**
-     * Load state from User Settings.
+     * Load state from User Settings using UserInfoEngine for cached access.
      */
     private async loadState(entityName: string): Promise<void> {
         try {
@@ -316,22 +323,17 @@ export class FormStateService {
             }
 
             const settingKey = this.getSettingKey(entityName);
-            const rv = new RunView();
-            const result = await rv.RunView<UserSettingEntity>({
-                EntityName: 'MJ: User Settings',
-                ExtraFilter: `UserID='${userId}' AND Setting='${settingKey}'`,
-                ResultType: 'entity_object'
-            });
+            const engine = UserInfoEngine.Instance;
+
+            // Find setting from cached user settings
+            const setting = engine.UserSettings.find(s => s.Setting === settingKey);
 
             const subject = this.getOrCreateSubject(entityName);
 
-            if (result.Success && result.Results.length > 0) {
-                const setting = result.Results[0];
-                if (setting.Value) {
-                    const savedState = JSON.parse(setting.Value) as Partial<FormState>;
-                    // Merge with defaults to handle new properties
-                    subject.next({ ...DEFAULT_FORM_STATE, ...savedState });
-                }
+            if (setting?.Value) {
+                const savedState = JSON.parse(setting.Value) as Partial<FormState>;
+                // Merge with defaults to handle new properties
+                subject.next({ ...DEFAULT_FORM_STATE, ...savedState });
             } else {
                 // No saved state, use defaults
                 subject.next({ ...DEFAULT_FORM_STATE });
@@ -360,7 +362,7 @@ export class FormStateService {
     }
 
     /**
-     * Save state to User Settings.
+     * Save state to User Settings using UserInfoEngine for cached lookup.
      */
     private async saveState(entityName: string): Promise<void> {
         try {
@@ -372,19 +374,13 @@ export class FormStateService {
             const settingKey = this.getSettingKey(entityName);
             const state = this.getCurrentState(entityName);
             const md = new Metadata();
-            const rv = new RunView();
+            const engine = UserInfoEngine.Instance;
 
-            // Check if setting exists
-            const result = await rv.RunView<UserSettingEntity>({
-                EntityName: 'MJ: User Settings',
-                ExtraFilter: `UserID='${userId}' AND Setting='${settingKey}'`,
-                ResultType: 'entity_object'
-            });
+            // Find existing setting from cached user settings
+            let setting = engine.UserSettings.find(s => s.Setting === settingKey);
 
-            let setting: UserSettingEntity;
-            if (result.Success && result.Results.length > 0) {
-                setting = result.Results[0];
-            } else {
+            if (!setting) {
+                // Create new setting if not found
                 setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
                 setting.UserID = userId;
                 setting.Setting = settingKey;

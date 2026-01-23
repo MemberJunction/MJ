@@ -1050,8 +1050,6 @@ private async detectAndReconnectToInProgressRuns(conversationId: string): Promis
         return;
     }
 
-    console.log(`🔄 Found ${inProgressMessages.length} in-progress messages, reconnecting...`);
-
     // For each in-progress message, check if there's an active agent run
     for (const message of inProgressMessages) {
         if (message.AgentID) {

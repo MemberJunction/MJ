@@ -16,6 +16,7 @@ export class CompanyIntegrationRunAPILogFormComponent extends BaseFormComponent 
         this.initSections([
             { sectionKey: 'executionTimingStatus', sectionName: 'Execution Timing & Status', isExpanded: true },
             { sectionKey: 'aPICallDetails', sectionName: 'API Call Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

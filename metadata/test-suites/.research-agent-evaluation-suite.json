@@ -17,23 +17,9 @@
           "ID": "77AD9CB2-D302-4DE9-95F9-56EA2FD06634"
         },
         "sync": {
-          "lastModified": "2025-11-10T03:20:36.425Z",
-          "checksum": "b4155ead3f33ffc5e8ae7dbc48f22d85c6c4404642f8dd9ce84fc0191599570d"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.SuiteID",
-            "expression": "@parent:ID",
-            "resolved": "7A0C49E2-B0F0-4764-90E3-CBEEE098AF79"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.TestID",
-            "expression": "@lookup:MJ: Tests.Name=Research Agent - Potato Soup Recipe Comparison",
-            "resolved": "A5189586-8248-4641-98ED-BC1B3B2969B2"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.565Z",
+          "checksum": "72b4dc4af08bedda02f34c105afda9f75811f168f891f885363a4a60ccc7e0cc"
+        }
       },
       {
         "fields": {
@@ -46,23 +32,9 @@
           "ID": "EAC9ECB7-7C1A-489B-B535-6FBAD21A5E86"
         },
         "sync": {
-          "lastModified": "2025-11-10T00:32:49.260Z",
-          "checksum": "a43c20621a6d9fa4ba4c288ebf00a1d3fbb3bf5236940d1f6d84b01375db227d"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.SuiteID",
-            "expression": "@parent:ID",
-            "resolved": "7A0C49E2-B0F0-4764-90E3-CBEEE098AF79"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.TestID",
-            "expression": "@lookup:MJ: Tests.Name=Research Agent - Mixed DB and Web Question",
-            "resolved": "40736BED-8E59-43F7-BF3A-E64992B4B6C4"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.569Z",
+          "checksum": "870df0d4d71e7e2f839ec930a03701da48bf186d5e3df451d7d8f202af08bc6c"
+        }
       }
     ]
   },
@@ -70,7 +42,7 @@
     "ID": "7A0C49E2-B0F0-4764-90E3-CBEEE098AF79"
   },
   "sync": {
-    "lastModified": "2025-11-10T00:29:07.875Z",
-    "checksum": "25143dc10387de33cfb7bec0a5088b2777916c1fe9cf7755a5c9e5ba6812ac1c"
+    "lastModified": "2025-12-30T23:07:38.536Z",
+    "checksum": "5b905bb9cebae680c8415a9dbcd6373b9c0f487443d5d70c2f3d2acbc9480808"
   }
 }

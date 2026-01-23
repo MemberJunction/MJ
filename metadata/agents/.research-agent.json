@@ -23,23 +23,9 @@
             "ID": "9C9ECAB8-139C-4452-8EF3-896D2E1834CE"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.428Z",
-            "checksum": "d5a50f5823a63b71f75c6f7f3e9070dfc92bb010c6ab8428d5b5570fd60d67eb"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Database Research Agent Prompt",
-              "resolved": "20EEFC07-3CC2-4730-A1AE-EDB3D60AA4EC"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.216Z",
+            "checksum": "60a33c8fb6e42dfaa4433b03606f9384560c43c9492c035db2a9642406fd0ced"
+          }
         }
       ],
       "MJ: AI Agent Data Sources": [
@@ -64,17 +50,9 @@
             "ID": "2F22C90E-05BF-4226-8F6F-209C74873D6F"
           },
           "sync": {
-            "lastModified": "2025-10-21T19:26:55.184Z",
-            "checksum": "7ea0d7ed9bac9b78f5ef992deb0eaf14f6602d0a6f667dcd28561de39e3573f1"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.188Z",
+            "checksum": "3e8e70d0cc217bd99e9406edb2470637059b904da4fc6e08f16c4ee12f8643aa"
+          }
         }
       ],
       "AI Agent Actions": [
@@ -88,23 +66,9 @@
             "ID": "E7BC67D1-22F6-47AC-9A3E-8EEA172BB349"
           },
           "sync": {
-            "lastModified": "2025-10-16T22:41:51.042Z",
-            "checksum": "9b6206432e7862cdd3a449f23b70bad8575beac4319b1259b68fe1145257ab50"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Get Entity Details",
-              "resolved": "BF084609-3C2B-4FAF-8D4C-598918AB765A"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.217Z",
+            "checksum": "ea25c32d3cbb8186836a49d1e4d21e6680a679448673493a9fea14c5b075ce28"
+          }
         },
         {
           "fields": {
@@ -116,23 +80,9 @@
             "ID": "ED43ED4D-2701-4978-A971-A00106E8757F"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.455Z",
-            "checksum": "616a50e782ee92895f6f2982620728edf2559ee9183981058c4d8946f5b18fc8"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Execute Research Query",
-              "resolved": "4B92BDED-4AD6-497A-B16E-BAE85BAB7563"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.218Z",
+            "checksum": "64ddd6dc6f8d3402dcf7f00b1c93af3a87c607fca040a5c319e5268a937d1b3b"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -152,23 +102,9 @@
             "ID": "78270AE2-0FCD-4E07-B6A8-C581D18F31FA"
           },
           "sync": {
-            "lastModified": "2025-11-01T20:26:05.300Z",
-            "checksum": "2b9df006bc53fad11c44917e46f72721a961da7f6f998e510a377e7a9a928df0"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.SubAgentID",
-              "expression": "@lookup:AI Agents.Name=Codesmith Agent",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.219Z",
+            "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
+          }
         }
       ]
     },
@@ -176,17 +112,9 @@
       "ID": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
     },
     "sync": {
-      "lastModified": "2025-10-18T13:29:52.063Z",
-      "checksum": "5775beb8bd6ce1d1e1315f51709b7b830d363869d6ad2e3b6d6b89e94b661fdc"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:35.113Z",
+      "checksum": "29af7ef3ae8e1ebaa61e303544375a68e602099573fccb7715efc5023594eec7"
+    }
   },
   {
     "fields": {
@@ -212,23 +140,9 @@
             "ID": "CDC20F26-DE77-42D1-A30F-A3B34EBA8106"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.465Z",
-            "checksum": "824b9cf2907c06be91b2937035cf6d889b4ed568f50a0233147d394900893b9a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "63070640-7E8E-4953-B13C-9F840D6BDD81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=File Research Agent Prompt",
-              "resolved": "6DFEC000-BFBC-4689-96E9-24C9F55FD385"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.221Z",
+            "checksum": "5a2182f648313def831c7576bc0c12a2c0fd652b905849f47d9fa0f52552a8c8"
+          }
         }
       ],
       "AI Agent Actions": [
@@ -242,23 +156,9 @@
             "ID": "1755B56E-6648-4198-9B70-0DFED107F827"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.474Z",
-            "checksum": "3bbe96df0ef692283ff09753b3d6b646f731257abcdba6959f082be2fe0862af"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "63070640-7E8E-4953-B13C-9F840D6BDD81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=List Storage Providers",
-              "resolved": "D6A74F70-AFB5-49BF-8F82-307CB08AB9EB"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.222Z",
+            "checksum": "a618bbd787f3b93611f5958a64b3b0b8c6dd43951020ec2768c7196c625feeb0"
+          }
         },
         {
           "fields": {
@@ -270,23 +170,9 @@
             "ID": "5CBAF259-2028-4643-981F-6B740B7C4CB2"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.485Z",
-            "checksum": "50cf04ad8ea727f08056ca68fe58f56412df1315f8726ef227853a78cd257d9c"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "63070640-7E8E-4953-B13C-9F840D6BDD81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Search Storage Files",
-              "resolved": "B5E3083E-D6B3-42C8-A6AA-25B8E603DF69"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.223Z",
+            "checksum": "0bdad7bbf184d19aa9529f3b85fec1e6d22c6af2ea1cd7d6f7930990fc0eae45"
+          }
         },
         {
           "fields": {
@@ -298,23 +184,9 @@
             "ID": "1A53B7ED-BCF4-4656-AF5C-277E21E12F36"
           },
           "sync": {
-            "lastModified": "2025-10-26T19:46:28.231Z",
-            "checksum": "7ef6f0eb8f8090090edd92742a0cd683e0e5eba8752194c1928685f22a6f19ce"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "63070640-7E8E-4953-B13C-9F840D6BDD81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=File Storage: Get File Content",
-              "resolved": "84DEB03C-B730-415B-8828-F301EE282970"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.225Z",
+            "checksum": "79e6ecd6ccac6f845e9112da735e51bd4ceaa1fe6d5c1b416a6548c3b8a6c2e7"
+          }
         },
         {
           "fields": {
@@ -326,23 +198,9 @@
             "ID": "BECD0806-3A02-4A0B-A747-058BF2EC7054"
           },
           "sync": {
-            "lastModified": "2025-10-26T19:46:28.251Z",
-            "checksum": "0a07b0149fcd6fbe5545f18bff56d510f65d4fc00d4660821ad93842702d0b00"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "63070640-7E8E-4953-B13C-9F840D6BDD81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=File Storage: Get Object Metadata",
-              "resolved": "32C9BA41-A275-46FF-AD71-52451770D8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.226Z",
+            "checksum": "3677d9d052e782b20e830e60adfeaf5037a6bb68e3da458af4a7c97c32e63843"
+          }
         },
         {
           "fields": {
@@ -354,23 +212,9 @@
             "ID": "99897734-2055-4DEF-A0A2-519E2CE8EA37"
           },
           "sync": {
-            "lastModified": "2025-10-26T19:46:28.270Z",
-            "checksum": "5d8551411882946da1cf4e14048c6a23af6fd31f57e286f2febe4cf47e3965c7"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "63070640-7E8E-4953-B13C-9F840D6BDD81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=File Storage: Get Download URL",
-              "resolved": "11637339-5F0A-4C41-940F-553EE65F264C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.321Z",
+            "checksum": "ba62e17453bfe466b52fd4c9a5fd6a340664b63c9f1922076262b9b8e9354905"
+          }
         },
         {
           "fields": {
@@ -382,23 +226,9 @@
             "ID": "3E42D14C-B739-4ADA-AA40-9DE95CEDCC24"
           },
           "sync": {
-            "lastModified": "2025-10-26T19:46:28.489Z",
-            "checksum": "d8b358da42739a5d23ca02dd91c36d37c6c6467e2a6eba9c6f78dfdd64c0abbf"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "63070640-7E8E-4953-B13C-9F840D6BDD81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=File Storage: List Objects",
-              "resolved": "AE9554D7-C3F6-400B-865D-D1E81CC2058E"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.322Z",
+            "checksum": "f11dda88bcb54c44e86a1918da081c5159567e619c8bf1587f89b85051eba14d"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -418,23 +248,9 @@
             "ID": "4DFF6A3D-E25F-42E6-A5D1-52AFA4B00C81"
           },
           "sync": {
-            "lastModified": "2025-11-01T20:26:05.508Z",
-            "checksum": "2b9df006bc53fad11c44917e46f72721a961da7f6f998e510a377e7a9a928df0"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "63070640-7E8E-4953-B13C-9F840D6BDD81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.SubAgentID",
-              "expression": "@lookup:AI Agents.Name=Codesmith Agent",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.324Z",
+            "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
+          }
         }
       ]
     },
@@ -442,17 +258,9 @@
       "ID": "63070640-7E8E-4953-B13C-9F840D6BDD81"
     },
     "sync": {
-      "lastModified": "2025-10-18T13:29:52.085Z",
-      "checksum": "e66912ce58a77610ecba15779b417c06b53ca5c02f09ec2cce4cf3fae347da07"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:35.114Z",
+      "checksum": "0abea6a905111122f95b42f648febdfc68e4e6713f672b8ef820271b2bdc03a6"
+    }
   },
   {
     "fields": {
@@ -478,23 +286,9 @@
             "ID": "A43CFA03-C714-4BEF-80CE-C0D120EF6EB8"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.495Z",
-            "checksum": "926d82c06919a79d182e63ed7de90edc87458169339ef544fa28823d58986e28"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Web Research Agent Prompt",
-              "resolved": "60407FD8-1EC8-48A1-9D79-AA43B66A2026"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.325Z",
+            "checksum": "76094ed674174e2dee3bd89cdf8cff3c0bf69e281f58f04a329a28a1a5621840"
+          }
         }
       ],
       "AI Agent Actions": [
@@ -508,23 +302,9 @@
             "ID": "206B25BD-3E23-48DF-96D6-651A8459BEDD"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.503Z",
-            "checksum": "fcde5d995f0d27d73dc9a26b97ab447c2e838cc334af18c70b6baea61f951032"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Google Custom Search",
-              "resolved": "FC003992-0203-4B23-946C-F9E9A40646AE"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.326Z",
+            "checksum": "f77f9c9fa004ae6fe97329180928ccb5cbb16fe7ec0f427da2e4e7b789861c22"
+          }
         },
         {
           "fields": {
@@ -536,23 +316,9 @@
             "ID": "6D3D1967-346E-494F-B448-D0B23F88FCD7"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.521Z",
-            "checksum": "e4a517c48df4a1d9a19b7d584214d6d9a7ac2371073b79e72070e9d4cb0e1b75"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Summarize Content",
-              "resolved": "A9B0C1D2-E3F4-4A5B-8C9D-0E1F2A3B4C5D"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.327Z",
+            "checksum": "7e3b060f9a0e037ae13cb53ef8029b0256a01f1ddc1cc5530d19e3733e35fd15"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -572,23 +338,9 @@
             "ID": "E23ACB34-4865-4F9A-89D0-9C1E19DCCF7B"
           },
           "sync": {
-            "lastModified": "2025-11-01T20:26:05.518Z",
-            "checksum": "2b9df006bc53fad11c44917e46f72721a961da7f6f998e510a377e7a9a928df0"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.SubAgentID",
-              "expression": "@lookup:AI Agents.Name=Codesmith Agent",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.329Z",
+            "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
+          }
         }
       ]
     },
@@ -596,17 +348,9 @@
       "ID": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
     },
     "sync": {
-      "lastModified": "2025-10-18T13:29:52.102Z",
-      "checksum": "5b6fd951f559117d1513a8c93eaafd7a48a77073276d2b641847f86aa7d86e00"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:35.115Z",
+      "checksum": "722bb41785b91405eb74474af98eec37877e8af9180c746a81a4cf75d337e2b2"
+    }
   },
   {
     "fields": {
@@ -644,23 +388,9 @@
             "ID": "D66B33D5-9066-4563-BF1B-88F28DFD2BCA"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.612Z",
-            "checksum": "b8078017d3b67732526530140a85c0410f1c395cd9c36a6d4bfe82bb2a6ebd11"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Research Agent - Main Prompt",
-              "resolved": "7F538775-F3D8-4210-8872-02C706BF3188"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.330Z",
+            "checksum": "d3e59885d711b5ee7d246160bb55a814655ca2997a9078c2b6d85e654204df5b"
+          }
         }
       ],
       "AI Agents": [
@@ -696,23 +426,9 @@
                   "ID": "A11D2711-6A5B-4FF9-B5B3-F2F506F1EEF2"
                 },
                 "sync": {
-                  "lastModified": "2025-10-17T01:10:53.717Z",
-                  "checksum": "d5c6f0be6e3ba0fb29f9f04846202041491cd08e8475d1b41989dc68c0ae06c8"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.PromptID",
-                    "expression": "@lookup:AI Prompts.Name=Research Report Writer Prompt",
-                    "resolved": "114726B5-D18E-48E3-B32B-9203BEF52DA3"
-                  }
-                ]
+                  "lastModified": "2025-12-30T23:07:35.468Z",
+                  "checksum": "0ba0ec6b2096698c875dd34a22d3a559babf675db8af6cc09edd4d47e4e24b26"
+                }
               }
             ],
             "AI Agent Actions": [
@@ -726,23 +442,9 @@
                   "ID": "9D2DACDB-49F0-4783-91D9-A2EF348B87DC"
                 },
                 "sync": {
-                  "lastModified": "2025-10-21T19:26:55.405Z",
-                  "checksum": "1f69440928e58cb33af27126b17dd476328b83810309708f6593e2bbc6bdc0b7"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Create SVG Sketch Diagram",
-                    "resolved": "C20BAFF4-022C-41E1-AB23-B2D200A2BE8C"
-                  }
-                ]
+                  "lastModified": "2025-12-30T23:07:35.470Z",
+                  "checksum": "ec9f229c2517250eccf2c61e9980cdd79af3d83fe12ee1d4944caec93cc34cda"
+                }
               },
               {
                 "fields": {
@@ -754,23 +456,9 @@
                   "ID": "4F3EA387-6CCC-4364-BB0C-C8ACAF1C5343"
                 },
                 "sync": {
-                  "lastModified": "2025-10-20T02:09:52.447Z",
-                  "checksum": "b29c665b6e6389ba72c6c555cd6dd2be21273d586f50e12644a4df76e7a76648"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Create SVG Chart",
-                    "resolved": "88D95CCD-EBAB-4760-80AD-39B12E251175"
-                  }
-                ]
+                  "lastModified": "2025-12-30T23:07:35.471Z",
+                  "checksum": "017773054aa09786b5f74ab920886a056cdf03e44cae1cb59be41cbf8a328544"
+                }
               },
               {
                 "fields": {
@@ -782,23 +470,9 @@
                   "ID": "F5D1AF9E-09DA-4DD1-82CB-175120DD7498"
                 },
                 "sync": {
-                  "lastModified": "2025-10-20T02:09:52.461Z",
-                  "checksum": "dc864a22279dadcb4f627c6057446370e03779a14540d02262450ed5301aab66"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Create SVG Diagram",
-                    "resolved": "4FC4DE06-4986-4914-875C-446CE6E7F8AA"
-                  }
-                ]
+                  "lastModified": "2025-12-30T23:07:35.472Z",
+                  "checksum": "8b98c2634ae3f74b0db43356a707a2e10507926e674a3c8d8d52eda5610b402c"
+                }
               },
               {
                 "fields": {
@@ -810,23 +484,9 @@
                   "ID": "A6A64D5E-1061-4845-B539-9CC5355B5227"
                 },
                 "sync": {
-                  "lastModified": "2025-10-20T02:09:52.474Z",
-                  "checksum": "b9895c351ca1b6f190441acff08df924cf5c716ca3f5a23dec3116543e83d012"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Create SVG Network",
-                    "resolved": "6D0BD2B6-CE93-4D6E-BCA4-55972C2C1F93"
-                  }
-                ]
+                  "lastModified": "2025-12-30T23:07:35.473Z",
+                  "checksum": "ec7ea85529946cba92e7caf6aa886fa1113345c1a6eb050f417f691f2197ee80"
+                }
               },
               {
                 "fields": {
@@ -838,23 +498,9 @@
                   "ID": "B6A57192-803F-46B4-9A91-ABBE99ABA551"
                 },
                 "sync": {
-                  "lastModified": "2025-10-20T02:09:52.485Z",
-                  "checksum": "b98d16398b0f08d0244872e2b3ecd5a55625b9cf702602a2a7cb744bdbce22b1"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Create SVG Word Cloud",
-                    "resolved": "F046406A-0F53-4123-B07A-5B109C7D1E98"
-                  }
-                ]
+                  "lastModified": "2025-12-30T23:07:35.474Z",
+                  "checksum": "0ba70a5528f6d5333a949199b5c874ba28300d40250c7e68479c69fdcf812489"
+                }
               },
               {
                 "fields": {
@@ -866,8 +512,22 @@
                   "ID": "9FD498B7-423E-4039-8AE3-10260202549C"
                 },
                 "sync": {
-                  "lastModified": "2025-10-26T19:46:28.764Z",
-                  "checksum": "71d83cfcb0c7b18241d34b70d23557c0249fe07da16dd7f01ec685317d11ec66"
+                  "lastModified": "2025-12-30T23:07:35.475Z",
+                  "checksum": "f80fec83ab753821ee8a23c7cbba8eca982e54743e23c7688d397cd311450d5b"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Generate Image",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "13D6F266-04A0-467A-8A71-96D9CE4AA4BC"
+                },
+                "sync": {
+                  "lastModified": "2026-01-13T23:45:24.319Z",
+                  "checksum": "79e6bc17002f1592f4f4b2e362be1f2e982048b8904ff97e9b663424c51fda38"
                 },
                 "__mj_sync_notes": [
                   {
@@ -879,8 +539,8 @@
                   {
                     "type": "lookup",
                     "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Create Mermaid Diagram",
-                    "resolved": "8CCE12B9-5F28-4C49-8270-D02F1E0F245F"
+                    "expression": "@lookup:Actions.Name=Generate Image",
+                    "resolved": "048FF309-C2CD-44D8-8A8E-8C771ADA8284"
                   }
                 ]
               }
@@ -902,23 +562,9 @@
                   "ID": "75E27303-EA65-4EC6-A104-DF63359BCA61"
                 },
                 "sync": {
-                  "lastModified": "2025-11-01T20:26:05.751Z",
-                  "checksum": "032fd5b4e0a61e39eccf398e68afdec2205a4ed4e592f8db3d7c1efe86cfc6fd"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.SubAgentID",
-                    "expression": "@lookup:AI Agents.Name=Infographic Agent",
-                    "resolved": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
-                  }
-                ]
+                  "lastModified": "2025-12-30T23:07:35.477Z",
+                  "checksum": "71d4fa11bd0a8bba8548f3de08095e59049e6f5f7d39980e368ffd699b0da40f"
+                }
               },
               {
                 "fields": {
@@ -936,23 +582,9 @@
                   "ID": "26243E8B-A3F5-48F6-81DE-3B9F74E63531"
                 },
                 "sync": {
-                  "lastModified": "2025-11-01T20:26:05.689Z",
-                  "checksum": "2b9df006bc53fad11c44917e46f72721a961da7f6f998e510a377e7a9a928df0"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.SubAgentID",
-                    "expression": "@lookup:AI Agents.Name=Codesmith Agent",
-                    "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-                  }
-                ]
+                  "lastModified": "2025-12-30T23:07:35.478Z",
+                  "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
+                }
               }
             ]
           },
@@ -960,23 +592,9 @@
             "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
           },
           "sync": {
-            "lastModified": "2025-10-19T20:35:28.352Z",
-            "checksum": "b2ea69d4c29a9eeef5384b1ced3789c1dfb624e7a74925b55a10d3c5219610b7"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ParentID",
-              "expression": "@parent:ID",
-              "resolved": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.TypeID",
-              "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-              "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.331Z",
+            "checksum": "d5bebf5917fde8f448718738f5a7060e2130403e84c4b9880deebe051a93366d"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -996,23 +614,9 @@
             "ID": "EC2EE264-31B8-42CE-AE9A-9177ACFC2947"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:03.668Z",
-            "checksum": "0eab7c0145c086a1d705bd00cf4f1b8b171d3883fb01f3636fcf4299b2912d38"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.SubAgentID",
-              "expression": "@lookup:AI Agents.Name=Web Research Agent",
-              "resolved": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.304Z",
+            "checksum": "a74175c37d10a15a4df7a375dd1b5e83d04ba571b2bd847f11efecbe77bf6bfa"
+          }
         },
         {
           "fields": {
@@ -1030,23 +634,9 @@
             "ID": "8DB9A71A-FD38-43A3-BE9C-759F4332ADD8"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:03.753Z",
-            "checksum": "5a3bda7291c9a0f9004966ca5041517d108efc0f413426d5bf13e7d3a33a400d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.SubAgentID",
-              "expression": "@lookup:AI Agents.Name=Database Research Agent",
-              "resolved": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.369Z",
+            "checksum": "4325ea6d8bf53a8b7760faf203eb13aa8110614634fb918602f20d908d0952f5"
+          }
         },
         {
           "fields": {
@@ -1064,23 +654,9 @@
             "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:03.765Z",
-            "checksum": "d26dd752c11cde23ea287403ddacc2c4424fd2cbeec2920ede39db9359bc5965"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.SubAgentID",
-              "expression": "@lookup:AI Agents.Name=File Research Agent",
-              "resolved": "63070640-7E8E-4953-B13C-9F840D6BDD81"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.370Z",
+            "checksum": "778f461a7f68241e59b4cbd204dfd34a181b5ca7dda21f323310b82eeea2bb18"
+          }
         },
         {
           "fields": {
@@ -1098,23 +674,9 @@
             "ID": "950F921A-6C52-4170-8FFC-EDF166D3675C"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:03.777Z",
-            "checksum": "687f5919aa025ec3e85c12f2cd87ec821b35bc68ab217c4f086acdcea5cab8fc"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.SubAgentID",
-              "expression": "@lookup:AI Agents.Name=Knowledge Base Research Agent",
-              "resolved": "0388084B-97A8-4C3D-A38B-B6CE60471A87"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.382Z",
+            "checksum": "50c7be18f9c36704dd901d7c0f3396a8c16d1d350a5be68a52aa96632fd41c04"
+          }
         }
       ],
       "MJ: AI Agent Configurations": [
@@ -1133,23 +695,9 @@
             "ID": "5368BC4B-5D62-4D03-AE2F-F2B2DB7F52F1"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:03.806Z",
-            "checksum": "be40b00e4a4fc7501797a417c8023cf28471b57a6afffd65753ed96d016d68e5"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.AIConfigurationID",
-              "expression": "@lookup:MJ: AI Configurations.Name=Fast",
-              "resolved": "3A1C5A15-8DAA-44E5-A098-F20085E6C93F"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.383Z",
+            "checksum": "25062bdd58fb8eb04195952f28074232f0537f6ffacd4a37bda9fa4851543e59"
+          }
         },
         {
           "fields": {
@@ -1166,23 +714,9 @@
             "ID": "F4DB3010-E073-4DD6-B185-8CCAC3D32BB7"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:03.819Z",
-            "checksum": "a2d8cf24b10114f50e3047ae8f54cfefa2868f229de338c890ab50140121834f"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.AIConfigurationID",
-              "expression": "@lookup:MJ: AI Configurations.Name=Standard",
-              "resolved": "A76B1550-A6D8-4491-9EF6-A38A8F660FBC"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.384Z",
+            "checksum": "f05bfc1b449cf5af313395326ddab1833862b8ff756d2959f24dcacd0ff19cf2"
+          }
         },
         {
           "fields": {
@@ -1199,23 +733,9 @@
             "ID": "FE85A838-D915-4B8A-973E-2142D675C22D"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:03.829Z",
-            "checksum": "a0f0c1951e7d5d275024012f102e681b9761023c1ec6c9a1ef28d2e89c1769a1"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.AIConfigurationID",
-              "expression": "@lookup:MJ: AI Configurations.Name=High Power",
-              "resolved": "B6B9D780-52B2-431B-93AB-AC83FEF78553"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.385Z",
+            "checksum": "e52c4a945d3b8167ab08c06476656634a22731a8a2c47b18add90629450ae9eb"
+          }
         }
       ]
     },
@@ -1223,22 +743,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2025-10-19T22:05:03.490Z",
-      "checksum": "a92fd9781968b0104365800a4116c45308ecaa08d436cde2cff7d35ea1fffdda"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.DefaultArtifactTypeID",
-        "expression": "@lookup:MJ: Artifact Types.Name=Research Content",
-        "resolved": "A7B8C9D0-E1F2-3A4B-5C6D-7E8F9A0B1C2D"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:35.120Z",
+      "checksum": "dc1a0ef4f2e49056d93e3491aad0707fcb5a90929f7bd8472c04d175b61b396e"
+    }
   }
 ]

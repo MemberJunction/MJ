@@ -1,5 +1,89 @@
 # Change Log - @memberjunction/core
 
+## 3.2.0
+
+### Patch Changes
+
+- @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/global@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Minor Changes
+
+- c00bd13: Add metadata migration script for 2.133.0
+
+### Patch Changes
+
+- @memberjunction/global@2.133.0
+
+## 2.132.0
+
+### Minor Changes
+
+- 55a2b08: Migration
+
+### Patch Changes
+
+- @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Minor Changes
+
+- 280a4c7: Add Cerebras as AI inference provider for GLM-4.7 model and improve MetadataSync with recursive @file reference resolution in checksum calculations
+
+### Patch Changes
+
+- 81598e3: no migration just code
+  - @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/global@2.130.1
+
+## 2.130.0
+
+### Minor Changes
+
+- 9f2ece4: Migration
+- 02e84a2: Add GPT Codex models (5.2-codex, 5.1-codex-max, 5.1-codex-mini), implement SimpleChart stackBy property for stacked bar/column charts, add @file: directive support for component code references, reorganize component metadata with comprehensive documentation, and fix metadata-sync validation for glob patterns with \*\*/ prefix
+
+### Patch Changes
+
+- @memberjunction/global@2.130.0
+
+## 2.129.0
+
+### Minor Changes
+
+- c391d7d: Migration
+- 8c412cf: migration
+- fbae243: migration
+- c7e38aa: migration
+- 7a39231: Add Vertex AI provider with Google GenAI SDK integration, resolve database connection timeout, and improve conversation UI
+
+### Patch Changes
+
+- 0fb62af: Move GraphQL type name utilities to @memberjunction/core and clean up unused imports
+- 7d42aa5: Fix non-deterministic entity ordering in metadata system and remove redundant entity sorting in CodeGen
+- Updated dependencies [fbae243]
+- Updated dependencies [c7e38aa]
+  - @memberjunction/global@2.129.0
+
 ## 2.128.0
 
 ### Minor Changes
@@ -235,7 +319,6 @@
 
 - bd75336: ix: Improve React component system registry handling and chart
   flexibility
-
   - Enhanced component manager to optimize pre-registered component loading
     by skipping redundant fetches
   - Fixed SimpleChart component to accept any field for grouping, not just
@@ -283,7 +366,6 @@
   metadata usage, and component composition.
 
   ### New Components
-
   - **SimpleChart**: Lightweight charting component with
     automatic data aggregation, smart chart type selection, and
     proper date formatting
@@ -372,7 +454,6 @@
 ### Patch Changes
 
 - f703033: Implement extensible N-provider authentication architecture
-
   - Created shared authentication types in @memberjunction/core for use
     across frontend and backend
   - Refactored authentication to support multiple providers using MJGlobal
@@ -390,7 +471,6 @@
   This enables teams to add custom authentication providers (SAML,
   proprietary SSO, etc.)
   without forking or modifying the core authentication modules.
-
   - @memberjunction/global@2.91.0
 
 ## 2.90.0
@@ -471,7 +551,6 @@
 
   Add comprehensive audit logging and caching capabilities to the
   MemberJunction Query system:
-
   - Add ForceAuditLog and AuditLogDescription parameters to RunQuery for
     granular audit control
   - Implement TTL-based result caching with LRU eviction strategy for
@@ -486,7 +565,6 @@
 ### Patch Changes
 
 - 6d2d478: feat: AI Agent UI improvements and server-side context fixes
-
   - Enhanced AI Agent dialogs with resizable and draggable functionality
     using Kendo UI Window component
   - Improved dialog positioning with consistent center placement and proper
@@ -551,7 +629,6 @@
   relationships.
 
   ### New Features
-
   - **Hierarchical Path Resolution**: CategoryName now supports paths like
     "/MJ/AI/Agents/" that are parsed by splitting on "/" and walking down the
     category hierarchy using ParentID relationships

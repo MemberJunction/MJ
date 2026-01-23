@@ -14,9 +14,8 @@ export class ContentProcessRunFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'runMetadata', sectionName: 'Run Metadata', isExpanded: false },
-            { sectionKey: 'timingStatus', sectionName: 'Timing & Status', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'runMetadata', sectionName: 'Run Metadata', isExpanded: false }
         ]);
     }
 }

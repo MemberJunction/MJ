@@ -1,0 +1,210 @@
+{
+  "name": "SimpleChart",
+  "title": "Simple Chart",
+  "description": "@file:../../descriptions/generic/simple-chart.md",
+  "type": "chart",
+  "location": "embedded",
+  "functionalRequirements": "@file:../../functional-requirements/generic/simple-chart.md",
+  "technicalDesign": "@file:../../technical-design/generic/simple-chart.md",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Component receives entity data through props and performs client-side aggregation"
+  },
+  "properties": [
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Optional entity name for metadata-aware formatting (dates, money, value lists). If omitted, component uses basic type detection and works with any data array. Note: This property is NOT used for generating the chart title - always provide an explicit 'title' property to avoid undefined titles.",
+      "required": false
+    },
+    {
+      "name": "data",
+      "type": "Array<object>",
+      "description": "Array of entity records to visualize. Typically detail-level records (invoices, transactions, events) that component will aggregate by groupBy field. Can also accept pre-aggregated data if you're building custom charts without drill-down needs. For drill-down charts, use SimpleDrilldownChart which requires detail records.",
+      "required": true
+    },
+    {
+      "name": "groupBy",
+      "type": "string",
+      "description": "Field name to group data by. Works with any field in the data array. In non-stacked mode, this is the primary (X-axis) grouping. In stacked mode (when stackBy is provided), this is still the primary X-axis grouping, and stackBy creates the color-coded series.",
+      "required": true
+    },
+    {
+      "name": "stackBy",
+      "type": "string",
+      "description": "Optional secondary grouping field for stacked bar/column charts. When provided, creates a multi-series stacked chart where: (1) groupBy field defines X-axis categories, (2) stackBy field defines the colored series/layers within each bar. Example: groupBy='Quarter' and stackBy='MeetingType' creates bars for each quarter with stacked layers colored by meeting type. Each unique stackBy value becomes a separate dataset with its own color. Best for showing composition or breakdown within categories. Only works with bar/column chart types - pie/line charts ignore this property.",
+      "required": false
+    },
+    {
+      "name": "valueField",
+      "type": "string",
+      "description": "Field name to aggregate for chart values. REQUIRED when using aggregateMethod 'sum', 'average', 'min', or 'max'. OMIT when using 'count' (counts records regardless of field values). Examples: 'Total' for revenue, 'Amount' for sales, 'Quantity' for inventory. Component groups records by groupBy field and aggregates this valueField according to aggregateMethod.",
+      "required": false,
+      "constraints": [
+        {
+          "type": "required-when",
+          "dependsOn": "aggregateMethod",
+          "description": "valueField is required when aggregateMethod is sum, average, min, or max",
+          "config": {
+            "condition": "siblingProp === 'sum' || siblingProp === 'average' || siblingProp === 'min' || siblingProp === 'max'"
+          },
+          "errorTemplate": "valueField is required when aggregateMethod is '{aggregateMethod}'"
+        }
+      ]
+    },
+    {
+      "name": "aggregateMethod",
+      "type": "'count' | 'sum' | 'average' | 'min' | 'max'",
+      "description": "How to aggregate records within each group. CRITICAL: Choose based on what you're measuring. Use 'count' ONLY when counting records (omit valueField). Use 'sum' for totals (revenue, sales, costs - REQUIRES valueField). Use 'average' for means (average deal size, average rating). Use 'min'/'max' for extremes. COMMON MISTAKE: Using default 'count' when valueField is specified - this counts records instead of summing values! Example: For 'revenue by month', use aggregateMethod='sum' with valueField='Total', NOT count.",
+      "required": false,
+      "defaultValue": "count",
+      "possibleValues": [
+        "count",
+        "sum",
+        "average",
+        "min",
+        "max"
+      ]
+    },
+    {
+      "name": "chartType",
+      "type": "'auto' | 'bar' | 'line' | 'pie' | 'doughnut' | 'area' | 'scatter'",
+      "description": "Chart type to render. 'auto' selects based on data",
+      "required": false,
+      "defaultValue": "auto",
+      "possibleValues": [
+        "auto",
+        "bar",
+        "line",
+        "pie",
+        "doughnut",
+        "area",
+        "scatter"
+      ]
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "description": "Chart title displayed above the chart. If not provided, no title will be shown. Best practice: Always provide a descriptive title when using the component to avoid undefined values in the display.",
+      "required": false
+    },
+    {
+      "name": "height",
+      "type": "number",
+      "description": "Chart height in pixels",
+      "required": false,
+      "defaultValue": 400
+    },
+    {
+      "name": "sortBy",
+      "type": "'label' | 'value' | undefined",
+      "description": "How to sort chart data. By default (undefined), input data order is PRESERVED - this is ideal for time-series data where your query already returns data sorted by date, or when you want full control over ordering. 'value' sorts by aggregated values - useful for ranking charts (top products by revenue, most active users). 'label' sorts alphabetically by category labels. IMPORTANT: If you pass pre-sorted time-series data, do NOT set sortBy - let it default to undefined to preserve your chronological ordering.",
+      "required": false,
+      "defaultValue": "undefined",
+      "possibleValues": [
+        "label",
+        "value",
+        "undefined"
+      ]
+    },
+    {
+      "name": "sortOrder",
+      "type": "'asc' | 'desc'",
+      "description": "Sort direction when sortBy is specified. 'asc' = ascending (low to high, A to Z, old to new). 'desc' = descending (high to low, Z to A, new to old). Only applies when sortBy is 'label' or 'value'. For rankings with sortBy='value', typically use 'desc' for highest-first (top 10 products). For alphabetical sorting with sortBy='label', use 'asc' for A→Z.",
+      "required": false,
+      "defaultValue": "asc",
+      "possibleValues": [
+        "asc",
+        "desc"
+      ]
+    },
+    {
+      "name": "limit",
+      "type": "number",
+      "description": "Limit number of data points shown (e.g., top 10)",
+      "required": false
+    },
+    {
+      "name": "colors",
+      "type": "Array<string>",
+      "description": "Custom color palette for the chart",
+      "required": false
+    },
+    {
+      "name": "showLegend",
+      "type": "boolean",
+      "description": "Whether to show the legend",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "legendPosition",
+      "type": "'auto' | 'top' | 'bottom' | 'left' | 'right'",
+      "description": "Position of the legend. 'auto' uses bottom for pie/doughnut, top for others",
+      "required": false,
+      "defaultValue": "auto",
+      "possibleValues": [
+        "auto",
+        "top",
+        "bottom",
+        "left",
+        "right"
+      ]
+    },
+    {
+      "name": "legendFontSize",
+      "type": "number",
+      "description": "Font size for legend labels in pixels",
+      "required": false,
+      "defaultValue": 12
+    },
+    {
+      "name": "showDataLabels",
+      "type": "boolean",
+      "description": "Whether to show data labels on chart",
+      "required": false,
+      "defaultValue": false
+    },
+    {
+      "name": "enableExport",
+      "type": "boolean",
+      "description": "When true, displays an export button in the top-right corner above the chart to download chart as PNG image. Button is positioned outside the chart canvas to avoid overlaying the visualization.",
+      "required": false,
+      "defaultValue": true
+    }
+  ],
+  "events": [
+    {
+      "name": "dataPointClick",
+      "description": "Fired when user clicks on a data point",
+      "parameters": [
+        {
+          "name": "clickData",
+          "type": "{ seriesName: string; value: number; label: string; records: Array<object>; chartType: string; percentage?: number }",
+          "description": "Object containing series name, data value, label, original records, and chart type"
+        }
+      ]
+    },
+    {
+      "name": "chartRendered",
+      "description": "Fired when chart has finished rendering",
+      "parameters": [
+        {
+          "name": "chartInfo",
+          "type": "{ chartType: string; dataPointCount: number; aggregationMethod: string; isEmpty: boolean }",
+          "description": "Information about the rendered chart including type, data point count, and aggregation method"
+        }
+      ]
+    }
+  ],
+  "libraries": [
+    {
+      "name": "chart.js",
+      "version": "4.4.1",
+      "globalVariable": "Chart"
+    }
+  ],
+  "dependencies": [],
+  "code": "@file:../../code/generic/simple-chart.js",
+  "exampleUsage": "<!-- Ranking Example: Top products by revenue (explicit sort by value) -->\n<SimpleChart\n  entityName=\"Invoice Line Items\"\n  data={invoiceItems}\n  groupBy=\"ProductCategory\"\n  valueField=\"TotalAmount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Top 10 Products by Revenue\"\n  limit={10}\n  sortBy=\"value\"  // Explicit sort by revenue for ranking\n  sortOrder=\"desc\"  // Highest first\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Time-Series Example: Revenue by month (preserve query order) -->\n<SimpleChart\n  entityName=\"Invoices\"\n  data={preAggregatedMonthlyData}  // Query returns data already sorted by Year/Month\n  groupBy=\"DateLabel\"  // e.g. \"January 2024\", \"February 2024\"\n  valueField=\"TotalRevenue\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Monthly Revenue\"\n  // No sortBy - preserves chronological order from query (default behavior)\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Stacked Example: Attendance by quarter, broken down by meeting type -->\n<SimpleChart\n  entityName=\"Meeting Attendance\"\n  data={attendanceRecords}  // Detail records with Quarter, MeetingType, AttendeeCount fields\n  groupBy=\"Quarter\"  // X-axis: Q1, Q2, Q3, Q4\n  stackBy=\"MeetingType\"  // Color-coded layers: Board, Committee, Annual, etc.\n  valueField=\"AttendeeCount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Meeting Attendance by Quarter and Type\"\n  showLegend={true}  // Legend shows meeting type colors\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Counting Example: Tickets by status (no explicit sorting needed) -->\n<SimpleChart\n  entityName=\"Support Tickets\"\n  data={tickets}\n  groupBy=\"Status\"\n  // No valueField - counting records\n  aggregateMethod=\"count\"\n  chartType=\"doughnut\"\n  title=\"Tickets by Status\"\n  // sortBy omitted - preserves input order or can add sortBy=\"value\" for ranking\n/>"
+}

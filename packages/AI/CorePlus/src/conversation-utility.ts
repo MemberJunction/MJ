@@ -2,12 +2,24 @@
  * @fileoverview Utility class for parsing and formatting special content in conversation messages.
  *
  * This module provides centralized logic for handling @{...} syntax in conversation messages,
- * supporting multiple content types (mentions, forms, etc.) with context-aware rendering.
+ * supporting multiple content types (mentions, forms, attachments, etc.) with context-aware rendering.
+ *
+ * This is the SINGLE SOURCE OF TRUTH for all message content handling across:
+ * - Frontend (Angular components)
+ * - Backend (Agent execution)
+ * - Storage (Database persistence)
  *
  * @module @memberjunction/ai-core-plus
  * @author MemberJunction.com
  * @since 2.118.0
  */
+
+import {
+    ChatMessageContent,
+    ChatMessageContentBlock,
+    parseBase64DataUrl,
+    createBase64DataUrl
+} from '@memberjunction/ai';
 
 /**
  * Utility class for parsing and formatting special content in conversation messages
@@ -155,6 +167,11 @@ export class ConversationUtility {
         case 'form':
           replacement = this.formToAgentContext(token.content as FormResponseContent);
           break;
+        case 'attachment':
+          // Attachment tokens are stripped from text - the actual attachment data
+          // is added as separate content blocks by BuildChatMessageContent
+          replacement = '';
+          break;
         default:
           // Unknown mode, leave original text
           replacement = token.originalText;
@@ -235,7 +252,269 @@ export class ConversationUtility {
     return `@${JSON.stringify(content)}`;
   }
 
+  // ==================== Attachment Methods ====================
+
+  /**
+   * Create an attachment reference token string
+   *
+   * @param attachment - The attachment content object
+   * @returns Formatted @{...} string for the attachment reference
+   */
+  public static CreateAttachmentReference(attachment: AttachmentContent): string {
+    const content: AttachmentContent = {
+      ...attachment,
+      _mode: 'attachment'
+    };
+    return `@${JSON.stringify(content)}`;
+  }
+
+  /**
+   * Check if a message contains attachment references
+   *
+   * @param text - The message text to check
+   * @returns true if the message contains attachment syntax
+   */
+  public static ContainsAttachments(text: string): boolean {
+    if (!text) return false;
+    const tokens = this.ParseSpecialContent(text);
+    return tokens.some(token => token.mode === 'attachment');
+  }
+
+  /**
+   * Get all attachment references from a message
+   *
+   * @param text - The message text to parse
+   * @returns Array of attachment content objects
+   */
+  public static GetAttachmentReferences(text: string): AttachmentContent[] {
+    if (!text) return [];
+    const tokens = this.ParseSpecialContent(text);
+    return tokens
+      .filter(token => token.mode === 'attachment')
+      .map(token => token.content as AttachmentContent);
+  }
+
+  /**
+   * Build ChatMessageContent from text and attachment data.
+   * This is the primary method for converting stored messages to AI-ready format.
+   *
+   * @param messageText - The message text (may contain @{...} tokens)
+   * @param attachmentData - Array of attachment data with content
+   * @param agents - Optional agents for mention resolution
+   * @param users - Optional users for mention resolution
+   * @returns ChatMessageContent ready for AI provider
+   */
+  public static BuildChatMessageContent(
+    messageText: string,
+    attachmentData: AttachmentData[],
+    agents?: AgentInfo[],
+    users?: UserInfo[]
+  ): ChatMessageContent {
+    // If no attachments, return processed text
+    if (!attachmentData || attachmentData.length === 0) {
+      return this.ToAgentContext(messageText, agents, users);
+    }
+
+    // Build content blocks array
+    const blocks: ChatMessageContentBlock[] = [];
+
+    // Add text content if present
+    const processedText = this.ToAgentContext(messageText, agents, users);
+    if (processedText?.trim()) {
+      blocks.push({
+        type: 'text',
+        content: processedText
+      });
+    }
+
+    // Add attachment content blocks
+    for (const att of attachmentData) {
+      const block = this.attachmentToContentBlock(att);
+      if (block) {
+        blocks.push(block);
+      }
+    }
+
+    // If only one text block, return as string for simplicity
+    if (blocks.length === 1 && blocks[0].type === 'text') {
+      return blocks[0].content;
+    }
+
+    return blocks;
+  }
+
+  /**
+   * Validate an attachment against size and count limits.
+   * Uses the cascade: agent → model → system defaults
+   *
+   * @param attachment - The attachment to validate
+   * @param currentCounts - Current counts of attachments in the message
+   * @param agentLimits - Agent-level limit overrides (optional)
+   * @param modelLimits - Model-level limits (optional)
+   * @param systemDefaults - System default limits
+   * @returns Validation result with allowed flag and optional reason
+   */
+  public static ValidateAttachment(
+    attachment: { type: AttachmentType; sizeBytes: number },
+    currentCounts: { images: number; videos: number; audios: number; documents: number },
+    agentLimits: Partial<AttachmentLimits> | null,
+    modelLimits: Partial<AttachmentLimits> | null,
+    systemDefaults: AttachmentDefaults
+  ): AttachmentValidationResult {
+    const type = attachment.type.toLowerCase();
+
+    // Get effective size limit
+    let maxSizeField: keyof AttachmentLimits;
+    let maxCountField: keyof AttachmentLimits;
+    let currentCount: number;
+
+    switch (type) {
+      case 'image':
+        maxSizeField = 'maxImageSizeBytes';
+        maxCountField = 'maxImagesPerMessage';
+        currentCount = currentCounts.images;
+        break;
+      case 'video':
+        maxSizeField = 'maxVideoSizeBytes';
+        maxCountField = 'maxVideosPerMessage';
+        currentCount = currentCounts.videos;
+        break;
+      case 'audio':
+        maxSizeField = 'maxAudioSizeBytes';
+        maxCountField = 'maxAudiosPerMessage';
+        currentCount = currentCounts.audios;
+        break;
+      default:
+        // Documents use image limits as fallback
+        maxSizeField = 'maxImageSizeBytes';
+        maxCountField = 'maxImagesPerMessage';
+        currentCount = currentCounts.documents;
+    }
+
+    // Get effective limits using cascade
+    const maxSize = this.GetEffectiveLimit(maxSizeField, agentLimits, modelLimits, systemDefaults);
+    const maxCount = this.GetEffectiveLimit(maxCountField, agentLimits, modelLimits, systemDefaults);
+
+    // Check size
+    if (attachment.sizeBytes > maxSize) {
+      const maxMB = (maxSize / (1024 * 1024)).toFixed(1);
+      const actualMB = (attachment.sizeBytes / (1024 * 1024)).toFixed(1);
+      return {
+        allowed: false,
+        reason: `${attachment.type} size (${actualMB}MB) exceeds maximum (${maxMB}MB)`
+      };
+    }
+
+    // Check count
+    if (currentCount >= maxCount) {
+      return {
+        allowed: false,
+        reason: `Maximum ${maxCount} ${type}(s) per message reached`
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  /**
+   * Get the effective limit value using cascade: agent → model → system
+   *
+   * @param limitName - The name of the limit to get
+   * @param agentLimits - Agent-level overrides
+   * @param modelLimits - Model-level limits
+   * @param systemDefaults - System defaults
+   * @returns The effective limit value
+   */
+  public static GetEffectiveLimit(
+    limitName: keyof AttachmentLimits,
+    agentLimits: Partial<AttachmentLimits> | null,
+    modelLimits: Partial<AttachmentLimits> | null,
+    systemDefaults: AttachmentDefaults
+  ): number {
+    // Agent override takes precedence
+    if (agentLimits?.[limitName] != null) {
+      return agentLimits[limitName]!;
+    }
+
+    // Then model setting
+    if (modelLimits?.[limitName] != null) {
+      return modelLimits[limitName]!;
+    }
+
+    // Finally system default
+    return systemDefaults[limitName];
+  }
+
+  /**
+   * Determine if an attachment should be stored inline or in MJStorage
+   *
+   * @param sizeBytes - Size of the attachment in bytes
+   * @param agentThreshold - Agent-level threshold override (optional)
+   * @param systemThreshold - System default threshold
+   * @returns true if should be stored inline, false if should use MJStorage
+   */
+  public static ShouldStoreInline(
+    sizeBytes: number,
+    agentThreshold: number | null | undefined,
+    systemThreshold: number
+  ): boolean {
+    const threshold = agentThreshold ?? systemThreshold;
+    return sizeBytes <= threshold;
+  }
+
+  /**
+   * Determine the attachment type from a MIME type
+   *
+   * @param mimeType - The MIME type of the file
+   * @returns The attachment type category
+   */
+  public static GetAttachmentTypeFromMime(mimeType: string): AttachmentType {
+    if (!mimeType) return 'Document';
+
+    const lower = mimeType.toLowerCase();
+    if (lower.startsWith('image/')) return 'Image';
+    if (lower.startsWith('video/')) return 'Video';
+    if (lower.startsWith('audio/')) return 'Audio';
+    return 'Document';
+  }
+
+  /**
+   * Get the ChatMessageContentBlock type from attachment type
+   *
+   * @param attachmentType - The attachment type
+   * @returns The corresponding content block type
+   */
+  public static GetContentBlockType(
+    attachmentType: AttachmentType
+  ): 'image_url' | 'video_url' | 'audio_url' | 'file_url' {
+    switch (attachmentType) {
+      case 'Image': return 'image_url';
+      case 'Video': return 'video_url';
+      case 'Audio': return 'audio_url';
+      default: return 'file_url';
+    }
+  }
+
   // ==================== Private Helper Methods ====================
+
+  /**
+   * Convert attachment data to a ChatMessageContentBlock
+   */
+  private static attachmentToContentBlock(data: AttachmentData): ChatMessageContentBlock | null {
+    if (!data.content) return null;
+
+    const blockType = this.GetContentBlockType(data.type);
+
+    return {
+      type: blockType,
+      content: data.content,
+      mimeType: data.mimeType,
+      fileName: data.fileName,
+      fileSize: data.sizeBytes,
+      width: data.width,
+      height: data.height
+    };
+  }
 
   /**
    * Parse a single @{...} token
@@ -259,6 +538,10 @@ export class ConversationUtility {
       } else if (mode === 'form') {
         if (parsed.action && Array.isArray(parsed.fields)) {
           return parsed as FormResponseContent;
+        }
+      } else if (mode === 'attachment') {
+        if (parsed.id && parsed.type && parsed.mimeType) {
+          return parsed as AttachmentContent;
         }
       }
 
@@ -387,7 +670,7 @@ export interface SpecialContentToken {
 /**
  * Union type of all special content types
  */
-export type SpecialContent = MentionContent | FormResponseContent;
+export type SpecialContent = MentionContent | FormResponseContent | AttachmentContent;
 
 /**
  * Mention content (@agent or @user)
@@ -455,3 +738,128 @@ export interface UserInfo {
   /** User name */
   Name: string;
 }
+
+// ==================== Attachment Type Definitions ====================
+
+/**
+ * Attachment type categories
+ */
+export type AttachmentType = 'Image' | 'Video' | 'Audio' | 'Document';
+
+/**
+ * Attachment content stored as @{...} reference in messages.
+ * This is what gets persisted in the ConversationDetail.Message field.
+ */
+export interface AttachmentContent {
+  /** Mode identifier */
+  _mode: 'attachment';
+  /** Unique ID of the attachment (ConversationDetailAttachment.ID) */
+  id: string;
+  /** Type category of the attachment */
+  type: AttachmentType;
+  /** MIME type (e.g., "image/png", "video/mp4") */
+  mimeType: string;
+  /** Original filename */
+  fileName?: string;
+  /** File size in bytes */
+  sizeBytes?: number;
+  /** Width in pixels (for images/videos) */
+  width?: number;
+  /** Height in pixels (for images/videos) */
+  height?: number;
+  /** Duration in seconds (for audio/video) */
+  durationSeconds?: number;
+  /** Base64-encoded thumbnail for preview (small images only) */
+  thumbnailBase64?: string;
+}
+
+/**
+ * Attachment data with actual content for building ChatMessageContent.
+ * Used when loading attachments from storage to pass to AI providers.
+ */
+export interface AttachmentData {
+  /** Type category of the attachment */
+  type: AttachmentType;
+  /** MIME type (e.g., "image/png", "video/mp4") */
+  mimeType: string;
+  /** Original filename */
+  fileName?: string;
+  /** File size in bytes */
+  sizeBytes?: number;
+  /** Width in pixels (for images/videos) */
+  width?: number;
+  /** Height in pixels (for images/videos) */
+  height?: number;
+  /** Duration in seconds (for audio/video) */
+  durationSeconds?: number;
+  /** The actual content: data URL (data:mime;base64,xxx) or pre-authenticated URL */
+  content: string;
+}
+
+/**
+ * Attachment size and count limits.
+ * Used for agent and model limit overrides (all fields optional).
+ */
+export interface AttachmentLimits {
+  /** Maximum image size in bytes */
+  maxImageSizeBytes?: number;
+  /** Maximum video size in bytes */
+  maxVideoSizeBytes?: number;
+  /** Maximum audio size in bytes */
+  maxAudioSizeBytes?: number;
+  /** Maximum number of images per message */
+  maxImagesPerMessage?: number;
+  /** Maximum number of videos per message */
+  maxVideosPerMessage?: number;
+  /** Maximum number of audio files per message */
+  maxAudiosPerMessage?: number;
+}
+
+/**
+ * System default limits for attachments (all fields required).
+ * These are used when agent and model don't specify limits.
+ */
+export interface AttachmentDefaults {
+  /** Maximum image size in bytes (default: 5MB) */
+  maxImageSizeBytes: number;
+  /** Maximum video size in bytes (default: 20MB) */
+  maxVideoSizeBytes: number;
+  /** Maximum audio size in bytes (default: 10MB) */
+  maxAudioSizeBytes: number;
+  /** Maximum number of images per message (default: 10) */
+  maxImagesPerMessage: number;
+  /** Maximum number of videos per message (default: 5) */
+  maxVideosPerMessage: number;
+  /** Maximum number of audio files per message (default: 5) */
+  maxAudiosPerMessage: number;
+}
+
+/**
+ * Result of attachment validation
+ */
+export interface AttachmentValidationResult {
+  /** Whether the attachment is allowed */
+  allowed: boolean;
+  /** Reason for rejection (if not allowed) */
+  reason?: string;
+}
+
+/**
+ * System-wide default attachment limits.
+ * These can be overridden at the model or agent level.
+ */
+export const DEFAULT_ATTACHMENT_LIMITS: AttachmentDefaults = {
+  maxImageSizeBytes: 5 * 1024 * 1024,      // 5MB
+  maxVideoSizeBytes: 20 * 1024 * 1024,     // 20MB
+  maxAudioSizeBytes: 10 * 1024 * 1024,     // 10MB
+  maxImagesPerMessage: 10,
+  maxVideosPerMessage: 5,
+  maxAudiosPerMessage: 5
+};
+
+/**
+ * Default threshold for inline storage (1MB).
+ * Files smaller than this are stored as base64 in the database.
+ * Files larger use MJStorage (S3, Azure, etc.).
+ */
+export const DEFAULT_INLINE_STORAGE_THRESHOLD_BYTES = 1 * 1024 * 1024;

@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { Observable, Subject, combineLatest, of } from 'rxjs';
+import { Observable, Subject, combineLatest, of, BehaviorSubject } from 'rxjs';
 import { takeUntil, map, shareReplay, switchMap } from 'rxjs/operators';
 import { TestingInstrumentationService, VersionMetrics } from '../services/testing-instrumentation.service';
 
@@ -48,7 +48,7 @@ interface VersionTestData {
           <label>Version A (Baseline)</label>
           <select [(ngModel)]="versionA" (change)="onVersionChange()" class="version-select">
             <option value="">Select Version...</option>
-            @for (version of (versions$ | async) ?? []; track version.version) {
+            @for (version of (versionsForA$ | async) ?? []; track version.version) {
               <option [value]="version.version">{{ version.version }} ({{ version.totalTests }} tests)</option>
             }
           </select>
@@ -60,7 +60,7 @@ interface VersionTestData {
           <label>Version B (Comparison)</label>
           <select [(ngModel)]="versionB" (change)="onVersionChange()" class="version-select">
             <option value="">Select Version...</option>
-            @for (version of (versions$ | async) ?? []; track version.version) {
+            @for (version of (versionsForB$ | async) ?? []; track version.version) {
               <option [value]="version.version">{{ version.version }} ({{ version.totalTests }} tests)</option>
             }
           </select>
@@ -704,7 +704,13 @@ export class TestingVersionComparisonComponent implements OnInit, OnDestroy {
   versionB = '';
   filter: 'all' | 'regressions' | 'improvements' | 'unchanged' = 'all';
 
+  // For reactive filtering of version dropdowns
+  private versionA$ = new BehaviorSubject<string>('');
+  private versionB$ = new BehaviorSubject<string>('');
+
   versions$!: Observable<VersionMetrics[]>;
+  versionsForA$!: Observable<VersionMetrics[]>;
+  versionsForB$!: Observable<VersionMetrics[]>;
   comparisons$!: Observable<VersionComparison[]>;
   filteredComparisons$!: Observable<VersionComparison[]>;
   regressionCount$!: Observable<number>;
@@ -726,6 +732,10 @@ export class TestingVersionComparisonComponent implements OnInit, OnDestroy {
       this.versionA = this.initialState.versionA || '';
       this.versionB = this.initialState.versionB || '';
       this.filter = this.initialState.filter || 'all';
+
+      // Initialize BehaviorSubjects with restored state
+      this.versionA$.next(this.versionA);
+      this.versionB$.next(this.versionB);
     }
   }
 
@@ -739,6 +749,21 @@ export class TestingVersionComparisonComponent implements OnInit, OnDestroy {
     this.versions$ = of(this.instrumentationService.getVersionMetrics()).pipe(
       switchMap(promise => promise),
       shareReplay(1),
+      takeUntil(this.destroy$)
+    );
+
+    // Filter versions to exclude the currently selected version in the other dropdown
+    this.versionsForA$ = combineLatest([this.versions$, this.versionB$]).pipe(
+      map(([versions, selectedB]) =>
+        selectedB ? versions.filter(v => v.version !== selectedB) : versions
+      ),
+      takeUntil(this.destroy$)
+    );
+
+    this.versionsForB$ = combineLatest([this.versions$, this.versionA$]).pipe(
+      map(([versions, selectedA]) =>
+        selectedA ? versions.filter(v => v.version !== selectedA) : versions
+      ),
       takeUntil(this.destroy$)
     );
 
@@ -878,6 +903,9 @@ export class TestingVersionComparisonComponent implements OnInit, OnDestroy {
   }
 
   onVersionChange(): void {
+    // Update the BehaviorSubjects for reactive filtering
+    this.versionA$.next(this.versionA);
+    this.versionB$.next(this.versionB);
     this.emitStateChange();
     this.cdr.markForCheck();
   }

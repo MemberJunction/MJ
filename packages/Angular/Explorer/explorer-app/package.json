@@ -1,0 +1,49 @@
+{
+  "name": "@memberjunction/ng-explorer-app",
+  "version": "3.2.0",
+  "description": "MemberJunction Explorer Application Shell - Complete branded entry point for Explorer-style applications",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "npm run clean && ngc && npm run copy-assets",
+    "copy-assets": "cp -r src/lib/styles dist/ && cp -r src/lib/assets dist/ && cp src/lib/styles.scss dist/",
+    "watch": "ngc --watch",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "memberjunction",
+    "angular",
+    "explorer",
+    "application",
+    "shell"
+  ],
+  "author": "MemberJunction",
+  "license": "MIT",
+  "dependencies": {
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/ng-auth-services": "3.2.0",
+    "@memberjunction/ng-bootstrap": "3.2.0",
+    "@memberjunction/ng-explorer-core": "3.2.0",
+    "@memberjunction/ng-workspace-initializer": "3.2.0"
+  },
+  "peerDependencies": {
+    "@angular/common": "^18.0.0",
+    "@angular/core": "^18.0.0",
+    "@angular/router": "^18.0.0",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@angular/common": "^18.2.13",
+    "@angular/core": "^18.2.13",
+    "@angular/compiler": "^18.2.13",
+    "@angular/compiler-cli": "^18.2.13",
+    "typescript": "~5.5.4"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

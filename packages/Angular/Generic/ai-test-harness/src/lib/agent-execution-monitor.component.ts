@@ -2,7 +2,7 @@ import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ViewChild, Eleme
 import { Subject, interval, Subscription } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ExecutionNodeComponent } from './agent-execution-node.component';
-import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Progress message with display mode

@@ -1,6 +1,26 @@
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 
 /**
+ * Available animation types for the loading screen.
+ */
+export type LoadingAnimationType = 'pulse' | 'spin' | 'bounce' | 'pulse-spin';
+
+/**
+ * Configuration for an animation step in a sequence.
+ */
+export interface AnimationStep {
+  /** The animation type to use */
+  type: LoadingAnimationType;
+
+  /**
+   * Duration in milliseconds for this animation step.
+   * If not specified or 0, this animation runs for the remainder of loading.
+   * Use this to create sequences like: bounce for 5s, then pulse for the rest.
+   */
+  durationMs?: number;
+}
+
+/**
  * Configuration for a seasonal loading theme.
  * Themes are selected based on date range and optionally locale.
  */
@@ -58,6 +78,19 @@ export interface LoadingTheme {
    * Used for standard theme to keep MJ blue throughout.
    */
   staticColors?: boolean;
+
+  /**
+   * Animation configuration for this theme.
+   * Can be a single animation type (string) or an array of AnimationSteps for sequences.
+   *
+   * Examples:
+   * - 'pulse' - Use pulse animation throughout
+   * - [{ type: 'bounce', durationMs: 5000 }, { type: 'pulse' }] - Bounce for 5s, then pulse
+   * - [{ type: 'spin', durationMs: 3000 }, { type: 'pulse-spin', durationMs: 3000 }, { type: 'pulse' }]
+   *
+   * If not specified, defaults to 'pulse' for standard theme or random selection for others.
+   */
+  animations?: LoadingAnimationType | AnimationStep[];
 }
 
 /**
@@ -70,6 +103,7 @@ export const STANDARD_THEME: LoadingTheme = {
   startsAt: { month: 1, day: 1 },
   endsAt: { month: 12, day: 31 },
   staticColors: true, // Keep MJ blue the whole time
+  animations: 'pulse', // Calm, professional pulse animation only
   colors: [
     '#264FAF', // MJ Blue (only color used)
   ],
@@ -111,6 +145,11 @@ export const WINTER_HOLIDAY_THEME: LoadingTheme = {
   name: 'Winter Holidays',
   startsAt: { month: 12, day: 1 },
   endsAt: { month: 12, day: 31 },
+  // Festive bounce to start, then gentle pulse
+  animations: [
+    { type: 'bounce', durationMs: 4000 },
+    { type: 'pulse' }
+  ],
   colors: [
     '#C41E3A', // Christmas Red
     '#228B22', // Forest Green
@@ -163,6 +202,12 @@ export const NEW_YEAR_THEME: LoadingTheme = {
   startsAt: { month: 12, day: 31 },
   endsAt: { month: 1, day: 2 },
   priority: 10, // Higher priority than Winter Holiday
+  // Exciting spin for countdown feel, then celebratory pulse-spin
+  animations: [
+    { type: 'spin', durationMs: 3000 },
+    { type: 'pulse-spin', durationMs: 4000 },
+    { type: 'pulse' }
+  ],
   colors: [
     '#FFD700', // Gold
     '#C0C0C0', // Silver
@@ -214,6 +259,11 @@ export const HALLOWEEN_THEME: LoadingTheme = {
   name: 'Halloween',
   startsAt: { month: 10, day: 15 },
   endsAt: { month: 10, day: 31 },
+  // Spooky slow pulse-spin, then eerie pulse
+  animations: [
+    { type: 'pulse-spin', durationMs: 5000 },
+    { type: 'pulse' }
+  ],
   colors: [
     '#FF6600', // Pumpkin Orange
     '#8B008B', // Dark Magenta
@@ -265,6 +315,8 @@ export const VALENTINES_THEME: LoadingTheme = {
   name: "Valentine's Day",
   startsAt: { month: 2, day: 1 },
   endsAt: { month: 2, day: 14 },
+  // Heartbeat-like pulse throughout
+  animations: 'pulse',
   colors: [
     '#FF69B4', // Hot Pink
     '#DC143C', // Crimson
@@ -311,6 +363,11 @@ export const ST_PATRICKS_THEME: LoadingTheme = {
   name: "St. Patrick's Day",
   startsAt: { month: 3, day: 14 },
   endsAt: { month: 3, day: 17 },
+  // Lucky bounce, then pulse
+  animations: [
+    { type: 'bounce', durationMs: 3000 },
+    { type: 'pulse' }
+  ],
   colors: [
     '#228B22', // Forest Green
     '#32CD32', // Lime Green
@@ -361,6 +418,11 @@ export const SPRING_THEME: LoadingTheme = {
   name: 'Spring',
   startsAt: { month: 3, day: 20 },
   endsAt: { month: 4, day: 15 },
+  // Fresh, light bounce then gentle pulse
+  animations: [
+    { type: 'bounce', durationMs: 3000 },
+    { type: 'pulse' }
+  ],
   colors: [
     '#98FB98', // Pale Green
     '#FFB6C1', // Light Pink
@@ -415,6 +477,8 @@ export const THANKSGIVING_US_THEME: LoadingTheme = {
   startsAt: { month: 11, day: 1 },
   endsAt: { month: 11, day: 30 },
   locales: ['en-US'],
+  // Warm, cozy pulse throughout
+  animations: 'pulse',
   colors: [
     '#D2691E', // Chocolate (brown)
     '#FF8C00', // Dark Orange
@@ -469,6 +533,8 @@ export const THANKSGIVING_CA_THEME: LoadingTheme = {
   startsAt: { month: 10, day: 1 },
   endsAt: { month: 10, day: 14 },
   locales: ['en-CA', 'fr-CA'],
+  // Warm, cozy pulse throughout
+  animations: 'pulse',
   colors: [
     '#D2691E', // Chocolate (brown)
     '#FF8C00', // Dark Orange
@@ -522,6 +588,12 @@ export const INDEPENDENCE_DAY_US_THEME: LoadingTheme = {
   startsAt: { month: 6, day: 28 },
   endsAt: { month: 7, day: 4 },
   locales: ['en-US'],
+  // Fireworks-like spin, then celebratory pulse-spin
+  animations: [
+    { type: 'spin', durationMs: 3000 },
+    { type: 'pulse-spin', durationMs: 3000 },
+    { type: 'pulse' }
+  ],
   colors: [
     '#B22234', // Old Glory Red
     '#FFFFFF', // White
@@ -571,6 +643,11 @@ export const CANADA_DAY_THEME: LoadingTheme = {
   startsAt: { month: 6, day: 28 },
   endsAt: { month: 7, day: 1 },
   locales: ['en-CA', 'fr-CA'],
+  // Celebratory bounce, then pulse
+  animations: [
+    { type: 'bounce', durationMs: 4000 },
+    { type: 'pulse' }
+  ],
   colors: [
     '#FF0000', // Red
     '#FFFFFF', // White
@@ -618,6 +695,12 @@ export const INDEPENDENCE_DAY_MX_THEME: LoadingTheme = {
   endsAt: { month: 9, day: 16 },
   locales: ['es-MX', 'es'],
   priority: 5,
+  // Fiesta spin, then celebratory pulse-spin
+  animations: [
+    { type: 'spin', durationMs: 3000 },
+    { type: 'pulse-spin', durationMs: 3000 },
+    { type: 'pulse' }
+  ],
   colors: [
     '#006847', // Green
     '#FFFFFF', // White
@@ -666,6 +749,11 @@ export const INDEPENDENCE_DAY_IN_THEME: LoadingTheme = {
   startsAt: { month: 8, day: 13 },
   endsAt: { month: 8, day: 15 },
   locales: ['en-IN', 'hi', 'hi-IN'],
+  // Patriotic spin, then pulse
+  animations: [
+    { type: 'spin', durationMs: 3000 },
+    { type: 'pulse' }
+  ],
   colors: [
     '#FF9933', // Saffron
     '#FFFFFF', // White
@@ -718,6 +806,11 @@ export const DIWALI_THEME: LoadingTheme = {
   endsAt: { month: 11, day: 15 },
   locales: ['en-IN', 'hi', 'hi-IN'],
   priority: 5,
+  // Festival of lights - glowing pulse-spin, then warm pulse
+  animations: [
+    { type: 'pulse-spin', durationMs: 4000 },
+    { type: 'pulse' }
+  ],
   colors: [
     '#FFD700', // Gold
     '#FF6600', // Orange (diyas)

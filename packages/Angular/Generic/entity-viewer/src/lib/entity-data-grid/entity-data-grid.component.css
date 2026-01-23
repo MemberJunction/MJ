@@ -1,0 +1,1094 @@
+/* ========================================
+   CSS Custom Properties (Theme Variables)
+   ======================================== */
+
+:host {
+  /* Grid container */
+  --grid-border-color: #e0e0e0;
+  --grid-border-radius: 0px;
+  --grid-background: #ffffff;
+
+  /* Header */
+  --grid-header-bg: #fafafa;
+  --grid-header-text: #333333;
+  --grid-header-font-weight: 600;
+  --grid-header-height: 40px;
+  --grid-header-border-color: #e0e0e0;
+
+  /* Rows */
+  --grid-row-height: 40px;
+  --grid-row-bg: #ffffff;
+  --grid-row-bg-alt: #fafafa;
+  --grid-row-hover-bg: #f5f5f5;
+  --grid-row-selected-bg: #fff9e6;
+  --grid-row-selected-hover-bg: #fff3cc;
+
+  /* Cells */
+  --grid-cell-padding: 8px 12px;
+  --grid-cell-text: #333333;
+  --grid-cell-border-color: #f0f0f0;
+
+  /* Selection - mellow yellow to avoid conflict with blue hyperlinks */
+  --grid-checkbox-color: #2196F3;
+  --grid-selection-indicator-color: #f9a825;
+
+  /* Editing */
+  --grid-edit-cell-bg: #ffffff;
+  --grid-edit-cell-border: #2196F3;
+  --grid-edit-cell-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+
+  /* Sorting */
+  --grid-sort-indicator-color: #2196F3;
+
+  /* Toolbar */
+  --grid-toolbar-bg: #ffffff;
+  --grid-toolbar-height: 48px;
+  --grid-toolbar-border-color: #e0e0e0;
+
+  /* Loading */
+  --grid-loading-overlay-bg: rgba(255, 255, 255, 0.8);
+
+  /* Empty state */
+  --grid-empty-text-color: #999999;
+  --grid-empty-icon-color: #cccccc;
+
+  display: block;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+/* ========================================
+   Grid Container
+   ======================================== */
+
+.mj-grid-container {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--grid-border-color);
+  border-radius: var(--grid-border-radius);
+  background: var(--grid-background);
+  overflow: hidden;
+}
+
+/* ========================================
+   Toolbar
+   ======================================== */
+
+.mj-grid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--grid-toolbar-height);
+  padding: 0 12px;
+  background: var(--grid-toolbar-bg);
+  border-bottom: 1px solid var(--grid-toolbar-border-color);
+  gap: 12px;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #666;
+  font-size: 13px;
+}
+
+.toolbar-search {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: #999;
+  font-size: 13px;
+}
+
+.search-input {
+  padding: 6px 30px 6px 32px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 200px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--grid-selection-indicator-color);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.search-clear {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #999;
+  font-size: 12px;
+}
+
+.search-clear:hover {
+  color: #666;
+}
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #333;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.toolbar-button:hover:not(:disabled) {
+  background: #eee;
+  border-color: #ccc;
+}
+
+.toolbar-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-button i {
+  font-size: 14px;
+}
+
+.toolbar-button-danger {
+  color: #d32f2f;
+}
+
+.toolbar-button-danger:hover:not(:disabled) {
+  background: #ffebee;
+  border-color: #ffcdd2;
+}
+
+.row-count,
+.selection-count {
+  font-weight: 500;
+}
+
+/* ========================================
+   Grid Content
+   ======================================== */
+
+.mj-grid-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.mj-grid-scroll-container {
+  height: 100%;
+  overflow: auto;
+}
+
+/* ========================================
+   Loading Overlay
+   ======================================== */
+
+.mj-grid-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--grid-loading-overlay-bg);
+  z-index: 10;
+}
+
+/* ========================================
+   Error State
+   ======================================== */
+
+.mj-grid-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #d32f2f;
+  gap: 12px;
+}
+
+.mj-grid-error i {
+  font-size: 32px;
+}
+
+.error-retry {
+  padding: 8px 16px;
+  background: #d32f2f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.error-retry:hover {
+  background: #c62828;
+}
+
+/* ========================================
+   Empty State
+   ======================================== */
+
+.mj-grid-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--grid-empty-text-color);
+  gap: 12px;
+}
+
+.mj-grid-empty i {
+  font-size: 48px;
+  color: var(--grid-empty-icon-color);
+}
+
+/* ========================================
+   Header Row
+   ======================================== */
+
+.mj-grid-header {
+  display: flex;
+  min-height: var(--grid-header-height);
+  background: var(--grid-header-bg);
+  border-bottom: 2px solid var(--grid-header-border-color);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.mj-grid-header-cell {
+  display: flex;
+  align-items: center;
+  padding: var(--grid-cell-padding);
+  font-weight: var(--grid-header-font-weight);
+  color: var(--grid-header-text);
+  font-size: 13px;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid var(--grid-cell-border-color);
+  flex-shrink: 0;
+}
+
+.mj-grid-header-cell:last-child {
+  border-right: none;
+}
+
+.mj-grid-header-cell.sortable {
+  cursor: pointer;
+}
+
+.mj-grid-header-cell.sortable:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.header-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sort-indicator {
+  display: flex;
+  align-items: center;
+  margin-left: 6px;
+  color: var(--grid-sort-indicator-color);
+}
+
+.sort-indicator i {
+  font-size: 12px;
+}
+
+.sort-index {
+  font-size: 10px;
+  margin-left: 2px;
+  font-weight: normal;
+}
+
+/* ========================================
+   Data Rows
+   ======================================== */
+
+.mj-grid-row {
+  display: flex;
+  align-items: stretch;
+  background: var(--grid-row-bg);
+  transition: background-color 0.15s;
+  cursor: default;
+}
+
+.mj-grid-row:hover {
+  background: var(--grid-row-hover-bg);
+}
+
+.mj-grid-row.grid-row-alt {
+  background: var(--grid-row-bg-alt);
+}
+
+.mj-grid-row.grid-row-alt:hover {
+  background: var(--grid-row-hover-bg);
+}
+
+.mj-grid-row.grid-row-selected {
+  background: var(--grid-row-selected-bg);
+}
+
+.mj-grid-row.grid-row-selected:hover {
+  background: var(--grid-row-selected-hover-bg);
+}
+
+.mj-grid-row.grid-row-editing {
+  background: #fffde7;
+}
+
+.mj-grid-row.grid-row-dirty {
+  border-left: 3px solid #ff9800;
+}
+
+/* ========================================
+   Data Cells
+   ======================================== */
+
+.mj-grid-cell {
+  display: flex;
+  align-items: center;
+  padding: var(--grid-cell-padding);
+  color: var(--grid-cell-text);
+  font-size: 13px;
+  overflow: hidden;
+  border-right: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.mj-grid-cell:last-child {
+  border-right: none;
+}
+
+/* Grid lines modes */
+.grid-lines-horizontal .mj-grid-row {
+  border-bottom: 1px solid var(--grid-cell-border-color);
+}
+
+.grid-lines-vertical .mj-grid-cell {
+  border-right: 1px solid var(--grid-cell-border-color);
+}
+
+.grid-lines-both .mj-grid-row {
+  border-bottom: 1px solid var(--grid-cell-border-color);
+}
+
+.grid-lines-both .mj-grid-cell {
+  border-right: 1px solid var(--grid-cell-border-color);
+}
+
+/* Cell alignment */
+.mj-grid-cell.align-left {
+  justify-content: flex-start;
+}
+
+.mj-grid-cell.align-center {
+  justify-content: center;
+}
+
+.mj-grid-cell.align-right {
+  justify-content: flex-end;
+}
+
+.cell-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Special cells */
+.row-number-cell {
+  width: 50px;
+  min-width: 50px;
+  max-width: 50px;
+  justify-content: center;
+  color: #999;
+  font-size: 12px;
+  background: var(--grid-header-bg);
+}
+
+.checkbox-cell {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  justify-content: center;
+}
+
+.checkbox-cell input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--grid-checkbox-color);
+}
+
+/* ========================================
+   Virtual Scrolling
+   ======================================== */
+
+.mj-grid-virtual-spacer {
+  flex-shrink: 0;
+}
+
+/* ========================================
+   Responsive Adjustments
+   ======================================== */
+
+@media (max-width: 768px) {
+  .mj-grid-toolbar {
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+
+  .toolbar-search {
+    order: 3;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .toolbar-center {
+    order: 2;
+  }
+
+  /* Hide button text on mobile */
+  .toolbar-button .button-text {
+    display: none;
+  }
+}
+
+/* ========================================
+   Toolbar Button Text
+   ======================================== */
+
+.toolbar-button .button-text {
+  font-size: 13px;
+}
+
+/* ========================================
+   Overflow Menu
+   ======================================== */
+
+.toolbar-overflow {
+  position: relative;
+}
+
+.overflow-trigger {
+  padding: 6px 8px !important;
+}
+
+.overflow-trigger i {
+  font-size: 16px;
+}
+
+.overflow-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 220px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.overflow-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  text-align: left;
+  gap: 12px;
+  transition: background-color 0.15s;
+}
+
+.overflow-item:hover:not(:disabled) {
+  background: #f5f5f5;
+}
+
+.overflow-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.overflow-item i {
+  width: 18px;
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+}
+
+.overflow-item span {
+  flex: 1;
+}
+
+.overflow-divider {
+  height: 1px;
+  background: #e0e0e0;
+  margin: 4px 0;
+}
+
+.overflow-section-label {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #999;
+  letter-spacing: 0.5px;
+}
+
+/* Entity Actions submenu styling */
+.overflow-item.action-item i {
+  color: #2196F3;
+}
+
+/* ========================================
+   Highlight Matches
+   ======================================== */
+
+::ng-deep .highlight-match {
+  background-color: #fff176;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* ========================================
+   AG Grid Customizations
+   ======================================== */
+
+.mj-ag-grid {
+  width: 100%;
+  height: 100%;
+}
+
+::ng-deep .ag-theme-alpine {
+  /* Row colors */
+  --ag-row-hover-color: var(--grid-row-hover-bg);
+  --ag-selected-row-background-color: var(--grid-row-selected-bg);
+  --ag-header-background-color: var(--grid-header-bg);
+
+  /* Selection accent colors - mellow yellow */
+  --ag-range-selection-background-color: rgba(249, 168, 37, 0.15);
+  --ag-range-selection-border-color: #f9a825;
+
+  /* Ensure borders are visible */
+  --ag-borders: none;
+  --ag-row-border-color: var(--grid-cell-border-color);
+}
+
+/* Selected row styling - left indicator bar only, background handled by AG Grid theme */
+::ng-deep .ag-row-selected {
+  box-shadow: inset 4px 0 0 0 #f9a825;
+}
+
+/* Selection checkbox styling */
+::ng-deep .ag-theme-alpine .ag-checkbox-input-wrapper {
+  width: 18px;
+  height: 18px;
+}
+
+::ng-deep .ag-theme-alpine .ag-checkbox-input-wrapper.ag-checked::after {
+  color: var(--grid-checkbox-color, #2196F3);
+}
+
+/* Row hover effect */
+::ng-deep .ag-theme-alpine .ag-row:hover:not(.ag-row-selected) {
+  background-color: var(--grid-row-hover-bg, #f0f7ff);
+}
+
+/* ========================================
+   Visual Config: Header Styles
+   ======================================== */
+
+/* Flat header (minimal) */
+.header-style-flat ::ng-deep .ag-header {
+  background: var(--grid-header-bg, #fafafa);
+  border-bottom: 1px solid var(--grid-header-border-color, #e0e0e0);
+}
+
+/* Elevated header (default - subtle shadow) */
+.header-style-elevated ::ng-deep .ag-header {
+  background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
+  border-bottom: 1px solid var(--grid-header-border-color, #e0e0e0);
+}
+
+.header-style-elevated.header-shadow ::ng-deep .ag-header {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* Gradient header (more prominent) */
+.header-style-gradient ::ng-deep .ag-header {
+  background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: none;
+}
+
+.header-style-gradient.header-shadow ::ng-deep .ag-header {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Bold header (high contrast) */
+.header-style-bold ::ng-deep .ag-header {
+  background: linear-gradient(180deg, #37474f 0%, #263238 100%);
+  border-bottom: none;
+}
+
+.header-style-bold ::ng-deep .ag-header-cell-text {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.header-style-bold ::ng-deep .ag-header-icon {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.header-style-bold ::ng-deep .ag-header-cell:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Header sort icons enhancement */
+::ng-deep .ag-header-cell-sorted-asc .ag-icon-asc,
+::ng-deep .ag-header-cell-sorted-desc .ag-icon-desc {
+  color: var(--grid-accent-color, var(--grid-sort-indicator-color, #2196F3));
+}
+
+/* ========================================
+   Visual Config: Zebra Striping
+   ======================================== */
+
+/* Subtle contrast */
+.alternate-rows-subtle ::ng-deep .ag-row-odd {
+  background-color: rgba(0, 0, 0, 0.015);
+}
+
+.alternate-rows-subtle ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+  background-color: var(--grid-row-hover-bg, #f5f5f5);
+}
+
+/* Medium contrast (default) */
+.alternate-rows-medium ::ng-deep .ag-row-odd {
+  background-color: rgba(0, 0, 0, 0.025);
+}
+
+.alternate-rows-medium ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+  background-color: var(--grid-row-hover-bg, #f5f5f5);
+}
+
+/* Strong contrast */
+.alternate-rows-strong ::ng-deep .ag-row-odd {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.alternate-rows-strong ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+  background-color: var(--grid-row-hover-bg, #f5f5f5);
+}
+
+/* ========================================
+   Visual Config: Hover Transitions
+   ======================================== */
+
+.hover-transitions ::ng-deep .ag-row {
+  transition: background-color var(--grid-hover-transition, 150ms) ease;
+}
+
+.hover-transitions ::ng-deep .ag-cell {
+  transition: background-color var(--grid-hover-transition, 150ms) ease;
+}
+
+/* ========================================
+   Visual Config: Cell Padding
+   ======================================== */
+
+.cell-padding-compact ::ng-deep .ag-cell {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.cell-padding-compact ::ng-deep .ag-header-cell {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.cell-padding-normal ::ng-deep .ag-cell {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.cell-padding-normal ::ng-deep .ag-header-cell {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.cell-padding-comfortable ::ng-deep .ag-cell {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.cell-padding-comfortable ::ng-deep .ag-header-cell {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* ========================================
+   Visual Config: Checkbox Styles
+   ======================================== */
+
+/* Rounded checkbox */
+.checkbox-style-rounded ::ng-deep .ag-checkbox-input-wrapper {
+  border-radius: 4px;
+}
+
+.checkbox-style-rounded ::ng-deep .ag-checkbox-input-wrapper::after {
+  border-radius: 3px;
+}
+
+/* Filled checkbox */
+.checkbox-style-filled ::ng-deep .ag-checkbox-input-wrapper.ag-checked {
+  background-color: var(--grid-checkbox-color, #2196F3);
+  border-color: var(--grid-checkbox-color, #2196F3);
+}
+
+.checkbox-style-filled ::ng-deep .ag-checkbox-input-wrapper.ag-checked::after {
+  color: #ffffff;
+}
+
+/* ========================================
+   Cell Content Formatting
+   ======================================== */
+
+/* Right-aligned cells (numbers) */
+::ng-deep .cell-align-right {
+  text-align: right;
+  justify-content: flex-end;
+}
+
+::ng-deep .header-align-right .ag-header-cell-label {
+  justify-content: flex-end;
+}
+
+/* Empty cell placeholder */
+::ng-deep .cell-empty {
+  color: #bdbdbd;
+  font-style: normal;
+}
+
+/* Boolean icons */
+::ng-deep .cell-boolean-true {
+  color: #43a047;
+  font-size: 14px;
+}
+
+::ng-deep .cell-boolean-false {
+  color: #bdbdbd;
+  font-size: 14px;
+}
+
+/* Clickable links */
+::ng-deep .cell-link {
+  color: var(--grid-accent-color, #2196F3);
+  text-decoration: none;
+  transition: color 0.15s;
+  font-size: inherit;
+  font-family: inherit;
+  line-height: inherit;
+}
+
+::ng-deep .cell-link:hover {
+  color: #1976D2;
+  text-decoration: underline;
+}
+
+/* Email cells */
+::ng-deep .cell-email {
+  font-family: inherit;
+  font-size: 13px;
+}
+
+/* URL cells */
+::ng-deep .cell-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-size: 13px;
+}
+
+/* Phone cells */
+::ng-deep .cell-phone {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+/* ========================================
+   Skeleton Loading Animation
+   ======================================== */
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.skeleton-row {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--grid-cell-border-color, #f0f0f0);
+}
+
+.skeleton-cell {
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 0px,
+    #e8e8e8 40px,
+    #f0f0f0 80px
+  );
+  background-size: 200px 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-cell-short {
+  width: 60px;
+}
+
+.skeleton-cell-medium {
+  width: 120px;
+}
+
+.skeleton-cell-long {
+  width: 180px;
+}
+
+/* Selection checkbox column header */
+::ng-deep .ag-header-select-all {
+  margin-right: 0;
+}
+
+/* ========================================
+   Row Border Enhancement
+   ======================================== */
+
+::ng-deep .ag-theme-alpine .ag-row {
+  border-bottom: 1px solid var(--grid-cell-border-color, #f0f0f0);
+}
+
+::ng-deep .ag-theme-alpine .ag-row:last-child {
+  border-bottom: none;
+}
+
+/* ========================================
+   Focus States
+   ======================================== */
+
+::ng-deep .ag-theme-alpine .ag-cell-focus {
+  border: none !important;
+  outline: none !important;
+}
+
+::ng-deep .ag-theme-alpine .ag-header-cell:focus {
+  outline: 2px solid var(--grid-accent-color, #2196F3);
+  outline-offset: -2px;
+}
+
+/* ========================================
+   Scrollbar Styling
+   ======================================== */
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-track {
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 4px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}
+
+/* ========================================
+   Pinned Column Styling
+   ======================================== */
+
+::ng-deep .ag-theme-alpine .ag-pinned-left-cols-container {
+  border-right: 2px solid var(--grid-border-color, #e0e0e0);
+}
+
+::ng-deep .ag-theme-alpine .ag-pinned-right-cols-container {
+  border-left: 2px solid var(--grid-border-color, #e0e0e0);
+}
+
+/* ========================================
+   Header Cell Enhancements
+   ======================================== */
+
+::ng-deep .ag-theme-alpine .ag-header-cell {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #546e7a;
+}
+
+::ng-deep .ag-theme-alpine .ag-header-cell:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+::ng-deep .ag-theme-alpine .ag-header-cell-sortable:hover .ag-header-cell-label {
+  color: var(--grid-accent-color, #2196F3);
+}
+
+/* Sort icon animation */
+::ng-deep .ag-theme-alpine .ag-sort-indicator-icon {
+  transition: transform 0.2s ease;
+}
+
+::ng-deep .ag-theme-alpine .ag-header-cell:hover .ag-sort-indicator-icon {
+  transform: scale(1.1);
+}
+
+/* ========================================
+   Enhanced Multi-Sort Indicators
+   These styles use :host to ensure they're scoped to this component
+   and !important to override AG Grid's built-in styles
+   ======================================== */
+
+/* Highlight sorted column headers with eye-catching background */
+/* Ascending = blue tint */
+:host ::ng-deep .ag-header-cell-sorted-asc {
+  background: linear-gradient(180deg, rgba(25, 118, 210, 0.15) 0%, rgba(25, 118, 210, 0.08) 100%) !important;
+  position: relative;
+}
+
+/* Descending = pink tint */
+:host ::ng-deep .ag-header-cell-sorted-desc {
+  background: linear-gradient(180deg, rgba(216, 27, 96, 0.15) 0%, rgba(216, 27, 96, 0.08) 100%) !important;
+  position: relative;
+}
+
+/* Bottom border accent for sorted columns - ascending = blue */
+:host ::ng-deep .ag-header-cell-sorted-asc::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #1976d2;
+}
+
+/* Bottom border accent for sorted columns - descending = pink */
+:host ::ng-deep .ag-header-cell-sorted-desc::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #d81b60;
+}
+
+/* Sorted column header text - ascending = blue, bold */
+:host ::ng-deep .ag-header-cell-sorted-asc .ag-header-cell-text {
+  color: #1976d2 !important;
+  font-weight: 700 !important;
+}
+
+/* Sorted column header text - descending = pink, bold */
+:host ::ng-deep .ag-header-cell-sorted-desc .ag-header-cell-text {
+  color: #d81b60 !important;
+  font-weight: 700 !important;
+}
+
+/* Sort icons - larger and more prominent */
+/* Ascending = blue */
+:host ::ng-deep .ag-sort-ascending-icon {
+  color: #1976d2 !important;
+}
+
+/* Descending = pink/magenta */
+:host ::ng-deep .ag-sort-descending-icon {
+  color: #d81b60 !important;
+}
+
+:host ::ng-deep .ag-sort-ascending-icon .ag-icon,
+:host ::ng-deep .ag-sort-descending-icon .ag-icon {
+  font-size: 14px !important;
+}
+
+/* Sort order number (1, 2, 3) - show as plain number, no bubble */
+/* This avoids AG Grid bug where .ag-sort-order is always present but empty when unsorted */
+/* The number is only visible when AG Grid populates it (i.e., when column is sorted) */
+/* Default blue for ascending */
+:host ::ng-deep .ag-sort-order {
+  margin-left: 4px;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: #1976d2 !important;
+}
+
+/* Sort order number - pink for descending */
+:host ::ng-deep .ag-header-cell-sorted-desc .ag-sort-order {
+  color: #d81b60 !important;
+}
+
+/* Hover state for sortable headers */
+:host ::ng-deep .ag-header-cell-sortable:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:host ::ng-deep .ag-header-cell-sortable:hover .ag-header-cell-text {
+  color: #1976d2;
+}

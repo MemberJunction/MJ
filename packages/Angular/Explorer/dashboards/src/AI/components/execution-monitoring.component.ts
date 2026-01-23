@@ -13,7 +13,8 @@ import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
 import { RunView, CompositeKey } from '@memberjunction/core';
-import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIModelEntityExtended, ResourceData } from '@memberjunction/core-entities';
+import { ResourceData } from "@memberjunction/core-entities";
+import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
@@ -598,17 +599,19 @@ export function LoadAIMonitorResource() {
   styles: [`
     .execution-monitoring {
       padding: 0;
-      background: #f8f9fa;
+      background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
       width: 100%;
       height: 100%;
       position: relative;
       overflow: auto;
+      display: flex;
+      flex-direction: column;
     }
-    
+
     .execution-monitoring.loading {
       overflow: hidden;
     }
-    
+
     /* Loading Overlay */
     .loading-overlay {
       position: absolute;
@@ -616,45 +619,47 @@ export function LoadAIMonitorResource() {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.7);
       z-index: 999;
       display: flex;
       align-items: center;
       justify-content: center;
-      backdrop-filter: blur(1px);
+      backdrop-filter: blur(4px);
     }
-    
 
+    /* === Dashboard Header - Clean White Style === */
     .monitoring-header {
       background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      margin-bottom: 20px;
+      padding: 16px 24px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
       gap: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      border-bottom: 1px solid #e0e6ed;
+      position: relative;
+      z-index: 10;
     }
 
     .monitoring-title {
       margin: 0;
       font-size: 20px;
-      font-weight: 600;
-      color: #333;
+      font-weight: 700;
+      color: #1e293b;
       display: flex;
       align-items: center;
       gap: 12px;
     }
 
     .monitoring-title i {
-      color: #2196f3;
+      color: #6366f1;
+      font-size: 22px;
     }
 
     .monitoring-controls {
       display: flex;
-      gap: 16px;
+      gap: 12px;
       align-items: center;
       flex-wrap: wrap;
     }
@@ -663,53 +668,72 @@ export function LoadAIMonitorResource() {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 12px;
+      font-size: 13px;
     }
 
     .time-range-control label {
-      color: #666;
+      color: #64748b;
       font-weight: 500;
     }
 
     .time-range-control select {
-      padding: 6px 12px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 12px;
-      background: white;
+      padding: 8px 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 13px;
+      background: #f8fafc;
+      color: #1e293b;
       cursor: pointer;
       transition: all 0.2s ease;
     }
-    
+
+    .time-range-control select:hover:not(:disabled) {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    .time-range-control select:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
     .time-range-control select:disabled {
-      opacity: 0.6;
+      opacity: 0.5;
       cursor: not-allowed;
-      background: #f5f5f5;
+    }
+
+    .time-range-control select option {
+      background: white;
+      color: #1e293b;
     }
 
     .refresh-btn {
-      background: #2196f3;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
       color: white;
       border: none;
       padding: 8px 16px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 6px;
-      transition: background 0.2s ease;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
     }
 
     .refresh-btn:hover:not(:disabled) {
-      background: #1976d2;
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
     }
 
     .refresh-btn:disabled {
-      opacity: 0.6;
+      opacity: 0.5;
       cursor: not-allowed;
-      background: #e0e0e0;
+      transform: none;
     }
 
     .refresh-btn i.spinning {
@@ -722,29 +746,35 @@ export function LoadAIMonitorResource() {
     }
 
     .kpi-dashboard {
-      margin-bottom: 20px;
+      padding: 20px;
     }
 
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 16px;
     }
 
     .dashboard-splitter {
-      height: calc(100vh - 550px); /* Increased to account for headers and margins */
-      min-height: 600px;
-      margin-bottom: 20px;
+      flex: 1;
+      min-height: 500px;
+      margin: 0 20px 20px 20px;
     }
 
     .dashboard-section {
       background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
       overflow: hidden;
       height: 100%;
       display: flex;
       flex-direction: column;
+      border: 1px solid rgba(99, 102, 241, 0.08);
+      transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .dashboard-section:hover {
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.12);
     }
 
     /* Ensure splitter panes take full height */
@@ -780,14 +810,14 @@ export function LoadAIMonitorResource() {
       margin: 0;
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: #1e293b;
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .chart-title i {
-      color: #2196f3;
+      color: #6366f1;
     }
 
     .cost-bars, .efficiency-items {
@@ -824,23 +854,23 @@ export function LoadAIMonitorResource() {
 
     .cost-value {
       font-size: 11px;
-      color: #ff9800;
+      color: #8b5cf6;
       font-weight: 600;
     }
 
     .cost-bar-container {
       flex: 1;
       height: 8px;
-      background: #f0f0f0;
+      background: linear-gradient(90deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
       border-radius: 4px;
       overflow: hidden;
     }
 
     .cost-bar {
       height: 100%;
-      background: linear-gradient(90deg, #ff9800, #f57c00);
+      background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
       border-radius: 4px;
-      transition: width 0.3s ease;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .token-info {
@@ -869,7 +899,7 @@ export function LoadAIMonitorResource() {
 
     .efficiency-ratio {
       font-size: 11px;
-      color: #2196f3;
+      color: #6366f1;
       font-weight: 600;
     }
 
@@ -880,23 +910,24 @@ export function LoadAIMonitorResource() {
     }
 
     .token-bar {
-      height: 6px;
-      background: #f0f0f0;
-      border-radius: 3px;
+      height: 8px;
+      background: rgba(99, 102, 241, 0.1);
+      border-radius: 4px;
       overflow: hidden;
       display: flex;
     }
 
     .token-segment {
       height: 100%;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .token-segment--input {
-      background: #4caf50;
+      background: linear-gradient(90deg, #6366f1 0%, #818cf8 100%);
     }
 
     .token-segment--output {
-      background: #2196f3;
+      background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%);
     }
 
     .token-labels {
@@ -907,11 +938,13 @@ export function LoadAIMonitorResource() {
     }
 
     .input-label {
-      color: #4caf50;
+      color: #6366f1;
+      font-weight: 500;
     }
 
     .output-label {
-      color: #2196f3;
+      color: #8b5cf6;
+      font-weight: 500;
     }
 
     .cost-per-token {
@@ -948,23 +981,23 @@ export function LoadAIMonitorResource() {
     }
 
     .status-icon--success {
-      background: rgba(76, 175, 80, 0.1);
-      color: #4caf50;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+      color: #10b981;
     }
 
     .status-icon--warning {
-      background: rgba(255, 152, 0, 0.1);
-      color: #ff9800;
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.15) 100%);
+      color: #f59e0b;
     }
 
     .status-icon--info {
-      background: rgba(33, 150, 243, 0.1);
-      color: #2196f3;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+      color: #6366f1;
     }
 
     .status-icon--primary {
-      background: rgba(156, 39, 176, 0.1);
-      color: #9c27b0;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%);
+      color: #8b5cf6;
     }
 
     .status-info {
@@ -1037,24 +1070,25 @@ export function LoadAIMonitorResource() {
     }
 
     .open-record-btn {
-      background: #2196f3;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
       color: white;
       border: none;
       padding: 8px 16px;
-      border-radius: 4px;
+      border-radius: 8px;
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 6px;
-      transition: all 0.2s ease;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
     }
 
     .open-record-btn:hover {
-      background: #1976d2;
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
       transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
     }
 
     .open-record-btn i {
@@ -1130,18 +1164,18 @@ export function LoadAIMonitorResource() {
     }
 
     .status-badge--completed {
-      background: rgba(76, 175, 80, 0.1);
-      color: #4caf50;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+      color: #10b981;
     }
 
     .status-badge--running {
-      background: rgba(33, 150, 243, 0.1);
-      color: #2196f3;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+      color: #6366f1;
     }
 
     .status-badge--failed {
-      background: rgba(244, 67, 54, 0.1);
-      color: #f44336;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
+      color: #ef4444;
     }
 
     .error-message {
@@ -1226,9 +1260,9 @@ export function LoadAIMonitorResource() {
 
     .tab-header {
       display: flex;
-      border-bottom: 1px solid #e0e0e0;
-      background: #f8f9fa;
-      min-height: 40px;
+      border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+      background: linear-gradient(180deg, #f8f9ff 0%, #f3f4f6 100%);
+      min-height: 44px;
       overflow-x: auto;
     }
 
@@ -1236,29 +1270,30 @@ export function LoadAIMonitorResource() {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 16px;
-      background: #f8f9fa;
+      padding: 10px 18px;
+      background: transparent;
       border: none;
       border-bottom: 2px solid transparent;
       cursor: pointer;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 500;
-      color: #666;
+      color: #64748b;
       white-space: nowrap;
-      transition: all 0.2s ease;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       min-width: 120px;
       justify-content: space-between;
     }
 
     .tab-item:hover {
-      background: #e9ecef;
-      color: #333;
+      background: rgba(99, 102, 241, 0.05);
+      color: #6366f1;
     }
 
     .tab-item.active {
       background: white;
-      color: #2196f3;
-      border-bottom-color: #2196f3;
+      color: #6366f1;
+      border-bottom-color: #6366f1;
+      font-weight: 600;
     }
 
     .tab-title {
@@ -1359,11 +1394,12 @@ export function LoadAIMonitorResource() {
     }
 
     .metric-badge {
-      background: #2196f3;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
       color: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-weight: 600;
+      box-shadow: 0 2px 4px rgba(99, 102, 241, 0.25);
     }
 
     .loading-spinner {
@@ -1421,23 +1457,24 @@ export function LoadAIMonitorResource() {
     }
 
     .type-badge {
-      background: #e9ecef;
-      color: #666;
-      padding: 2px 6px;
-      border-radius: 3px;
+      background: linear-gradient(135deg, rgba(100, 116, 139, 0.1) 0%, rgba(71, 85, 105, 0.1) 100%);
+      color: #64748b;
+      padding: 3px 8px;
+      border-radius: 4px;
       font-size: 10px;
-      font-weight: 500;
+      font-weight: 600;
       text-transform: uppercase;
+      letter-spacing: 0.3px;
     }
 
     .type-badge--prompt {
-      background: rgba(33, 150, 243, 0.1);
-      color: #2196f3;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+      color: #6366f1;
     }
 
     .type-badge--agent {
-      background: rgba(76, 175, 80, 0.1);
-      color: #4caf50;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+      color: #10b981;
     }
 
     .no-data {
@@ -1554,18 +1591,24 @@ export function LoadAIMonitorResource() {
 
     /* Collapsible Panel Styles */
     .analysis-panels {
-      padding: 10px;
+      padding: 12px;
       height: 100%;
       overflow-y: auto;
-      background: #f8f9fa;
+      background: linear-gradient(180deg, #f8f9ff 0%, #f3f4f6 100%);
     }
 
     .analysis-panel {
       margin-bottom: 12px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
       background: white;
       overflow: hidden;
+      border: 1px solid rgba(99, 102, 241, 0.08);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .analysis-panel:hover {
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
     }
 
     .analysis-panel:last-child {
@@ -1573,44 +1616,44 @@ export function LoadAIMonitorResource() {
     }
 
     .panel-header {
-      padding: 12px 16px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #e0e0e0;
+      padding: 14px 18px;
+      background: linear-gradient(180deg, #fafbff 0%, #f8f9fc 100%);
+      border-bottom: 1px solid rgba(99, 102, 241, 0.08);
       cursor: pointer;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      transition: background 0.2s ease;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .panel-header:hover {
-      background: #e9ecef;
+      background: linear-gradient(180deg, #f0f1ff 0%, #e8e9ff 100%);
     }
 
     .panel-title {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       font-weight: 600;
-      color: #333;
+      color: #1e293b;
       font-size: 14px;
     }
 
     .panel-title i {
-      color: #2196f3;
-      width: 16px;
+      color: #6366f1;
+      width: 18px;
     }
 
     .panel-toggle-icon {
-      color: #666;
+      color: #6366f1;
       font-size: 12px;
-      transition: transform 0.2s ease;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .panel-content {
-      padding: 16px;
-      border-top: 1px solid #f0f0f0;
-      animation: slideDown 0.2s ease-out;
+      padding: 18px;
+      border-top: 1px solid rgba(99, 102, 241, 0.05);
+      animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     @keyframes slideDown {
@@ -1636,8 +1679,7 @@ export function LoadAIMonitorResource() {
     /* Responsive Design */
     @media (max-width: 1200px) {
       .dashboard-splitter {
-        height: calc(100vh - 270px); /* Consistent with main height */
-        margin-bottom: 20px;
+        min-height: 400px;
       }
       
       .table-header,
@@ -1675,9 +1717,7 @@ export function LoadAIMonitorResource() {
       }
       
       .dashboard-splitter {
-        height: calc(100vh - 270px); /* Consistent with main height */
-        min-height: 400px;
-        margin-bottom: 20px;
+        min-height: 350px;
       }
       
       .kpi-grid {

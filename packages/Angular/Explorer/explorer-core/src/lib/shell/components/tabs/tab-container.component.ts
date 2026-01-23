@@ -28,9 +28,8 @@ import {
 import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, ResourceTypeEntity } from '@memberjunction/core-entities';
-import { DatasetResultType, LogError, Metadata, RunView } from '@memberjunction/core';
+import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
-import { DashboardResource } from '../../../resource-wrappers/dashboard-resource.component';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -59,9 +58,17 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   @Output() firstResourceLoadComplete = new EventEmitter<void>();
 
+  /**
+   * Emitted when Golden Layout fails to initialize after multiple retries.
+   * The shell can use this to show an error dialog and redirect.
+   */
+  @Output() layoutInitError = new EventEmitter<void>();
+
   private subscriptions: Subscription[] = [];
-  private hasEmittedFirstLoadComplete = false;
+  private layoutInitRetryCount = 0;
+  private readonly MAX_LAYOUT_INIT_RETRIES = 5;
   private layoutInitialized = false;
+  private layoutRestorationComplete = false; // True only AFTER layout is fully restored/created
 
   // Track component references for cleanup (legacy - keep for backward compat during transition)
   private componentRefs = new Map<string, ComponentRef<BaseResourceComponent>>();
@@ -136,9 +143,10 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
                 this.loadSingleResourceContent();
               }
             }
-          } else if (this.layoutInitialized && !this.isCreatingInitialTabs) {
+          } else if (this.layoutRestorationComplete && !this.isCreatingInitialTabs) {
             // In multi-tab mode, sync with Golden Layout
-            // Skip during initial tab creation to avoid race condition (tabs would be created twice)
+            // IMPORTANT: Only sync AFTER layout restoration is complete to avoid creating duplicate tabs
+            // layoutRestorationComplete is set to true only after initializeGoldenLayout finishes
             this.syncTabsWithConfiguration(config.tabs);
           }
         }
@@ -168,25 +176,56 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * @param forceCreateTabs - If true, always creates tabs fresh from config.tabs instead of restoring saved layout
    */
   private initializeGoldenLayout(forceCreateTabs = false): void {
+    // If we are in single resource mode we do NOT need to do this work as golden layout should not exist in that state
+    if (this.useSingleResourceMode)
+      return;
+
     if (!this.glContainer?.nativeElement) {
-      console.warn('Golden Layout container not available, waiting...');
+      this.layoutInitRetryCount++;
+
+      if (this.layoutInitRetryCount > this.MAX_LAYOUT_INIT_RETRIES) {
+        console.error(`Golden Layout container not available after ${this.MAX_LAYOUT_INIT_RETRIES} retries, emitting error`);
+        this.layoutInitError.emit();
+        return;
+      }
+
+      console.warn(`Golden Layout container not available, retry ${this.layoutInitRetryCount}/${this.MAX_LAYOUT_INIT_RETRIES}...`);
       setTimeout(() => this.initializeGoldenLayout(forceCreateTabs), 50);
       return;
     }
+
+    // Reset retry counter on success
+    this.layoutInitRetryCount = 0;
 
     if (this.layoutInitialized) {
       return; // Already initialized
     }
 
-    // Initialize Golden Layout
+    // Check if configuration is available
+    // If not, wait for it to be loaded before proceeding
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config) {
+      // Configuration not loaded yet - wait for it
+      const configSub = this.workspaceManager.Configuration.subscribe(loadedConfig => {
+        if (loadedConfig) {
+          configSub.unsubscribe();
+          // Re-call initializeGoldenLayout now that config is available
+          this.initializeGoldenLayout(forceCreateTabs);
+        }
+      });
+      return;
+    }
+
+    // Initialize Golden Layout (we have config now)
     this.layoutManager.Initialize(this.glContainer.nativeElement);
 
     // Mark layout as initialized
     this.layoutInitialized = true;
 
-    // Load tabs from configuration
-    const config = this.workspaceManager.GetConfiguration();
-    if (!config || config.tabs.length === 0) {
+    // Check if config has no tabs
+    if (config.tabs.length === 0) {
+      // No tabs to load, but mark restoration as complete
+      this.layoutRestorationComplete = true;
       return;
     }
 
@@ -203,29 +242,33 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       } else {
         // RESTORE SAVED LAYOUT - preserves drag/drop arrangements (stacks, columns, rows)
         // This is the single source of truth for visual arrangement
-        console.log('[TabContainer.initializeGoldenLayout] Restoring saved layout structure');
         const layoutLoaded = this.layoutManager.LoadLayout(config.layout);
 
         if (layoutLoaded) {
+          // Mark layout restoration as complete AFTER layout is loaded
+          this.layoutRestorationComplete = true;
+
           // Focus active tab and ensure proper sizing
+          // Also trigger updateSize() to force Golden Layout to fire 'show' events
+          // for the active tab in ALL stacks (not just the globally active tab)
           setTimeout(() => {
             if (config.activeTabId) {
               this.layoutManager.FocusTab(config.activeTabId);
             }
+            // Trigger resize to ensure all visible tabs in all stacks render their content
+            this.layoutManager.updateSize();
           }, 50);
           return; // Layout restored successfully
         }
 
         // Layout load FAILED - clear the corrupted layout and fall through to create tabs fresh
-        console.warn('[TabContainer.initializeGoldenLayout] Saved layout was corrupted, clearing and recreating tabs');
+        console.warn('[TabContainer] Saved layout was corrupted, clearing and recreating tabs');
         this.workspaceManager.ClearLayout();
       }
     }
 
     // CREATE FRESH - no saved layout, forceCreateTabs=true, or layout load failed
     // Use config.tabs sorted by sequence to build a simple single-stack layout
-    console.log(`[TabContainer.initializeGoldenLayout] Creating ${config.tabs.length} tabs from config (sorted by sequence)`);
-
     const sortedTabs = [...config.tabs].sort((a, b) => a.sequence - b.sequence);
 
     this.isCreatingInitialTabs = true;
@@ -236,6 +279,9 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     } finally {
       this.isCreatingInitialTabs = false;
     }
+
+    // Mark layout restoration as complete AFTER tabs are created
+    this.layoutRestorationComplete = true;
 
     setTimeout(() => {
       if (config.activeTabId) {
@@ -287,7 +333,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     const shouldUseSingleResourceMode = !tabBarVisible;
 
     if (shouldUseSingleResourceMode !== this.useSingleResourceMode) {
-      console.log(`🔄 Switching to ${shouldUseSingleResourceMode ? 'single-resource' : 'multi-tab'} mode`);
       this.useSingleResourceMode = shouldUseSingleResourceMode;
       this.cdr.detectChanges();
 
@@ -298,7 +343,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         setTimeout(() => {
           // First, destroy Golden Layout if it was initialized (prevents stale state)
           if (this.layoutInitialized) {
-            console.log('[TabContainer] Destroying Golden Layout when transitioning to single-resource mode');
             this.layoutManager.Destroy();
             this.layoutInitialized = false;
           }
@@ -404,8 +448,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     );
 
     if (cached) {
-      console.log(`♻️ Reusing cached component for single-resource mode: ${driverClass}`);
-
       // Clean up previous single-resource component (if different)
       this.cleanupSingleResourceComponent();
 
@@ -419,12 +461,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // Store reference for cleanup
       this.singleResourceComponentRef = cached.componentRef;
 
-      console.log('✅ Single-resource component transferred from cache (instant!)');
       return;
     }
-
-    // **Fallback: Create new component if not in cache**
-    console.log(`📦 Creating new component for single-resource mode: ${driverClass}`);
 
     // Get the component registration
     const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
@@ -499,6 +537,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       tab.applicationId,
       tab.configuration?.resourceType || '',
       tab.configuration?.driverClass || '',
+      tab.configuration?.Entity || '',  // Include Entity name for Records resource type
       effectiveRecordId,
       tab.configuration?.route || ''
     ];
@@ -579,8 +618,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       );
 
       if (cached) {
-        console.log(`♻️ Reusing cached component for ${resourceData.ResourceType} (driver: ${driverClass})`);
-
         // Reattach the cached wrapper element
         glContainer.element.appendChild(cached.wrapperElement);
 
@@ -603,9 +640,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
         return;
       }
-
-      // No cached component found - create new one
-      console.log(`🆕 Creating new component for ${resourceData.ResourceType} using driver class: ${driverClass}`);
 
       // Get the component registration using the driver class
       const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
@@ -706,12 +740,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       const displayName = await tempInstance.GetResourceDisplayName(resourceData);
 
       if (displayName && displayName !== tab.title) {
-        console.log('[TabContainer.updateTabDisplayName] Updating tab title:', {
-          tabId: tab.id,
-          from: tab.title,
-          to: displayName
-        });
-
         // Update the tab title in Golden Layout
         this.layoutManager.UpdateTabStyle(tab.id, { title: displayName });
 
@@ -732,25 +760,18 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     resourceData: ResourceData
   ): Promise<void> {
     try {
-      console.log('[TabContainer.updateTabTitleFromResource] Getting display name for tab:', tabId);
-
       // Get the display name from the resource component
       const displayName = await resourceComponent.GetResourceDisplayName(resourceData);
 
-      console.log('[TabContainer.updateTabTitleFromResource] Got display name:', displayName);
-
       if (!displayName) {
-        console.log('[TabContainer.updateTabTitleFromResource] No display name returned, keeping current title');
         return;
       }
 
       // Update the tab title in Golden Layout
       this.layoutManager.UpdateTabStyle(tabId, { title: displayName });
-      console.log('[TabContainer.updateTabTitleFromResource] Updated Golden Layout tab title to:', displayName);
 
       // Update the tab title in workspace configuration for persistence
       this.workspaceManager.UpdateTabTitle(tabId, displayName);
-      console.log('[TabContainer.updateTabTitleFromResource] Updated workspace configuration tab title');
 
     } catch (error) {
       console.error('[TabContainer.updateTabTitleFromResource] Error updating tab title:', error);
@@ -918,7 +939,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     const cachedInfo = this.cacheManager.markAsDetached(tabId);
 
     if (cachedInfo) {
-      console.log(`📎 Detached component from tab ${tabId}, available for reuse`);
       // Remove from legacy componentRefs but keep in cache
       this.componentRefs.delete(tabId);
     } else {
@@ -945,7 +965,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Remove tabs that are no longer in configuration
     existingTabIds.forEach(tabId => {
       if (!configTabIds.includes(tabId)) {
-        console.log('[TabContainer.syncTabsWithConfiguration] Removing tab not in config:', tabId);
         this.layoutManager.RemoveTab(tabId);
       }
     });
@@ -976,14 +995,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
                              (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
 
           if (needsReload) {
-            console.log('[TabContainer.syncTabsWithConfiguration] Tab content changed, reloading:', {
-              tabId: tab.id,
-              title: tab.title,
-              existingRecordId,
-              newRecordId,
-              configRecordId: tab.configuration['recordId'],
-              recordIdChanged: existingRecordId !== newRecordId
-            });
             // Clean up old component
             this.cleanupTabComponent(tab.id);
 
@@ -1096,10 +1107,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Close all other tabs from context menu
    */
   onContextCloseOthers(): void {
-    console.log('[TabContainer.onContextCloseOthers] Called with tabId:', this.contextMenuTabId);
     if (this.contextMenuTabId) {
-      const config = this.workspaceManager.GetConfiguration();
-      console.log('[TabContainer.onContextCloseOthers] Current tabs:', config?.tabs.length);
       this.workspaceManager.CloseOtherTabs(this.contextMenuTabId);
     }
     this.hideContextMenu();
@@ -1109,10 +1117,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Close tabs to the right from context menu
    */
   onContextCloseToRight(): void {
-    console.log('[TabContainer.onContextCloseToRight] Called with tabId:', this.contextMenuTabId);
     if (this.contextMenuTabId) {
-      const config = this.workspaceManager.GetConfiguration();
-      console.log('[TabContainer.onContextCloseToRight] Current tabs:', config?.tabs.length);
       this.workspaceManager.CloseTabsToRight(this.contextMenuTabId);
     }
     this.hideContextMenu();

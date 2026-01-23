@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, ViewContainerRef } from '@angular/core';
 import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
 import { TestRunDialogComponent } from '../components/test-run-dialog.component';
 
@@ -6,6 +6,7 @@ export interface TestDialogOptions {
   testId?: string;
   suiteId?: string;
   mode?: 'test' | 'suite';
+  viewContainerRef?: ViewContainerRef;
 }
 
 @Injectable({
@@ -26,7 +27,8 @@ export class TestingDialogService {
       width: 800,
       height: 700,
       minWidth: 600,
-      minHeight: 500
+      minHeight: 500,
+      appendTo: options?.viewContainerRef
     });
 
     // Track this dialog
@@ -82,11 +84,11 @@ export class TestingDialogService {
     }
   }
 
-  OpenTestDialog(testId: string): DialogRef {
-    return this.OpenTestRunDialog({ testId, mode: 'test' });
+  OpenTestDialog(testId: string, viewContainerRef?: ViewContainerRef): DialogRef {
+    return this.OpenTestRunDialog({ testId, mode: 'test', viewContainerRef });
   }
 
-  OpenSuiteDialog(suiteId: string): DialogRef {
-    return this.OpenTestRunDialog({ suiteId, mode: 'suite' });
+  OpenSuiteDialog(suiteId: string, viewContainerRef?: ViewContainerRef): DialogRef {
+    return this.OpenTestRunDialog({ suiteId, mode: 'suite', viewContainerRef });
   }
 }

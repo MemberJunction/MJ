@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TaskEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { TaskEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Task detail panel showing task information, agent details, and agent run

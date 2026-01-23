@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { DashboardCategoryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Dashboard Categories') // Tell MemberJunction about this class
 @Component({
@@ -19,7 +19,9 @@ export class DashboardCategoryFormComponent extends BaseFormComponent {
             { sectionKey: 'hierarchyStructure', sectionName: 'Hierarchy Structure', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'dashboardCategories', sectionName: 'Dashboard Categories', isExpanded: false },
-            { sectionKey: 'dashboards', sectionName: 'Dashboards', isExpanded: false }
+            { sectionKey: 'dashboards', sectionName: 'Dashboards', isExpanded: false },
+            { sectionKey: 'mJDashboardCategoryLinks', sectionName: 'MJ: Dashboard Category Links', isExpanded: false },
+            { sectionKey: 'mJDashboardCategoryPermissions', sectionName: 'MJ: Dashboard Category Permissions', isExpanded: false }
         ]);
     }
 }

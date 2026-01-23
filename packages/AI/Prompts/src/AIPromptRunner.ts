@@ -1,8 +1,9 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo } from '@memberjunction/ai';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
-import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, RunView } from '@memberjunction/core';
+import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity, TemplateEntityExtended, AICredentialBindingEntity, CredentialEntity } from '@memberjunction/core-entities';
+import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
@@ -263,96 +264,208 @@ export class AIPromptRunner {
   ): Promise<string> {
     const verbose = params.verbose === true || IsVerboseLoggingEnabled();
 
-    // Determine credential ID using resolution hierarchy
-    let credentialId: string | null = null;
-    let credentialSource: string | null = null;
-
-    // Priority 1: Per-request override
+    // Priority 1: Per-request override - no failover, explicit choice
     if (params.credentialId) {
-      credentialId = params.credentialId;
-      credentialSource = 'per-request override';
+      return await this.resolveCredentialById(params.credentialId, 'per-request override', params, verbose);
     }
 
-    // Priority 2: Prompt-Model specific
-    if (!credentialId && promptId && modelId) {
+    // Ensure CredentialEngine is configured for binding lookups
+    await CredentialEngine.Instance.Config(false, params.contextUser);
+
+    // Priority 2: PromptModel bindings (most specific) - with failover
+    if (promptId && modelId) {
       const promptModel = AIEngine.Instance.PromptModels.find(
         pm => pm.PromptID === promptId && pm.ModelID === modelId
       );
-      if (promptModel?.CredentialID) {
-        credentialId = promptModel.CredentialID;
-        credentialSource = 'AIPromptModel';
+      if (promptModel) {
+        const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('PromptModel', promptModel.ID);
+        const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(PromptModel)', params, verbose);
+        if (result) return result;
       }
     }
 
-    // Priority 3: Model-Vendor specific
-    if (!credentialId && modelId && vendorId) {
+    // Priority 3: ModelVendor bindings - with failover
+    if (modelId && vendorId) {
       const modelVendor = AIEngine.Instance.ModelVendors.find(
         mv => mv.ModelID === modelId && mv.VendorID === vendorId && mv.Status === 'Active'
       );
-      if (modelVendor?.CredentialID) {
-        credentialId = modelVendor.CredentialID;
-        credentialSource = 'AIModelVendor';
+      if (modelVendor) {
+        const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('ModelVendor', modelVendor.ID);
+        const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(ModelVendor)', params, verbose);
+        if (result) return result;
       }
     }
 
-    // Priority 4: Vendor default
-    if (!credentialId && vendorId) {
+    // Priority 4: Vendor bindings - with failover
+    if (vendorId) {
+      const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('Vendor', vendorId);
+      const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(Vendor)', params, verbose);
+      if (result) return result;
+    }
+
+    // Priority 5: Type-based default credential
+    // If the vendor declares a CredentialTypeID, try to find a default credential of that type
+    if (vendorId) {
       const vendor = AIEngine.Instance.Vendors.find(v => v.ID === vendorId);
-      if (vendor?.CredentialID) {
-        credentialId = vendor.CredentialID;
-        credentialSource = 'AIVendor';
+      if (vendor?.CredentialTypeID) {
+        const defaultCredential = this.findDefaultCredentialByType(vendor.CredentialTypeID);
+        if (defaultCredential) {
+          const result = await this.tryResolveCredential(defaultCredential, 'type-based default', params, verbose);
+          if (result) return result;
+        }
       }
     }
 
-    // If we found a credential ID, use the Credentials system
-    if (credentialId) {
-      try {
-        // Ensure CredentialEngine is configured
-        await CredentialEngine.Instance.Config(false, params.contextUser);
-
-        // Get the credential by ID
-        const credential = CredentialEngine.Instance.getCredentialById(credentialId);
-        if (!credential) {
-          throw new Error(`Credential with ID ${credentialId} not found`);
-        }
-
-        // Use getCredential to get decrypted values with audit logging
-        const resolved = await CredentialEngine.Instance.getCredential(credential.Name, {
-          credentialId,
-          contextUser: params.contextUser,
-          subsystem: 'AIPromptRunner'
-        });
-
-        if (verbose) {
-          this.logStatus(`   🔐 Using credential from ${credentialSource}: "${credential.Name}"`, true, params);
-        }
-
-        // Return stringified credential values for the LLM constructor
-        // The LLM will parse this as JSON to extract apiKey and any additional config
-        return JSON.stringify(resolved.values);
-
-      } catch (error) {
-        this.logError(error instanceof Error ? error : new Error(String(error)), {
-          category: 'CredentialResolution',
-          severity: 'error',
-          metadata: {
-            credentialId,
-            credentialSource,
-            driverClass
-          },
-          maxErrorLength: params.maxErrorLength
-        });
-        throw new Error(`Failed to resolve credential from ${credentialSource}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    // No credential ID found - fall back to legacy methods
+    // No credential bindings found - fall back to legacy methods
     if (verbose) {
       this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
     }
 
-    // Priority 5 & 6: Legacy apiKeys array and environment variables
+    // Priority 6 & 7: Legacy apiKeys array and environment variables
     return GetAIAPIKey(driverClass, params.apiKeys, verbose);
+  }
+
+  /**
+   * Attempts to resolve credentials from bindings with priority-based failover.
+   * Tries each binding in priority order until one succeeds.
+   */
+  private async tryCredentialBindingsWithFailover(
+    bindings: AICredentialBindingEntity[],
+    source: string,
+    params: AIPromptParams,
+    verbose: boolean
+  ): Promise<string | null> {
+    if (bindings.length === 0) return null;
+
+    for (let i = 0; i < bindings.length; i++) {
+      const binding = bindings[i];
+      const credential = CredentialEngine.Instance.getCredentialById(binding.CredentialID);
+
+      if (!credential) {
+        if (verbose) {
+          this.logStatus(`   ⚠️ Credential ${binding.CredentialID} not found (priority ${binding.Priority}), trying next...`, true, params);
+        }
+        continue;
+      }
+
+      const result = await this.tryResolveCredential(
+        credential,
+        `${source} priority ${binding.Priority}`,
+        params,
+        verbose,
+        i < bindings.length - 1  // hasMoreBindings
+      );
+
+      if (result) return result;
+    }
+
+    return null;
+  }
+
+  /**
+   * Attempts to resolve a single credential, returning null on failure for failover support.
+   */
+  private async tryResolveCredential(
+    credential: CredentialEntity,
+    source: string,
+    params: AIPromptParams,
+    verbose: boolean,
+    hasMoreBindings: boolean = false
+  ): Promise<string | null> {
+    try {
+      // Check if credential is active and not expired
+      if (!credential.IsActive) {
+        if (verbose) {
+          this.logStatus(`   ⚠️ Credential "${credential.Name}" is inactive, trying next...`, true, params);
+        }
+        return null;
+      }
+
+      if (credential.ExpiresAt && new Date(credential.ExpiresAt) < new Date()) {
+        if (verbose) {
+          this.logStatus(`   ⚠️ Credential "${credential.Name}" has expired, trying next...`, true, params);
+        }
+        return null;
+      }
+
+      // Resolve the credential values
+      const resolved = await CredentialEngine.Instance.getCredential(credential.Name, {
+        credentialId: credential.ID,
+        contextUser: params.contextUser,
+        subsystem: 'AIPromptRunner'
+      });
+
+      if (verbose) {
+        this.logStatus(`   🔐 Using credential from ${source}: "${credential.Name}"`, true, params);
+      }
+
+      return JSON.stringify(resolved.values);
+
+    } catch (error) {
+      if (hasMoreBindings) {
+        // More bindings to try - log warning and continue
+        if (verbose) {
+          this.logStatus(`   ⚠️ Failed to resolve credential "${credential.Name}" from ${source}: ${error instanceof Error ? error.message : String(error)}, trying next...`, true, params);
+        }
+        return null;
+      } else {
+        // No more bindings - log error but still return null for legacy fallback
+        this.logError(error instanceof Error ? error : new Error(String(error)), {
+          category: 'CredentialResolution',
+          severity: 'warning',
+          metadata: {
+            credentialId: credential.ID,
+            credentialName: credential.Name,
+            source
+          },
+          maxErrorLength: params.maxErrorLength
+        });
+        return null;
+      }
+    }
+  }
+
+  /**
+   * Resolves a credential by its explicit ID (used for per-request override).
+   * This does not support failover since it's an explicit choice.
+   */
+  private async resolveCredentialById(
+    credentialId: string,
+    source: string,
+    params: AIPromptParams,
+    verbose: boolean
+  ): Promise<string> {
+    await CredentialEngine.Instance.Config(false, params.contextUser);
+
+    const credential = CredentialEngine.Instance.getCredentialById(credentialId);
+    if (!credential) {
+      throw new Error(`Credential with ID ${credentialId} not found`);
+    }
+
+    const resolved = await CredentialEngine.Instance.getCredential(credential.Name, {
+      credentialId,
+      contextUser: params.contextUser,
+      subsystem: 'AIPromptRunner'
+    });
+
+    if (verbose) {
+      this.logStatus(`   🔐 Using credential from ${source}: "${credential.Name}"`, true, params);
+    }
+
+    return JSON.stringify(resolved.values);
+  }
+
+  /**
+   * Finds a default credential matching a specific credential type.
+   */
+  private findDefaultCredentialByType(credentialTypeId: string): CredentialEntity | null {
+    const credentials = CredentialEngine.Instance.Credentials;
+    return credentials.find(c =>
+      c.CredentialTypeID === credentialTypeId &&
+      c.IsDefault === true &&
+      c.IsActive === true &&
+      (!c.ExpiresAt || new Date(c.ExpiresAt) > new Date())
+    ) || null;
   }
 
   /**
@@ -362,16 +475,17 @@ export class AIPromptRunner {
    *
    * Checks the credential hierarchy:
    * 1. Per-request override: params.credentialId
-   * 2. Prompt-Model specific: AIPromptModel.CredentialID
-   * 3. Model-Vendor specific: AIModelVendor.CredentialID
-   * 4. Vendor default: AIVendor.CredentialID
-   * 5. Legacy: params.apiKeys[] array
-   * 6. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
+   * 2. PromptModel bindings: AICredentialBinding WHERE BindingType='PromptModel'
+   * 3. ModelVendor bindings: AICredentialBinding WHERE BindingType='ModelVendor'
+   * 4. Vendor bindings: AICredentialBinding WHERE BindingType='Vendor'
+   * 5. Type-based default: Credential.IsDefault=1 matching AIVendor.CredentialTypeID
+   * 6. Legacy: params.apiKeys[] array
+   * 7. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
    * @param driverClass - The driver class name (e.g., 'OpenAILLM')
-   * @param promptId - The prompt ID for looking up AIPromptModel credentials
-   * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor credentials
-   * @param vendorId - The vendor ID for looking up AIModelVendor and AIVendor credentials
+   * @param promptId - The prompt ID for looking up AIPromptModel bindings
+   * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor bindings
+   * @param vendorId - The vendor ID for looking up AIModelVendor and AIVendor bindings
    * @param params - The prompt execution parameters
    * @returns true if credentials are available, false otherwise
    */
@@ -388,35 +502,45 @@ export class AIPromptRunner {
       return true;
     }
 
-    // Priority 2: Prompt-Model specific
+    // Priority 2: PromptModel bindings
     if (promptId && modelId) {
       const promptModel = AIEngine.Instance.PromptModels.find(
         pm => pm.PromptID === promptId && pm.ModelID === modelId
       );
-      if (promptModel?.CredentialID) {
+      if (promptModel && AIEngine.Instance.HasCredentialBindings('PromptModel', promptModel.ID)) {
         return true;
       }
     }
 
-    // Priority 3: Model-Vendor specific
+    // Priority 3: ModelVendor bindings
     if (modelId && vendorId) {
       const modelVendor = AIEngine.Instance.ModelVendors.find(
         mv => mv.ModelID === modelId && mv.VendorID === vendorId && mv.Status === 'Active'
       );
-      if (modelVendor?.CredentialID) {
+      if (modelVendor && AIEngine.Instance.HasCredentialBindings('ModelVendor', modelVendor.ID)) {
         return true;
       }
     }
 
-    // Priority 4: Vendor default
+    // Priority 4: Vendor bindings
+    if (vendorId) {
+      if (AIEngine.Instance.HasCredentialBindings('Vendor', vendorId)) {
+        return true;
+      }
+    }
+
+    // Priority 5: Type-based default credential
     if (vendorId) {
       const vendor = AIEngine.Instance.Vendors.find(v => v.ID === vendorId);
-      if (vendor?.CredentialID) {
-        return true;
+      if (vendor?.CredentialTypeID) {
+        const defaultCredential = this.findDefaultCredentialByType(vendor.CredentialTypeID);
+        if (defaultCredential) {
+          return true;
+        }
       }
     }
 
-    // Priority 5 & 6: Legacy methods - check if API key is available
+    // Priority 6 & 7: Legacy methods - check if API key is available
     const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose);
     return this.isValidAPIKey(apiKey);
   }
@@ -617,11 +741,11 @@ export class AIPromptRunner {
         
         const saveResult = await promptRun.Save();
         if (!saveResult) {
-          this.logError(`Failed to save error to AIPromptRun: ${promptRun.LatestResult?.Message || 'Unknown error'}`, {
+          this.logError(`Failed to save error to AIPromptRun: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`, {
             category: 'PromptRunSave',
             metadata: {
               promptRunId: promptRun.ID,
-              errorMessage: promptRun.LatestResult?.Message
+              errorMessage: promptRun.LatestResult?.CompleteMessage
             },
             maxErrorLength: params.maxErrorLength
           });
@@ -964,7 +1088,7 @@ export class AIPromptRunner {
 
     const saveResult = await consolidatedPromptRun.Save();
     if (!saveResult) {
-      this.logError(`Failed to save consolidated AIPromptRun: ${consolidatedPromptRun.LatestResult?.Message || 'Unknown error'}`, {
+      this.logError(`Failed to save consolidated AIPromptRun: ${consolidatedPromptRun.LatestResult?.CompleteMessage || 'Unknown error'}`, {
         category: 'ConsolidatedPromptRunSave',
         metadata: {
           promptRunId: consolidatedPromptRun.ID,
@@ -1630,15 +1754,21 @@ export class AIPromptRunner {
 
   /**
    * Helper: Filter prompt models by configuration matching rules.
+   * Supports configuration inheritance - includes models from the entire inheritance chain.
    */
   private filterPromptModelsByConfiguration(
     allPromptModels: AIPromptModelEntity[],
     configurationId?: string
   ): AIPromptModelEntity[] {
     if (configurationId) {
-      // Include both config-matching AND null-config (universal fallback) models
+      // Get the configuration inheritance chain
+      const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
+      const chainIds = new Set(chain.map(c => c.ID));
+
+      // Include models matching any config in the chain, plus null-config (universal fallback)
       return allPromptModels.filter(
-        pm => pm.ConfigurationID === configurationId || pm.ConfigurationID === null
+        pm => (pm.ConfigurationID && chainIds.has(pm.ConfigurationID)) ||
+              pm.ConfigurationID === null
       );
     } else {
       // No config specified - only include null-config models
@@ -1648,21 +1778,32 @@ export class AIPromptRunner {
 
   /**
    * Helper: Sort prompt models for 'Specific' strategy.
-   * Config-specific models first, then universal models, by priority DESC within each group.
+   * Respects configuration inheritance chain - child configs first, then parents, then null-config.
+   * Within each config level, sorts by priority DESC.
    */
   private sortPromptModelsForSpecificStrategy(
     promptModels: AIPromptModelEntity[],
     configurationId?: string
   ): AIPromptModelEntity[] {
+    if (!configurationId) {
+      // No config specified - just sort by priority
+      return promptModels.sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
+    }
+
+    // Get the configuration inheritance chain and create position map
+    const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
+    const chainOrder = new Map(chain.map((c, index) => [c.ID, index]));
+
     return promptModels.sort((a, b) => {
-      // Primary: Config-specific models before null-config models
-      const aIsConfigMatch = configurationId && a.ConfigurationID === configurationId ? 1 : 0;
-      const bIsConfigMatch = configurationId && b.ConfigurationID === configurationId ? 1 : 0;
-      if (aIsConfigMatch !== bIsConfigMatch) {
-        return bIsConfigMatch - aIsConfigMatch;  // Config matches first
+      // Primary: Chain position (lower index = higher priority, null config = last)
+      const aChainPos = a.ConfigurationID ? (chainOrder.get(a.ConfigurationID) ?? 999) : 1000;
+      const bChainPos = b.ConfigurationID ? (chainOrder.get(b.ConfigurationID) ?? 999) : 1000;
+
+      if (aChainPos !== bChainPos) {
+        return aChainPos - bChainPos; // Lower chain position first (child before parent)
       }
 
-      // Secondary: Higher priority first within same config group
+      // Secondary: Higher priority first within same config level
       return (b.Priority || 0) - (a.Priority || 0);
     });
   }
@@ -1773,36 +1914,41 @@ export class AIPromptRunner {
   }
 
   /**
-   * Helper: Get prompt models for configuration with fallback logic.
+   * Helper: Get prompt models for configuration with inheritance chain fallback.
+   * Walks the configuration inheritance chain looking for prompt models.
+   * Returns models from the first config in the chain that has any, or falls back to null-config.
    */
   private getPromptModelsForConfiguration(
     prompt: AIPromptEntityExtended,
     configurationId?: string
   ): AIPromptModelEntity[] {
     if (configurationId) {
-      const promptModels = AIEngine.Instance.PromptModels.filter(
-        pm => pm.PromptID === prompt.ID &&
-              (pm.Status === 'Active' || pm.Status === 'Preview') &&
-              pm.ConfigurationID === configurationId
-      );
+      // Get the configuration inheritance chain (child -> parent -> grandparent -> ...)
+      const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
 
-      if (promptModels.length === 0) {
-        LogStatus(`No models found for configuration "${configurationId}", falling back to default models`);
-        return AIEngine.Instance.PromptModels.filter(
+      // Walk the chain looking for prompt models
+      for (const config of chain) {
+        const promptModels = AIEngine.Instance.PromptModels.filter(
           pm => pm.PromptID === prompt.ID &&
                 (pm.Status === 'Active' || pm.Status === 'Preview') &&
-                !pm.ConfigurationID
+                pm.ConfigurationID === config.ID
         );
+
+        if (promptModels.length > 0) {
+          return promptModels;
+        }
       }
 
-      return promptModels;
-    } else {
-      return AIEngine.Instance.PromptModels.filter(
-        pm => pm.PromptID === prompt.ID &&
-              (pm.Status === 'Active' || pm.Status === 'Preview') &&
-              !pm.ConfigurationID
-      );
+      // No match in chain, fall back to NULL config models
+      LogStatus(`No models found in configuration chain for "${configurationId}", falling back to default models`);
     }
+
+    // Return null-config (universal) models
+    return AIEngine.Instance.PromptModels.filter(
+      pm => pm.PromptID === prompt.ID &&
+            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+            !pm.ConfigurationID
+    );
   }
 
   /**
@@ -1829,7 +1975,8 @@ export class AIPromptRunner {
   }
 
   /**
-   * Helper: Add configuration fallback candidates (null-config models).
+   * Helper: Add configuration fallback candidates from the inheritance chain.
+   * Adds models from parent configs (with decreasing priority) and null-config models as final fallback.
    */
   private addConfigurationFallbackCandidates(
     candidates: ModelVendorCandidate[],
@@ -1838,6 +1985,39 @@ export class AIPromptRunner {
     preferredVendorId?: string,
     verbose?: boolean
   ): void {
+    const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
+
+    // Add models from parent configs (skip index 0 which is the direct config, already handled)
+    for (let i = 1; i < chain.length; i++) {
+      const parentConfig = chain[i];
+      const parentModels = AIEngine.Instance.PromptModels.filter(
+        pm => pm.PromptID === prompt.ID &&
+              (pm.Status === 'Active' || pm.Status === 'Preview') &&
+              pm.ConfigurationID === parentConfig.ID
+      );
+
+      if (parentModels.length > 0 && verbose) {
+        LogStatus(`Adding ${parentModels.length} models from parent config "${parentConfig.Name}" as fallback`);
+      }
+
+      for (const pm of parentModels) {
+        const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
+        if (model && model.IsActive) {
+          // Decrease base priority for each level up the chain (3000, 2500, 2000, etc.)
+          const basePriority = 3000 - (i * 500);
+          const modelCandidates = this.createCandidatesForModel(
+            model,
+            basePriority,
+            'prompt-model',
+            preferredVendorId,
+            pm.Priority
+          );
+          candidates.push(...modelCandidates);
+        }
+      }
+    }
+
+    // Finally add NULL config models (universal fallback) with lowest priority
     const nullConfigModels = AIEngine.Instance.PromptModels.filter(
       pm => pm.PromptID === prompt.ID &&
             (pm.Status === 'Active' || pm.Status === 'Preview') &&
@@ -1845,16 +2025,15 @@ export class AIPromptRunner {
     );
 
     if (nullConfigModels.length > 0 && verbose) {
-      LogStatus(`Adding ${nullConfigModels.length} NULL configuration models as fallback candidates`);
+      LogStatus(`Adding ${nullConfigModels.length} NULL configuration models as universal fallback`);
     }
 
     for (const pm of nullConfigModels) {
       const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
       if (model && model.IsActive) {
-        // Use lower base priority (2000 instead of 5000) so config-specific models are tried first
         const modelCandidates = this.createCandidatesForModel(
           model,
-          2000,
+          1000, // Lowest priority tier
           'prompt-model',
           preferredVendorId,
           pm.Priority
@@ -2380,7 +2559,7 @@ export class AIPromptRunner {
 
       const saveResult = await promptRun.Save();
       if (!saveResult) {
-        const error = `Failed to save AIPromptRun: ${promptRun.LatestResult?.Message || 'Unknown error'}`;
+        const error = `Failed to save AIPromptRun: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`;
         this.logError(error, {
           category: 'PromptRunCreation',
           metadata: {
@@ -2405,12 +2584,12 @@ export class AIPromptRunner {
       
       return promptRun;
     } catch (error) {
-      const msg = `Error creating prompt run record: ${error.message} - ${promptRun?.LatestResult?.Message} - ${promptRun?.LatestResult?.Errors[0]?.Message}`;
+      const msg = `Error creating prompt run record: ${error.message} - ${promptRun?.LatestResult?.CompleteMessage} - ${promptRun?.LatestResult?.Errors[0]?.Message}`;
       this.logError(msg, {
         category: 'PromptRunSave',
         metadata: {
           promptRunId: promptRun.ID,
-          saveError: promptRun.LatestResult?.Message
+          saveError: promptRun.LatestResult?.CompleteMessage
         },
         maxErrorLength: params.maxErrorLength
       });
@@ -2639,9 +2818,12 @@ export class AIPromptRunner {
       }
       
       // Get all models of this specific type
-      allModels = aiEngine.Models.filter(m => 
-        m.AIModelType?.trim().toLowerCase() === modelType.Name.trim().toLowerCase()
-      );
+      const targetTypeName = modelType.Name.trim().toLowerCase();
+      allModels = aiEngine.Models.filter(m => {
+        // Guard against AIModelType being non-string (defensive coding for data issues)
+        const mType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
+        return mType === targetTypeName;
+      });
     } else {
       // No type restriction - get all models
       allModels = aiEngine.Models;
@@ -4265,13 +4447,13 @@ export class AIPromptRunner {
 
       const saveResult = await promptRun.Save();
       if (!saveResult) {
-        // Safely extract error message - LatestResult.Message might be an Error object or string
+        // Safely extract error message using CompleteMessage getter
         let errorMsg = 'Unknown error';
         try {
-          if (promptRun.LatestResult?.Message) {
-            errorMsg = typeof promptRun.LatestResult.Message === 'string'
-              ? promptRun.LatestResult.Message
-              : String(promptRun.LatestResult.Message);
+          if (promptRun.LatestResult?.CompleteMessage) {
+            errorMsg = typeof promptRun.LatestResult.CompleteMessage === 'string'
+              ? promptRun.LatestResult.CompleteMessage
+              : String(promptRun.LatestResult.CompleteMessage);
           }
         } catch (msgError) {
           errorMsg = 'Error accessing error message';

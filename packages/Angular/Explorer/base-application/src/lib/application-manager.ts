@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
-import { Metadata, RunView, ApplicationInfo, LogError, LogStatus } from '@memberjunction/core';
-import { ApplicationEntity, UserApplicationEntity } from '@memberjunction/core-entities';
+import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager } from '@memberjunction/core';
+import { UserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
 /**
@@ -96,9 +96,14 @@ export class ApplicationManager {
     return this.activeApp$.value;
   }
 
+  constructor() {
+    this.Initialize();
+  }
+
   /**
    * Initialize the application manager by subscribing to the LoggedIn event.
    * Applications are loaded when the event fires, ensuring metadata is ready.
+   * Also subscribes to UserInfoEngine data changes to auto-sync when user apps change.
    */
   Initialize(): void {
     if (this.initialized) {
@@ -106,11 +111,63 @@ export class ApplicationManager {
     }
 
     // Subscribe with replay (true) to catch the event even if it already fired
-    MJGlobal.Instance.GetEventListener(true).subscribe(event => {
+    MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
       if (event.event === MJEventType.LoggedIn) {
+        await StartupManager.Instance.Startup() // make sure this is done
         this.loadApplications();
+        this.subscribeToEngineChanges();
       }
     });
+  }
+
+  /**
+   * Subscribe to UserInfoEngine data changes to automatically sync our observables
+   * when UserApplication records are modified.
+   */
+  private subscribeToEngineChanges(): void {
+    const engine = UserInfoEngine.Instance;
+    engine.DataChange$.subscribe(event => {
+      // When UserApplications data changes in the engine, sync our observables
+      if (event.config.PropertyName === 'UserApplications') {
+        this.syncFromEngine();
+      }
+    });
+  }
+
+  /**
+   * Sync our BehaviorSubjects with the current data from UserInfoEngine.
+   * Called when the engine emits a data change event for UserApplications.
+   */
+  private syncFromEngine(): void {
+    const allApps = this.allApplications$.value;
+    const engine = UserInfoEngine.Instance;
+    const userApps = engine.UserApplications;
+
+    // Build a map for quick lookup
+    const appMap = new Map<string, BaseApplication>();
+    for (const app of allApps) {
+      appMap.set(app.ID, app);
+    }
+
+    // Build user's filtered and ordered app list
+    const userAppConfigs: UserAppConfig[] = [];
+    const activeApps: BaseApplication[] = [];
+
+    for (const userApp of userApps) {
+      const app = appMap.get(userApp.ApplicationID);
+      if (app && userApp.IsActive) {
+        userAppConfigs.push({
+          app,
+          userAppId: userApp.ID,
+          sequence: userApp.Sequence,
+          isActive: userApp.IsActive
+        });
+        activeApps.push(app);
+      }
+    }
+
+    this.userAppConfigs$.next(userAppConfigs);
+    this.applications$.next(activeApps);
   }
 
   /**
@@ -198,7 +255,6 @@ export class ApplicationManager {
    */
   private async loadUserApplicationConfig(): Promise<void> {
     const md = new Metadata();
-    const appInfoList: ApplicationInfo[] = md.Applications;
     const allApps = this.allApplications$.value;
 
     // Build a map for quick lookup
@@ -207,26 +263,15 @@ export class ApplicationManager {
       appMap.set(app.ID, app);
     }
 
-    // Load user's UserApplication records
-    const rv = new RunView();
-    const userAppsResult = await rv.RunView<UserApplicationEntity>({
-      EntityName: 'User Applications',
-      ExtraFilter: `UserID = '${md.CurrentUser.ID}'`,
-      OrderBy: 'Sequence, Application',
-      ResultType: 'entity_object'
-    });
+    // Load user's UserApplication records using UserInfoEngine for caching
+    const engine = UserInfoEngine.Instance;
 
-    let userApps: UserApplicationEntity[] = [];
-    if (userAppsResult.Success) {
-      userApps = userAppsResult.Results;
-    } else {
-      LogError('Failed to load UserApplication records:', undefined, userAppsResult.ErrorMessage);
-    }
+    let userApps: UserApplicationEntity[] = engine.UserApplications;
 
     // Self-healing: If user has no UserApplication records, create from DefaultForNewUser apps
     if (userApps.length === 0) {
       LogStatus(`User ${md.CurrentUser.Name} has no UserApplication records, creating from DefaultForNewUser apps`);
-      userApps = await this.createDefaultUserApplications(md, appInfoList);
+      userApps = await this.createDefaultUserApplications();
     }
 
     // Build user's filtered and ordered app list
@@ -253,41 +298,11 @@ export class ApplicationManager {
   /**
    * Creates UserApplication records for apps with DefaultForNewUser=true and Status='Active'.
    * Called when a user has no existing UserApplication records (self-healing).
-   * Orders apps by their DefaultSequence field.
+   * Delegates to UserInfoEngine for the actual creation.
    */
-  private async createDefaultUserApplications(md: Metadata, appInfoList: ApplicationInfo[]): Promise<UserApplicationEntity[]> {
-    // Filter to Active apps with DefaultForNewUser=true, sorted by DefaultSequence
-    const defaultApps = appInfoList
-      .filter(a => a.DefaultForNewUser && a.Status === 'Active')
-      .sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
-
-    const createdUserApps: UserApplicationEntity[] = [];
-
-    LogStatus(`Found ${defaultApps.length} Active applications with DefaultForNewUser=true`);
-
-    for (const [index, appInfo] of defaultApps.entries()) {
-      try {
-        const userApp = await md.GetEntityObject<UserApplicationEntity>('User Applications');
-        userApp.NewRecord();
-        userApp.UserID = md.CurrentUser.ID;
-        userApp.ApplicationID = appInfo.ID;
-        // Use the index based on sorted DefaultSequence order
-        userApp.Sequence = index;
-        userApp.IsActive = true;
-
-        const saved = await userApp.Save();
-        if (saved) {
-          LogStatus(`Created UserApplication for ${appInfo.Name} with sequence ${index} (DefaultSequence: ${appInfo.DefaultSequence})`);
-          createdUserApps.push(userApp);
-        } else {
-          LogError(`Failed to create UserApplication for ${appInfo.Name}:`, undefined, userApp.LatestResult);
-        }
-      } catch (error) {
-        LogError(`Error creating UserApplication for ${appInfo.Name}:`, undefined, error instanceof Error ? error.message : String(error));
-      }
-    }
-
-    return createdUserApps;
+  private async createDefaultUserApplications(): Promise<UserApplicationEntity[]> {
+    const engine = UserInfoEngine.Instance;
+    return await engine.CreateDefaultApplications();
   }
 
   /**
@@ -371,4 +386,165 @@ export class ApplicationManager {
       app.NavigationStyle === 'App Switcher' || app.NavigationStyle === 'Both'
     );
   }
+
+  /**
+   * Check if an app exists in the system by path or name (case-insensitive).
+   * Returns the app from allApplications$ if found, regardless of user access.
+   */
+  GetSystemAppByPath(path: string): BaseApplication | undefined {
+    const normalizedPath = path.trim().toLowerCase();
+
+    // First try exact path match
+    const pathMatch = this.allApplications$.value.find(a =>
+      a.Path?.toLowerCase() === normalizedPath
+    );
+
+    if (pathMatch) {
+      return pathMatch;
+    }
+
+    // Fallback: try matching by name
+    return this.allApplications$.value.find(a =>
+      a.Name.trim().toLowerCase() === normalizedPath
+    );
+  }
+
+  /**
+   * Check if a system app is inactive (Status !== 'Active').
+   * Delegates to UserInfoEngine for the metadata lookup.
+   */
+  IsAppInactive(path: string): boolean {
+    const engine = UserInfoEngine.Instance;
+    const appInfo = engine.FindApplicationByPathOrName(path);
+    return appInfo != null && engine.IsApplicationInactive(appInfo.ID);
+  }
+
+  /**
+   * Determine why a user cannot access an app by its URL path.
+   * Uses UserInfoEngine for core access checking logic.
+   * Returns detailed access information for error handling.
+   */
+  CheckAppAccess(path: string): AppAccessResult {
+    const engine = UserInfoEngine.Instance;
+
+    // Step 1: Check if app exists in metadata at all
+    const appInfo = engine.FindApplicationByPathOrName(path);
+
+    if (!appInfo) {
+      return {
+        status: 'not_found',
+        message: `The application "${path}" does not exist.`,
+        appName: path
+      };
+    }
+
+    // Step 2: Check if app is inactive
+    if (engine.IsApplicationInactive(appInfo.ID)) {
+      return {
+        status: 'inactive',
+        message: `The application "${appInfo.Name}" is currently inactive.`,
+        appName: appInfo.Name,
+        appId: appInfo.ID
+      };
+    }
+
+    // Step 3: Check user's access status via engine
+    const accessStatus = engine.CheckUserApplicationAccess(appInfo.ID);
+
+    switch (accessStatus) {
+      case 'installed_active': {
+        // User has access - find the BaseApplication instance
+        const baseApp = this.applications$.value.find(a => a.ID === appInfo.ID);
+        return {
+          status: 'accessible',
+          message: 'User has access to this app',
+          appName: appInfo.Name,
+          appId: appInfo.ID,
+          app: baseApp
+        };
+      }
+
+      case 'installed_inactive':
+        return {
+          status: 'disabled',
+          message: `You have disabled "${appInfo.Name}" in your app configuration.`,
+          appName: appInfo.Name,
+          appId: appInfo.ID,
+          canInstall: true
+        };
+
+      case 'not_installed':
+      default:
+        return {
+          status: 'not_installed',
+          message: `You don't have "${appInfo.Name}" installed.`,
+          appName: appInfo.Name,
+          appId: appInfo.ID,
+          canInstall: true
+        };
+    }
+  }
+
+  /**
+   * Install an application for the current user by creating a UserApplication record.
+   * Delegates to UserInfoEngine for the actual installation.
+   * Returns the newly created UserApplication entity.
+   */
+  async InstallAppForUser(appId: string): Promise<UserApplicationEntity | null> {
+    const engine = UserInfoEngine.Instance;
+    // The engine will emit DataChange$ after the entity save triggers a refresh,
+    // which our subscribeToEngineChanges() handler will pick up and call syncFromEngine()
+    return await engine.InstallApplication(appId);
+  }
+
+  /**
+   * Enable an existing but disabled UserApplication record.
+   * Delegates to UserInfoEngine for the actual enabling.
+   * Sync happens automatically via DataChange$ subscription.
+   */
+  async EnableAppForUser(appId: string): Promise<boolean> {
+    const engine = UserInfoEngine.Instance;
+    // The engine will emit DataChange$ after the entity save triggers a refresh
+    return await engine.EnableApplication(appId);
+  }
+
+  /**
+   * Disable an application for the current user.
+   * Delegates to UserInfoEngine for the actual disabling.
+   * Sync happens automatically via DataChange$ subscription.
+   */
+  async DisableAppForUser(appId: string): Promise<boolean> {
+    const engine = UserInfoEngine.Instance;
+    // The engine will emit DataChange$ after the entity save triggers a refresh
+    return await engine.DisableApplication(appId);
+  }
+
+  /**
+   * Uninstall an application for the current user.
+   * Delegates to UserInfoEngine for the actual uninstallation.
+   * Sync happens automatically via DataChange$ subscription.
+   */
+  async UninstallAppForUser(appId: string): Promise<boolean> {
+    const engine = UserInfoEngine.Instance;
+    // The engine will emit DataChange$ after the entity delete triggers a refresh
+    return await engine.UninstallApplication(appId);
+  }
+}
+
+/**
+ * Result of checking a user's access to an application
+ */
+export interface AppAccessResult {
+  /** Status of the access check */
+  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled';
+  /** Human-readable message describing the access status */
+  message: string;
+  /** Name of the application (if found) */
+  appName: string;
+  /** ID of the application (if found) */
+  appId?: string;
+  /** The BaseApplication instance (if accessible) */
+  app?: BaseApplication;
+  /** Whether the user can install/enable this app */
+  canInstall?: boolean;
 }

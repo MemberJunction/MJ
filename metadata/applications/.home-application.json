@@ -5,17 +5,29 @@
     "Icon": "fa-solid fa-home",
     "DefaultForNewUser": true,
     "Color": "#2196f3",
-    "DefaultSequence": 0,
+    "DefaultSequence": -1,
     "Status": "Active",
     "NavigationStyle": "Both",
     "TopNavLocation": "Left of App Switcher",
-    "HideNavBarIconWhenActive": true
+    "HideNavBarIconWhenActive": true,
+    "ClassName": "HomeApplication",
+    "DefaultNavItems": [
+      {
+        "Label": "Home",
+        "ResourceType": "Custom",
+        "DriverClass": "HomeDashboard",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
   },
   "primaryKey": {
     "ID": "5D0419BD-21AE-44DD-BC87-DCE0819860F5"
   },
   "sync": {
-    "lastModified": "2025-11-28T02:04:46.019Z",
-    "checksum": "5a5082a61676f89540dd7b24d1d35e8e67f759b13e990d0d23af2a20871967cb"
+    "lastModified": "2026-01-21T05:01:18.837Z",
+    "checksum": "031a02ee3df49c8796365506d53cccef3e74817d5c91b8521d13071c399dc181"
   }
 }

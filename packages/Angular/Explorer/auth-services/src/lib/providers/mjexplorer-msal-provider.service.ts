@@ -1,24 +1,38 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAuthBase } from '../mjexplorer-auth-base.service';
-import { BehaviorSubject, Observable, Subject, catchError, filter, from, map, of, throwError, takeUntil, take, firstValueFrom } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, catchError, filter, from, map, of, throwError, takeUntil, take } from 'rxjs';
 import { MsalBroadcastService, MsalService, MSAL_INSTANCE, MSAL_GUARD_CONFIG, MSAL_INTERCEPTOR_CONFIG, MsalGuard } from '@azure/msal-angular';
 import { AccountInfo, AuthenticationResult } from '@azure/msal-common';
-import { CacheLookupPolicy, InteractionRequiredAuthError, InteractionStatus, PublicClientApplication, InteractionType } from '@azure/msal-browser';
+import { CacheLookupPolicy, InteractionRequiredAuthError, InteractionStatus, PublicClientApplication, InteractionType, BrowserAuthError } from '@azure/msal-browser';
 import { LogError } from '@memberjunction/core';
 import { AngularAuthProviderConfig } from '../IAuthProvider';
+import {
+  StandardUserInfo,
+  StandardAuthToken,
+  StandardAuthError,
+  AuthErrorType,
+  TokenRefreshResult
+} from '../auth-types';
 
 // Prevent tree-shaking by explicitly referencing the class
 export function LoadMJMSALProvider() {
 }
 
+/**
+ * MSAL (Microsoft Authentication Library) provider implementation - v3.0.0
+ *
+ * Implements the abstract methods from MJAuthBase to hide MSAL-specific details.
+ * The key abstraction is that MSAL stores the JWT in AuthenticationResult.idToken,
+ * but consumers never need to know this detail.
+ */
 @Injectable({
   providedIn: 'root'
 })
 @RegisterClass(MJAuthBase, 'msal')
 export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   static readonly PROVIDER_TYPE = 'msal';
-  type = MJMSALProvider.PROVIDER_TYPE;
+  readonly type = MJMSALProvider.PROVIDER_TYPE;
 
   private readonly _destroying$ = new Subject<void>();
   private readonly _initializationCompleted$ = new BehaviorSubject<boolean>(false);
@@ -28,13 +42,13 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
    * Factory function to provide Angular dependencies required by MSAL
    * Stored as a static property for the factory to access without instantiation
    */
-  static angularProviderFactory = (environment: any) => [
+  static angularProviderFactory = (environment: Record<string, unknown>) => [
     {
       provide: MSAL_INSTANCE,
       useValue: new PublicClientApplication({
         auth: {
-          clientId: environment.CLIENT_ID,
-          authority: environment.CLIENT_AUTHORITY,
+          clientId: environment['CLIENT_ID'] as string,
+          authority: environment['CLIENT_AUTHORITY'] as string,
           redirectUri: window.location.origin,
         },
         cache: {
@@ -65,171 +79,105 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   ];
 
   constructor(public auth: MsalService, private msalBroadcastService: MsalBroadcastService) {
-    const config: AngularAuthProviderConfig = { 
-      name: MJMSALProvider.PROVIDER_TYPE, 
-      type: MJMSALProvider.PROVIDER_TYPE 
+    const config: AngularAuthProviderConfig = {
+      name: MJMSALProvider.PROVIDER_TYPE,
+      type: MJMSALProvider.PROVIDER_TYPE
     };
     super(config);
-    // Defer initialization to avoid blocking app startup
-    // This will be called lazily when auth is actually needed
   }
 
-  private async initializeMSAL(): Promise<void> {
-    // Only initialize once
+  // ============================================================================
+  // LIFECYCLE METHODS
+  // ============================================================================
+
+  async initialize(): Promise<void> {
     if (this._initPromise) {
       return this._initPromise;
     }
-    
+
     this._initPromise = this._performInitialization();
     return this._initPromise;
   }
-  
+
   private async _performInitialization(): Promise<void> {
+    console.log('[MSAL] Starting initialization...');
     await this.auth.instance.initialize();
+    console.log('[MSAL] MSAL instance initialized');
 
     // Handle redirect immediately after initialization
     const redirectResponse = await this.auth.instance.handleRedirectPromise();
+    console.log('[MSAL] Redirect response:', redirectResponse ? 'Found' : 'None');
 
     if (redirectResponse && redirectResponse.account) {
       // User just logged in via redirect
+      console.log('[MSAL] Processing redirect login');
       this.auth.instance.setActiveAccount(redirectResponse.account);
       this.updateAuthState(true);
-      this.authenticated = true;
+
+      // Update user info from account
+      const userInfo = this.mapMSALAccountToStandard(redirectResponse.account);
+      this.updateUserInfo(userInfo);
+
       this._initializationCompleted$.next(true);
+      console.log('[MSAL] Initialization completed (redirect login)');
     } else {
       // Set active account if we have one from cache
       const accounts = this.auth.instance.getAllAccounts();
+      console.log('[MSAL] Cached accounts found:', accounts.length);
 
       if (accounts.length > 0) {
+        console.log('[MSAL] Restoring session from cached account:', accounts[0].username);
         this.auth.instance.setActiveAccount(accounts[0]);
         this.updateAuthState(true);
-        this.authenticated = true;
+
+        // Update user info from cached account
+        const userInfo = this.mapMSALAccountToStandard(accounts[0]);
+        this.updateUserInfo(userInfo);
+
         this._initializationCompleted$.next(true);
+        console.log('[MSAL] Initialization completed (cached session restored)');
+      } else {
+        console.log('[MSAL] No cached accounts, user needs to log in');
       }
     }
-    
+
     // Subscribe to broadcast service for ongoing auth state changes
     this.msalBroadcastService.inProgress$
-      .pipe(filter((status: InteractionStatus) => status === InteractionStatus.None), takeUntil(this._destroying$))
+      .pipe(
+        filter((status: InteractionStatus) => status === InteractionStatus.None),
+        takeUntil(this._destroying$)
+      )
       .subscribe(() => {
-        const isAuth = this.auth.instance.getAllAccounts().length > 0;
+        const accounts = this.auth.instance.getAllAccounts();
+        const isAuth = accounts.length > 0;
+
         this.updateAuthState(isAuth);
-        this.authenticated = isAuth;
+
         if (isAuth) {
-          this.auth.instance.setActiveAccount(this.auth.instance.getAllAccounts()[0]);
+          this.auth.instance.setActiveAccount(accounts[0]);
+          const userInfo = this.mapMSALAccountToStandard(accounts[0]);
+          this.updateUserInfo(userInfo);
+        } else {
+          this.updateUserInfo(null);
         }
+
         this._initializationCompleted$.next(true);
       });
   }
 
-  // Ensure methods wait for initialization
-  private async ensureInitialized() {
-    // Trigger lazy initialization if not started
-    if (!this._initPromise) {
-      await this.initializeMSAL();
-    } else if (!this._initializationCompleted$.value) {
-      // Waiting for existing initialization to complete...
-      await this._initPromise;
-    }
-  }
+  protected async loginInternal(options?: Record<string, unknown>): Promise<void> {
+    await this.ensureInitialized();
 
-  override login(options?: any): Observable<void> {
-    const silentRequest: any = {
-      scopes: ['User.Read','email', 'profile'],
+    const silentRequest = {
+      scopes: ['User.Read', 'email', 'profile'],
       ...options
     };
 
-    this.auth.loginRedirect(silentRequest).subscribe({
-      next: () => {
-        this.auth.instance.setActiveAccount(this.auth.instance.getAllAccounts()[0] || null);
-        // Don't reload here - let the redirect handler manage the flow
-      }, 
-      error: (error) => {
-        LogError(error);
-      }
-    });
-
-    return of(void 0);
-  }
-
-  public async logout(): Promise<void> {
-    await this.ensureInitialized();
-    this.auth.logoutRedirect().subscribe(() => {
-      // Logout will trigger a redirect
-    });
-  }
-
-  public async refresh(): Promise<Observable<any>> {
-    await this.ensureInitialized();
-    const silentRequest: any = {
-      scopes: ['User.Read', 'email', 'profile'],
-      cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork,
-    };
-    return from(this.auth.instance.acquireTokenSilent(silentRequest));
-  }
-
-  async getUser(): Promise<AccountInfo | null> {
-    await this.ensureInitialized();
-    return this.auth.instance.getActiveAccount();
-  }
-
-  override isAuthenticated(): Observable<boolean> {
-    // Return the base class observable which is being updated in initializeMSAL
-    return this.isAuthenticated$.asObservable();
-  }
-
-  async getUserClaims(): Promise<Observable<any>> {
-    await this.ensureInitialized();
-    const account = this.auth.instance.getActiveAccount();
-    
-    if (!account) {
-      // No account, return null observable
-      return of(null);
-    }
-    
-    const silentRequest: any = {
-      scopes: ['User.Read', 'email', 'profile'],
-      account: account,
-      cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
-    };
-    
-    return from(this.auth.instance.acquireTokenSilent(silentRequest)).pipe(
-      map((response: AuthenticationResult) => response),
-      catchError((error) => {
-        LogError(error);
-        if (error instanceof InteractionRequiredAuthError) {
-          // Try popup as fallback
-          return from(this.auth.instance.acquireTokenPopup({
-            scopes: ['User.Read', 'email', 'profile']
-          }));
-        }
-        this.authenticated = false;
-        return throwError(() => error);
-      })
-    );
-  }
-
-  checkExpiredTokenError(error: string): boolean {
-    return error?.trim().toLowerCase().includes('you need to be authorized to perform');
-  }
-
-  // Required methods for the new interface
-  async initialize(): Promise<void> {
-    await this.initializeMSAL();
-  }
-
-  protected async loginInternal(options?: any): Promise<void> {
-    await this.ensureInitialized();
-    const silentRequest: any = {
-      scopes: ['User.Read','email', 'profile'],
-      ...options
-    };
-    
     return new Promise((resolve, reject) => {
-      this.auth.loginRedirect(silentRequest).subscribe({ 
+      this.auth.loginRedirect(silentRequest).subscribe({
         next: () => {
           resolve();
-        }, 
+        },
         error: (error) => {
           LogError(error);
           reject(error);
@@ -238,63 +186,398 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     });
   }
 
-  async getToken(): Promise<string | null> {
+  async logout(): Promise<void> {
     await this.ensureInitialized();
+    this.auth.logoutRedirect().subscribe(() => {
+      // Logout will trigger a redirect
+    });
+  }
+
+  async handleCallback(): Promise<void> {
+    // MSAL Angular handles callbacks internally through its broadcast service
+    // The handleRedirectPromise is called in initialize()
+    await this.ensureInitialized();
+  }
+
+  // ============================================================================
+  // ABSTRACT METHOD IMPLEMENTATIONS (v3.0.0)
+  // ============================================================================
+
+  /**
+   * Extract ID token from MSAL's storage
+   *
+   * MSAL stores the JWT in AuthenticationResult.idToken
+   * This is the key abstraction - consumers never need to know about MSAL's structure!
+   */
+  protected async extractIdTokenInternal(): Promise<string | null> {
     try {
+      await this.ensureInitialized();
+
       const account = this.auth.instance.getActiveAccount();
       if (!account) {
         return null;
       }
-      
+
+      // First try to get cached token from account
+      // This avoids unnecessary iframe calls that can timeout
+      if (account.idToken) {
+        return account.idToken;
+      }
+
+      // If not in account, try silent token acquisition from cache only
+      // Use CacheLookupPolicy.AccessToken to avoid iframe calls
+      const response = await this.auth.instance.acquireTokenSilent({
+        scopes: ['User.Read', 'email', 'profile'],
+        account: account,
+        cacheLookupPolicy: CacheLookupPolicy.AccessToken
+      });
+
+      // MSAL-specific detail: JWT is in idToken property
+      return response.idToken || null;
+    } catch (error) {
+      console.error('[MSAL] Error extracting ID token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Extract complete token info from MSAL
+   *
+   * Maps MSAL's AuthenticationResult to StandardAuthToken
+   */
+  protected async extractTokenInfoInternal(): Promise<StandardAuthToken | null> {
+    try {
+      await this.ensureInitialized();
+
+      const account = this.auth.instance.getActiveAccount();
+      if (!account) {
+        return null;
+      }
+
+      // Use cache-only lookup to avoid iframe timeouts during normal token extraction
+      const response = await this.auth.instance.acquireTokenSilent({
+        scopes: ['User.Read', 'email', 'profile'],
+        account: account,
+        cacheLookupPolicy: CacheLookupPolicy.AccessToken
+      });
+
+      if (!response.idToken) {
+        return null;
+      }
+
+      return {
+        idToken: response.idToken,
+        accessToken: response.accessToken,
+        expiresAt: response.expiresOn ? response.expiresOn.getTime() : 0,
+        scopes: response.scopes
+      };
+    } catch (error) {
+      // If acquireTokenSilent fails (e.g., iframe timeout), try to use cached account data
+      console.error('[MSAL] Error extracting token info:', error);
+
+      const account = this.auth.instance.getActiveAccount();
+      if (account?.idToken) {
+        // Return basic token info from account if available
+        return {
+          idToken: account.idToken,
+          expiresAt: 0, // Unknown from account alone
+          scopes: []
+        };
+      }
+
+      return null;
+    }
+  }
+
+  /**
+   * Extract user info from MSAL account
+   *
+   * Maps MSAL's AccountInfo structure to StandardUserInfo
+   */
+  protected async extractUserInfoInternal(): Promise<StandardUserInfo | null> {
+    try {
+      await this.ensureInitialized();
+
+      const account = this.auth.instance.getActiveAccount();
+      if (!account) {
+        return null;
+      }
+
+      return this.mapMSALAccountToStandard(account);
+    } catch (error) {
+      console.error('[MSAL] Error extracting user info:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Refresh token using MSAL's silent token acquisition
+   *
+   * Uses acquireTokenSilent with forceRefresh to get new tokens
+   */
+  protected async refreshTokenInternal(): Promise<TokenRefreshResult> {
+    try {
+      await this.ensureInitialized();
+
+      const account = this.auth.instance.getActiveAccount();
+      if (!account) {
+        return {
+          success: false,
+          error: {
+            type: AuthErrorType.NO_ACTIVE_SESSION,
+            message: 'No active account found',
+            userMessage: 'You need to log in to continue.'
+          }
+        };
+      }
+
+      // IMPORTANT: Match original code exactly - no account parameter, no offline_access
+      // This allows MSAL to use lenient matching and successfully refresh tokens
+      const response = await this.auth.instance.acquireTokenSilent({
+        scopes: ['User.Read', 'email', 'profile'],
+        cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
+        // NOTE: Intentionally NOT passing account or offline_access to match original working code
+      });
+
+      if (!response.idToken) {
+        return {
+          success: false,
+          error: {
+            type: AuthErrorType.NO_ACTIVE_SESSION,
+            message: 'Token refresh succeeded but no ID token returned',
+            userMessage: 'Session refresh failed. Please log in again.'
+          }
+        };
+      }
+
+      const token: StandardAuthToken = {
+        idToken: response.idToken,
+        accessToken: response.accessToken,
+        expiresAt: response.expiresOn ? response.expiresOn.getTime() : 0,
+        scopes: response.scopes
+      };
+
+      return {
+        success: true,
+        token
+      };
+    } catch (error) {
+      console.error('[MSAL] Token refresh failed:', error);
+
+      // Check if this is an iframe timeout or interaction required error
+      const errorCode = (error as any)?.errorCode;
+      if (errorCode === 'monitor_window_timeout' || error instanceof InteractionRequiredAuthError) {
+        // Return INTERACTION_REQUIRED error - base class will call handleSessionExpiryInternal
+        return {
+          success: false,
+          error: {
+            type: AuthErrorType.INTERACTION_REQUIRED,
+            message: 'Silent token refresh failed - interaction required',
+            userMessage: 'Your session has expired. Redirecting to login...',
+            originalError: error
+          }
+        };
+      }
+
+      return {
+        success: false,
+        error: this.classifyErrorInternal(error)
+      };
+    }
+  }
+
+  /**
+   * Classify MSAL-specific errors into semantic types
+   *
+   * Maps MSAL error classes to AuthErrorType enum
+   */
+  protected classifyErrorInternal(error: unknown): StandardAuthError {
+    const errorObj = error as Record<string, unknown>;
+    const message = errorObj?.['message'] as string || 'Unknown error';
+    const errorCode = errorObj?.['errorCode'] as string || '';
+
+    // Check for specific MSAL error types
+    if (error instanceof InteractionRequiredAuthError) {
+      return {
+        type: AuthErrorType.INTERACTION_REQUIRED,
+        message,
+        originalError: error,
+        userMessage: 'Additional authentication is required. Please log in again.'
+      };
+    }
+
+    if (error instanceof BrowserAuthError) {
+      // Check specific error codes
+      if (errorCode === 'user_cancelled' || message.includes('user cancelled')) {
+        return {
+          type: AuthErrorType.USER_CANCELLED,
+          message,
+          originalError: error,
+          userMessage: 'Login was cancelled.'
+        };
+      }
+
+      return {
+        type: AuthErrorType.NO_ACTIVE_SESSION,
+        message,
+        originalError: error,
+        userMessage: 'Authentication error. Please log in again.'
+      };
+    }
+
+    // Check message patterns
+    if (message.includes('token') && message.includes('expired')) {
+      return {
+        type: AuthErrorType.TOKEN_EXPIRED,
+        message,
+        originalError: error,
+        userMessage: 'Your session has expired. Please log in again.'
+      };
+    }
+
+    if (message.includes('network') || message.includes('fetch')) {
+      return {
+        type: AuthErrorType.NETWORK_ERROR,
+        message,
+        originalError: error,
+        userMessage: 'Network error. Please check your connection and try again.'
+      };
+    }
+
+    if (message.includes('you need to be authorized')) {
+      return {
+        type: AuthErrorType.TOKEN_EXPIRED,
+        message,
+        originalError: error,
+        userMessage: 'Your session has expired. Please log in again.'
+      };
+    }
+
+    // Default to unknown error
+    return {
+      type: AuthErrorType.UNKNOWN_ERROR,
+      message,
+      originalError: error,
+      userMessage: 'An unexpected error occurred. Please try again.'
+    };
+  }
+
+  // ============================================================================
+  // HELPER METHODS
+  // ============================================================================
+
+  private async ensureInitialized(): Promise<void> {
+    if (!this._initPromise) {
+      await this.initialize();
+    } else if (!this._initializationCompleted$.value) {
+      await this._initPromise;
+    }
+  }
+
+  /**
+   * Map MSAL AccountInfo to StandardUserInfo
+   */
+  private mapMSALAccountToStandard(account: AccountInfo): StandardUserInfo {
+    return {
+      id: account.localAccountId || account.homeAccountId,
+      email: account.username || '',
+      name: account.name || account.username || '',
+      givenName: account.idTokenClaims?.['given_name'] as string,
+      familyName: account.idTokenClaims?.['family_name'] as string,
+      preferredUsername: account.username,
+      emailVerified: true // MSAL doesn't provide this, assume true
+    };
+  }
+
+  /**
+   * Get profile picture URL from Microsoft Graph API
+   *
+   * MSAL requires fetching the photo from Microsoft Graph.
+   * This is the key advantage of encapsulation - consumers don't need
+   * to know about Graph API, they just call getProfilePictureUrl()!
+   */
+  protected async getProfilePictureUrlInternal(): Promise<string | null> {
+    try {
+      await this.ensureInitialized();
+
+      const account = this.auth.instance.getActiveAccount();
+      if (!account) {
+        return null;
+      }
+
+      // Get access token for Microsoft Graph
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read'],
         account: account,
         forceRefresh: false
       });
-      return response.accessToken;
-    } catch (error: any) {
-      if (error instanceof InteractionRequiredAuthError) {
-        // Try interactive login if silent acquisition fails
-        try {
-          const response = await this.auth.instance.acquireTokenPopup({
-            scopes: ['User.Read']
-          });
-          return response.accessToken;
-        } catch (popupError) {
-          console.error('Failed to acquire token via popup:', popupError);
-        }
+
+      if (!response.accessToken) {
+        return null;
       }
+
+      // Fetch photo from Microsoft Graph
+      const graphResponse = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
+        headers: { 'Authorization': `Bearer ${response.accessToken}` }
+      });
+
+      if (graphResponse.ok) {
+        const blob = await graphResponse.blob();
+        return URL.createObjectURL(blob);
+      }
+
+      return null;
+    } catch (error) {
+      console.error('[MSAL] Error getting profile picture:', error);
       return null;
     }
   }
 
-  async handleCallback(): Promise<void> {
-    // MSAL Angular handles callbacks internally through its broadcast service
-    // The handleRedirectPromise is called in initializeMSAL
-    await this.ensureInitialized();
+  /**
+   * Handle session expiry by redirecting to Microsoft login
+   *
+   * This method is called by the base class when silent token refresh fails
+   * with INTERACTION_REQUIRED error. It redirects to Microsoft login and never returns.
+   * After authentication, the app will reload and re-initialize with a fresh token.
+   */
+  protected async handleSessionExpiryInternal(): Promise<void> {
+    console.log('[MSAL] Redirecting to Microsoft login for re-authentication...');
+
+    // Initiate redirect authentication - page will navigate away
+    this.auth.loginRedirect({
+      scopes: ['User.Read', 'email', 'profile'],
+      prompt: 'select_account'
+    }).subscribe({
+      error: (redirectError) => {
+        console.error('[MSAL] Redirect initiation failed:', redirectError);
+      }
+    });
+
+    // Return a promise that never resolves - page will navigate before this matters
+    return new Promise<void>(() => {});
   }
 
-  getRequiredConfig(): string[] {
+  // ============================================================================
+  // CONFIGURATION
+  // ============================================================================
+
+  override getRequiredConfig(): string[] {
     return ['clientId', 'tenantId'];
   }
 
-  validateConfig(_config: any): boolean {
+  override validateConfig(_config: Record<string, unknown>): boolean {
     // MSAL configuration is handled by Angular module providers
     return true;
   }
-  
+
+  // ============================================================================
+  // CLEANUP
+  // ============================================================================
+
   ngOnDestroy(): void {
-    // Complete the destroying subject to clean up subscriptions
     this._destroying$.next();
     this._destroying$.complete();
-    
-    // Clear any cached promises
     this._initPromise = null;
-    
-    // Complete behavior subjects
     this._initializationCompleted$.complete();
-    this.isAuthenticated$.complete();
-    this.userProfile$.complete();
-    this.userEmail$.complete();
   }
 }

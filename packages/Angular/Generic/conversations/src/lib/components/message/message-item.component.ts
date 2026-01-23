@@ -11,16 +11,31 @@ import {
   SimpleChanges,
   DoCheck
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair, LogStatusEx } from '@memberjunction/core';
+import { ConversationDetailEntity, ConversationEntity, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
+import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
+
+/**
+ * Represents an attachment on a message for display
+ */
+export interface MessageAttachment {
+  id: string;
+  type: 'Image' | 'Video' | 'Audio' | 'Document';
+  mimeType: string;
+  fileName: string | null;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
+  thumbnailUrl?: string;
+  contentUrl?: string;
+}
 
 /**
  * Component for displaying a single message in a conversation
@@ -47,6 +62,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
+  @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
@@ -58,6 +74,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
+  @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -930,6 +947,37 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     event.stopPropagation();
     // TODO: Implement artifact export
     console.log('Export artifact for message:', this.message.ID);
+  }
+
+  /**
+   * Handle attachment thumbnail click
+   * Emits the attachment for the parent to display in the image viewer
+   */
+  public onAttachmentClick(attachment: MessageAttachment): void {
+    this.attachmentClicked.emit(attachment);
+  }
+
+  /**
+   * Check if message has any attachments
+   */
+  public get hasAttachments(): boolean {
+    return this.attachments && this.attachments.length > 0;
+  }
+
+  /**
+   * Get only image attachments
+   */
+  public get imageAttachments(): MessageAttachment[] {
+    return this.attachments?.filter(a => a.type === 'Image') || [];
+  }
+
+  /**
+   * Format file size for display
+   */
+  public formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
   /**

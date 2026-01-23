@@ -74,6 +74,24 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public CacheMaxSize: number = null
     /**
+     * SQL query that returns cache validation fingerprint data (MaxUpdatedAt, RowCount).
+     * Used for smart cache refresh to determine if cached data is stale without fetching full results.
+     * When provided, enables efficient server-side cache validation before sending full query results.
+     *
+     * The SQL should return exactly one row with two columns:
+     * - MaxUpdatedAt: DATETIME - The maximum __mj_UpdatedAt timestamp from the underlying data
+     * - RowCount: INT - The total number of rows that would be returned
+     *
+     * Example for a simple entity query:
+     * ```sql
+     * SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS RowCount FROM [schema].[EntityView]
+     * ```
+     *
+     * For complex queries with filters/joins, the validation SQL should mirror the main query's
+     * data scope but only return the fingerprint metrics.
+     */
+    public CacheValidationSQL: string = null
+    /**
      * Date and time when this query record was created
      */
     __mj_CreatedAt: Date = null

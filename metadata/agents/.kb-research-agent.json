@@ -23,23 +23,9 @@
             "ID": "63FDABF2-CDED-4AA2-AA8F-5F564B15D8C2"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:03.022Z",
-            "checksum": "68bbbc558f89f4300ca1fc50bc0726585b78acedea43c31ddb5534059da3a2ac"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "0388084B-97A8-4C3D-A38B-B6CE60471A87"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Knowledge Base Research Agent Prompt",
-              "resolved": "B3DBD3AC-A529-45A9-AAB5-F682E2E0F73A"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.016Z",
+            "checksum": "c151b9bc854fb6b995bbc6a56afa21833da10f40d6159b0cfe6dd8983cddc45d"
+          }
         }
       ],
       "AI Agent Actions": [
@@ -53,23 +39,9 @@
             "ID": "21D2E6E0-3331-4DAF-B401-E0D5545CDE34"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:03.033Z",
-            "checksum": "b1301c100476fee8e984756e18f36bf6995f950e5ac01471ec9fe08315451595"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "0388084B-97A8-4C3D-A38B-B6CE60471A87"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Betty",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.018Z",
+            "checksum": "aa0fca193addf7fae93dcddb62eb65f236b634b536aac13b37f1cccbc599a4f2"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -89,23 +61,9 @@
             "ID": "B3CD28BD-4F31-4ED8-BB27-198A90D4E07A"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:03.057Z",
-            "checksum": "2b9df006bc53fad11c44917e46f72721a961da7f6f998e510a377e7a9a928df0"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "0388084B-97A8-4C3D-A38B-B6CE60471A87"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.SubAgentID",
-              "expression": "@lookup:AI Agents.Name=Codesmith Agent",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.019Z",
+            "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
+          }
         }
       ]
     },
@@ -113,16 +71,8 @@
       "ID": "0388084B-97A8-4C3D-A38B-B6CE60471A87"
     },
     "sync": {
-      "lastModified": "2025-11-10T00:29:02.951Z",
-      "checksum": "1194089c77e951bd4f0823ae02aebe4a25ee085cbc61fbc86cc25fcf089297c8"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:34.988Z",
+      "checksum": "36a7053cb886969d2c62d4b80463eff8aca77638f38437f42cd6d4b0f85b3554"
+    }
   }
 ]

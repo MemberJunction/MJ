@@ -1,0 +1,844 @@
+<!-- Backdrop -->
+@if (isOpen) {
+  <div class="panel-backdrop" (click)="onClose()"></div>
+}
+
+<!-- Sliding Panel -->
+<div class="config-panel"
+     [class.open]="isOpen"
+     [class.resizing]="isResizing"
+     [style.width.px]="panelWidth">
+  <!-- Resize Handle -->
+  <div class="resize-handle"
+       (mousedown)="onResizeStart($event)"
+       title="Drag to resize">
+    <div class="resize-grip"></div>
+  </div>
+
+  <!-- Panel Header -->
+  <div class="panel-header">
+    <div class="header-title">
+      <i class="fa-solid fa-sliders-h"></i>
+      <span>{{ viewEntity ? 'Edit View' : 'Configure View' }}</span>
+    </div>
+    <button class="close-btn" (click)="onClose()" title="Close">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="tab-nav">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab === 'columns'"
+      (click)="setActiveTab('columns')">
+      <i class="fa-solid fa-columns"></i>
+      <span>Columns</span>
+    </button>
+    <button
+      class="tab-btn"
+      [class.active]="activeTab === 'sorting'"
+      (click)="setActiveTab('sorting')">
+      <i class="fa-solid fa-arrow-up-wide-short"></i>
+      <span>Sorting</span>
+      @if (sortItems.length > 0) {
+        <span class="tab-badge">{{ sortItems.length }}</span>
+      }
+    </button>
+    <button
+      class="tab-btn"
+      [class.active]="activeTab === 'filters'"
+      (click)="setActiveTab('filters')">
+      <i class="fa-solid fa-filter"></i>
+      <span>Filters</span>
+    </button>
+    <button
+      class="tab-btn"
+      [class.active]="activeTab === 'settings'"
+      (click)="setActiveTab('settings')">
+      <i class="fa-solid fa-cog"></i>
+      <span>Settings</span>
+    </button>
+  </div>
+
+  <!-- Panel Content -->
+  <div class="panel-content">
+    <!-- Columns Tab -->
+    @if (activeTab === 'columns' && !formatEditingColumn) {
+      <div class="tab-content">
+        <!-- Visible Columns -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-eye"></i>
+            <span>Visible Columns</span>
+            <span class="column-count">{{ visibleColumns.length }}</span>
+          </div>
+          <div class="column-list visible-columns">
+            @for (column of visibleColumns; track column.fieldId; let i = $index) {
+              <!-- Drop indicator before -->
+              @if (isDropBefore(column)) {
+                <div class="drop-indicator"></div>
+              }
+              <div
+                class="column-item"
+                [class.dragging]="draggedColumn === column"
+                [class.drop-target]="dropTargetColumn === column"
+                draggable="true"
+                (dragstart)="onDragStart($event, column)"
+                (dragover)="onDragOver($event, column)"
+                (dragleave)="onDragLeave($event)"
+                (drop)="onDrop($event, column)"
+                (dragend)="onDragEnd($event)">
+                <div class="drag-handle">
+                  <i class="fa-solid fa-grip-vertical"></i>
+                </div>
+                <span class="column-name">
+                  {{ column.userDisplayName || column.displayName }}
+                  @if (column.userDisplayName) {
+                    <i class="fa-solid fa-pen-nib alias-indicator" title="Custom name: {{ column.userDisplayName }}"></i>
+                  }
+                  @if (hasCustomFormat(column)) {
+                    <i class="fa-solid fa-paintbrush format-indicator" title="Custom formatting applied"></i>
+                  }
+                </span>
+                <div class="column-actions">
+                  <button
+                    class="action-btn format-btn"
+                    (click)="openFormatEditor(column)"
+                    title="Format column">
+                    <i class="fa-solid fa-paintbrush"></i>
+                  </button>
+                  <button
+                    class="action-btn"
+                    [disabled]="i === 0"
+                    (click)="moveColumnUp(column)"
+                    title="Move up">
+                    <i class="fa-solid fa-chevron-up"></i>
+                  </button>
+                  <button
+                    class="action-btn"
+                    [disabled]="i === visibleColumns.length - 1"
+                    (click)="moveColumnDown(column)"
+                    title="Move down">
+                    <i class="fa-solid fa-chevron-down"></i>
+                  </button>
+                  <button
+                    class="action-btn hide-btn"
+                    (click)="toggleColumnVisibility(column)"
+                    title="Hide column">
+                    <i class="fa-solid fa-eye-slash"></i>
+                  </button>
+                </div>
+              </div>
+              <!-- Drop indicator after (only for last item) -->
+              @if (isDropAfter(column) && i === visibleColumns.length - 1) {
+                <div class="drop-indicator"></div>
+              }
+            }
+            @if (visibleColumns.length === 0) {
+              <div class="empty-list">
+                <i class="fa-solid fa-info-circle"></i>
+                <span>No columns visible. Add columns from below.</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Hidden Columns -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-eye-slash"></i>
+            <span>Hidden Columns</span>
+            <span class="column-count">{{ hiddenColumns.length }}</span>
+          </div>
+          @if (hiddenColumns.length > 5) {
+            <div class="column-search">
+              <i class="fa-solid fa-search"></i>
+              <input
+                type="text"
+                placeholder="Search columns..."
+                [(ngModel)]="columnSearchText"
+              />
+            </div>
+          }
+          <div class="column-list hidden-columns">
+            @for (column of filteredHiddenColumns; track column.fieldId) {
+              <div class="column-item hidden">
+                <span class="column-name">{{ column.displayName }}</span>
+                <button
+                  class="action-btn show-btn"
+                  (click)="toggleColumnVisibility(column)"
+                  title="Show column">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              </div>
+            }
+            @if (hiddenColumns.length === 0) {
+              <div class="empty-list">
+                <i class="fa-solid fa-check-circle"></i>
+                <span>All columns are visible</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Column Format Editor Sub-Panel -->
+    @if (activeTab === 'columns' && formatEditingColumn) {
+      <div class="format-editor">
+        <!-- Format Editor Header -->
+        <div class="format-editor-header">
+          <button class="back-btn" (click)="closeFormatEditor()">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <div class="format-editor-title">
+            <span>Format: {{ formatEditingColumn.userDisplayName || formatEditingColumn.displayName }}</span>
+          </div>
+        </div>
+
+        <!-- Column Alias Section -->
+        <div class="format-section">
+          <div class="format-section-header">
+            <i class="fa-solid fa-pen-nib"></i>
+            <span>Column Name</span>
+          </div>
+          <div class="format-row">
+            <label>Display As</label>
+            <input type="text" class="format-input"
+                   [value]="formatEditingColumn.userDisplayName || ''"
+                   (input)="updateUserDisplayName($any($event.target).value)"
+                   [placeholder]="formatEditingColumn.displayName" />
+          </div>
+          @if (formatEditingColumn.userDisplayName) {
+            <div class="format-row alias-info">
+              <small class="muted-text">Original: {{ formatEditingColumn.displayName }}</small>
+              <button class="clear-alias-btn" (click)="formatEditingColumn.userDisplayName = undefined" title="Clear alias">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+          }
+        </div>
+
+        <!-- Preview Section -->
+        <div class="format-preview-section">
+          <div class="preview-header">
+            <i class="fa-solid fa-eye"></i>
+            <span>Preview</span>
+          </div>
+          <div class="preview-table">
+            <div class="preview-header-cell"
+                 [style.font-weight]="formatEditingColumn.format?.headerStyle?.bold ? 'bold' : 'normal'"
+                 [style.font-style]="formatEditingColumn.format?.headerStyle?.italic ? 'italic' : 'normal'"
+                 [style.text-decoration]="formatEditingColumn.format?.headerStyle?.underline ? 'underline' : 'none'"
+                 [style.color]="formatEditingColumn.format?.headerStyle?.color"
+                 [style.background-color]="formatEditingColumn.format?.headerStyle?.backgroundColor">
+              {{ formatEditingColumn.userDisplayName || formatEditingColumn.displayName }}
+            </div>
+            @for (value of getSampleValues(formatEditingColumn); track $index) {
+              <div class="preview-cell"
+                   [style.text-align]="formatEditingColumn.format?.align || 'left'"
+                   [style.font-weight]="formatEditingColumn.format?.cellStyle?.bold ? 'bold' : 'normal'"
+                   [style.font-style]="formatEditingColumn.format?.cellStyle?.italic ? 'italic' : 'normal'"
+                   [style.text-decoration]="formatEditingColumn.format?.cellStyle?.underline ? 'underline' : 'none'"
+                   [style.color]="formatEditingColumn.format?.cellStyle?.color"
+                   [style.background-color]="formatEditingColumn.format?.cellStyle?.backgroundColor">
+                {{ formatPreviewValue(value, formatEditingColumn.format) }}
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Format Type -->
+        <div class="format-section">
+          <div class="format-section-header">
+            <i class="fa-solid fa-hashtag"></i>
+            <span>Format Type</span>
+          </div>
+          <select class="format-select" [(ngModel)]="formatEditingColumn.format!.type">
+            <option value="auto">Auto (Smart Default)</option>
+            <option value="text">Text</option>
+            <option value="number">Number</option>
+            <option value="currency">Currency</option>
+            <option value="percent">Percent</option>
+            <option value="date">Date</option>
+            <option value="datetime">Date & Time</option>
+            <option value="boolean">Boolean</option>
+          </select>
+        </div>
+
+        <!-- Type-Specific Options -->
+        @if (formatEditingColumn.format?.type === 'number' || formatEditingColumn.format?.type === 'currency' || formatEditingColumn.format?.type === 'percent') {
+          <div class="format-section">
+            <div class="format-section-header">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Number Options</span>
+            </div>
+            <div class="format-row">
+              <label>Decimal Places</label>
+              <input type="number" class="format-input small" min="0" max="10"
+                     [(ngModel)]="formatEditingColumn.format!.decimals" />
+            </div>
+            @if (formatEditingColumn.format?.type === 'currency') {
+              <div class="format-row">
+                <label>Currency</label>
+                <select class="format-select" [(ngModel)]="formatEditingColumn.format!.currencyCode">
+                  <option value="USD">USD ($)</option>
+                  <option value="EUR">EUR (€)</option>
+                  <option value="GBP">GBP (£)</option>
+                  <option value="JPY">JPY (¥)</option>
+                  <option value="CAD">CAD ($)</option>
+                  <option value="AUD">AUD ($)</option>
+                </select>
+              </div>
+            }
+            <div class="format-row">
+              <label>Thousands Separator</label>
+              <input type="checkbox" [(ngModel)]="formatEditingColumn.format!.thousandsSeparator" />
+            </div>
+          </div>
+        }
+
+        @if (formatEditingColumn.format?.type === 'date' || formatEditingColumn.format?.type === 'datetime') {
+          <div class="format-section">
+            <div class="format-section-header">
+              <i class="fa-solid fa-calendar"></i>
+              <span>Date Options</span>
+            </div>
+            <div class="format-row">
+              <label>Format</label>
+              <select class="format-select" [(ngModel)]="formatEditingColumn.format!.dateFormat">
+                <option value="short">Short (1/15/25)</option>
+                <option value="short-weekday">Short + Day (Wed, 1/15/25)</option>
+                <option value="medium">Medium (Jan 15, 2025)</option>
+                <option value="medium-weekday">Medium + Day (Wed, Jan 15, 2025)</option>
+                <option value="long">Long (January 15, 2025)</option>
+                <option value="long-weekday">Long + Day (Wednesday, January 15, 2025)</option>
+              </select>
+            </div>
+          </div>
+        }
+
+        @if (formatEditingColumn.format?.type === 'boolean') {
+          <div class="format-section">
+            <div class="format-section-header">
+              <i class="fa-solid fa-toggle-on"></i>
+              <span>Boolean Options</span>
+            </div>
+            <div class="format-row">
+              <label>True Label</label>
+              <input type="text" class="format-input" [(ngModel)]="formatEditingColumn.format!.trueLabel" placeholder="Yes" />
+            </div>
+            <div class="format-row">
+              <label>False Label</label>
+              <input type="text" class="format-input" [(ngModel)]="formatEditingColumn.format!.falseLabel" placeholder="No" />
+            </div>
+            <div class="format-row">
+              <label>Display As</label>
+              <select class="format-select" [(ngModel)]="formatEditingColumn.format!.booleanDisplay">
+                <option value="text">Text</option>
+                <option value="checkbox">Checkbox</option>
+                <option value="icon">Icon</option>
+              </select>
+            </div>
+          </div>
+        }
+
+        <!-- Alignment -->
+        <div class="format-section">
+          <div class="format-section-header">
+            <i class="fa-solid fa-align-left"></i>
+            <span>Alignment</span>
+          </div>
+          <div class="alignment-toggle">
+            <button class="align-btn" [class.active]="formatEditingColumn.format?.align === 'left' || !formatEditingColumn.format?.align"
+                    (click)="formatEditingColumn.format!.align = 'left'" title="Left">
+              <i class="fa-solid fa-align-left"></i>
+            </button>
+            <button class="align-btn" [class.active]="formatEditingColumn.format?.align === 'center'"
+                    (click)="formatEditingColumn.format!.align = 'center'" title="Center">
+              <i class="fa-solid fa-align-center"></i>
+            </button>
+            <button class="align-btn" [class.active]="formatEditingColumn.format?.align === 'right'"
+                    (click)="formatEditingColumn.format!.align = 'right'" title="Right">
+              <i class="fa-solid fa-align-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Header Style -->
+        <div class="format-section">
+          <div class="format-section-header">
+            <i class="fa-solid fa-heading"></i>
+            <span>Header Style</span>
+          </div>
+          <div class="style-buttons">
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.bold"
+                    (click)="toggleHeaderStyle('bold')"
+                    title="Bold">
+              <i class="fa-solid fa-bold"></i>
+            </button>
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.italic"
+                    (click)="toggleHeaderStyle('italic')"
+                    title="Italic">
+              <i class="fa-solid fa-italic"></i>
+            </button>
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.underline"
+                    (click)="toggleHeaderStyle('underline')"
+                    title="Underline">
+              <i class="fa-solid fa-underline"></i>
+            </button>
+          </div>
+          <div class="format-row">
+            <label>Text Color</label>
+            <input type="color" class="color-input"
+                   [value]="formatEditingColumn.format?.headerStyle?.color || '#000000'"
+                   (input)="updateHeaderColor('color', $any($event.target).value)" />
+          </div>
+          <div class="format-row">
+            <label>Background</label>
+            <input type="color" class="color-input"
+                   [value]="formatEditingColumn.format?.headerStyle?.backgroundColor || '#ffffff'"
+                   (input)="updateHeaderColor('backgroundColor', $any($event.target).value)" />
+          </div>
+        </div>
+
+        <!-- Cell Style -->
+        <div class="format-section">
+          <div class="format-section-header">
+            <i class="fa-solid fa-table-cells"></i>
+            <span>Cell Style</span>
+          </div>
+          <div class="style-buttons">
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.bold"
+                    (click)="toggleCellStyle('bold')"
+                    title="Bold">
+              <i class="fa-solid fa-bold"></i>
+            </button>
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.italic"
+                    (click)="toggleCellStyle('italic')"
+                    title="Italic">
+              <i class="fa-solid fa-italic"></i>
+            </button>
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.underline"
+                    (click)="toggleCellStyle('underline')"
+                    title="Underline">
+              <i class="fa-solid fa-underline"></i>
+            </button>
+          </div>
+          <div class="format-row">
+            <label>Text Color</label>
+            <input type="color" class="color-input"
+                   [value]="formatEditingColumn.format?.cellStyle?.color || '#000000'"
+                   (input)="updateCellColor('color', $any($event.target).value)" />
+          </div>
+          <div class="format-row">
+            <label>Background</label>
+            <input type="color" class="color-input"
+                   [value]="formatEditingColumn.format?.cellStyle?.backgroundColor || '#ffffff'"
+                   (input)="updateCellColor('backgroundColor', $any($event.target).value)" />
+          </div>
+        </div>
+
+        <!-- Clear Format Button -->
+        <div class="format-actions">
+          <button class="clear-format-btn" (click)="clearColumnFormat(formatEditingColumn); closeFormatEditor()">
+            <i class="fa-solid fa-eraser"></i>
+            Clear Formatting
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Sorting Tab -->
+    @if (activeTab === 'sorting') {
+      <div class="tab-content">
+        <div class="config-section sorting-section">
+          <div class="sorting-header">
+            <p class="sorting-description">
+              Define how records should be ordered. Add multiple levels to sort by secondary fields when values are equal.
+            </p>
+          </div>
+
+          <!-- Add Sort Button -->
+          <button
+            class="add-sort-btn"
+            (click)="addSortLevel()"
+            [disabled]="!canEdit || sortItems.length >= sortableFields.length"
+            title="Add another sort level">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add Sort Level</span>
+          </button>
+
+          <!-- Sort Items List -->
+          @if (sortItems.length > 0) {
+            <div class="sort-items-list">
+              @for (sortItem of sortItems; track $index; let i = $index) {
+                <!-- Drop indicator before -->
+                @if (isSortDropBefore(sortItem)) {
+                  <div class="sort-drop-indicator"></div>
+                }
+                <div
+                  class="sort-item"
+                  [class.dragging]="draggedSortItem === sortItem"
+                  [class.drop-target]="dropTargetSortItem === sortItem"
+                  draggable="true"
+                  (dragstart)="onSortDragStart($event, sortItem)"
+                  (dragover)="onSortDragOver($event, sortItem)"
+                  (dragleave)="onSortDragLeave($event)"
+                  (drop)="onSortDrop($event, sortItem)"
+                  (dragend)="onSortDragEnd($event)">
+                  <!-- Priority Badge -->
+                  <div class="sort-priority-badge">{{ i + 1 }}</div>
+                  <!-- Drag Handle -->
+                  <div class="sort-drag-handle" title="Drag to reorder">
+                    <i class="fa-solid fa-grip-vertical"></i>
+                  </div>
+                  <!-- Field Dropdown -->
+                  <select
+                    class="sort-field-dropdown"
+                    [(ngModel)]="sortItem.field"
+                    (ngModelChange)="onSortFieldChange(sortItem, $event)"
+                    [disabled]="!canEdit">
+                    @for (field of sortableFields; track field.ID) {
+                      <option [value]="field.Name">{{ field.DisplayNameOrName }}</option>
+                    }
+                  </select>
+                  <!-- Direction Toggle -->
+                  <div class="sort-direction-toggle">
+                    <button
+                      class="direction-btn"
+                      [class.active]="sortItem.direction === 'asc'"
+                      (click)="onSortDirectionChange(sortItem, 'asc')"
+                      [disabled]="!canEdit"
+                      title="Ascending (A-Z, 1-9)">
+                      <i class="fa-solid fa-arrow-up"></i>
+                    </button>
+                    <button
+                      class="direction-btn"
+                      [class.active]="sortItem.direction === 'desc'"
+                      (click)="onSortDirectionChange(sortItem, 'desc')"
+                      [disabled]="!canEdit"
+                      title="Descending (Z-A, 9-1)">
+                      <i class="fa-solid fa-arrow-down"></i>
+                    </button>
+                  </div>
+                  <!-- Remove Button -->
+                  <button
+                    class="sort-remove-btn"
+                    (click)="removeSortLevel(sortItem)"
+                    [disabled]="!canEdit"
+                    title="Remove sort level">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                <!-- Drop indicator after (only for last item) -->
+                @if (isSortDropAfter(sortItem) && i === sortItems.length - 1) {
+                  <div class="sort-drop-indicator"></div>
+                }
+              }
+            </div>
+            <!-- Multi-sort hint -->
+            @if (sortItems.length > 1) {
+              <div class="sort-hint">
+                <i class="fa-solid fa-info-circle"></i>
+                <span>Drag items to change priority. Records sort by first level, then second, etc.</span>
+              </div>
+            }
+          } @else {
+            <div class="sort-empty-state">
+              <i class="fa-solid fa-arrow-up-wide-short"></i>
+              <span>No sorting configured</span>
+              <p class="sort-empty-hint">Click "Add Sort Level" to define how records should be ordered</p>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Filters Tab -->
+    @if (activeTab === 'filters') {
+      <div class="tab-content">
+        <!-- Filter Mode Selection -->
+        <div class="filter-mode-selector">
+          <button
+            class="filter-mode-btn"
+            [class.active]="filterMode === 'smart'"
+            (click)="setFilterMode('smart')"
+            [disabled]="!canEdit">
+            <div class="mode-icon">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </div>
+            <div class="mode-content">
+              <span class="mode-title">Smart Filter</span>
+              <span class="mode-subtitle">Use AI to filter with natural language</span>
+            </div>
+            @if (filterMode === 'smart') {
+              <i class="fa-solid fa-check mode-check"></i>
+            }
+          </button>
+          <button
+            class="filter-mode-btn"
+            [class.active]="filterMode === 'traditional'"
+            (click)="setFilterMode('traditional')"
+            [disabled]="!canEdit">
+            <div class="mode-icon">
+              <i class="fa-solid fa-sliders"></i>
+            </div>
+            <div class="mode-content">
+              <span class="mode-title">Traditional Filter</span>
+              <span class="mode-subtitle">Build filters with field/operator/value</span>
+            </div>
+            @if (filterMode === 'traditional') {
+              <i class="fa-solid fa-check mode-check"></i>
+            }
+          </button>
+        </div>
+
+        <!-- Smart Filter Section -->
+        @if (filterMode === 'smart') {
+          <div class="config-section smart-filter-section">
+            <div class="smart-filter-input-container">
+              <div class="smart-filter-icon">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+              </div>
+              <textarea
+                id="smartFilterPrompt"
+                class="smart-filter-textarea"
+                placeholder="Describe what you're looking for..."
+                [(ngModel)]="smartFilterPrompt"
+                [disabled]="!canEdit"
+                rows="3"
+              ></textarea>
+            </div>
+
+            @if (smartFilterExplanation) {
+              <div class="smart-filter-explanation">
+                <i class="fa-solid fa-robot"></i>
+                <span>{{ smartFilterExplanation }}</span>
+              </div>
+            }
+
+            <!-- Example Prompts -->
+            <div class="smart-filter-examples">
+              <div class="examples-header">
+                <i class="fa-solid fa-lightbulb"></i>
+                <span>Try these examples:</span>
+              </div>
+              <div class="example-chips">
+                <button
+                  class="example-chip"
+                  (click)="applySmartFilterExample('Show records created in the last 30 days')"
+                  [disabled]="!canEdit">
+                  <i class="fa-regular fa-calendar"></i>
+                  Last 30 days
+                </button>
+                <button
+                  class="example-chip"
+                  (click)="applySmartFilterExample('Active records only')"
+                  [disabled]="!canEdit">
+                  <i class="fa-solid fa-circle-check"></i>
+                  Active only
+                </button>
+                <button
+                  class="example-chip"
+                  (click)="applySmartFilterExample('Records with high priority')"
+                  [disabled]="!canEdit">
+                  <i class="fa-solid fa-star"></i>
+                  High priority
+                </button>
+                <button
+                  class="example-chip"
+                  (click)="applySmartFilterExample('Records modified this week')"
+                  [disabled]="!canEdit">
+                  <i class="fa-solid fa-clock-rotate-left"></i>
+                  Modified this week
+                </button>
+              </div>
+            </div>
+
+            <div class="smart-filter-tip">
+              <i class="fa-solid fa-info-circle"></i>
+              <span>The AI will interpret your description and create the appropriate filter when you save the view.</span>
+            </div>
+          </div>
+        }
+
+        <!-- Traditional Filter Section -->
+        @if (filterMode === 'traditional') {
+          <div class="config-section traditional-filter-section">
+            <div class="filter-summary-container">
+              <div class="filter-summary">
+                <div class="summary-info">
+                  @if (getFilterCount() > 0) {
+                    <span class="filter-badge">{{ getFilterCount() }}</span>
+                    <span class="summary-text">{{ getFilterSummary() }}</span>
+                  } @else {
+                    <span class="summary-text no-filters">No filters configured</span>
+                  }
+                </div>
+                <div class="summary-actions">
+                  @if (getFilterCount() > 0 && canEdit) {
+                    <button
+                      class="summary-btn clear-btn"
+                      (click)="clearFilters()"
+                      title="Clear all filters">
+                      <i class="fa-solid fa-times"></i>
+                      Clear
+                    </button>
+                  }
+                  <button
+                    class="summary-btn edit-btn primary"
+                    (click)="openFilterDialog()"
+                    [disabled]="!canEdit && getFilterCount() === 0"
+                    title="Edit filters">
+                    <i class="fa-solid fa-pen"></i>
+                    {{ getFilterCount() > 0 ? 'Edit Filters' : 'Add Filters' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="traditional-filter-tip">
+              <i class="fa-solid fa-info-circle"></i>
+              <span>Build precise filters by selecting fields, operators, and values. Use groups for complex AND/OR logic.</span>
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Settings Tab -->
+    @if (activeTab === 'settings') {
+      <div class="tab-content">
+        <!-- View Name & Description -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-info-circle"></i>
+            <span>View Details</span>
+          </div>
+          <div class="form-group">
+            <label for="viewName">Name</label>
+            <input
+              id="viewName"
+              type="text"
+              class="form-input"
+              placeholder="Enter view name..."
+              [(ngModel)]="viewName"
+              [disabled]="!canEdit"
+            />
+          </div>
+          <div class="form-group">
+            <label for="viewDescription">Description</label>
+            <textarea
+              id="viewDescription"
+              class="form-input form-textarea"
+              placeholder="Describe this view..."
+              [(ngModel)]="viewDescription"
+              [disabled]="!canEdit"
+              rows="3"
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- Sharing -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-share-alt"></i>
+            <span>Sharing</span>
+          </div>
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              [(ngModel)]="isShared"
+              [disabled]="!canEdit"
+            />
+            <span class="checkbox-text">
+              <strong>Share with others</strong>
+              <small>Allow other users to use this view</small>
+            </span>
+          </label>
+        </div>
+
+        <!-- Danger Zone -->
+        @if (viewEntity && canDelete) {
+          <div class="config-section danger-zone">
+            <div class="section-header">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <span>Danger Zone</span>
+            </div>
+            <button class="delete-btn" (click)="onDelete()">
+              <i class="fa-solid fa-trash"></i>
+              <span>Delete View</span>
+            </button>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Panel Footer -->
+  <div class="panel-footer">
+    <!-- Action buttons on LEFT -->
+    <div class="footer-left">
+      @if (viewEntity && canEdit) {
+        <!-- Editing an existing saved view -->
+        <button
+          class="footer-btn save-btn primary"
+          (click)="onSave()"
+          [disabled]="isSaving || !viewName">
+          @if (isSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-save"></i>
+          }
+          {{ isSaving ? 'Saving...' : 'Save' }}
+        </button>
+      }
+      @if (!viewEntity) {
+        <!-- Default/Dynamic view - Save to user settings -->
+        <button
+          class="footer-btn save-btn primary"
+          (click)="onSaveDefaults()"
+          [disabled]="isSaving">
+          @if (isSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-save"></i>
+          }
+          {{ isSaving ? 'Saving...' : 'Save' }}
+        </button>
+        <!-- Save As New - creates a named view -->
+        <button
+          class="footer-btn save-as-btn"
+          (click)="onSaveAsNew()"
+          [disabled]="isSaving || !viewName">
+          @if (isSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-plus"></i>
+          }
+          {{ isSaving ? 'Creating...' : 'Save As New' }}
+        </button>
+      }
+      @if (viewEntity && canEdit) {
+        <!-- Save As New for existing view -->
+        <button
+          class="footer-btn save-as-btn"
+          (click)="onSaveAsNew()"
+          [disabled]="isSaving">
+          @if (isSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-plus"></i>
+          }
+          Save As New
+        </button>
+      }
+    </div>
+    <!-- Cancel button on RIGHT -->
+    <button class="footer-btn cancel-btn" (click)="onClose()">
+      Cancel
+    </button>
+  </div>
+</div>

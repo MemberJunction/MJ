@@ -1,9 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
-import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptModelEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { AIModelEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface PromptModelAssociation {
   promptId: string;

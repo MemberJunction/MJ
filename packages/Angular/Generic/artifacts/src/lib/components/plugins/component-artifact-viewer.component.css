@@ -12,6 +12,15 @@
   overflow: auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+/* Ensure React component takes full height */
+.component-preview mj-react-component {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .error-state {
@@ -22,6 +31,8 @@
   padding: 40px;
   text-align: center;
   color: #dc3545;
+  flex: 1;
+  min-height: 300px;
 }
 .error-state i {
   font-size: 48px;

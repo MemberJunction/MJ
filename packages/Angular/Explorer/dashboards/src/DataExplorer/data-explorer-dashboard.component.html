@@ -77,6 +77,19 @@
             (createNewRecordRequested)="onCreateNewRecord()"
             (exportRequested)="onExport()">
           </mj-view-selector>
+
+          <!-- Add to List Button -->
+          <button
+            class="header-action-btn"
+            [class.disabled]="!hasSelectedRecords"
+            [disabled]="!hasSelectedRecords"
+            (click)="onAddToListClick()"
+            [title]="hasSelectedRecords ? 'Add ' + selectedRecords.length + ' selected record(s) to a list' : 'Select records to add to a list'">
+            <i class="fa-solid fa-list-check"></i>
+            @if (hasSelectedRecords) {
+              <span class="selection-badge">{{ selectedRecords.length }}</span>
+            }
+          </button>
         } @else {
           @if (displayIcon) {
             <i [class]="displayIcon" class="entity-icon"></i>
@@ -95,11 +108,11 @@
               type="text"
               class="smart-filter-input"
               placeholder="Filter records... (press / to focus)"
-              [ngModel]="state.smartFilterPrompt"
-              (ngModelChange)="onSmartFilterChanged($event)"
+              [ngModel]="debouncedFilterText"
+              (ngModelChange)="onFilterTextChanged($event)"
             />
-            @if (state.smartFilterPrompt) {
-              <button class="clear-filter-btn" (click)="onSmartFilterChanged('')">
+            @if (debouncedFilterText) {
+              <button class="clear-filter-btn" (click)="onFilterTextChanged('')">
                 <i class="fa-solid fa-times"></i>
               </button>
             }
@@ -460,6 +473,7 @@
         </div>
       } @else {
         <mj-entity-viewer
+          #entityViewer
           [entity]="selectedEntity"
           [viewEntity]="selectedViewEntity"
           [viewMode]="state.viewMode"
@@ -468,13 +482,18 @@
           [config]="viewerConfig"
           [gridState]="currentGridState"
           [timelineConfig]="currentTimelineConfig"
+          [gridSelectionMode]="'checkbox'"
+          [showGridToolbar]="false"
+          [showAddToListButton]="false"
           (viewModeChange)="onViewModeChanged($event)"
           (filterTextChange)="onFilterTextChanged($event)"
           (recordSelected)="onViewerRecordSelected($event)"
           (recordOpened)="onViewerRecordOpened($event)"
           (dataLoaded)="onDataLoaded($event)"
           (filteredCountChanged)="onFilteredCountChanged($event)"
-          (gridStateChanged)="onGridStateChanged($event)">
+          (gridStateChanged)="onGridStateChanged($event)"
+          (selectionChanged)="onSelectionChanged($event)"
+          (addToListRequested)="onAddToListRequested($event)">
         </mj-entity-viewer>
       }
     </div>
@@ -483,6 +502,16 @@
   <!-- Detail Panel (Right - Slide In) -->
   @if (state.detailPanelOpen && selectedRecord) {
     <div class="detail-panel" [style.width.px]="state.detailPanelWidth">
+      <!-- Detail Panel Actions Bar -->
+      <div class="detail-panel-actions">
+        <button
+          class="detail-action-btn"
+          (click)="openListManagementDialog()"
+          title="Add to List">
+          <i class="fa-solid fa-list-check"></i>
+          <span>Add to List</span>
+        </button>
+      </div>
       <mj-entity-record-detail-panel
         [entity]="detailPanelEntity"
         [record]="selectedRecord"
@@ -505,6 +534,7 @@
     [isSaving]="isSavingView"
     (close)="onCloseViewConfigPanel()"
     (save)="onSaveView($event)"
+    (saveDefaults)="onSaveDefaultViewSettings($event)"
     (delete)="onDeleteView()"
     (openFilterDialogRequest)="onOpenFilterDialogRequest($event)">
   </mj-view-config-panel>
@@ -519,10 +549,20 @@
     (apply)="onFilterApplied($event)">
   </mj-filter-dialog>
 
-  <!-- Excel Export Component (hidden, used for export functionality) -->
-  <kendo-excelexport #excelExport [data]="exportData" [fileName]="exportFileName">
-    @for (col of exportColumns; track col.Name) {
-      <kendo-excelexport-column [field]="col.Name" [title]="col.DisplayName"></kendo-excelexport-column>
-    }
-  </kendo-excelexport>
+  <!-- Export Dialog -->
+  <mj-export-dialog
+    [visible]="showExportDialog"
+    [config]="exportDialogConfig"
+    (closed)="onExportDialogClosed($event)">
+  </mj-export-dialog>
+
+  <!-- List Management Dialog -->
+  @if (showListManagementDialog && listManagementConfig) {
+    <mj-list-management-dialog
+      [config]="listManagementConfig"
+      [visible]="showListManagementDialog"
+      (complete)="onListManagementComplete($event)"
+      (cancel)="onListManagementCancel()">
+    </mj-list-management-dialog>
+  }
 </div>

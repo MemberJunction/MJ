@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView } from "@memberjunction/core";
-import { AIPromptEntityExtended } from "@memberjunction/core-entities";
+import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams} from "@memberjunction/ai-core-plus";
 

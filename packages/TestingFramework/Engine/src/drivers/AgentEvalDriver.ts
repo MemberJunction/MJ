@@ -3,7 +3,7 @@
  * @module @memberjunction/testing-engine
  */
 
-import { UserInfo, Metadata } from '@memberjunction/core';
+import { UserInfo, Metadata, EntityInfo } from '@memberjunction/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { AIAgentEntity, AIAgentRunEntity, TestEntity, TestRunEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
@@ -209,6 +209,42 @@ export interface AgentEvalExpectedOutcomes {
 @RegisterClass(BaseTestDriver, 'AgentEvalDriver')
 export class AgentEvalDriver extends BaseTestDriver {
     /**
+     * Entity name for AI Agent Runs - used for proper FK linkage in TestRun
+     */
+    private static readonly AI_AGENT_RUNS_ENTITY_NAME = 'MJ: AI Agent Runs';
+
+    /**
+     * Cached Entity ID for AI Agent Runs
+     */
+    private _aiAgentRunsEntityId: string | null = null;
+
+    /**
+     * Returns true as this driver supports cancellation via AbortSignal.
+     * When timeout occurs, the AbortController signals the agent to stop execution.
+     */
+    public override supportsCancellation(): boolean {
+        return true;
+    }
+
+    /**
+     * Get the Entity ID for "MJ: AI Agent Runs" for proper FK linkage.
+     * Caches the result after first lookup.
+     * @private
+     */
+    private getAIAgentRunsEntityId(): string | null {
+        if (this._aiAgentRunsEntityId === null) {
+            const entityInfo = this._metadata.Entities.find(
+                e => e.Name === AgentEvalDriver.AI_AGENT_RUNS_ENTITY_NAME
+            );
+            this._aiAgentRunsEntityId = entityInfo?.ID || null;
+            if (!this._aiAgentRunsEntityId) {
+                this.logError(`Could not find Entity ID for ${AgentEvalDriver.AI_AGENT_RUNS_ENTITY_NAME}`);
+            }
+        }
+        return this._aiAgentRunsEntityId;
+    }
+
+    /**
      * Execute agent evaluation test.
      *
      * Steps:
@@ -223,7 +259,7 @@ export class AgentEvalDriver extends BaseTestDriver {
      * @returns Execution result
      */
     public async Execute(context: DriverExecutionContext): Promise<DriverExecutionResult> {
-        this.log('Starting agent evaluation', context.options.verbose);
+        this.logToTestRun(context, 'info', 'Starting agent evaluation');
 
         try {
             // Parse configuration
@@ -238,27 +274,57 @@ export class AgentEvalDriver extends BaseTestDriver {
             const turns = this.normalizeTurns(input);
             const isMultiTurn = turns.length > 1;
 
-            this.log(`Executing agent: ${agent.Name} (${turns.length} turn${turns.length > 1 ? 's' : ''})`, context.options.verbose);
+            this.logToTestRun(context, 'info', `Executing agent: ${agent.Name} (${turns.length} turn${turns.length > 1 ? 's' : ''})`);
 
-            // Execute agent (single or multi-turn)
-            const { agentRuns, turnResults } = await this.executeAgent(
+            // Execute agent (single or multi-turn) with timeout/cancellation support
+            const { agentRuns, turnResults, timedOut, timeoutMessage } = await this.executeAgent(
                 agent,
                 input,
                 context.contextUser,
                 context.test,
                 config.maxExecutionTime,
-                context.testRun
+                context.testRun,
+                context
             );
 
-            // Create bidirectional links for all agent runs
-            await this.linkTestRunToAgentRuns(context.testRun, agentRuns);
+            // Handle timeout case
+            if (timedOut) {
+                this.logToTestRun(context, 'error', timeoutMessage || 'Test execution timed out');
+
+                // Build timeout result with partial data if available
+                const result: DriverExecutionResult = {
+                    targetType: 'AI Agent',
+                    targetLogEntityId: this.getAIAgentRunsEntityId() || undefined,
+                    targetLogId: agentRuns.length > 0 ? agentRuns[agentRuns.length - 1].ID : '',
+                    status: 'Timeout',
+                    score: 0,
+                    oracleResults: [],
+                    passedChecks: 0,
+                    failedChecks: 0,
+                    totalChecks: 0,
+                    inputData: input,
+                    expectedOutput: expected,
+                    actualOutput: agentRuns.length > 0 ? this.extractAgentOutput(agentRuns[agentRuns.length - 1]) : undefined,
+                    errorMessage: timeoutMessage,
+                    totalCost: turnResults.reduce((sum, tr) => sum + (tr.cost || 0), 0),
+                    durationMs: turnResults.reduce((sum, tr) => sum + (tr.durationMs || 0), 0),
+                    totalTurns: isMultiTurn ? turns.length : undefined,
+                    turnResults: isMultiTurn ? turnResults : undefined,
+                    allAgentRunIds: agentRuns.length > 0 ? agentRuns.map(ar => ar.ID) : undefined
+                };
+
+                // Note: Linking already happened via onAgentRunCreated callback for completed turns
+                return result;
+            }
+
+            // Note: Bidirectional linking already happened via onAgentRunCreated callback
 
             // Get final agent run and output
             const finalAgentRun = agentRuns[agentRuns.length - 1];
             const actualOutput = this.extractAgentOutput(finalAgentRun);
 
             // Run oracles
-            this.log('Running oracles for evaluation', context.options.verbose);
+            this.logToTestRun(context, 'info', 'Running oracles for evaluation');
             const oracleResults = await this.runOraclesForMultiTurn(
                 config,
                 turns,
@@ -285,6 +351,7 @@ export class AgentEvalDriver extends BaseTestDriver {
             // Build result
             const result: DriverExecutionResult = {
                 targetType: 'AI Agent',
+                targetLogEntityId: this.getAIAgentRunsEntityId() || undefined,
                 targetLogId: finalAgentRun.ID,
                 status,
                 score,
@@ -303,14 +370,12 @@ export class AgentEvalDriver extends BaseTestDriver {
                 allAgentRunIds: isMultiTurn ? agentRuns.map(ar => ar.ID) : undefined
             };
 
-            this.log(
-                `Agent evaluation completed: ${status} (Score: ${score})`,
-                context.options.verbose
-            );
+            this.logToTestRun(context, 'info', `Agent evaluation completed: ${status} (Score: ${score})`);
             return result;
 
         } catch (error) {
-            this.logError('Agent evaluation failed', error as Error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logToTestRun(context, 'error', `Agent evaluation failed: ${errorMessage}`);
             throw error;
         }
     }
@@ -457,6 +522,7 @@ export class AgentEvalDriver extends BaseTestDriver {
 
     /**
      * Execute agent (single or multi-turn) and return results.
+     * Uses AbortController for proper cancellation support when timeout occurs.
      * @private
      */
     private async executeAgent(
@@ -465,55 +531,95 @@ export class AgentEvalDriver extends BaseTestDriver {
         contextUser: UserInfo,
         test: TestEntity,
         maxExecutionTime: number | undefined,
-        testRun: TestRunEntity
-    ): Promise<{ agentRuns: AIAgentRunEntity[], turnResults: TurnResult[] }> {
+        testRun: TestRunEntity,
+        context: DriverExecutionContext
+    ): Promise<{ agentRuns: AIAgentRunEntity[], turnResults: TurnResult[], timedOut: boolean, timeoutMessage?: string }> {
         // Normalize to multi-turn format
         const turns = this.normalizeTurns(input);
 
         const agentRuns: AIAgentRunEntity[] = [];
         const turnResults: TurnResult[] = [];
 
+        // Get effective timeout using priority: config JSON > entity field > default
+        const config = this.parseConfig<AgentEvalConfig>(test);
+        const effectiveTimeout = this.getEffectiveTimeout(test, config);
+
+        // Create AbortController for cancellation
+        const abortController = new AbortController();
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        let timedOut = false;
+        let timeoutMessage: string | undefined;
+
+        // Set up timeout to abort execution
+        if (effectiveTimeout > 0) {
+            timeoutId = setTimeout(() => {
+                timedOut = true;
+                timeoutMessage = `Test execution timed out after ${effectiveTimeout}ms`;
+                this.logToTestRun(context, 'warn', timeoutMessage);
+                abortController.abort();
+            }, effectiveTimeout);
+        }
+
         let conversationId: string | undefined = input.conversationContext?.conversationId;
         let previousOutputPayload: Record<string, unknown> | undefined;
 
-        // Execute each turn sequentially
-        for (let i = 0; i < turns.length; i++) {
-            const turn = turns[i];
-            const turnNumber = i + 1;
+        try {
+            // Execute each turn sequentially
+            for (let i = 0; i < turns.length; i++) {
+                // Check if aborted before starting turn
+                if (abortController.signal.aborted) {
+                    this.logToTestRun(context, 'info', `Skipping turn ${i + 1} due to timeout/cancellation`);
+                    break;
+                }
 
-            // Determine input payload for this turn
-            const inputPayload = i === 0
-                ? turn.inputPayload  // First turn: use provided payload
-                : previousOutputPayload;  // Subsequent turns: use previous output
+                const turn = turns[i];
+                const turnNumber = i + 1;
 
-            // Execute single turn
-            const turnResult = await this.executeSingleTurn({
-                agent,
-                turn,
-                turnNumber,
-                totalTurns: turns.length,
-                conversationId,
-                inputPayload,
-                priorMessages: input.conversationContext?.priorMessages,
-                contextUser,
-                test,
-                testRun,
-                maxExecutionTime
-            });
+                // Determine input payload for this turn
+                const inputPayload = i === 0
+                    ? turn.inputPayload  // First turn: use provided payload
+                    : previousOutputPayload;  // Subsequent turns: use previous output
 
-            agentRuns.push(turnResult.agentRun);
-            turnResults.push(turnResult);
+                this.logToTestRun(context, 'info', `Executing turn ${turnNumber} of ${turns.length}`);
 
-            // Update context for next turn
-            conversationId = turnResult.agentRun.ConversationID;
-            previousOutputPayload = this.extractOutputPayload(turnResult.agentRun);
+                // Execute single turn with cancellation token and resolved variables
+                const turnResult = await this.executeSingleTurn({
+                    agent,
+                    turn,
+                    turnNumber,
+                    totalTurns: turns.length,
+                    conversationId,
+                    inputPayload,
+                    priorMessages: input.conversationContext?.priorMessages,
+                    contextUser,
+                    test,
+                    testRun,
+                    cancellationToken: abortController.signal,
+                    resolvedVariables: context.resolvedVariables
+                });
+
+                agentRuns.push(turnResult.agentRun);
+                turnResults.push(turnResult);
+
+                this.logToTestRun(context, 'info', `Turn ${turnNumber} completed: ${turnResult.agentRun.Status}`);
+
+                // Update context for next turn
+                conversationId = turnResult.agentRun.ConversationID;
+                previousOutputPayload = this.extractOutputPayload(turnResult.agentRun);
+            }
+        } finally {
+            // Clean up timeout
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
         }
 
-        return { agentRuns, turnResults };
+        return { agentRuns, turnResults, timedOut, timeoutMessage };
     }
 
     /**
      * Execute a single turn in a multi-turn test.
+     * Passes cancellation token to agent for proper timeout handling.
      * @private
      */
     private async executeSingleTurn(params: {
@@ -527,7 +633,8 @@ export class AgentEvalDriver extends BaseTestDriver {
         contextUser: UserInfo;
         test: TestEntity;
         testRun: TestRunEntity;
-        maxExecutionTime?: number;
+        cancellationToken?: AbortSignal;
+        resolvedVariables?: { values: Record<string, unknown>; sources: Record<string, string> };
     }): Promise<TurnResult> {
         const runner = new AgentRunner();
 
@@ -550,42 +657,64 @@ export class AgentEvalDriver extends BaseTestDriver {
             content: params.turn.userMessage
         } as ChatMessage);
 
-        // Build conversation name
-        const conversationName = params.totalTurns > 1
-            ? (params.testRun.Sequence != null
-                ? `[${params.testRun.Sequence}] ${params.test.Name} - Turn ${params.turnNumber}`
-                : `[Test] ${params.test.Name} - Turn ${params.turnNumber}`)
-            : (params.testRun.Sequence != null
-                ? `[${params.testRun.Sequence}] ${params.test.Name}`
-                : `[Test] ${params.test.Name}`);
+        // Build conversation name with format:
+        // - Individual test (no suite): "[Test] TestName" or "[Test][tag1, tag2] TestName"
+        // - Suite test: "[1] TestName" or "[1][tag1, tag2] TestName"
+        const conversationName = this.buildConversationName(
+            params.test.Name,
+            params.testRun.Sequence,
+            params.testRun.Tags,
+            params.turnNumber,
+            params.totalTurns
+        );
 
-        // Build execution parameters
+        // Get Entity ID for AI Agent Runs for proper FK linkage
+        const aiAgentRunsEntityId = this.getAIAgentRunsEntityId();
+
+        // Build override from turn execution params and resolved variables
+        const override = this.buildExecutionOverride(params.turn.executionParams, params.resolvedVariables);
+
+        // Build execution parameters with cancellation token and onAgentRunCreated callback
         const runParams = {
             agent: params.agent as any,
             conversationId: params.conversationId,  // Continue same conversation for multi-turn
             conversationMessages,
             contextUser: params.contextUser,
             payload: params.inputPayload,  // Pass payload from previous turn
-            override: params.turn.executionParams?.modelOverride ? {
-                modelId: params.turn.executionParams.modelOverride
-            } : undefined
+            override,
+            cancellationToken: params.cancellationToken,  // Pass cancellation token to agent
+            // Callback to immediately link TestRun <-> AgentRun when AgentRun is created
+            onAgentRunCreated: async (agentRunId: string) => {
+                // For the first turn (or single-turn tests), link TestRun.TargetLogID to this AgentRun
+                // Subsequent turns still get TestRunID set on their AgentRun (via testRunId param below)
+                // but the TestRun only points to the first/primary AgentRun
+                if (params.turnNumber === 1) {
+                    params.testRun.TargetLogID = agentRunId;
+                    if (aiAgentRunsEntityId) {
+                        params.testRun.TargetLogEntityID = aiAgentRunsEntityId;
+                    }
+                    const saved = await params.testRun.Save();
+                    if (saved) {
+                        this.log(`✓ Linked TestRun ${params.testRun.ID} -> AgentRun ${agentRunId}`, true);
+                    } else {
+                        this.logError(`Failed to link TestRun to AgentRun: ${params.testRun.LatestResult?.Message}`);
+                    }
+                }
+                // Note: AgentRun.TestRunID is set by BaseAgent via the testRunId param passed to RunAgentInConversation
+            }
         };
 
-        // Execute with timeout if specified
-        const executePromise = runner.RunAgentInConversation(runParams, {
+        const startTime = Date.now();
+
+        // Execute agent - cancellation is handled via AbortSignal, not Promise.race
+        // Note: BaseAgent already sets AgentRun.TestRunID from the testRunId param and invokes onAgentRunCreated callback
+        const runResult = await runner.RunAgentInConversation(runParams, {
             userMessage: params.turn.userMessage,
             createArtifacts: true,
             conversationName: conversationName,
             testRunId: params.testRun.ID
         });
 
-        const startTime = Date.now();
-        const runResult = params.maxExecutionTime
-            ? await Promise.race([
-                executePromise,
-                this.createTimeoutPromise(params.maxExecutionTime)
-            ])
-            : await executePromise;
         const endTime = Date.now();
 
         const agentRun = runResult.agentResult.agentRun;
@@ -598,16 +727,6 @@ export class AgentEvalDriver extends BaseTestDriver {
             durationMs: endTime - startTime,
             cost: agentRun.TotalCost || 0
         };
-    }
-
-    /**
-     * Create a timeout promise that rejects after specified milliseconds.
-     * @private
-     */
-    private createTimeoutPromise(timeoutMs: number): Promise<never> {
-        return new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Agent execution timeout after ${timeoutMs}ms`)), timeoutMs)
-        );
     }
 
     /**
@@ -643,37 +762,6 @@ export class AgentEvalDriver extends BaseTestDriver {
         return finalPayloadObject || {};
     }
 
-    /**
-     * Create bidirectional links between TestRun and multiple AgentRuns.
-     * @private
-     */
-    private async linkTestRunToAgentRuns(
-        testRun: TestRunEntity,
-        agentRuns: AIAgentRunEntity[]
-    ): Promise<void> {
-        // Link each AgentRun to TestRun with TurnNumber
-        for (let i = 0; i < agentRuns.length; i++) {
-            const agentRun = agentRuns[i];
-            const turnNumber = i + 1;
-
-            // Update AgentRun with hard FK to TestRun
-            agentRun.TestRunID = testRun.ID;
-
-            // Set turn number if field exists (check dynamically)
-            if ('TurnNumber' in agentRun) {
-                (agentRun as any).TurnNumber = turnNumber;
-            }
-
-            const saved = await agentRun.Save();
-
-            if (!saved) {
-                this.logError(
-                    `Failed to link AgentRun (Turn ${turnNumber}) to TestRun`,
-                    new Error(agentRun.LatestResult?.Message)
-                );
-            }
-        }
-    }
 
     /**
      * Extract agent output from agent run.
@@ -686,6 +774,60 @@ export class AgentEvalDriver extends BaseTestDriver {
             errorMessage: agentRun.ErrorMessage,
             conversationId: agentRun.ConversationID
         };
+    }
+
+    /**
+     * Build execution override object from turn params and resolved variables.
+     *
+     * Priority (highest to lowest):
+     * 1. Turn-level execution params (modelOverride, temperatureOverride, etc.)
+     * 2. Resolved variables (AIConfiguration, Temperature, etc.)
+     *
+     * @private
+     */
+    private buildExecutionOverride(
+        turnExecutionParams?: {
+            modelOverride?: string;
+            temperatureOverride?: number;
+            maxTokensOverride?: number;
+        },
+        resolvedVariables?: { values: Record<string, unknown>; sources: Record<string, string> }
+    ): Record<string, unknown> | undefined {
+        const override: Record<string, unknown> = {};
+
+        // Apply resolved variables (lower priority)
+        if (resolvedVariables?.values) {
+            // AIConfiguration variable maps to aiConfigurationId
+            if (resolvedVariables.values['AIConfiguration']) {
+                override.aiConfigurationId = resolvedVariables.values['AIConfiguration'];
+            }
+
+            // Temperature variable maps to temperature override
+            if (resolvedVariables.values['Temperature'] !== undefined) {
+                override.temperature = resolvedVariables.values['Temperature'];
+            }
+
+            // MaxTokens variable maps to maxTokens override
+            if (resolvedVariables.values['MaxTokens'] !== undefined) {
+                override.maxTokens = resolvedVariables.values['MaxTokens'];
+            }
+        }
+
+        // Apply turn execution params (higher priority - overwrites variables)
+        if (turnExecutionParams) {
+            if (turnExecutionParams.modelOverride) {
+                override.modelId = turnExecutionParams.modelOverride;
+            }
+            if (turnExecutionParams.temperatureOverride !== undefined) {
+                override.temperature = turnExecutionParams.temperatureOverride;
+            }
+            if (turnExecutionParams.maxTokensOverride !== undefined) {
+                override.maxTokens = turnExecutionParams.maxTokensOverride;
+            }
+        }
+
+        // Return undefined if no overrides
+        return Object.keys(override).length > 0 ? override : undefined;
     }
 
     /**
@@ -917,5 +1059,55 @@ export class AgentEvalDriver extends BaseTestDriver {
         const start = new Date(agentRun.StartedAt).getTime();
         const end = new Date(agentRun.CompletedAt).getTime();
         return end - start;
+    }
+
+    /**
+     * Build conversation name with standardized format.
+     *
+     * Format:
+     * - Individual test (no suite): "[Test] TestName" or "[Test][tag1, tag2] TestName"
+     * - Suite test: "[1] TestName" or "[1][tag1, tag2] TestName"
+     * - Multi-turn adds " - Turn N" suffix
+     *
+     * @param testName - Name of the test
+     * @param sequence - Sequence number within suite (null for standalone tests)
+     * @param tagsJson - JSON string array of tags (null if no tags)
+     * @param turnNumber - Current turn number (1-indexed)
+     * @param totalTurns - Total number of turns
+     * @returns Formatted conversation name
+     * @private
+     */
+    private buildConversationName(
+        testName: string,
+        sequence: number | null,
+        tagsJson: string | null,
+        turnNumber: number,
+        totalTurns: number
+    ): string {
+        // Build prefix: [Test] for standalone, [sequence] for suite
+        const sequencePrefix = sequence != null ? `[${sequence}]` : '[Test]';
+
+        // Build tags suffix if tags exist
+        let tagsPrefix = '';
+        if (tagsJson) {
+            try {
+                const tags = JSON.parse(tagsJson) as string[];
+                if (tags && tags.length > 0) {
+                    tagsPrefix = `[${tags.join(', ')}]`;
+                }
+            } catch {
+                // Invalid JSON, skip tags
+            }
+        }
+
+        // Build base name
+        const baseName = `${sequencePrefix}${tagsPrefix} ${testName}`;
+
+        // Add turn suffix for multi-turn tests
+        if (totalTurns > 1) {
+            return `${baseName} - Turn ${turnNumber}`;
+        }
+
+        return baseName;
     }
 }

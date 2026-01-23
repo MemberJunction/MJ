@@ -1,0 +1,47 @@
+{
+  "fields": {
+    "Name": "Lists",
+    "Description": "Manage user defined collections of records across the system",
+    "Icon": "fa-solid fa-list-check",
+    "DefaultForNewUser": true,
+    "Color": "#009688",
+    "DefaultSequence": 50,
+    "Status": "Active",
+    "NavigationStyle": "Both",
+    "HideNavBarIconWhenActive": true,
+    "TopNavLocation": "Left of User Menu",
+    "DefaultNavItems": [
+      {
+        "Label": "Lists",
+        "Icon": "fa-solid fa-list-check",
+        "ResourceType": "Custom",
+        "DriverClass": "ListsBrowseResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Operations",
+        "Icon": "fa-solid fa-diagram-project",
+        "ResourceType": "Custom",
+        "DriverClass": "ListsOperationsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Categories",
+        "Icon": "fa-solid fa-tags",
+        "ResourceType": "Custom",
+        "DriverClass": "ListsCategoriesResource",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "140166B9-4064-4C3F-ACF1-3EB7DB2C9BD0"
+  },
+  "sync": {
+    "lastModified": "2026-01-21T05:01:18.855Z",
+    "checksum": "98b7350719cd0ecf6bf992cb298e4fbece6c35c5bd1cd3d2181c15b882a651fa"
+  }
+}

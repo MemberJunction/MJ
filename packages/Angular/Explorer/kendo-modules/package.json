@@ -1,0 +1,61 @@
+{
+  "name": "@memberjunction/ng-kendo-modules",
+  "version": "3.2.0",
+  "description": "MemberJunction: Consolidated Kendo UI Modules Bundle",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "ngc"
+  },
+  "keywords": [
+    "memberjunction",
+    "kendo",
+    "angular",
+    "ui-components"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14"
+  },
+  "peerDependencies": {
+    "@angular/common": "^18.0.0",
+    "@angular/core": "^18.0.0",
+    "@progress/kendo-angular-buttons": "*",
+    "@progress/kendo-angular-dateinputs": "*",
+    "@progress/kendo-angular-dialog": "*",
+    "@progress/kendo-angular-dropdowns": "*",
+    "@progress/kendo-angular-grid": "*",
+    "@progress/kendo-angular-icons": "*",
+    "@progress/kendo-angular-inputs": "*",
+    "@progress/kendo-angular-label": "*",
+    "@progress/kendo-angular-layout": "*",
+    "@progress/kendo-angular-navigation": "*",
+    "@progress/kendo-angular-notification": "*",
+    "@progress/kendo-angular-l10n": "*",
+    "@progress/kendo-angular-popup": "*",
+    "@progress/kendo-angular-utils": "*",
+    "@progress/kendo-angular-pdf-export": "*",
+    "@progress/kendo-drawing": "*"
+  },
+  "dependencies": {
+    "@progress/kendo-angular-intl": "16.2.0",
+    "@progress/kendo-angular-l10n": "16.2.0",
+    "@progress/kendo-angular-popup": "16.2.0",
+    "@progress/kendo-angular-utils": "16.2.0",
+    "@progress/kendo-angular-pdf-export": "16.2.0",
+    "@progress/kendo-angular-excel-export": "16.2.0",
+    "@progress/kendo-drawing": "^1.0.0",
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

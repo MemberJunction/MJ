@@ -1,6 +1,6 @@
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
-import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 

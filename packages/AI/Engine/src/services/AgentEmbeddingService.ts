@@ -1,5 +1,5 @@
 import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
-import { AIAgentEntityExtended, AIModelEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentMatchResult, AgentEmbeddingMetadata } from '../types/AgentMatchResult';
 import { EmbedTextResult } from '@memberjunction/ai';
 

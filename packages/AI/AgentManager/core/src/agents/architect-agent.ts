@@ -1,7 +1,7 @@
 import { BaseAgent, PayloadManager } from '@memberjunction/ai-agents';
-import { ExecuteAgentParams, BaseAgentNextStep, AgentSpec } from '@memberjunction/ai-core-plus';
-import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, ActionEntity, AIPromptEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { ExecuteAgentParams, BaseAgentNextStep, AgentSpec, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
+import { ActionEntity } from "@memberjunction/core-entities";
+import { RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 
 /**

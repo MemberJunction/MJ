@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { FileStorageProviderEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'File Storage Providers') // Tell MemberJunction about this class
 @Component({
@@ -18,8 +18,12 @@ export class FileStorageProviderFormComponent extends BaseFormComponent {
             { sectionKey: 'providerIdentification', sectionName: 'Provider Identification', isExpanded: true },
             { sectionKey: 'driverConfiguration', sectionName: 'Driver Configuration', isExpanded: true },
             { sectionKey: 'selectionAvailability', sectionName: 'Selection & Availability', isExpanded: false },
+            { sectionKey: 'authenticationAccess', sectionName: 'Authentication & Access', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'files', sectionName: 'Files', isExpanded: false }
+            { sectionKey: 'files', sectionName: 'Files', isExpanded: false },
+            { sectionKey: 'mJFileStorageAccounts', sectionName: 'MJ: File Storage Accounts', isExpanded: false },
+            { sectionKey: 'mJAIConfigurations', sectionName: 'MJ: AI Configurations', isExpanded: false },
+            { sectionKey: 'aIAgents', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }
 }

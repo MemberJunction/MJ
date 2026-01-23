@@ -10,16 +10,8 @@
       "ID": "F0209686-E477-4C06-A082-B8FC1C9AD338"
     },
     "sync": {
-      "lastModified": "2025-10-29T15:24:47.992Z",
-      "checksum": "7df08ac02b95a635454bfdb7e1361e1e9f87e0911e4166fbaad3b469841ef6cd"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
-        "resolved": "0DC7433E-F36B-1410-8DB6-00021F8B792E"
-      }
-    ]
+      "lastModified": "2025-12-30T23:06:46.651Z",
+      "checksum": "d19dc957d9c651002536037d42aff90319c27797aa5f538cd539fd115784048a"
+    }
   }
 ]

@@ -1,11 +1,21 @@
-import { Component, Input, OnInit } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
-import { BaseEntity, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
-import { ListDetailEntityExtended, ListEntity, UserViewEntityExtended, ViewColumnInfo } from '@memberjunction/core-entities';
+import { Component, Input, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { BaseEntity, CompositeKey, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
+import { ListDetailEntity, ListDetailEntityExtended, ListEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
-import { PageChangeEvent } from '@progress/kendo-angular-grid';
+import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
+import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
 import { Subject, debounceTime } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
+
+/**
+ * Represents a record that can be added to a list
+ */
+interface AddableRecord {
+  ID: string;
+  Name: string;
+  isInList: boolean;
+  isSelected: boolean;
+}
 
 @Component({
   selector: 'mj-list-detail',
@@ -14,454 +24,552 @@ import { NewItemOption } from '../../generic/Item.types';
 })
 export class SingleListDetailComponent implements OnInit {
 
-    @Input() public ListID: string = "";
+  @Input() public ListID: string = "";
 
-    public listRecord: ListEntity | null = null;
-    private sourceEntityInfo: EntityInfo | null = null;
-    public showLoader: boolean = false;
-    public sourceGridData: Record<string, any>[] = [];
-    public filteredGridData: Record<string, any>[] = [];
-    public showAddDialog: boolean = false;
-    public showAddLoader: boolean = false;
-    public showDialogLoader: boolean = false;
-    public userViews: UserViewEntityExtended[] | null = null;
+  @ViewChild('listDetailGrid') listDetailGrid: ListDetailGridComponent | undefined;
 
-    private filterDebounceTime: number = 250;
-    private filterItemsSubject: Subject<any> = new Subject();
-    private filter: string = '';
+  // List record
+  public listRecord: ListEntity | null = null;
+  public showLoader: boolean = false;
 
-    public userViewsToAdd: UserViewEntityExtended[] = [];
+  // Grid state
+  public selectedKeys: string[] = [];
+  public rowCount: number = 0;
 
-    public page: number = 0;
-    public pageSize: number = 50;
-    public gridHeight: number = 750;
-    public sortSettings: any[] = [];
-    public selectedKeys: any[] = [];
-    public selectModeEnabled: boolean = false;
-    public viewColumns: Partial<ViewColumnInfo>[] = [];
-    public visibleColumns: Partial<ViewColumnInfo>[] = [];
-    public totalRowCount: number = 0;
-    public viewExecutionTime: number = 0;
+  // Toolbar config - hide EDG toolbar, we'll use our own
+  public gridToolbarConfig: GridToolbarConfig = {
+    showSearch: false,
+    showRefresh: false,
+    showAdd: false,
+    showDelete: false,
+    showExport: false,
+    showRowCount: false,
+    showSelectionCount: false
+  };
 
-    public recordsToSave: number = 0;
-    public recordsSaved: number = 0;
-    public fetchingRecordsToSave: boolean = false;
+  // Remove from list dialog
+  public showRemoveDialog: boolean = false;
+  public isRemoving: boolean = false;
+  public removeProgress: number = 0;
+  public removeTotal: number = 0;
 
-    public showAddSingleRecordsDialog: boolean = false;
-    public fetchingListRecords: boolean = false;
-    public listRecords: Record<'ID' | 'Name', string>[] = [];
-    public selectedListRecords: Record<'ID' | 'Name', string>[] = [];
-    public searchFilter: string = "";
-    private filterListrecordsSubject: Subject<any> = new Subject();
+  // Add records dialog
+  public showAddRecordsDialog: boolean = false;
+  public addDialogLoading: boolean = false;
+  public addDialogSaving: boolean = false;
+  public addableRecords: AddableRecord[] = [];
+  public addRecordsSearchFilter: string = "";
+  public existingListDetailIds: Set<string> = new Set();
+  public addProgress: number = 0;
+  public addTotal: number = 0;
+  private searchSubject: Subject<string> = new Subject();
 
-    public addOptions: NewItemOption[] = [
-        {
-            Text: 'Add From View',
-            Description: 'Add all records of a view to this list',
-            Icon: 'folder',
-            Action: () => {
-                this.toggleAddFromViewDialog(true);
-            }
-        },
-        {
-            Text: 'Add a Record',
-            Description: 'Add a specific record to the list',
-            Icon: 'folder',
-            Action: () => {
-                this.toggleAddRecordsDialog(true);
-            }
-        }
-    ]
-    
-    constructor (private router: Router, private route: ActivatedRoute, private sharedService: SharedService)
+  // Add from view dialog (existing)
+  public showAddFromViewDialog: boolean = false;
+  public showAddFromViewLoader: boolean = false;
+  public userViews: UserViewEntityExtended[] | null = null;
+  public userViewsToAdd: UserViewEntityExtended[] = [];
+  public addFromViewProgress: number = 0;
+  public addFromViewTotal: number = 0;
+  public fetchingRecordsToSave: boolean = false;
+
+  // Dropdown menu options
+  public addOptions: NewItemOption[] = [
     {
-        this.filterItemsSubject
-        .pipe(debounceTime(this.filterDebounceTime))
-        .subscribe(() => this.filterItems(this.filter));
+      Text: 'Add Records',
+      Description: 'Search and add specific records to this list',
+      Icon: 'search',
+      Action: () => this.openAddRecordsDialog()
+    },
+    {
+      Text: 'Add From View',
+      Description: 'Add all records from a saved view',
+      Icon: 'folder',
+      Action: () => this.openAddFromViewDialog()
+    }
+  ];
 
-        this.filterListrecordsSubject
-        .pipe(debounceTime(this.filterDebounceTime))
-        .subscribe(() => this.loadListRecords());
+  constructor(
+    private sharedService: SharedService,
+    private cdr: ChangeDetectorRef
+  ) {
+    // Debounce search input
+    this.searchSubject
+      .pipe(debounceTime(300))
+      .subscribe((searchText) => this.searchRecords(searchText));
+  }
+
+  public async ngOnInit(): Promise<void> {
+    if (this.ListID) {
+      await this.loadListRecord();
+    }
+  }
+
+  /**
+   * Load the list entity record
+   */
+  private async loadListRecord(): Promise<void> {
+    if (!this.ListID) return;
+
+    this.showLoader = true;
+
+    try {
+      const md = new Metadata();
+      this.listRecord = await md.GetEntityObject<ListEntity>("Lists");
+      const loadResult = await this.listRecord.Load(this.ListID);
+
+      if (!loadResult) {
+        LogError("Error loading list with ID " + this.ListID, undefined, this.listRecord.LatestResult);
+        this.listRecord = null;
+      }
+    } catch (error) {
+      LogError("Error loading list", undefined, error);
+      this.listRecord = null;
+    } finally {
+      this.showLoader = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  // ==========================================
+  // Grid Event Handlers
+  // ==========================================
+
+  onRowClicked(_event: ListGridRowClickedEvent): void {
+    // Selection is handled by the grid
+  }
+
+  onRowDoubleClicked(_event: ListGridRowClickedEvent): void {
+    // Navigation is handled by mj-list-detail-grid
+  }
+
+  onSelectionChange(keys: string[]): void {
+    this.selectedKeys = keys;
+  }
+
+  onDataLoaded(event: { totalCount: number }): void {
+    this.rowCount = event.totalCount;
+  }
+
+  refreshGrid(): void {
+    if (this.listDetailGrid) {
+      this.listDetailGrid.refresh();
+    }
+  }
+
+  // ==========================================
+  // Toolbar Actions
+  // ==========================================
+
+  onRefreshClick(): void {
+    this.refreshGrid();
+  }
+
+  onExportClick(): void {
+    // Trigger export on the underlying grid
+    if (this.listDetailGrid) {
+      this.listDetailGrid.export();
+    }
+  }
+
+  onDropdownItemClick(item: NewItemOption): void {
+    if (item.Action) {
+      item.Action();
+    }
+  }
+
+  // ==========================================
+  // Remove from List Dialog
+  // ==========================================
+
+  openRemoveDialog(): void {
+    if (this.selectedKeys.length === 0) {
+      this.sharedService.CreateSimpleNotification("Please select records to remove", 'warning', 2500);
+      return;
+    }
+    this.showRemoveDialog = true;
+  }
+
+  closeRemoveDialog(): void {
+    this.showRemoveDialog = false;
+    this.isRemoving = false;
+    this.removeProgress = 0;
+    this.removeTotal = 0;
+  }
+
+  async confirmRemoveFromList(): Promise<void> {
+    if (!this.listRecord || this.selectedKeys.length === 0) return;
+
+    this.isRemoving = true;
+    this.removeTotal = this.selectedKeys.length;
+    this.removeProgress = 0;
+
+    const md = new Metadata();
+    const rv = new RunView();
+    const entityInfo = md.EntityByID(this.listRecord.EntityID);
+
+    // selectedKeys from grid are in concatenated format (ID|value)
+    // For single PK entities, RecordID in DB is just the raw value
+    // For composite PK entities, RecordID in DB is the concatenated format
+    // Extract the appropriate format for the query
+    const selectedRecordIds = this.selectedKeys.map(key => {
+      if (entityInfo && entityInfo.PrimaryKeys.length === 1) {
+        // Single PK: extract just the value from concatenated format
+        const compositeKey = new CompositeKey();
+        compositeKey.LoadFromConcatenatedString(key);
+        return compositeKey.KeyValuePairs[0]?.Value || key;
+      } else {
+        // Composite PK: use full concatenated format as-is
+        return key;
+      }
+    });
+
+    const listDetailsFilter = `ListID = '${this.listRecord.ID}' AND RecordID IN (${selectedRecordIds.map(id => `'${id}'`).join(',')})`;
+
+    const listDetailsResult = await rv.RunView<ListDetailEntity>({
+      EntityName: 'List Details',
+      ExtraFilter: listDetailsFilter,
+      ResultType: 'entity_object'
+    }, md.CurrentUser);
+
+    if (!listDetailsResult.Success) {
+      LogError("Error loading list details for removal", undefined, listDetailsResult.ErrorMessage);
+      this.sharedService.CreateSimpleNotification("Failed to remove records", 'error', 2500);
+      this.isRemoving = false;
+      return;
     }
 
-    public async ngOnInit(): Promise<void> {
-        if(this.ListID){
-            await this.loadList(this.ListID);
-        }
+    // Use transaction group for bulk delete
+    const tg = await md.CreateTransactionGroup();
+    const listDetails = listDetailsResult.Results;
+
+    for (const listDetail of listDetails) {
+      listDetail.TransactionGroup = tg;
+      await listDetail.Delete();
     }
 
-    private async loadList(listID: string): Promise<void> {
-        if(!listID){
-            return;
-        }
+    const success = await tg.Submit();
 
-        const startTime: number = new Date().getTime();
-        this.showLoader = true;
+    if (success) {
+      this.removeProgress = this.removeTotal;
+      this.sharedService.CreateSimpleNotification(
+        `Removed ${listDetails.length} record${listDetails.length !== 1 ? 's' : ''} from list`,
+        'success',
+        2500
+      );
+      this.closeRemoveDialog();
+      this.listDetailGrid?.clearSelection();
+      this.refreshGrid();
+    } else {
+      LogError("Error removing records from list");
+      this.sharedService.CreateSimpleNotification("Failed to remove some records", 'error', 2500);
+      this.isRemoving = false;
+    }
+  }
 
-        const md: Metadata = new Metadata();
-        const rv: RunView = new RunView();
+  // ==========================================
+  // Add Records Dialog
+  // ==========================================
 
-        this.listRecord = await md.GetEntityObject<ListEntity>("Lists");
-        const loadResult = await this.listRecord.Load(listID);
-        if(!loadResult){
-            LogError("Error loading list with ID " + listID, undefined, this.listRecord.LatestResult);
-            this.showLoader = false;
-            return;
-        }            
-    
-        this.sourceEntityInfo = md.EntityByID(this.listRecord.EntityID);
+  async openAddRecordsDialog(): Promise<void> {
+    this.showAddRecordsDialog = true;
+    this.addableRecords = [];
+    this.addRecordsSearchFilter = "";
+    this.addDialogLoading = true;
+    this.addDialogSaving = false;
 
-        this.viewColumns = this.sourceEntityInfo.Fields.filter((field: EntityFieldInfo) => field.DefaultInView).map((field: EntityFieldInfo) => {
-            return {
-                ID: field.ID,
-                Name: field.CodeName,
-                DisplayName: field.DisplayName,
-                EntityField: field,
-                hidden: false,
-                orderIndex: field.Sequence,
-                width: field.DefaultColumnWidth || 100,
-            } as ViewColumnInfo
+    // Load existing list detail IDs to mark which records are already in the list
+    await this.loadExistingListDetailIds();
+    this.addDialogLoading = false;
+  }
+
+  closeAddRecordsDialog(): void {
+    this.showAddRecordsDialog = false;
+    this.addableRecords = [];
+    this.addRecordsSearchFilter = "";
+    this.existingListDetailIds.clear();
+    this.addDialogSaving = false;
+    this.addProgress = 0;
+    this.addTotal = 0;
+  }
+
+  private async loadExistingListDetailIds(): Promise<void> {
+    if (!this.listRecord) return;
+
+    const md = new Metadata();
+    const rv = new RunView();
+
+    const result = await rv.RunView<{ RecordID: string }>({
+      EntityName: 'List Details',
+      ExtraFilter: `ListID = '${this.listRecord.ID}'`,
+      Fields: ['RecordID'],
+      ResultType: 'simple'
+    }, md.CurrentUser);
+
+    if (result.Success) {
+      this.existingListDetailIds = new Set(result.Results.map(r => r.RecordID));
+    }
+  }
+
+  onAddRecordsSearchChange(value: string): void {
+    this.addRecordsSearchFilter = value;
+    this.searchSubject.next(value);
+  }
+
+  private async searchRecords(searchText: string): Promise<void> {
+    if (!this.listRecord || !searchText || searchText.length < 2) {
+      this.addableRecords = [];
+      return;
+    }
+
+    this.addDialogLoading = true;
+
+    const md = new Metadata();
+    const sourceEntityInfo = md.EntityByID(this.listRecord.EntityID);
+    if (!sourceEntityInfo) {
+      this.addDialogLoading = false;
+      return;
+    }
+
+    const nameField = sourceEntityInfo.Fields.find(field => field.IsNameField);
+    const pkField = sourceEntityInfo.FirstPrimaryKey?.Name || 'ID';
+
+    let filter: string | undefined;
+    if (nameField) {
+      filter = `${nameField.Name} LIKE '%${searchText}%'`;
+    }
+
+    const rv = new RunView();
+    const result: RunViewResult = await rv.RunView({
+      EntityName: this.listRecord.Entity,
+      ExtraFilter: filter,
+      MaxRows: 100,
+      ResultType: 'simple'
+    });
+
+    if (result.Success) {
+      this.addableRecords = result.Results.map((record: Record<string, unknown>) => {
+        const recordId = String(record[pkField]);
+        return {
+          ID: recordId,
+          Name: nameField ? String(record[nameField.Name]) : recordId,
+          isInList: this.existingListDetailIds.has(recordId),
+          isSelected: false
+        };
+      });
+    }
+
+    this.addDialogLoading = false;
+    this.cdr.detectChanges();
+  }
+
+  toggleRecordSelection(record: AddableRecord): void {
+    if (record.isInList) return; // Can't select records already in list
+    record.isSelected = !record.isSelected;
+  }
+
+  get selectedAddableRecords(): AddableRecord[] {
+    return this.addableRecords.filter(r => r.isSelected);
+  }
+
+  selectAllAddable(): void {
+    this.addableRecords.forEach(r => {
+      if (!r.isInList) r.isSelected = true;
+    });
+  }
+
+  deselectAllAddable(): void {
+    this.addableRecords.forEach(r => r.isSelected = false);
+  }
+
+  async confirmAddRecords(): Promise<void> {
+    const recordsToAdd = this.selectedAddableRecords;
+    if (recordsToAdd.length === 0 || !this.listRecord) return;
+
+    this.addDialogSaving = true;
+    // Reserve 20% of progress for tg.Submit()
+    this.addTotal = recordsToAdd.length;
+    this.addProgress = 0;
+    const progressPerRecord = 0.8 / recordsToAdd.length; // 80% for individual saves
+
+    const md = new Metadata();
+
+    // Use transaction group for bulk insert
+    const tg = await md.CreateTransactionGroup();
+
+    for (let i = 0; i < recordsToAdd.length; i++) {
+      const record = recordsToAdd[i];
+      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("List Details", md.CurrentUser);
+      listDetail.ListID = this.listRecord.ID;
+      listDetail.RecordID = record.ID;
+      listDetail.TransactionGroup = tg;
+      const result = await listDetail.Save();
+      if (!result) {
+        LogErrorEx({
+          message: listDetail.LatestResult?.CompleteMessage
         });
+      }
+      // Update progress (0-80%)
+      this.addProgress = Math.round((i + 1) * progressPerRecord * this.addTotal);
+    }
 
-                                                        /*make sure there is an entity field linked*/
-        this.visibleColumns = this.viewColumns.filter(x => x.hidden === false && x.EntityField).sort((a,b) => {
-            const aOrder = a.orderIndex != null ? a.orderIndex : 9999;
-            const bOrder = b.orderIndex != null ? b.orderIndex : 9999;
-            return aOrder - bOrder;
+    // Show 80% complete before submit
+    this.addProgress = Math.round(this.addTotal * 0.8);
+
+    const success = await tg.Submit();
+
+    if (success) {
+      this.addProgress = this.addTotal;
+      this.sharedService.CreateSimpleNotification(
+        `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
+        'success',
+        2500
+      );
+      this.closeAddRecordsDialog();
+      this.refreshGrid();
+    } else {
+      LogError("Error adding records to list");
+      this.sharedService.CreateSimpleNotification("Failed to add some records", 'error', 2500);
+      this.addDialogSaving = false;
+    }
+  }
+
+  // ==========================================
+  // Add From View Dialog (existing functionality, cleaned up)
+  // ==========================================
+
+  async openAddFromViewDialog(): Promise<void> {
+    this.showAddFromViewDialog = true;
+    this.userViewsToAdd = [];
+
+    if (!this.userViews) {
+      await this.loadEntityViews();
+    }
+  }
+
+  closeAddFromViewDialog(): void {
+    this.showAddFromViewDialog = false;
+    this.userViewsToAdd = [];
+    this.showAddFromViewLoader = false;
+    this.addFromViewProgress = 0;
+    this.addFromViewTotal = 0;
+  }
+
+  private async loadEntityViews(): Promise<void> {
+    if (!this.listRecord || !this.listRecord.Entity) return;
+
+    this.showAddFromViewLoader = true;
+
+    const rv = new RunView();
+    const md = new Metadata();
+
+    const runViewResult = await rv.RunView<UserViewEntityExtended>({
+      EntityName: "User Views",
+      ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this.listRecord.EntityID}'`,
+      ResultType: 'entity_object'
+    }, md.CurrentUser);
+
+    if (!runViewResult.Success) {
+      LogError(`Error loading User Views for entity ${this.listRecord.Entity}`);
+    } else {
+      this.userViews = runViewResult.Results;
+    }
+
+    this.showAddFromViewLoader = false;
+  }
+
+  toggleViewSelection(view: UserViewEntityExtended): void {
+    const index = this.userViewsToAdd.findIndex(v => v.ID === view.ID);
+    if (index >= 0) {
+      this.userViewsToAdd.splice(index, 1);
+    } else {
+      this.userViewsToAdd.push(view);
+    }
+  }
+
+  isViewSelected(view: UserViewEntityExtended): boolean {
+    return this.userViewsToAdd.some(v => v.ID === view.ID);
+  }
+
+  async confirmAddFromView(): Promise<void> {
+    if (!this.listRecord || this.userViewsToAdd.length === 0) return;
+
+    this.showAddFromViewLoader = true;
+    this.fetchingRecordsToSave = true;
+
+    const rv = new RunView();
+    const md = new Metadata();
+
+    // Collect all unique record IDs from selected views
+    const recordIdSet = new Set<string>();
+
+    for (const userView of this.userViewsToAdd) {
+      const runViewResult = await rv.RunView({
+        EntityName: "User Views",
+        ViewEntity: userView,
+        Fields: ["ID"]
+      }, md.CurrentUser);
+
+      if (runViewResult.Success) {
+        const records = runViewResult.Results as Array<{ ID: string }>;
+        records.forEach(r => recordIdSet.add(r.ID));
+      }
+    }
+
+    // Filter out records already in the list
+    await this.loadExistingListDetailIds();
+    const recordsToAdd = [...recordIdSet].filter(id => !this.existingListDetailIds.has(id));
+
+    this.addFromViewTotal = recordsToAdd.length;
+    this.addFromViewProgress = 0;
+    this.fetchingRecordsToSave = false;
+    const progressPerRecord = 0.8 / Math.max(recordsToAdd.length, 1); // 80% for individual saves
+
+    if (recordsToAdd.length === 0) {
+      this.sharedService.CreateSimpleNotification("All records already in list", 'info', 2500);
+      this.showAddFromViewLoader = false;
+      return;
+    }
+
+    LogStatus(`Adding ${recordsToAdd.length} records to list`);
+
+    // Use transaction group for bulk insert
+    const tg = await md.CreateTransactionGroup();
+
+    for (let i = 0; i < recordsToAdd.length; i++) {
+      const recordID = recordsToAdd[i];
+      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("List Details", md.CurrentUser);
+      listDetail.ListID = this.listRecord.ID;
+      listDetail.RecordID = recordID;
+      listDetail.TransactionGroup = tg;
+      const result = await listDetail.Save();
+      if (!result) {
+        LogErrorEx({
+          message: listDetail.LatestResult?.CompleteMessage
         });
-
-        const primaryKeyName: string = this.sourceEntityInfo.FirstPrimaryKey.Name;
-        const rvResult: RunViewResult<Record<string, any>> = await rv.RunView<Record<string, any>>({
-            EntityName: this.listRecord.Entity,
-            ExtraFilter: `${primaryKeyName} IN (SELECT [RecordID] FROM ${md.ConfigData.MJCoreSchemaName}.[vwListDetails] WHERE ListID = '${this.listRecord.ID}')`
-        }, md.CurrentUser);
-
-        if(!rvResult.Success){
-            LogError(`Error loading ${this.listRecord.Entity} records: ${rvResult.ErrorMessage}`);
-            this.showLoader = false;
-            return;
-        }
-
-        this.sourceGridData = this.filteredGridData = rvResult.Results;
-        this.viewExecutionTime = (new Date().getTime() - startTime) / 1000; // in seconds
-        this.showLoader = false;
+      }
+      // Update progress (0-80%)
+      this.addFromViewProgress = Math.round((i + 1) * progressPerRecord * this.addFromViewTotal);
     }
 
-    public pageChange(event: PageChangeEvent): void {
-        this.page = event.skip;
-        this.loadList(this.ListID);
+    // Show 80% complete before submit
+    this.addFromViewProgress = Math.round(this.addFromViewTotal * 0.8);
+
+    const success = await tg.Submit();
+
+    if (success) {
+      this.addFromViewProgress = this.addFromViewTotal;
+      this.sharedService.CreateSimpleNotification(
+        `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
+        'success',
+        2500
+      );
+      this.closeAddFromViewDialog();
+      this.refreshGrid();
+    } else {
+      LogError("Error adding records from view to list");
+      this.sharedService.CreateSimpleNotification("Failed to add some records", 'error', 2500);
+      this.showAddFromViewLoader = false;
     }
-
-    GetColumnTitle(col: Partial<ViewColumnInfo>): string {
-        if (col.DisplayName){
-            // use view's display name first if it exists
-            return col.DisplayName;
-        }
-        else if (col.EntityField && col.EntityField.DisplayName){
-            // then use entity display name, if that exist
-            return col.EntityField.DisplayName; 
-        }
-        else{
-            // otherwise just use the column name
-            return col.Name || '';
-        }
-    }
-
-    public getEditor(ef: EntityFieldInfo | undefined): "boolean" | "text" | "numeric" | "date" {
-        if (!ef) {
-            return "text";
-        }
-
-        switch (ef.TSType) {  
-          case EntityFieldTSType.Boolean:
-            return "boolean";
-          case EntityFieldTSType.Date:
-            return "date";
-          case EntityFieldTSType.Number:
-            return "numeric";
-          default:
-            return "text";
-        }          
-    }
-
-    GetColumnCellStyle(col: Partial<ViewColumnInfo>): Record<'text-align' | 'vertical-align', string> {
-        if (!col || !col.EntityField) {
-            return {'text-align': 'left', 'vertical-align': 'top'};
-        }
-
-        const fieldType: string = col.EntityField.Type.trim().toLowerCase();
-        switch (fieldType) {
-            case "money":
-            case 'decimal':
-            case 'real':
-            case 'float':
-            case 'int':
-                // right align numbers,
-                return {'text-align': 'right', 'vertical-align': 'top'};
-            default:
-                // left align everything else
-                return {'text-align': 'left', 'vertical-align': 'top'};
-        }
-    }
-
-    public async toggleAddFromViewDialog(show: boolean): Promise<void> {
-        this.showAddDialog = show;
-
-        if(show && !this.userViews){  
-            await this.loadEntityViews();
-        }
-    }
-
-    private async loadEntityViews(): Promise<void> {
-        this.showAddLoader = true;
-
-        if(!this.listRecord || !this.listRecord.Entity){
-            return;
-        }
-
-        const rv: RunView = new RunView();
-        const md: Metadata = new Metadata();
-
-        const runViewResult: RunViewResult = await rv.RunView<UserViewEntityExtended>({
-            EntityName: "User Views",
-            ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this.listRecord.EntityID}'`,
-            ResultType: 'entity_object'
-        }, md.CurrentUser);
-
-        if(!runViewResult.Success){
-            this.showAddLoader = false;
-            LogError(`Error loading ${this.listRecord.Entity} User View records for user ${md.CurrentUser.ID}`);
-            return;
-        }
-
-        this.userViews = runViewResult.Results;
-        this.showAddLoader = false;
-    }
-
-    public async addTolist(): Promise<void> {
-        if(!this.listRecord){
-            return;
-        }
-
-        if(!this.listRecord.Entity){
-            return;
-        }
-
-        this.showAddLoader = true;
-        this.fetchingRecordsToSave = true;
-
-        const rv: RunView = new RunView();
-        const md: Metadata = new Metadata();
-
-        const hashMap: Map<string, {ID: string}> = new Map();
-        await Promise.all(this.userViewsToAdd.map(async (userView: UserViewEntityExtended) => {
-            const runViewResult: RunViewResult = await rv.RunView({
-                EntityName: "User Views",
-                ViewEntity: userView,
-                Fields: ["ID"]
-            }, md.CurrentUser);
-
-            if(!runViewResult.Success){
-                LogError(`Error loading view ${userView.Name} for user ${md.CurrentUser.ID}`);
-                return;
-            }
-
-            const records: {ID: string }[] = runViewResult.Results;
-            for(const record of records){
-                hashMap.set(record.ID, record);
-            }
-        }));
-
-        this.recordsToSave = hashMap.size;
-        this.recordsSaved = 0;
-        this.fetchingRecordsToSave = false;
-
-        LogStatus(`Adding ${hashMap.size} records to list ${this.listRecord!.ID}`);
-
-        //now add the records to the list
-        const recordIDs: string[] = [...hashMap.keys()];
-        const chunkSize: number = 100;
-        for(let i = 0; i < recordIDs.length; i += chunkSize){
-            const chunk: string[] = recordIDs.slice(i, i + chunkSize);
-            await Promise.all(chunk.map(async (recordID: string) => {
-                const listDetail: ListDetailEntityExtended = await md.GetEntityObject("List Details");
-                listDetail.ListID = this.listRecord!.ID;
-                listDetail.RecordID = recordID.toString();
-                listDetail.ContextCurrentUser = md.CurrentUser;
-
-                const saveResult: boolean = await listDetail.Save();
-                if(!saveResult){
-                    LogError(`Error adding record ${recordID} to list ${this.listRecord!.ID}`, undefined, listDetail.LatestResult);
-                }
-
-                this.recordsSaved++;
-            }));
-        }
-
-        this.showAddLoader = false;
-        this.toggleAddFromViewDialog(false);
-        this.loadList(this.listRecord!.ID);
-    }
-
-    public onListSearchValueChange(Value: string): void {
-        this.filter = Value;
-        this.filterItemsSubject.next(true);
-    }
-
-    public onListRecordDialogValueChange(Value: string): void {
-        this.searchFilter = Value;
-        this.filterListrecordsSubject.next(true);
-    }
-
-    private filterItems(filter: string): void {
-
-        if(!filter || filter === "") {
-            this.filteredGridData = this.sourceGridData;
-            return;
-        }
-
-        if(!this.listRecord){
-            return;
-        }
-
-        if(!this.sourceGridData){
-          this.sourceGridData = [];
-        }
-    
-        const toLower: string = filter.toLowerCase();
-        const nameField: EntityFieldInfo | undefined = this.listRecord.EntityInfo.Fields.find((field: EntityFieldInfo) => field.IsNameField);
-        if(!nameField){
-            LogError("Unable to filter list: No name field found");
-            return;
-        }
-
-        this.filteredGridData = this.sourceGridData.filter((data: Record<string, any>) => {
-            const name: string = data[nameField.Name];
-            return name.toLowerCase().includes(toLower);
-        });
-    }
-
-    public addViewToSelectedList(view: UserViewEntityExtended): void {
-        this.userViewsToAdd.push(view);
-    }
-
-    public removeViewFromSelectedList(view: UserViewEntityExtended): void {
-        this.userViewsToAdd.filter((userView: UserViewEntityExtended) => userView.ID !== view.ID);
-    }
-
-    public onDropdownItemClick(item: NewItemOption): void {
-        if(!item.Action){
-            return;
-        }
-
-        item.Action();
-    }
-
-    public async toggleAddRecordsDialog(show: boolean): Promise<void> {
-        this.showAddSingleRecordsDialog = show;
-
-        if(show){
-            this.listRecords = [];
-            this.searchFilter = "";
-            await this.loadListRecords();
-        }
-    }
-
-    private async loadListRecords(): Promise<void> {
-        if(!this.listRecord){
-            LogError("Error loading list records. List record is null");
-            return;
-        }
-
-        if(!this.sourceEntityInfo){
-            LogError("Error loading list records. Source entity info is null");
-            return;
-        }
-
-        this.fetchingListRecords = true;
-
-        const primaryKeyName: string = this.sourceEntityInfo.FirstPrimaryKey.Name;
-
-        let filter: string | undefined = undefined;
-        const nameField: EntityFieldInfo | undefined = this.sourceEntityInfo.Fields.find((field: EntityFieldInfo) => field.IsNameField);
-        if(nameField && this.searchFilter){
-            filter = `${nameField.Name} LIKE '%${this.searchFilter}%'`;
-        }
-
-        const rv: RunView = new RunView();
-        const rvResult: RunViewResult = await rv.RunView({
-            EntityName: this.listRecord.Entity,
-            ExtraFilter: filter,
-            MaxRows: 50
-        });
-
-        if(!rvResult.Success){
-            LogError(`Error loading list records for list ${this.listRecord.ID}`, undefined, rvResult.ErrorMessage);
-            this.fetchingListRecords = false;
-            return;
-        }
-
-        this.listRecords = rvResult.Results.filter((record: Record<string, any>) => {
-            const alreadyExits: boolean = this.sourceGridData.some((selectedRecord: Record<'ID' | 'Name', string>) => selectedRecord.ID === record[primaryKeyName]);
-            return !alreadyExits;
-        }).map((record: Record<string, any>) => {
-            let result = { ID: record[primaryKeyName], Name: record[nameField!.Name] };
-            return result;
-        });
-
-        this.fetchingListRecords = false;
-    }
-
-    public async addListRecord(listRecord: Record<'ID' | 'Name', string>): Promise<void> {
-        if(!this.listRecord){
-            LogError("Error adding list record. List record is null");
-            this.sharedService.CreateSimpleNotification("Unable to add record to list");
-            return;
-        }
-
-        const md: Metadata = new Metadata();
-        const listEntity: ListDetailEntityExtended = await md.GetEntityObject("List Details", md.CurrentUser);
-        listEntity.ListID = this.listRecord.ID;
-        listEntity.RecordID = listRecord.ID;
-
-        const saveResult = await listEntity.Save();
-        if(!saveResult){
-            LogError(`Error adding record ${listRecord.ID} to list ${this.listRecord.ID}`, undefined, listEntity.LatestResult);
-            
-            const alreadyExists: boolean = listEntity.LatestResult.Message.includes("already exists in List");
-            if(alreadyExists){
-                this.sharedService.CreateSimpleNotification("Record already exists in this list", 'error', 2500);
-                return;
-            }
-
-            this.sharedService.CreateSimpleNotification("Unable to add record to list", 'error', 2500);
-            return;
-        }
-
-        this.sharedService.CreateSimpleNotification("Unable to add record to list", 'success', 2500);
-
-    }
+  }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

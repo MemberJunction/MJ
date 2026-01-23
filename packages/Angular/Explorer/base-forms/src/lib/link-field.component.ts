@@ -252,7 +252,7 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
             return '';
         if (record.Get !== undefined) {
             // we have a base entity
-            return this.RelatedEntityNameField ? record.Get(this.RelatedEntityNameField) : record.FirstPrimaryKey.ToString();
+            return this.RelatedEntityNameField ? record.Get(this.RelatedEntityNameField) : (record.FirstPrimaryKey ? record.FirstPrimaryKey.Value?.toString() : 'Unable to retrieve Primary Key Value.');
         }
         else {
             // we have a plain object because we couldn't find any records

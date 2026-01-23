@@ -316,6 +316,93 @@ if (engine.IsEncrypted(someValue)) {
 engine.ClearCaches();
 ```
 
+## API Key Management
+
+The `EncryptionEngine` provides secure API key management for authentication scenarios like MCP servers, external integrations, and programmatic access.
+
+### Creating API Keys
+
+```typescript
+import { EncryptionEngine } from '@memberjunction/encryption';
+
+const result = await EncryptionEngine.Instance.CreateAPIKey({
+    userId: 'user-guid-here',
+    label: 'MCP Server Integration',
+    description: 'Used for Claude Desktop MCP connections',
+    expiresAt: new Date('2025-12-31') // Optional - omit for non-expiring keys
+}, contextUser);
+
+if (result.success) {
+    // CRITICAL: Save this key immediately - it cannot be recovered!
+    console.log('Your API Key:', result.rawKey);
+    console.log('API Key ID:', result.apiKeyId);
+} else {
+    console.error('Failed to create API key:', result.error);
+}
+```
+
+**Key Format**: `mj_sk_[64 hex characters]` (70 characters total)
+
+**Security**: Only the SHA-256 hash is stored in the database. The raw key is returned exactly once at creation time and cannot be recovered.
+
+### Validating API Keys
+
+```typescript
+const validation = await EncryptionEngine.Instance.ValidateAPIKey(
+    request.headers['x-api-key'],
+    systemUser
+);
+
+if (validation.isValid) {
+    // Use validation.user for authorized operations
+    console.log('Authenticated user:', validation.user.Name);
+    console.log('API Key ID:', validation.apiKeyId);
+} else {
+    throw new Error(validation.error);
+}
+```
+
+The validation method:
+- Checks key format
+- Looks up the hash in the CredentialEngine cache (fast!)
+- Verifies the key is active and not expired
+- Loads the associated user from the database
+- Updates `LastUsedAt` and logs usage
+
+### Other API Key Methods
+
+```typescript
+// Generate a key without storing it (for custom storage scenarios)
+const { raw, hash } = EncryptionEngine.Instance.GenerateAPIKey();
+
+// Hash a key for manual comparison
+const keyHash = EncryptionEngine.Instance.HashAPIKey(rawKey);
+
+// Validate key format before processing
+if (!EncryptionEngine.Instance.IsValidAPIKeyFormat(key)) {
+    throw new Error('Invalid API key format');
+}
+
+// Revoke an API key (permanently disables it)
+const revoked = await EncryptionEngine.Instance.RevokeAPIKey(apiKeyId, contextUser);
+```
+
+### API Key Database Schema
+
+The API key system uses these tables (part of MemberJunction core):
+
+**MJ: API Keys**
+- `ID` - Unique identifier
+- `Hash` - SHA-256 hash of the raw key
+- `UserID` - Associated user (operations execute with this user's permissions)
+- `Label` - Friendly name
+- `Status` - `Active` or `Revoked`
+- `ExpiresAt` - Optional expiration date
+- `LastUsedAt` - Automatically updated on each use
+
+**MJ: API Key Usage Logs**
+- Tracks API key usage for analytics and security monitoring
+
 ## Encrypted Value Format
 
 Encrypted values are stored as self-describing strings:

@@ -1,10 +1,11 @@
 import { Component, Input, OnInit, ContentChild, ElementRef } from '@angular/core';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
-import { CompositeKey, LogError, Metadata, RecordDependency } from '@memberjunction/core';
+import { CompositeKey, LogError, Metadata, RecordDependency, BaseEntity, RunView } from '@memberjunction/core';
 import { Router } from '@angular/router';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
-import { ListDetailEntity, ListEntity } from '@memberjunction/core-entities';
+import { ListDetailEntity, ListDetailEntityExtended, ListEntity } from '@memberjunction/core-entities';
+import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
 
 
 @Component({
@@ -39,6 +40,16 @@ export class FormToolbarComponent implements OnInit {
     public availableLists: ListEntity[] = [];
     public selectedLists: ListEntity[] = [];
 
+    // Enhanced list management dialog
+    public showEnhancedListDialog: boolean = false;
+    public listManagementConfig: ListManagementDialogConfig | null = null;
+    public useEnhancedListDialog: boolean = true; // Toggle to use enhanced dialog
+
+    // List membership indicator
+    public recordListCount: number = 0;
+    public recordListsLoading: boolean = false;
+    public recordLists: ListEntity[] = [];
+
     /**
      * Internal property that changes over time based on the state of the record being managed. Don't access this directly, use the CurrentlyDisabled property instead.
      */
@@ -61,6 +72,67 @@ export class FormToolbarComponent implements OnInit {
     }
 
     public async ngOnInit(): Promise<void> {
+        // Load list membership info for the current record
+        await this.loadRecordListCount();
+    }
+
+    /**
+     * Load the count of lists this record belongs to
+     */
+    public async loadRecordListCount(): Promise<void> {
+        const record = this.form?.record;
+        if (!record || !record.IsSaved) {
+            this.recordListCount = 0;
+            this.recordLists = [];
+            return;
+        }
+
+        this.recordListsLoading = true;
+
+        try {
+            const rv = new RunView();
+            // Use the proper RecordID format based on PK count:
+            // Single PK: raw value, Composite PK: concatenated format
+            const recordId = ListDetailEntityExtended.BuildRecordID(record.EntityInfo, record);
+            const entityId = record.EntityInfo.ID;
+
+            // Get list details for this record
+            const detailsResult = await rv.RunView<ListDetailEntity>({
+                EntityName: 'List Details',
+                ExtraFilter: `RecordID = '${recordId}'`,
+                ResultType: 'entity_object'
+            });
+
+            if (!detailsResult.Success || !detailsResult.Results || detailsResult.Results.length === 0) {
+                this.recordListCount = 0;
+                this.recordLists = [];
+                return;
+            }
+
+            const listIds = [...new Set(detailsResult.Results.map((d: ListDetailEntity) => d.ListID))];
+
+            // Get the lists filtered by entity
+            const listIdFilter = listIds.map(id => `'${id}'`).join(',');
+            const listsResult = await rv.RunView<ListEntity>({
+                EntityName: 'Lists',
+                ExtraFilter: `ID IN (${listIdFilter}) AND EntityID = '${entityId}'`,
+                ResultType: 'entity_object'
+            });
+
+            if (listsResult.Success && listsResult.Results) {
+                this.recordLists = listsResult.Results;
+                this.recordListCount = listsResult.Results.length;
+            } else {
+                this.recordListCount = 0;
+                this.recordLists = [];
+            }
+        } catch (error) {
+            console.error('Error loading record list count:', error);
+            this.recordListCount = 0;
+            this.recordLists = [];
+        } finally {
+            this.recordListsLoading = false;
+        }
     }
  
     public async saveExistingRecord(event: MouseEvent) {
@@ -110,7 +182,7 @@ export class FormToolbarComponent implements OnInit {
             // Save the record
             const result = await this.form.SaveRecord(true);
             if (!result) {
-                const msg = this.form.record.LatestResult?.Message ? ': ' + this.form.record.LatestResult.Message : '';
+                const msg = this.form.record.LatestResult?.CompleteMessage ? ': ' + this.form.record.LatestResult.CompleteMessage : '';
                 SharedService.Instance.CreateSimpleNotification(`Error saving record${msg}`, 'error', 3000);
             }
         } finally {
@@ -142,6 +214,13 @@ export class FormToolbarComponent implements OnInit {
     }
 
     public async toggleListDialog(show: boolean): Promise<void> {
+        if (this.useEnhancedListDialog && show) {
+            // Use the enhanced list management dialog
+            this.openEnhancedListDialog();
+            return;
+        }
+
+        // Fallback to original simple dialog
         this.listDialogVisible = show;
 
         if(show){
@@ -150,15 +229,92 @@ export class FormToolbarComponent implements OnInit {
         }
     }
 
+    /**
+     * Opens the enhanced list management dialog
+     */
+    public openEnhancedListDialog(): void {
+        const record = this.form.record;
+        if (!record) return;
+
+        // Use the proper RecordID format based on PK count:
+        // Single PK: raw value, Composite PK: concatenated format
+        const entityInfo = record.EntityInfo;
+        const recordId = ListDetailEntityExtended.BuildRecordID(entityInfo, record);
+        const recordName = this.getRecordDisplayName(record);
+
+        this.listManagementConfig = {
+            mode: 'manage',
+            entityId: entityInfo.ID,
+            entityName: entityInfo.Name,
+            recordIds: [recordId],
+            recordDisplayNames: [recordName],
+            allowCreate: true,
+            allowRemove: true,
+            showMembership: true,
+            dialogTitle: `Manage Lists for "${recordName}"`
+        };
+
+        this.showEnhancedListDialog = true;
+    }
+
+    /**
+     * Get a display name for a record
+     */
+    private getRecordDisplayName(record: BaseEntity): string {
+        const entityInfo = record.EntityInfo;
+        if (entityInfo?.NameField) {
+            const name = record.Get(entityInfo.NameField.Name);
+            if (name) return String(name);
+        }
+        return record.PrimaryKey.ToConcatenatedString();
+    }
+
+    /**
+     * Handle completion of the enhanced list management dialog
+     */
+    public async onEnhancedListDialogComplete(result: ListManagementResult): Promise<void> {
+        this.showEnhancedListDialog = false;
+        this.listManagementConfig = null;
+
+        if (result.action === 'apply') {
+            const addedCount = result.added.length;
+            const removedCount = result.removed.length;
+
+            if (addedCount > 0 || removedCount > 0) {
+                let message = '';
+                if (addedCount > 0) {
+                    message += `Added to ${addedCount} list(s)`;
+                }
+                if (removedCount > 0) {
+                    if (message) message += ', ';
+                    message += `Removed from ${removedCount} list(s)`;
+                }
+                SharedService.Instance.CreateSimpleNotification(message, 'success', 2500);
+
+                // Refresh the list count
+                await this.loadRecordListCount();
+            }
+        }
+    }
+
+    /**
+     * Handle cancellation of the enhanced list management dialog
+     */
+    public onEnhancedListDialogCancel(): void {
+        this.showEnhancedListDialog = false;
+        this.listManagementConfig = null;
+    }
+
     public async addRecordToList(list: ListEntity): Promise<void> {
         this.toggleListDialog(false);
-        
+
         const md: Metadata = new Metadata();
-        
-        const listDetailEntity: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>("List Details", md.CurrentUser);
+
+        const listDetailEntity = await md.GetEntityObject<ListDetailEntityExtended>("List Details", md.CurrentUser);
         listDetailEntity.NewRecord();
         listDetailEntity.ListID = list.ID;
-        listDetailEntity.RecordID = this.form.record.FirstPrimaryKey.Value;
+        // Use SetRecordIDFromEntity which handles single vs composite PK properly
+        listDetailEntity.SetRecordIDFromEntity(this.form.record.EntityInfo, this.form.record);
 
         const saveResult: boolean = await listDetailEntity.Save();
         if(!saveResult){

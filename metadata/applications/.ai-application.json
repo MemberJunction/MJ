@@ -3,7 +3,7 @@
     "Name": "AI",
     "Description": "AI Administration",
     "Icon": "fa-solid fa-robot",
-    "DefaultForNewUser": true,
+    "DefaultForNewUser": false,
     "Color": "#d32f2f",
     "DefaultSequence": 1001,
     "DefaultNavItems": [
@@ -51,7 +51,7 @@
     "ID": "7ACD423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-11-28T02:04:45.757Z",
-    "checksum": "7e6f7bba31db23f76691d6a7169b15ee3f272936e7f25e1e5c50ace16686ec77"
+    "lastModified": "2026-01-10T15:28:55.543Z",
+    "checksum": "5769c14877ecd208c0f889b82e7af9e4db3d26839605b55c5c3662d19280b33d"
   }
 }

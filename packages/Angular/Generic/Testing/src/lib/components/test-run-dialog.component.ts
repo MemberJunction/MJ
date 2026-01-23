@@ -2,10 +2,24 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrateg
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { TestEngineBase } from '@memberjunction/testing-engine-base';
+import { TestEngineBase, TestVariableDefinition, TestTypeVariablesSchema, TestVariablesConfig } from '@memberjunction/testing-engine-base';
 import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { TestEntity, TestSuiteEntity } from '@memberjunction/core-entities';
+import { TestEntity, TestSuiteEntity, TestSuiteTestEntity, TestTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
+import { SafeJSONParse } from '@memberjunction/global';
+
+interface SuiteTestItem {
+  testId: string;
+  testName: string;
+  sequence: number;
+  selected: boolean;
+}
+
+interface VariableInput {
+  definition: TestVariableDefinition;
+  value: string | number | Date | boolean | null;
+  stringValue: string; // For input binding (converted on submit)
+}
 
 interface ProgressUpdate {
   step: string;
@@ -23,6 +37,7 @@ interface ProgressUpdate {
         @if (!isRunning && !hasCompleted) {
           <!-- Pre-selected Mode - Compact Header -->
           @if (isPreselected) {
+            <div class="dialog-scroll-content">
             <div class="preselected-header">
               <div class="preselected-info">
                 <div class="preselected-icon">
@@ -45,6 +60,205 @@ interface ProgressUpdate {
                   </label>
                 }
               </div>
+            </div>
+
+            <!-- Tags Section for Preselected Mode -->
+            <div class="tags-section">
+              <div class="tags-header">
+                <i class="fa-solid fa-tags"></i>
+                <span>Run Tags</span>
+                <span class="tags-hint">(optional)</span>
+              </div>
+              <div class="tags-container">
+                <div class="tags-chips">
+                  @for (tag of tags; track tag) {
+                    <span class="tag-chip">
+                      {{ tag }}
+                      <button class="tag-remove" (click)="removeTag(tag)">
+                        <i class="fa-solid fa-times"></i>
+                      </button>
+                    </span>
+                  }
+                </div>
+                <div class="tag-input-row">
+                  <input
+                    type="text"
+                    [(ngModel)]="newTag"
+                    placeholder="Add tag (e.g., opus-4.5, v2.1.0)"
+                    (keyup.enter)="addTag()"
+                    class="tag-input"
+                  />
+                  <button class="tag-add-btn" (click)="addTag()" [disabled]="!newTag.trim()">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Variables Section for Preselected Mode -->
+            @if (availableVariables.length > 0) {
+              <div class="variables-section">
+                <button class="variables-toggle" (click)="showVariablesSection = !showVariablesSection">
+                  <i class="fa-solid" [class.fa-chevron-right]="!showVariablesSection" [class.fa-chevron-down]="showVariablesSection"></i>
+                  <i class="fa-solid fa-sliders"></i>
+                  <span>Test Variables</span>
+                  <span class="variables-count-badge">{{ availableVariables.length }}</span>
+                </button>
+
+                @if (showVariablesSection) {
+                  <div class="variables-content">
+                    @for (variable of availableVariables; track variable.definition.name) {
+                      <div class="variable-row">
+                        <div class="variable-info">
+                          <label class="variable-label">{{ variable.definition.displayName }}</label>
+                          @if (variable.definition.description) {
+                            <span class="variable-description">{{ variable.definition.description }}</span>
+                          }
+                        </div>
+                        <div class="variable-input">
+                          @if (variable.definition.valueSource === 'static' && variable.definition.possibleValues) {
+                            <select [(ngModel)]="variable.stringValue" class="variable-select">
+                              <option value="">-- Select --</option>
+                              @for (option of variable.definition.possibleValues; track option.value) {
+                                <option [value]="option.value">{{ option.label || option.value }}</option>
+                              }
+                            </select>
+                          } @else if (variable.definition.dataType === 'boolean') {
+                            <select [(ngModel)]="variable.stringValue" class="variable-select">
+                              <option value="">-- Select --</option>
+                              <option value="true">Yes</option>
+                              <option value="false">No</option>
+                            </select>
+                          } @else if (variable.definition.dataType === 'number') {
+                            <input
+                              type="number"
+                              [(ngModel)]="variable.stringValue"
+                              class="variable-input-field"
+                              [placeholder]="variable.definition.defaultValue?.toString() || 'Enter value'"
+                              [step]="variable.definition.name.toLowerCase().includes('temperature') ? 0.1 : 1"
+                            />
+                          } @else {
+                            <input
+                              type="text"
+                              [(ngModel)]="variable.stringValue"
+                              class="variable-input-field"
+                              [placeholder]="variable.definition.defaultValue?.toString() || 'Enter value'"
+                            />
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Advanced Options for Preselected Suite Mode -->
+            @if (runMode === 'suite' && suiteTests.length > 0) {
+              <div class="advanced-options-section preselected-advanced">
+                <button class="advanced-toggle" (click)="toggleAdvancedOptions()">
+                  <i class="fa-solid" [class.fa-chevron-right]="!showAdvancedOptions" [class.fa-chevron-down]="showAdvancedOptions"></i>
+                  <span>Advanced Options</span>
+                  <span class="test-count-badge">{{ suiteTests.length }} tests</span>
+                </button>
+
+                @if (showAdvancedOptions) {
+                  <div class="advanced-content">
+                    <!-- Selection Mode Tabs -->
+                    <div class="selection-mode-tabs">
+                      <button
+                        class="selection-tab"
+                        [class.active]="!useSequenceRange"
+                        (click)="useSequenceRange = false"
+                      >
+                        <i class="fa-solid fa-check-square"></i>
+                        Select Tests
+                      </button>
+                      <button
+                        class="selection-tab"
+                        [class.active]="useSequenceRange"
+                        (click)="useSequenceRange = true"
+                      >
+                        <i class="fa-solid fa-arrows-left-right"></i>
+                        Sequence Range
+                      </button>
+                    </div>
+
+                    <!-- Select Individual Tests Mode -->
+                    @if (!useSequenceRange) {
+                      <div class="test-selection-panel">
+                        <div class="selection-header">
+                          <label class="checkbox-label select-all">
+                            <input
+                              type="checkbox"
+                              [checked]="allTestsSelected"
+                              [indeterminate]="someTestsSelected"
+                              (change)="toggleAllTests($any($event.target).checked)"
+                            />
+                            <span>Select All</span>
+                          </label>
+                          <span class="selection-count">{{ selectedTestCount }} of {{ suiteTests.length }} selected</span>
+                        </div>
+                        <div class="test-list">
+                          @for (test of suiteTests; track test.testId) {
+                            <label class="test-item" [class.selected]="test.selected">
+                              <input
+                                type="checkbox"
+                                [checked]="test.selected"
+                                (change)="toggleTest(test.testId)"
+                              />
+                              <span class="test-sequence">#{{ test.sequence }}</span>
+                              <span class="test-name">{{ test.testName }}</span>
+                            </label>
+                          }
+                        </div>
+                      </div>
+                    }
+
+                    <!-- Sequence Range Mode -->
+                    @if (useSequenceRange) {
+                      <div class="sequence-range-panel">
+                        <div class="range-inputs">
+                          <div class="range-field">
+                            <label>Start at sequence</label>
+                            <input
+                              type="number"
+                              [(ngModel)]="sequenceStart"
+                              [min]="1"
+                              [max]="suiteTests.length"
+                              class="sequence-input"
+                            />
+                          </div>
+                          <div class="range-separator">
+                            <i class="fa-solid fa-arrow-right"></i>
+                          </div>
+                          <div class="range-field">
+                            <label>End at sequence</label>
+                            <input
+                              type="number"
+                              [(ngModel)]="sequenceEnd"
+                              [min]="1"
+                              [max]="suiteTests.length"
+                              class="sequence-input"
+                            />
+                          </div>
+                        </div>
+                        @if (sequenceRangeValid) {
+                          <div class="range-summary">
+                            Will run {{ testsInSequenceRange }} test(s) from sequence {{ sequenceStart }} to {{ sequenceEnd }}
+                          </div>
+                        } @else {
+                          <div class="range-error">
+                            <i class="fa-solid fa-exclamation-triangle"></i>
+                            Invalid range: start must be less than or equal to end
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
             </div>
           }
 
@@ -164,6 +378,113 @@ interface ProgressUpdate {
                   }
                 </div>
               </div>
+
+              <!-- Advanced Options - Progressive Disclosure -->
+              @if (selectedSuiteId && suiteTests.length > 0) {
+                <div class="advanced-options-section">
+                  <button class="advanced-toggle" (click)="toggleAdvancedOptions()">
+                    <i class="fa-solid" [class.fa-chevron-right]="!showAdvancedOptions" [class.fa-chevron-down]="showAdvancedOptions"></i>
+                    <span>Advanced Options</span>
+                    <span class="test-count-badge">{{ suiteTests.length }} tests</span>
+                  </button>
+
+                  @if (showAdvancedOptions) {
+                    <div class="advanced-content">
+                      <!-- Selection Mode Tabs -->
+                      <div class="selection-mode-tabs">
+                        <button
+                          class="selection-tab"
+                          [class.active]="!useSequenceRange"
+                          (click)="useSequenceRange = false"
+                        >
+                          <i class="fa-solid fa-check-square"></i>
+                          Select Tests
+                        </button>
+                        <button
+                          class="selection-tab"
+                          [class.active]="useSequenceRange"
+                          (click)="useSequenceRange = true"
+                        >
+                          <i class="fa-solid fa-arrows-left-right"></i>
+                          Sequence Range
+                        </button>
+                      </div>
+
+                      <!-- Select Individual Tests Mode -->
+                      @if (!useSequenceRange) {
+                        <div class="test-selection-panel">
+                          <div class="selection-header">
+                            <label class="checkbox-label select-all">
+                              <input
+                                type="checkbox"
+                                [checked]="allTestsSelected"
+                                [indeterminate]="someTestsSelected"
+                                (change)="toggleAllTests($any($event.target).checked)"
+                              />
+                              <span>Select All</span>
+                            </label>
+                            <span class="selection-count">{{ selectedTestCount }} of {{ suiteTests.length }} selected</span>
+                          </div>
+                          <div class="test-list">
+                            @for (test of suiteTests; track test.testId) {
+                              <label class="test-item" [class.selected]="test.selected">
+                                <input
+                                  type="checkbox"
+                                  [checked]="test.selected"
+                                  (change)="toggleTest(test.testId)"
+                                />
+                                <span class="test-sequence">#{{ test.sequence }}</span>
+                                <span class="test-name">{{ test.testName }}</span>
+                              </label>
+                            }
+                          </div>
+                        </div>
+                      }
+
+                      <!-- Sequence Range Mode -->
+                      @if (useSequenceRange) {
+                        <div class="sequence-range-panel">
+                          <div class="range-inputs">
+                            <div class="range-field">
+                              <label>Start at sequence</label>
+                              <input
+                                type="number"
+                                [(ngModel)]="sequenceStart"
+                                [min]="1"
+                                [max]="suiteTests.length"
+                                class="sequence-input"
+                              />
+                            </div>
+                            <div class="range-separator">
+                              <i class="fa-solid fa-arrow-right"></i>
+                            </div>
+                            <div class="range-field">
+                              <label>End at sequence</label>
+                              <input
+                                type="number"
+                                [(ngModel)]="sequenceEnd"
+                                [min]="1"
+                                [max]="suiteTests.length"
+                                class="sequence-input"
+                              />
+                            </div>
+                          </div>
+                          @if (sequenceRangeValid) {
+                            <div class="range-summary">
+                              Will run {{ testsInSequenceRange }} test(s) from sequence {{ sequenceStart }} to {{ sequenceEnd }}
+                            </div>
+                          } @else {
+                            <div class="range-error">
+                              <i class="fa-solid fa-exclamation-triangle"></i>
+                              Invalid range: start must be less than or equal to end
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
             }
 
               <div class="options-panel">
@@ -177,6 +498,39 @@ interface ProgressUpdate {
                     <span>Run tests in parallel</span>
                   </label>
                 }
+              </div>
+
+              <!-- Tags Section for Selection Mode -->
+              <div class="tags-section selection-mode-tags">
+                <div class="tags-header">
+                  <i class="fa-solid fa-tags"></i>
+                  <span>Run Tags</span>
+                  <span class="tags-hint">(optional)</span>
+                </div>
+                <div class="tags-container">
+                  <div class="tags-chips">
+                    @for (tag of tags; track tag) {
+                      <span class="tag-chip">
+                        {{ tag }}
+                        <button class="tag-remove" (click)="removeTag(tag)">
+                          <i class="fa-solid fa-times"></i>
+                        </button>
+                      </span>
+                    }
+                  </div>
+                  <div class="tag-input-row">
+                    <input
+                      type="text"
+                      [(ngModel)]="newTag"
+                      placeholder="Add tag (e.g., opus-4.5, v2.1.0)"
+                      (keyup.enter)="addTag()"
+                      class="tag-input"
+                    />
+                    <button class="tag-add-btn" (click)="addTag()" [disabled]="!newTag.trim()">
+                      <i class="fa-solid fa-plus"></i>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           }
@@ -310,6 +664,16 @@ interface ProgressUpdate {
       flex-direction: column;
       height: 100%;
       background: #f8f9fa;
+      overflow: hidden;
+    }
+
+    .dialog-scroll-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
     .dialog-actions {
@@ -364,30 +728,29 @@ interface ProgressUpdate {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 20px;
+      padding: 12px;
       background: white;
       border-radius: 8px;
-      margin: 20px 20px 0 20px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .preselected-info {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
       flex: 1;
     }
 
     .preselected-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 8px;
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
       background: linear-gradient(135deg, #2196f3, #21cbf3);
       display: flex;
       align-items: center;
       justify-content: center;
       color: white;
-      font-size: 20px;
+      font-size: 16px;
       flex-shrink: 0;
     }
 
@@ -974,6 +1337,473 @@ interface ProgressUpdate {
     .error-message span {
       flex: 1;
     }
+
+    /* Tags Section Styles */
+    .tags-section {
+      padding: 10px 12px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .tags-section.selection-mode-tags {
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .tags-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .tags-header i {
+      color: #2196f3;
+    }
+
+    .tags-hint {
+      color: #999;
+      font-weight: 400;
+      font-size: 12px;
+    }
+
+    .tags-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .tags-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 20px;
+    }
+
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: #e3f2fd;
+      color: #1976d2;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .tag-remove {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border: none;
+      background: rgba(0,0,0,0.1);
+      color: #1976d2;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tag-remove:hover {
+      background: rgba(0,0,0,0.2);
+      color: #c62828;
+    }
+
+    .tag-remove i {
+      font-size: 10px;
+    }
+
+    .tag-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tag-input {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #e0e4e8;
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .tag-input:focus {
+      border-color: #2196f3;
+    }
+
+    .tag-input::placeholder {
+      color: #999;
+    }
+
+    .tag-add-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: none;
+      background: #2196f3;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tag-add-btn:hover:not(:disabled) {
+      background: #1976d2;
+    }
+
+    .tag-add-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .tag-add-btn i {
+      font-size: 14px;
+    }
+
+    /* Advanced Options - Progressive Disclosure */
+    .advanced-options-section {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .advanced-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      text-align: left;
+      transition: background 0.2s ease;
+    }
+
+    .advanced-toggle:hover {
+      background: #f5f7fa;
+    }
+
+    .advanced-toggle i {
+      color: #999;
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .test-count-badge {
+      margin-left: auto;
+      padding: 2px 8px;
+      background: #e3f2fd;
+      color: #1976d2;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .advanced-content {
+      padding: 0 12px 12px 12px;
+      border-top: 1px solid #eee;
+    }
+
+    .selection-mode-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 8px 0;
+    }
+
+    .selection-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border: 1px solid #e0e4e8;
+      background: white;
+      color: #666;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .selection-tab:hover {
+      border-color: #90caf9;
+      color: #2196f3;
+    }
+
+    .selection-tab.active {
+      border-color: #2196f3;
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .selection-tab i {
+      font-size: 14px;
+    }
+
+    /* Test Selection Panel */
+    .test-selection-panel {
+      border: 1px solid #e0e4e8;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .selection-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e0e4e8;
+    }
+
+    .select-all {
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    .selection-count {
+      font-size: 11px;
+      color: #666;
+    }
+
+    .test-list {
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .test-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .test-item:last-child {
+      border-bottom: none;
+    }
+
+    .test-item:hover {
+      background: #f5f7fa;
+    }
+
+    .test-item.selected {
+      background: #e8f4fd;
+    }
+
+    .test-item input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .test-sequence {
+      font-size: 11px;
+      font-weight: 600;
+      color: #999;
+      min-width: 24px;
+    }
+
+    .test-name {
+      flex: 1;
+      font-size: 12px;
+      color: #333;
+    }
+
+    /* Sequence Range Panel */
+    .sequence-range-panel {
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 4px;
+    }
+
+    .range-inputs {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+    }
+
+    .range-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .range-field label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #666;
+    }
+
+    .sequence-input {
+      padding: 8px 10px;
+      border: 1px solid #e0e4e8;
+      border-radius: 4px;
+      font-size: 13px;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .sequence-input:focus {
+      border-color: #2196f3;
+    }
+
+    .range-separator {
+      padding-bottom: 8px;
+      color: #999;
+    }
+
+    .range-summary {
+      margin-top: 8px;
+      padding: 8px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-radius: 4px;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .range-error {
+      margin-top: 8px;
+      padding: 8px;
+      background: #ffebee;
+      color: #c62828;
+      border-radius: 4px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .range-error i {
+      font-size: 12px;
+    }
+
+    .preselected-advanced {
+      /* No extra margin - handled by dialog-scroll-content gap */
+    }
+
+    /* Variables Section Styles */
+    .variables-section {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .variables-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      text-align: left;
+      transition: background 0.2s ease;
+    }
+
+    .variables-toggle:hover {
+      background: #f5f7fa;
+    }
+
+    .variables-toggle .fa-sliders {
+      color: #9c27b0;
+    }
+
+    .variables-count-badge {
+      margin-left: auto;
+      padding: 2px 8px;
+      background: #f3e5f5;
+      color: #7b1fa2;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .variables-content {
+      padding: 0 12px 12px 12px;
+      border-top: 1px solid #eee;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-top: 12px;
+    }
+
+    .variable-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .variable-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .variable-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .variable-description {
+      font-size: 11px;
+      color: #666;
+      line-height: 1.3;
+    }
+
+    .variable-input {
+      width: 100%;
+    }
+
+    .variable-select,
+    .variable-input-field {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e0e4e8;
+      border-radius: 4px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s ease;
+      background: white;
+    }
+
+    .variable-select:focus,
+    .variable-input-field:focus {
+      border-color: #9c27b0;
+    }
+
+    .variable-input-field::placeholder {
+      color: #999;
+    }
   `]
 })
 export class TestRunDialogComponent implements OnInit, OnDestroy {
@@ -989,6 +1819,10 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   verbose = true;
   parallel = false;
 
+  // Tags for test/suite runs
+  tags: string[] = [];
+  newTag = '';
+
   // Pre-selection mode - when launched from a specific test/suite
   isPreselected = false;
   preselectedName = '';
@@ -998,6 +1832,17 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   allSuites: TestSuiteEntity[] = [];
   filteredTests: TestEntity[] = [];
   filteredSuites: TestSuiteEntity[] = [];
+
+  // Selective test execution for suites (progressive disclosure)
+  showAdvancedOptions = false;
+  suiteTests: SuiteTestItem[] = [];
+  useSequenceRange = false;
+  sequenceStart: number | null = null;
+  sequenceEnd: number | null = null;
+
+  // Variables for parameterized tests
+  availableVariables: VariableInput[] = [];
+  showVariablesSection = false;
 
   // Execution state
   isRunning = false;
@@ -1050,12 +1895,20 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     // Check if we have a pre-selected test or suite
     if (this.selectedTestId) {
       this.isPreselected = true;
+      this.runMode = 'test';
       const test = this.allTests.find(t => t.ID === this.selectedTestId);
       this.preselectedName = test ? test.Name : 'Test';
+      // Load variables for the selected test
+      if (test) {
+        this.loadVariablesForTest(test);
+      }
     } else if (this.selectedSuiteId) {
       this.isPreselected = true;
+      this.runMode = 'suite';
       const suite = this.allSuites.find(s => s.ID === this.selectedSuiteId);
       this.preselectedName = suite ? suite.Name : 'Test Suite';
+      // Load suite tests for selective execution
+      this.loadSuiteTests(this.selectedSuiteId);
     }
 
     this.filterItems();
@@ -1101,12 +1954,198 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
 
   selectTest(testId: string): void {
     this.selectedTestId = testId;
+    // Load variables for the selected test
+    const test = this.allTests.find(t => t.ID === testId);
+    if (test) {
+      this.loadVariablesForTest(test);
+    }
     this.cdr.markForCheck();
   }
 
   selectSuite(suiteId: string): void {
     this.selectedSuiteId = suiteId;
+    this.loadSuiteTests(suiteId);
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Load tests for a selected suite to enable selective execution
+   */
+  private loadSuiteTests(suiteId: string): void {
+    const suiteTestLinks = this.engine.TestSuiteTests.filter(st => st.SuiteID === suiteId);
+
+    // Build list of tests with their sequence numbers
+    this.suiteTests = suiteTestLinks
+      .map(st => {
+        const test = this.allTests.find(t => t.ID === st.TestID);
+        if (!test) return null;
+        return {
+          testId: st.TestID,
+          testName: test.Name,
+          sequence: st.Sequence,
+          selected: true // All selected by default
+        };
+      })
+      .filter((item): item is SuiteTestItem => item !== null)
+      .sort((a, b) => a.sequence - b.sequence);
+
+    // Reset sequence range
+    this.useSequenceRange = false;
+    this.sequenceStart = this.suiteTests.length > 0 ? this.suiteTests[0].sequence : null;
+    this.sequenceEnd = this.suiteTests.length > 0 ? this.suiteTests[this.suiteTests.length - 1].sequence : null;
+  }
+
+  toggleAdvancedOptions(): void {
+    this.showAdvancedOptions = !this.showAdvancedOptions;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Load available variables for a test based on its TestType's VariablesSchema
+   */
+  private loadVariablesForTest(test: TestEntity): void {
+    this.availableVariables = [];
+    this.showVariablesSection = false;
+
+    // Get the TestType to access VariablesSchema
+    const testType = this.engine.TestTypes.find(tt => tt.ID === test.TypeID);
+    if (!testType) {
+      return;
+    }
+
+    // Parse the type's VariablesSchema
+    const variablesSchemaJson = (testType as TestTypeEntity & { VariablesSchema?: string }).VariablesSchema;
+    if (!variablesSchemaJson) {
+      return;
+    }
+
+    const typeSchema = SafeJSONParse(variablesSchemaJson) as TestTypeVariablesSchema | null;
+    if (!typeSchema || !typeSchema.variables || typeSchema.variables.length === 0) {
+      return;
+    }
+
+    // Parse the test's Variables config to check which are exposed
+    const testVariablesJson = (test as TestEntity & { Variables?: string }).Variables;
+    const testConfig = testVariablesJson ? SafeJSONParse(testVariablesJson) as TestVariablesConfig | null : null;
+
+    // Build the available variables list
+    for (const varDef of typeSchema.variables) {
+      // Check if test explicitly hides this variable
+      const testOverride = testConfig?.variables?.[varDef.name];
+      if (testOverride?.exposed === false) {
+        continue; // Variable not exposed by this test
+      }
+
+      // Determine the default value to show
+      const defaultValue = testOverride?.defaultValue ?? varDef.defaultValue;
+
+      this.availableVariables.push({
+        definition: varDef,
+        value: defaultValue ?? null,
+        stringValue: defaultValue != null ? String(defaultValue) : ''
+      });
+    }
+
+    // Auto-expand variables section if there are required variables
+    if (this.availableVariables.some(v => v.definition.required)) {
+      this.showVariablesSection = true;
+    }
+  }
+
+  /**
+   * Collect variable values for test execution
+   */
+  private getVariablesForExecution(): Record<string, unknown> | undefined {
+    if (this.availableVariables.length === 0) {
+      return undefined;
+    }
+
+    const variables: Record<string, unknown> = {};
+    let hasValues = false;
+
+    for (const variable of this.availableVariables) {
+      if (variable.stringValue !== '' && variable.stringValue != null) {
+        hasValues = true;
+        // Convert string value to appropriate type
+        switch (variable.definition.dataType) {
+          case 'number':
+            variables[variable.definition.name] = parseFloat(variable.stringValue);
+            break;
+          case 'boolean':
+            variables[variable.definition.name] = variable.stringValue.toLowerCase() === 'true';
+            break;
+          default:
+            variables[variable.definition.name] = variable.stringValue;
+        }
+      }
+    }
+
+    return hasValues ? variables : undefined;
+  }
+
+  toggleAllTests(selectAll: boolean): void {
+    this.suiteTests.forEach(t => t.selected = selectAll);
+    this.cdr.markForCheck();
+  }
+
+  toggleTest(testId: string): void {
+    const test = this.suiteTests.find(t => t.testId === testId);
+    if (test) {
+      test.selected = !test.selected;
+      this.cdr.markForCheck();
+    }
+  }
+
+  get selectedTestCount(): number {
+    return this.suiteTests.filter(t => t.selected).length;
+  }
+
+  get allTestsSelected(): boolean {
+    return this.suiteTests.length > 0 && this.suiteTests.every(t => t.selected);
+  }
+
+  get someTestsSelected(): boolean {
+    const selected = this.selectedTestCount;
+    return selected > 0 && selected < this.suiteTests.length;
+  }
+
+  get sequenceRangeValid(): boolean {
+    if (!this.useSequenceRange) return true;
+    if (this.sequenceStart == null || this.sequenceEnd == null) return false;
+    return this.sequenceStart <= this.sequenceEnd;
+  }
+
+  get testsInSequenceRange(): number {
+    if (!this.useSequenceRange || this.sequenceStart == null || this.sequenceEnd == null) {
+      return this.suiteTests.length;
+    }
+    return this.suiteTests.filter(t =>
+      t.sequence >= this.sequenceStart! && t.sequence <= this.sequenceEnd!
+    ).length;
+  }
+
+  /**
+   * Get IDs of selected tests for execution
+   */
+  private getSelectedTestIds(): string[] {
+    if (!this.showAdvancedOptions) {
+      // If advanced options not shown, run all tests
+      return this.suiteTests.map(t => t.testId);
+    }
+    return this.suiteTests.filter(t => t.selected).map(t => t.testId);
+  }
+
+  /**
+   * Get sequence range parameters if enabled
+   */
+  private getSequenceRangeParams(): { start: number | undefined; end: number | undefined } {
+    if (!this.showAdvancedOptions || !this.useSequenceRange) {
+      return { start: undefined, end: undefined };
+    }
+    return {
+      start: this.sequenceStart ?? undefined,
+      end: this.sequenceEnd ?? undefined
+    };
   }
 
   canRun(): boolean {
@@ -1143,9 +2182,14 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
 
   private async executeTest(): Promise<void> {
     try {
+      // Collect variable values for execution
+      const variables = this.getVariablesForExecution();
+
       const result = await this.testingClient.RunTest({
         testId: this.selectedTestId!,
         verbose: this.verbose,
+        tags: this.tags.length > 0 ? this.tags : undefined,
+        variables,
         onProgress: (progress) => {
           // Update progress percentage (fallback to 0 if not provided)
           this.progress = progress.percentage ?? 0;
@@ -1191,10 +2235,21 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
 
   private async executeSuite(): Promise<void> {
     try {
+      // Build selective execution parameters
+      const selectedTestIds = this.getSelectedTestIds();
+      const sequenceParams = this.getSequenceRangeParams();
+      // Collect variable values for execution (applies to all tests in suite)
+      const variables = this.getVariablesForExecution();
+
       const result = await this.testingClient.RunTestSuite({
         suiteId: this.selectedSuiteId!,
         verbose: this.verbose,
         parallel: this.parallel,
+        tags: this.tags.length > 0 ? this.tags : undefined,
+        variables,
+        selectedTestIds: selectedTestIds.length < this.suiteTests.length ? selectedTestIds : undefined,
+        sequenceStart: sequenceParams.start,
+        sequenceEnd: sequenceParams.end,
         onProgress: (progress) => {
           // Update progress percentage (fallback to 0 if not provided)
           this.progress = progress.percentage ?? 0;
@@ -1325,6 +2380,8 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     this.selectedTestId = null;
     this.selectedSuiteId = null;
     this.searchText = '';
+    this.tags = [];
+    this.newTag = '';
     this.resetProgressSteps();
     this.filterItems();
     this.cdr.markForCheck();
@@ -1334,5 +2391,20 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     if (!this.isRunning) {
       this.dialogRef.close();
     }
+  }
+
+  // Tag management methods
+  addTag(): void {
+    const tag = this.newTag.trim();
+    if (tag && !this.tags.includes(tag)) {
+      this.tags = [...this.tags, tag];
+      this.newTag = '';
+      this.cdr.markForCheck();
+    }
+  }
+
+  removeTag(tag: string): void {
+    this.tags = this.tags.filter(t => t !== tag);
+    this.cdr.markForCheck();
   }
 }

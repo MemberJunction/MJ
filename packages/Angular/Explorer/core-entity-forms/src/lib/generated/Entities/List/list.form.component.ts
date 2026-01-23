@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { ListEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Lists') // Tell MemberJunction about this class
 @Component({
@@ -19,7 +19,9 @@ export class ListFormComponent extends BaseFormComponent {
             { sectionKey: 'associations', sectionName: 'Associations', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'duplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'mJListInvitations', sectionName: 'MJ: List Invitations', isExpanded: false },
+            { sectionKey: 'mJListShares', sectionName: 'MJ: List Shares', isExpanded: false }
         ]);
     }
 }

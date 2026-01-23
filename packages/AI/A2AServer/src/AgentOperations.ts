@@ -1,6 +1,6 @@
 import { Metadata, UserInfo } from "@memberjunction/core";
 import { AIEngine } from "@memberjunction/aiengine";
-import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AgentRunner } from "@memberjunction/ai-agents";
 import { ChatMessage } from "@memberjunction/ai";
 

@@ -17,16 +17,8 @@
       "ID": "1ED5F808-5B12-45DB-A376-324CF65B0CAF"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:44.127Z",
-      "checksum": "5d98de1a84d5892db73fa17843cda0dba6afcdde3a26cc16fa8e322d2b2a3ef2"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Query Categories.Name=Agents",
-        "resolved": "5609FBC7-381C-4F9C-9C74-04B52C1FF3DA"
-      }
-    ]
+      "lastModified": "2026-01-21T05:01:15.203Z",
+      "checksum": "0dce808f9239b2f6fa3c829f3f9e63bae52b681ecf8f918f1e9df068ef6ff8f8"
+    }
   }
 ]

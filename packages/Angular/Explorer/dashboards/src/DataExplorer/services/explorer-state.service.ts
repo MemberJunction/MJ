@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView, CompositeKey, EntityRecordNameInput } from '@memberjunction/core';
-import { UserSettingEntity, UserFavoriteEntity, UserRecordLogEntity, ApplicationEntityEntity } from '@memberjunction/core-entities';
-import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter, RecentEntityAccess, FavoriteEntity, RecentRecordAccess, FavoriteRecord, DataExplorerViewMode } from '../models/explorer-state.interface';
+import { UserSettingEntity, UserFavoriteEntity, ApplicationEntityEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter, FavoriteEntity, RecentRecordAccess, FavoriteRecord, DataExplorerViewMode } from '../models/explorer-state.interface';
 
 const BASE_SETTING_KEY = 'DataExplorer.State';
 const MAX_RECENT_ITEMS = 20;
@@ -396,7 +396,7 @@ export class ExplorerStateService {
   }
 
   /**
-   * Load state from UserSetting
+   * Load state from UserSetting using UserInfoEngine for cached access
    */
   private async loadState(): Promise<void> {
     try {
@@ -404,20 +404,15 @@ export class ExplorerStateService {
       if (!userId) return;
 
       const settingKey = this.getSettingKey();
-      const rv = new RunView();
-      const result = await rv.RunView<UserSettingEntity>({
-        EntityName: 'MJ: User Settings',
-        ExtraFilter: `UserID='${userId}' AND Setting='${settingKey}'`,
-        ResultType: 'entity_object'
-      });
+      const engine = UserInfoEngine.Instance;
 
-      if (result.Success && result.Results.length > 0) {
-        const setting = result.Results[0];
-        if (setting.Value) {
-          const savedState = JSON.parse(setting.Value) as Partial<DataExplorerState>;
-          // Merge with defaults to handle new properties
-          this.state$.next({ ...DEFAULT_EXPLORER_STATE, ...savedState });
-        }
+      // Find the setting from cached user settings
+      const setting = engine.UserSettings.find(s => s.Setting === settingKey);
+
+      if (setting?.Value) {
+        const savedState = JSON.parse(setting.Value) as Partial<DataExplorerState>;
+        // Merge with defaults to handle new properties
+        this.state$.next({ ...DEFAULT_EXPLORER_STATE, ...savedState });
       } else {
         // No saved state, use defaults
         this.state$.next({ ...DEFAULT_EXPLORER_STATE });
@@ -497,7 +492,7 @@ export class ExplorerStateService {
   }
 
   /**
-   * Save state to UserSetting
+   * Save state to UserSetting using UserInfoEngine for cached lookup
    */
   private async saveState(): Promise<void> {
     try {
@@ -506,19 +501,13 @@ export class ExplorerStateService {
 
       const settingKey = this.getSettingKey();
       const md = new Metadata();
-      const rv = new RunView();
+      const engine = UserInfoEngine.Instance;
 
-      // Check if setting exists
-      const result = await rv.RunView<UserSettingEntity>({
-        EntityName: 'MJ: User Settings',
-        ExtraFilter: `UserID='${userId}' AND Setting='${settingKey}'`,
-        ResultType: 'entity_object'
-      });
+      // Find existing setting from cached user settings
+      let setting = engine.UserSettings.find(s => s.Setting === settingKey);
 
-      let setting: UserSettingEntity;
-      if (result.Success && result.Results.length > 0) {
-        setting = result.Results[0];
-      } else {
+      if (!setting) {
+        // Create new setting if not found
         setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
         setting.Setting = settingKey;
@@ -723,7 +712,7 @@ export class ExplorerStateService {
   }
 
   /**
-   * Load favorite entities from User Favorites
+   * Load favorite entities from User Favorites using UserInfoEngine
    */
   private async loadFavoriteEntities(): Promise<void> {
     try {
@@ -734,105 +723,97 @@ export class ExplorerStateService {
       const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'Entities');
       if (!entitiesEntity) return;
 
-      const rv = new RunView();
-      const result = await rv.RunView<UserFavoriteEntity>({
-        EntityName: 'User Favorites',
-        ExtraFilter: `UserID='${userId}' AND EntityID='${entitiesEntity.ID}'`,
-        ResultType: 'entity_object'
-      });
+      // Use UserInfoEngine for cached access to user favorites
+      const engine = UserInfoEngine.Instance;
 
-      if (result.Success && result.Results) {
-        const favoriteEntities: FavoriteEntity[] = [];
-        for (const fav of result.Results) {
-          // Look up entity name from RecordID (which is the Entity.ID)
-          const entity = this.metadata.Entities.find(e => e.ID === fav.RecordID);
-          if (entity) {
-            favoriteEntities.push({
-              userFavoriteId: fav.ID,
-              entityName: entity.Name,
-              entityId: fav.RecordID
-            });
-          }
+      // Filter to only entity favorites (where EntityID is the Entities entity)
+      const entityFavorites = engine.UserFavorites.filter(f => f.EntityID === entitiesEntity.ID);
+
+      const favoriteEntities: FavoriteEntity[] = [];
+      for (const fav of entityFavorites) {
+        // Look up entity name from RecordID (which is the Entity.ID)
+        const entity = this.metadata.Entities.find(e => e.ID === fav.RecordID);
+        if (entity) {
+          favoriteEntities.push({
+            userFavoriteId: fav.ID,
+            entityName: entity.Name,
+            entityId: fav.RecordID
+          });
         }
-        this.updateState({ favoriteEntities });
       }
+      this.updateState({ favoriteEntities });
     } catch (error) {
       console.warn('Failed to load favorite entities:', error);
     }
   }
 
   /**
-   * Load recent records from User Record Logs with batch record name lookup
+   * Load recent records from User Record Logs with batch record name lookup using UserInfoEngine
    */
   private async loadRecentRecords(): Promise<void> {
     try {
       const userId = this.metadata.CurrentUser?.ID;
       if (!userId) return;
 
-      const rv = new RunView();
-      const result = await rv.RunView<UserRecordLogEntity>({
-        EntityName: 'User Record Logs',
-        ExtraFilter: `UserID='${userId}'`,
-        OrderBy: 'LatestAt DESC',
-        MaxRows: MAX_RECENT_RECORDS,
-        ResultType: 'entity_object'
-      });
+      // Use UserInfoEngine for cached access to user record logs
+      const engine = UserInfoEngine.Instance;
 
-      if (result.Success && result.Results) {
-        const recentRecords: RecentRecordAccess[] = [];
-        const recordNameInputs: EntityRecordNameInput[] = [];
-        const recordIndexMap: Map<string, number> = new Map(); // Map composite key to array index
+      // Get recent records, limited to MAX_RECENT_RECORDS
+      const userRecordLogs = engine.UserRecordLogs.slice(0, MAX_RECENT_RECORDS);
 
-        for (const log of result.Results) {
-          // Look up entity name from EntityID
-          const entity = this.metadata.Entities.find(e => e.ID === log.EntityID);
-          if (entity) {
-            // Filter by application context if applicable
-            if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === log.EntityID)) {
-              continue; // Skip records from entities not in this application
-            }
+      const recentRecords: RecentRecordAccess[] = [];
+      const recordNameInputs: EntityRecordNameInput[] = [];
+      const recordIndexMap: Map<string, number> = new Map(); // Map composite key to array index
 
-            const recordAccess: RecentRecordAccess = {
-              entityName: entity.Name,
-              entityId: log.EntityID,
-              recordId: log.RecordID,
-              latestAt: log.LatestAt,
-              totalCount: log.TotalCount
-            };
-            const index = recentRecords.length;
-            recentRecords.push(recordAccess);
+      for (const log of userRecordLogs) {
+        // Look up entity name from EntityID
+        const entity = this.metadata.Entities.find(e => e.ID === log.EntityID);
+        if (entity) {
+          // Filter by application context if applicable
+          if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === log.EntityID)) {
+            continue; // Skip records from entities not in this application
+          }
 
-            // Build composite key for batch name lookup
-            const compositeKey = this.buildCompositeKeyForEntity(entity, log.RecordID);
-            if (compositeKey) {
-              recordNameInputs.push({ EntityName: entity.Name, CompositeKey: compositeKey });
-              recordIndexMap.set(`${entity.Name}|${log.RecordID}`, index);
-            }
+          const recordAccess: RecentRecordAccess = {
+            entityName: entity.Name,
+            entityId: log.EntityID,
+            recordId: log.RecordID,
+            latestAt: log.LatestAt,
+            totalCount: log.TotalCount
+          };
+          const index = recentRecords.length;
+          recentRecords.push(recordAccess);
+
+          // Build composite key for batch name lookup
+          const compositeKey = this.buildCompositeKeyForEntity(entity, log.RecordID);
+          if (compositeKey) {
+            recordNameInputs.push({ EntityName: entity.Name, CompositeKey: compositeKey });
+            recordIndexMap.set(`${entity.Name}|${log.RecordID}`, index);
           }
         }
+      }
 
-        // Batch fetch record names
-        if (recordNameInputs.length > 0) {
-          try {
-            const nameResults = await this.metadata.GetEntityRecordNames(recordNameInputs);
-            for (const nameResult of nameResults) {
-              if (nameResult.Success && nameResult.RecordName) {
-                const pkValue = nameResult.CompositeKey.KeyValuePairs[0]?.Value?.toString();
-                const key = `${nameResult.EntityName}|${pkValue}`;
-                const index = recordIndexMap.get(key);
-                if (index !== undefined) {
-                  recentRecords[index].recordName = nameResult.RecordName;
-                }
+      // Batch fetch record names
+      if (recordNameInputs.length > 0) {
+        try {
+          const nameResults = await this.metadata.GetEntityRecordNames(recordNameInputs);
+          for (const nameResult of nameResults) {
+            if (nameResult.Success && nameResult.RecordName) {
+              const pkValue = nameResult.CompositeKey.KeyValuePairs[0]?.Value?.toString();
+              const key = `${nameResult.EntityName}|${pkValue}`;
+              const index = recordIndexMap.get(key);
+              if (index !== undefined) {
+                recentRecords[index].recordName = nameResult.RecordName;
               }
             }
-          } catch (nameError) {
-            console.warn('Failed to load record names:', nameError);
-            // Continue without names - they'll show record IDs
           }
+        } catch (nameError) {
+          console.warn('Failed to load record names:', nameError);
+          // Continue without names - they'll show record IDs
         }
-
-        this.recentRecords$.next(recentRecords);
       }
+
+      this.recentRecords$.next(recentRecords);
     } catch (error) {
       console.warn('Failed to load recent records:', error);
     }
@@ -928,7 +909,7 @@ export class ExplorerStateService {
   }
 
   /**
-   * Load favorite records from User Favorites (non-entity favorites) with batch record name lookup.
+   * Load favorite records from User Favorites (non-entity favorites) with batch record name lookup using UserInfoEngine.
    * Filters to only include records from entities in the current application context.
    */
   private async loadFavoriteRecords(): Promise<void> {
@@ -940,68 +921,65 @@ export class ExplorerStateService {
       const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'Entities');
       const entitiesEntityId = entitiesEntity?.ID || '';
 
-      const rv = new RunView();
-      const result = await rv.RunView<UserFavoriteEntity>({
-        EntityName: 'User Favorites',
-        ExtraFilter: `UserID='${userId}' AND EntityID <> '${entitiesEntityId}'`,
-        ResultType: 'entity_object'
-      });
+      // Use UserInfoEngine for cached access to user favorites
+      const engine = UserInfoEngine.Instance;
 
-      if (result.Success && result.Results) {
-        const favoriteRecords: FavoriteRecord[] = [];
-        const recordNameInputs: EntityRecordNameInput[] = [];
-        const recordIndexMap: Map<string, number> = new Map();
+      // Filter to non-entity favorites (exclude favorites where EntityID is the Entities entity)
+      const nonEntityFavorites = engine.UserFavorites.filter(f => f.EntityID !== entitiesEntityId);
 
-        for (const fav of result.Results) {
-          // Look up entity info from the EntityID
-          const entity = this.metadata.Entities.find(e => e.ID === fav.EntityID);
-          if (entity) {
-            // Filter by application context if applicable
-            if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === fav.EntityID)) {
-              continue; // Skip records from entities not in this application
-            }
+      const favoriteRecords: FavoriteRecord[] = [];
+      const recordNameInputs: EntityRecordNameInput[] = [];
+      const recordIndexMap: Map<string, number> = new Map();
 
-            const favoriteRecord: FavoriteRecord = {
-              userFavoriteId: fav.ID,
-              entityName: entity.Name,
-              entityId: fav.EntityID,
-              recordId: fav.RecordID
-            };
-            const index = favoriteRecords.length;
-            favoriteRecords.push(favoriteRecord);
+      for (const fav of nonEntityFavorites) {
+        // Look up entity info from the EntityID
+        const entity = this.metadata.Entities.find(e => e.ID === fav.EntityID);
+        if (entity) {
+          // Filter by application context if applicable
+          if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === fav.EntityID)) {
+            continue; // Skip records from entities not in this application
+          }
 
-            // Build composite key for batch name lookup
-            const compositeKey = this.buildCompositeKeyForEntity(entity, fav.RecordID);
-            if (compositeKey) {
-              recordNameInputs.push({ EntityName: entity.Name, CompositeKey: compositeKey });
-              recordIndexMap.set(`${entity.Name}|${fav.RecordID}`, index);
-            }
+          const favoriteRecord: FavoriteRecord = {
+            userFavoriteId: fav.ID,
+            entityName: entity.Name,
+            entityId: fav.EntityID,
+            recordId: fav.RecordID
+          };
+          const index = favoriteRecords.length;
+          favoriteRecords.push(favoriteRecord);
+
+          // Build composite key for batch name lookup
+          const compositeKey = this.buildCompositeKeyForEntity(entity, fav.RecordID);
+          if (compositeKey) {
+            recordNameInputs.push({ EntityName: entity.Name, CompositeKey: compositeKey });
+            recordIndexMap.set(`${entity.Name}|${fav.RecordID}`, index);
           }
         }
+      }
 
-        // Batch fetch record names
-        if (recordNameInputs.length > 0) {
-          try {
-            const nameResults = await this.metadata.GetEntityRecordNames(recordNameInputs);
-            for (const nameResult of nameResults) {
-              if (nameResult.Success && nameResult.RecordName) {
-                const pkValue = nameResult.CompositeKey.KeyValuePairs[0]?.Value?.toString();
-                const key = `${nameResult.EntityName}|${pkValue}`;
-                const index = recordIndexMap.get(key);
-                if (index !== undefined) {
-                  favoriteRecords[index].recordName = nameResult.RecordName;
-                }
+      // Batch fetch record names
+      if (recordNameInputs.length > 0) {
+        try {
+          const nameResults = await this.metadata.GetEntityRecordNames(recordNameInputs);
+          for (const nameResult of nameResults) {
+            if (nameResult.Success && nameResult.RecordName) {
+              const pkValue = nameResult.CompositeKey.KeyValuePairs[0]?.Value?.toString();
+              const key = `${nameResult.EntityName}|${pkValue}`;
+              const index = recordIndexMap.get(key);
+              if (index !== undefined) {
+                favoriteRecords[index].recordName = nameResult.RecordName;
               }
             }
-          } catch (nameError) {
-            console.warn('Failed to load record names for favorites:', nameError);
-            // Continue without names - they'll show record IDs
           }
+        } catch (nameError) {
+          console.warn('Failed to load record names for favorites:', nameError);
+          // Continue without names - they'll show record IDs
         }
-
-        this.favoriteRecords$.next(favoriteRecords);
-        this.updateState({ favoriteRecords });
       }
+
+      this.favoriteRecords$.next(favoriteRecords);
+      this.updateState({ favoriteRecords });
     } catch (error) {
       console.warn('Failed to load favorite records:', error);
     }

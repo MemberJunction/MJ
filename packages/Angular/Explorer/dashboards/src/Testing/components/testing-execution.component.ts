@@ -1,17 +1,19 @@
-import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { Observable, Subject, combineLatest } from 'rxjs';
-import { takeUntil, map } from 'rxjs/operators';
+import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, ViewContainerRef } from '@angular/core';
+import { Observable, Subject, combineLatest, BehaviorSubject } from 'rxjs';
+import { takeUntil, map, distinctUntilChanged } from 'rxjs/operators';
 import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, Metadata } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
+import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { TestingInstrumentationService, TestRunSummary } from '../services/testing-instrumentation.service';
-import { TestRunDialogComponent } from '@memberjunction/ng-testing';
+import { TestRunDialogComponent, TestStatus } from '@memberjunction/ng-testing';
 
 interface ExecutionListItem {
   id: string;
+  testId: string;
   testName: string;
   suiteName: string;
-  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Pending';
+  status: TestStatus;
   score: number;
   duration: number;
   cost: number;
@@ -32,52 +34,87 @@ interface ExecutionFilters {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="testing-execution" kendoDialogContainer>
+      <!-- Premium Header with Gradient -->
       <div class="execution-header">
         <div class="header-left">
-          <h2>
+          <div class="header-icon">
             <i class="fa-solid fa-play-circle"></i>
-            Test Execution Monitor
-          </h2>
-          <div class="live-indicator" *ngIf="hasRunningTests$ | async">
-            <span class="pulse"></span>
-            <span class="text">Live</span>
+          </div>
+          <div class="header-text">
+            <h2>Test Execution Monitor</h2>
+            <div class="header-meta">
+              <span class="last-updated">
+                <i class="fa-solid fa-clock"></i>
+                Updated {{ lastUpdated | date:'shortTime' }}
+              </span>
+              @if (hasRunningTests$ | async) {
+                <div class="live-indicator">
+                  <span class="pulse"></span>
+                  <span class="text">Live</span>
+                </div>
+              }
+            </div>
           </div>
         </div>
         <div class="header-actions">
-          <button class="action-btn refresh" (click)="refresh()" [disabled]="isRefreshing">
-            <i class="fa-solid fa-refresh" [class.spinning]="isRefreshing"></i>
-            Refresh
+          <button class="action-btn refresh-btn" (click)="refresh()" [disabled]="isRefreshing">
+            <i class="fa-solid fa-sync-alt" [class.spinning]="isRefreshing"></i>
+            <span>Refresh</span>
           </button>
-          <button class="action-btn primary" (click)="startNewTest()">
+          <button class="action-btn primary-btn" (click)="startNewTest()">
             <i class="fa-solid fa-play"></i>
-            Run Test
+            <span>Run Test</span>
           </button>
         </div>
       </div>
 
-      <div class="execution-filters">
-        <div class="filter-group">
-          <label>Status</label>
-          <select [(ngModel)]="filters.status" (change)="onFilterChange()">
-            <option value="all">All Statuses</option>
-            <option value="running">Running</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-            <option value="passed">Passed</option>
-          </select>
+      <!-- Smart Filter Bar -->
+      <div class="filter-bar">
+        <div class="filter-chips">
+          <button
+            class="filter-chip"
+            [class.active]="filters.status === 'all'"
+            (click)="filters.status = 'all'; onFilterChange()"
+          >
+            All
+          </button>
+          <button
+            class="filter-chip running"
+            [class.active]="filters.status === 'running'"
+            (click)="filters.status = 'running'; onFilterChange()"
+          >
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            Running
+          </button>
+          <button
+            class="filter-chip passed"
+            [class.active]="filters.status === 'passed'"
+            (click)="filters.status = 'passed'; onFilterChange()"
+          >
+            <i class="fa-solid fa-check"></i>
+            Passed
+          </button>
+          <button
+            class="filter-chip failed"
+            [class.active]="filters.status === 'failed'"
+            (click)="filters.status = 'failed'; onFilterChange()"
+          >
+            <i class="fa-solid fa-times"></i>
+            Failed
+          </button>
         </div>
-        <div class="filter-group">
-          <label>Time Range</label>
-          <select [(ngModel)]="filters.timeRange" (change)="onFilterChange()">
-            <option value="today">Today</option>
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-            <option value="all">All Time</option>
-          </select>
-        </div>
-        <div class="filter-group search">
-          <label>Search</label>
-          <div class="search-input-wrapper">
+
+        <div class="filter-controls">
+          <div class="time-select">
+            <select [(ngModel)]="filters.timeRange" (change)="onFilterChange()">
+              <option value="today">Today</option>
+              <option value="week">This Week</option>
+              <option value="month">This Month</option>
+              <option value="all">All Time</option>
+            </select>
+          </div>
+
+          <div class="search-input">
             <i class="fa-solid fa-search"></i>
             <input
               type="text"
@@ -85,52 +122,72 @@ interface ExecutionFilters {
               (input)="onFilterChange()"
               placeholder="Search tests..."
             />
-            <button
-              class="clear-btn"
-              *ngIf="filters.searchText"
-              (click)="clearSearch()"
-            >
-              <i class="fa-solid fa-times"></i>
-            </button>
+            @if (filters.searchText) {
+              <button class="clear-btn" (click)="clearSearch()">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
           </div>
         </div>
       </div>
 
-      <div class="execution-summary">
-        <div class="summary-card">
-          <div class="summary-icon running">
+      <!-- KPI Cards (Actionable) -->
+      <div class="kpi-grid">
+        <div
+          class="kpi-card running clickable"
+          (click)="filterByStatus('running')"
+        >
+          <div class="kpi-icon">
             <i class="fa-solid fa-spinner fa-spin"></i>
           </div>
-          <div class="summary-content">
-            <div class="summary-value">{{ (runningCount$ | async) || 0 }}</div>
-            <div class="summary-label">Running Now</div>
+          <div class="kpi-content">
+            <div class="kpi-value">{{ (runningCount$ | async) ?? 0 }}</div>
+            <div class="kpi-label">Running Now</div>
+          </div>
+          <div class="kpi-arrow">
+            <i class="fa-solid fa-chevron-right"></i>
           </div>
         </div>
-        <div class="summary-card">
-          <div class="summary-icon completed">
+
+        <div
+          class="kpi-card passed clickable"
+          (click)="filterByStatus('passed')"
+        >
+          <div class="kpi-icon">
             <i class="fa-solid fa-check-circle"></i>
           </div>
-          <div class="summary-content">
-            <div class="summary-value">{{ (completedTodayCount$ | async) || 0 }}</div>
-            <div class="summary-label">Completed Today</div>
+          <div class="kpi-content">
+            <div class="kpi-value">{{ (completedTodayCount$ | async) ?? 0 }}</div>
+            <div class="kpi-label">Passed {{ getTimeRangeLabel() }}</div>
+          </div>
+          <div class="kpi-arrow">
+            <i class="fa-solid fa-chevron-right"></i>
           </div>
         </div>
-        <div class="summary-card">
-          <div class="summary-icon failed">
+
+        <div
+          class="kpi-card failed clickable"
+          (click)="filterByStatus('failed')"
+        >
+          <div class="kpi-icon">
             <i class="fa-solid fa-exclamation-circle"></i>
           </div>
-          <div class="summary-content">
-            <div class="summary-value">{{ (failedTodayCount$ | async) || 0 }}</div>
-            <div class="summary-label">Failed Today</div>
+          <div class="kpi-content">
+            <div class="kpi-value">{{ (failedTodayCount$ | async) ?? 0 }}</div>
+            <div class="kpi-label">Failed {{ getTimeRangeLabel() }}</div>
+          </div>
+          <div class="kpi-arrow">
+            <i class="fa-solid fa-chevron-right"></i>
           </div>
         </div>
-        <div class="summary-card">
-          <div class="summary-icon duration">
+
+        <div class="kpi-card duration">
+          <div class="kpi-icon">
             <i class="fa-solid fa-clock"></i>
           </div>
-          <div class="summary-content">
-            <div class="summary-value">{{ formatDuration((avgDurationToday$ | async) || 0) }}</div>
-            <div class="summary-label">Avg Duration Today</div>
+          <div class="kpi-content">
+            <div class="kpi-value">{{ formatDuration((avgDurationToday$ | async) ?? 0) }}</div>
+            <div class="kpi-label">Avg Duration</div>
           </div>
         </div>
       </div>
@@ -147,7 +204,11 @@ interface ExecutionFilters {
             <div class="header-cell actions">Actions</div>
           </div>
 
-          @if ((filteredExecutions$ | async)?.length === 0) {
+          @if (isLoading) {
+            <div class="loading-placeholder">
+              <mj-loading text="Loading test executions..."></mj-loading>
+            </div>
+          } @else if ((filteredExecutions$ | async)?.length === 0) {
             <div class="no-data">
               <i class="fa-solid fa-inbox"></i>
               <p>No test executions found</p>
@@ -211,22 +272,27 @@ interface ExecutionFilters {
     </div>
   `,
   styles: [`
+    /* ============================================
+       Testing Execution - Premium Design System
+       ============================================ */
+
     .testing-execution {
-      padding: 20px;
+      padding: 24px;
       height: 100%;
       overflow-y: auto;
-      background: #f8f9fa;
+      background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
     }
 
+    /* Premium Header */
     .execution-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 20px;
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      padding: 24px 28px;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(99, 102, 241, 0.25);
     }
 
     .header-left {
@@ -235,18 +301,41 @@ interface ExecutionFilters {
       gap: 16px;
     }
 
-    .header-left h2 {
-      margin: 0;
+    .header-icon {
+      width: 48px;
+      height: 48px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: white;
+    }
+
+    .header-text h2 {
+      margin: 0 0 4px 0;
       font-size: 20px;
       font-weight: 600;
-      color: #333;
+      color: white;
+    }
+
+    .header-meta {
       display: flex;
       align-items: center;
       gap: 12px;
     }
 
-    .header-left h2 i {
-      color: #2196f3;
+    .last-updated {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .last-updated i {
+      font-size: 11px;
     }
 
     .live-indicator {
@@ -254,24 +343,25 @@ interface ExecutionFilters {
       align-items: center;
       gap: 6px;
       padding: 4px 12px;
-      background: #e3f2fd;
+      background: rgba(255, 255, 255, 0.2);
       border-radius: 12px;
       font-size: 11px;
       font-weight: 600;
-      color: #2196f3;
+      color: white;
     }
 
     .pulse {
       width: 8px;
       height: 8px;
-      background: #2196f3;
+      background: #22c55e;
       border-radius: 50%;
       animation: pulse 2s infinite;
+      box-shadow: 0 0 8px #22c55e;
     }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(1.2); }
+      50% { opacity: 0.5; transform: scale(1.3); }
     }
 
     .header-actions {
@@ -282,41 +372,46 @@ interface ExecutionFilters {
     .action-btn {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
+      gap: 8px;
+      padding: 10px 18px;
       border: none;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .action-btn.refresh {
-      background: white;
-      border: 1px solid #ddd;
-      color: #666;
-    }
-
-    .action-btn.refresh:hover:not(:disabled) {
-      background: #f5f5f5;
-    }
-
-    .action-btn.primary {
-      background: #2196f3;
+    .refresh-btn {
+      background: rgba(255, 255, 255, 0.15);
       color: white;
+      border: 1px solid rgba(255, 255, 255, 0.25);
     }
 
-    .action-btn.primary:hover {
-      background: #1976d2;
+    .refresh-btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .primary-btn {
+      background: white;
+      color: #6366f1;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .primary-btn:hover {
+      background: #f8f9ff;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
     }
 
     .action-btn:disabled {
-      opacity: 0.6;
+      opacity: 0.5;
       cursor: not-allowed;
+      transform: none !important;
     }
 
-    .action-btn i.spinning {
+    .spinning {
       animation: spin 1s linear infinite;
     }
 
@@ -325,148 +420,257 @@ interface ExecutionFilters {
       to { transform: rotate(360deg); }
     }
 
-    .execution-filters {
+    /* Smart Filter Bar */
+    .filter-bar {
       display: flex;
+      justify-content: space-between;
+      align-items: center;
       gap: 16px;
       margin-bottom: 20px;
+      padding: 16px 20px;
       background: white;
-      padding: 16px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 14px;
+      box-shadow: 0 2px 12px rgba(99, 102, 241, 0.06);
     }
 
-    .filter-group {
+    .filter-chips {
       display: flex;
-      flex-direction: column;
+      gap: 8px;
+    }
+
+    .filter-chip {
+      display: flex;
+      align-items: center;
       gap: 6px;
-      min-width: 150px;
-    }
-
-    .filter-group.search {
-      flex: 1;
-    }
-
-    .filter-group label {
-      font-size: 11px;
+      padding: 8px 16px;
+      background: #f1f5f9;
+      border: 2px solid transparent;
+      border-radius: 20px;
+      font-size: 12px;
       font-weight: 600;
-      color: #666;
-      text-transform: uppercase;
+      color: #64748b;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .filter-group select {
-      padding: 8px 12px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 13px;
-      color: #333;
-      background: white;
+    .filter-chip:hover {
+      background: #e2e8f0;
+      color: #475569;
     }
 
-    .search-input-wrapper {
-      position: relative;
+    .filter-chip.active {
+      background: #6366f1;
+      color: white;
+      border-color: #6366f1;
+    }
+
+    .filter-chip.running.active {
+      background: #3b82f6;
+      border-color: #3b82f6;
+    }
+
+    .filter-chip.passed.active {
+      background: #22c55e;
+      border-color: #22c55e;
+    }
+
+    .filter-chip.failed.active {
+      background: #ef4444;
+      border-color: #ef4444;
+    }
+
+    .filter-chip i {
+      font-size: 11px;
+    }
+
+    .filter-controls {
       display: flex;
+      gap: 12px;
       align-items: center;
     }
 
-    .search-input-wrapper i.fa-search {
-      position: absolute;
-      left: 12px;
-      color: #999;
-      font-size: 12px;
+    .time-select select {
+      padding: 10px 14px;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #475569;
+      background: white;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
 
-    .search-input-wrapper input {
+    .time-select select:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .search-input {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: #f8fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      min-width: 250px;
+      transition: all 0.2s ease;
+    }
+
+    .search-input:focus-within {
+      border-color: #6366f1;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .search-input i {
+      color: #94a3b8;
+      font-size: 14px;
+    }
+
+    .search-input input {
       flex: 1;
-      padding: 8px 40px 8px 36px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
+      border: none;
+      background: transparent;
+      outline: none;
       font-size: 13px;
+      color: #334155;
+    }
+
+    .search-input input::placeholder {
+      color: #94a3b8;
     }
 
     .clear-btn {
-      position: absolute;
-      right: 8px;
-      background: none;
+      padding: 4px 8px;
       border: none;
-      color: #999;
+      background: transparent;
+      color: #94a3b8;
       cursor: pointer;
-      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
     }
 
     .clear-btn:hover {
-      color: #333;
+      background: #e2e8f0;
+      color: #64748b;
     }
 
-    .execution-summary {
+    /* KPI Cards Grid */
+    .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 16px;
       margin-bottom: 20px;
     }
 
-    .summary-card {
-      background: white;
-      padding: 16px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    .kpi-card {
       display: flex;
       align-items: center;
       gap: 16px;
+      padding: 20px;
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 2px 12px rgba(99, 102, 241, 0.06);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
     }
 
-    .summary-icon {
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      border-radius: 4px 0 0 4px;
+    }
+
+    .kpi-card.clickable {
+      cursor: pointer;
+    }
+
+    .kpi-card.clickable:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.15);
+    }
+
+    .kpi-card.running::before { background: linear-gradient(180deg, #3b82f6, #60a5fa); }
+    .kpi-card.passed::before { background: linear-gradient(180deg, #22c55e, #4ade80); }
+    .kpi-card.failed::before { background: linear-gradient(180deg, #ef4444, #f87171); }
+    .kpi-card.duration::before { background: linear-gradient(180deg, #8b5cf6, #a78bfa); }
+
+    .kpi-icon {
       width: 48px;
       height: 48px;
-      border-radius: 8px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 20px;
     }
 
-    .summary-icon.running {
-      background: #e3f2fd;
-      color: #2196f3;
+    .kpi-card.running .kpi-icon {
+      background: rgba(59, 130, 246, 0.1);
+      color: #3b82f6;
     }
 
-    .summary-icon.completed {
-      background: #e8f5e9;
-      color: #4caf50;
+    .kpi-card.passed .kpi-icon {
+      background: rgba(34, 197, 94, 0.1);
+      color: #22c55e;
     }
 
-    .summary-icon.failed {
-      background: #ffebee;
-      color: #f44336;
+    .kpi-card.failed .kpi-icon {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
     }
 
-    .summary-icon.duration {
-      background: #fff3e0;
-      color: #ff9800;
+    .kpi-card.duration .kpi-icon {
+      background: rgba(139, 92, 246, 0.1);
+      color: #8b5cf6;
     }
 
-    .summary-content {
+    .kpi-content {
       flex: 1;
     }
 
-    .summary-value {
-      font-size: 24px;
+    .kpi-value {
+      font-size: 26px;
       font-weight: 700;
-      color: #333;
+      color: #1e293b;
       line-height: 1;
       margin-bottom: 4px;
     }
 
-    .summary-label {
-      font-size: 11px;
-      color: #666;
+    .kpi-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #64748b;
       text-transform: uppercase;
-      font-weight: 600;
+      letter-spacing: 0.5px;
     }
 
+    .kpi-arrow {
+      color: #cbd5e1;
+      font-size: 14px;
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+
+    .kpi-card.clickable:hover .kpi-arrow {
+      opacity: 1;
+      color: #6366f1;
+      transform: translateX(4px);
+    }
+
+    /* Execution List Container */
     .execution-content {
       background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 14px;
+      box-shadow: 0 2px 12px rgba(99, 102, 241, 0.06);
       overflow: hidden;
     }
 
@@ -475,45 +679,59 @@ interface ExecutionFilters {
       flex-direction: column;
     }
 
+    /* List Header */
     .list-header {
       display: grid;
-      grid-template-columns: 2fr 140px 100px 100px 100px 150px 100px;
-      gap: 16px;
-      padding: 16px;
-      background: #f8f9fa;
-      border-bottom: 2px solid #e0e0e0;
+      grid-template-columns: 2fr 120px 100px 100px 140px 100px;
+      gap: 20px;
+      padding: 16px 24px;
+      background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+      border-bottom: 1px solid #e2e8f0;
       font-size: 11px;
-      font-weight: 600;
-      color: #666;
+      font-weight: 700;
+      color: #64748b;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
+    .header-cell {
+      display: flex;
+      align-items: center;
+    }
+
+    /* Execution Row */
     .execution-row {
       display: grid;
-      grid-template-columns: 2fr 140px 100px 100px 100px 150px 100px;
-      gap: 16px;
-      padding: 16px;
-      border-bottom: 1px solid #f0f0f0;
-      transition: background 0.2s ease;
+      grid-template-columns: 2fr 120px 100px 100px 140px 100px;
+      gap: 20px;
+      padding: 18px 24px;
+      border-bottom: 1px solid #f1f5f9;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .execution-row:last-child {
+      border-bottom: none;
     }
 
     .execution-row:hover {
-      background: #f8f9fa;
+      background: linear-gradient(90deg, rgba(99, 102, 241, 0.03) 0%, rgba(139, 92, 246, 0.03) 100%);
     }
 
     .execution-row.running {
-      background: #e3f2fd;
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.04) 100%);
+      border-left: 3px solid #3b82f6;
     }
 
     .execution-row.running:hover {
-      background: #bbdefb;
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.06) 100%);
     }
 
+    /* Cells */
     .cell {
       display: flex;
       align-items: center;
       font-size: 13px;
-      color: #333;
+      color: #334155;
     }
 
     .cell.test-name {
@@ -523,84 +741,155 @@ interface ExecutionFilters {
     }
 
     .test-info .name {
-      font-weight: 500;
-      color: #333;
+      font-weight: 600;
+      color: #1e293b;
+      font-size: 14px;
     }
 
     .test-info .suite {
-      font-size: 11px;
-      color: #666;
+      font-size: 12px;
+      color: #64748b;
     }
 
     .cell.status {
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
       align-items: flex-start;
     }
 
     .progress-bar {
       width: 100%;
       height: 4px;
-      background: #e0e0e0;
+      background: #e2e8f0;
       border-radius: 2px;
       overflow: hidden;
     }
 
     .progress-fill {
       height: 100%;
-      background: #2196f3;
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      border-radius: 2px;
       transition: width 0.3s ease;
     }
 
     .cell.actions {
       gap: 8px;
+      justify-content: flex-end;
     }
 
+    /* Action Buttons */
     .icon-btn {
-      background: none;
-      border: none;
-      color: #666;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #64748b;
       cursor: pointer;
-      padding: 6px;
-      border-radius: 4px;
-      transition: all 0.2s ease;
+      border-radius: 10px;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       font-size: 14px;
     }
 
     .icon-btn:hover {
-      background: #f0f0f0;
-      color: #2196f3;
+      background: #6366f1;
+      border-color: #6366f1;
+      color: white;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
     }
 
     .icon-btn.danger:hover {
-      background: #ffebee;
-      color: #f44336;
+      background: #ef4444;
+      border-color: #ef4444;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
     }
 
+    /* Loading State */
+    .loading-placeholder {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 80px 40px;
+      background: linear-gradient(180deg, #fafbff 0%, #f8fafc 100%);
+    }
+
+    /* Empty State */
     .no-data {
-      padding: 60px 20px;
+      padding: 80px 40px;
       text-align: center;
-      color: #999;
+      background: linear-gradient(180deg, #fafbff 0%, #f8fafc 100%);
     }
 
     .no-data i {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .no-data p {
-      font-size: 14px;
+      font-size: 64px;
+      color: #cbd5e1;
       margin-bottom: 20px;
     }
 
+    .no-data p {
+      font-size: 16px;
+      color: #64748b;
+      margin-bottom: 24px;
+    }
+
+    .no-data .action-btn {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-weight: 600;
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+    }
+
+    .no-data .action-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(99, 102, 241, 0.4);
+    }
+
+    /* Responsive */
+    @media (max-width: 1400px) {
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
     @media (max-width: 1200px) {
-      .execution-filters {
-        flex-wrap: wrap;
+      .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
       }
 
-      .filter-group {
-        min-width: 120px;
+      .filter-chips {
+        justify-content: center;
+      }
+
+      .filter-controls {
+        justify-content: center;
+      }
+
+      .list-header,
+      .execution-row {
+        grid-template-columns: 1fr 100px 80px 100px;
+      }
+
+      .header-cell.cost,
+      .header-cell.timestamp,
+      .cell.cost,
+      .cell.timestamp {
+        display: none;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .kpi-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .search-input {
+        min-width: 200px;
       }
     }
   `]
@@ -613,12 +902,20 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   private activeDialogRef: DialogRef | null = null;
 
   isRefreshing = false;
+  isLoading = false;
+  lastUpdated = new Date();
   filters: ExecutionFilters = {
     status: 'all',
     suite: 'all',
-    timeRange: 'today',
+    timeRange: 'month',  // Default to "This Month" to show more data
     searchText: ''
   };
+
+  // Track previous time range to detect changes requiring server re-query
+  private previousTimeRange: string = 'month';
+
+  // BehaviorSubject to trigger client-side filter updates
+  private filterTrigger$ = new BehaviorSubject<void>(undefined);
 
   executions$!: Observable<ExecutionListItem[]>;
   filteredExecutions$!: Observable<ExecutionListItem[]>;
@@ -628,18 +925,37 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   avgDurationToday$!: Observable<number>;
   hasRunningTests$!: Observable<boolean>;
 
+  private testingClient: GraphQLTestingClient;
+
   constructor(
     private instrumentationService: TestingInstrumentationService,
     private dialogService: DialogService,
-    private cdr: ChangeDetectorRef
-  ) {}
+    private cdr: ChangeDetectorRef,
+    private viewContainerRef: ViewContainerRef
+  ) {
+    // Initialize GraphQL testing client for cancel/rerun operations
+    const dataProvider = Metadata.Provider as GraphQLDataProvider;
+    this.testingClient = new GraphQLTestingClient(dataProvider);
+
+    // Subscribe to loading state
+    this.instrumentationService.isLoading$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(loading => {
+      this.isLoading = loading;
+      this.cdr.markForCheck();
+    });
+  }
 
   ngOnInit(): void {
-    this.setupObservables();
-
+    // Apply initial state if provided
     if (this.initialState) {
       this.filters = { ...this.filters, ...this.initialState.filters };
     }
+
+    // Set the service date range based on the selected time range filter
+    this.updateServiceDateRange();
+
+    this.setupObservables();
   }
 
   ngOnDestroy(): void {
@@ -663,47 +979,35 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$)
     );
 
+    // Combine executions with filter trigger to react to client-side filter changes
     this.filteredExecutions$ = combineLatest([
-      this.executions$
+      this.executions$,
+      this.filterTrigger$
     ]).pipe(
       map(([executions]) => this.applyFilters(executions)),
       takeUntil(this.destroy$)
     );
 
+    // KPI counts are now based on the full executions$ (which respects the service date range)
+    // This means the counts will match the selected time range filter
     this.runningCount$ = this.executions$.pipe(
       map(execs => execs.filter(e => e.status === 'Running').length)
     );
 
     this.completedTodayCount$ = this.executions$.pipe(
-      map(execs => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return execs.filter(e =>
-          e.status === 'Passed' &&
-          e.startedAt >= today
-        ).length;
-      })
+      map(execs => execs.filter(e => e.status === 'Passed').length)
     );
 
     this.failedTodayCount$ = this.executions$.pipe(
-      map(execs => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return execs.filter(e =>
-          e.status === 'Failed' &&
-          e.startedAt >= today
-        ).length;
-      })
+      map(execs => execs.filter(e => e.status === 'Failed' || e.status === 'Error').length)
     );
 
     this.avgDurationToday$ = this.executions$.pipe(
       map(execs => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayExecs = execs.filter(e => e.startedAt >= today && e.completedAt);
-        if (todayExecs.length === 0) return 0;
-        const totalDuration = todayExecs.reduce((sum, e) => sum + e.duration, 0);
-        return totalDuration / todayExecs.length;
+        const completedExecs = execs.filter(e => e.completedAt || e.status !== 'Running');
+        if (completedExecs.length === 0) return 0;
+        const totalDuration = completedExecs.reduce((sum, e) => sum + e.duration, 0);
+        return totalDuration / completedExecs.length;
       })
     );
 
@@ -720,9 +1024,10 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
 
     return {
       id: run.id,
+      testId: run.testId,
       testName: run.testName,
       suiteName: run.suiteName,
-      status: run.status,
+      status: run.status as TestStatus,
       score: run.score,
       duration,
       cost: run.cost,
@@ -735,6 +1040,7 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   private applyFilters(executions: ExecutionListItem[]): ExecutionListItem[] {
     let filtered = [...executions];
 
+    // Apply status filter
     if (this.filters.status !== 'all') {
       if (this.filters.status === 'running') {
         filtered = filtered.filter(e => e.status === 'Running');
@@ -747,21 +1053,10 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
       }
     }
 
-    if (this.filters.timeRange !== 'all') {
-      const now = new Date();
-      let startDate = new Date();
+    // Note: Time range filtering is now handled by the service via updateServiceDateRange()
+    // This ensures the KPIs and list use the same data set
 
-      if (this.filters.timeRange === 'today') {
-        startDate.setHours(0, 0, 0, 0);
-      } else if (this.filters.timeRange === 'week') {
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      } else if (this.filters.timeRange === 'month') {
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      }
-
-      filtered = filtered.filter(e => e.startedAt >= startDate);
-    }
-
+    // Apply search text filter
     if (this.filters.searchText) {
       const searchLower = this.filters.searchText.toLowerCase();
       filtered = filtered.filter(e =>
@@ -770,14 +1065,49 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
       );
     }
 
+    // Sort by most recent first
     filtered.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
 
     return filtered;
   }
 
   onFilterChange(): void {
+    // Only re-query server when time range changes - status/search filtering is client-side only
+    if (this.filters.timeRange !== this.previousTimeRange) {
+      this.previousTimeRange = this.filters.timeRange;
+      this.updateServiceDateRange();
+    }
+
+    // Trigger client-side filter update via observable
+    this.filterTrigger$.next();
+
     this.emitStateChange();
     this.cdr.markForCheck();
+  }
+
+  private updateServiceDateRange(): void {
+    const now = new Date();
+    let startDate: Date;
+
+    switch (this.filters.timeRange) {
+      case 'today':
+        startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'all':
+      default:
+        // For "all time", use a very old date (e.g., 1 year ago)
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+    }
+
+    this.instrumentationService.setDateRange(startDate, now);
   }
 
   clearSearch(): void {
@@ -790,8 +1120,14 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
     this.instrumentationService.refresh();
     setTimeout(() => {
       this.isRefreshing = false;
+      this.lastUpdated = new Date();
       this.cdr.markForCheck();
     }, 1000);
+  }
+
+  filterByStatus(status: string): void {
+    this.filters.status = status;
+    this.onFilterChange();
   }
 
   startNewTest(): void {
@@ -824,12 +1160,63 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
     SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(execution.id));
   }
 
-  cancelExecution(execution: ExecutionListItem): void {
-    console.log('Cancel execution:', execution);
+  async cancelExecution(execution: ExecutionListItem): Promise<void> {
+    // For now, show a notification - full cancel support requires server-side CancelTest mutation
+    // which we documented in the plan but haven't implemented yet
+    SharedService.Instance.CreateSimpleNotification(
+      `Cancellation requested for "${execution.testName}". Full cancellation support coming soon.`,
+      'warning',
+      3000
+    );
+
+    // Refresh after a delay to pick up any status changes
+    setTimeout(() => this.refresh(), 1500);
   }
 
-  rerunTest(execution: ExecutionListItem): void {
-    console.log('Re-run test:', execution);
+  async rerunTest(execution: ExecutionListItem): Promise<void> {
+    if (!execution.testId) {
+      SharedService.Instance.CreateSimpleNotification(
+        'Cannot re-run: Test ID not available',
+        'error',
+        3000
+      );
+      return;
+    }
+
+    // Open the test run dialog with the test pre-selected
+    this.activeDialogRef = this.dialogService.open({
+      content: TestRunDialogComponent,
+      width: 1000,
+      height: 750,
+      title: 'Re-run Test',
+      actions: []
+    });
+
+    // Pre-configure the dialog with the test
+    const dialogComponent = this.activeDialogRef.content.instance;
+    dialogComponent.runMode = 'test';
+    dialogComponent.selectedTestId = execution.testId;
+
+    this.activeDialogRef.result.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (result) => {
+        if (result && typeof result === 'object' && 'testExecuted' in result && result.testExecuted) {
+          SharedService.Instance.CreateSimpleNotification(
+            `Test "${execution.testName}" completed`,
+            'success',
+            3000
+          );
+          this.refresh();
+        }
+      },
+      error: () => {
+        this.activeDialogRef = null;
+      },
+      complete: () => {
+        this.activeDialogRef = null;
+      }
+    });
   }
 
   formatDuration(milliseconds: number): string {
@@ -838,6 +1225,16 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
     const minutes = Math.floor(seconds / 60);
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
     return `${seconds}s`;
+  }
+
+  getTimeRangeLabel(): string {
+    switch (this.filters.timeRange) {
+      case 'today': return 'Today';
+      case 'week': return 'This Week';
+      case 'month': return 'This Month';
+      case 'all': return 'All Time';
+      default: return '';
+    }
   }
 
   private emitStateChange(): void {

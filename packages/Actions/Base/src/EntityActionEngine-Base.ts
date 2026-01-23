@@ -99,23 +99,28 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'Entity Action Invocation Types',
-                PropertyName: '_EntityActionInvocationTypes'
+                PropertyName: '_EntityActionInvocationTypes',
+                CacheLocal: true
             },
             {
                 EntityName: 'Entity Action Filters',
-                PropertyName: '_EntityActionFilters'
+                PropertyName: '_EntityActionFilters',
+                CacheLocal: true
             },
             {
                 EntityName: 'Entity Action Invocations',
-                PropertyName: '_EntityActionInvocations'
+                PropertyName: '_EntityActionInvocations',
+                CacheLocal: true
             },
             {
                 EntityName: 'Entity Actions', // sub-class for this will handle dynamic loading of filters, invocations, and params when needed by callers of those read-only properties
-                PropertyName: '_EntityActions'
+                PropertyName: '_EntityActions',
+                CacheLocal: true
             },
             {
                 EntityName: 'Entity Action Params',
-                PropertyName: '_EntityActionParams'
+                PropertyName: '_EntityActionParams',
+                CacheLocal: true
             }
         ]; 
         await this.Load(configs, provider, forceRefresh, contextUser);

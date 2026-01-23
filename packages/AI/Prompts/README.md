@@ -3035,6 +3035,96 @@ WHERE ID = @PromptID;
 
 For more details on API key management, see the [AI Core API Keys documentation](../Core/README.md#api-key-management).
 
+### Configuration Inheritance (v3.1+)
+
+AI Configurations now support parent-child inheritance relationships. This enables you to create child configurations that inherit prompt-model mappings from parent configurations while overriding specific settings.
+
+#### Use Cases
+
+- **Experimentation**: Create a child config that inherits from "Production" but overrides just 2-3 prompts with experimental models
+- **Regional Variations**: Create "Production-EU" inheriting from "Production" with region-specific model overrides
+- **A/B Testing**: Create test configurations that inherit baseline settings while varying specific prompts
+
+#### How Inheritance Works
+
+When you specify a `configurationId`, the system builds an inheritance chain from child to root:
+
+```
+Child Config → Parent Config → Grandparent Config → ... → Root Config
+```
+
+For each prompt, the system walks this chain looking for AIPromptModel matches:
+1. First checks for models assigned to the child config
+2. If none found, checks the parent config
+3. Continues up the chain until a match is found
+4. Falls back to NULL configuration models as final fallback
+
+#### Setting Up Inheritance
+
+```sql
+-- Create parent configuration
+INSERT INTO AIConfiguration (ID, Name, Description, ParentID, IsDefault, Status)
+VALUES (NEWID(), 'Production', 'Standard production configuration', NULL, 1, 'Active');
+
+-- Create child configuration that inherits from Production
+INSERT INTO AIConfiguration (ID, Name, Description, ParentID, IsDefault, Status)
+VALUES (NEWID(), 'Production-Experimental', 'Production with experimental models for select prompts',
+        (SELECT ID FROM AIConfiguration WHERE Name = 'Production'), 0, 'Active');
+```
+
+#### Model Override Example
+
+```sql
+-- Parent (Production) uses GPT-4 for the summarization prompt
+INSERT INTO AIPromptModel (PromptID, ModelID, ConfigurationID, Priority)
+VALUES (@SummarizePromptID, @GPT4ModelID, @ProductionConfigID, 100);
+
+-- Child (Production-Experimental) overrides with Claude for summarization
+INSERT INTO AIPromptModel (PromptID, ModelID, ConfigurationID, Priority)
+VALUES (@SummarizePromptID, @ClaudeModelID, @ExperimentalConfigID, 100);
+
+-- Other prompts in Production-Experimental inherit GPT-4 from parent
+```
+
+#### Using Inherited Configurations
+
+```typescript
+// Execute with child configuration - inherits from parent where no override exists
+const result = await promptRunner.ExecutePrompt({
+    prompt: summarizePrompt,
+    configurationId: experimentalConfigId, // Child config
+    data: { text: 'Content to summarize' },
+    contextUser: currentUser
+});
+
+// For summarization: Uses Claude (child override)
+// For other prompts: Uses parent's models (inherited)
+```
+
+#### Parameter Inheritance
+
+Configuration parameters also inherit from parent configurations. Child parameters override parent parameters with the same name:
+
+```typescript
+// Get all parameters including inherited ones
+const params = AIEngine.Instance.GetConfigurationParamsWithInheritance(childConfigId);
+
+// Parent has: temperature=0.7, maxTokens=4000
+// Child has: temperature=0.9
+// Result: temperature=0.9 (child), maxTokens=4000 (inherited)
+```
+
+#### Cycle Detection
+
+The system automatically detects circular references in the configuration hierarchy. If a cycle is detected, an error is thrown with a descriptive message showing the problematic chain.
+
+#### Best Practices
+
+1. **Keep inheritance chains shallow** - 2-3 levels is usually sufficient
+2. **Document override intentions** - Use Description field to explain why child configs exist
+3. **Use meaningful names** - Name child configs to indicate their parent (e.g., "Production-EU", "Standard-Experimental")
+4. **Test inheritance** - Verify that child configs properly inherit unoverridden models
+
 ## Model Selection Tracking (v2.78+)
 
 The AIPromptRunner now provides comprehensive tracking of model selection decisions through the `modelSelectionInfo` property in `AIPromptRunResult`. This feature helps developers understand:

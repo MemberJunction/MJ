@@ -224,6 +224,22 @@ export class ValidationService {
     parentContext?: { entity: string; field: string },
     depth: number = 0,
   ): Promise<void> {
+    // Skip validation for deletion records - they don't need field validation or reference checks
+    if ((entityData as any).deleteRecord?.delete === true) {
+      // Only validate that primaryKey exists for deletion records
+      if (!entityData.primaryKey) {
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: 'Deletion record is missing required "primaryKey" property',
+          suggestion: 'Add primaryKey to identify the record to delete',
+        });
+      }
+      return; // Skip all other validation for deletion records
+    }
+
     // Check nesting depth
     if (depth > this.options.maxNestingDepth) {
       this.addWarning({
@@ -236,10 +252,24 @@ export class ValidationService {
       });
     }
 
-    // Validate fields
-    if (entityData.fields) {
-      await this.validateFields(entityData.fields, entityInfo, filePath, parentContext);
+    // Validate that 'fields' property exists (required)
+    if (!entityData.fields) {
+      const context = parentContext
+        ? `Related entity "${parentContext.field}" in ${parentContext.entity}`
+        : `Record`;
+      this.addError({
+        type: 'field',
+        severity: 'error',
+        entity: entityInfo.Name,
+        file: filePath,
+        message: `${context} is missing required "fields" property. Did you mean "fields" instead of "field"?`,
+        suggestion: 'Each record must have a "fields" object containing the entity field values',
+      });
+      return; // Can't continue validation without fields
     }
+
+    // Validate fields
+    await this.validateFields(entityData.fields, entityInfo, filePath, parentContext);
 
     // Track dependencies
     this.trackEntityDependencies(entityData, entityInfo.Name, filePath);
@@ -1029,10 +1059,13 @@ export class ValidationService {
   private async getMatchingFiles(dir: string, pattern: string): Promise<string[]> {
     const files = fs.readdirSync(dir).filter((f) => fs.statSync(path.join(dir, f)).isFile());
 
+    // Strip leading **/ from glob patterns (we only match in current directory)
+    const normalizedPattern = pattern.replace(/^\*\*\//, '');
+
     // Simple glob pattern matching
-    if (pattern === '*.json') {
+    if (normalizedPattern === '*.json') {
       return files.filter((f) => f.endsWith('.json') && !f.startsWith('.mj-'));
-    } else if (pattern === '.*.json') {
+    } else if (normalizedPattern === '.*.json') {
       return files.filter((f) => f.startsWith('.') && f.endsWith('.json') && !f.startsWith('.mj-'));
     }
 

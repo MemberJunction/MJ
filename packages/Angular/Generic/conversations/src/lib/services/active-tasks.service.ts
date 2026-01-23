@@ -1,6 +1,9 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { RunView, UserInfo } from '@memberjunction/core';
+import { AIAgentRunEntity } from '@memberjunction/core-entities';
+import { ConversationDataService } from './conversation-data.service';
 
 /**
  * Represents an active agent task that is currently running
@@ -9,6 +12,7 @@ export interface ActiveTask {
   id: string;
   agentName: string;
   agentId?: string; // The agent ID for looking up icon/metadata
+  agentRunId?: string; // The AIAgentRun ID for finding task on completion
   status: string;
   relatedMessageId: string;
   conversationDetailId?: string;  // The ConversationDetail that tracks this task
@@ -27,6 +31,8 @@ export interface ActiveTask {
 export class ActiveTasksService {
   private _tasks$ = new BehaviorSubject<Map<string, ActiveTask>>(new Map());
   private _conversationIdsWithTasks$ = new BehaviorSubject<Set<string>>(new Set());
+
+  constructor(private conversationData: ConversationDataService) {}
 
   /**
    * Observable of all active tasks as an array
@@ -168,9 +174,100 @@ export class ActiveTasksService {
   }
 
   /**
+   * Get an active task by its agent run ID
+   * @param agentRunId The AIAgentRun ID
+   * @returns The task if found, undefined otherwise
+   */
+  getByAgentRunId(agentRunId: string): ActiveTask | undefined {
+    const tasks = Array.from(this._tasks$.value.values());
+    return tasks.find(task => task.agentRunId === agentRunId);
+  }
+
+  /**
+   * Remove a task by its agent run ID
+   * @param agentRunId The AIAgentRun ID
+   * @returns true if task was found and removed, false otherwise
+   */
+  removeByAgentRunId(agentRunId: string): boolean {
+    const task = this.getByAgentRunId(agentRunId);
+    if (task) {
+      this.remove(task.id);
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Clear all active tasks
    */
   clear(): void {
     this._tasks$.next(new Map());
+  }
+
+  /**
+   * Restore active tasks from database by querying running agent runs.
+   * Call this on app initialization to restore state after browser refresh.
+   * @param currentUser The current user to filter agent runs by
+   */
+  async restoreFromDatabase(currentUser: UserInfo): Promise<void> {
+    try {
+      const rv = new RunView();
+
+      // Query for running agent runs owned by this user
+      // Only restore parent agents (those with ConversationDetailID) - child agents don't have one
+      // This matches normal behavior where we only track parent agents, not child agents
+      const result = await rv.RunView<AIAgentRunEntity>({
+        EntityName: 'MJ: AI Agent Runs',
+        Fields: ["ID", "ConversationID", "AgentID", "Agent", "ConversationDetailID"], // narrow field scope to not pull back JSON blobs - much faster
+        ExtraFilter: `Status='Running' AND UserID='${currentUser.ID}' AND ConversationDetailID IS NOT NULL`,
+        ResultType: 'simple' // no need for entity-object here we aren't mutating
+      }, currentUser);
+
+      if (!result.Success || !result.Results || result.Results.length === 0) {
+        // No running tasks or query failed - nothing to restore
+        return;
+      }
+
+      // Get conversation names from cached ConversationDataService
+      const conversationNames = new Map<string, string>();
+      for (const agentRun of result.Results) {
+        if (agentRun.ConversationID) {
+          const conv = this.conversationData.getConversationById(agentRun.ConversationID);
+          if (conv?.Name) {
+            conversationNames.set(agentRun.ConversationID, conv.Name);
+          }
+        }
+      }
+
+      // Add each running agent to ActiveTasksService
+      let restoredCount = 0;
+      for (const agentRun of result.Results) {
+        // Skip if already tracked (prevents duplicates)
+        if (agentRun.ConversationDetailID &&
+            this.getByConversationDetailId(agentRun.ConversationDetailID)) {
+          continue;
+        }
+
+        this.add({
+          agentName: agentRun.Agent || 'Unknown Agent',
+          agentId: agentRun.AgentID,
+          agentRunId: agentRun.ID, // For finding task on completion
+          status: 'Reconnecting...',
+          relatedMessageId: agentRun.ConversationDetailID || agentRun.ID,
+          conversationDetailId: agentRun.ConversationDetailID || undefined,
+          conversationId: agentRun.ConversationID || undefined,
+          conversationName: agentRun.ConversationID
+            ? conversationNames.get(agentRun.ConversationID) || null
+            : null
+        });
+        restoredCount++;
+      }
+
+      if (restoredCount > 0) {
+        console.log(`✅ Restored ${restoredCount} active task(s) from database`);
+      }
+    } catch (error) {
+      console.error('Failed to restore active tasks from database:', error);
+    }
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/scheduling-engine",
-  "version": "2.128.0",
+  "version": "3.2.0",
   "description": "MemberJunction: Scheduling Engine - core engine for executing scheduled jobs with plugin architecture",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,15 +14,16 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "2.128.0",
-    "@memberjunction/actions-base": "2.128.0",
-    "@memberjunction/ai-agents": "2.128.0",
-    "@memberjunction/core": "2.128.0",
-    "@memberjunction/core-entities": "2.128.0",
-    "@memberjunction/global": "2.128.0",
-    "@memberjunction/scheduling-base-types": "2.128.0",
-    "@memberjunction/scheduling-engine-base": "2.128.0",
-    "@memberjunction/sqlserver-dataprovider": "2.128.0",
+    "@memberjunction/actions": "3.2.0",
+    "@memberjunction/actions-base": "3.2.0",
+    "@memberjunction/ai-core-plus": "3.2.0",
+    "@memberjunction/ai-agents": "3.2.0",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/core-entities": "3.2.0",
+    "@memberjunction/global": "3.2.0",
+    "@memberjunction/scheduling-base-types": "3.2.0",
+    "@memberjunction/scheduling-engine-base": "3.2.0",
+    "@memberjunction/sqlserver-dataprovider": "3.2.0",
     "cron-parser": "^4.9.0"
   },
   "devDependencies": {

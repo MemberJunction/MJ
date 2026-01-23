@@ -8,16 +8,16 @@
     "start": "node -r dotenv/config src/index.js"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.126.0",
-    "@memberjunction/ai-openai": "2.126.0",
-    "@memberjunction/ai-vectordb": "2.126.0",
-    "@memberjunction/ai-vectors": "2.126.0",
-    "@memberjunction/ai-vectors-pinecone": "2.126.0",
-    "@memberjunction/ai-vector-sync": "2.126.0",
-    "@memberjunction/aiengine": "2.126.0",
-    "@memberjunction/core": "2.126.0",
-    "@memberjunction/global": "2.126.0",
-    "@memberjunction/core-entities": "2.126.0",
+    "@memberjunction/ai": "3.1.1",
+    "@memberjunction/ai-openai": "3.1.1",
+    "@memberjunction/ai-vectordb": "3.1.1",
+    "@memberjunction/ai-vectors": "3.1.1",
+    "@memberjunction/ai-vectors-pinecone": "3.1.1",
+    "@memberjunction/ai-vector-sync": "3.1.1",
+    "@memberjunction/aiengine": "3.1.1",
+    "@memberjunction/core": "3.1.1",
+    "@memberjunction/global": "3.1.1",
+    "@memberjunction/core-entities": "3.1.1",
     "dotenv": "^16.4.1"
   },
   "devDependencies": {

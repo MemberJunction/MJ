@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "title": "Project ID",
+      "description": "GCP Project ID",
+      "isSecret": false,
+      "order": 0
+    },
+    "location": {
+      "type": "string",
+      "title": "Location",
+      "description": "GCP region (e.g., us-central1, europe-west1)",
+      "default": "us-central1",
+      "isSecret": false,
+      "order": 1
+    },
+    "keyFilePath": {
+      "type": "string",
+      "title": "Key File Path",
+      "description": "Optional: Path to service account JSON file. If not provided, will use Application Default Credentials (ADC) or inline credentials.",
+      "isSecret": false,
+      "order": 2
+    },
+    "serviceAccountJson": {
+      "type": "string",
+      "title": "Service Account JSON",
+      "description": "Optional: Full service account JSON as string. If not provided, will use ADC or key file path.",
+      "isSecret": true,
+      "order": 3
+    }
+  },
+  "required": ["project"]
+}

@@ -24,29 +24,9 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=AccessToken"
           },
           "sync": {
-            "lastModified": "2025-12-25T16:54:17.650Z",
-            "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "primaryKey.ID",
-              "expression": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=AccessToken",
-              "resolved": "155817F0-6F36-EF11-86D4-6045BDEE16E6",
-              "nested": [
-                {
-                  "expression": "@lookup:Entities.Name=Company Integrations",
-                  "resolved": "DE238F34-2837-EF11-86D4-6045BDEE16E6"
-                }
-              ]
-            },
-            {
-              "type": "lookup",
-              "field": "fields.EncryptionKeyID",
-              "expression": "@lookup:MJ: Encryption Keys.Name=Base Encryption Key",
-              "resolved": "85B814C8-A01B-4AE3-A252-DC9D54C914C7"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:38.868Z",
+            "checksum": "a45fd51f3adf368ba113766c23e0bf6ead9199d90c89152fb0e2bc0fafa1bd06"
+          }
         },
         {
           "fields": {
@@ -62,29 +42,9 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=RefreshToken"
           },
           "sync": {
-            "lastModified": "2025-12-25T16:54:17.669Z",
-            "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "primaryKey.ID",
-              "expression": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=RefreshToken",
-              "resolved": "165817F0-6F36-EF11-86D4-6045BDEE16E6",
-              "nested": [
-                {
-                  "expression": "@lookup:Entities.Name=Company Integrations",
-                  "resolved": "DE238F34-2837-EF11-86D4-6045BDEE16E6"
-                }
-              ]
-            },
-            {
-              "type": "lookup",
-              "field": "fields.EncryptionKeyID",
-              "expression": "@lookup:MJ: Encryption Keys.Name=Base Encryption Key",
-              "resolved": "85B814C8-A01B-4AE3-A252-DC9D54C914C7"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:38.889Z",
+            "checksum": "a45fd51f3adf368ba113766c23e0bf6ead9199d90c89152fb0e2bc0fafa1bd06"
+          }
         },
         {
           "fields": {
@@ -100,29 +60,9 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=APIKey"
           },
           "sync": {
-            "lastModified": "2025-12-25T16:54:17.687Z",
-            "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "primaryKey.ID",
-              "expression": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=APIKey",
-              "resolved": "185817F0-6F36-EF11-86D4-6045BDEE16E6",
-              "nested": [
-                {
-                  "expression": "@lookup:Entities.Name=Company Integrations",
-                  "resolved": "DE238F34-2837-EF11-86D4-6045BDEE16E6"
-                }
-              ]
-            },
-            {
-              "type": "lookup",
-              "field": "fields.EncryptionKeyID",
-              "expression": "@lookup:MJ: Encryption Keys.Name=Base Encryption Key",
-              "resolved": "85B814C8-A01B-4AE3-A252-DC9D54C914C7"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:38.911Z",
+            "checksum": "a45fd51f3adf368ba113766c23e0bf6ead9199d90c89152fb0e2bc0fafa1bd06"
+          }
         },
         {
           "fields": {
@@ -138,42 +78,14 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=ClientSecret"
           },
           "sync": {
-            "lastModified": "2025-12-25T16:54:17.702Z",
-            "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "primaryKey.ID",
-              "expression": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=ClientSecret",
-              "resolved": "B44217F0-6F36-EF11-86D4-6045BDEE16E6",
-              "nested": [
-                {
-                  "expression": "@lookup:Entities.Name=Company Integrations",
-                  "resolved": "DE238F34-2837-EF11-86D4-6045BDEE16E6"
-                }
-              ]
-            },
-            {
-              "type": "lookup",
-              "field": "fields.EncryptionKeyID",
-              "expression": "@lookup:MJ: Encryption Keys.Name=Base Encryption Key",
-              "resolved": "85B814C8-A01B-4AE3-A252-DC9D54C914C7"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:38.926Z",
+            "checksum": "a45fd51f3adf368ba113766c23e0bf6ead9199d90c89152fb0e2bc0fafa1bd06"
+          }
         }
       ]
     },
     "primaryKey": {
       "ID": "@lookup:Entities.Name=Company Integrations"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "primaryKey.ID",
-        "expression": "@lookup:Entities.Name=Company Integrations",
-        "resolved": "DE238F34-2837-EF11-86D4-6045BDEE16E6"
-      }
-    ]
+    }
   }
 ]

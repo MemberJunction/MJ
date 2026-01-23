@@ -433,11 +433,13 @@ export class SchedulingInstrumentationService {
       {
         EntityName: 'MJ: Scheduled Job Types',
         OrderBy: 'Name ASC',
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
+        CacheLocal: true
       },
       {
         EntityName: 'MJ: Scheduled Jobs',
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
+        CacheLocal: true
       },
       {
         EntityName: 'MJ: Scheduled Job Runs',

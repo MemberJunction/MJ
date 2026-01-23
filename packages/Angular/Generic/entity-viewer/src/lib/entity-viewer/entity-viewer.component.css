@@ -2,7 +2,13 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  height: 100%;
   background: #fafafa;
+}
+
+/* Pagination footer - always visible at bottom */
+mj-pagination {
+  flex-shrink: 0;
 }
 
 /* Header */
@@ -166,12 +172,32 @@
   background: white;
 }
 
-/* Loading State */
+/* Loading State - full-page centered loading for initial load when no data exists */
 .loading-container {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
+}
+
+/* Loading overlay - semi-transparent overlay on top of existing content during refresh */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ensure [hidden] attribute works properly on loading elements */
+.loading-container[hidden],
+.loading-overlay[hidden] {
+  display: none !important;
 }
 
 /* Empty State */
@@ -197,14 +223,12 @@
 }
 
 /* Hidden components should not display - ensure [hidden] attribute works properly */
-mj-entity-grid[hidden],
 mj-entity-cards[hidden],
 mj-timeline[hidden] {
   display: none !important;
 }
 
 /* Visible view components should fill available space */
-mj-entity-grid:not([hidden]),
 mj-entity-cards:not([hidden]),
 mj-timeline:not([hidden]) {
   display: block;
