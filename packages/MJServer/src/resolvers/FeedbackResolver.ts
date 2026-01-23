@@ -54,7 +54,7 @@ export class SubmitFeedbackInput {
   AffectedArea?: string;
 
   @Field({ nullable: true })
-  Url?: string;
+  CurrentPage?: string;
 
   @Field({ nullable: true })
   UserAgent?: string;
@@ -114,7 +114,7 @@ interface FeedbackSubmission {
   name?: string;
   environment?: string;
   affectedArea?: string;
-  url?: string;
+  currentPage?: string;
   userAgent?: string;
   screenSize?: string;
   appName?: string;
@@ -164,7 +164,7 @@ const FeedbackSubmissionSchema = z.object({
   name: z.string().max(100).optional(),
   environment: z.enum(['production', 'staging', 'development', 'local']).optional(),
   affectedArea: z.string().max(100).optional(),
-  url: z.string().url().optional().or(z.literal('')),
+  currentPage: z.string().max(200).optional(),
   userAgent: z.string().max(500).optional(),
   screenSize: z.string().max(20).optional(),
   appName: z.string().max(100).optional(),
@@ -214,6 +214,7 @@ export class FeedbackResolver {
     @Ctx() ctx: AppContext
   ): Promise<FeedbackResponseType> {
     try {
+      console.log('[FeedbackResolver] input.CurrentPage:', input.CurrentPage);
       // Get configuration
       const config = this.getConfig();
       if (!config) {
@@ -225,6 +226,7 @@ export class FeedbackResolver {
 
       // Convert input to internal format
       const submission = this.convertInputToSubmission(input, ctx);
+      console.log('[FeedbackResolver] submission.currentPage:', submission.currentPage);
 
       // Validate submission
       const validationResult = FeedbackSubmissionSchema.safeParse(submission);
@@ -314,7 +316,7 @@ export class FeedbackResolver {
       name: input.Name,
       environment: input.Environment,
       affectedArea: input.AffectedArea,
-      url: input.Url,
+      currentPage: input.CurrentPage,
       userAgent: input.UserAgent,
       screenSize: input.ScreenSize,
       appName: input.AppName,
@@ -346,6 +348,7 @@ export class FeedbackResolver {
 
     const labels = this.buildLabels(submission, config);
     const body = this.formatIssueBody(submission);
+    console.log('[FeedbackResolver] GitHub issue body:', body);
 
     const response = await octokit.issues.create({
       owner: config.owner,
@@ -492,14 +495,14 @@ export class FeedbackResolver {
     }
 
     // Technical details section
-    if (submission.url || submission.userAgent || submission.screenSize || submission.userId) {
+    if (submission.currentPage || submission.userAgent || submission.screenSize || submission.userId) {
       sections.push('### Technical Details');
       sections.push('');
       sections.push('| Field | Value |');
       sections.push('|-------|-------|');
 
-      if (submission.url) {
-        sections.push(`| **URL** | ${this.sanitizeMarkdown(submission.url)} |`);
+      if (submission.currentPage) {
+        sections.push(`| **Page/View** | ${this.sanitizeMarkdown(submission.currentPage)} |`);
       }
 
       if (submission.userAgent) {
@@ -544,7 +547,8 @@ export class FeedbackResolver {
       .replace(/>/g, '&gt;')
       .replace(/\[/g, '\\[')
       .replace(/\]/g, '\\]')
-      .replace(/!\[/g, '!\\[');
+      .replace(/!\[/g, '!\\[')
+      .replace(/\|/g, '\\|');
   }
 
   /**

@@ -1,5 +1,16 @@
 # GitHub Issue Form - Reusable Package Specification
 
+## Implementation Status
+
+✅ **Implemented** - The feedback system has been built and integrated into MJExplorer.
+
+**Key implementation details:**
+- Angular package: `packages/Angular/Generic/feedback/`
+- Server resolver: `packages/MJServer/src/resolvers/FeedbackResolver.ts`
+- Uses GraphQL mutation (not REST) via `SubmitFeedback`
+- Tab-based context via `CurrentPageProvider` instead of URL capture
+- Markdown sanitization to handle special characters in table cells
+
 ## Overview
 
 A reusable package that provides consistent bug reporting and feedback functionality across all applications. Each app installs the package, configures it for their specific repo, and owns their own GitHub credentials.
@@ -85,13 +96,15 @@ A reusable package that provides consistent bug reporting and feedback functiona
 
 | Field | Source | Purpose |
 |-------|--------|---------|
-| `url` | `window.location.href` | Page where issue was reported |
+| `currentPage` | `CurrentPageProvider` callback | Current view/tab name(s) for tab-based apps |
 | `userAgent` | `navigator.userAgent` | Browser and OS info |
 | `screenSize` | `window.innerWidth/Height` | Viewport dimensions |
 | `timestamp` | Server | When submitted |
 | `appVersion` | Config | Application version |
 | `appName` | Config | Which application |
 | `userId` | Auth context (optional) | If user is logged in |
+
+> **Note**: URL capture was intentionally removed because MJExplorer and similar apps use tab-based navigation where the browser URL doesn't change during navigation. The `currentPage` field provides more meaningful context by showing which tabs/views the user has open.
 
 ---
 
@@ -272,7 +285,32 @@ export class AppModule { }
 
 <!-- Option 3: Floating button (always visible) -->
 <mj-feedback-button position="bottom-right"></mj-feedback-button>
+
+<!-- Option 4: Floating button with CurrentPageProvider for tab-based apps -->
+<mj-feedback-button
+  position="bottom-right"
+  [CurrentPageProvider]="GetCurrentPage">
+</mj-feedback-button>
 ```
+
+#### CurrentPageProvider for Tab-Based Applications
+
+For applications where the browser URL doesn't change during navigation (e.g., tab-based UIs), use the `CurrentPageProvider` input to provide meaningful context about where the user is:
+
+```typescript
+// In your app component
+GetCurrentPage = (): string | undefined => {
+  const config = this.workspaceManager.GetConfiguration();
+  if (!config?.tabs?.length) {
+    return undefined;
+  }
+  // Return all open tab names separated by " | "
+  const titles = config.tabs.map(t => t.title).filter(Boolean);
+  return titles.length > 0 ? titles.join(' | ') : undefined;
+};
+```
+
+This provides context like "Actions Overview | Execution Monitoring" in the GitHub issue instead of a static URL.
 
 ### Component API
 
@@ -430,11 +468,13 @@ Jane Doe — jane@example.com
 
 | Field | Value |
 |-------|-------|
-| **URL** | https://app.example.com/reports/123 |
+| **Current Page** | Actions Overview \| Execution Monitoring |
 | **Browser** | Chrome 120.0.0 on Windows 10 |
 | **Screen Size** | 1920x1080 |
 | **User ID** | user_abc123 |
 ```
+
+> **Note**: Pipe characters (`|`) in field values are escaped (`\|`) to prevent breaking the markdown table format.
 
 ---
 
@@ -466,7 +506,7 @@ export interface FeedbackSubmission {
   affectedArea?: string;
   
   // Auto-captured
-  url?: string;
+  currentPage?: string;      // Tab/view names for tab-based apps
   userAgent?: string;
   screenSize?: string;
   appName?: string;
@@ -547,6 +587,26 @@ export const validationRules = {
 - Sanitize markdown in issue body to prevent injection
 - Validate file attachments (type, size, content)
 - Log submissions (without PII) for abuse detection
+
+### Markdown Sanitization
+
+The `sanitizeMarkdown()` function escapes special characters that could break GitHub issue formatting:
+
+```typescript
+private sanitizeMarkdown(text: string | undefined): string {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')       // HTML entities
+    .replace(/</g, '&lt;')        // Prevent HTML injection
+    .replace(/>/g, '&gt;')
+    .replace(/\[/g, '\\[')        // Escape markdown links
+    .replace(/\]/g, '\\]')
+    .replace(/!\[/g, '!\\[')      // Escape markdown images
+    .replace(/\|/g, '\\|');       // Escape pipe chars (breaks tables)
+}
+```
+
+The pipe character (`|`) escaping is particularly important for the `currentPage` field when multiple tab names are joined with ` | ` — without escaping, the markdown table would be corrupted.
 
 ### GitHub Token Permissions
 - Use fine-grained PAT with minimal permissions:
@@ -792,7 +852,7 @@ export class SubmitFeedbackInput {
   affectedArea?: string;
 
   @Field({ nullable: true })
-  url?: string;
+  currentPage?: string;
 
   @Field({ nullable: true })
   userAgent?: string;

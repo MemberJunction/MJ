@@ -114,7 +114,6 @@ export class FeedbackService {
       name: data.name || currentUser?.Name,
       email: data.email || currentUser?.Email,
       // Auto-capture environment data
-      url: data.url || window.location.href,
       userAgent: data.userAgent || navigator.userAgent,
       screenSize: data.screenSize || `${window.innerWidth}x${window.innerHeight}`,
       appName: data.appName || this.config.appName,
@@ -127,7 +126,8 @@ export class FeedbackService {
    * Convert camelCase submission to PascalCase GraphQL input
    */
   private convertToGraphQLInput(data: FeedbackSubmission): GraphQLFeedbackInput {
-    return {
+    console.log('[FeedbackService] data.currentPage:', data.currentPage);
+    const result = {
       Title: data.title,
       Description: data.description,
       Category: data.category,
@@ -141,7 +141,7 @@ export class FeedbackService {
       Name: data.name,
       Environment: data.environment,
       AffectedArea: data.affectedArea,
-      Url: data.url,
+      CurrentPage: data.currentPage,
       UserAgent: data.userAgent,
       ScreenSize: data.screenSize,
       AppName: data.appName,
@@ -150,6 +150,8 @@ export class FeedbackService {
       Timestamp: data.timestamp,
       Metadata: data.metadata ? JSON.stringify(data.metadata) : undefined
     };
+    console.log('[FeedbackService] GraphQL input CurrentPage:', result.CurrentPage);
+    return result;
   }
 
   /**
@@ -192,7 +194,7 @@ interface GraphQLFeedbackInput {
   Name?: string;
   Environment?: string;
   AffectedArea?: string;
-  Url?: string;
+  CurrentPage?: string;
   UserAgent?: string;
   ScreenSize?: string;
   AppName?: string;

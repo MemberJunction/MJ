@@ -348,6 +348,8 @@ export class FeedbackFormComponent implements OnInit {
   @Input() PrefilledCategory?: FeedbackCategory | string;
   @Input() PrefilledTitle?: string;
   @Input() ContextData?: Record<string, unknown>;
+  /** Current page/view name (for apps where URL doesn't reflect navigation) */
+  @Input() CurrentPage?: string;
 
   // Outputs
   @Output() Submitted = new EventEmitter<FeedbackSubmission>();
@@ -457,12 +459,16 @@ export class FeedbackFormComponent implements OnInit {
     this.ErrorMessage = '';
     this.cdr.detectChanges();
 
+    console.log('[FeedbackForm] this.CurrentPage:', this.CurrentPage);
     const submission: FeedbackSubmission = {
       title: this.Title.trim(),
       description: this.Description.trim(),
       category: this.Category,
-      metadata: this.ContextData
+      metadata: this.ContextData,
+      // Current page/view name (for apps where URL doesn't reflect navigation)
+      currentPage: this.CurrentPage
     };
+    console.log('[FeedbackForm] submission.currentPage:', submission.currentPage);
 
     // Add category-specific fields
     if (this.Category === 'bug') {

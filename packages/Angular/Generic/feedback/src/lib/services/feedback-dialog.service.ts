@@ -16,6 +16,8 @@ export interface FeedbackDialogOptions {
   prefilledTitle?: string;
   /** Additional context data to include */
   contextData?: Record<string, unknown>;
+  /** Current page/view name (for apps where URL doesn't change during navigation) */
+  currentPage?: string;
 }
 
 /**
@@ -73,6 +75,11 @@ export class FeedbackDialogService {
 
     if (options?.contextData) {
       instance.ContextData = options.contextData;
+    }
+
+    if (options?.currentPage) {
+      console.log('[FeedbackDialog] Setting CurrentPage on form:', options.currentPage);
+      instance.CurrentPage = options.currentPage;
     }
 
     return dialogRef;

@@ -135,3 +135,4 @@ packages/MJServer/src/agents/skipRequest-new-chat.json
 .mjrc.yml.ignore
 report.json
 report.html
+.vscode/settings.json

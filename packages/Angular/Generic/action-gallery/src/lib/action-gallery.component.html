@@ -136,13 +136,13 @@
             </div>
             <div class="card-actions">
               @if (config.enableQuickTest) {
-                <button kendoButton 
-                        look="flat" 
+                <button kendoButton
+                        look="flat"
                         size="small"
-                        icon="play"
                         (click)="testAction(action, $event)"
                         kendoTooltip
                         title="Test this action">
+                  <i class="fa-solid fa-play"></i>
                 </button>
               }
               <i class="fa-solid expand-indicator"
@@ -259,13 +259,13 @@
           <span class="col-params">{{ action.parameters?.length || 0 }}</span>
           <span class="col-actions">
             @if (config.enableQuickTest) {
-              <button kendoButton 
-                      look="flat" 
+              <button kendoButton
+                      look="flat"
                       size="small"
-                      icon="play"
                       (click)="testAction(action, $event)"
                       kendoTooltip
                       title="Test this action">
+                <i class="fa-solid fa-play"></i>
               </button>
             }
           </span>

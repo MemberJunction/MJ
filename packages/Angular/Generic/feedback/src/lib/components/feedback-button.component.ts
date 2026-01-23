@@ -109,6 +109,22 @@ export class FeedbackButtonComponent {
    */
   @Input() ButtonText = 'Feedback';
 
+  /**
+   * Optional callback to get the current page/view name.
+   * Use this for apps where URL doesn't reflect navigation (e.g., tab-based apps).
+   * @example
+   * ```html
+   * <mj-feedback-button [CurrentPageProvider]="getCurrentPage"></mj-feedback-button>
+   * ```
+   * ```typescript
+   * getCurrentPage = (): string => {
+   *   return this.workspaceManager.GetConfiguration()?.tabs
+   *     .find(t => t.id === this.workspaceManager.GetActiveTabId())?.title || '';
+   * };
+   * ```
+   */
+  @Input() CurrentPageProvider?: () => string | undefined;
+
   constructor(
     private dialogService: FeedbackDialogService,
     private vcr: ViewContainerRef
@@ -118,8 +134,11 @@ export class FeedbackButtonComponent {
    * Open the feedback dialog
    */
   OpenFeedbackDialog(): void {
+    const currentPage = this.CurrentPageProvider?.();
+    console.log('[FeedbackButton] currentPage from provider:', currentPage);
     this.dialogService.OpenFeedbackDialog({
-      viewContainerRef: this.vcr
+      viewContainerRef: this.vcr,
+      currentPage
     });
   }
 }

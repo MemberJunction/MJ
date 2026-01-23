@@ -41,7 +41,8 @@ export interface FeedbackSubmission {
   affectedArea?: string;
 
   // Auto-captured fields
-  url?: string;
+  /** Current page/view name (for apps with tab-based navigation where URL doesn't change) */
+  currentPage?: string;
   userAgent?: string;
   screenSize?: string;
   appName?: string;

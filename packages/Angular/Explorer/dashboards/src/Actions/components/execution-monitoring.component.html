@@ -3,8 +3,8 @@
   <div class="monitoring-header">
     <div class="header-title">
       <h3><i class="fa-solid fa-chart-line"></i> Execution Monitoring</h3>
-      <button kendoButton [primary]="true" [icon]="'refresh'" (click)="refreshData()" class="refresh-btn">
-        Refresh
+      <button kendoButton [primary]="true" (click)="refreshData()" class="refresh-btn">
+        <i class="fa-solid fa-sync"></i> Refresh
       </button>
     </div>
     
@@ -189,10 +189,10 @@
             </div>
             
             <div class="execution-actions">
-              <button kendoButton 
-                [fillMode]="'flat'" 
-                [icon]="'more-vertical'"
+              <button kendoButton
+                [fillMode]="'flat'"
                 (click)="$event.stopPropagation()">
+                <i class="fa-solid fa-ellipsis-vertical"></i>
               </button>
             </div>
           </div>
