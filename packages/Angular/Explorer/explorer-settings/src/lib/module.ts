@@ -2,6 +2,8 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
+import { WindowModule } from '@progress/kendo-angular-dialog';
+
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
@@ -31,6 +33,7 @@ import { UserDialogComponent } from './user-management/user-dialog/user-dialog.c
 import { PermissionDialogComponent } from './entity-permissions/permission-dialog/permission-dialog.component';
 import { ApplicationDialogComponent } from './application-management/application-dialog/application-dialog.component';
 import { UserAppConfigComponent } from './user-app-config/user-app-config.component';
+import { NotificationPreferencesComponent } from './notification-preferences/notification-preferences.component';
 
 @NgModule({
   declarations: [
@@ -47,7 +50,8 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     UserDialogComponent,
     PermissionDialogComponent,
     ApplicationDialogComponent,
-    UserAppConfigComponent
+    UserAppConfigComponent,
+    NotificationPreferencesComponent
   ],
   imports: [
     CommonModule,
@@ -63,7 +67,8 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     JoinGridModule,
     CodeEditorModule,
     SharedSettingsModule,
-    SharedGenericModule
+    SharedGenericModule,
+    WindowModule
   ],
   exports: [
     // Main dashboard components
@@ -79,7 +84,8 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     UserDialogComponent,
     PermissionDialogComponent,
     ApplicationDialogComponent,
-    UserAppConfigComponent
+    UserAppConfigComponent,
+    NotificationPreferencesComponent
   ]
 })
 export class ExplorerSettingsModule { }
