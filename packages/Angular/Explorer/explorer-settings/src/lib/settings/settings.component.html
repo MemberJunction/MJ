@@ -2,46 +2,90 @@
   <!-- Header Section -->
   <div class="mj-header">
     <div class="mj-header-title">
-      <i class="fa-solid fa-cog"></i>
+      <i class="fa-solid fa-cog" aria-hidden="true"></i>
       <h1>Settings</h1>
     </div>
-    
+
     <div class="mj-header-actions">
       <div class="mj-search">
-        <i class="fa-solid fa-search mj-search-icon"></i>
-        <input 
-          type="text" 
-          class="mj-search-input" 
+        <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
+        <input
+          type="text"
+          class="mj-search-input"
           placeholder="Search settings..."
           (input)="onSearchChange($event)"
           [value]="searchTerm$.value"
+          aria-label="Search settings"
+          role="combobox"
+          [attr.aria-expanded]="showSearchResults"
+          aria-controls="search-results-list"
+          aria-autocomplete="list"
         />
+        @if (searchTerm$.value) {
+          <button
+            class="mj-search-clear"
+            (click)="clearSearch()"
+            aria-label="Clear search"
+          >
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        }
+
+        <!-- Search Results Dropdown -->
+        @if (showSearchResults && searchResults.length > 0) {
+          <div class="search-results-dropdown" role="listbox" id="search-results-list">
+            <div class="search-results-header">
+              <span>{{ searchResults.length }} result{{ searchResults.length !== 1 ? 's' : '' }} found</span>
+            </div>
+            <ul class="search-results-list">
+              @for (result of searchResults; track result.id) {
+                <li
+                  class="search-result-item"
+                  role="option"
+                  (click)="navigateToSearchResult(result)"
+                  (keydown.enter)="navigateToSearchResult(result)"
+                  tabindex="0"
+                  [attr.aria-label]="result.label + ' in ' + getTabLabelById(result.tabId)"
+                >
+                  <i [class]="getTabIconById(result.tabId)" aria-hidden="true"></i>
+                  <div class="result-content">
+                    <span class="result-label">{{ result.label }}</span>
+                    <span class="result-path">{{ getTabLabelById(result.tabId) }}</span>
+                  </div>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <!-- Empty Search State -->
+        @if (showSearchResults && searchResults.length === 0) {
+          <div class="search-results-dropdown">
+            <div class="search-empty-state">
+              <i class="fa-solid fa-search" aria-hidden="true"></i>
+              <p>No settings found for "{{ searchTerm$.value }}"</p>
+            </div>
+          </div>
+        }
       </div>
     </div>
   </div>
 
   <!-- Loading State -->
   @if (isLoading) {
-    <div class="loading-container">
-      <div class="loading-content">
-        <div class="loading-spinner">
-          <div class="spinner-ring"></div>
-          <div class="spinner-ring"></div>
-          <div class="spinner-ring"></div>
-        </div>
-        <div class="loading-text">Loading settings...</div>
-      </div>
+    <div class="loading-container" role="status" aria-live="polite">
+      <mj-loading text="Loading settings..."></mj-loading>
     </div>
   }
 
   <!-- Error State -->
   @if (error && !isLoading) {
-    <div class="error-container">
+    <div class="error-container" role="alert">
       <div class="error-content">
-        <i class="fa-solid fa-exclamation-triangle error-icon"></i>
+        <i class="fa-solid fa-exclamation-triangle error-icon" aria-hidden="true"></i>
         <p class="error-message">{{ error }}</p>
         <button class="retry-button" (click)="loadInitialData()">
-          <i class="fa-solid fa-refresh"></i>
+          <i class="fa-solid fa-refresh" aria-hidden="true"></i>
           Try Again
         </button>
       </div>
@@ -55,15 +99,20 @@
       @if (!isMobile) {
         <div class="desktop-layout" style="display: flex;">
           <!-- Side Navigation -->
-          <nav class="side-navigation">
-            <ul class="nav-list">
-              @for (tab of tabs; track tab.id) {
-                <li 
+          <nav class="side-navigation" role="navigation" aria-label="Settings navigation">
+            <ul class="nav-list" role="tablist" aria-orientation="vertical">
+              @for (tab of filteredTabs; track tab.id) {
+                <li
                   class="nav-item"
                   [class.active]="activeTab === tab.id"
                   (click)="onTabChange(tab.id)"
+                  (keydown.enter)="onTabChange(tab.id)"
+                  role="tab"
+                  [attr.aria-selected]="activeTab === tab.id"
+                  [attr.aria-controls]="'panel-' + tab.id"
+                  tabindex="0"
                 >
-                  <i [class]="tab.icon"></i>
+                  <i [class]="tab.icon" aria-hidden="true"></i>
                   <span class="nav-label">{{ tab.label }}</span>
                   @if (tab.badgeCount && tab.badgeCount > 0) {
                     <span class="nav-badge" [class]="'badge-' + (tab.badgeColor || 'primary')">
@@ -76,7 +125,7 @@
           </nav>
 
           <!-- Content Area -->
-          <div class="content-area">
+          <div class="content-area" role="tabpanel" [attr.id]="'panel-' + activeTab">
             <div class="tab-content">
               @switch (activeTab) {
                 @case ('general') {
@@ -105,15 +154,19 @@
                           <!-- Preferences content will go here -->
                         </div>
                       </mj-settings-card>
-                    </div>
-                  </div>
-                }
 
-                @case ('notifications') {
-                  <div class="notifications-settings">
-                    <h2 class="section-title">Notification Preferences</h2>
-                    <p class="section-description">Manage how you receive notifications for different types of events</p>
-                    <mj-notification-preferences></mj-notification-preferences>
+                      <mj-settings-card
+                        title="Notifications"
+                        icon="fa-solid fa-bell"
+                        [expanded]="isSectionExpanded('notifications')"
+                        (toggle)="toggleSection('notifications')"
+                      >
+                        <div class="card-content">
+                          <p>Configure how and when you receive notifications.</p>
+                          <!-- Notification settings will go here -->
+                        </div>
+                      </mj-settings-card>
+                    </div>
                   </div>
                 }
 
@@ -124,7 +177,7 @@
                     <mj-user-management></mj-user-management>
                   </div>
                 }
-                
+
                 @case ('roles') {
                   <div class="roles-settings">
                     <h2 class="section-title">Role Management</h2>
@@ -132,69 +185,80 @@
                     <mj-role-management></mj-role-management>
                   </div>
                 }
-                
+
                 @case ('applications') {
                   <div class="applications-settings">
                     <mj-application-management></mj-application-management>
                   </div>
                 }
-                
+
                 @case ('permissions') {
                   <div class="permissions-settings">
                     <mj-entity-permissions></mj-entity-permissions>
                   </div>
                 }
-                
+
                 @case ('advanced') {
                   <div class="advanced-settings">
                     <h2 class="section-title">Advanced Settings</h2>
                     <div class="beta-warning">
-                      <i class="fa-solid fa-flask"></i>
+                      <i class="fa-solid fa-flask" aria-hidden="true"></i>
                       <span>Beta features - Use with caution</span>
                     </div>
-                    
+
                     <!-- Tab Navigation -->
-                    <div class="advanced-tabs">
-                      <button 
+                    <div class="advanced-tabs" role="tablist" aria-label="Advanced settings tabs">
+                      <button
                         class="tab-btn"
                         [class.active]="advancedActiveTab === 'sql-logging'"
                         (click)="setAdvancedTab('sql-logging')"
+                        role="tab"
+                        [attr.aria-selected]="advancedActiveTab === 'sql-logging'"
+                        aria-controls="panel-sql-logging"
                       >
-                        <i class="fa-solid fa-database"></i>
+                        <i class="fa-solid fa-database" aria-hidden="true"></i>
                         SQL Logging
                       </button>
-                      <button 
+                      <button
                         class="tab-btn"
                         [class.active]="advancedActiveTab === 'performance'"
                         (click)="setAdvancedTab('performance')"
+                        role="tab"
+                        [attr.aria-selected]="advancedActiveTab === 'performance'"
+                        aria-controls="panel-performance"
                       >
-                        <i class="fa-solid fa-gauge-high"></i>
+                        <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
                         Performance
                       </button>
-                      <button 
+                      <button
                         class="tab-btn"
                         [class.active]="advancedActiveTab === 'developer'"
                         (click)="setAdvancedTab('developer')"
+                        role="tab"
+                        [attr.aria-selected]="advancedActiveTab === 'developer'"
+                        aria-controls="panel-developer"
                       >
-                        <i class="fa-solid fa-code"></i>
+                        <i class="fa-solid fa-code" aria-hidden="true"></i>
                         Developer Tools
                       </button>
                     </div>
-                    
+
                     <!-- Tab Content -->
                     <div class="advanced-tab-content">
                       @switch (advancedActiveTab) {
                         @case ('sql-logging') {
-                          <mj-sql-logging></mj-sql-logging>
+                          <div id="panel-sql-logging" role="tabpanel">
+                            <mj-sql-logging></mj-sql-logging>
+                          </div>
                         }
                         @case ('performance') {
-                          <div class="performance-settings">
+                          <div id="panel-performance" role="tabpanel" class="performance-settings">
                             <h3>Performance Settings</h3>
                             <p>Performance monitoring and optimization tools coming soon.</p>
                           </div>
                         }
                         @case ('developer') {
-                          <div class="developer-settings">
+                          <div id="panel-developer" role="tabpanel" class="developer-settings">
                             <h3>Developer Tools</h3>
                             <p>Advanced developer options coming soon.</p>
                           </div>
@@ -233,15 +297,18 @@
           </div>
 
           <!-- Mobile Bottom Navigation -->
-          <nav class="mobile-navigation">
-            <div class="nav-tabs">
+          <nav class="mobile-navigation" role="navigation" aria-label="Settings navigation">
+            <div class="nav-tabs" role="tablist">
               @for (tab of tabs.slice(0, 5); track tab.id) {
-                <button 
+                <button
                   class="nav-tab"
                   [class.active]="activeTab === tab.id"
                   (click)="onTabChange(tab.id)"
+                  role="tab"
+                  [attr.aria-selected]="activeTab === tab.id"
+                  [attr.aria-label]="tab.label"
                 >
-                  <i [class]="tab.icon"></i>
+                  <i [class]="tab.icon" aria-hidden="true"></i>
                   @if (tab.badgeCount && tab.badgeCount > 0) {
                     <span class="tab-badge" [class]="'badge-' + (tab.badgeColor || 'primary')">
                       {{ tab.badgeCount }}
@@ -251,8 +318,8 @@
                 </button>
               }
               @if (tabs.length > 5) {
-                <button class="nav-tab more-tab">
-                  <i class="fa-solid fa-ellipsis"></i>
+                <button class="nav-tab more-tab" aria-label="More options">
+                  <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
                   <span class="tab-label">More</span>
                 </button>
               }
