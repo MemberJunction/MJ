@@ -1,3 +1,16 @@
+/**
+ * @fileoverview Configuration loader for the MemberJunction MCP Server.
+ *
+ * Loads configuration from:
+ * 1. Environment variables (.env file via dotenv)
+ * 2. Configuration file (mj.config.cjs via cosmiconfig)
+ * 3. Default server configuration as fallback
+ *
+ * Configuration is validated using Zod schemas to ensure type safety.
+ *
+ * @module @memberjunction/ai-mcp-server/config
+ */
+
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -90,6 +103,17 @@ export const {
   dbReadOnlyPassword,
 } = configInfo;
 
+/**
+ * Loads and validates the MCP server configuration.
+ *
+ * Configuration loading order:
+ * 1. Searches for mj.config.cjs in the current directory and parent directories
+ * 2. Merges found configuration with DEFAULT_SERVER_CONFIG
+ * 3. Validates the merged configuration using Zod schema
+ *
+ * @returns Validated configuration object
+ * @throws Error if configuration validation fails
+ */
 export function loadConfig(): ConfigInfo {
   const configSearchResult = explorer.search(process.cwd());
 

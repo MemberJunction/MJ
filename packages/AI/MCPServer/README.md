@@ -311,11 +311,15 @@ The MCP Server uses API key authentication to secure access. All requests must i
 
 ### Authentication Overview
 
-- **Authentication Method**: API Key via HTTP headers
-- **Supported Headers**: `x-api-key` or `x-mj-api-key`
-- **Key Format**: `mj_sk_` prefix followed by 32 random characters (e.g., `mj_sk_YOUR_API_KEY_HERE`)
+- **Authentication Method**: API Key via HTTP headers or Bearer token
+- **Supported Headers**:
+  - `x-api-key` - Primary header
+  - `x-mj-api-key` - Alternative header
+  - `Authorization: Bearer <key>` - OAuth-style Bearer token
+- **Query Parameter Fallback**: `?apiKey=<key>` or `?api_key=<key>`
+- **Key Format**: `mj_sk_` prefix followed by 64 hex characters (e.g., `mj_sk_abc123...`)
 - **Storage**: Keys are stored as SHA-256 hashes in the database for security
-- **User Context**: Each API key is associated with a MemberJunction user account
+- **User Context**: Each API key is associated with a MemberJunction user account - all tool operations execute with that user's permissions
 
 ### Creating API Keys
 
@@ -419,13 +423,20 @@ The API Key system uses four tables:
 #### With HTTP Headers
 
 ```bash
-# Using x-api-key header
+# Using x-api-key header (recommended)
 curl -H "x-api-key: mj_sk_YOUR_API_KEY_HERE" \
   http://localhost:3100/mcp
 
 # Using x-mj-api-key header (alternative)
 curl -H "x-mj-api-key: mj_sk_YOUR_API_KEY_HERE" \
   http://localhost:3100/mcp
+
+# Using Authorization Bearer token (OAuth-style)
+curl -H "Authorization: Bearer mj_sk_YOUR_API_KEY_HERE" \
+  http://localhost:3100/mcp
+
+# Using query parameter (useful for SSE connections)
+curl "http://localhost:3100/mcp?apiKey=mj_sk_YOUR_API_KEY_HERE"
 ```
 
 #### With MCP Clients
@@ -525,27 +536,34 @@ WHERE UserID = 'your-user-id';
 
 ### Authentication Flow
 
-1. Client sends request with `x-api-key` header
-2. Server validates key format (must start with `mj_sk_`)
-3. Server hashes the key and looks up in database
-4. Server checks:
+1. Client sends request with API key via header, Bearer token, or query parameter
+2. Server extracts API key from (in order of priority):
+   - `x-api-key` header
+   - `x-mj-api-key` header
+   - `Authorization: Bearer <key>` header
+   - `apiKey` or `api_key` query parameter
+3. Server validates key format (must match `mj_sk_[64 hex chars]`)
+4. Server hashes the key (SHA-256) and looks up in CredentialEngine cache
+5. Server checks:
    - Key exists and hash matches
    - Status is `Active`
    - Not expired (ExpiresAt is NULL or in future)
    - Associated user account is active
-5. Server loads the user context from UserCache
-6. Server updates `LastUsedAt` timestamp (async, non-blocking)
-7. Request proceeds with authenticated user context
+6. Server loads the full user from the database using the key's UserID
+7. Server updates `LastUsedAt` timestamp and logs usage
+8. Session is created with the authenticated user context
+9. All tool executions use this user's permissions
 
 ### Troubleshooting Authentication
 
 **"API key required"**
-- Ensure you're including the `x-api-key` or `x-mj-api-key` header
+- Ensure you're including the `x-api-key`, `x-mj-api-key`, or `Authorization: Bearer` header
 - Check that the header value is not empty
+- Try using the query parameter: `?apiKey=mj_sk_...`
 
 **"Invalid API key format"**
 - Key must start with `mj_sk_` prefix
-- Key must be exactly 37 characters total
+- Key must be exactly 70 characters total (`mj_sk_` + 64 hex chars)
 
 **"API key not found"**
 - The key hash doesn't match any record in the database

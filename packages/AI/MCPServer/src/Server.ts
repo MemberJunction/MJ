@@ -1,4 +1,19 @@
-import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
+/**
+ * @fileoverview MemberJunction MCP Server
+ *
+ * This module implements a Model Context Protocol (MCP) server that exposes MemberJunction
+ * entities, agents, and actions as tools that can be consumed by AI models and other MCP clients.
+ *
+ * Key features:
+ * - API key authentication with user context
+ * - Dynamic tool generation from entity metadata
+ * - Agent discovery and execution
+ * - Configurable tool filtering
+ *
+ * @module @memberjunction/ai-mcp-server
+ */
+
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { FastMCP } from "fastmcp";
 import sql from "mssql";
@@ -14,46 +29,202 @@ import { CredentialEngine } from "@memberjunction/credentials";
 import { validateAPIKey } from "@memberjunction/encryption";
 import * as http from 'http';
 
-// Tool filtering types
+/*******************************************************************************
+ * TYPES AND INTERFACES
+ ******************************************************************************/
+
+/**
+ * Options for filtering which tools are exposed by the MCP server.
+ * Supports glob-style patterns for flexible tool selection.
+ */
 export interface ToolFilterOptions {
+    /** Patterns that tools must match to be included (supports wildcards: *, prefix*, *suffix, *contains*) */
     includePatterns?: string[];
+    /** Patterns that exclude matching tools (supports wildcards: *, prefix*, *suffix, *contains*) */
     excludePatterns?: string[];
 }
 
-// Track registered tool names for listing and filtering
-const registeredToolNames: string[] = [];
-let activeFilterOptions: ToolFilterOptions = {};
-
-
-const mcpServerPort = mcpServerSettings?.port || 3100;
-
-// Prepare mssql configuration
-const poolConfig: sql.config = {
-    server: dbHost,
-    port: dbPort,
-    user: dbUsername,
-    password: dbPassword,
-    database: dbDatabase,
-    requestTimeout: configInfo.databaseSettings.requestTimeout,
-    connectionTimeout: configInfo.databaseSettings.connectionTimeout,
-    options: {
-        encrypt: true,
-        enableArithAbort: true,
-        trustServerCertificate: dbTrustServerCertificate === 'Y'
-    },
-};
-
-if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
-    poolConfig.options!.instanceName = dbInstanceName;
+/**
+ * Session context stored for each authenticated MCP connection.
+ * Contains the API key information and the authenticated user.
+ * Extends Record<string, unknown> to satisfy FastMCP's generic constraint.
+ */
+interface MCPSessionContext extends Record<string, unknown> {
+    /** The raw API key used for authentication */
+    apiKey: string;
+    /** The database ID of the API key record */
+    apiKeyId: string;
+    /** The MemberJunction user associated with the API key */
+    user: UserInfo;
 }
 
-// Create FastMCP server instance with API key authentication
-// Note: authenticate callback will be set in initializeServer after pool is created
-let server: FastMCP<{ apiKey: string; apiKeyId: string; user: UserInfo }>;
+/*******************************************************************************
+ * MODULE STATE
+ ******************************************************************************/
+
+/** Registry of all tool names (used for --list-tools CLI option) */
+const registeredToolNames: string[] = [];
+
+/** Currently active filter options for tool registration */
+let activeFilterOptions: ToolFilterOptions = {};
+
+/** MCP server port from configuration or default */
+const mcpServerPort = mcpServerSettings?.port || 3100;
+
+/** FastMCP server instance - initialized in initializeServer() */
+let server: FastMCP<MCPSessionContext>;
+
+/*******************************************************************************
+ * DATABASE CONFIGURATION
+ ******************************************************************************/
 
 /**
- * Check if a tool name matches a glob-style pattern
- * Supports: * (match all), prefix*, *suffix, *contains*
+ * Builds the SQL Server connection pool configuration from environment/config settings.
+ * @returns The mssql connection pool configuration object
+ */
+function buildPoolConfig(): sql.config {
+    const config: sql.config = {
+        server: dbHost,
+        port: dbPort,
+        user: dbUsername,
+        password: dbPassword,
+        database: dbDatabase,
+        requestTimeout: configInfo.databaseSettings.requestTimeout,
+        connectionTimeout: configInfo.databaseSettings.connectionTimeout,
+        options: {
+            encrypt: true,
+            enableArithAbort: true,
+            trustServerCertificate: dbTrustServerCertificate === 'Y'
+        },
+    };
+
+    if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
+        config.options!.instanceName = dbInstanceName;
+    }
+
+    return config;
+}
+
+/*******************************************************************************
+ * AUTHENTICATION
+ ******************************************************************************/
+
+/**
+ * Extracts an API key from an incoming HTTP request.
+ * Checks multiple sources in order of preference:
+ * 1. x-api-key header
+ * 2. x-mj-api-key header
+ * 3. Authorization: Bearer <token> header
+ * 4. URL query parameter (apiKey or api_key)
+ *
+ * @param request - The incoming HTTP request
+ * @returns The extracted API key string, or null if not found
+ */
+function extractAPIKeyFromRequest(request: http.IncomingMessage): string | null {
+    // Check dedicated API key headers first
+    let apiKey = request.headers['x-api-key'] as string
+        || request.headers['x-mj-api-key'] as string;
+
+    // Check Authorization header (Bearer token format)
+    if (!apiKey && request.headers['authorization']) {
+        const authHeader = request.headers['authorization'] as string;
+        if (authHeader.startsWith('Bearer ')) {
+            apiKey = authHeader.substring(7); // Remove "Bearer " prefix
+        }
+    }
+
+    // Check URL query parameters as fallback
+    if (!apiKey && request.url) {
+        const url = new URL(request.url, `http://${request.headers.host}`);
+        const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
+        if (queryKey) {
+            apiKey = queryKey;
+        }
+    }
+
+    return apiKey || null;
+}
+
+/**
+ * Authenticates an incoming MCP request using API key authentication.
+ * This function is called by FastMCP for each incoming connection.
+ *
+ * Authentication flow:
+ * 1. Extract API key from request headers/query params
+ * 2. If no key but systemApiKey is configured, use system user (dev mode)
+ * 3. Validate the API key against the database
+ * 4. Return the session context with the authenticated user
+ *
+ * @param request - The incoming HTTP request from the MCP client
+ * @returns Promise resolving to the session context with authenticated user
+ * @throws Error if authentication fails (invalid/missing key, inactive user, etc.)
+ */
+async function authenticateRequest(request: http.IncomingMessage): Promise<MCPSessionContext> {
+    const apiKey = extractAPIKeyFromRequest(request);
+
+    console.log(`[Auth] API key found: ${apiKey ? 'yes' : 'no'}`);
+
+    // Backward compatibility: if no API key but systemApiKey configured, use system user
+    if (!apiKey && mcpServerSettings?.systemApiKey) {
+        const systemUser = UserCache.Instance.GetSystemUser();
+        if (!systemUser) {
+            throw new Error('System user not found in UserCache');
+        }
+        console.log(`Authenticated via system API key for user: ${systemUser?.Email}`);
+        return { apiKey: 'system', apiKeyId: 'system', user: systemUser };
+    }
+
+    if (!apiKey) {
+        throw new Error('API key required. Provide via x-api-key header.');
+    }
+
+    console.log(`[Auth] Validating API key...`);
+    try {
+        // Use system user as context for the validation query itself
+        const systemUser = UserCache.Instance.GetSystemUser();
+        if (!systemUser) {
+            throw new Error('System user not found in UserCache for API key validation');
+        }
+
+        const validation = await validateAPIKey(apiKey, systemUser);
+
+        console.log(`[Auth] Validation result: isValid=${validation.isValid}, user=${validation.user?.Email}`);
+
+        if (!validation.isValid) {
+            console.error(`[Auth] Validation failed: ${validation.error}`);
+            throw new Error(validation.error || 'Invalid API key');
+        }
+
+        console.log(`✅ Authenticated via API key for user: ${validation.user?.Email}`);
+        return { apiKey, apiKeyId: validation.apiKeyId!, user: validation.user! };
+    } catch (error) {
+        console.error(`[Auth] Exception during validation:`, error);
+        throw error;
+    }
+}
+
+/*******************************************************************************
+ * TOOL FILTERING
+ ******************************************************************************/
+
+/**
+ * Checks if a tool name matches a glob-style pattern.
+ *
+ * Supported patterns:
+ * - `*` - Matches all tools
+ * - `prefix*` - Matches tools starting with "prefix"
+ * - `*suffix` - Matches tools ending with "suffix"
+ * - `*contains*` - Matches tools containing "contains"
+ * - `exact` - Exact match (case-insensitive)
+ *
+ * @param toolName - The tool name to test
+ * @param pattern - The glob-style pattern to match against
+ * @returns True if the tool name matches the pattern
+ *
+ * @example
+ * matchesPattern("Get_Users_Record", "Get_*") // true
+ * matchesPattern("Get_Users_Record", "*_Record") // true
+ * matchesPattern("Get_Users_Record", "*Users*") // true
  */
 function matchesPattern(toolName: string, pattern: string): boolean {
     const lowerName = toolName.toLowerCase();
@@ -85,7 +256,16 @@ function matchesPattern(toolName: string, pattern: string): boolean {
 }
 
 /**
- * Check if a tool should be included based on filter options
+ * Determines if a tool should be included based on the current filter options.
+ *
+ * Filter logic:
+ * 1. If includePatterns are specified, tool must match at least one pattern
+ * 2. If excludePatterns are specified, tool must not match any pattern
+ * 3. If no patterns are specified, all tools are included
+ *
+ * @param toolName - The name of the tool to check
+ * @param filterOptions - The filter configuration with include/exclude patterns
+ * @returns True if the tool should be included, false if it should be filtered out
  */
 function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): boolean {
     const { includePatterns, excludePatterns } = filterOptions;
@@ -110,7 +290,13 @@ function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): 
 }
 
 /**
- * Wrapper to add a tool with filtering support
+ * Registers a tool with the MCP server, applying the active filter options.
+ *
+ * This wrapper:
+ * 1. Always adds the tool name to registeredToolNames for --list-tools
+ * 2. Only registers the tool with the server if it passes the active filters
+ *
+ * @param toolConfig - The FastMCP tool configuration object
  */
 function addToolWithFilter(toolConfig: Parameters<typeof server.addTool>[0]): void {
     const toolName = toolConfig.name;
@@ -127,8 +313,19 @@ function addToolWithFilter(toolConfig: Parameters<typeof server.addTool>[0]): vo
 }
 
 /**
- * Smart text truncation that preserves beginning and end of content
- * Used for large input/output data in agent run diagnostics
+ * Performs smart text truncation that preserves both the beginning and end of content.
+ * This is useful for debugging large I/O data where both the start and end are important.
+ *
+ * The truncation preserves 70% from the start and 30% from the end, with a clear
+ * indicator of how many characters were removed.
+ *
+ * @param text - The text to truncate (null/undefined returns empty string)
+ * @param maxChars - Maximum characters to keep (0 = no truncation)
+ * @returns Object with the truncated value and a flag indicating if truncation occurred
+ *
+ * @example
+ * truncateText("Hello World", 5) // { value: "Hel...[4 chars]...ld", truncated: true }
+ * truncateText("Hi", 100) // { value: "Hi", truncated: false }
  */
 function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
     if (!text) {
@@ -151,8 +348,38 @@ function truncateText(text: string | null | undefined, maxChars: number): { valu
     return { value: truncated, truncated: true };
 }
 
-// Initialize database and setup tools
-export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
+/*******************************************************************************
+ * SERVER INITIALIZATION
+ ******************************************************************************/
+
+/**
+ * Initializes and starts the MemberJunction MCP server.
+ *
+ * This function performs the following setup:
+ * 1. Establishes database connection using configured credentials
+ * 2. Sets up SQL Server client and MemberJunction metadata
+ * 3. Loads API keys into the CredentialEngine cache for fast validation
+ * 4. Registers all configured tools (entities, agents, actions)
+ * 5. Starts the FastMCP server with SSE transport
+ *
+ * The server uses API key authentication. Each authenticated request gets a session
+ * with the user context from the API key, which is used for all tool executions.
+ *
+ * @param filterOptions - Optional tool filtering configuration to limit which tools are exposed
+ * @throws Error if MCP server is disabled in configuration or database connection fails
+ *
+ * @example
+ * // Start with all tools
+ * await initializeServer();
+ *
+ * @example
+ * // Start with filtered tools
+ * await initializeServer({
+ *   includePatterns: ['Get_*', 'Run_Agent'],
+ *   excludePatterns: ['*_AuditLog_*']
+ * });
+ */
+export async function initializeServer(filterOptions: ToolFilterOptions = {}): Promise<void> {
     try {
         // Store filter options for use by addToolWithFilter
         activeFilterOptions = filterOptions;
@@ -163,88 +390,38 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
         if (!mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
             throw new Error("MCP Server is disabled in the configuration.");
-       }
+        }
+
         // Initialize database connection
+        const poolConfig = buildPoolConfig();
         const pool = new sql.ConnectionPool(poolConfig);
         await pool.connect();
 
-        // Create FastMCP server with authentication
-        server = new FastMCP<{ apiKey: string; apiKeyId: string; user: UserInfo }>({
+        // Create FastMCP server with API key authentication
+        server = new FastMCP<MCPSessionContext>({
             name: "MemberJunction",
             version: "1.0.0",
-            authenticate: async (request: http.IncomingMessage) => {
-                // Try to extract API key from multiple sources
-                let apiKey = request.headers['x-api-key'] as string
-                    || request.headers['x-mj-api-key'] as string;
-
-                // Also check Authorization header (Bearer token format)
-                if (!apiKey && request.headers['authorization']) {
-                    const authHeader = request.headers['authorization'] as string;
-                    if (authHeader.startsWith('Bearer ')) {
-                        apiKey = authHeader.substring(7); // Remove "Bearer " prefix
-                    }
-                }
-
-                // Check URL query parameters as fallback
-                if (!apiKey && request.url) {
-                    const url = new URL(request.url, `http://${request.headers.host}`);
-                    const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
-                    if (queryKey) {
-                        apiKey = queryKey;
-                    }
-                }
-
-                console.log(`[Auth] API key found: ${apiKey ? 'yes' : 'no'}`);
-
-                // Backward compatibility: if no API key header but systemApiKey configured, use system user
-                if (!apiKey && mcpServerSettings?.systemApiKey) {
-                    const systemUser = UserCache.Instance.GetSystemUser();
-                    if (!systemUser) {
-                        throw new Error('System user not found in UserCache');
-                    }
-                    console.log(`Authenticated via system API key for user: ${systemUser?.Email}`);
-                    return { apiKey: 'system', apiKeyId: 'system', user: systemUser };
-                }
-
-                if (!apiKey) {
-                    throw new Error('API key required. Provide via x-api-key header.');
-                }
-
-                console.log(`[Auth] Validating API key...`);
-                try {
-                    const systemUser = UserCache.Instance.Users[0];
-                    const validation = await validateAPIKey(apiKey, systemUser);
-
-                    console.log(`[Auth] Validation result: isValid=${validation.isValid}, user=${validation.user?.Email}`);
-
-                    if (!validation.isValid) {
-                        console.error(`[Auth] Validation failed: ${validation.error}`);
-                        throw new Error(validation.error || 'Invalid API key');
-                    }
-
-                    console.log(`✅ Authenticated via API key for user: ${validation.user?.Email}`);
-                    return { apiKey, apiKeyId: validation.apiKeyId!, user: validation.user! };
-                } catch (error) {
-                    console.error(`[Auth] Exception during validation:`, error);
-                    throw error;
-                }
-            }
+            authenticate: authenticateRequest
         });
 
-        
         // Setup SQL Server client
-        const config = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
-        await setupSQLServerClient(config);
+        const sqlConfig = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
+        await setupSQLServerClient(sqlConfig);
         console.log("Database connection setup completed.");
 
-        const contextUser = UserCache.Instance.Users[0];
+        // Use system user for server initialization tasks (loading credentials, discovering agents)
+        // Note: Individual tool executions use the authenticated session user, not this system user
+        const systemUser = UserCache.Instance.GetSystemUser();
+        if (!systemUser) {
+            throw new Error('System user not found in UserCache - required for server initialization');
+        }
 
         // Load API keys into cache for fast validation
         console.log('Loading credentials and API keys into cache...');
-        await CredentialEngine.Instance.Config(false, contextUser);
+        await CredentialEngine.Instance.Config(false, systemUser);
         console.log(`API keys loaded successfully. Count: ${CredentialEngine.Instance.APIKeys.length}`);
 
-
+        // Register tools
         addToolWithFilter({
             name: "Get_All_Entities",
             description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
@@ -256,8 +433,8 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
             }
         });
         await loadEntityTools();
-        await loadActionTools(contextUser);
-        await loadAgentTools(contextUser);
+        await loadActionTools(systemUser);
+        await loadAgentTools(systemUser);
         loadAgentRunDiagnosticTools();
         console.log("Tools loaded successfully.");
 
@@ -280,21 +457,42 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
     }
 }
 
-async function loadActionTools(contextUser: UserInfo) {
-    // not yet supported but don't throw log error unless the config has action tools in it
+/*******************************************************************************
+ * TOOL LOADERS
+ ******************************************************************************/
+
+/**
+ * Loads action tools from configuration.
+ * Note: Action tools are not yet implemented - this function logs a warning if any are configured.
+ *
+ * @param _systemUser - System user for context (reserved for future use)
+ */
+async function loadActionTools(_systemUser: UserInfo): Promise<void> {
     const actionTools = mcpServerSettings?.actionTools;
     if (actionTools && actionTools.length > 0) {
         console.warn("Action tools are not yet supported");
     }
 }
 
-async function loadAgentTools(contextUser: UserInfo) {
+/**
+ * Loads and registers agent tools based on configuration.
+ *
+ * Creates the following tools based on configuration:
+ * - `Discover_Agents` - Lists available agents matching a pattern
+ * - `Run_Agent` - General tool to execute any agent by name/ID
+ * - `Execute_[AgentName]_Agent` - Specific tools for each configured agent
+ * - `Get_Agent_Run_Status` - Check status of agent executions
+ * - `Cancel_Agent_Run` - Cancel running agent executions
+ *
+ * @param systemUser - System user for context when discovering and configuring agents
+ */
+async function loadAgentTools(systemUser: UserInfo): Promise<void> {
     const agentTools = mcpServerSettings?.agentTools;
     
     if (agentTools && agentTools.length > 0) {
         // Ensure AIEngine is configured
         const aiEngine = AIEngine.Instance;
-        await aiEngine.Config(false, contextUser);
+        await aiEngine.Config(false, systemUser);
         
         // Add discovery tool if any agent tool has discover enabled
         const hasDiscovery = agentTools.some(tool => tool.discover);
@@ -420,7 +618,7 @@ async function loadAgentTools(contextUser: UserInfo) {
         // Process each agent tool configuration for specific agent tools
         for (const tool of agentTools) {
             const agentPattern = tool.agentName || "*";
-            const agents = await discoverAgents(agentPattern, contextUser);
+            const agents = await discoverAgents(agentPattern, systemUser);
             
             // Add tools for each matching agent
             for (const agent of agents) {
@@ -502,9 +700,18 @@ async function loadAgentTools(contextUser: UserInfo) {
 }
 
 /**
- * Load agent run diagnostic tools for debugging and auditing agent executions
+ * Registers diagnostic tools for debugging and auditing agent executions.
+ *
+ * Creates the following tools:
+ * - `List_Recent_Agent_Runs` - Query recent agent runs with filtering
+ * - `Get_Agent_Run_Summary` - Comprehensive summary with step metadata
+ * - `Get_Agent_Run_Step_Detail` - Detailed step info with truncated I/O
+ * - `Get_Agent_Run_Step_Full_Data` - Export complete step data to file
+ *
+ * These tools help users debug agent behavior, audit executions, and
+ * troubleshoot failures without needing direct database access.
  */
-function loadAgentRunDiagnosticTools() {
+function loadAgentRunDiagnosticTools(): void {
     // Tool 1: List Recent Agent Runs
     addToolWithFilter({
         name: "List_Recent_Agent_Runs",
@@ -754,12 +961,30 @@ function loadAgentRunDiagnosticTools() {
     });
 }
 
-async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<AIAgentEntityExtended[]> {
+/*******************************************************************************
+ * AGENT HELPERS
+ ******************************************************************************/
+
+/**
+ * Discovers AI agents matching a given name pattern.
+ *
+ * Pattern matching:
+ * - `*` - Returns all agents
+ * - `exact` - Exact name match (case-sensitive)
+ * - `prefix*` - Agents starting with prefix (case-insensitive)
+ * - `*suffix` - Agents ending with suffix (case-insensitive)
+ * - `*contains*` - Agents containing the text (case-insensitive)
+ *
+ * @param pattern - The name pattern to match (supports wildcards)
+ * @param userContext - Optional user context for AIEngine configuration
+ * @returns Array of matching agent entities
+ */
+async function discoverAgents(pattern: string, userContext?: UserInfo): Promise<AIAgentEntityExtended[]> {
     const aiEngine = AIEngine.Instance;
-    await aiEngine.Config(false, contextUser);
-    
+    await aiEngine.Config(false, userContext);
+
     const allAgents = aiEngine.Agents;
-    
+
     if (pattern === '*') {
         return allAgents;
     }
@@ -774,12 +999,22 @@ async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<
     const regexPattern = pattern
         .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars except *
         .replace(/\*/g, '.*'); // Convert * to .*
-    
+
     const regex = new RegExp(`^${regexPattern}$`, 'i');
     return allAgents.filter(a => a.Name && regex.test(a.Name));
 }
 
-function addAgentExecuteTool(agent: AIAgentEntityExtended) {
+/**
+ * Creates and registers an execution tool for a specific AI agent.
+ *
+ * The generated tool allows MCP clients to execute the agent with:
+ * - Optional conversation history for context
+ * - Optional template data
+ * - Synchronous or asynchronous execution modes
+ *
+ * @param agent - The agent entity to create an execution tool for
+ */
+function addAgentExecuteTool(agent: AIAgentEntityExtended): void {
     const agentRunner = new AgentRunner();
 
     addToolWithFilter({
@@ -840,14 +1075,29 @@ function addAgentExecuteTool(agent: AIAgentEntityExtended) {
     });
 }
 
-async function loadEntityTools() {
-    // use the config metadata to load up the tools requested
+/*******************************************************************************
+ * ENTITY TOOLS
+ ******************************************************************************/
+
+/**
+ * Loads and registers entity tools based on configuration.
+ *
+ * For each configured entity tool pattern, creates tools for the specified operations:
+ * - Get: Retrieve a record by primary key
+ * - Create: Create a new record
+ * - Update: Update an existing record
+ * - Delete: Delete a record
+ * - RunView: Query records with filtering and sorting
+ *
+ * Entity matching supports wildcards in both entityName and schemaName.
+ */
+async function loadEntityTools(): Promise<void> {
     const entityTools = mcpServerSettings?.entityTools;
 
     if (entityTools && entityTools.length > 0) {
         const md = new Metadata();
 
-        // iterate through the tools and add them to the server
+        // Iterate through the tools and add them to the server
         entityTools.forEach((tool) => {
             const matchingEntities = getMatchingEntitiesForTool(md.Entities, tool);
             matchingEntities.forEach((entity) => {
@@ -871,7 +1121,13 @@ async function loadEntityTools() {
     }
 }
 
-function addEntityRunViewTool(entity: EntityInfo) {
+/**
+ * Creates a RunView tool for querying entity records.
+ * Allows filtering, sorting, and field selection.
+ *
+ * @param entity - The entity to create the tool for
+ */
+function addEntityRunViewTool(entity: EntityInfo): void {
     const paramObject = z.object({
         extraFilter: z.string().optional(),
         orderBy: z.string().optional(),
@@ -899,8 +1155,13 @@ function addEntityRunViewTool(entity: EntityInfo) {
     addToolWithFilter(toolConfig);
 }
 
-function addEntityCreateTool(entity: EntityInfo) {
-    // add a tool for getting records from the specified entity or wildcard
+/**
+ * Creates a tool for creating new records in an entity.
+ * Parameters are generated from the entity's non-readonly fields.
+ *
+ * @param entity - The entity to create the tool for
+ */
+function addEntityCreateTool(entity: EntityInfo): void {
     const paramObject = getEntityParamObject(entity, true, false, false);
 
     const toolConfig = {
@@ -927,7 +1188,13 @@ function addEntityCreateTool(entity: EntityInfo) {
     addToolWithFilter(toolConfig);
 }
 
-function addEntityUpdateTool(entity: EntityInfo) {
+/**
+ * Creates a tool for updating existing records in an entity.
+ * Requires primary key fields to identify the record, plus optional fields to update.
+ *
+ * @param entity - The entity to create the tool for
+ */
+function addEntityUpdateTool(entity: EntityInfo): void {
     const paramObject = getEntityParamObject(entity, true, true, true);
 
     const toolConfig = {
@@ -968,7 +1235,13 @@ function addEntityUpdateTool(entity: EntityInfo) {
     addToolWithFilter(toolConfig);
 }
 
-function addEntityDeleteTool(entity: EntityInfo) {
+/**
+ * Creates a tool for deleting records from an entity.
+ * Only requires the primary key field(s) to identify the record.
+ *
+ * @param entity - The entity to create the tool for
+ */
+function addEntityDeleteTool(entity: EntityInfo): void {
     const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
     const toolConfig = {
         name: `Delete_${entity.ClassName}_Record`,
@@ -1004,7 +1277,17 @@ function addEntityDeleteTool(entity: EntityInfo) {
 }
 
 
-async function convertEntityObjectToJSON(record: BaseEntity) {
+/*******************************************************************************
+ * ENTITY HELPER FUNCTIONS
+ ******************************************************************************/
+
+/**
+ * Converts a BaseEntity object to a JSON representation suitable for API responses.
+ *
+ * @param record - The entity record to convert
+ * @returns JSON string representation of the entity data
+ */
+async function convertEntityObjectToJSON(record: BaseEntity): Promise<string> {
     const output = await record.GetDataObjectJSON({
         includeRelatedEntityData: false,
         oldValues: false,
@@ -1016,9 +1299,22 @@ async function convertEntityObjectToJSON(record: BaseEntity) {
     return output;
 }
 
-function getEntityParamObject(entity: EntityInfo, excludeReadOnlyFields: boolean, includePrimaryKeys: boolean, nonPKeysOptional: boolean) {
-    const paramObject: { [key: string]: any } = {};
-    // add the updateable fields as arguments
+/**
+ * Builds a Zod parameter object for entity CRUD operations.
+ *
+ * @param entity - The entity to build parameters for
+ * @param excludeReadOnlyFields - If true, excludes read-only fields from the schema
+ * @param includePrimaryKeys - If true, includes primary key fields
+ * @param nonPKeysOptional - If true, makes non-primary-key fields optional
+ * @returns Object with Zod schemas for each included field
+ */
+function getEntityParamObject(
+    entity: EntityInfo,
+    excludeReadOnlyFields: boolean,
+    includePrimaryKeys: boolean,
+    nonPKeysOptional: boolean
+): Record<string, z.ZodTypeAny> {
+    const paramObject: Record<string, z.ZodTypeAny> = {};
 
     entity.Fields.filter(f => {
         if (f.IsPrimaryKey && includePrimaryKeys) {
@@ -1029,16 +1325,29 @@ function getEntityParamObject(entity: EntityInfo, excludeReadOnlyFields: boolean
         }
         else {
             return true;
-        } 
-
+        }
     }).forEach((f) => {
         addSingleParamToObject(paramObject, f, f.IsPrimaryKey ? false : nonPKeysOptional);
-    })
+    });
+
     return paramObject;
 }
 
-function addSingleParamToObject(theObject: any, field: EntityFieldInfo, optional: boolean){
-    let newParam: any;
+/**
+ * Adds a single field as a Zod parameter to the parameter object.
+ * Handles type mapping from MemberJunction types to Zod schemas,
+ * including support for value lists (enums).
+ *
+ * @param theObject - The parameter object to add the field to
+ * @param field - The entity field info
+ * @param optional - If true, makes the parameter optional
+ */
+function addSingleParamToObject(
+    theObject: Record<string, z.ZodTypeAny>,
+    field: EntityFieldInfo,
+    optional: boolean
+): void {
+    let newParam: z.ZodTypeAny;
     switch (field.TSType) {
         case 'Date':
             newParam = z.date();
@@ -1050,24 +1359,24 @@ function addSingleParamToObject(theObject: any, field: EntityFieldInfo, optional
             newParam = z.number();
             break;
         case 'string':
-            // for strings, check to see if we have a list of entity field values and if so, create an enum otherwise just a regular string
+        default:
+            // For strings, check if we have a value list and create an enum
             if (field.ValueListTypeEnum === 'None' || field.EntityFieldValues.length === 0) {
                 newParam = z.string();
             }
             else {
-                // we have either a list only, or list + user input scenario so set that up for zod
-                const enumList = field.EntityFieldValues.map((v) => {
-                    return v.Value;
-                });
+                const enumList = field.EntityFieldValues.map((v) => v.Value);
                 if (field.ValueListTypeEnum === 'List') {
                     newParam = z.enum(enumList as [string, ...string[]]);
                 }
                 else {
+                    // List + user input: allow enum values or any string
                     newParam = z.union([z.enum(enumList as [string, ...string[]]), z.string()]);
-                }    
+                }
             }
             break;
     }
+
     if (optional) {
         theObject[field.Name] = newParam.optional();
     }
@@ -1076,53 +1385,82 @@ function addSingleParamToObject(theObject: any, field: EntityFieldInfo, optional
     }
 }
 
-function getEntityPrimaryKeyParamsObject(entity: EntityInfo) {
-    // add a tool for getting records from the specified entity or wildcard
-    const paramObject: { [key: string]: any } = {};
-    // add the primary keys as arguments
+/**
+ * Builds a Zod parameter object containing only the primary key fields for an entity.
+ * Used for Get and Delete operations that only need to identify the record.
+ *
+ * @param entity - The entity to build primary key parameters for
+ * @returns Object with Zod schemas for each primary key field
+ */
+function getEntityPrimaryKeyParamsObject(entity: EntityInfo): Record<string, z.ZodTypeAny> {
+    const paramObject: Record<string, z.ZodTypeAny> = {};
     entity.PrimaryKeys.forEach((pk) => {
-        addSingleParamToObject(paramObject, pk, false); 
-    })
+        addSingleParamToObject(paramObject, pk, false);
+    });
     return paramObject;
 }
 
-function addEntityGetTool(entity: EntityInfo) {
+/**
+ * Creates a tool for retrieving a single record from an entity by primary key.
+ *
+ * @param entity - The entity to create the tool for
+ */
+function addEntityGetTool(entity: EntityInfo): void {
     const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
 
     const toolConfig = {
         name: `Get_${entity.ClassName}_Record`,
         description: `Retrieves the specified record from the ${entity.Name} entity`,
         parameters: z.object(pkeyParams),
-        async execute (props: any, context: any) {
-            const sessionUser = context.session?.user;
+        async execute (props: unknown, context: unknown) {
+            const ctx = context as { session?: MCPSessionContext };
+            const sessionUser = ctx.session?.user;
             if (!sessionUser) {
                 return JSON.stringify({ error: "No authenticated user in session" });
             }
+            const p = props as Record<string, unknown>;
             const md = new Metadata();
             const record = await md.GetEntityObject(entity.Name, sessionUser);
             await record.InnerLoad(new CompositeKey(
-                // use the primary keys to load the record
-                entity.PrimaryKeys.map((pk) => {
-                    return {
-                        FieldName: pk.Name,
-                        Value: props[pk.Name]
-                    };
-                })
+                entity.PrimaryKeys.map((pk) => ({
+                    FieldName: pk.Name,
+                    Value: p[pk.Name]
+                }))
             ));
             return await convertEntityObjectToJSON(record);
         }
     };
     addToolWithFilter(toolConfig);
 }
-function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: {
+
+/**
+ * Configuration interface for entity tool matching.
+ */
+interface EntityToolConfig {
     get: boolean;
     create: boolean;
     update: boolean;
     delete: boolean;
     runView: boolean;
-    entityName?: string | undefined;
-    schemaName?: string | undefined;
-}) {
+    entityName?: string;
+    schemaName?: string;
+}
+
+/**
+ * Filters entities based on tool configuration patterns.
+ *
+ * Supports wildcard matching for both entityName and schemaName:
+ * - `*` - Matches all
+ * - `prefix*` - Matches names starting with prefix
+ * - `*suffix` - Matches names ending with suffix
+ * - `*contains*` - Matches names containing the text
+ * - `exact` - Exact match (case-insensitive)
+ *
+ * @param allEntities - Array of all available entities
+ * @param tool - Tool configuration with entity/schema patterns
+ * @returns Array of entities matching the patterns
+ */
+function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: EntityToolConfig): EntityInfo[] {
     const matchingEntities = allEntities.filter((entity) => {
         const entityName = entity.Name;
         const schemaName = entity.SchemaName;
@@ -1173,11 +1511,31 @@ function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: {
     return matchingEntities;
 }
 
+/*******************************************************************************
+ * CLI UTILITIES
+ ******************************************************************************/
+
 /**
- * List all available tools without starting the server
- * This connects to the database to discover dynamic tools
+ * Lists all available tools without starting the server.
+ *
+ * This function is used by the `--list-tools` CLI option to display what tools
+ * would be available based on the current configuration. It connects to the
+ * database to discover dynamic tools (entities, agents) but does not start
+ * the MCP server.
+ *
+ * Output is grouped by tool prefix and sorted alphabetically.
+ *
+ * @param filterOptions - Optional filter patterns to show a subset of tools
+ *
+ * @example
+ * // List all tools
+ * await listAvailableTools();
+ *
+ * @example
+ * // List only Get_* tools
+ * await listAvailableTools({ includePatterns: ['Get_*'] });
  */
-export async function listAvailableTools(filterOptions: ToolFilterOptions = {}) {
+export async function listAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
     try {
         if (!mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
@@ -1189,11 +1547,12 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}) 
         registeredToolNames.length = 0;
 
         // Initialize database connection to discover dynamic tools
+        const poolConfig = buildPoolConfig();
         const pool = new sql.ConnectionPool(poolConfig);
         await pool.connect();
 
-        const config = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
-        await setupSQLServerClient(config);
+        const sqlConfig = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
+        await setupSQLServerClient(sqlConfig);
 
         // Register all tools (they won't actually be added to server, just tracked)
         // We need to use a dummy filter that includes everything for listing
@@ -1209,11 +1568,15 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}) 
         registeredToolNames.push("Get_Agent_Run_Step_Detail");
         registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
 
-        const contextUser = UserCache.Instance.Users[0];
+        // Use system user for tool discovery
+        const systemUser = UserCache.Instance.GetSystemUser();
+        if (!systemUser) {
+            throw new Error('System user not found in UserCache');
+        }
 
         // Load tools to populate registeredToolNames
-        await loadEntityToolsForListing(contextUser);
-        await loadAgentToolsForListing(contextUser);
+        await loadEntityToolsForListing(systemUser);
+        await loadAgentToolsForListing(systemUser);
 
         // Close database connection
         await pool.close();
@@ -1264,9 +1627,12 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}) 
 }
 
 /**
- * Helper to load entity tools for listing (just collects names)
+ * Populates the registeredToolNames array with entity tool names for the --list-tools CLI option.
+ * Does not actually register the tools with the server, just collects their names.
+ *
+ * @param _systemUser - System user for context (unused in this function but kept for API consistency)
  */
-async function loadEntityToolsForListing(contextUser: UserInfo) {
+async function loadEntityToolsForListing(_systemUser: UserInfo): Promise<void> {
     const entityTools = mcpServerSettings?.entityTools;
 
     if (entityTools && entityTools.length > 0) {
@@ -1296,14 +1662,17 @@ async function loadEntityToolsForListing(contextUser: UserInfo) {
 }
 
 /**
- * Helper to load agent tools for listing (just collects names)
+ * Populates the registeredToolNames array with agent tool names for the --list-tools CLI option.
+ * Does not actually register the tools with the server, just collects their names.
+ *
+ * @param systemUser - System user for context when discovering agents
  */
-async function loadAgentToolsForListing(contextUser: UserInfo) {
+async function loadAgentToolsForListing(systemUser: UserInfo): Promise<void> {
     const agentTools = mcpServerSettings?.agentTools;
 
     if (agentTools && agentTools.length > 0) {
         const aiEngine = AIEngine.Instance;
-        await aiEngine.Config(false, contextUser);
+        await aiEngine.Config(false, systemUser);
 
         const hasDiscovery = agentTools.some(tool => tool.discover);
         if (hasDiscovery) {
@@ -1318,7 +1687,7 @@ async function loadAgentToolsForListing(contextUser: UserInfo) {
         // Add specific agent execution tools
         for (const tool of agentTools) {
             const agentPattern = tool.agentName || "*";
-            const agents = await discoverAgents(agentPattern, contextUser);
+            const agents = await discoverAgents(agentPattern, systemUser);
 
             for (const agent of agents) {
                 if (tool.execute) {
