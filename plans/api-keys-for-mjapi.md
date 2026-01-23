@@ -179,22 +179,51 @@ The `apiKeyId` field allows:
 
 #### 2. Update getUserPayload() (`context.ts`)
 
-The function now accepts separate parameters for each API key type:
+The function now accepts separate parameters for each API key type, plus request context for logging:
 
 ```typescript
+/**
+ * Request context for API key usage logging.
+ */
+export interface RequestContext {
+  /** The API endpoint path (e.g., '/graphql', '/mcp') */
+  endpoint: string;
+  /** HTTP method (e.g., 'POST', 'GET') */
+  method: string;
+  /** GraphQL operation name if available */
+  operationName?: string;
+  /** Client IP address */
+  ipAddress?: string;
+  /** User-Agent header */
+  userAgent?: string;
+}
+
 export const getUserPayload = async (
   bearerToken: string,
   sessionId = 'default',
   dataSources: DataSourceInfo[],
   requestDomain?: string,
   systemApiKey?: string,   // From x-mj-api-key header
-  userApiKey?: string      // From X-API-Key header
+  userApiKey?: string,     // From X-API-Key header
+  requestContext?: RequestContext
 ): Promise<UserPayload> => {
   // Check for user API key first (X-API-Key header)
   // This authenticates as the specific user who owns the API key
   if (userApiKey && userApiKey != String(undefined)) {
     const systemUser = await getSystemUser(readOnlyDataSource);
-    const validationResult = await EncryptionEngine.Instance.ValidateAPIKey(userApiKey, systemUser);
+    const validationResult = await EncryptionEngine.Instance.ValidateAPIKey(
+      {
+        rawKey: userApiKey,
+        endpoint: requestContext?.endpoint ?? '/api',
+        method: requestContext?.method ?? 'POST',
+        operation: requestContext?.operationName ?? null,
+        statusCode: 200, // Auth succeeded if we get here
+        responseTimeMs: null, // Not available at auth time
+        ipAddress: requestContext?.ipAddress ?? null,
+        userAgent: requestContext?.userAgent ?? null,
+      },
+      systemUser
+    );
 
     if (validationResult.isValid && validationResult.user) {
       return {
@@ -234,7 +263,7 @@ export const getUserPayload = async (
 3. These operations require a valid user context, but we don't yet have the authenticated user
 4. The system user provides the necessary privileges for these internal operations
 
-#### 3. Update contextFunction() to extract both headers
+#### 3. Update contextFunction() to extract both headers and request context
 
 ```typescript
 // Two types of API keys:
@@ -243,25 +272,38 @@ export const getUserPayload = async (
 const systemApiKey = String(req.headers['x-mj-api-key']);
 const userApiKey = String(req.headers['x-api-key']);
 
+// Build request context for API key logging
+const expressReq = req as e.Request;
+const requestContext: RequestContext = {
+  endpoint: expressReq.path || expressReq.url || '/api',
+  method: expressReq.method || 'POST',
+  operationName: operationName,
+  ipAddress: expressReq.ip || expressReq.socket?.remoteAddress || undefined,
+  userAgent: req.headers['user-agent'] as string | undefined,
+};
+
 const userPayload = await getUserPayload(
   bearerToken,
   sessionId,
   dataSources,
   requestDomain?.hostname ? requestDomain.hostname : undefined,
   systemApiKey,
-  userApiKey
+  userApiKey,
+  requestContext
 );
 ```
 
 ### Validation Flow Details
 
-The `EncryptionEngine.ValidateAPIKey()` method (already implemented) performs:
+The `EncryptionEngine.ValidateAPIKey()` method performs:
 
 1. **Format Validation** - Ensures key matches `mj_sk_[64 hex chars]` pattern
 2. **Hash Lookup** - SHA-256 hashes the key, looks up in cached API keys
 3. **Status Check** - Verifies key status is 'Active'
 4. **Expiration Check** - Ensures key hasn't expired
 5. **User Lookup** - Loads the associated UserEntity
+6. **Update LastUsedAt** - Updates the key's last used timestamp (failure causes validation to fail)
+7. **Log Usage** - Creates audit log entry with request context (failure causes validation to fail)
 
 ```mermaid
 flowchart LR
@@ -274,11 +316,32 @@ flowchart LR
     E -->|No| F
     G -->|Yes| H{User Account Active?}
     G -->|No| F
-    H -->|Yes| I[Valid - Return User]
+    H -->|Yes| J{Update LastUsedAt}
     H -->|No| F
+    J -->|Success| K{Log Usage}
+    J -->|Failure| F
+    K -->|Success| I[Valid - Return User]
+    K -->|Failure| F
 
     style I fill:#c8e6c9
     style F fill:#ffcdd2
+```
+
+### ValidateAPIKeyOptions Interface
+
+The `ValidateAPIKey` method accepts an options object for comprehensive request logging:
+
+```typescript
+interface ValidateAPIKeyOptions {
+  rawKey: string;           // The raw API key from the request
+  endpoint: string;         // API endpoint path (e.g., '/graphql')
+  method: string;           // HTTP method (e.g., 'POST')
+  operation?: string | null; // GraphQL operation name or MCP tool
+  statusCode: number;       // HTTP status code (200 for success)
+  responseTimeMs?: number | null; // Response time in milliseconds
+  ipAddress?: string | null; // Client IP address
+  userAgent?: string | null; // User-Agent header
+}
 ```
 
 ### Security Considerations
@@ -287,7 +350,8 @@ flowchart LR
 2. **Timing Attacks**: Hash comparison uses constant-time comparison via crypto module
 3. **Key Rotation**: Users can generate new keys; old keys can be revoked
 4. **Rate Limiting**: `apiKeyId` in UserPayload enables per-key rate limiting
-5. **Audit Trail**: All API key usage is logged via existing EncryptionEngine logging
+5. **Audit Trail**: All API key usage is logged with request context
+6. **Logging as Critical Path**: Logging failures cause authentication to fail, ensuring complete audit trails
 
 ### Authentication Methods Summary
 
@@ -306,7 +370,11 @@ flowchart LR
 | User API key expired | "Invalid API key" |
 | User API key inactive | "Invalid API key" |
 | User account disabled | "Invalid API key" |
+| Failed to update LastUsedAt | "Failed to update API key usage timestamp" |
+| Failed to save usage log | "Failed to log API key usage" |
 | System key mismatch | "Invalid system API key" |
+
+Note: Generic error messages for user API keys prevent enumeration attacks. Logging failures return specific messages since they indicate system issues rather than authentication problems.
 
 Note: Generic error messages for user API keys prevent enumeration attacks.
 

@@ -26,7 +26,7 @@ import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
 import { ChatMessage } from "@memberjunction/ai";
 import { CredentialEngine } from "@memberjunction/credentials";
-import { validateAPIKey } from "@memberjunction/encryption";
+import { EncryptionEngine } from "@memberjunction/encryption";
 import * as http from 'http';
 
 /*******************************************************************************
@@ -150,6 +150,48 @@ function extractAPIKeyFromRequest(request: http.IncomingMessage): string | null 
 }
 
 /**
+ * Extracts request context from an HTTP request for API key usage logging.
+ *
+ * @param request - The incoming HTTP request
+ * @returns Object containing endpoint, method, IP address, and user agent
+ */
+function extractRequestContext(request: http.IncomingMessage): {
+    endpoint: string;
+    method: string;
+    ipAddress: string | null;
+    userAgent: string | null;
+} {
+    // Extract endpoint from URL (without query params)
+    let endpoint = '/mcp';
+    if (request.url) {
+        try {
+            const url = new URL(request.url, `http://${request.headers.host}`);
+            endpoint = url.pathname || '/mcp';
+        } catch {
+            endpoint = request.url.split('?')[0] || '/mcp';
+        }
+    }
+
+    // Extract client IP address
+    // Check X-Forwarded-For header first (for proxied requests)
+    const forwardedFor = request.headers['x-forwarded-for'];
+    let ipAddress: string | null = null;
+    if (forwardedFor) {
+        // X-Forwarded-For can be a comma-separated list; take the first one
+        ipAddress = (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor).split(',')[0].trim();
+    } else {
+        ipAddress = request.socket?.remoteAddress || null;
+    }
+
+    return {
+        endpoint,
+        method: request.method || 'POST',
+        ipAddress,
+        userAgent: request.headers['user-agent'] as string || null,
+    };
+}
+
+/**
  * Authenticates an incoming MCP request using API key authentication.
  * This function is called by FastMCP for each incoming connection.
  *
@@ -190,7 +232,22 @@ async function authenticateRequest(request: http.IncomingMessage): Promise<MCPSe
             throw new Error('System user not found in UserCache for API key validation');
         }
 
-        const validation = await validateAPIKey(apiKey, systemUser);
+        // Extract request context for logging
+        const requestContext = extractRequestContext(request);
+
+        const validation = await EncryptionEngine.Instance.ValidateAPIKey(
+            {
+                rawKey: apiKey,
+                endpoint: requestContext.endpoint,
+                method: requestContext.method,
+                operation: null, // MCP tool name not known at auth time
+                statusCode: 200, // Auth succeeded if we get here
+                responseTimeMs: null, // Not available at auth time
+                ipAddress: requestContext.ipAddress,
+                userAgent: requestContext.userAgent,
+            },
+            systemUser
+        );
 
         console.log(`[Auth] Validation result: isValid=${validation.isValid}, user=${validation.user?.Email}`);
 

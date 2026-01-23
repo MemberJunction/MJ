@@ -42,13 +42,30 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
     });
   });
 
+/**
+ * Request context for API key usage logging.
+ */
+export interface RequestContext {
+  /** The API endpoint path (e.g., '/graphql', '/mcp') */
+  endpoint: string;
+  /** HTTP method (e.g., 'POST', 'GET') */
+  method: string;
+  /** GraphQL operation name if available */
+  operationName?: string;
+  /** Client IP address */
+  ipAddress?: string;
+  /** User-Agent header */
+  userAgent?: string;
+}
+
 export const getUserPayload = async (
   bearerToken: string,
   sessionId = 'default',
   dataSources: DataSourceInfo[],
   requestDomain?: string,
   systemApiKey?: string,
-  userApiKey?: string
+  userApiKey?: string,
+  requestContext?: RequestContext
 ): Promise<UserPayload> => {
   try {
     const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -59,7 +76,19 @@ export const getUserPayload = async (
     if (userApiKey && userApiKey !== String(undefined)) {
       // Use system user as context for validation operations
       const systemUser = await getSystemUser(readOnlyDataSource);
-      const validationResult = await EncryptionEngine.Instance.ValidateAPIKey(userApiKey, systemUser);
+      const validationResult = await EncryptionEngine.Instance.ValidateAPIKey(
+        {
+          rawKey: userApiKey,
+          endpoint: requestContext?.endpoint ?? '/api',
+          method: requestContext?.method ?? 'POST',
+          operation: requestContext?.operationName ?? null,
+          statusCode: 200, // Auth succeeded if we get here
+          responseTimeMs: null, // Not available at auth time
+          ipAddress: requestContext?.ipAddress ?? null,
+          userAgent: requestContext?.userAgent ?? null,
+        },
+        systemUser
+      );
 
       if (validationResult.isValid && validationResult.user) {
         return {
@@ -181,13 +210,25 @@ export const contextFunction =
       console.log({ operationName, variables: reqAny.body?.variables || undefined });
     }
 
+    // Build request context for API key logging
+    // Note: responseTimeMs is not available at auth time, only endpoint/method/ip/ua
+    const expressReq = req as e.Request;
+    const requestContext: RequestContext = {
+      endpoint: expressReq.path || expressReq.url || '/api',
+      method: expressReq.method || 'POST',
+      operationName: operationName,
+      ipAddress: expressReq.ip || expressReq.socket?.remoteAddress || undefined,
+      userAgent: req.headers['user-agent'] as string | undefined,
+    };
+
     const userPayload = await getUserPayload(
       bearerToken,
       sessionId,
       dataSources,
       requestDomain?.hostname ? requestDomain.hostname : undefined,
       systemApiKey,
-      userApiKey
+      userApiKey,
+      requestContext
     );
 
     if (Metadata.Provider.Entities.length === 0 ) {
