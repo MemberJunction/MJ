@@ -23,6 +23,8 @@
     "@memberjunction/config": "3.2.0",
     "@memberjunction/core": "3.2.0",
     "@memberjunction/core-entities": "3.2.0",
+    "@memberjunction/credentials": "3.2.0",
+    "@memberjunction/encryption": "3.2.0",
     "@memberjunction/global": "3.2.0",
     "@memberjunction/server": "3.2.0",
     "@memberjunction/sqlserver-dataprovider": "3.2.0",

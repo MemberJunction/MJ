@@ -11,6 +11,8 @@ export type UserPayload = {
   sessionId: string;
   isSystemUser?: boolean;
   apiKey?: string;
+  /** ID of the MJ API key used for authentication (when using mj_sk_* format keys) */
+  apiKeyId?: string;
 };
 
 /**

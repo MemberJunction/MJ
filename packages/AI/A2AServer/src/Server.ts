@@ -1,6 +1,7 @@
-import { EntityInfo, LogError, Metadata, UserInfo } from "@memberjunction/core";
+import { EntityInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
-import express from 'express';
+import { EncryptionEngine } from "@memberjunction/encryption";
+import express, { Request, Response, NextFunction } from 'express';
 import * as sql from 'mssql';
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, a2aServerSettings } from './config.js';
@@ -102,6 +103,105 @@ const tasks = new Map<string, Task>();
 const app = express();
 app.use(express.json());
 
+/**
+ * Extract request context from an Express request for API key logging.
+ */
+function extractRequestContext(req: Request): {
+    endpoint: string;
+    method: string;
+    ipAddress: string | null;
+    userAgent: string | null;
+} {
+    return {
+        endpoint: req.path || req.url || '/a2a',
+        method: req.method || 'POST',
+        ipAddress: req.ip || req.socket?.remoteAddress || null,
+        userAgent: req.headers['user-agent'] as string || null,
+    };
+}
+
+/**
+ * Authentication middleware for A2A endpoints.
+ * Validates MJ API keys (X-API-Key header with mj_sk_* format).
+ */
+async function authenticateRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const apiKey = req.headers['x-api-key'] as string | undefined;
+
+    if (!apiKey) {
+        res.status(401).json({
+            error: {
+                code: 401,
+                message: 'Missing API key. Provide X-API-Key header with a valid MJ API key.'
+            }
+        });
+        return;
+    }
+
+    try {
+        // Get system user for validation context
+        const systemUser = UserCache.Instance.Users[0];
+        if (!systemUser) {
+            LogError('A2A Server: No system user available for API key validation');
+            res.status(500).json({
+                error: {
+                    code: 500,
+                    message: 'Server configuration error'
+                }
+            });
+            return;
+        }
+
+        const requestContext = extractRequestContext(req);
+
+        const validationResult = await EncryptionEngine.Instance.ValidateAPIKey(
+            {
+                rawKey: apiKey,
+                endpoint: requestContext.endpoint,
+                method: requestContext.method,
+                operation: null, // Could extract from request body if available
+                statusCode: 200, // Auth succeeded if we get past validation
+                responseTimeMs: null, // Not available at auth time
+                ipAddress: requestContext.ipAddress,
+                userAgent: requestContext.userAgent,
+            },
+            systemUser
+        );
+
+        if (!validationResult.isValid) {
+            LogStatus(`A2A Server: Invalid API key attempt from ${requestContext.ipAddress}`);
+            res.status(401).json({
+                error: {
+                    code: 401,
+                    message: 'Invalid API key'
+                }
+            });
+            return;
+        }
+
+        // Store the authenticated user on the request for use in handlers
+        (req as RequestWithUser).authenticatedUser = validationResult.user!;
+        (req as RequestWithUser).apiKeyId = validationResult.apiKeyId;
+
+        next();
+    } catch (error) {
+        LogError('A2A Server: API key validation error', undefined, error);
+        res.status(500).json({
+            error: {
+                code: 500,
+                message: 'Authentication error'
+            }
+        });
+    }
+}
+
+/**
+ * Extended Request type with authenticated user information.
+ */
+interface RequestWithUser extends Request {
+    authenticatedUser?: UserInfo;
+    apiKeyId?: string;
+}
+
 // Initialize A2A server
 export async function initializeA2AServer() {
     try {
@@ -133,27 +233,31 @@ export async function initializeA2AServer() {
 }
 
 function setupRoutes() {
-    // Agent Card endpoint
+    // Agent Card endpoint (public - for discovery)
     app.get('/a2a/agent-card', async (req, res) => {
         const agentCard = await generateAgentCard();
         res.json(agentCard);
     });
 
+    // Apply authentication middleware to all /a2a/tasks routes
+    app.use('/a2a/tasks', authenticateRequest);
+
     // Send a message to a task
-    app.post('/a2a/tasks/send', (req, res) => {
-        const result = handleTaskSend(req.body);
+    app.post('/a2a/tasks/send', (req: Request, res: Response) => {
+        const result = handleTaskSend(req.body, (req as RequestWithUser).authenticatedUser);
         res.json(result);
     });
 
     // Send a message to a task with streaming response
-    app.post('/a2a/tasks/sendSubscribe', (req, res) => {
+    app.post('/a2a/tasks/sendSubscribe', (req: Request, res: Response) => {
         if (!a2aServerSettings?.streamingEnabled) {
-            return res.status(400).json({
+            res.status(400).json({
                 error: {
                     code: 400,
                     message: "Streaming is not enabled for this agent"
                 }
             });
+            return;
         }
 
         // Set up SSE connection
@@ -161,43 +265,45 @@ function setupRoutes() {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        handleTaskSendSubscribe(req.body, res);
+        handleTaskSendSubscribe(req.body, res, (req as RequestWithUser).authenticatedUser);
     });
 
     // Get a task's status
-    app.get('/a2a/tasks/:taskId', (req, res) => {
-        const { taskId } = req.params;
+    app.get('/a2a/tasks/:taskId', (req: Request, res: Response) => {
+        const taskId = req.params.taskId as string;
         const task = tasks.get(taskId);
-        
+
         if (!task) {
-            return res.status(404).json({
+            res.status(404).json({
                 error: {
                     code: 404,
                     message: `Task with ID ${taskId} not found`
                 }
             });
+            return;
         }
-        
+
         res.json(task);
     });
 
     // Cancel a task
-    app.post('/a2a/tasks/:taskId/cancel', (req, res) => {
-        const { taskId } = req.params;
+    app.post('/a2a/tasks/:taskId/cancel', (req: Request, res: Response) => {
+        const taskId = req.params.taskId as string;
         const task = tasks.get(taskId);
-        
+
         if (!task) {
-            return res.status(404).json({
+            res.status(404).json({
                 error: {
                     code: 404,
                     message: `Task with ID ${taskId} not found`
                 }
             });
+            return;
         }
-        
+
         task.status = 'cancelled';
         task.updated = new Date();
-        
+
         res.json({ success: true });
     });
 }
@@ -215,6 +321,10 @@ async function generateAgentCard(): Promise<AgentCard> {
         endpoints: {
             tasks: `/a2a/tasks`,
             agentCard: `/a2a/agent-card`
+        },
+        authentication: {
+            type: "apiKey",
+            scheme: "X-API-Key"
         },
         capabilities: {
             streaming: !!a2aServerSettings?.streamingEnabled,
@@ -367,9 +477,9 @@ function getMatchingEntitiesForConfig(allEntities: EntityInfo[], config: any) {
     });
 }
 
-function handleTaskSend(requestBody: any) {
-    const { taskId, message } = requestBody;
-    
+function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?: UserInfo) {
+    const { taskId, message } = requestBody as { taskId?: string; message?: { parts?: Part[] } };
+
     if (!taskId) {
         // Create a new task
         const newTaskId = generateId();
@@ -381,7 +491,7 @@ function handleTaskSend(requestBody: any) {
             created: new Date(),
             updated: new Date()
         };
-        
+
         if (message) {
             const newMessage: Message = {
                 id: generateId(),
@@ -392,12 +502,12 @@ function handleTaskSend(requestBody: any) {
             };
             task.messages.push(newMessage);
         }
-        
+
         tasks.set(newTaskId, task);
-        
-        // Process the task asynchronously
-        processTask(task);
-        
+
+        // Process the task asynchronously with the authenticated user
+        processTask(task, authenticatedUser);
+
         return {
             taskId: newTaskId,
             status: task.status
@@ -405,7 +515,7 @@ function handleTaskSend(requestBody: any) {
     } else {
         // Update an existing task
         const task = tasks.get(taskId);
-        
+
         if (!task) {
             throw {
                 error: {
@@ -414,7 +524,7 @@ function handleTaskSend(requestBody: any) {
                 }
             };
         }
-        
+
         if (task.status === 'completed' || task.status === 'cancelled' || task.status === 'failed') {
             throw {
                 error: {
@@ -423,7 +533,7 @@ function handleTaskSend(requestBody: any) {
                 }
             };
         }
-        
+
         if (message) {
             const newMessage: Message = {
                 id: generateId(),
@@ -435,10 +545,10 @@ function handleTaskSend(requestBody: any) {
             task.messages.push(newMessage);
             task.updated = new Date();
         }
-        
-        // Process the updated task
-        processTask(task);
-        
+
+        // Process the updated task with the authenticated user
+        processTask(task, authenticatedUser);
+
         return {
             taskId: task.id,
             status: task.status
@@ -446,8 +556,8 @@ function handleTaskSend(requestBody: any) {
     }
 }
 
-function handleTaskSendSubscribe(requestBody: any, res: any) {
-    const result = handleTaskSend(requestBody);
+function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo) {
+    const result = handleTaskSend(requestBody, authenticatedUser);
     const task = tasks.get(result.taskId);
     
     if (!task) {
@@ -501,7 +611,7 @@ function handleTaskSendSubscribe(requestBody: any, res: any) {
 }
 
 // Process a task using MemberJunction APIs
-async function processTask(task: Task) {
+async function processTask(task: Task, authenticatedUser?: UserInfo) {
     try {
         task.status = 'in_progress';
         task.updated = new Date();
@@ -513,9 +623,15 @@ async function processTask(task: Task) {
             throw new Error("No user message found");
         }
 
-        // Initialize operations handlers
+        // Use authenticated user or fall back to first cached user (for backwards compatibility)
+        const contextUser = authenticatedUser || UserCache.Instance.Users[0];
+        if (!contextUser) {
+            throw new Error("No user context available for processing task");
+        }
+
+        // Initialize operations handlers with the authenticated user
         const entityOps = new EntityOperations();
-        const agentOps = new AgentOperations(UserCache.Instance.Users[0]);
+        const agentOps = new AgentOperations(contextUser);
 
         // Extract text content and parse operation
         const textParts = lastMessage.parts.filter(p => p.type === 'text');
