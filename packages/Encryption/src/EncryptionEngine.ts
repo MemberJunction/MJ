@@ -56,6 +56,7 @@ import {
     CreateAPIKeyParams,
     CreateAPIKeyResult,
     APIKeyValidationResult,
+    ValidateAPIKeyOptions,
     GeneratedAPIKey
 } from './interfaces';
 import { CredentialEngine } from '@memberjunction/credentials';
@@ -653,18 +654,27 @@ export class EncryptionEngine extends EncryptionEngineBase {
      * 2. Hashes the key and looks it up in the CredentialEngine cache
      * 3. Checks the key is active and not expired
      * 4. Loads the associated user from the database
-     * 5. Updates LastUsedAt and logs usage
+     * 5. Updates LastUsedAt and logs usage (logging failures cause validation to fail)
      *
      * For best performance, ensure CredentialEngine is configured before calling.
      *
-     * @param rawKey - The raw API key from the request
+     * @param options - Validation options including the raw key and request context for logging
      * @param contextUser - System user context for database operations
      * @returns Validation result with user context if valid
      *
      * @example
      * ```typescript
      * const result = await EncryptionEngine.Instance.ValidateAPIKey(
-     *   request.headers['x-api-key'],
+     *   {
+     *     rawKey: request.headers['x-api-key'],
+     *     endpoint: '/graphql',
+     *     method: 'POST',
+     *     operation: 'GetUsers',
+     *     statusCode: 200,
+     *     responseTimeMs: 150,
+     *     ipAddress: request.ip,
+     *     userAgent: request.headers['user-agent']
+     *   },
      *   systemUser
      * );
      *
@@ -677,9 +687,11 @@ export class EncryptionEngine extends EncryptionEngineBase {
      * ```
      */
     async ValidateAPIKey(
-        rawKey: string,
+        options: ValidateAPIKeyOptions,
         contextUser: UserInfo
     ): Promise<APIKeyValidationResult> {
+        const { rawKey, endpoint, method, operation, statusCode, responseTimeMs, ipAddress, userAgent } = options;
+
         // 1. Validate format first (fast fail)
         if (!this.IsValidAPIKeyFormat(rawKey)) {
             return { isValid: false, error: 'Invalid API key format' };
@@ -724,19 +736,32 @@ export class EncryptionEngine extends EncryptionEngineBase {
 
         // 7. Update LastUsedAt on the cached key entity
         cachedKey.LastUsedAt = new Date();
-        await cachedKey.Save();
+        const lastUsedSaved = await cachedKey.Save();
+        if (!lastUsedSaved) {
+            LogError(`Failed to update LastUsedAt for API key ${cachedKey.ID}`);
+            return { isValid: false, error: 'Failed to update API key usage timestamp' };
+        }
 
-        // 8. Log usage
+        // 8. Log usage - logging failures cause validation to fail
         const md = new Metadata();
         const usageLog = await md.GetEntityObject<APIKeyUsageLogEntity>(
             'MJ: API Key Usage Logs',
             contextUser
         );
         usageLog.APIKeyID = cachedKey.ID;
-        usageLog.Endpoint = '/api';
-        usageLog.Method = 'POST';
-        usageLog.StatusCode = 200;
-        await usageLog.Save();
+        usageLog.Endpoint = endpoint;
+        usageLog.Method = method;
+        usageLog.Operation = operation ?? null;
+        usageLog.StatusCode = statusCode;
+        usageLog.ResponseTimeMs = responseTimeMs ?? null;
+        usageLog.IPAddress = ipAddress ?? null;
+        usageLog.UserAgent = userAgent ?? null;
+
+        const logSaved = await usageLog.Save();
+        if (!logSaved) {
+            LogError(`Failed to save API key usage log for key ${cachedKey.ID}: ${usageLog.LatestResult?.Message}`);
+            return { isValid: false, error: 'Failed to log API key usage' };
+        }
 
         // 9. Create UserInfo from the entity
         const user = new UserInfo(undefined, userRecord.GetAll());

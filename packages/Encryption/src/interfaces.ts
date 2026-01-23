@@ -345,6 +345,64 @@ export interface APIKeyValidationResult {
 }
 
 /**
+ * Options for validating an API key, including request context for logging.
+ *
+ * All logging fields are required to ensure proper audit trails. Logging failures
+ * will cause validation to fail, treating audit logging as a critical operation.
+ *
+ * @see {@link EncryptionEngine.ValidateAPIKey}
+ */
+export interface ValidateAPIKeyOptions {
+    /**
+     * The raw API key from the request header.
+     * Expected format: `mj_sk_[64 hex characters]`
+     */
+    rawKey: string;
+
+    /**
+     * The API endpoint path that was accessed.
+     * @example '/graphql', '/mcp', '/api/v1/entities'
+     */
+    endpoint: string;
+
+    /**
+     * HTTP method used for the request.
+     * @example 'GET', 'POST', 'PUT', 'DELETE'
+     */
+    method: string;
+
+    /**
+     * The specific operation performed (e.g., GraphQL operation name, MCP tool).
+     * Can be null for endpoints without specific operations.
+     * @example 'GetUsersRecord', 'RunAgent', 'tools/list'
+     */
+    operation?: string | null;
+
+    /**
+     * HTTP response status code to log.
+     * Set to 200 for successful requests, appropriate error codes otherwise.
+     */
+    statusCode: number;
+
+    /**
+     * Total time in milliseconds to process the request.
+     * Pass null if response time tracking is not available.
+     */
+    responseTimeMs?: number | null;
+
+    /**
+     * Client IP address that made the request.
+     * Supports both IPv4 and IPv6 addresses.
+     */
+    ipAddress?: string | null;
+
+    /**
+     * User-Agent header from the HTTP request.
+     */
+    userAgent?: string | null;
+}
+
+/**
  * Generated API key with both raw and hashed versions.
  *
  * @see {@link EncryptionEngine.GenerateAPIKey}

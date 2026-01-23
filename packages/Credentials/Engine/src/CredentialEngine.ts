@@ -5,10 +5,9 @@ import {
     LogError,
     LogStatus,
     Metadata,
-    RunView,
     UserInfo
 } from "@memberjunction/core";
-import sql from 'mssql';
+
 import {
     AuditLogEntity,
     CredentialCategoryEntity,

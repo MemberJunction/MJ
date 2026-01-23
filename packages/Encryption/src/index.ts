@@ -68,6 +68,7 @@ export {
     CreateAPIKeyParams,
     CreateAPIKeyResult,
     APIKeyValidationResult,
+    ValidateAPIKeyOptions,
     GeneratedAPIKey
 } from './interfaces';
 
