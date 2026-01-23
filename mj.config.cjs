@@ -109,7 +109,15 @@ module.exports = {
    */
 
   mcpServerSettings: {
-    enableMCPServer: true, // Override default (false)
+    port: 3100,
+    enableMCPServer: true,
+    systemApiKey: 'MY_API_KEY_FOR_MCP_SERVER',
+    actionTools: [
+      {
+        actionName: 'NOT YET SUPPORTED',
+        actionCategory: '*',
+      }
+    ],
     entityTools: [
       {
         schemaName: 'CRM',
@@ -120,6 +128,14 @@ module.exports = {
         delete: true,
         runView: true,
       },
+    ],
+    agentTools: [
+      {
+        agentName: '*',        // All agents (or specific name pattern)
+        execute: true,
+        status: true,
+        cancel: true
+      }
     ]
   },
 
