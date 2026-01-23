@@ -63,7 +63,12 @@ export {
     RotateKeyParams,
     RotateKeyResult,
     EnableFieldEncryptionParams,
-    EnableFieldEncryptionResult
+    EnableFieldEncryptionResult,
+    // API Key interfaces
+    CreateAPIKeyParams,
+    CreateAPIKeyResult,
+    APIKeyValidationResult,
+    GeneratedAPIKey
 } from './interfaces';
 
 // Base class for key source providers
@@ -83,5 +88,14 @@ export { AzureKeyVaultKeySource } from './providers/AzureKeyVaultKeySource';
 // Actions for key management and data migration
 export { RotateEncryptionKeyAction } from './actions/RotateEncryptionKeyAction';
 export { EnableFieldEncryptionAction } from './actions/EnableFieldEncryptionAction';
-// API Key utilities
-export { generateAPIKey, hashAPIKey, isValidAPIKeyFormat, validateAPIKey, GeneratedAPIKey, APIKeyValidationResult } from './apiKeyUtils';
+
+// API Key utilities (legacy functions - prefer EncryptionEngine methods)
+// These are maintained for backwards compatibility but the OOP methods on
+// EncryptionEngine (GenerateAPIKey, HashAPIKey, CreateAPIKey, ValidateAPIKey, etc.)
+// are the preferred approach.
+export {
+    generateAPIKey,
+    hashAPIKey,
+    isValidAPIKeyFormat,
+    validateAPIKey
+} from './apiKeyUtils';

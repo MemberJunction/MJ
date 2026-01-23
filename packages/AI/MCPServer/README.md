@@ -323,72 +323,57 @@ The MCP Server uses API key authentication to secure access. All requests must i
 
 ### Creating API Keys
 
-API keys are managed through the MemberJunction database. Here's how to create a new API key:
-
-#### Step 1: Generate a Raw Key
-
-Use the MemberJunction Core library to generate a properly formatted key:
+API keys are managed through the `EncryptionEngine` class in the `@memberjunction/encryption` package. This provides a clean, type-safe API using MemberJunction's BaseEntity pattern.
 
 ```typescript
-import { generateAPIKey } from '@memberjunction/encryption';
+import { EncryptionEngine } from '@memberjunction/encryption';
 
-// Generate a new API key with mj_sk_ prefix
-const rawKey = generateAPIKey();
-console.log('Your API Key:', rawKey);
-// Example output: mj_sk_YOUR_API_KEY_HERE
+// Create an API key for a user
+const result = await EncryptionEngine.Instance.CreateAPIKey({
+  userId: 'user-guid-here',
+  label: 'MCP Server Integration',
+  description: 'Used for Claude Desktop MCP connections',
+  expiresAt: new Date('2025-12-31') // Optional - omit for non-expiring keys
+}, contextUser);
 
-// IMPORTANT: Save this key immediately - it cannot be recovered once hashed!
+if (result.success) {
+  // IMPORTANT: Save this key immediately - it cannot be recovered!
+  console.log('Your API Key:', result.rawKey);
+  console.log('API Key ID:', result.apiKeyId);
+} else {
+  console.error('Failed to create API key:', result.error);
+}
 ```
 
-#### Step 2: Hash the Key for Database Storage
+The `CreateAPIKey` method:
+- Generates a secure key with format `mj_sk_[64 hex characters]`
+- Stores only the SHA-256 hash in the database (never the raw key)
+- Creates the database record using proper BaseEntity patterns
+- Returns the raw key exactly once - it cannot be retrieved later
+
+#### Other API Key Methods
+
+The `EncryptionEngine` also provides these API key management methods:
 
 ```typescript
-import { hashAPIKey } from '@memberjunction/encryption';
+// Generate a key without storing it (for manual storage scenarios)
+const { raw, hash } = EncryptionEngine.Instance.GenerateAPIKey();
 
-const keyHash = hashAPIKey(rawKey);
-console.log('Key Hash:', keyHash);
-// This is what gets stored in the database
-```
+// Hash a key for validation
+const keyHash = EncryptionEngine.Instance.HashAPIKey(rawKey);
 
-#### Step 3: Insert into Database
+// Validate key format
+const isValid = EncryptionEngine.Instance.IsValidAPIKeyFormat(rawKey);
 
-```sql
-INSERT INTO __mj.APIKey (ID, Hash, UserID, Label, Status, CreatedByUserID)
-VALUES (
-  NEWID(),
-  'your-hashed-key-here',
-  'user-id-guid',
-  'My MCP Client Key',
-  'Active',
-  'creator-user-id-guid'
-);
-```
+// Validate a key and get the associated user
+const validation = await EncryptionEngine.Instance.ValidateAPIKey(rawKey, contextUser);
+if (validation.isValid) {
+  console.log('User:', validation.user);
+  console.log('API Key ID:', validation.apiKeyId);
+}
 
-**Complete Example:**
-
-```typescript
-import { generateAPIKey, hashAPIKey } from '@memberjunction/encryption';
-import sql from 'mssql';
-
-// 1. Generate the raw key
-const rawKey = generateAPIKey();
-console.log('🔑 Your API Key (save this!):', rawKey);
-
-// 2. Hash it for storage
-const keyHash = hashAPIKey(rawKey);
-
-// 3. Store in database
-const pool = await sql.connect(config);
-await pool.request()
-  .input('hash', sql.NVarChar(64), keyHash)
-  .input('userId', sql.UniqueIdentifier, 'your-user-id-guid')
-  .input('label', sql.NVarChar(255), 'My Application Key')
-  .query(`
-    INSERT INTO __mj.APIKey (ID, Hash, UserID, Label, Status, CreatedByUserID)
-    VALUES (NEWID(), @hash, @userId, @label, 'Active', @userId)
-  `);
-
-console.log('✅ API Key created successfully!');
+// Revoke an API key
+const revoked = await EncryptionEngine.Instance.RevokeAPIKey(apiKeyId, contextUser);
 ```
 
 ### API Key Schema

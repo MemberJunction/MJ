@@ -244,3 +244,121 @@ export interface EnableFieldEncryptionParams {
      */
     batchSize?: number;
 }
+
+// ============================================================================
+// API KEY MANAGEMENT INTERFACES
+// ============================================================================
+
+/**
+ * Parameters for creating a new API key.
+ *
+ * @see {@link EncryptionEngine.CreateAPIKey}
+ *
+ * @example
+ * ```typescript
+ * const params: CreateAPIKeyParams = {
+ *   userId: 'user-guid-here',
+ *   label: 'MCP Server Integration',
+ *   description: 'Used for Claude Desktop MCP connections',
+ *   expiresAt: new Date('2025-12-31')
+ * };
+ * ```
+ */
+export interface CreateAPIKeyParams {
+    /**
+     * The user ID this API key will be associated with.
+     * All operations using this key will execute in this user's context.
+     */
+    userId: string;
+
+    /**
+     * A friendly label for identifying the key purpose.
+     * @example 'MCP Client', 'CI/CD Pipeline', 'Mobile App'
+     */
+    label: string;
+
+    /**
+     * Optional detailed description of the key's intended use.
+     */
+    description?: string;
+
+    /**
+     * Optional expiration date for the key.
+     * If not set (null), the key never expires.
+     */
+    expiresAt?: Date | null;
+}
+
+/**
+ * Result returned when creating a new API key.
+ *
+ * **IMPORTANT**: The `rawKey` is only returned once at creation time.
+ * It cannot be recovered later - only the hash is stored.
+ *
+ * @see {@link EncryptionEngine.CreateAPIKey}
+ */
+export interface CreateAPIKeyResult {
+    /** Whether the key was created successfully */
+    success: boolean;
+
+    /**
+     * The raw API key to give to the user.
+     * Format: `mj_sk_[64 hex characters]`
+     *
+     * **CRITICAL**: Save this immediately - it cannot be recovered!
+     */
+    rawKey?: string;
+
+    /** The database ID of the created API key record */
+    apiKeyId?: string;
+
+    /** Error message if creation failed */
+    error?: string;
+}
+
+/**
+ * Result returned when validating an API key.
+ *
+ * @see {@link EncryptionEngine.ValidateAPIKey}
+ */
+export interface APIKeyValidationResult {
+    /** Whether the key is valid and the user is active */
+    isValid: boolean;
+
+    /**
+     * The user associated with the API key.
+     * Only populated if validation succeeds.
+     */
+    user?: import('@memberjunction/core').UserInfo;
+
+    /** The database ID of the API key record */
+    apiKeyId?: string;
+
+    /**
+     * Scopes granted to this API key.
+     * Reserved for future fine-grained permissions.
+     */
+    scopes?: string[];
+
+    /** Error message explaining why validation failed */
+    error?: string;
+}
+
+/**
+ * Generated API key with both raw and hashed versions.
+ *
+ * @see {@link EncryptionEngine.GenerateAPIKey}
+ */
+export interface GeneratedAPIKey {
+    /**
+     * The raw API key to show to the user.
+     * Format: `mj_sk_[64 hex characters]`
+     */
+    raw: string;
+
+    /**
+     * SHA-256 hash of the raw key for database storage.
+     * 64 hexadecimal characters.
+     */
+    hash: string;
+}
