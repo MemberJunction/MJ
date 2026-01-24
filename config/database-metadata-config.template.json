@@ -1,0 +1,51 @@
+{
+  "description": "Database metadata configuration for MemberJunction CodeGen. This file allows you to define soft primary keys and foreign keys for tables that may not have database constraints. Copy this file to database-metadata-config.json and customize for your database.",
+  "version": "1.0",
+  "tables": [
+    {
+      "schemaName": "dbo",
+      "tableName": "Orders",
+      "primaryKeys": [
+        {
+          "fieldName": "OrderID",
+          "comment": "Primary key field (no database constraint)"
+        }
+      ],
+      "foreignKeys": [
+        {
+          "fieldName": "CustomerID",
+          "relatedSchema": "dbo",
+          "relatedTable": "Customers",
+          "relatedField": "ID",
+          "comment": "Foreign key to Customers table (no database constraint)"
+        },
+        {
+          "fieldName": "ProductID",
+          "relatedSchema": "dbo",
+          "relatedTable": "Products",
+          "relatedField": "ID",
+          "comment": "Foreign key to Products table (no database constraint)"
+        }
+      ]
+    },
+    {
+      "schemaName": "dbo",
+      "tableName": "OrderDetails",
+      "primaryKeys": [
+        {
+          "fieldName": "OrderDetailID",
+          "comment": "Primary key field"
+        }
+      ],
+      "foreignKeys": [
+        {
+          "fieldName": "OrderID",
+          "relatedSchema": "dbo",
+          "relatedTable": "Orders",
+          "relatedField": "OrderID",
+          "comment": "Foreign key to Orders table"
+        }
+      ]
+    }
+  ]
+}

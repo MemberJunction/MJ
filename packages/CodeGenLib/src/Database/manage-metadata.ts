@@ -1,5 +1,5 @@
 import * as sql from 'mssql';
-import { configInfo, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
+import { configInfo, currentWorkingDirectory, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { ApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
@@ -551,6 +551,13 @@ export class ManageMetadataBase {
       }
       logStatus(`      Updated existing entity fields from schema in ${(new Date().getTime() - step3StartTime.getTime()) / 1000} seconds`);
 
+      // Apply soft PK/FK configuration if config file exists
+      const stepConfigStartTime: Date = new Date();
+      if (! await this.applySoftPKFKConfig(pool)) {
+         logError('Error applying soft PK/FK configuration');
+      }
+      logStatus(`      Applied soft PK/FK configuration in ${(new Date().getTime() - stepConfigStartTime.getTime()) / 1000} seconds`);
+
       const step4StartTime: Date = new Date();
       if (! await this.setDefaultColumnWidthWhereNeeded(pool, excludeSchemas)) {
          logError ('Error setting default column width where needed')
@@ -590,6 +597,94 @@ export class ManageMetadataBase {
       return bSuccess;
    }
 
+   /**
+    * Applies soft PK/FK configuration from config/database-metadata-config.json if it exists.
+    * This populates IsSoftPrimaryKey, SoftFKRelatedEntityID, and SoftFKRelatedEntityFieldName in EntityField table.
+    */
+   protected async applySoftPKFKConfig(pool: sql.ConnectionPool): Promise<boolean> {
+      const configPath = path.join(process.cwd(), 'config', 'database-metadata-config.json');
+
+      if (!fs.existsSync(configPath)) {
+         // Config file doesn't exist - this is fine, it's optional
+         return true;
+      }
+
+      try {
+         logStatus(`         Found config/database-metadata-config.json, applying soft PK/FK configuration...`);
+         const configContent = fs.readFileSync(configPath, 'utf-8');
+         const config = JSON.parse(configContent);
+
+         let totalPKs = 0;
+         let totalFKs = 0;
+         const schema = mj_core_schema();
+
+         for (const table of config.tables || []) {
+            // Look up entity ID
+            const entityResult = await pool.request()
+               .input('schemaName', sql.NVarChar, table.schemaName)
+               .input('tableName', sql.NVarChar, table.tableName)
+               .query(`SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = @schemaName AND BaseTable = @tableName`);
+
+            if (entityResult.recordset.length === 0) {
+               logStatus(`Entity not found for ${table.schemaName}.${table.tableName} - skipping`);
+               continue;
+            }
+
+            const entityId = entityResult.recordset[0].ID;
+
+            // Process primary keys
+            if (table.primaryKeys && table.primaryKeys.length > 0) {
+               for (const pk of table.primaryKeys) {
+                  const updateResult = await pool.request()
+                     .input('entityId', sql.UniqueIdentifier, entityId)
+                     .input('fieldName', sql.NVarChar, pk.fieldName)
+                     .query(`UPDATE [${schema}].[EntityField] SET [IsSoftPrimaryKey] = 1 WHERE [EntityID] = @entityId AND [Name] = @fieldName`);
+
+                  if (updateResult.rowsAffected[0] > 0) {
+                     logStatus(`         ✓ Set IsSoftPrimaryKey=1 for ${table.tableName}.${pk.fieldName}`);
+                     totalPKs++;
+                  }
+               }
+            }
+
+            // Process foreign keys
+            if (table.foreignKeys && table.foreignKeys.length > 0) {
+               for (const fk of table.foreignKeys) {
+                  // Look up related entity ID
+                  const relatedEntityResult = await pool.request()
+                     .input('schemaName', sql.NVarChar, fk.relatedSchema)
+                     .input('tableName', sql.NVarChar, fk.relatedTable)
+                     .query(`SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = @schemaName AND BaseTable = @tableName`);
+
+                  if (relatedEntityResult.recordset.length === 0) {
+                     logStatus(`         ⚠️  Related entity not found for ${fk.relatedSchema}.${fk.relatedTable} - skipping FK ${fk.fieldName}`);
+                     continue;
+                  }
+
+                  const relatedEntityId = relatedEntityResult.recordset[0].ID;
+
+                  const updateResult = await pool.request()
+                     .input('entityId', sql.UniqueIdentifier, entityId)
+                     .input('fieldName', sql.NVarChar, fk.fieldName)
+                     .input('relatedEntityId', sql.UniqueIdentifier, relatedEntityId)
+                     .input('relatedFieldName', sql.NVarChar, fk.relatedField)
+                     .query(`UPDATE [${schema}].[EntityField] SET [SoftFKRelatedEntityID] = @relatedEntityId, [SoftFKRelatedEntityFieldName] = @relatedFieldName WHERE [EntityID] = @entityId AND [Name] = @fieldName`);
+
+                  if (updateResult.rowsAffected[0] > 0) {
+                     logStatus(`         ✓ Set soft FK for ${table.tableName}.${fk.fieldName} → ${fk.relatedTable}.${fk.relatedField}`);
+                     totalFKs++;
+                  }
+               }
+            }
+         }
+
+         logStatus(`         Applied ${totalPKs} soft PK(s) and ${totalFKs} soft FK(s) from configuration`);
+         return true;
+      } catch (e) {
+         logError(`Error applying soft PK/FK configuration: ${e}`);
+         return false;
+      }
+   }
 
    /**
     * This method ensures that the __mj_DeletedAt field exists in each entity that has DeleteType=Soft. If the field does not exist, it is created.
@@ -1666,26 +1761,56 @@ NumberedRows AS (
    }
 
    protected async shouldCreateNewEntity(ds: sql.ConnectionPool, newEntity: any): Promise<{shouldCreate: boolean, validationMessage: string}> {
-      // validate that the new entity meets our criteria for creation
-      // criteria:
-      // 1) entity has a field that is a primary key
-      // validate all of these factors by getting the sql from SQL Server and check the result, if failure, shouldCreate=false and generate validation message, otherwise return empty validation message and true for shouldCreate.
-
       const query = `EXEC ${Metadata.Provider.ConfigData.MJCoreSchemaName}.spGetPrimaryKeyForTable @TableName='${newEntity.TableName}', @SchemaName='${newEntity.SchemaName}'`;
 
       try {
-          const resultResult = await ds.request().query(query);
-      const result = resultResult.recordset;
-          if (result.length === 0) {
-              return { shouldCreate: false, validationMessage: "No primary key found" };
-          }
+         const resultResult = await ds.request().query(query);
+         const result = resultResult.recordset;
+         if (result.length === 0) {
+            // No database PK constraint found - check if there's a soft PK defined in config
+            if (this.hasSoftPrimaryKeyInConfig(newEntity.SchemaName, newEntity.TableName)) {
+               logStatus(`         ✓ No database PK for ${newEntity.SchemaName}.${newEntity.TableName}, but soft PK found in config - allowing entity creation`);
+               return { shouldCreate: true, validationMessage: '' };
+            }
+            return { shouldCreate: false, validationMessage: "No primary key found" };
+         }
 
-          return { shouldCreate: true, validationMessage: '' };
+         return { shouldCreate: true, validationMessage: '' };
       }
       catch (error) {
          const errorMsg = 'Error validating new entity for table:' + newEntity?.TableName;
          console.error(errorMsg, error);
          return { shouldCreate: false, validationMessage: errorMsg };
+      }
+   }
+
+   /**
+    * Checks if a table has a soft primary key defined in the config/database-metadata-config.json file
+    */
+   protected hasSoftPrimaryKeyInConfig(schemaName: string, tableName: string): boolean {
+      const configPath = path.join(currentWorkingDirectory, 'config/database-metadata-config.json');
+      //is there even a file
+      if (!fs.existsSync(configPath)) {
+         return false;
+      }
+
+      try {
+         const configContent = fs.readFileSync(configPath, 'utf-8');
+         const config = JSON.parse(configContent);
+         //does file have contents at all
+         if (!config || !config.tables) {
+            return false;
+         }
+         //find where in config we have match
+         const tableConfig = config.tables.find(
+            (t: { schemaName?: string; tableName?: string }) =>
+               t.schemaName?.toLowerCase() === schemaName?.toLowerCase() &&
+               t.tableName?.toLowerCase() === tableName?.toLowerCase()
+         );
+         //is there primary key?
+         return Boolean(tableConfig?.primaryKeys && tableConfig.primaryKeys.length > 0);
+      } catch (e) {
+         return false;
       }
    }
 
