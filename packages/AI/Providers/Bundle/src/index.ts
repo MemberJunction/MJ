@@ -18,6 +18,7 @@ import { LoadAzureLLM, LoadAzureEmbedding } from '@memberjunction/ai-azure';
 import { LoadBedrockLLM, LoadBedrockEmbedding } from '@memberjunction/ai-bedrock';
 import { LoadBettyBotLLM } from '@memberjunction/ai-betty-bot';
 import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
+import { LoadCohereReranker } from '@memberjunction/ai-cohere';
 import { LoadElevenLabsAudioGenerator } from '@memberjunction/ai-elevenlabs';
 import { LoadGeminiLLM } from '@memberjunction/ai-gemini';
 import { LoadGroqLLM } from '@memberjunction/ai-groq';
@@ -79,4 +80,7 @@ export function LoadAIProviders(): void {
     // Specialized Providers
     LoadRexRecommendationsProvider();
     LoadPineconeVectorDB();
+
+    // Reranking Providers
+    LoadCohereReranker();
 }

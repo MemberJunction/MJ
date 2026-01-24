@@ -945,7 +945,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
         const needsFiltering = agentId || userId || companyId;
         const filter = needsFiltering ? (metadata: NoteEmbeddingMetadata) => {
-            if (agentId && metadata.agentId !== agentId) return false;
+            if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
             if (userId && metadata.userId && metadata.userId !== userId) return false;
             if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
             return true;
@@ -1025,7 +1025,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
         const needsFiltering = agentId || userId || companyId;
         const filter = needsFiltering ? (metadata: ExampleEmbeddingMetadata) => {
-            if (agentId && metadata.agentId !== agentId) return false;
+            if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
             if (userId && metadata.userId && metadata.userId !== userId) return false;
             if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
             return true;

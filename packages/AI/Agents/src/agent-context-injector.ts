@@ -1,7 +1,22 @@
-import { Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { LogError, LogStatus, RunView, UserInfo } from "@memberjunction/core";
 import { AIAgentNoteEntity, AIAgentExampleEntity } from "@memberjunction/core-entities";
 import { AIEngine } from "@memberjunction/aiengine";
 import { UserScope } from "@memberjunction/ai-core-plus";
+import { RerankerConfiguration, RerankerService } from "@memberjunction/ai-reranker";
+
+/**
+ * Options for observability integration when retrieving notes.
+ */
+export interface NotesObservabilityOptions {
+    /**
+     * Current agent run ID for tracing
+     */
+    agentRunID: string;
+    /**
+     * Parent step ID for hierarchical step logging
+     */
+    parentStepID?: string;
+}
 
 /**
  * Parameters for retrieving notes in a specific context
@@ -22,6 +37,17 @@ export interface GetNotesParams {
      * - Fully-scoped notes (e.g., contact-level)
      */
     userScope?: UserScope;
+    /**
+     * Optional reranker configuration for two-stage retrieval.
+     * When enabled, fetches more candidates via vector search,
+     * then reranks them using a semantic reranker for better relevance.
+     */
+    rerankerConfig?: RerankerConfiguration | null;
+    /**
+     * Optional observability context for tracing reranking operations.
+     * When provided, reranking will create an AIAgentRunStep record.
+     */
+    observability?: NotesObservabilityOptions;
 }
 
 /**
@@ -76,19 +102,75 @@ export class AgentContextInjector {
     }
 
     /**
-     * Get notes using semantic search via AIEngine
+     * Get notes using semantic search via AIEngine.
+     * Supports optional two-stage retrieval with reranking for improved relevance.
+     *
+     * When reranking is enabled:
+     * 1. Fetch N * retrievalMultiplier candidates via vector search
+     * 2. Rerank candidates using configured reranker
+     * 3. Return top N reranked results
+     *
+     * Fallback behavior (controlled by config.fallbackOnError):
+     * - If true: On reranking failure, gracefully falls back to vector search results
+     * - If false: Propagates reranking errors to caller
      */
     private async getNotesViaSemanticSearch(params: GetNotesParams): Promise<AIAgentNoteEntity[]> {
+        const config = params.rerankerConfig;
+
+        // Calculate candidates to fetch (more if reranking enabled)
+        const fetchCount = config?.enabled
+            ? params.maxNotes * config.retrievalMultiplier
+            : params.maxNotes;
+
+        // Stage 1: Vector search
         const matches = await AIEngine.Instance.FindSimilarAgentNotes(
             params.currentInput!,
             params.agentId,
             params.userId,
             params.companyId,
-            params.maxNotes
+            fetchCount
         );
 
-        // Return entities directly from vector service (no database round-trip)
-        return matches.map(m => m.note);
+        // If no reranker config or disabled, return vector results directly
+        if (!config?.enabled) {
+            return matches.slice(0, params.maxNotes).map(m => m.note);
+        }
+
+        // Stage 2: Rerank candidates with fallback handling
+        LogStatus(`AgentContextInjector: Reranking ${matches.length} candidates to top ${params.maxNotes}`);
+        const rerankerService = RerankerService.Instance;
+
+        try {
+            const rerankResult = await rerankerService.rerankNotes(
+                matches,
+                params.currentInput!,
+                config,
+                params.contextUser,
+                params.observability ? {
+                    agentRunID: params.observability.agentRunID,
+                    parentStepID: params.observability.parentStepID
+                } : undefined
+            );
+
+            // Return top N reranked notes
+            const result = rerankResult.notes.slice(0, params.maxNotes).map(m => m.note);
+            LogStatus(`AgentContextInjector: Returning ${result.length} notes after reranking`);
+            return result;
+
+        } catch (error) {
+            // Fallback decision is made HERE in the agent class, not in the service
+            const message = error instanceof Error ? error.message : String(error);
+
+            if (config.fallbackOnError) {
+                // Graceful fallback to vector search results
+                LogStatus(`AgentContextInjector: Reranking failed (${message}), falling back to vector search results`);
+                return matches.slice(0, params.maxNotes).map(m => m.note);
+            }
+
+            // No fallback - propagate the error
+            LogError(`AgentContextInjector: Reranking failed and fallbackOnError is false: ${message}`);
+            throw error;
+        }
     }
 
     /**

@@ -1,4 +1,5 @@
 import { BaseAgent } from './base-agent';
+import { RegisterClass } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import {
     ConversationDetailEntity,
@@ -62,6 +63,7 @@ interface ExtractedExample {
  * This agent runs on a schedule (every 15 minutes) and analyzes high-quality conversations
  * and agent runs to extract learnings and example interactions.
  */
+@RegisterClass(BaseAgent, 'MemoryManagerAgent')
 export class MemoryManagerAgent extends BaseAgent {
     /**
      * Get the last run timestamp for this agent to determine what to process.
@@ -90,7 +92,25 @@ export class MemoryManagerAgent extends BaseAgent {
      * Only extract notes/examples for agents that actually use these features.
      */
     private async LoadAgentsUsingMemory(contextUser: UserInfo): Promise<AIAgentEntityExtended[]> {
-        const filteredAgents = AIEngine.Instance.Agents.filter(a => a.Status === 'Active' && (a.InjectNotes || a.InjectExamples));
+        // Debug: Log all agents and their memory settings
+        const allAgents = AIEngine.Instance.Agents;
+        LogStatus(`Memory Manager: AIEngine has ${allAgents.length} total agents cached`);
+
+        const filteredAgents = allAgents.filter(a => a.Status === 'Active' && (a.InjectNotes || a.InjectExamples));
+
+        // Debug: Log which agents have memory enabled
+        if (filteredAgents.length > 0) {
+            const agentNames = filteredAgents.map(a => `${a.Name} (InjectNotes=${a.InjectNotes}, InjectExamples=${a.InjectExamples})`).join(', ');
+            LogStatus(`Memory Manager: Agents with memory enabled: ${agentNames}`);
+        }
+
+        // Debug: Check if Sage is in the list
+        const sage = allAgents.find(a => a.Name === 'Sage');
+        if (sage) {
+            LogStatus(`Memory Manager: Sage agent - ID=${sage.ID}, InjectNotes=${sage.InjectNotes}, InjectExamples=${sage.InjectExamples}, Status=${sage.Status}`);
+        } else {
+            LogStatus(`Memory Manager: WARNING - Sage agent not found in AIEngine cache!`);
+        }
 
         return filteredAgents;
     }
@@ -114,23 +134,28 @@ export class MemoryManagerAgent extends BaseAgent {
         const rv = new RunView();
 
         // Build filter with subquery for high ratings
-        const sinceFilter = since ? `AND cd.__mj_CreatedAt >= '${since.toISOString()}'` : '';
+        const sinceFilter = since ? `AND __mj_CreatedAt >= '${since.toISOString()}'` : '';
 
         // Filter to only agents that use memory
         const agentIdFilter = agentsUsingMemory.map(a => `'${a.ID}'`).join(',');
 
+        // IMPORTANT: Load ALL messages (both User and AI) from conversations that have at least one
+        // high-rated AI message. This ensures the extraction prompt has full context including
+        // the user's request that triggered the AI response.
+        // Use fully qualified view name for column references in EXISTS subqueries.
         const filter = `
             Status = 'Complete'
-            AND Role = 'AI'
             ${sinceFilter}
             AND EXISTS (
-                SELECT 1 FROM ConversationDetailRating cdr
-                WHERE cdr.ConversationDetailID = cd.ID
+                SELECT 1 FROM __mj.ConversationDetail cd_rated
+                JOIN __mj.ConversationDetailRating cdr ON cdr.ConversationDetailID = cd_rated.ID
+                WHERE cd_rated.ConversationID = [__mj].[vwConversationDetails].ConversationID
+                AND cd_rated.Role = 'AI'
                 AND cdr.Rating >= 8
             )
             AND EXISTS (
-                SELECT 1 FROM AIAgentRun ar
-                WHERE ar.ConversationID = cd.ConversationID
+                SELECT 1 FROM __mj.AIAgentRun ar
+                WHERE ar.ConversationID = [__mj].[vwConversationDetails].ConversationID
                 AND ar.AgentID IN (${agentIdFilter})
             )
         `.trim().replace(/\s+/g, ' ');
@@ -159,14 +184,14 @@ export class MemoryManagerAgent extends BaseAgent {
         const filter = `
             ID IN (
                 SELECT DISTINCT ar.ID
-                FROM AIAgentRun ar
-                INNER JOIN Conversation c ON ar.ConversationID = c.ID
-                INNER JOIN ConversationDetail cd ON cd.ConversationID = c.ID
-                INNER JOIN ConversationDetailArtifact cda ON cda.ConversationDetailID = cd.ID
-                INNER JOIN ArtifactVersion av ON av.ID = cda.ArtifactVersionID
+                FROM __mj.AIAgentRun ar
+                INNER JOIN __mj.Conversation c ON ar.ConversationID = c.ID
+                INNER JOIN __mj.ConversationDetail cd ON cd.ConversationID = c.ID
+                INNER JOIN __mj.ConversationDetailArtifact cda ON cda.ConversationDetailID = cd.ID
+                INNER JOIN __mj.ArtifactVersion av ON av.ID = cda.ArtifactVersionID
                 WHERE EXISTS (
                     SELECT 1
-                    FROM ArtifactUse au
+                    FROM __mj.ArtifactUse au
                     WHERE au.ArtifactVersionID = av.ID
                     ${sinceFilter}
                     GROUP BY au.ArtifactVersionID
@@ -243,7 +268,16 @@ export class MemoryManagerAgent extends BaseAgent {
 
         if (!prompt) {
             LogError('Memory Manager note extraction prompt not found');
+            LogStatus(`Memory Manager: Available prompts in MJ: System category: ${AIEngine.Instance.Prompts.filter(p => p.Category === 'MJ: System').map(p => p.Name).join(', ')}`);
             return [];
+        }
+
+        LogStatus(`Memory Manager: Found extraction prompt "${prompt.Name}" (ID: ${prompt.ID})`);
+        LogStatus(`Memory Manager: Sending ${conversationThreads.length} conversation threads with ${conversationThreads.reduce((sum, t) => sum + t.messages.length, 0)} total messages for note extraction`);
+        // Debug: Log first conversation thread to verify user messages are included
+        if (conversationThreads.length > 0) {
+            const firstThread = conversationThreads[0];
+            LogStatus(`Memory Manager: Sample thread (conv ${firstThread.conversationId}): ${firstThread.messages.map(m => `[${m.role}] ${m.message?.substring(0, 80)}...`).join(' | ')}`)
         }
 
         // Execute AI extraction
@@ -255,13 +289,35 @@ export class MemoryManagerAgent extends BaseAgent {
 
         const result = await runner.ExecutePrompt<{ notes: ExtractedNote[] }>(params);
 
+        LogStatus(`Memory Manager: Extraction prompt result - success: ${result.success}, hasResult: ${!!result.result}`);
+        if (result.errorMessage) {
+            LogStatus(`Memory Manager: Extraction error: ${result.errorMessage}`);
+        }
+        if (result.result) {
+            LogStatus(`Memory Manager: Raw extraction result: ${JSON.stringify(result.result)}`);
+        }
+
         if (!result.success || !result.result) {
             LogError('Failed to extract notes:', result.errorMessage);
             return [];
         }
 
+        // Parse result if it's a string (AI sometimes returns JSON as string)
+        let parsedResult: { notes: ExtractedNote[] };
+        if (typeof result.result === 'string') {
+            try {
+                parsedResult = JSON.parse(result.result);
+                LogStatus(`Memory Manager: Parsed string result into object with ${parsedResult.notes?.length || 0} notes`);
+            } catch (e) {
+                LogError('Failed to parse extraction result as JSON:', e);
+                return [];
+            }
+        } else {
+            parsedResult = result.result;
+        }
+
         // Filter by confidence threshold
-        const candidateNotes = (result.result.notes || []).filter(n => n.confidence >= 70);
+        const candidateNotes = (parsedResult.notes || []).filter(n => n.confidence >= 70);
 
         if (candidateNotes.length === 0) {
             return [];
@@ -365,7 +421,20 @@ export class MemoryManagerAgent extends BaseAgent {
             return [];
         }
 
-        const candidateExamples = (extractResult.result.examples || [])
+        // Parse result if it's a string (AI sometimes returns JSON as string)
+        let parsedResult: { examples: ExtractedExample[] };
+        if (typeof extractResult.result === 'string') {
+            try {
+                parsedResult = JSON.parse(extractResult.result);
+            } catch (e) {
+                LogError('Failed to parse example extraction result as JSON:', e);
+                return [];
+            }
+        } else {
+            parsedResult = extractResult.result;
+        }
+
+        const candidateExamples = (parsedResult.examples || [])
             .filter(e => e.successScore >= 70 && e.confidence >= 70);
 
         if (candidateExamples.length === 0) {
@@ -435,14 +504,15 @@ export class MemoryManagerAgent extends BaseAgent {
         // Cache source agent runs to avoid repeated lookups
         const runCache = new Map<string, AIAgentRunEntity | null>();
 
+        // Get the "AI" note type ID for AI-generated notes
+        const aiNoteTypeId = AIEngine.Instance.AgenteNoteTypeIDByName('AI');
+        if (!aiNoteTypeId) {
+            LogError('Memory Manager: Could not find "AI" note type - cannot create notes');
+            return 0;
+        }
+
         for (const extracted of extractedNotes) {
             try {
-                // Look up the AgentNoteTypeID from the type name
-                const noteTypeId = AIEngine.Instance.AgenteNoteTypeIDByName(extracted.type);
-                if (!noteTypeId) {
-                    LogError(`Memory Manager: Unknown note type "${extracted.type}" - skipping note creation`);
-                    continue;
-                }
 
                 // Load source agent run for scope inheritance (if available)
                 let sourceRun: AIAgentRunEntity | null = null;
@@ -466,21 +536,28 @@ export class MemoryManagerAgent extends BaseAgent {
                         // Update existing note
                         existingNote.Note = extracted.content;
                         existingNote.Type = extracted.type;
-                        existingNote.AgentNoteTypeID = noteTypeId;
+                        existingNote.AgentNoteTypeID = aiNoteTypeId;
                         await existingNote.Save();
                         created++;
                     }
                 } else {
                     // Create new note
                     const note = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
-                    note.AgentID = extracted.agentId || null;
-                    note.UserID = extracted.userId || null;
-                    note.CompanyID = extracted.companyId || null;
-                    note.AgentNoteTypeID = noteTypeId;
-                    note.Type = extracted.type;
+                    // Only use valid UUIDs, filter out placeholders like "user-uuid-here"
+                    const isValidUUID = (id: string | undefined | null): boolean => {
+                        if (!id) return false;
+                        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+                    };
+                    note.AgentID = isValidUUID(extracted.agentId) ? extracted.agentId! : null;
+                    note.UserID = isValidUUID(extracted.userId) ? extracted.userId! : null;
+                    note.CompanyID = isValidUUID(extracted.companyId) ? extracted.companyId! : null;
+                    note.AgentNoteTypeID = aiNoteTypeId;  // "AI" type for AI-generated notes
+                    note.Type = extracted.type;  // Category: Preference, Constraint, Context, Issue, Example
                     note.Note = extracted.content;
                     note.IsAutoGenerated = true;
                     note.Status = 'Active'; // Auto-approve high-confidence notes
+                    note.AccessCount = 1; // Required field - testing with non-zero value
+                    LogStatus(`Memory Manager: Set AccessCount to ${note.AccessCount}`);
                     note.SourceConversationID = extracted.sourceConversationId || null;
                     note.SourceConversationDetailID = extracted.sourceConversationDetailId || null;
                     note.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
@@ -507,12 +584,20 @@ export class MemoryManagerAgent extends BaseAgent {
                         }
                     }
 
-                    if (await note.Save()) {
+                    LogStatus(`Memory Manager: Attempting to save note - Type: ${note.Type}, AccessCount: ${note.AccessCount}, Content: ${note.Note?.substring(0, 50)}...`);
+                    // Debug: check the actual internal state
+                    const allFields = note.GetAll();
+                    LogStatus(`Memory Manager: GetAll() AccessCount=${allFields.AccessCount}, Dirty=${note.Dirty}, Fields=${JSON.stringify(note.Fields.filter(f => f.Name === 'AccessCount'))}`);
+                    const saveResult = await note.Save();
+                    if (saveResult) {
+                        LogStatus(`Memory Manager: Successfully created note ID: ${note.ID}`);
                         created++;
+                    } else {
+                        LogError(`Memory Manager: Failed to save note - Validation errors: ${JSON.stringify(note.LatestResult)}`);
                     }
                 }
             } catch (error) {
-                LogError('Failed to create note:', error);
+                LogError('Memory Manager: Exception creating note:', error);
             }
         }
 

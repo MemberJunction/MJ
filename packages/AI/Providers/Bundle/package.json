@@ -22,6 +22,7 @@
     "@memberjunction/ai-bedrock": "3.0.0",
     "@memberjunction/ai-betty-bot": "3.0.0",
     "@memberjunction/ai-cerebras": "3.0.0",
+    "@memberjunction/ai-cohere": "3.0.0",
     "@memberjunction/ai-elevenlabs": "3.0.0",
     "@memberjunction/ai-gemini": "3.0.0",
     "@memberjunction/ai-groq": "3.0.0",

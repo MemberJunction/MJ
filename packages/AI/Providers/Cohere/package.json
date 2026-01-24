@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ai-agents",
+  "name": "@memberjunction/ai-cohere",
   "version": "3.0.0",
-  "description": "MemberJunction: AI Agent Execution and Management",
+  "description": "MemberJunction: Cohere AI Provider - Semantic reranking using Cohere's Rerank API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -15,23 +15,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "3.0.0",
-    "@memberjunction/actions-base": "3.0.0",
     "@memberjunction/ai": "3.0.0",
-    "@memberjunction/ai-core-plus": "3.0.0",
-    "@memberjunction/ai-engine-base": "3.0.0",
-    "@memberjunction/ai-prompts": "3.0.0",
-    "@memberjunction/ai-reranker": "3.0.0",
-    "@memberjunction/aiengine": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/core-entities": "3.0.0",
     "@memberjunction/global": "3.0.0",
-    "dotenv": "^16.4.1",
-    "lodash": "^4.17.21",
-    "rxjs": "^7.8.1"
+    "cohere-ai": "^7.14.0"
   },
   "devDependencies": {
-    "@types/lodash": "^4.14.202",
     "@types/node": "20.14.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"

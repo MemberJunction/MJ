@@ -22,6 +22,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentContextInjector } from './agent-context-injector';
+import { RerankerService } from '@memberjunction/ai-reranker';
 import {
     AIPromptParams,
     AIPromptRunResult,
@@ -884,6 +885,11 @@ export class BaseAgent {
 
         const injector = new AgentContextInjector();
 
+        // Parse reranker configuration if present
+        // Access dynamically since field may not exist until CodeGen runs after migration
+        const rerankerConfigJson = agent.Get('RerankerConfiguration') as string | null;
+        const rerankerConfig = RerankerService.Instance.parseConfiguration(rerankerConfigJson);
+
         // Get notes if injection enabled
         const notes = agent.InjectNotes
             ? await injector.GetNotesForContext({
@@ -893,9 +899,15 @@ export class BaseAgent {
                 currentInput: input,
                 strategy: agent.NoteInjectionStrategy as 'Relevant' | 'Recent' | 'All',
                 maxNotes: agent.MaxNotesToInject || 5,
-                contextUser: contextUser!
+                contextUser: contextUser!,
+                rerankerConfig,
+                // Pass observability context for run step tracking
+                observability: this._agentRun ? {
+                    agentRunID: this._agentRun.ID
+                } : undefined
             })
             : [];
+        this.logStatus(`BaseAgent: Got ${notes.length} notes from injector`, true);
 
         // Get examples if injection enabled
         const examples = agent.InjectExamples

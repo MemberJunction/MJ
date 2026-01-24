@@ -22,3 +22,14 @@ export * from './types/payload-operations';
 export * from './AgentDataPreloader';
 export * from './agent-context-injector';
 export * from './memory-manager-agent';
+
+// Re-export from ai-reranker for backward compatibility
+export {
+    RerankerService,
+    RerankerConfiguration,
+    parseRerankerConfiguration,
+    RerankServiceResult,
+    RerankObservabilityOptions,
+    LLMReranker,
+    LoadLLMReranker
+} from '@memberjunction/ai-reranker';

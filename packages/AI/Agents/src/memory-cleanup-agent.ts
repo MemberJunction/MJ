@@ -1,7 +1,7 @@
 import { BaseAgent } from './base-agent';
 import { UserInfo, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
-import { ExecuteAgentParams, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentParams, AIAgentEntityExtended, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 /**
@@ -33,13 +33,13 @@ export class MemoryCleanupAgent extends BaseAgent {
     /**
      * Main entry point for the cleanup agent
      */
-    protected override async ExecuteAgentInternal(
+    protected override async executeAgentInternal<P = any>(
         params: ExecuteAgentParams,
-        agentEntity: AIAgentEntityExtended,
-        contextUser: UserInfo
-    ): Promise<string> {
+        config: AgentConfiguration
+    ): Promise<{finalStep: BaseAgentNextStep<P>, stepCount: number}> {
         LogStatus('MemoryCleanupAgent: Starting cleanup process');
 
+        const contextUser = params.contextUser!;
         const result: CleanupResult = {
             notesArchived: 0,
             examplesArchived: 0,
@@ -57,11 +57,23 @@ export class MemoryCleanupAgent extends BaseAgent {
 
             const summary = this.buildSummary(result);
             LogStatus(`MemoryCleanupAgent: Cleanup completed - ${summary}`);
-            return summary;
+
+            const finalStep: BaseAgentNextStep<P> = {
+                terminate: true,
+                step: 'Success',
+                message: summary
+            };
+            return { finalStep, stepCount: 1 };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             LogError('MemoryCleanupAgent: Cleanup failed', undefined, error);
-            return `Cleanup failed: ${errorMessage}`;
+
+            const finalStep: BaseAgentNextStep<P> = {
+                terminate: true,
+                step: 'Failed',
+                message: `Cleanup failed: ${errorMessage}`
+            };
+            return { finalStep, stepCount: 1 };
         }
     }
 
@@ -282,8 +294,9 @@ export class MemoryCleanupAgent extends BaseAgent {
      * Get note retention days for an agent (uses agent config or default)
      */
     private getNoteRetentionDays(agent: AIAgentEntityExtended): number {
-        // Check if agent has NoteRetentionDays property
-        const retention = (agent as Record<string, unknown>)['NoteRetentionDays'];
+        // Check if agent has NoteRetentionDays property using GetAll() for plain object access
+        const agentData = agent.GetAll();
+        const retention = agentData['NoteRetentionDays'];
         if (typeof retention === 'number' && retention > 0) {
             return retention;
         }
@@ -294,7 +307,8 @@ export class MemoryCleanupAgent extends BaseAgent {
      * Get example retention days for an agent (uses agent config or default)
      */
     private getExampleRetentionDays(agent: AIAgentEntityExtended): number {
-        const retention = (agent as Record<string, unknown>)['ExampleRetentionDays'];
+        const agentData = agent.GetAll();
+        const retention = agentData['ExampleRetentionDays'];
         if (typeof retention === 'number' && retention > 0) {
             return retention;
         }
@@ -305,7 +319,8 @@ export class MemoryCleanupAgent extends BaseAgent {
      * Check if auto-archive is enabled for an agent
      */
     private getAutoArchiveEnabled(agent: AIAgentEntityExtended): boolean {
-        const enabled = (agent as Record<string, unknown>)['AutoArchiveEnabled'];
+        const agentData = agent.GetAll();
+        const enabled = agentData['AutoArchiveEnabled'];
         // Default to true if not explicitly set to false
         return enabled !== false;
     }
