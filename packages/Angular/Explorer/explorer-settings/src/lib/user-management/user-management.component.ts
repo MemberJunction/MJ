@@ -68,6 +68,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public showCreateDialog = false;
   public showEditDialog = false;
   public showDeleteConfirm = false;
+  public showMobileFilters = false;
 
   // Mobile expansion state
   private expandedUserIds = new Set<string>();
@@ -430,6 +431,28 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
   public get selectedCount(): number {
     return this.selectedUserIds.size;
+  }
+
+  public get hasActiveFilters(): boolean {
+    const filters = this.filters$.value;
+    return filters.status !== 'all' || filters.role !== '';
+  }
+
+  public get activeFilterCount(): number {
+    let count = 0;
+    const filters = this.filters$.value;
+    if (filters.status !== 'all') count++;
+    if (filters.role !== '') count++;
+    return count;
+  }
+
+  public clearFilters(): void {
+    this.filters$.next({
+      ...this.filters$.value,
+      status: 'all',
+      role: ''
+    });
+    this.showMobileFilters = false;
   }
 
   public toggleSelectAll(): void {

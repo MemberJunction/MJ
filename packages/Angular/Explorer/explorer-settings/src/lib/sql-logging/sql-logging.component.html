@@ -23,54 +23,83 @@
     }
   </div>
 
-  <!-- Stats Cards -->
+  <!-- Stats Cards with Toggle -->
   @if (isOwner && configEnabled) {
-    <div class="stats-grid" role="region" aria-label="SQL logging statistics">
-      <div class="stat-card">
-        <div class="stat-icon stat-icon-status">
-          <i class="fa-solid fa-power-off" aria-hidden="true"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" [attr.aria-label]="'Status: ' + (configEnabled ? 'Enabled' : 'Disabled')">
-            {{ configEnabled ? "Enabled" : "Disabled" }}
+    <div class="stats-toggle-container">
+      <!-- Toggle Button -->
+      <button
+        class="stats-toggle-button"
+        [class.expanded]="showStats"
+        (click)="showStats = !showStats"
+        [attr.aria-expanded]="showStats"
+        aria-controls="stats-grid-content"
+      >
+        <div class="stats-toggle-left">
+          <div class="stats-toggle-icon">
+            <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
           </div>
-          <div class="stat-label">Status</div>
+          <div class="stats-toggle-text">
+            <h3 class="stats-toggle-title">Statistics</h3>
+            <p class="stats-toggle-subtitle">View session statistics and metrics</p>
+          </div>
         </div>
-      </div>
+        <i class="fa-solid fa-chevron-down stats-toggle-arrow" aria-hidden="true"></i>
+      </button>
 
-      <div class="stat-card">
-        <div class="stat-icon stat-icon-active">
-          <i class="fa-solid fa-play-circle" aria-hidden="true"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" [attr.aria-label]="activeSessions.length + ' active sessions'">
-            {{ activeSessions.length }}
+      <!-- Stats Grid (Collapsible) -->
+      <div
+        id="stats-grid-content"
+        class="stats-grid"
+        [class.visible]="showStats"
+        role="region"
+        aria-label="SQL logging statistics"
+      >
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-status">
+            <i class="fa-solid fa-power-off" aria-hidden="true"></i>
           </div>
-          <div class="stat-label">Active Sessions</div>
+          <div class="stat-content">
+            <div class="stat-value" [attr.aria-label]="'Status: ' + (configEnabled ? 'Enabled' : 'Disabled')">
+              {{ configEnabled ? "Enabled" : "Disabled" }}
+            </div>
+            <div class="stat-label">Status</div>
+          </div>
         </div>
-      </div>
 
-      <div class="stat-card">
-        <div class="stat-icon stat-icon-limit">
-          <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" [attr.aria-label]="(sqlLoggingConfig?.maxActiveSessions || 5) + ' maximum sessions allowed'">
-            {{ sqlLoggingConfig?.maxActiveSessions || 5 }}
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-active">
+            <i class="fa-solid fa-play-circle" aria-hidden="true"></i>
           </div>
-          <div class="stat-label">Max Sessions</div>
+          <div class="stat-content">
+            <div class="stat-value" [attr.aria-label]="activeSessions.length + ' active sessions'">
+              {{ activeSessions.length }}
+            </div>
+            <div class="stat-label">Active Sessions</div>
+          </div>
         </div>
-      </div>
 
-      <div class="stat-card">
-        <div class="stat-icon stat-icon-total">
-          <i class="fa-solid fa-database" aria-hidden="true"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" [attr.aria-label]="getTotalStatementCount() + ' total SQL statements captured'">
-            {{ getTotalStatementCount() }}
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-limit">
+            <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
           </div>
-          <div class="stat-label">Total Statements</div>
+          <div class="stat-content">
+            <div class="stat-value" [attr.aria-label]="(sqlLoggingConfig?.maxActiveSessions || 5) + ' maximum sessions allowed'">
+              {{ sqlLoggingConfig?.maxActiveSessions || 5 }}
+            </div>
+            <div class="stat-label">Max Sessions</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-total">
+            <i class="fa-solid fa-database" aria-hidden="true"></i>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value" [attr.aria-label]="getTotalStatementCount() + ' total SQL statements captured'">
+              {{ getTotalStatementCount() }}
+            </div>
+            <div class="stat-label">Total Statements</div>
+          </div>
         </div>
       </div>
     </div>

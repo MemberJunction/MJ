@@ -98,6 +98,9 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
   /** Whether the start session dialog is currently visible */
   showStartSessionDialog = false;
 
+  /** Whether to show the statistics cards section */
+  showStats = false;
+
   /** Whether the log viewer is in expanded (fullscreen) mode */
   isLogViewerExpanded = false;
 
