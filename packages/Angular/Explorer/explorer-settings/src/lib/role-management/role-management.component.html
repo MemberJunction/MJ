@@ -68,20 +68,33 @@
     <!-- Filters Section -->
     <div class="filters-section" role="search" aria-label="Filter roles">
       <div class="filters-row">
-        <!-- Search - Enhanced prominent search box -->
-        <div class="mj-search">
-          <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
-          <input
-            type="text"
-            class="mj-search-input"
-            placeholder="Search roles by name or description..."
-            (input)="onSearchChange($event)"
-            [value]="filters$.value.search"
-            aria-label="Search roles by name or description"
-          />
+        <!-- Mobile: Search + Filter Button Container -->
+        <div class="mobile-search-container">
+          <!-- Search - Enhanced prominent search box -->
+          <div class="mj-search">
+            <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
+            <input
+              type="text"
+              class="mj-search-input"
+              placeholder="Search roles by name or description..."
+              (input)="onSearchChange($event)"
+              [value]="filters$.value.search"
+              aria-label="Search roles by name or description"
+            />
+          </div>
+
+          <!-- Filter Button (Mobile Only) -->
+          <button
+            class="filter-button"
+            (click)="showMobileFilters = true"
+            aria-label="Open filters"
+          >
+            <i class="fa-solid fa-filter" aria-hidden="true"></i>
+            <span>Filters</span>
+          </button>
         </div>
 
-        <!-- Type Filter -->
+        <!-- Type Filter (Desktop) -->
         <div class="mj-filter-group">
           <label class="mj-filter-label" id="type-filter-label">Type</label>
           <div class="mj-filter-buttons" role="group" aria-labelledby="type-filter-label">
@@ -325,6 +338,102 @@
             }
           </button>
           <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Mobile Filter Modal -->
+  @if (showMobileFilters) {
+    <div
+      class="filter-modal-backdrop"
+      (click)="showMobileFilters = false"
+      role="presentation"
+    >
+      <div
+        class="filter-modal"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="filter-modal-title"
+      >
+        <div class="filter-modal-header">
+          <h3 class="filter-modal-title" id="filter-modal-title">
+            <i class="fa-solid fa-filter" aria-hidden="true"></i>
+            Filters
+          </h3>
+          <button
+            class="filter-modal-close"
+            (click)="showMobileFilters = false"
+            aria-label="Close filters"
+          >
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <div class="filter-modal-body">
+          <div class="filter-options-container">
+            <!-- Type Filter -->
+            <div class="filter-group">
+              <h4 class="filter-group-label">Type</h4>
+              <div class="filter-group-options">
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.type === 'all'"
+                >
+                  <input
+                    type="radio"
+                    name="type"
+                    value="all"
+                    [checked]="filters$.value.type === 'all'"
+                    (change)="onTypeFilterChange('all')"
+                  />
+                  <span class="filter-option-label">All Roles</span>
+                </label>
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.type === 'system'"
+                >
+                  <input
+                    type="radio"
+                    name="type"
+                    value="system"
+                    [checked]="filters$.value.type === 'system'"
+                    (change)="onTypeFilterChange('system')"
+                  />
+                  <span class="filter-option-label">System Roles</span>
+                </label>
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.type === 'custom'"
+                >
+                  <input
+                    type="radio"
+                    name="type"
+                    value="custom"
+                    [checked]="filters$.value.type === 'custom'"
+                    (change)="onTypeFilterChange('custom')"
+                  />
+                  <span class="filter-option-label">Custom Roles</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-modal-footer">
+          <button
+            class="mj-btn mj-btn-primary"
+            (click)="showMobileFilters = false"
+          >
+            Apply Filters
+          </button>
+          <button
+            class="mj-btn mj-btn-secondary"
+            (click)="showMobileFilters = false"
+          >
             Cancel
           </button>
         </div>

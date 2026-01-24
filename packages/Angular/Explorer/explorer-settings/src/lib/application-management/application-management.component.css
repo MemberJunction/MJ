@@ -1,10 +1,13 @@
 /* =============================================================================
    Application Management Component - MD3 Design System
-   Following UIUX-DESIGN-GUIDE.md principles
+   Following Material Design 3 color palette and design tokens
    ============================================================================= */
 
-/* Host element fills container but doesn't scroll itself */
+/* -----------------------------------------------------------------------------
+   Host Element - Using shared MD3 tokens from _md3-theme.scss
+   ----------------------------------------------------------------------------- */
 :host {
+  /* Host element fills container but doesn't scroll itself */
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -92,7 +95,7 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Statistics Cards - Compact for sticky header
+   Statistics Cards - Static Display (Non-interactive)
    ----------------------------------------------------------------------------- */
 .mj-grid-4 {
   display: grid;
@@ -117,98 +120,105 @@
 }
 
 .mj-card {
-  background: var(--mat-sys-surface-container);
-  border-radius: var(--mat-sys-corner-small);
-  padding: 0.75rem;
+  background: var(--mat-sys-surface-container-low);
+  border-radius: var(--mat-sys-corner-medium);
+  padding: 1rem;
   box-shadow: none;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  transition: background-color 0.2s ease;
+  gap: 1rem;
   border: 1px solid var(--mat-sys-outline-variant);
-}
-
-.mj-card:hover {
-  background: var(--mat-sys-surface-container-high);
+  cursor: default;
+  pointer-events: none;
 }
 
 @media (min-width: 768px) {
   .mj-card {
-    padding: 0.875rem 1rem;
+    padding: 1rem 1.25rem;
   }
 }
 
+/* -----------------------------------------------------------------------------
+   Stat Icon Containers
+   ----------------------------------------------------------------------------- */
 .stat-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--mat-sys-corner-small);
+  width: 48px;
+  height: 48px;
+  border-radius: var(--mat-sys-corner-medium);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   flex-shrink: 0;
 }
 
 @media (min-width: 768px) {
   .stat-icon {
-    width: 44px;
-    height: 44px;
-    font-size: 1.25rem;
+    width: 52px;
+    height: 52px;
+    font-size: 1.375rem;
   }
 }
 
 .stat-icon-total {
   background: var(--mat-sys-primary-container);
-  color: var(--mat-sys-on-primary-container);
+  color: var(--mat-sys-primary);
 }
 
 .stat-icon-active {
   background: var(--mat-sys-tertiary-container);
-  color: var(--mat-sys-on-tertiary-container);
+  color: var(--mat-sys-tertiary);
 }
 
 .stat-icon-entities {
   background: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
+  color: #B5751A;
 }
 
 .stat-icon-public {
   background: var(--mat-sys-tertiary-container);
-  color: var(--mat-sys-on-tertiary-container);
+  color: var(--mat-sys-tertiary);
 }
 
+/* -----------------------------------------------------------------------------
+   Stat Content Typography
+   ----------------------------------------------------------------------------- */
 .stat-content {
   flex: 1;
   min-width: 0;
 }
 
 .stat-content .stat-value {
-  font: var(--mat-sys-title-large);
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--mat-sys-on-surface);
   line-height: 1;
+  letter-spacing: -0.02em;
 }
 
 @media (min-width: 768px) {
   .stat-content .stat-value {
-    font: var(--mat-sys-headline-small);
+    font-size: 2rem;
   }
 }
 
 .stat-content .stat-label {
-  font: var(--mat-sys-label-small);
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--mat-sys-on-surface-variant);
-  margin-top: 0.125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
 }
 
 @media (min-width: 768px) {
   .stat-content .stat-label {
-    font: var(--mat-sys-body-small);
+    font-size: 0.8125rem;
   }
 }
 
 /* -----------------------------------------------------------------------------
-   Filters Section - Compact in sticky header
+   Filters Section
    ----------------------------------------------------------------------------- */
 .filters-section {
   flex-shrink: 0;
@@ -239,11 +249,13 @@
   }
 }
 
-/* MJ Search Component - Enhanced prominent search */
+/* -----------------------------------------------------------------------------
+   Search Input
+   ----------------------------------------------------------------------------- */
 .mj-search {
+  position: relative;
   flex: 1;
   min-width: 200px;
-  position: relative;
 }
 
 @media (min-width: 640px) {
@@ -252,7 +264,6 @@
   }
 }
 
-/* Large screens - Full width prominent search */
 @media (min-width: 1024px) {
   .mj-search {
     min-width: 400px;
@@ -280,27 +291,25 @@
 @media (min-width: 1024px) {
   .mj-search .mj-search-icon {
     left: 1.25rem;
-    font-size: 1.25rem;
+    font-size: 1.125rem;
   }
 }
 
 .mj-search .mj-search-input {
   width: 100%;
-  padding: 0.75rem 1rem 0.75rem 2.75rem;
-  border: 2px solid var(--mat-sys-outline);
-  border-radius: var(--mat-sys-corner-medium);
-  font: var(--mat-sys-body-large);
+  padding: 0.875rem 1rem 0.875rem 2.75rem;
+  border: 2px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-full);
+  font-size: 1rem;
   background: var(--mat-sys-surface);
   color: var(--mat-sys-on-surface);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Large screens - Bigger search input */
 @media (min-width: 1024px) {
   .mj-search .mj-search-input {
     padding: 1rem 1.25rem 1rem 3.25rem;
-    font: var(--mat-sys-title-medium);
-    border-radius: var(--mat-sys-corner-large);
+    font-size: 1.0625rem;
     box-shadow: var(--mat-sys-elevation-1);
   }
 }
@@ -317,20 +326,19 @@
 
 .mj-search .mj-search-input:hover {
   border-color: var(--mat-sys-primary);
-  background: var(--mat-sys-surface-container-low);
+  background: var(--mat-sys-surface-container-lowest);
 }
 
 .mj-search .mj-search-input:focus {
   outline: none;
   border-color: var(--mat-sys-primary);
-  box-shadow: 0 0 0 4px var(--mat-sys-primary-container);
+  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
   background: var(--mat-sys-surface);
 }
 
-/* Large screens - More prominent focus state */
 @media (min-width: 1024px) {
   .mj-search .mj-search-input:focus {
-    box-shadow: var(--mat-sys-elevation-2), 0 0 0 4px var(--mat-sys-primary-container);
+    box-shadow: var(--mat-sys-elevation-2), 0 0 0 3px rgba(0, 118, 182, 0.2);
   }
 }
 
@@ -338,7 +346,9 @@
   color: var(--mat-sys-primary);
 }
 
-/* MJ Filter Group */
+/* -----------------------------------------------------------------------------
+   Filter Button Group
+   ----------------------------------------------------------------------------- */
 .mj-filter-group {
   display: flex;
   flex-direction: column;
@@ -346,25 +356,40 @@
 }
 
 .mj-filter-group .mj-filter-label {
-  font: var(--mat-sys-label-medium);
+  font-size: 0.8125rem;
+  font-weight: 500;
   color: var(--mat-sys-on-surface);
 }
 
 .mj-filter-group .mj-filter-buttons {
   display: flex;
-  background: var(--mat-sys-surface-container);
-  border-radius: var(--mat-sys-corner-small);
+  background: #EDF0F4;
+  border-radius: var(--mat-sys-corner-full);
   padding: 4px;
+  gap: 2px;
 }
 
-/* Filter button group styling */
 .mj-filter-buttons .mj-btn-ghost {
-  border-radius: var(--mat-sys-corner-extra-small);
+  border-radius: var(--mat-sys-corner-full);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mj-filter-buttons .mj-btn-ghost:hover:not(:disabled):not(.mj-btn-primary) {
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
 }
 
 .mj-filter-buttons .mj-btn-primary {
-  background-color: var(--mat-sys-primary);
+  background: var(--mat-sys-primary);
   color: var(--mat-sys-on-primary);
+  box-shadow: var(--mat-sys-elevation-1);
 }
 
 /* -----------------------------------------------------------------------------
@@ -375,7 +400,7 @@
   overflow: visible;
   position: relative;
   background: var(--mat-sys-surface);
-  border-radius: var(--mat-sys-corner-medium);
+  border-radius: var(--mat-sys-corner-large);
   box-shadow: var(--mat-sys-elevation-1);
   padding: 1rem;
   border: 1px solid var(--mat-sys-outline-variant);
@@ -397,14 +422,15 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Application Card
+   Application Card - Interactive
    ----------------------------------------------------------------------------- */
 .app-card {
   background: var(--mat-sys-surface);
   border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: var(--mat-sys-corner-medium);
+  border-radius: var(--mat-sys-corner-large);
   overflow: hidden;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
 }
 
 .app-card:hover {
@@ -422,17 +448,17 @@
 }
 
 .app-header {
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  background: var(--mat-sys-surface-container-low);
+  background: var(--mat-sys-surface-container-lowest);
   transition: background-color 0.2s ease;
 }
 
 .app-header:hover {
-  background: var(--mat-sys-surface-container);
+  background: var(--mat-sys-surface-container-low);
 }
 
 .app-info {
@@ -451,7 +477,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--mat-sys-on-primary-container);
+  color: var(--mat-sys-primary);
   font-size: 1.25rem;
   flex-shrink: 0;
 }
@@ -462,7 +488,8 @@
 }
 
 .app-details .app-name {
-  font: var(--mat-sys-title-medium);
+  font-size: 1.0625rem;
+  font-weight: 600;
   color: var(--mat-sys-on-surface);
   margin: 0 0 0.25rem 0;
   word-break: break-word;
@@ -470,7 +497,7 @@
 }
 
 .app-details .app-description {
-  font: var(--mat-sys-body-medium);
+  font-size: 0.9375rem;
   color: var(--mat-sys-on-surface-variant);
   margin: 0;
   overflow: hidden;
@@ -478,7 +505,6 @@
   white-space: nowrap;
 }
 
-/* Mobile: allow description to wrap */
 @media (max-width: 639px) {
   .app-details .app-description {
     white-space: normal;
@@ -502,19 +528,24 @@
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.25rem 0.75rem;
+  padding: 0.375rem 0.875rem;
   border-radius: var(--mat-sys-corner-full);
-  font: var(--mat-sys-label-small);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .status-badge.status-active {
   background: var(--mat-sys-tertiary-container);
-  color: var(--mat-sys-on-tertiary-container);
+  color: #1B5E20;
+  border: 1px solid var(--mat-sys-tertiary);
 }
 
 .status-badge.status-inactive {
   background: var(--mat-sys-error-container);
   color: var(--mat-sys-on-error-container);
+  border: 1px solid var(--mat-sys-error);
 }
 
 .status-badge i {
@@ -530,14 +561,14 @@
 }
 
 .expand-btn {
-  padding: 0.5rem;
+  padding: 0.625rem;
   border: none;
   background: transparent;
   color: var(--mat-sys-on-surface-variant);
   font-size: 1rem;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border-radius: var(--mat-sys-corner-small);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: var(--mat-sys-corner-full);
   min-width: 44px;
   min-height: 44px;
   display: flex;
@@ -546,8 +577,8 @@
 }
 
 .expand-btn:hover {
-  background: var(--mat-sys-surface-container);
-  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
 }
 
 .expand-btn i {
@@ -564,7 +595,6 @@
   animation: slideDown 0.3s cubic-bezier(0, 0, 0.2, 1);
 }
 
-/* Mobile actions bar - hidden on desktop by default */
 .mobile-actions-bar {
   display: none;
 }
@@ -591,7 +621,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font: var(--mat-sys-body-medium);
+  font-size: 0.9375rem;
 }
 
 .app-stats .stat-item i {
@@ -604,7 +634,7 @@
 
 .app-stats .stat-item .stat-value {
   color: var(--mat-sys-on-surface);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* -----------------------------------------------------------------------------
@@ -619,14 +649,16 @@
 .entities-section .section-title {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font: var(--mat-sys-title-small);
+  gap: 0.625rem;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--mat-sys-on-surface);
   margin: 0 0 1rem 0;
 }
 
 .entities-section .section-title i {
   color: var(--mat-sys-primary);
+  font-size: 1.125rem;
 }
 
 .entities-grid {
@@ -646,7 +678,7 @@
   background: var(--mat-sys-surface);
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: var(--mat-sys-corner-small);
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .entity-item:hover {
@@ -655,7 +687,8 @@
 }
 
 .entity-item .entity-name {
-  font: var(--mat-sys-label-large);
+  font-size: 0.9375rem;
+  font-weight: 600;
   color: var(--mat-sys-on-surface);
   margin-bottom: 0.25rem;
 }
@@ -664,29 +697,33 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font: var(--mat-sys-body-small);
+  font-size: 0.8125rem;
   color: var(--mat-sys-on-surface-variant);
 }
 
 .entity-badge {
   padding: 0.125rem 0.5rem;
   border-radius: var(--mat-sys-corner-full);
-  font: var(--mat-sys-label-small);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .entity-badge.public {
   background: var(--mat-sys-tertiary-container);
-  color: var(--mat-sys-on-tertiary-container);
+  color: #1B5E20;
+  border: 1px solid var(--mat-sys-tertiary);
 }
 
 .entity-sequence {
-  font: var(--mat-sys-body-small);
+  font-size: 0.8125rem;
   color: var(--mat-sys-on-surface-variant);
 }
 
 .no-entities {
   color: var(--mat-sys-on-surface-variant);
-  font: var(--mat-sys-body-medium);
+  font-size: 0.9375rem;
   text-align: center;
   padding: 1rem;
   margin: 0;
@@ -703,23 +740,24 @@
 .empty-state .empty-icon {
   font-size: 4rem;
   color: var(--mat-sys-outline-variant);
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .empty-state .empty-text {
-  font: var(--mat-sys-title-medium);
+  font-size: 1.25rem;
+  font-weight: 600;
   color: var(--mat-sys-on-surface);
   margin: 0 0 0.5rem 0;
 }
 
 .empty-state .empty-subtext {
-  font: var(--mat-sys-body-medium);
+  font-size: 1rem;
   color: var(--mat-sys-on-surface-variant);
   margin: 0;
 }
 
 /* -----------------------------------------------------------------------------
-   Loading State (using mj-loading component)
+   Loading State
    ----------------------------------------------------------------------------- */
 .loading-container {
   display: flex;
@@ -745,27 +783,25 @@
 }
 
 .error-container .error-icon {
-  font-size: 3rem;
+  font-size: 3.5rem;
   color: var(--mat-sys-error);
   margin-bottom: 1rem;
 }
 
 .error-container .error-message {
-  font: var(--mat-sys-body-large);
+  font-size: 1.0625rem;
   color: var(--mat-sys-on-surface);
   margin: 0 0 1.5rem 0;
 }
 
 /* -----------------------------------------------------------------------------
-   Delete Confirmation Modal
+   Modal Dialog
    ----------------------------------------------------------------------------- */
 .modal-backdrop {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -776,7 +812,7 @@
 
 .modal-dialog {
   background: var(--mat-sys-surface);
-  border-radius: 28px;
+  border-radius: var(--mat-sys-corner-extra-large);
   box-shadow: var(--mat-sys-elevation-5);
   max-width: 500px;
   width: 100%;
@@ -797,20 +833,21 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font: var(--mat-sys-title-large);
+  font-size: 1.375rem;
+  font-weight: 600;
   color: var(--mat-sys-on-surface);
   margin: 0;
 }
 
 .modal-header .modal-close {
-  padding: 0.5rem;
+  padding: 0.625rem;
   border: none;
   background: transparent;
   color: var(--mat-sys-on-surface-variant);
   font-size: 1.25rem;
   cursor: pointer;
-  border-radius: var(--mat-sys-corner-small);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  border-radius: var(--mat-sys-corner-full);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 44px;
   min-height: 44px;
   display: flex;
@@ -819,8 +856,8 @@
 }
 
 .modal-header .modal-close:hover {
-  background: var(--mat-sys-surface-container);
-  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
 }
 
 .modal-body {
@@ -828,7 +865,7 @@
 }
 
 .modal-body p {
-  font: var(--mat-sys-body-large);
+  font-size: 1.0625rem;
   color: var(--mat-sys-on-surface);
   margin: 0 0 1rem 0;
 }
@@ -838,10 +875,14 @@
 }
 
 .modal-body .text-warning {
-  color: var(--mat-sys-secondary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-secondary);
+  border-radius: var(--mat-sys-corner-small);
+  font-weight: 500;
 }
 
 .modal-footer {
@@ -854,17 +895,18 @@
 }
 
 /* -----------------------------------------------------------------------------
-   MJ Button System
+   Button System
    ----------------------------------------------------------------------------- */
 .mj-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.625rem 1.5rem;
-  font: var(--mat-sys-label-large);
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
   border: none;
-  border-radius: 20px;
+  border-radius: var(--mat-sys-corner-full);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
@@ -872,61 +914,87 @@
 }
 
 .mj-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.38;
   cursor: not-allowed;
 }
 
+/* Primary Button - Dark, lightens on hover */
 .mj-btn-primary {
   background: var(--mat-sys-primary);
   color: var(--mat-sys-on-primary);
+  box-shadow: var(--mat-sys-elevation-1);
 }
 
 .mj-btn-primary:hover:not(:disabled) {
+  background: #3395C8;
   box-shadow: var(--mat-sys-elevation-2);
 }
 
 .mj-btn-primary:active:not(:disabled) {
+  background: #4BA5D4;
   transform: scale(0.98);
 }
 
+/* Secondary Button - Light, darkens on hover */
 .mj-btn-secondary {
   background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
+  color: var(--mat-sys-primary);
   border: 1px solid var(--mat-sys-outline);
 }
 
 .mj-btn-secondary:hover:not(:disabled) {
-  background: var(--mat-sys-surface-container-high);
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
   border-color: var(--mat-sys-primary);
-  color: var(--mat-sys-primary);
 }
 
+.mj-btn-secondary:active:not(:disabled) {
+  background: #005A8C;
+  border-color: #005A8C;
+}
+
+/* Ghost Button - Transparent, fills on hover */
 .mj-btn-ghost {
   background: transparent;
   color: var(--mat-sys-on-surface-variant);
 }
 
 .mj-btn-ghost:hover:not(:disabled) {
-  background: var(--mat-sys-surface-container);
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
 }
 
+.mj-btn-ghost:active:not(:disabled) {
+  background: #005A8C;
+}
+
+/* Danger Button - Dark red, lightens on hover */
 .mj-btn-danger {
   background: var(--mat-sys-error);
   color: var(--mat-sys-on-error);
+  box-shadow: var(--mat-sys-elevation-1);
 }
 
 .mj-btn-danger:hover:not(:disabled) {
+  background: #E57373;
   box-shadow: var(--mat-sys-elevation-2);
 }
 
+.mj-btn-danger:active:not(:disabled) {
+  background: #EF9A9A;
+  transform: scale(0.98);
+}
+
+/* Small Button */
 .mj-btn-sm {
-  padding: 0.375rem 0.75rem;
-  font: var(--mat-sys-label-medium);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
   min-height: 36px;
 }
 
+/* Icon-only Button */
 .mj-btn-icon-only {
-  padding: 0.5rem;
+  padding: 0.625rem;
   min-width: 44px;
   min-height: 44px;
 }
@@ -1029,7 +1097,7 @@ button:focus-visible,
    Mobile-specific adjustments (< 640px)
    ----------------------------------------------------------------------------- */
 @media (max-width: 639px) {
-  /* Compact sticky header for mobile - maximize content space */
+  /* Compact sticky header for mobile */
   .sticky-header {
     padding: 0;
   }
@@ -1041,11 +1109,12 @@ button:focus-visible,
     justify-content: flex-end;
   }
 
-  /* Icon-only buttons on mobile */
+  /* Icon-only buttons on mobile - keep pill shape */
   .mj-btn-icon-mobile {
     padding: 0.5rem 0.75rem;
     min-height: 40px;
     gap: 0;
+    border-radius: var(--mat-sys-corner-full);
   }
 
   .mj-btn-icon-mobile .btn-text {
@@ -1065,7 +1134,7 @@ button:focus-visible,
   .filters-section {
     margin: 0 0.5rem 0.5rem 0.5rem;
     padding: 0.5rem;
-    border-radius: var(--mat-sys-corner-extra-small);
+    border-radius: var(--mat-sys-corner-small);
   }
 
   .filters-row {
@@ -1082,8 +1151,9 @@ button:focus-visible,
   .mj-search .mj-search-input {
     padding: 0.625rem 1rem 0.625rem 2.5rem;
     min-height: 40px;
-    font: var(--mat-sys-body-medium);
-    border-width: 1px;
+    font-size: 0.9375rem;
+    border-width: 2px;
+    border-radius: var(--mat-sys-corner-full);
   }
 
   .mj-search .mj-search-icon {
@@ -1108,18 +1178,29 @@ button:focus-visible,
 
   .mj-filter-buttons .mj-btn {
     flex: 1;
-    padding: 0.375rem 0.5rem;
+    padding: 0.375rem 0.75rem;
     min-height: 36px;
-    font: var(--mat-sys-label-small);
-    border-radius: var(--mat-sys-corner-extra-small);
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: var(--mat-sys-corner-full);
     background: transparent;
     color: var(--mat-sys-on-surface-variant);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  /* Hover state for filter buttons on mobile */
+  .mj-filter-buttons .mj-btn:hover:not(:disabled):not(.mj-btn-primary) {
+    background: var(--mat-sys-primary);
+    color: var(--mat-sys-on-primary);
   }
 
   /* Active/selected state for filter buttons on mobile */
   .mj-filter-buttons .mj-btn.mj-btn-primary {
     background: var(--mat-sys-primary) !important;
     color: var(--mat-sys-on-primary) !important;
+    box-shadow: var(--mat-sys-elevation-1);
   }
 
   /* More compact scrollable content */
@@ -1139,7 +1220,7 @@ button:focus-visible,
   }
 
   .modal-dialog {
-    border-radius: 20px;
+    border-radius: var(--mat-sys-corner-extra-large);
     max-height: 95vh;
   }
 
@@ -1150,9 +1231,10 @@ button:focus-visible,
   .modal-footer .mj-btn {
     width: 100%;
     justify-content: center;
+    border-radius: var(--mat-sys-corner-full);
   }
 
-  /* App Card Mobile Layout - More compact */
+  /* App Card Mobile Layout */
   .applications-list {
     gap: 0.5rem;
   }
@@ -1163,14 +1245,16 @@ button:focus-visible,
   }
 
   .app-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75rem;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
     padding: 0.75rem;
-    padding-bottom: 0.875rem;
   }
 
   .app-info {
+    flex: 1;
+    min-width: 0;
     flex-direction: row;
     align-items: flex-start;
     gap: 0.75rem;
@@ -1181,6 +1265,7 @@ button:focus-visible,
     height: 36px;
     font-size: 0.875rem;
     flex-shrink: 0;
+    border-radius: var(--mat-sys-corner-small);
   }
 
   .app-details {
@@ -1189,14 +1274,15 @@ button:focus-visible,
   }
 
   .app-details .app-name {
-    font: var(--mat-sys-label-large);
+    font-size: 0.9375rem;
     line-height: 1.3;
     margin-bottom: 0.125rem;
   }
 
   .app-details .app-description {
-    font: var(--mat-sys-body-small);
+    font-size: 0.8125rem;
     -webkit-line-clamp: 1;
+    line-clamp: 1;
   }
 
   /* On mobile: hide status and actions in header, show only expand button */
@@ -1223,24 +1309,11 @@ button:focus-visible,
     min-width: 36px;
     min-height: 36px;
     padding: 0.5rem;
+    border-radius: var(--mat-sys-corner-full);
   }
 
   .expand-btn i {
     font-size: 1rem;
-  }
-
-  /* Mobile header layout: info on left, expand button on right */
-  .app-header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.75rem;
-  }
-
-  .app-info {
-    flex: 1;
-    min-width: 0;
   }
 
   /* Mobile actions bar - visible on mobile only */
@@ -1257,7 +1330,7 @@ button:focus-visible,
 
   .mobile-actions-bar .status-badge {
     padding: 0.25rem 0.625rem;
-    font: var(--mat-sys-label-medium);
+    font-size: 0.6875rem;
   }
 
   .mobile-action-buttons {
@@ -1269,8 +1342,9 @@ button:focus-visible,
     display: flex;
     align-items: center;
     gap: 0.375rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 0.875rem;
     min-height: 36px;
+    border-radius: var(--mat-sys-corner-full);
   }
 
   .mobile-action-buttons .mj-btn-sm i {
@@ -1278,7 +1352,7 @@ button:focus-visible,
   }
 
   .mobile-action-buttons .btn-label {
-    font: var(--mat-sys-label-medium);
+    font-size: 0.8125rem;
   }
 
   .app-stats {
@@ -1302,7 +1376,7 @@ button:focus-visible,
   }
 
   .entity-item .entity-name {
-    font: var(--mat-sys-label-medium);
+    font-size: 0.875rem;
     word-break: break-word;
   }
 
