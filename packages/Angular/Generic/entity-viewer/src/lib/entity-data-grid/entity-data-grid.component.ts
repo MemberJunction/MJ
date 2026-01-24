@@ -29,6 +29,7 @@ import {
   ColumnResizedEvent,
   ColumnMovedEvent,
   SelectionChangedEvent,
+  CellClickedEvent,
   ICellRendererParams,
   IDatasource,
   IGetRowsParams,
@@ -56,7 +57,8 @@ import {
   GridStateChangedEvent,
   EntityActionConfig,
   GridVisualConfig,
-  DEFAULT_VISUAL_CONFIG
+  DEFAULT_VISUAL_CONFIG,
+  ForeignKeyClickEvent
 } from './models/grid-types';
 import {
   BeforeRowSelectEventArgs,
@@ -903,6 +905,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   @Output() BeforeRowDoubleClick = new EventEmitter<BeforeRowDoubleClickEventArgs>();
   @Output() AfterRowDoubleClick = new EventEmitter<AfterRowDoubleClickEventArgs>();
 
+  // Foreign Key Link Click
+  /**
+   * Emitted when a foreign key link is clicked in the grid.
+   * Parent components should handle this to navigate to the related record.
+   */
+  @Output() ForeignKeyClick = new EventEmitter<ForeignKeyClickEvent>();
+
   // Editing
   @Output() BeforeCellEdit = new EventEmitter<BeforeCellEditEventArgs>();
   @Output() AfterCellEditBegin = new EventEmitter<AfterCellEditBeginEventArgs>();
@@ -1596,70 +1605,124 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     this.buildAgColumnDefs();
   }
 
+  /**
+   * Determines if a field should be shown by default when no saved view exists.
+   * This logic is aligned with UserViewEntity.SetDefaultsFromEntity() to ensure
+   * consistent column visibility between initial load and saved views.
+   */
   private shouldShowField(field: EntityFieldInfo): boolean {
+    // Always exclude system fields
     if (field.Name.startsWith('__mj_')) return false;
+
+    // Always exclude UUID primary keys (they're not useful to display)
     if (field.IsPrimaryKey && field.SQLFullType?.toLowerCase() === 'uniqueidentifier') {
       return false;
     }
-    if (field.DefaultInView === true) return true;
-    if (field.Length > 500) return false;
-    return true;
+
+    // Only show fields explicitly marked as DefaultInView
+    // This aligns with UserViewEntity.SetDefaultsFromEntity() behavior
+    // ensuring users see the same columns before and after saving a view
+    return field.DefaultInView === true;
   }
 
+  /**
+   * Estimate an appropriate column width based on field metadata.
+   * Takes into account: metadata DefaultColumnWidth, header text length, data type, and field patterns.
+   */
   private estimateColumnWidth(field: EntityFieldInfo): number {
+    // Priority 1: Use metadata-defined width if set
+    if (field.DefaultColumnWidth && field.DefaultColumnWidth > 0) {
+      return field.DefaultColumnWidth;
+    }
+
+    // Calculate minimum width needed for header text
+    const headerText = field.DisplayName || field.Name;
+    const headerWidth = this.calculateHeaderWidth(headerText);
+
+    // Calculate estimated data width based on field type
+    const dataWidth = this.calculateDataWidth(field);
+
+    // Use the larger of header or data width, with bounds
+    const estimatedWidth = Math.max(headerWidth, dataWidth);
+
+    // Apply min/max bounds: minimum 80px, maximum 350px
+    return Math.max(Math.min(estimatedWidth, 350), 80);
+  }
+
+  /**
+   * Calculate minimum width needed to display header text without truncation.
+   */
+  private calculateHeaderWidth(text: string): number {
+    // Average char width ~7.5px for typical grid font
+    const charWidth = 7.5;
+    // Padding for sort icon and cell padding
+    const sortIconPadding = 24;
+    const cellPadding = 16;
+    return Math.ceil(text.length * charWidth + sortIconPadding + cellPadding);
+  }
+
+  /**
+   * Calculate estimated data width based on field type and patterns.
+   */
+  private calculateDataWidth(field: EntityFieldInfo): number {
     const fieldNameLower = field.Name.toLowerCase();
-    const displayNameLower = (field.DisplayName || field.Name).toLowerCase();
+    const tsType = field.TSType;
 
     // Fixed-width types
-    if (field.TSType === 'boolean') return 80;
-    if (field.TSType === 'Date') return 120;
+    if (tsType === 'boolean') return 90;
+    if (tsType === 'Date') return 130;
 
     // Numeric fields - compact
-    if (field.TSType === 'number') {
+    if (tsType === 'number') {
       if (fieldNameLower.includes('year') || fieldNameLower.includes('age')) return 80;
-      if (fieldNameLower.includes('amount') || fieldNameLower.includes('price') || fieldNameLower.includes('total')) return 120;
+      if (fieldNameLower.includes('amount') || fieldNameLower.includes('price') ||
+          fieldNameLower.includes('cost') || fieldNameLower.includes('total')) return 130;
       return 100;
     }
 
-    // ID fields - compact
-    if (fieldNameLower.endsWith('id') && field.Length <= 50) return 80;
+    // ID fields (typically UUIDs shown truncated or as links)
+    if (fieldNameLower.endsWith('id') && field.Length <= 50) return 100;
 
     // Email - needs more space
     if (fieldNameLower.includes('email')) return 220;
 
     // Phone numbers
-    if (fieldNameLower.includes('phone') || fieldNameLower.includes('mobile') || fieldNameLower.includes('fax')) return 130;
+    if (fieldNameLower.includes('phone') || fieldNameLower.includes('mobile') || fieldNameLower.includes('fax')) return 140;
+
+    // Description fields - give them adequate room (increased from 150)
+    if (fieldNameLower.includes('description')) return 250;
 
     // Name fields - medium width
     if (fieldNameLower.includes('name') || fieldNameLower.includes('title')) {
-      if (fieldNameLower === 'firstname' || fieldNameLower === 'lastname' || fieldNameLower === 'first name' || fieldNameLower === 'last name') return 120;
-      return 160;
+      if (fieldNameLower === 'firstname' || fieldNameLower === 'lastname' ||
+          fieldNameLower === 'first name' || fieldNameLower === 'last name') return 130;
+      return 180;
     }
 
     // Location fields
-    if (fieldNameLower.includes('city')) return 120;
-    if (fieldNameLower.includes('state') || fieldNameLower.includes('country')) return 100;
-    if (fieldNameLower.includes('zip') || fieldNameLower.includes('postal')) return 90;
-    if (fieldNameLower.includes('address')) return 200;
+    if (fieldNameLower.includes('city')) return 130;
+    if (fieldNameLower.includes('state') || fieldNameLower.includes('country')) return 110;
+    if (fieldNameLower.includes('zip') || fieldNameLower.includes('postal')) return 100;
+    if (fieldNameLower.includes('address')) return 220;
 
     // Date-like strings
-    if (fieldNameLower.includes('date') || fieldNameLower.includes('time')) return 120;
+    if (fieldNameLower.includes('date') || fieldNameLower.includes('time')) return 130;
 
-    // Status/Type fields - usually short values
-    if (fieldNameLower.includes('status') || fieldNameLower.includes('type') || fieldNameLower.includes('category')) return 110;
+    // Status/Type/Category fields
+    if (fieldNameLower.includes('status') || fieldNameLower.includes('type') ||
+        fieldNameLower.includes('category') || fieldNameLower.includes('mode')) return 130;
 
     // Code/abbreviation fields
-    if (fieldNameLower.includes('code') || fieldNameLower.includes('abbr')) return 100;
+    if (fieldNameLower.includes('code') || fieldNameLower.includes('abbr')) return 110;
 
-    // Long text fields - limit width, they'll truncate
-    if (field.Length > 500) return 150;
-    if (field.Length > 200) return 180;
+    // Long text fields - give them more room (nvarchar(max) has Length < 0)
+    if (field.Length < 0) return 250;  // nvarchar(max)
+    if (field.Length > 500) return 220;
+    if (field.Length > 200) return 200;
 
-    // Default: estimate based on field length but with tighter bounds
-    const estimatedChars = Math.min(field.Length, 50);
-    const charWidth = 7;
-    const padding = 24;
-    return Math.min(Math.max(estimatedChars * charWidth / 2 + padding, 80), 200);
+    // Default: estimate based on field length with reasonable bounds
+    const estimatedChars = Math.min(field.Length || 50, 40);
+    return Math.max(estimatedChars * 6 + 24, 100);
   }
 
   private mapFieldTypeToGridType(fieldType: string): 'string' | 'number' | 'boolean' | 'date' | 'datetime' {
@@ -1796,7 +1859,16 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private generateAgColumnDefs(entity: EntityInfo): ColDef[] {
     const cols: ColDef[] = [];
-    const visibleFields = entity.Fields.filter(f => this.shouldShowField(f));
+    let visibleFields = entity.Fields.filter(f => this.shouldShowField(f));
+
+    // Fallback: if no DefaultInView fields are defined, show first 10 non-system fields
+    // sorted by importance to give users a reasonable starting point
+    if (visibleFields.length === 0) {
+      visibleFields = this.getDefaultFieldsFallback(entity);
+    }
+
+    // Sort fields by importance for better default ordering
+    visibleFields = this.sortFieldsByImportance(visibleFields);
 
     for (const field of visibleFields) {
       const colDef: ColDef = {
@@ -1804,7 +1876,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         headerName: field.DisplayNameOrName,
         width: this.estimateColumnWidth(field),
         sortable: this._allowSorting,
-        resizable: this._allowColumnResize
+        resizable: this._allowColumnResize,
+        headerTooltip: this.buildHeaderTooltip(field)
       };
 
       this.applyFieldFormatter(colDef, field);
@@ -1812,6 +1885,94 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
 
     return cols;
+  }
+
+  /**
+   * When no DefaultInView fields are set, fall back to showing the first 10
+   * non-system, non-PK fields to give users something reasonable to start with.
+   */
+  private getDefaultFieldsFallback(entity: EntityInfo): EntityFieldInfo[] {
+    return entity.Fields
+      .filter(f =>
+        !f.Name.startsWith('__mj_') &&
+        !(f.IsPrimaryKey && f.SQLFullType?.toLowerCase() === 'uniqueidentifier') &&
+        (f.Length <= 500 || f.Length < 0)  // Exclude very long text unless nvarchar(max)
+      )
+      .slice(0, 10);
+  }
+
+  /**
+   * Sort fields by importance for better default column ordering.
+   * Name fields first, then status/type, then other fields, with system fields last.
+   */
+  private sortFieldsByImportance(fields: EntityFieldInfo[]): EntityFieldInfo[] {
+    return [...fields].sort((a, b) => {
+      const priorityA = this.getFieldPriority(a);
+      const priorityB = this.getFieldPriority(b);
+      return priorityA - priorityB;
+    });
+  }
+
+  private getFieldPriority(field: EntityFieldInfo): number {
+    const nameLower = field.Name.toLowerCase();
+
+    // Name fields first
+    if (field.IsNameField) return 0;
+    if (nameLower === 'name' || nameLower === 'title') return 1;
+
+    // Status and type fields are important
+    if (nameLower === 'status') return 2;
+    if (nameLower === 'type' || nameLower === 'category') return 3;
+
+    // Other name-like fields
+    if (nameLower.endsWith('name') && !nameLower.endsWith('typename')) return 4;
+
+    // Description fields
+    if (nameLower.includes('description')) return 5;
+
+    // Date fields
+    if (field.TSType === 'Date') return 50;
+
+    // Foreign keys (usually IDs pointing to other entities)
+    if (field.RelatedEntityID) return 60;
+
+    // Numbers
+    if (field.TSType === 'number') return 70;
+
+    // Booleans toward the end
+    if (field.TSType === 'boolean') return 80;
+
+    // Long text fields at the end
+    if ((field.Length > 500 || field.Length < 0)) return 90;
+
+    // System fields last (though they should be filtered out already)
+    if (field.Name.startsWith('__mj_')) return 100;
+
+    // Default priority
+    return 40;
+  }
+
+  /**
+   * Build a tooltip for the column header showing field details.
+   */
+  private buildHeaderTooltip(field: EntityFieldInfo): string {
+    const parts: string[] = [];
+
+    // Show internal field name if different from display name
+    if (field.DisplayName && field.DisplayName !== field.Name) {
+      parts.push(`Field: ${field.Name}`);
+    }
+
+    // Show description if available
+    if (field.Description) {
+      parts.push(field.Description);
+    }
+
+    // Show type info
+    const typeInfo = field.Type + (field.Length && field.Length > 0 ? `(${field.Length})` : '');
+    parts.push(`Type: ${typeInfo}`);
+
+    return parts.join('\n');
   }
 
   private applyFieldFormatter(colDef: ColDef, field: EntityFieldInfo, customFormat?: ColumnFormat): void {
@@ -1841,6 +2002,30 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
                                        fieldNameLower.includes('mobile') ||
                                        fieldNameLower.includes('fax')));
 
+    // Check if this is a foreign key field (has a related entity)
+    // Also check if this is a virtual display field that corresponds to an FK field
+    let isForeignKey = !!field.RelatedEntityID;
+    let fkField: EntityFieldInfo | undefined = field;
+    let relatedEntityName = isForeignKey ? field.RelatedEntity : undefined;
+
+    console.log(`[FK Debug] applyFieldFormatter for field: ${field.Name}, RelatedEntityID: ${field.RelatedEntityID}, IsVirtual: ${field.IsVirtual}, isForeignKey: ${isForeignKey}`);
+
+    // If this field doesn't have RelatedEntityID but is virtual, check for a corresponding FK field
+    // Pattern: for a field named "Category", look for "CategoryID" with RelatedEntityID
+    if (!isForeignKey && field.IsVirtual && this._entityInfo) {
+      const potentialFkFieldName = field.Name + 'ID';
+      const correspondingFkField = this._entityInfo.Fields.find(
+        f => f.Name.toLowerCase() === potentialFkFieldName.toLowerCase() && f.RelatedEntityID
+      );
+      console.log(`[FK Debug] Checking for corresponding FK field: ${potentialFkFieldName}, found: ${correspondingFkField?.Name}`);
+      if (correspondingFkField) {
+        isForeignKey = true;
+        fkField = correspondingFkField;
+        relatedEntityName = correspondingFkField.RelatedEntity;
+        console.log(`[FK Debug] Found corresponding FK field! fkField: ${fkField.Name}, relatedEntityName: ${relatedEntityName}`);
+      }
+    }
+
     // Apply alignment - use custom format alignment if provided, otherwise default to right for numbers
     const customAlign = customFormat?.align;
     if (customAlign) {
@@ -1865,6 +2050,50 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     colDef.cellRenderer = (params: ICellRendererParams) => {
       if (params.value === null || params.value === undefined) {
         return '<span class="cell-empty">—</span>';
+      }
+
+      // Handle foreign key fields - render as clickable links
+      // Only apply FK rendering if no custom format is specified
+      if (isForeignKey && !customFormat && fkField?.RelatedEntityID) {
+        // For virtual display fields, we show the display value but link to the FK value
+        // For direct FK fields, the value IS the FK value
+        const isVirtualDisplay = field.IsVirtual && fkField !== field;
+        const displayValue = String(params.value);
+
+        // Get the actual FK value - for virtual fields, look it up from row data
+        let fkValue: string;
+        if (isVirtualDisplay && params.data) {
+          // Get the FK value from the corresponding FK field in the row data
+          fkValue = String(params.data[fkField.Name] ?? '');
+        } else {
+          fkValue = displayValue;
+        }
+
+        console.log(`[FK Debug] Rendering FK cell for field: ${field.Name}, fkField: ${fkField.Name}, fkValue: ${fkValue}, displayValue: ${displayValue}`);
+
+        // Skip if we don't have a valid FK value
+        if (!fkValue) {
+          console.log(`[FK Debug] No fkValue, returning plain span`);
+          return `<span>${HighlightUtil.escapeHtml(displayValue)}</span>`;
+        }
+
+        const escapedDisplayValue = HighlightUtil.escapeHtml(displayValue);
+        const escapedFieldName = HighlightUtil.escapeHtml(fkField.Name);
+        const escapedRelatedEntityId = HighlightUtil.escapeHtml(fkField.RelatedEntityID);
+        const escapedRelatedEntityName = relatedEntityName ? HighlightUtil.escapeHtml(relatedEntityName) : '';
+
+        // Build data attributes for the click handler
+        const dataAttrs = `data-related-entity-id="${escapedRelatedEntityId}" data-record-id="${fkValue}" data-field-name="${escapedFieldName}"${relatedEntityName ? ` data-related-entity-name="${escapedRelatedEntityName}"` : ''}`;
+
+        // Apply highlighting if filter text is set
+        const displayText = this._filterText
+          ? HighlightUtil.highlight(displayValue, this._filterText, true)
+          : escapedDisplayValue;
+
+        // NOTE: Do NOT add onclick="event.stopPropagation()" here - it prevents AG Grid's cellClicked from firing
+        const linkHtml = `<a href="javascript:void(0)" class="cell-link cell-fk-link" ${dataAttrs}>${displayText}</a>`;
+        console.log(`[FK Debug] Generated FK link HTML (first 200 chars):`, linkHtml.substring(0, 200));
+        return linkHtml;
       }
 
       let displayValue = '';
@@ -2690,6 +2919,56 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Auto-navigate on double-click (if enabled)
     if (this._autoNavigate && this._navigateOnDoubleClick && this._editMode === 'none') {
       this.emitNavigationRequest(rowData.entity, pkString);
+    }
+  }
+
+  /**
+   * Handles cell click events to detect FK link clicks.
+   * When a user clicks on a foreign key link, emits ForeignKeyClick event
+   * for the parent component to handle navigation.
+   */
+  onAgCellClicked(event: CellClickedEvent): void {
+    console.log('[FK Debug] onAgCellClicked fired', { column: event.column?.getColId(), value: event.value });
+
+    // Check if the click was on an FK link
+    const target = event.event?.target as HTMLElement;
+    if (!target) {
+      console.log('[FK Debug] No target element');
+      return;
+    }
+
+    console.log('[FK Debug] Target element:', target.tagName, target.className, target.outerHTML?.substring(0, 200));
+
+    // Look for the FK link element (may be the target or a parent)
+    const fkLink = target.closest('.cell-fk-link') as HTMLElement;
+    if (!fkLink) {
+      console.log('[FK Debug] No .cell-fk-link found in ancestors');
+      return;
+    }
+
+    console.log('[FK Debug] Found FK link element:', fkLink.outerHTML?.substring(0, 300));
+
+    // Prevent the row click handler from firing
+    event.event?.stopPropagation();
+
+    // Extract FK data from data attributes
+    const relatedEntityId = fkLink.dataset['relatedEntityId'];
+    const recordId = fkLink.dataset['recordId'];
+    const fieldName = fkLink.dataset['fieldName'];
+    const relatedEntityName = fkLink.dataset['relatedEntityName'];
+
+    console.log('[FK Debug] Extracted data attributes:', { relatedEntityId, recordId, fieldName, relatedEntityName });
+
+    if (relatedEntityId && recordId && fieldName) {
+      console.log('[FK Debug] Emitting ForeignKeyClick event');
+      this.ForeignKeyClick.emit({
+        relatedEntityId,
+        recordId,
+        fieldName,
+        relatedEntityName
+      });
+    } else {
+      console.log('[FK Debug] Missing required data attributes, not emitting');
     }
   }
 

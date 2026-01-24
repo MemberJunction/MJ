@@ -386,6 +386,25 @@ export interface ExportOptions {
 }
 
 // ========================================
+// Event Types
+// ========================================
+
+/**
+ * Event emitted when a foreign key link is clicked in the grid.
+ * The parent component should handle navigation to the related record.
+ */
+export interface ForeignKeyClickEvent {
+  /** The ID of the related entity (from EntityFieldInfo.RelatedEntityID) */
+  relatedEntityId: string;
+  /** The ID of the related record (the FK value) */
+  recordId: string;
+  /** The field name that was clicked */
+  fieldName: string;
+  /** The entity name of the related entity (if available) */
+  relatedEntityName?: string;
+}
+
+// ========================================
 // Internal Types
 // ========================================
 

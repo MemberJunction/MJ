@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
-import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
@@ -29,7 +29,7 @@ import {
   AfterRowDoubleClickEventArgs,
   AfterSortEventArgs
 } from '../entity-data-grid/events/grid-events';
-import { GridToolbarConfig, GridSelectionMode } from '../entity-data-grid/models/grid-types';
+import { GridToolbarConfig, GridSelectionMode, ForeignKeyClickEvent } from '../entity-data-grid/models/grid-types';
 import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.component';
 
 /**
@@ -1240,6 +1240,43 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
       this.resetPaginationState(false);
       this.loadData();
     }
+  }
+
+  /**
+   * Handle foreign key link click from mj-entity-data-grid
+   * Bubbles the event up for parent components to handle navigation
+   */
+  /**
+   * Handle foreign key link click from mj-entity-data-grid
+   * Converts to recordOpened event for seamless navigation integration
+   */
+  onForeignKeyClick(event: ForeignKeyClickEvent): void {
+    console.log('[FK Debug] entity-viewer onForeignKeyClick received:', event);
+
+    // Look up the related entity by name
+    const md = new Metadata();
+    const relatedEntity = event.relatedEntityName
+      ? md.Entities.find(e => e.Name === event.relatedEntityName)
+      : md.Entities.find(e => e.ID === event.relatedEntityId);
+
+    console.log('[FK Debug] Looking for entity:', { name: event.relatedEntityName, id: event.relatedEntityId });
+    console.log('[FK Debug] Found relatedEntity:', relatedEntity?.Name);
+
+    if (!relatedEntity) {
+      console.warn(`[FK Debug] Could not find related entity for FK navigation: ${event.relatedEntityName || event.relatedEntityId}`);
+      return;
+    }
+
+    // Create composite key from the FK value using the static factory method
+    const compositeKey = CompositeKey.FromID(event.recordId);
+    console.log('[FK Debug] Created compositeKey:', compositeKey);
+
+    // Emit recordOpened for the related entity (record is undefined since it's not loaded)
+    console.log('[FK Debug] Emitting recordOpened with:', { entity: relatedEntity.Name, compositeKey });
+    this.recordOpened.emit({
+      entity: relatedEntity,
+      compositeKey
+    });
   }
 
   /**

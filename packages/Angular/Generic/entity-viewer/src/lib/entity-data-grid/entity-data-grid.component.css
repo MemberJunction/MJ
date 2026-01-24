@@ -844,6 +844,23 @@
   font-size: 13px;
 }
 
+/* Foreign key link cells */
+::ng-deep .cell-fk-link {
+  color: var(--grid-accent-color, #1976D2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s, text-decoration 0.15s;
+}
+
+::ng-deep .cell-fk-link:hover {
+  color: #1565C0;
+  text-decoration: underline;
+}
+
+::ng-deep .cell-fk-link:active {
+  color: #0D47A1;
+}
+
 /* URL cells */
 ::ng-deep .cell-url {
   overflow: hidden;

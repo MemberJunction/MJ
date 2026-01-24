@@ -113,8 +113,8 @@ export interface RecordSelectedEvent {
  * Event emitted when a record should be opened (double-click or open button)
  */
 export interface RecordOpenedEvent {
-  /** The entity record to open */
-  record: BaseEntity;
+  /** The entity record to open (may be undefined for FK navigation where record isn't loaded) */
+  record?: BaseEntity;
   /** The entity metadata */
   entity: EntityInfo;
   /** The composite key of the record */
