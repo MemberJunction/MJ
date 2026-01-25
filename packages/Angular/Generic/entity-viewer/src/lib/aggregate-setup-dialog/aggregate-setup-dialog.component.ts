@@ -202,21 +202,24 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
 
   /**
    * Check if an expression matches simple function(column) pattern
+   * Also matches COUNT(*) for row counting
    */
   private isSimpleExpression(expression: string): boolean {
-    const pattern = /^(SUM|AVG|COUNT|MIN|MAX|COUNT_DISTINCT)\s*\(\s*\[?[\w\s]+\]?\s*\)$/i;
+    const pattern = /^(SUM|AVG|COUNT|MIN|MAX|COUNT_DISTINCT)\s*\(\s*(\*|\[?[\w\s]+\]?)\s*\)$/i;
     return pattern.test(expression.trim());
   }
 
   /**
    * Parse a simple expression into function and column
+   * Returns empty string for column if COUNT(*)
    */
   private parseSimpleExpression(expression: string): { func: AggregateFunctionType; column: string } | null {
-    const match = expression.trim().match(/^(SUM|AVG|COUNT|MIN|MAX|COUNT_DISTINCT)\s*\(\s*\[?([\w\s]+)\]?\s*\)$/i);
+    const match = expression.trim().match(/^(SUM|AVG|COUNT|MIN|MAX|COUNT_DISTINCT)\s*\(\s*(\*|\[?([\w\s]+)\]?)\s*\)$/i);
     if (!match) return null;
 
     const funcName = match[1].toUpperCase().replace(' ', '_') as AggregateFunctionType;
-    const column = match[2].trim();
+    // If it's COUNT(*), column will be empty string
+    const column = match[2] === '*' ? '' : (match[3] || match[2]).trim();
 
     return { func: funcName, column };
   }
@@ -348,7 +351,8 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
     }
 
     // Update label if it was auto-generated (matches old pattern) or is empty
-    if (shouldUpdateLabel && this.SelectedColumn) {
+    // For COUNT, we can set auto-label even without a column (COUNT(*))
+    if (shouldUpdateLabel && (this.SelectedColumn || this.SelectedFunction === 'COUNT')) {
       this.setAutoLabel();
     }
 
@@ -387,9 +391,18 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   /**
    * Generate what the auto-label would be for a given function and column
    * Returns null if we can't generate a label (missing data)
+   * Handles COUNT(*) case with "Record Count" label
    */
   private generateAutoLabel(func: AggregateFunctionType, column: string): string | null {
-    if (!column || !func) return null;
+    if (!func) return null;
+
+    // Handle COUNT(*) case - no column needed
+    if (!column) {
+      if (func === 'COUNT') {
+        return 'Record Count';
+      }
+      return null; // Other functions require a column
+    }
 
     const field = this.Entity?.Fields.find(f => f.Name === column);
     if (!field) return null;
@@ -430,7 +443,15 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   private buildExpression(): string {
     switch (this.Mode) {
       case 'simple':
-        if (!this.SelectedColumn || !this.SelectedFunction) return '';
+        if (!this.SelectedFunction) return '';
+        // COUNT can work without a column (uses COUNT(*))
+        // COUNT_DISTINCT requires a column
+        if (!this.SelectedColumn) {
+          if (this.SelectedFunction === 'COUNT') {
+            return 'COUNT(*)';
+          }
+          return ''; // Other functions require a column
+        }
         // Use brackets for column names with spaces
         const columnRef = this.SelectedColumn.includes(' ')
           ? `[${this.SelectedColumn}]`
@@ -470,7 +491,11 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
 
     switch (this.Mode) {
       case 'simple':
-        if (!this.SelectedColumn) return 'Please select a column';
+        // COUNT can work without a column (uses COUNT(*))
+        // All other functions require a column
+        if (!this.SelectedColumn && this.SelectedFunction !== 'COUNT') {
+          return 'Please select a column';
+        }
         break;
       case 'advanced':
         if (!this.Expression.trim()) return 'Please enter an expression';

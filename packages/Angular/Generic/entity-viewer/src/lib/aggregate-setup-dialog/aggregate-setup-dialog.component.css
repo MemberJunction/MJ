@@ -298,6 +298,15 @@
   color: #f59e0b;
 }
 
+.field-hint.info {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.field-hint.info i {
+  color: #3b82f6;
+}
+
 .field-hint i {
   color: #94a3b8;
   margin-top: 1px;

@@ -1249,3 +1249,27 @@
 .aggregate-card-loading i {
   font-size: 16px;
 }
+
+/* ========================================
+   Text Wrapping Styles
+   ======================================== */
+
+/* Cell class for wrapped text */
+::ng-deep .cell-wrap-text {
+  white-space: normal !important;
+  word-wrap: break-word;
+  line-height: 1.4;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+/* Ensure AG Grid cells allow wrapping */
+::ng-deep .ag-cell.cell-wrap-text {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* Maintain minimum row height when wrapping */
+::ng-deep .ag-row[style*="auto-height"] {
+  min-height: 40px;
+}

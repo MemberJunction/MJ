@@ -18,7 +18,7 @@ import {
   SortState,
   SortChangedEvent,
   PaginationState,
-  ViewGridStateConfig,
+  ViewGridState,
   GridStateChangedEvent,
   TimelineSegmentGrouping,
   TimelineOrientation,
@@ -271,7 +271,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Grid state configuration from a User View
    * Controls column visibility, widths, order, and sort settings
    */
-  @Input() gridState: ViewGridStateConfig | null = null;
+  @Input() gridState: ViewGridState | null = null;
 
   /**
    * Timeline configuration state

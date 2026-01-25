@@ -51,9 +51,8 @@ import {
   GridRowData,
   ColumnRuntimeState,
   GridRunViewParams,
-  ViewGridStateConfig,
-  ViewColumnConfig,
-  ViewSortConfig,
+  ViewGridColumnSetting,
+  ViewGridSortSetting,
   GridStateChangedEvent,
   EntityActionConfig,
   GridVisualConfig,
@@ -120,7 +119,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
  * - Inline cell and row editing
  * - Column reordering, resizing, and visibility toggle
  * - State persistence to User Settings
- * - Compatible with ViewGridStateConfig from User Views
+ * - Compatible with ViewGridState from User Views
  *
  * @example
  * ```html
@@ -326,13 +325,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     return this._columns;
   }
 
-  private _gridState: ViewGridStateConfig | null = null;
+  private _gridState: ViewGridState | null = null;
   /**
    * Grid state from a User View - controls columns, widths, order, sort
    * When provided, this takes precedence over auto-generated columns
    */
   @Input()
-  set GridState(value: ViewGridStateConfig | null) {
+  set GridState(value: ViewGridState | null) {
     if (!!value) {
       const previousValue = this._gridState;
       this._gridState = value;
@@ -341,7 +340,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
     }
   }
-  get GridState(): ViewGridStateConfig | null {
+  get GridState(): ViewGridState | null {
     return this._gridState;
   }
 
@@ -521,6 +520,23 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
   get RowHeight(): number {
     return this._rowHeight;
+  }
+
+  /**
+   * Enable text wrapping in grid cells
+   * When true, long text will wrap to multiple lines and rows will auto-size
+   * Note: This disables fixed row height and may impact performance with large datasets
+   */
+  private _wrapText: boolean = false;
+  @Input()
+  set WrapText(value: boolean) {
+    if (this._wrapText !== value) {
+      this._wrapText = value;
+      this.updateDefaultColDefForWrapping();
+    }
+  }
+  get WrapText(): boolean {
+    return this._wrapText;
   }
 
   private _virtualScroll: boolean = true;
@@ -1207,6 +1223,31 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     minWidth: 80
   };
 
+  /**
+   * Update defaultColDef when text wrapping setting changes
+   * Enables/disables auto row height and cell text wrapping
+   */
+  private updateDefaultColDefForWrapping(): void {
+    if (this._wrapText) {
+      this.defaultColDef = {
+        ...this.defaultColDef,
+        wrapText: true,
+        autoHeight: true,
+        cellClass: 'cell-wrap-text'
+      };
+    } else {
+      // Remove wrapping properties
+      const { wrapText, autoHeight, cellClass, ...rest } = this.defaultColDef;
+      this.defaultColDef = rest;
+    }
+
+    // Refresh the grid to apply changes
+    if (this.gridApi) {
+      this.gridApi.setGridOption('defaultColDef', this.defaultColDef);
+      this.gridApi.refreshCells({ force: true });
+    }
+  }
+
   /** Get row ID function for AG Grid */
   public getRowId = (params: GetRowIdParams<Record<string, unknown>>) =>
     params.data['__pk'] as string;
@@ -1289,19 +1330,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private refreshSubject = new Subject<void>();
   private statesSaveSubject = new Subject<void>();
-  private statePersistSubject = new Subject<ViewGridStateConfig>();
-  private userDefaultsPersistSubject = new Subject<ViewGridStateConfig>();
+  private statePersistSubject = new Subject<ViewGridState>();
+  private userDefaultsPersistSubject = new Subject<ViewGridState>();
 
   // Persist state tracking
-  private pendingStateToSave: ViewGridStateConfig | null = null;
+  private pendingStateToSave: ViewGridState | null = null;
   private isSavingState: boolean = false;
 
   /**
    * Pending state waiting to be persisted (for flushing on destroy).
    * Tracks state for both saved views and user defaults separately.
    */
-  private _pendingViewStateToPersist: ViewGridStateConfig | null = null;
-  private _pendingUserDefaultsToPersist: ViewGridStateConfig | null = null;
+  private _pendingViewStateToPersist: ViewGridState | null = null;
+  private _pendingUserDefaultsToPersist: ViewGridState | null = null;
 
   /**
    * Flag to suppress state persistence during view transitions.
@@ -1617,7 +1658,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Persists the current grid state as user defaults for a dynamic view.
    * Uses UserInfoEngine to store settings with key format: "default-view-setting/{entityName}"
    */
-  private async persistUserDefaultGridState(state: ViewGridStateConfig): Promise<void> {
+  private async persistUserDefaultGridState(state: ViewGridState): Promise<void> {
     if (!this._entityInfo) {
       this._pendingUserDefaultsToPersist = null;
       return;
@@ -2012,7 +2053,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
   }
 
-  private buildAgColumnDefsFromGridState(columnSettings: ViewColumnConfig[]): ColDef[] {
+  private buildAgColumnDefsFromGridState(columnSettings: ViewGridColumnSetting[]): ColDef[] {
     if (!this._entityInfo) return [];
 
     const sortedColumns = [...columnSettings].sort((a, b) =>
@@ -3447,7 +3488,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Persists the grid state to the UserView entity.
    * Only saves if the user has edit permission on the view.
    */
-  private async persistGridStateToView(state: ViewGridStateConfig): Promise<void> {
+  private async persistGridStateToView(state: ViewGridState): Promise<void> {
     if (!this._viewEntity || this.isSavingState) {
       return;
     }
@@ -3499,7 +3540,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
   }
 
-  private buildCurrentGridState(): ViewGridStateConfig {
+  private buildCurrentGridState(): ViewGridState {
     if (!this.gridApi || !this._entityInfo || !this._entityInfo.Fields) {
       return { columnSettings: [], sortSettings: [] };
     }
@@ -3526,7 +3567,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
     }
 
-    const columnSettings: ViewColumnConfig[] = [];
+    const columnSettings: ViewGridColumnSetting[] = [];
     // Collect sorted columns with their sortIndex for proper ordering
     const sortedColumns: Array<{ field: string; dir: 'asc' | 'desc'; sortIndex: number }> = [];
 
@@ -3538,7 +3579,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
       if (field) {
         const keyLower = field.Name.toLowerCase();
-        const colConfig: ViewColumnConfig = {
+        const colConfig: ViewGridColumnSetting = {
           ID: field.ID,
           Name: field.Name,
           DisplayName: field.DisplayNameOrName,
@@ -3573,7 +3614,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
     // Sort by sortIndex to maintain correct multi-sort priority order
     sortedColumns.sort((a, b) => a.sortIndex - b.sortIndex);
-    const sortSettings: ViewSortConfig[] = sortedColumns.map(s => ({
+    const sortSettings: ViewGridSortSetting[] = sortedColumns.map(s => ({
       field: s.field,
       dir: s.dir
     }));

@@ -89,13 +89,23 @@
               <span>No numeric fields available. Use COUNT or switch to Advanced mode.</span>
             </div>
           }
+          @if (SelectedFunction === 'COUNT' && !SelectedColumn) {
+            <div class="field-hint info">
+              <i class="fa-solid fa-info-circle"></i>
+              <span>No column selected - will count all records (COUNT(*))</span>
+            </div>
+          }
         </div>
 
         <!-- Preview -->
-        @if (SelectedColumn && SelectedFunction) {
+        @if (SelectedFunction && (SelectedColumn || SelectedFunction === 'COUNT')) {
           <div class="expression-preview">
             <label class="preview-label">Expression Preview</label>
-            <code class="preview-code">{{ SelectedFunction === 'COUNT_DISTINCT' ? 'COUNT(DISTINCT ' + SelectedColumn + ')' : SelectedFunction + '(' + SelectedColumn + ')' }}</code>
+            <code class="preview-code">{{
+              !SelectedColumn && SelectedFunction === 'COUNT' ? 'COUNT(*)' :
+              SelectedFunction === 'COUNT_DISTINCT' ? 'COUNT(DISTINCT ' + SelectedColumn + ')' :
+              SelectedFunction + '(' + SelectedColumn + ')'
+            }}</code>
           </div>
         }
       </div>

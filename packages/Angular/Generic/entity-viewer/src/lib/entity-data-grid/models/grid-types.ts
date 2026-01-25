@@ -6,10 +6,11 @@ import { BaseEntity } from '@memberjunction/core';
 export {
   SortDirection,
   SortState,
-  ViewColumnConfig,
-  ViewSortConfig,
-  ViewGridStateConfig,
-  GridStateChangedEvent
+  GridStateChangedEvent,
+  // View grid types - re-exported from types.ts which gets them from core-entities
+  ViewGridColumnSetting,
+  ViewGridSortSetting,
+  ViewGridState
 } from '../../types';
 
 // ========================================

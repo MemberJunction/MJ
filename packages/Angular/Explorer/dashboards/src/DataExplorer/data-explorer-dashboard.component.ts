@@ -18,7 +18,7 @@ import {
   EntityViewMode,
   NavigateToRelatedEvent,
   EntityViewerComponent,
-  ViewGridStateConfig,
+  ViewGridState,
   GridStateChangedEvent,
   ViewSaveEvent,
   ViewConfigPanelComponent
@@ -490,7 +490,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Current grid state (built from view entity or local state changes)
    * This is passed to mj-entity-viewer to control column display
    */
-  public currentGridState: ViewGridStateConfig | null = null;
+  public currentGridState: ViewGridState | null = null;
 
   // Filter dialog state (rendered at dashboard level for full viewport width)
   public isFilterDialogOpen: boolean = false;
@@ -884,7 +884,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Load user's saved default grid state from UserInfoEngine
    * Returns null if no saved state exists
    */
-  private loadUserDefaultGridState(): ViewGridStateConfig | null {
+  private loadUserDefaultGridState(): ViewGridState | null {
     if (!this.selectedEntity) return null;
 
     try {
@@ -911,7 +911,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Parse GridState JSON from a UserView entity
    * Returns null if no valid GridState is present
    */
-  private parseViewGridState(view: UserViewEntityExtended): ViewGridStateConfig | null {
+  private parseViewGridState(view: UserViewEntityExtended): ViewGridState | null {
     if (!view.GridState) {
       return null;
     }
@@ -1171,8 +1171,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         // Update currentGridState to reflect saved state
         this.currentGridState = {
-          columnSettings: gridState.columnSettings as ViewGridStateConfig['columnSettings'],
-          sortSettings: gridState.sortSettings as ViewGridStateConfig['sortSettings'],
+          columnSettings: gridState.columnSettings as ViewGridState['columnSettings'],
+          sortSettings: gridState.sortSettings as ViewGridState['sortSettings'],
           aggregates: gridState.aggregates
         };
 
