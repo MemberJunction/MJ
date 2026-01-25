@@ -370,41 +370,6 @@ promptTools: [
   - `modelId` (optional): Specific model ID to use
 - Returns: `{ success: boolean, result: any, rawOutput?: string, tokensUsed?: number, errorMessage?: string }`
 
-### Report Tools
-
-Report tools allow AI models to discover and execute MemberJunction Reports.
-
-```javascript
-reportTools: [
-  {
-    reportName: '*',           // Report name pattern
-    reportCategory: 'Sales',   // Optional category filter
-    discover: true,            // Enable report discovery
-    execute: true              // Enable report execution
-  }
-]
-```
-
-#### Report Tool Naming
-
-- `Discover_Reports`: Lists available reports
-- `Run_Report`: Execute any report by name or ID
-
-#### Report Tool Parameters and Responses
-
-**Discover_Reports**
-- Parameters:
-  - `pattern` (optional): Wildcard pattern to match report names
-  - `category` (optional): Category name to filter reports
-- Returns: Array of report metadata (id, name, description, category)
-
-**Run_Report**
-- Parameters:
-  - `reportName` (optional): Name of the report to execute
-  - `reportId` (optional): ID of the report to execute
-  - `maxRows` (optional): Maximum number of rows to return (default: 1000)
-- Returns: `{ success: boolean, rowCount: number, executionTime?: number, results: [], errorMessage?: string }`
-
 ### Communication Tools
 
 Communication tools allow AI models to send messages through configured communication channels.

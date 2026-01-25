@@ -18,7 +18,7 @@ import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@m
 import { FastMCP } from "fastmcp";
 import sql from "mssql";
 import { z } from "zod";
-import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerReportToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
+import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
 import { AIAgentEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
@@ -31,8 +31,7 @@ import * as http from 'http';
 import { ActionEngineBase, ActionEntityExtended, RunActionParams } from "@memberjunction/actions-base";
 import { ActionEngineServer } from "@memberjunction/actions";
 import { AIPromptRunner, AIPromptParams } from "@memberjunction/ai-prompts";
-import { RunReport, RunReportParams } from "@memberjunction/core";
-import { ReportEntity, ReportCategoryEntity, ActionParamEntity } from "@memberjunction/core-entities";
+import { ActionParamEntity } from "@memberjunction/core-entities";
 
 /*******************************************************************************
  * TYPES AND INTERFACES
@@ -508,7 +507,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         loadAgentRunDiagnosticTools();
         loadQueryTools();
         await loadPromptTools(systemUser);
-        await loadReportTools(systemUser);
         loadCommunicationTools();
         console.log("Tools loaded successfully.");
 
@@ -1610,153 +1608,6 @@ async function loadPromptTools(systemUser: UserInfo): Promise<void> {
                             rawOutput: result.rawOutput,
                             tokensUsed: result.tokensUsed,
                             errorMessage: result.errorMessage
-                        });
-                    } catch (error) {
-                        return JSON.stringify({
-                            success: false,
-                            error: error instanceof Error ? error.message : String(error)
-                        });
-                    }
-                }
-            });
-        }
-    }
-}
-
-/*******************************************************************************
- * REPORT TOOLS
- ******************************************************************************/
-
-/**
- * Loads Report tools based on configuration.
- *
- * Creates tools for discovering and executing reports:
- * - `Discover_Reports` - Lists available reports
- * - `Run_Report` - Execute any report by name or ID
- */
-async function loadReportTools(systemUser: UserInfo): Promise<void> {
-    const reportTools = _config.mcpServerSettings?.reportTools;
-
-    if (reportTools && reportTools.length > 0) {
-        // Add discovery tool if any report tool has discover enabled
-        const hasDiscovery = reportTools.some((tool: MCPServerReportToolInfo) => tool.discover);
-        if (hasDiscovery) {
-            addToolWithFilter({
-                name: "Discover_Reports",
-                description: "List available Reports based on a name pattern and/or category",
-                parameters: z.object({
-                    pattern: z.string().optional().describe("Name pattern to match reports (supports wildcards)"),
-                    category: z.string().optional().describe("Category name to filter reports")
-                }),
-                async execute(props: {pattern?: string; category?: string}, context: {session?: {user?: UserInfo}}) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ error: "No authenticated user in session" });
-                    }
-
-                    const rv = new RunView();
-                    let filter = '';
-
-                    if (props.category && props.category !== '*') {
-                        filter = `Category LIKE '%${props.category}%'`;
-                    }
-
-                    const result = await rv.RunView<ReportEntity>({
-                        EntityName: 'Reports',
-                        ExtraFilter: filter || undefined,
-                        OrderBy: 'Name',
-                        ResultType: 'entity_object'
-                    }, sessionUser);
-
-                    if (!result.Success) {
-                        return JSON.stringify({ error: result.ErrorMessage });
-                    }
-
-                    let reports = result.Results || [];
-
-                    // Filter by pattern
-                    const pattern = props.pattern || '*';
-                    if (pattern !== '*') {
-                        if (pattern.includes('*')) {
-                            const regexPattern = pattern
-                                .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-                                .replace(/\*/g, '.*');
-                            const regex = new RegExp(`^${regexPattern}$`, 'i');
-                            reports = reports.filter((r: ReportEntity) => r.Name && regex.test(r.Name));
-                        } else {
-                            reports = reports.filter((r: ReportEntity) => r.Name === pattern);
-                        }
-                    }
-
-                    return JSON.stringify(reports.map((r: ReportEntity) => ({
-                        id: r.ID,
-                        name: r.Name,
-                        description: r.Description || '',
-                        category: r.Category
-                    })));
-                }
-            });
-        }
-
-        // Add report execution tool if any tool has execute enabled
-        const hasExecute = reportTools.some((tool: MCPServerReportToolInfo) => tool.execute);
-        if (hasExecute) {
-            addToolWithFilter({
-                name: "Run_Report",
-                description: "Execute a Report by name or ID",
-                parameters: z.object({
-                    reportName: z.string().optional().describe("Name of the report to execute"),
-                    reportId: z.string().optional().describe("ID of the report to execute"),
-                    maxRows: z.number().optional().default(1000).describe("Maximum number of rows to return")
-                }),
-                async execute(props: {reportName?: string; reportId?: string; maxRows?: number}, context: {session?: {user?: UserInfo}}) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ success: false, error: "No authenticated user in session" });
-                    }
-
-                    try {
-                        let reportId = props.reportId;
-
-                        // Look up by name if no ID provided
-                        if (!reportId && props.reportName) {
-                            const rv = new RunView();
-                            const result = await rv.RunView<ReportEntity>({
-                                EntityName: 'Reports',
-                                ExtraFilter: `Name = '${props.reportName.replace(/'/g, "''")}'`,
-                                ResultType: 'entity_object'
-                            }, sessionUser);
-
-                            if (!result.Success || !result.Results?.length) {
-                                return JSON.stringify({
-                                    success: false,
-                                    error: `Report not found with name: ${props.reportName}`
-                                });
-                            }
-                            reportId = result.Results[0].ID;
-                        }
-
-                        if (!reportId) {
-                            return JSON.stringify({
-                                success: false,
-                                error: "Either reportName or reportId must be provided"
-                            });
-                        }
-
-                        // Execute the report
-                        const runReport = new RunReport();
-                        const reportParams: RunReportParams = {
-                            ReportID: reportId
-                        };
-
-                        const result = await runReport.RunReport(reportParams, sessionUser);
-
-                        return JSON.stringify({
-                            success: result.Success,
-                            rowCount: result.Results?.length || 0,
-                            executionTime: result.ExecutionTime,
-                            results: (result.Results || []).slice(0, props.maxRows || 1000),
-                            errorMessage: result.ErrorMessage
                         });
                     } catch (error) {
                         return JSON.stringify({
