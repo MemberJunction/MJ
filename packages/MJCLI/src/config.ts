@@ -43,6 +43,12 @@ const result = searchResult
   ? { ...searchResult, config: mergedConfig }
   : { config: mergedConfig, filepath: '', isEmpty: false };
 
+// Schema placeholder configuration for cross-schema references
+const schemaPlaceholderSchema = z.object({
+  schema: z.string(),
+  placeholder: z.string(),
+});
+
 // Schema for database-dependent config (required fields)
 const mjConfigSchema = z.object({
   dbHost: z.string().default('localhost'),
@@ -57,6 +63,9 @@ const mjConfigSchema = z.object({
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
   baselineVersion: z.string().optional().default('202601122300'),
   baselineOnMigrate: z.boolean().optional().default(true),
+  SQLOutput: z.object({
+    schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
+  }).passthrough().optional(),
 });
 
 // Schema for non-database commands (all fields optional)
@@ -73,6 +82,9 @@ const mjConfigSchemaOptional = z.object({
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
   baselineVersion: z.string().optional().default('202601122300'),
   baselineOnMigrate: z.boolean().optional().default(true),
+  SQLOutput: z.object({
+    schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
+  }).passthrough().optional(),
 });
 
 // Don't validate at module load - let commands decide when they need validated config
@@ -166,12 +178,49 @@ export const getFlywayConfig = async (
   }
 
   // Enable custom placeholders for cross-schema references (e.g., BCSaaS → MJ)
-  // This allows migrations to use ${mjSchema} to reference the MJ schema dynamically
+  // Uses schemaPlaceholders from mj.config.cjs SQLOutput configuration if available
+  // Falls back to legacy behavior (mjSchema placeholder) for backward compatibility
   // NOTE: The Map entries are swapped (value, key) due to a bug in node-flyway's Map.forEach iteration
-  if (schema && schema !== mjConfig.coreSchema) {
+  const schemaPlaceholders = mjConfig.SQLOutput?.schemaPlaceholders;
+
+  if (schemaPlaceholders && schemaPlaceholders.length > 0) {
+    // Use schemaPlaceholders from config (new behavior - supports BCSaaS and other extensions)
     advancedConfig.placeHolderReplacement = true;
-    advancedConfig.placeHolders = new Map([[mjConfig.coreSchema, 'mjSchema']]);  // Swapped due to node-flyway bug
+    const placeholderMap = new Map();
+
+    // Build placeholder map from config
+    // Flyway CLI format: -placeholders.PLACEHOLDER_NAME=value
+    // Example: -placeholders.mjSchema=__mj means ${mjSchema} -> __mj
+    //
+    // node-flyway bug: forEach((key, val)) should be forEach((val, key))
+    // When we set Map([['mjSchema', '__mj']]), forEach will incorrectly read key='mjSchema', val='__mj'
+    // and generate -placeholders.mjSchema=__mj  (which is what we want!)
+    // So we need: Map.set(placeholderName, schemaValue)
+    schemaPlaceholders.forEach(({ schema: schemaName, placeholder }) => {
+      // Remove ${} wrapper if present in placeholder name
+      const cleanPlaceholder = placeholder.replace(/^\$\{|\}$/g, '');
+
+      // Skip Flyway built-in placeholders (they're set automatically by Flyway)
+      if (cleanPlaceholder.startsWith('flyway:')) {
+        return;
+      }
+
+      // Set Map(placeholderName => schemaValue)
+      // Example: Map('mjSchema' => '__mj') generates -placeholders.mjSchema=__mj
+      placeholderMap.set(cleanPlaceholder, schemaName);
+    });
+
+    advancedConfig.placeHolders = placeholderMap;
+  } else if (schema && schema !== mjConfig.coreSchema) {
+    // Legacy behavior: Add mjSchema placeholder for non-core schemas
+    advancedConfig.placeHolderReplacement = true;
+    // Map('mjSchema' => '__mj') generates -placeholders.mjSchema=__mj
+    advancedConfig.placeHolders = new Map([['mjSchema', mjConfig.coreSchema]]);
   }
+
+  // Merge additional required properties into advancedConfig
+  advancedConfig.baselineVersion = mjConfig.baselineVersion;
+  advancedConfig.baselineOnMigrate = mjConfig.baselineOnMigrate;
 
   return {
     url: createFlywayUrl(mjConfig),
@@ -180,11 +229,6 @@ export const getFlywayConfig = async (
     // Note: Flyway uses the first schema in advanced.schemas as the default schema
     // Setting both defaultSchema and schemas causes issues due to node-flyway's filtering logic
     migrationLocations: [location],
-    advanced: {
-      schemas: [mjConfig.coreSchema],
-      cleanDisabled: mjConfig.cleanDisabled === false ? false : undefined,
-      baselineVersion: mjConfig.baselineVersion,
-      baselineOnMigrate: mjConfig.baselineOnMigrate,
-    },
+    advanced: advancedConfig,
   };
 };
