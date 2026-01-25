@@ -1,8 +1,8 @@
-import { Component, OnDestroy, ViewChild } from '@angular/core';
-import { BaseResourceComponent } from '@memberjunction/ng-shared-generic';
+import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
-import { APIKeyEntity, APIScopeEntity, APIKeyUsageLogEntity } from '@memberjunction/core-entities';
+import { APIKeyEntity, APIScopeEntity, APIKeyUsageLogEntity, ResourceData } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { APIKeyFilter, APIKeyListComponent } from './api-key-list.component';
 import { APIKeyCreateResult } from './api-key-create-dialog.component';
@@ -50,11 +50,12 @@ export function LoadAPIKeysResource(): void {
     templateUrl: './api-keys-resource.component.html',
     styleUrls: ['./api-keys-resource.component.css']
 })
-export class APIKeysResourceComponent extends BaseResourceComponent implements OnDestroy {
+export class APIKeysResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     @ViewChild('keyList') keyListComponent: APIKeyListComponent | undefined;
 
     private destroy$ = new Subject<void>();
     private md = new Metadata();
+    private cdr: ChangeDetectorRef;
 
     // View state
     public CurrentView: ViewType = 'overview';
@@ -109,8 +110,13 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public UserCanCreateKeys = false;
     public UserCanRevokeKeys = false;
 
-    constructor() {
+    constructor(cdr: ChangeDetectorRef) {
         super();
+        this.cdr = cdr;
+    }
+
+    async ngOnInit(): Promise<void> {
+        await this.loadData();
     }
 
     ngOnDestroy(): void {
@@ -118,8 +124,12 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         this.destroy$.complete();
     }
 
-    override async AfterResourceLoaded(): Promise<void> {
-        await this.loadData();
+    async GetResourceDisplayName(_data: ResourceData): Promise<string> {
+        return 'API Keys';
+    }
+
+    async GetResourceIconClass(_data: ResourceData): Promise<string> {
+        return 'fa-solid fa-key';
     }
 
     /**
@@ -127,6 +137,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      */
     public async loadData(): Promise<void> {
         this.IsLoading = true;
+        this.cdr.markForCheck();
         try {
             await Promise.all([
                 this.loadAPIKeys(),
@@ -139,6 +150,8 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
             console.error('Error loading API Keys dashboard data:', error);
         } finally {
             this.IsLoading = false;
+            this.NotifyLoadComplete();
+            this.cdr.markForCheck();
         }
     }
 
@@ -195,7 +208,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         // Load usage logs
         const usageResult = await rv.RunView<APIKeyUsageLogEntity>({
             EntityName: 'MJ: API Key Usage Logs',
-            OrderBy: 'RequestTimestamp DESC',
+            OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 20,
             ResultType: 'entity_object'
         });
@@ -208,7 +221,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
                     keyLabel: log.APIKey || 'Unknown Key',
                     action: 'Used',
                     user: log.APIKey || 'System',
-                    date: log.RequestTimestamp,
+                    date: log.__mj_CreatedAt,
                     keyId: log.APIKeyID
                 });
             }
@@ -248,7 +261,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         // Check if user can create/manage API keys
         const entityInfo = this.md.Entities.find(e => e.Name === 'MJ: API Keys');
         if (entityInfo) {
-            const permissions = entityInfo.GetUserPermissions(this.md.CurrentUser);
+            const permissions = entityInfo.GetUserPermisions(this.md.CurrentUser);
             this.UserCanCreateKeys = permissions.CanCreate;
             this.UserCanRevokeKeys = permissions.CanUpdate;
         }
@@ -464,7 +477,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     /**
      * Format date for display
      */
-    public formatDate(date: Date): string {
+    public formatDate(date: Date | null): string {
         if (!date) return 'Never';
 
         const now = new Date();

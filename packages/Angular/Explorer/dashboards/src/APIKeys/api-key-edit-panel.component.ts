@@ -154,7 +154,7 @@ export class APIKeyEditPanelComponent implements OnChanges {
 
             if (allScopesResult.Success && assignedScopesResult.Success) {
                 const assignedScopeIds = new Set(
-                    (assignedScopesResult.Results as APIKeyScopeEntity[]).map(ks => ks.APIScopeID)
+                    (assignedScopesResult.Results as APIKeyScopeEntity[]).map(ks => ks.ScopeID)
                 );
 
                 const categoryMap = new Map<string, ScopeItem[]>();
@@ -200,17 +200,17 @@ export class APIKeyEditPanelComponent implements OnChanges {
             const result = await rv.RunView<APIKeyUsageLogEntity>({
                 EntityName: 'MJ: API Key Usage Logs',
                 ExtraFilter: `APIKeyID='${this.KeyId}'`,
-                OrderBy: 'RequestTimestamp DESC',
+                OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 100,
                 ResultType: 'entity_object'
             });
 
             if (result.Success) {
                 this.UsageLogs = result.Results.map(log => ({
-                    timestamp: log.RequestTimestamp,
+                    timestamp: log.__mj_CreatedAt,
                     endpoint: log.Endpoint || '/unknown',
-                    method: log.HTTPMethod || 'GET',
-                    statusCode: log.ResponseStatusCode || 200,
+                    method: log.Method || 'GET',
+                    statusCode: log.StatusCode || 200,
                     responseTime: log.ResponseTimeMs || 0,
                     ipAddress: log.IPAddress || 'Unknown'
                 }));
@@ -297,10 +297,10 @@ export class APIKeyEditPanelComponent implements OnChanges {
 
             // Add new scope assignments
             for (const item of toAdd) {
-                const keyScope = await this.md.GetEntityObject('MJ: API Key Scopes');
+                const keyScope = await this.md.GetEntityObject<APIKeyScopeEntity>('MJ: API Key Scopes');
                 keyScope.NewRecord();
-                keyScope.Set('APIKeyID', this.APIKey.ID);
-                keyScope.Set('APIScopeID', item.scope.ID);
+                keyScope.APIKeyID = this.APIKey.ID;
+                keyScope.ScopeID = item.scope.ID;
                 await keyScope.Save();
                 item.originallySelected = true;
             }
@@ -310,7 +310,7 @@ export class APIKeyEditPanelComponent implements OnChanges {
             for (const item of toRemove) {
                 const result = await rv.RunView<APIKeyScopeEntity>({
                     EntityName: 'MJ: API Key Scopes',
-                    ExtraFilter: `APIKeyID='${this.APIKey.ID}' AND APIScopeID='${item.scope.ID}'`,
+                    ExtraFilter: `APIKeyID='${this.APIKey.ID}' AND ScopeID='${item.scope.ID}'`,
                     ResultType: 'entity_object'
                 });
                 if (result.Success && result.Results.length > 0) {
@@ -437,6 +437,13 @@ export class APIKeyEditPanelComponent implements OnChanges {
     public getAssignedScopeCount(): number {
         return this.ScopeCategories.reduce((sum, cat) =>
             sum + cat.scopes.filter(s => s.selected).length, 0);
+    }
+
+    /**
+     * Get selected scope count for a category (for template use)
+     */
+    public getSelectedCount(category: ScopeCategory): number {
+        return category.scopes.filter(s => s.selected).length;
     }
 
     /**

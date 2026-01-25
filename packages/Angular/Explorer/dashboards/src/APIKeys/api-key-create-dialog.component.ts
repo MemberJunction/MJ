@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { APIKeyEntity, APIScopeEntity } from '@memberjunction/core-entities';
+import { APIKeyEntity, APIKeyScopeEntity, APIScopeEntity } from '@memberjunction/core-entities';
 
 /** Scope selection item */
 interface ScopeItem {
@@ -303,10 +303,10 @@ export class APIKeyCreateDialogComponent implements OnInit {
 
         for (const item of selectedScopes) {
             try {
-                const keyScope = await this.md.GetEntityObject('MJ: API Key Scopes');
+                const keyScope = await this.md.GetEntityObject<APIKeyScopeEntity>('MJ: API Key Scopes');
                 keyScope.NewRecord();
-                keyScope.Set('APIKeyID', keyId);
-                keyScope.Set('APIScopeID', item.scope.ID);
+                keyScope.APIKeyID = keyId;
+                keyScope.ScopeID = item.scope.ID;
                 await keyScope.Save();
             } catch (error) {
                 console.error('Error saving scope association:', error);

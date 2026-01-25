@@ -218,7 +218,7 @@
                             <i [class]="category.icon" [style.color]="category.color"></i>
                             <span class="category-name">{{category.name}}</span>
                             <span class="category-count">
-                                {{category.scopes.filter(s => s.selected).length}}/{{category.scopes.length}}
+                                {{getSelectedCount(category)}}/{{category.scopes.length}}
                             </span>
                         </div>
                         <i class="fa-solid" [class.fa-chevron-down]="!category.expanded"

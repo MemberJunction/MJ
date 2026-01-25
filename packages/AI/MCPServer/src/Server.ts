@@ -30,7 +30,8 @@ import { EncryptionEngine } from "@memberjunction/encryption";
 import * as http from 'http';
 import { ActionEngineBase, ActionEntityExtended, RunActionParams } from "@memberjunction/actions-base";
 import { ActionEngineServer } from "@memberjunction/actions";
-import { AIPromptRunner, AIPromptParams } from "@memberjunction/ai-prompts";
+import { AIPromptRunner } from "@memberjunction/ai-prompts";
+import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { ActionParamEntity } from "@memberjunction/core-entities";
 
 /*******************************************************************************
@@ -561,7 +562,7 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
                     pattern: z.string().optional().describe("Name pattern to match actions (supports wildcards: *, *Action, Action*, *Action*)"),
                     category: z.string().optional().describe("Category name to filter actions")
                 }),
-                async execute(props: {pattern?: string; category?: string}, context: {session?: {user?: UserInfo}}) {
+                async execute(props: any, context: any) {
                     const sessionUser = context.session?.user;
                     if (!sessionUser) {
                         return JSON.stringify({ error: "No authenticated user in session" });
@@ -592,7 +593,7 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
                     actionId: z.string().optional().describe("ID of the action to execute"),
                     params: z.record(z.unknown()).optional().describe("Parameters for the action as key-value pairs")
                 }),
-                async execute(props: {actionName?: string; actionId?: string; params?: Record<string, unknown>}, context: {session?: {user?: UserInfo}}) {
+                async execute(props: any, context: any) {
                     const sessionUser = context.session?.user;
                     if (!sessionUser) {
                         return JSON.stringify({ success: false, error: "No authenticated user in session" });
@@ -631,9 +632,11 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
                         const runParams: RunActionParams = {
                             Action: action,
                             ContextUser: sessionUser,
+                            Filters: [],
                             Params: actionParams.map((p: ActionParamEntity) => ({
                                 Name: p.Name,
-                                Value: props.params?.[p.Name] ?? p.DefaultValue
+                                Value: props.params?.[p.Name] ?? p.DefaultValue,
+                                Type: (p.Type as 'Input' | 'Output' | 'Both') || 'Input'
                             }))
                         };
 
@@ -642,9 +645,9 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
 
                         return JSON.stringify({
                             success: result.Success,
-                            resultCode: result.ResultCode,
+                            resultCode: result.Result?.ResultCode,
                             message: result.Message,
-                            runId: result.RunID
+                            runId: result.LogEntry?.ID
                         });
                     } catch (error) {
                         return JSON.stringify({
@@ -663,7 +666,7 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
                     actionName: z.string().optional().describe("Name of the action"),
                     actionId: z.string().optional().describe("ID of the action")
                 }),
-                async execute(props: {actionName?: string; actionId?: string}, context: {session?: {user?: UserInfo}}) {
+                async execute(props: any, context: any) {
                     const sessionUser = context.session?.user;
                     if (!sessionUser) {
                         return JSON.stringify({ error: "No authenticated user in session" });
@@ -806,7 +809,7 @@ function addActionExecuteTool(action: ActionEntityExtended, _systemUser: UserInf
         name: `Execute_${safeName}_Action`,
         description: `Execute the ${action.Name || 'Unknown'} action. ${action.Description || ''}`,
         parameters: z.object(paramSchema),
-        async execute(props: Record<string, unknown>, context: {session?: {user?: UserInfo}}) {
+        async execute(props: any, context: any) {
             const sessionUser = context.session?.user;
             if (!sessionUser) {
                 return JSON.stringify({ success: false, error: "No authenticated user in session" });
@@ -815,9 +818,11 @@ function addActionExecuteTool(action: ActionEntityExtended, _systemUser: UserInf
                 const runParams: RunActionParams = {
                     Action: action,
                     ContextUser: sessionUser,
+                    Filters: [],
                     Params: actionParams.map((p: ActionParamEntity) => ({
                         Name: p.Name,
-                        Value: props[p.Name] ?? p.DefaultValue
+                        Value: props[p.Name] ?? p.DefaultValue,
+                        Type: (p.Type as 'Input' | 'Output' | 'Both') || 'Input'
                     }))
                 };
 
@@ -825,9 +830,9 @@ function addActionExecuteTool(action: ActionEntityExtended, _systemUser: UserInf
 
                 return JSON.stringify({
                     success: result.Success,
-                    resultCode: result.ResultCode,
+                    resultCode: result.Result?.ResultCode,
                     message: result.Message,
-                    runId: result.RunID
+                    runId: result.LogEntry?.ID
                 });
             } catch (error) {
                 return JSON.stringify({
@@ -1333,58 +1338,107 @@ function loadAgentRunDiagnosticTools(): void {
 /**
  * Loads query tools based on configuration.
  *
- * Creates tools for executing SQL queries with schema-based filtering:
- * - `Run_SQL_Query` - Execute read-only SQL SELECT queries
- * - `Get_Database_Schema` - Get schema information for available tables
+ * Creates tools for discovering and executing stored MJ Queries:
+ * - `Discover_Queries` - List available stored queries
+ * - `Run_Query` - Execute a stored query by name or ID
+ * - `Get_Database_Schema` - Get schema information for available entities
  */
 function loadQueryTools(): void {
     const queryTools = _config.mcpServerSettings?.queryTools;
 
     if (queryTools?.enabled) {
-        // Add SQL query execution tool
+        // Add query discovery tool
         addToolWithFilter({
-            name: "Run_SQL_Query",
-            description: "Execute a read-only SQL SELECT query against the database. Only SELECT statements are allowed.",
+            name: "Discover_Queries",
+            description: "List available stored queries that can be executed. Returns query metadata including name, description, and category.",
             parameters: z.object({
-                sql: z.string().describe("The SQL SELECT query to execute"),
-                maxRows: z.number().optional().default(1000).describe("Maximum number of rows to return (default: 1000)")
+                pattern: z.string().optional().describe("Name pattern to match queries (supports wildcards: *, *Query, Query*, *Query*)"),
+                category: z.string().optional().describe("Category name or path to filter queries (e.g., 'Reports', '/MJ/AI/')")
             }),
-            async execute(props: {sql: string; maxRows?: number}, context: {session?: {user?: UserInfo}}) {
+            async execute(props: any, context: any) {
                 const sessionUser = context.session?.user;
                 if (!sessionUser) {
                     return JSON.stringify({ error: "No authenticated user in session" });
                 }
 
                 try {
-                    // Validate that it's a SELECT query
-                    const trimmedSQL = props.sql.trim().toLowerCase();
-                    if (!trimmedSQL.startsWith('select')) {
-                        return JSON.stringify({
-                            success: false,
-                            error: "Only SELECT queries are allowed. Query must start with SELECT."
-                        });
+                    const rv = new RunView();
+                    const result = await rv.RunView({
+                        EntityName: 'Queries',
+                        ExtraFilter: `Status = 'Active'`,
+                        OrderBy: 'Name',
+                        Fields: ['ID', 'Name', 'Description', 'CategoryID', 'Status'],
+                        ResultType: 'simple'
+                    }, sessionUser);
+
+                    if (!result.Success) {
+                        return JSON.stringify({ error: result.ErrorMessage });
                     }
 
-                    // Check for dangerous keywords
-                    const dangerousKeywords = ['insert', 'update', 'delete', 'drop', 'truncate', 'alter', 'create', 'exec', 'execute'];
-                    for (const keyword of dangerousKeywords) {
-                        if (trimmedSQL.includes(keyword)) {
-                            return JSON.stringify({
-                                success: false,
-                                error: `Query contains forbidden keyword: ${keyword}`
-                            });
+                    let queries = result.Results || [];
+
+                    // Filter by pattern if provided
+                    const pattern = props.pattern || '*';
+                    if (pattern !== '*') {
+                        if (pattern.includes('*')) {
+                            const regexPattern = pattern
+                                .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+                                .replace(/\*/g, '.*');
+                            const regex = new RegExp(`^${regexPattern}$`, 'i');
+                            queries = queries.filter((q: { Name: string }) => q.Name && regex.test(q.Name));
+                        } else {
+                            queries = queries.filter((q: { Name: string }) => q.Name === pattern);
                         }
                     }
 
-                    // Apply schema filtering if configured
-                    const allowedSchemas = queryTools.allowedSchemas;
-                    const blockedSchemas = queryTools.blockedSchemas;
+                    return JSON.stringify(queries.map((q: { ID: string; Name: string; Description?: string; CategoryID?: string; Status: string }) => ({
+                        id: q.ID,
+                        name: q.Name,
+                        description: q.Description || '',
+                        categoryId: q.CategoryID,
+                        status: q.Status
+                    })));
+                } catch (error) {
+                    return JSON.stringify({
+                        success: false,
+                        error: error instanceof Error ? error.message : String(error)
+                    });
+                }
+            }
+        });
 
-                    // Execute via RunQuery
+        // Add stored query execution tool
+        addToolWithFilter({
+            name: "Run_Query",
+            description: "Execute a stored query by name or ID. Stored queries are pre-defined SQL queries managed in MemberJunction.",
+            parameters: z.object({
+                queryName: z.string().optional().describe("Name of the stored query to execute"),
+                queryId: z.string().optional().describe("ID of the stored query to execute"),
+                categoryPath: z.string().optional().describe("Category path for disambiguation (e.g., '/MJ/Reports/')"),
+                parameters: z.record(z.unknown()).optional().describe("Parameters to pass to parameterized queries"),
+                maxRows: z.number().optional().describe("Maximum number of rows to return")
+            }),
+            async execute(props: any, context: any) {
+                const sessionUser = context.session?.user;
+                if (!sessionUser) {
+                    return JSON.stringify({ error: "No authenticated user in session" });
+                }
+
+                if (!props.queryName && !props.queryId) {
+                    return JSON.stringify({
+                        success: false,
+                        error: "Either queryName or queryId must be provided"
+                    });
+                }
+
+                try {
                     const rq = new RunQuery();
                     const result = await rq.RunQuery({
-                        SQL: props.sql,
-                        MaxRows: props.maxRows || 1000
+                        QueryID: props.queryId,
+                        QueryName: props.queryName,
+                        CategoryPath: props.categoryPath,
+                        Parameters: props.parameters,
+                        MaxRows: props.maxRows
                     }, sessionUser);
 
                     if (!result.Success) {
@@ -1408,15 +1462,15 @@ function loadQueryTools(): void {
             }
         });
 
-        // Add schema discovery tool
+        // Add schema discovery tool (for understanding available entities)
         addToolWithFilter({
             name: "Get_Database_Schema",
-            description: "Get information about database tables and their columns",
+            description: "Get information about available MemberJunction entities and their fields",
             parameters: z.object({
                 schemaFilter: z.string().optional().describe("Filter by schema name (e.g., 'dbo', '__mj')"),
-                tableFilter: z.string().optional().describe("Filter by table name pattern")
+                entityFilter: z.string().optional().describe("Filter by entity name pattern")
             }),
-            async execute(props: {schemaFilter?: string; tableFilter?: string}, context: {session?: {user?: UserInfo}}) {
+            async execute(props: any, context: any) {
                 const sessionUser = context.session?.user;
                 if (!sessionUser) {
                     return JSON.stringify({ error: "No authenticated user in session" });
@@ -1431,16 +1485,16 @@ function loadQueryTools(): void {
                     entities = entities.filter((e: EntityInfo) => e.SchemaName.toLowerCase() === schemaLower);
                 }
 
-                // Apply table/entity filter
-                if (props.tableFilter) {
-                    const filterLower = props.tableFilter.toLowerCase();
-                    if (props.tableFilter.includes('*')) {
-                        const regexPattern = props.tableFilter
+                // Apply entity filter
+                if (props.entityFilter) {
+                    if (props.entityFilter.includes('*')) {
+                        const regexPattern = props.entityFilter
                             .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
                             .replace(/\*/g, '.*');
                         const regex = new RegExp(`^${regexPattern}$`, 'i');
                         entities = entities.filter((e: EntityInfo) => regex.test(e.Name));
                     } else {
+                        const filterLower = props.entityFilter.toLowerCase();
                         entities = entities.filter((e: EntityInfo) => e.Name.toLowerCase().includes(filterLower));
                     }
                 }
@@ -1460,12 +1514,14 @@ function loadQueryTools(): void {
                     schema: e.SchemaName,
                     table: e.BaseTable,
                     entityName: e.Name,
+                    description: e.Description,
                     columns: e.Fields.map((f: EntityFieldInfo) => ({
                         name: f.Name,
                         type: f.Type,
                         length: f.Length,
                         nullable: f.AllowsNull,
-                        isPrimaryKey: f.IsPrimaryKey
+                        isPrimaryKey: f.IsPrimaryKey,
+                        description: f.Description
                     }))
                 })));
             }
@@ -1503,7 +1559,7 @@ async function loadPromptTools(systemUser: UserInfo): Promise<void> {
                     pattern: z.string().optional().describe("Name pattern to match prompts (supports wildcards)"),
                     category: z.string().optional().describe("Category name to filter prompts")
                 }),
-                async execute(props: {pattern?: string; category?: string}, context: {session?: {user?: UserInfo}}) {
+                async execute(props: any, context: any) {
                     const sessionUser = context.session?.user;
                     if (!sessionUser) {
                         return JSON.stringify({ error: "No authenticated user in session" });
@@ -1558,7 +1614,7 @@ async function loadPromptTools(systemUser: UserInfo): Promise<void> {
                     data: z.record(z.unknown()).optional().describe("Data to pass to the prompt template"),
                     modelId: z.string().optional().describe("Optional model ID to use for execution")
                 }),
-                async execute(props: {promptName?: string; promptId?: string; data?: Record<string, unknown>; modelId?: string}, context: {session?: {user?: UserInfo}}) {
+                async execute(props: any, context: any) {
                     const sessionUser = context.session?.user;
                     if (!sessionUser) {
                         return JSON.stringify({ success: false, error: "No authenticated user in session" });
@@ -1605,8 +1661,7 @@ async function loadPromptTools(systemUser: UserInfo): Promise<void> {
                         return JSON.stringify({
                             success: result.success,
                             result: result.result,
-                            rawOutput: result.rawOutput,
-                            tokensUsed: result.tokensUsed,
+                            rawResult: result.rawResult,
                             errorMessage: result.errorMessage
                         });
                     } catch (error) {
@@ -1646,7 +1701,7 @@ function loadCommunicationTools(): void {
                 body: z.string().describe("Email body (can be HTML)"),
                 isHtml: z.boolean().optional().default(true).describe("Whether body is HTML (default: true)")
             }),
-            async execute(props: {to: string; subject: string; body: string; isHtml?: boolean}, context: {session?: {user?: UserInfo}}) {
+            async execute(_props: any, context: any) {
                 const sessionUser = context.session?.user;
                 if (!sessionUser) {
                     return JSON.stringify({ success: false, error: "No authenticated user in session" });
@@ -1674,7 +1729,7 @@ function loadCommunicationTools(): void {
             name: "Get_Communication_Providers",
             description: "List available communication providers configured in the system",
             parameters: z.object({}),
-            async execute(_props: Record<string, never>, context: {session?: {user?: UserInfo}}) {
+            async execute(_props: any, context: any) {
                 const sessionUser = context.session?.user;
                 if (!sessionUser) {
                     return JSON.stringify({ error: "No authenticated user in session" });
