@@ -27,20 +27,26 @@
   </div>
 
   <!-- Tab Navigation -->
-  <div class="tab-nav">
+  <div class="tab-nav" [class.icon-only]="isIconOnlyMode">
     <button
       class="tab-btn"
       [class.active]="activeTab === 'columns'"
-      (click)="setActiveTab('columns')">
+      (click)="setActiveTab('columns')"
+      [title]="isIconOnlyMode ? 'Columns' : ''">
       <i class="fa-solid fa-columns"></i>
-      <span>Columns</span>
+      @if (!isIconOnlyMode) {
+        <span>Columns</span>
+      }
     </button>
     <button
       class="tab-btn"
       [class.active]="activeTab === 'sorting'"
-      (click)="setActiveTab('sorting')">
+      (click)="setActiveTab('sorting')"
+      [title]="isIconOnlyMode ? 'Sorting' + (sortItems.length > 0 ? ' (' + sortItems.length + ')' : '') : ''">
       <i class="fa-solid fa-arrow-up-wide-short"></i>
-      <span>Sorting</span>
+      @if (!isIconOnlyMode) {
+        <span>Sorting</span>
+      }
       @if (sortItems.length > 0) {
         <span class="tab-badge">{{ sortItems.length }}</span>
       }
@@ -48,16 +54,22 @@
     <button
       class="tab-btn"
       [class.active]="activeTab === 'filters'"
-      (click)="setActiveTab('filters')">
+      (click)="setActiveTab('filters')"
+      [title]="isIconOnlyMode ? 'Filters' : ''">
       <i class="fa-solid fa-filter"></i>
-      <span>Filters</span>
+      @if (!isIconOnlyMode) {
+        <span>Filters</span>
+      }
     </button>
     <button
       class="tab-btn"
       [class.active]="activeTab === 'aggregates'"
-      (click)="setActiveTab('aggregates')">
+      (click)="setActiveTab('aggregates')"
+      [title]="isIconOnlyMode ? 'Aggregates' + (enabledAggregatesCount > 0 ? ' (' + enabledAggregatesCount + ')' : '') : ''">
       <i class="fa-solid fa-chart-simple"></i>
-      <span>Aggregates</span>
+      @if (!isIconOnlyMode) {
+        <span>Aggregates</span>
+      }
       @if (enabledAggregatesCount > 0) {
         <span class="tab-badge">{{ enabledAggregatesCount }}</span>
       }
@@ -65,9 +77,12 @@
     <button
       class="tab-btn"
       [class.active]="activeTab === 'settings'"
-      (click)="setActiveTab('settings')">
+      (click)="setActiveTab('settings')"
+      [title]="isIconOnlyMode ? 'Settings' : ''">
       <i class="fa-solid fa-cog"></i>
-      <span>Settings</span>
+      @if (!isIconOnlyMode) {
+        <span>Settings</span>
+      }
     </button>
   </div>
 
@@ -783,7 +798,7 @@
                     <button
                       class="agg-action-btn toggle-btn"
                       [class.enabled]="agg.enabled !== false"
-                      (click)="toggleAggregateEnabled(agg)"
+                      (click)="toggleAggregateEnabled(agg, $event)"
                       [disabled]="!canEdit"
                       [title]="agg.enabled !== false ? 'Disable' : 'Enable'">
                       <i [class]="agg.enabled !== false ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'"></i>

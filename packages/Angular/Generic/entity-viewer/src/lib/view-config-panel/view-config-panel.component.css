@@ -165,6 +165,22 @@
   margin-left: 4px;
 }
 
+/* Icon-only mode for narrow panels */
+.tab-nav.icon-only .tab-btn {
+  padding: 12px 8px;
+  gap: 4px;
+}
+
+.tab-nav.icon-only .tab-btn i {
+  font-size: 14px;
+}
+
+.tab-nav.icon-only .tab-badge {
+  margin-left: 0;
+  padding: 2px 4px;
+  font-size: 9px;
+}
+
 /* Panel Content */
 .panel-content {
   flex: 1;

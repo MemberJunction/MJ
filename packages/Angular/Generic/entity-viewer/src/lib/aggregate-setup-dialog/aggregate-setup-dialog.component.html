@@ -80,7 +80,7 @@
             (ngModelChange)="onColumnChange()">
             <option value="">Select a column...</option>
             @for (field of AvailableFields; track field.ID) {
-              <option [value]="field.Name">{{ field.DisplayNameOrName }}</option>
+              <option [value]="field.Name">{{ getFieldDisplayLabel(field) }}</option>
             }
           </select>
           @if (SelectedFunction !== 'COUNT' && SelectedFunction !== 'COUNT_DISTINCT' && NumericFields.length === 0) {

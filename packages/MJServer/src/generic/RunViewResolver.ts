@@ -661,6 +661,9 @@ export class RunViewResolver extends ResolverBase {
         RowCount: rawData?.RowCount,
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
+        Success: rawData?.Success,
+        AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
+        AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
     } catch (err) {
       console.log(err);
@@ -689,6 +692,9 @@ export class RunViewResolver extends ResolverBase {
         RowCount: rawData?.RowCount,
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
+        Success: rawData?.Success,
+        AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
+        AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
     } catch (err) {
       console.log(err);
@@ -715,6 +721,9 @@ export class RunViewResolver extends ResolverBase {
         RowCount: rawData?.RowCount,
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
+        Success: rawData?.Success,
+        AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
+        AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
     } catch (err) {
       console.log(err);

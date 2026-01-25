@@ -928,6 +928,74 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     return this._aggregatesLoading;
   }
 
+  /**
+   * Returns enabled aggregates configured for card display.
+   */
+  public get CardAggregates(): ViewGridAggregate[] {
+    if (!this._aggregatesConfig?.expressions) return [];
+    return this._aggregatesConfig.expressions
+      .filter(a => a.enabled !== false && a.displayType === 'card')
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  /**
+   * Returns enabled aggregates configured for column footer display.
+   */
+  public get ColumnAggregates(): ViewGridAggregate[] {
+    if (!this._aggregatesConfig?.expressions) return [];
+    return this._aggregatesConfig.expressions
+      .filter(a => a.enabled !== false && a.displayType === 'column')
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  /**
+   * Whether to show aggregate summary row (has column-type aggregates with values).
+   */
+  public get ShowAggregateSummary(): boolean {
+    const hasColumnAggs = this.ColumnAggregates.length > 0;
+    const hasValues = this._aggregateValues.size > 0;
+    // Debug logging for aggregate display
+    if (this._aggregatesConfig?.expressions?.length || this._aggregateValues.size > 0) {
+      console.log('[EntityDataGrid] ShowAggregateSummary check:', {
+        hasConfig: !!this._aggregatesConfig,
+        expressionsCount: this._aggregatesConfig?.expressions?.length || 0,
+        columnAggregatesCount: this.ColumnAggregates.length,
+        valuesMapSize: this._aggregateValues.size,
+        showSummary: hasColumnAggs && hasValues,
+        columnAggregates: this.ColumnAggregates.map(a => ({ id: a.id, label: a.label, displayType: a.displayType, enabled: a.enabled }))
+      });
+    }
+    return hasColumnAggs && hasValues;
+  }
+
+  /**
+   * Whether to show aggregate panel (has card-type aggregates with values).
+   */
+  public get ShowAggregatePanel(): boolean {
+    return this.CardAggregates.length > 0 && this._aggregateValues.size > 0;
+  }
+
+  /**
+   * Get formatted aggregate value for display
+   */
+  public getAggregateValue(agg: ViewGridAggregate): string {
+    const key = agg.id || agg.expression;
+    const value = this._aggregateValues.get(key);
+    if (value == null) return '—';
+
+    // Format based on value type
+    if (typeof value === 'number') {
+      return value.toLocaleString('en-US', {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 0
+      });
+    }
+    if (value instanceof Date) {
+      return value.toLocaleDateString();
+    }
+    return String(value);
+  }
+
   // ========================================
   // Event Outputs
   // ========================================
@@ -2582,6 +2650,15 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           }));
       }
 
+      // Log aggregate request for debugging
+      if (aggregateExpressions?.length) {
+        console.log('[EntityDataGrid] RunView with aggregates:', {
+          entityName: runViewParams.EntityName || this._params?.EntityName,
+          aggregateCount: aggregateExpressions.length,
+          expressions: aggregateExpressions.map(a => ({ expression: a.expression, alias: a.alias }))
+        });
+      }
+
       const rv = new RunView();
       const result = await rv.RunView<BaseEntity>({
         ...runViewParams,
@@ -2860,6 +2937,22 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   private processAggregateResults(results: AggregateResult[] | undefined, executionTime?: number): void {
     this._aggregatesLoading = false;
+
+    // Log aggregate results for debugging
+    if (results && results.length > 0) {
+      console.log('[EntityDataGrid] Aggregate results received:', {
+        count: results.length,
+        executionTimeMs: executionTime,
+        results: results.map(r => ({
+          alias: r.alias,
+          expression: r.expression,
+          value: r.value,
+          error: r.error
+        }))
+      });
+    } else if (this._aggregatesConfig?.expressions?.length) {
+      console.log('[EntityDataGrid] No aggregate results returned (expected:', this._aggregatesConfig.expressions.length, 'aggregates)');
+    }
 
     if (!results || results.length === 0) {
       this._aggregateResults = [];

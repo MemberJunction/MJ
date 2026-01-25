@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { ViewGridAggregate, AggregateDisplayType } from '@memberjunction/core-entities';
 
@@ -52,7 +52,7 @@ const FUNCTION_LABELS: Record<AggregateFunctionType, string> = {
   templateUrl: './aggregate-setup-dialog.component.html',
   styleUrls: ['./aggregate-setup-dialog.component.css']
 })
-export class AggregateSetupDialogComponent implements OnInit {
+export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   /**
    * The entity being viewed - provides field information
    */
@@ -129,6 +129,16 @@ export class AggregateSetupDialogComponent implements OnInit {
 
   ngOnInit(): void {
     this.initializeFromAggregate();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    // Re-initialize when dialog opens or aggregate changes
+    if (changes['IsOpen'] && this.IsOpen) {
+      this.initializeFromAggregate();
+    }
+    if (changes['Aggregate'] && !changes['Aggregate'].firstChange) {
+      this.initializeFromAggregate();
+    }
   }
 
   /**
@@ -267,10 +277,10 @@ export class AggregateSetupDialogComponent implements OnInit {
     if (this.SelectedFunction === 'SUM' || this.SelectedFunction === 'AVG') {
       return this.NumericFields;
     }
-    // MIN and MAX work with numeric, date, and string fields
+    // MIN and MAX work with numeric and date fields only (not text/varchar)
     if (this.SelectedFunction === 'MIN' || this.SelectedFunction === 'MAX') {
-      // Combine numeric, date, and string fields (avoiding duplicates)
-      const combined = [...this.NumericFields, ...this.DateFields, ...this.StringFields];
+      // Combine numeric and date fields (avoiding duplicates)
+      const combined = [...this.NumericFields, ...this.DateFields];
       // Remove duplicates by field ID
       const seen = new Set<string>();
       return combined.filter(f => {
@@ -425,7 +435,7 @@ export class AggregateSetupDialogComponent implements OnInit {
       label: this.Label.trim(),
       description: this.Description.trim() || undefined,
       icon: this.Icon || this.getDefaultIcon(),
-      enabled: true,
+      enabled: this.Aggregate?.enabled ?? true, // Preserve enabled state when editing, default to true for new
       order: this.Aggregate?.order || 0
     };
 
@@ -488,5 +498,16 @@ export class AggregateSetupDialogComponent implements OnInit {
   clearGeneratedExpression(): void {
     this.GeneratedExpression = '';
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Get display label for field dropdown showing "Name (DisplayName)" format
+   * If DisplayName equals Name or is not set, just show Name
+   */
+  getFieldDisplayLabel(field: EntityFieldInfo): string {
+    if (field.DisplayName && field.DisplayName !== field.Name) {
+      return `${field.Name} (${field.DisplayName})`;
+    }
+    return field.Name;
   }
 }

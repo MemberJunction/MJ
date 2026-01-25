@@ -1401,6 +1401,11 @@ export class SQLServerDataProvider
   protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
     // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
 
+    // Log aggregate input for debugging
+    if (params?.Aggregates?.length) {
+      LogStatus(`[SQLServerDataProvider] InternalRunView received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}, aggregates=${JSON.stringify(params.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+    }
+
     const startTime = new Date();
     try {
       if (params) {

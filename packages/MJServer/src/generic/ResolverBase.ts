@@ -1,4 +1,5 @@
 import {
+  AggregateExpression,
   BaseEntity,
   BaseEntityEvent,
   CompositeKey,
@@ -266,6 +267,11 @@ export class ResolverBase {
 
   async RunViewByNameGeneric(viewInput: RunViewByNameInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
+      // Log aggregate input for debugging
+      if (viewInput.Aggregates?.length) {
+        LogStatus(`[ResolverBase] RunViewByNameGeneric received aggregates: viewName=${viewInput.ViewName}, aggregateCount=${viewInput.Aggregates.length}, aggregates=${JSON.stringify(viewInput.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+      }
+
       const rv = provider as any as IRunViewProvider;
       const result = await rv.RunView<UserViewEntityExtended>({
         EntityName: 'User Views',
@@ -290,7 +296,8 @@ export class ResolverBase {
           viewInput.ResultType,
           userPayload,
           viewInput.MaxRows,
-          viewInput.StartRow
+          viewInput.StartRow,
+          viewInput.Aggregates
         );
       }
       else {
@@ -305,6 +312,11 @@ export class ResolverBase {
 
   async RunViewByIDGeneric(viewInput: RunViewByIDInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
+      // Log aggregate input for debugging
+      if (viewInput.Aggregates?.length) {
+        LogStatus(`[ResolverBase] RunViewByIDGeneric received aggregates: viewID=${viewInput.ViewID}, aggregateCount=${viewInput.Aggregates.length}, aggregates=${JSON.stringify(viewInput.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+      }
+
       const contextUser = this.GetUserFromPayload(userPayload);
       const viewInfo = await provider.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
       await viewInfo.Load(viewInput.ViewID);
@@ -325,7 +337,8 @@ export class ResolverBase {
         viewInput.ResultType,
         userPayload,
         viewInput.MaxRows,
-        viewInput.StartRow
+        viewInput.StartRow,
+        viewInput.Aggregates
       );
     } catch (err) {
       console.log(err);
@@ -335,6 +348,11 @@ export class ResolverBase {
 
   async RunDynamicViewGeneric(viewInput: RunDynamicViewInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
+      // Log aggregate input for debugging
+      if (viewInput.Aggregates?.length) {
+        LogStatus(`[ResolverBase] RunDynamicViewGeneric received aggregates: entityName=${viewInput.EntityName}, aggregateCount=${viewInput.Aggregates.length}, aggregates=${JSON.stringify(viewInput.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+      }
+
       const md = provider;
       const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
@@ -363,7 +381,8 @@ export class ResolverBase {
         viewInput.ResultType,
         userPayload,
         viewInput.MaxRows,
-        viewInput.StartRow
+        viewInput.StartRow,
+        viewInput.Aggregates
       );
     } catch (err) {
       console.log(err);
@@ -422,7 +441,8 @@ export class ResolverBase {
           forceAuditLog: viewInput.ForceAuditLog,
           auditLogDescription: viewInput.AuditLogDescription,
           resultType: viewInput.ResultType,
-          userPayload, 
+          userPayload,
+          aggregates: viewInput.Aggregates,
         });
       } catch (err) {
         LogError(err);
@@ -524,7 +544,8 @@ export class ResolverBase {
     resultType: string | undefined,
     userPayload: UserPayload | null,
     maxRows: number | undefined,
-    startRow: number | undefined
+    startRow: number | undefined,
+    aggregates?: AggregateExpression[]
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -559,6 +580,11 @@ export class ResolverBase {
         }
       }
 
+      // Log aggregate request for debugging
+      if (aggregates?.length) {
+        LogStatus(`[ResolverBase] RunViewGenericInternal with aggregates: entityName=${viewInfo.Entity}, viewName=${viewInfo.Name}, aggregateCount=${aggregates.length}, aggregates=${JSON.stringify(aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+      }
+
       const result = await rv.RunView(
         {
           ViewID: viewInfo.ID,
@@ -578,9 +604,15 @@ export class ResolverBase {
           ForceAuditLog: forceAuditLog,
           AuditLogDescription: auditLogDescription,
           ResultType: rt,
+          Aggregates: aggregates,
         },
         user
       );
+
+      // Log aggregate results for debugging
+      if (aggregates?.length) {
+        LogStatus(`[ResolverBase] RunView result aggregate info: entityName=${viewInfo.Entity}, hasAggregateResults=${!!result?.AggregateResults}, aggregateResultCount=${result?.AggregateResults?.length || 0}, aggregateExecutionTime=${result?.AggregateExecutionTime}, aggregateResults=${JSON.stringify(result?.AggregateResults)}`);
+      }
 
       // Process results for GraphQL transport
       const mapper = new FieldMapper();
@@ -682,6 +714,7 @@ export class ResolverBase {
           ForceAuditLog: param.forceAuditLog,
           AuditLogDescription: param.auditLogDescription,
           ResultType: rt,
+          Aggregates: param.aggregates,
         });
       }
 

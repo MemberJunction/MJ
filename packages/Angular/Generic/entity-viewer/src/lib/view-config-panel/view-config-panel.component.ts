@@ -10,7 +10,8 @@ import {
   ColumnConditionalRule,
   ViewGridAggregatesConfig,
   ViewGridAggregate,
-  DEFAULT_AGGREGATE_DISPLAY
+  DEFAULT_AGGREGATE_DISPLAY,
+  UserInfoEngine
 } from '@memberjunction/core-entities';
 import {
   CompositeFilterDescriptor,
@@ -200,12 +201,22 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
   // Panel resize state
   public isResizing: boolean = false;
-  public panelWidth: number = 450;
+  public panelWidth: number = 520;
   private readonly MIN_PANEL_WIDTH = 360;
   private readonly MAX_PANEL_WIDTH = 800;
-  private readonly DEFAULT_PANEL_WIDTH = 450;
+  private readonly DEFAULT_PANEL_WIDTH = 520;
+  /** Width threshold below which tabs show icons only */
+  private readonly ICON_ONLY_THRESHOLD = 440;
+  private readonly PANEL_WIDTH_SETTING_KEY = 'view-config-panel/width';
   private resizeStartX: number = 0;
   private resizeStartWidth: number = 0;
+
+  /**
+   * Whether tabs should show icons only (narrow panel mode)
+   */
+  get isIconOnlyMode(): boolean {
+    return this.panelWidth < this.ICON_ONLY_THRESHOLD;
+  }
 
   private metadata = new Metadata();
 
@@ -270,11 +281,42 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     document.removeEventListener('mouseup', this.onResizeEnd);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+    // Persist the panel width to user settings
+    this.savePanelWidth();
     this.cdr.detectChanges();
   };
 
   ngOnInit(): void {
+    this.loadSavedPanelWidth();
     this.initializeFromEntity();
+  }
+
+  /**
+   * Load saved panel width from user settings
+   */
+  private loadSavedPanelWidth(): void {
+    try {
+      const savedWidth = UserInfoEngine.Instance.GetSetting(this.PANEL_WIDTH_SETTING_KEY);
+      if (savedWidth) {
+        const width = parseInt(savedWidth, 10);
+        if (!isNaN(width) && width >= this.MIN_PANEL_WIDTH && width <= this.MAX_PANEL_WIDTH) {
+          this.panelWidth = width;
+        }
+      }
+    } catch (error) {
+      console.warn('[ViewConfigPanel] Failed to load saved panel width:', error);
+    }
+  }
+
+  /**
+   * Save panel width to user settings
+   */
+  private async savePanelWidth(): Promise<void> {
+    try {
+      await UserInfoEngine.Instance.SetSetting(this.PANEL_WIDTH_SETTING_KEY, String(this.panelWidth));
+    } catch (error) {
+      console.warn('[ViewConfigPanel] Failed to save panel width:', error);
+    }
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -283,6 +325,11 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       this.activeTab = 'columns';
       this.columnSearchText = '';
       this.formatEditingColumn = null;
+      // Also close any open aggregate dialog
+      this.showAggregateDialog = false;
+      this.editingAggregate = null;
+      // Re-initialize from entity to get fresh state
+      this.initializeFromEntity();
     }
 
     if (changes['entity'] || changes['viewEntity'] || changes['currentGridState']) {
@@ -1520,9 +1567,56 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   /**
    * Toggle aggregate enabled state
    */
-  toggleAggregateEnabled(aggregate: ViewGridAggregate): void {
-    aggregate.enabled = !aggregate.enabled;
-    this.cdr.detectChanges();
+  toggleAggregateEnabled(aggregate: ViewGridAggregate, event?: MouseEvent): void {
+    // Stop event propagation to prevent any parent handlers
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    console.log('[ViewConfigPanel] toggleAggregateEnabled called:', {
+      aggregateId: aggregate.id,
+      aggregateLabel: aggregate.label,
+      currentEnabled: aggregate.enabled,
+      allAggregates: this.aggregates.map(a => ({ id: a.id, label: a.label, enabled: a.enabled }))
+    });
+
+    // Try to find by ID first, fall back to object reference if ID is missing
+    let index = -1;
+    if (aggregate.id) {
+      index = this.aggregates.findIndex(a => a.id === aggregate.id);
+    }
+    // Fallback: find by object reference or label
+    if (index < 0) {
+      index = this.aggregates.indexOf(aggregate);
+    }
+    if (index < 0 && aggregate.label) {
+      index = this.aggregates.findIndex(a => a.label === aggregate.label && a.expression === aggregate.expression);
+    }
+
+    console.log('[ViewConfigPanel] Found index:', index, 'in array of length:', this.aggregates.length);
+
+    if (index >= 0) {
+      // Create a new object with toggled enabled state to ensure change detection
+      const currentEnabled = this.aggregates[index].enabled;
+      const newEnabledState = currentEnabled === false ? true : false;
+      console.log('[ViewConfigPanel] Toggling from', currentEnabled, 'to', newEnabledState);
+
+      const updatedAggregate: ViewGridAggregate = {
+        ...this.aggregates[index],
+        enabled: newEnabledState
+      };
+      // Replace entire array to trigger change detection
+      const newAggregates = [...this.aggregates];
+      newAggregates[index] = updatedAggregate;
+      this.aggregates = newAggregates;
+
+      console.log('[ViewConfigPanel] After toggle, aggregates:', this.aggregates.map(a => ({ id: a.id, label: a.label, enabled: a.enabled })));
+
+      this.cdr.detectChanges();
+    } else {
+      console.error('[ViewConfigPanel] Could not find aggregate in array:', aggregate);
+    }
   }
 
   /**
