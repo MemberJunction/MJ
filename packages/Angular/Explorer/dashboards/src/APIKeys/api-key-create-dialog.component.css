@@ -522,3 +522,24 @@
 :host ::ng-deep kendo-dialog-actions button i {
     margin: 0 4px;
 }
+
+/* Close Button in Titlebar */
+:host ::ng-deep kendo-dialog-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dialog-close-btn {
+    margin-left: auto;
+    color: #6b7280;
+    transition: color 0.2s ease;
+}
+
+.dialog-close-btn:hover {
+    color: #1f2937;
+}
+
+.dialog-close-btn i {
+    font-size: 18px;
+}

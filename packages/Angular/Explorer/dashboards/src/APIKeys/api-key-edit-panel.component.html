@@ -13,6 +13,9 @@
                 {{APIKey?.Status}}
             </span>
         </div>
+        <button kendoButton fillMode="flat" (click)="close()" class="window-close-btn" title="Close (Esc)">
+            <i class="fa-solid fa-times"></i>
+        </button>
     </kendo-window-titlebar>
 
     <mj-loading *ngIf="IsLoading" text="Loading key details..."></mj-loading>
