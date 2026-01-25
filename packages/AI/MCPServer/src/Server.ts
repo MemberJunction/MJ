@@ -1281,7 +1281,9 @@ async function loadAgentTools(
                                 runId: result.agentRun?.ID,
                                 errorMessage: result.agentRun?.ErrorMessage,
                                 finalStep: result.agentRun?.FinalStep,
-                                result: result.payload
+                                payload: result.payload || result.agentRun?.FinalPayload,
+                                message: result.agentRun?.Message,
+                                responseForm: result.responseForm
                             });
                         } else {
                             // Return just the run ID for async checking
@@ -2142,7 +2144,9 @@ function addAgentExecuteTool(
                         runId: result.agentRun?.ID,
                         errorMessage: result.agentRun?.ErrorMessage,
                         finalStep: result.agentRun?.FinalStep,
-                        result: result.payload
+                        payload: result.payload || result.agentRun?.FinalPayload, 
+                        message: result.agentRun?.Message,
+                        responseForm: result.responseForm
                     });
                 } else {
                     // Return just the run ID for async checking
