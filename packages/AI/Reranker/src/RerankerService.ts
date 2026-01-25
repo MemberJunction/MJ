@@ -451,7 +451,7 @@ export class RerankerService {
 
         stepEntity.AgentRunID = options.agentRunID!;
         stepEntity.StepNumber = options.stepNumber || 0;
-        stepEntity.StepType = 'Validation'; // Reranking is a preprocessing/validation step
+        stepEntity.StepType = 'Decision'; // Reranking is a decision step for relevance scoring
         stepEntity.StepName = 'Rerank Notes';
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date(startTime);
