@@ -726,6 +726,11 @@ export type RunViewWithCacheCheckResult<T = unknown> = {
      * Error message if status is 'error'
      */
     errorMessage?: string;
+    /**
+     * Aggregate results - populated when status is 'stale' or 'differential' and aggregates were requested.
+     * For 'differential', aggregates are always re-computed fresh (can't be incrementally updated).
+     */
+    aggregateResults?: AggregateResult[];
 }
 
 /**
