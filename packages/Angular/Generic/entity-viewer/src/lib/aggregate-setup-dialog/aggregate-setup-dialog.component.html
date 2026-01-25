@@ -62,7 +62,7 @@
               <button
                 class="function-btn"
                 [class.active]="SelectedFunction === func.value"
-                (click)="SelectedFunction = func.value; onFunctionChange()"
+                (click)="selectFunction(func.value)"
                 [title]="func.label">
                 <i [class]="func.icon"></i>
                 <span>{{ func.label }}</span>
@@ -77,7 +77,7 @@
           <select
             class="form-select"
             [(ngModel)]="SelectedColumn"
-            (ngModelChange)="onColumnChange()">
+            (ngModelChange)="onColumnSelected($event)">
             <option value="">Select a column...</option>
             @for (field of AvailableFields; track field.ID) {
               <option [value]="field.Name">{{ getFieldDisplayLabel(field) }}</option>

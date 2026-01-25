@@ -172,6 +172,7 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
       if (parsed) {
         this.SelectedFunction = parsed.func;
         this.SelectedColumn = parsed.column;
+        this._previousColumn = parsed.column; // Track for auto-label updates
       }
     } else {
       // Advanced mode - custom expression
@@ -188,6 +189,7 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   private resetForm(): void {
     this.Mode = 'simple';
     this.SelectedColumn = '';
+    this._previousColumn = ''; // Reset previous column tracking
     this.SelectedFunction = 'SUM';
     this.Expression = '';
     this.SmartPrompt = '';
@@ -308,18 +310,46 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Handle function selection change
+   * Handle function button click - captures old value before changing
+   * Called from template when user clicks a function button
    */
-  onFunctionChange(): void {
+  selectFunction(newFunction: AggregateFunctionType): void {
+    if (newFunction === this.SelectedFunction) return;
+
+    const previousFunction = this.SelectedFunction;
+    this.SelectedFunction = newFunction;
+    this.onFunctionChange(previousFunction);
+  }
+
+  /**
+   * Handle column selection from dropdown
+   * Called from template with the NEW value from ngModelChange
+   * We track the previous value internally
+   */
+  private _previousColumn: string = '';
+
+  onColumnSelected(newColumn: string): void {
+    const previousColumn = this._previousColumn;
+    this._previousColumn = newColumn;
+    this.onColumnChange(previousColumn);
+  }
+
+  /**
+   * Handle function selection change (internal)
+   */
+  private onFunctionChange(previousFunction: AggregateFunctionType): void {
+    // Check if label matches what we would have auto-generated for the OLD function
+    const shouldUpdateLabel = this.shouldAutoUpdateLabel(previousFunction, this.SelectedColumn);
+
     // If current column is not valid for new function, clear it
     const validFields = this.AvailableFields;
     if (this.SelectedColumn && !validFields.find(f => f.Name === this.SelectedColumn)) {
       this.SelectedColumn = '';
     }
 
-    // Auto-generate label if not set
-    if (!this.Label && this.SelectedColumn) {
-      this.updateAutoLabel();
+    // Update label if it was auto-generated (matches old pattern) or is empty
+    if (shouldUpdateLabel && this.SelectedColumn) {
+      this.setAutoLabel();
     }
 
     this.cdr.detectChanges();
@@ -328,22 +358,53 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   /**
    * Handle column selection change
    */
-  onColumnChange(): void {
-    // Auto-generate label if not set
-    this.updateAutoLabel();
+  onColumnChange(previousColumn: string): void {
+    // Check if label matches what we would have auto-generated for the OLD column
+    const shouldUpdateLabel = this.shouldAutoUpdateLabel(this.SelectedFunction, previousColumn);
+
+    // Update label if it was auto-generated (matches old pattern) or is empty
+    if (shouldUpdateLabel) {
+      this.setAutoLabel();
+    }
+
     this.cdr.detectChanges();
   }
 
   /**
-   * Update auto-generated label based on function and column
+   * Check if the current label matches what we would have auto-generated
+   * for the given function and column. If so, we should update the label
+   * when either changes. This allows auto-updating while preserving manual edits.
    */
-  private updateAutoLabel(): void {
-    if (!this.SelectedColumn || !this.SelectedFunction) return;
+  private shouldAutoUpdateLabel(func: AggregateFunctionType, column: string): boolean {
+    // Always update if label is empty
+    if (!this.Label) return true;
 
-    const field = this.Entity?.Fields.find(f => f.Name === this.SelectedColumn);
-    if (field) {
-      const funcLabel = FUNCTION_LABELS[this.SelectedFunction] || this.SelectedFunction;
-      this.Label = `${funcLabel} of ${field.DisplayNameOrName}`;
+    // Check if current label matches the auto-generated pattern for the old values
+    const expectedOldLabel = this.generateAutoLabel(func, column);
+    return expectedOldLabel !== null && this.Label === expectedOldLabel;
+  }
+
+  /**
+   * Generate what the auto-label would be for a given function and column
+   * Returns null if we can't generate a label (missing data)
+   */
+  private generateAutoLabel(func: AggregateFunctionType, column: string): string | null {
+    if (!column || !func) return null;
+
+    const field = this.Entity?.Fields.find(f => f.Name === column);
+    if (!field) return null;
+
+    const funcLabel = FUNCTION_LABELS[func] || func;
+    return `${funcLabel} of ${field.DisplayNameOrName}`;
+  }
+
+  /**
+   * Set the auto-generated label based on current function and column
+   */
+  private setAutoLabel(): void {
+    const label = this.generateAutoLabel(this.SelectedFunction, this.SelectedColumn);
+    if (label) {
+      this.Label = label;
     }
   }
 
