@@ -215,16 +215,6 @@ async function authenticateRequest(request: Request | http.IncomingMessage): Pro
 
     console.log(`[Auth] API key found: ${apiKey ? 'yes' : 'no'}`);
 
-    // Backward compatibility: if no API key but systemApiKey configured, use system user
-    if (!apiKey && _config.mcpServerSettings?.systemApiKey) {
-        const systemUser = UserCache.Instance.GetSystemUser();
-        if (!systemUser) {
-            throw new Error('System user not found in UserCache');
-        }
-        console.log(`Authenticated via system API key for user: ${systemUser?.Email}`);
-        return { apiKey: 'system', apiKeyId: 'system', user: systemUser };
-    }
-
     if (!apiKey) {
         throw new Error('API key required. Provide via x-api-key header.');
     }
@@ -538,6 +528,22 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         // Create Express app for SSE transport
         const app = express();
 
+        // CORS must be FIRST - browser preflight OPTIONS requests need immediate handling
+        // before any other middleware touches the request
+        app.use((req: Request, res: Response, next: NextFunction) => {
+            res.header('Access-Control-Allow-Origin', '*');
+            res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, x-api-key, x-mj-api-key');
+            res.header('Access-Control-Expose-Headers', 'Content-Type');
+
+            // Handle preflight requests immediately - don't let other middleware process them
+            if (req.method === 'OPTIONS') {
+                res.sendStatus(200);
+                return;
+            }
+            next();
+        });
+
         // Enable JSON parsing for POST requests EXCEPT /mcp/messages
         // SSEServerTransport.handlePostMessage needs the raw body stream
         app.use((req: Request, res: Response, next: NextFunction) => {
@@ -547,20 +553,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             } else {
                 express.json()(req, res, next);
             }
-        });
-
-        // Enable CORS for MCP Inspector and other browser-based clients
-        app.use((req: Request, res: Response, next: NextFunction) => {
-            res.header('Access-Control-Allow-Origin', '*');
-            res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-            res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, x-mj-api-key');
-
-            // Handle preflight requests
-            if (req.method === 'OPTIONS') {
-                res.sendStatus(200);
-                return;
-            }
-            next();
         });
 
         // SSE endpoint for establishing MCP connections
