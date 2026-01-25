@@ -13,14 +13,14 @@
  * @module @memberjunction/ai-mcp-server
  */
 
-import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { FastMCP } from "fastmcp";
 import sql from "mssql";
 import { z } from "zod";
-import { initConfig, ConfigInfo } from './config.js';
+import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerReportToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { AIAgentEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from "@memberjunction/ai-core-plus";
+import { AIAgentEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
@@ -28,6 +28,11 @@ import { ChatMessage } from "@memberjunction/ai";
 import { CredentialEngine } from "@memberjunction/credentials";
 import { EncryptionEngine } from "@memberjunction/encryption";
 import * as http from 'http';
+import { ActionEngineBase, ActionEntityExtended, RunActionParams } from "@memberjunction/actions-base";
+import { ActionEngineServer } from "@memberjunction/actions";
+import { AIPromptRunner, AIPromptParams } from "@memberjunction/ai-prompts";
+import { RunReport, RunReportParams } from "@memberjunction/core";
+import { ReportEntity, ReportCategoryEntity, ActionParamEntity } from "@memberjunction/core-entities";
 
 /*******************************************************************************
  * TYPES AND INTERFACES
@@ -501,6 +506,10 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         await loadActionTools(systemUser);
         await loadAgentTools(systemUser);
         loadAgentRunDiagnosticTools();
+        loadQueryTools();
+        await loadPromptTools(systemUser);
+        await loadReportTools(systemUser);
+        loadCommunicationTools();
         console.log("Tools loaded successfully.");
 
         // Configure server options with API key authentication
@@ -527,16 +536,309 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
  ******************************************************************************/
 
 /**
- * Loads action tools from configuration.
- * Note: Action tools are not yet implemented - this function logs a warning if any are configured.
+ * Loads and registers action tools based on configuration.
  *
- * @param _systemUser - System user for context (reserved for future use)
+ * Creates the following tools based on configuration:
+ * - `Discover_Actions` - Lists available actions matching a pattern
+ * - `Run_Action` - General tool to execute any action by name/ID
+ * - `Execute_[ActionName]_Action` - Specific tools for each configured action
+ *
+ * @param systemUser - System user for context when discovering and configuring actions
  */
-async function loadActionTools(_systemUser: UserInfo): Promise<void> {
+async function loadActionTools(systemUser: UserInfo): Promise<void> {
     const actionTools = _config.mcpServerSettings?.actionTools;
+
     if (actionTools && actionTools.length > 0) {
-        console.warn("Action tools are not yet supported");
+        // Ensure ActionEngine is configured
+        const actionEngine = ActionEngineServer.Instance;
+        await actionEngine.Config(false, systemUser);
+
+        // Add discovery tool if any action tool has discover enabled
+        const hasDiscovery = actionTools.some((tool: MCPServerActionToolInfo) => tool.discover);
+        if (hasDiscovery) {
+            addToolWithFilter({
+                name: "Discover_Actions",
+                description: "List available Actions based on a name pattern and/or category (* for all)",
+                parameters: z.object({
+                    pattern: z.string().optional().describe("Name pattern to match actions (supports wildcards: *, *Action, Action*, *Action*)"),
+                    category: z.string().optional().describe("Category name to filter actions")
+                }),
+                async execute(props: {pattern?: string; category?: string}, context: {session?: {user?: UserInfo}}) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ error: "No authenticated user in session" });
+                    }
+                    const actions = await discoverActions(props.pattern || '*', props.category, sessionUser);
+                    return JSON.stringify(actions.map(action => ({
+                        id: action.ID,
+                        name: action.Name,
+                        description: action.Description || '',
+                        category: action.Category,
+                        categoryId: action.CategoryID,
+                        type: action.Type,
+                        status: action.Status,
+                        paramCount: actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action.ID).length
+                    })));
+                }
+            });
+        }
+
+        // Add general action execution tool if any tool has execute enabled
+        const hasExecute = actionTools.some((tool: MCPServerActionToolInfo) => tool.execute);
+        if (hasExecute) {
+            addToolWithFilter({
+                name: "Run_Action",
+                description: "Execute any Action by name or ID with the specified parameters",
+                parameters: z.object({
+                    actionName: z.string().optional().describe("Name of the action to execute"),
+                    actionId: z.string().optional().describe("ID of the action to execute"),
+                    params: z.record(z.unknown()).optional().describe("Parameters for the action as key-value pairs")
+                }),
+                async execute(props: {actionName?: string; actionId?: string; params?: Record<string, unknown>}, context: {session?: {user?: UserInfo}}) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ success: false, error: "No authenticated user in session" });
+                    }
+                    try {
+                        const actionEngine = ActionEngineServer.Instance;
+                        await actionEngine.Config(false, sessionUser);
+
+                        let action: ActionEntityExtended | null = null;
+
+                        if (props.actionId) {
+                            action = actionEngine.Actions.find((a: ActionEntityExtended) => a.ID === props.actionId) || null;
+                            if (!action) {
+                                return JSON.stringify({
+                                    success: false,
+                                    error: `Action not found with ID: ${props.actionId}`
+                                });
+                            }
+                        } else if (props.actionName) {
+                            action = actionEngine.Actions.find((a: ActionEntityExtended) => a.Name?.toLowerCase() === props.actionName?.toLowerCase()) || null;
+                            if (!action) {
+                                return JSON.stringify({
+                                    success: false,
+                                    error: `Action not found with name: ${props.actionName}`
+                                });
+                            }
+                        } else {
+                            return JSON.stringify({
+                                success: false,
+                                error: "Either actionName or actionId must be provided"
+                            });
+                        }
+
+                        // Build action params
+                        const actionParams = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action!.ID);
+                        const runParams: RunActionParams = {
+                            Action: action,
+                            ContextUser: sessionUser,
+                            Params: actionParams.map((p: ActionParamEntity) => ({
+                                Name: p.Name,
+                                Value: props.params?.[p.Name] ?? p.DefaultValue
+                            }))
+                        };
+
+                        // Execute the action
+                        const result = await actionEngine.RunAction(runParams);
+
+                        return JSON.stringify({
+                            success: result.Success,
+                            resultCode: result.ResultCode,
+                            message: result.Message,
+                            runId: result.RunID
+                        });
+                    } catch (error) {
+                        return JSON.stringify({
+                            success: false,
+                            error: error instanceof Error ? error.message : String(error)
+                        });
+                    }
+                }
+            });
+
+            // Add Get_Action_Params tool to help discover action parameters
+            addToolWithFilter({
+                name: "Get_Action_Params",
+                description: "Get the parameter definitions for a specific action",
+                parameters: z.object({
+                    actionName: z.string().optional().describe("Name of the action"),
+                    actionId: z.string().optional().describe("ID of the action")
+                }),
+                async execute(props: {actionName?: string; actionId?: string}, context: {session?: {user?: UserInfo}}) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ error: "No authenticated user in session" });
+                    }
+
+                    const actionEngine = ActionEngineServer.Instance;
+                    await actionEngine.Config(false, sessionUser);
+
+                    let action: ActionEntityExtended | null = null;
+                    if (props.actionId) {
+                        action = actionEngine.Actions.find((a: ActionEntityExtended) => a.ID === props.actionId) || null;
+                    } else if (props.actionName) {
+                        action = actionEngine.Actions.find((a: ActionEntityExtended) => a.Name?.toLowerCase() === props.actionName?.toLowerCase()) || null;
+                    }
+
+                    if (!action) {
+                        return JSON.stringify({ error: "Action not found" });
+                    }
+
+                    const params = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action!.ID);
+                    return JSON.stringify({
+                        actionId: action.ID,
+                        actionName: action.Name,
+                        description: action.Description,
+                        params: params.map((p: ActionParamEntity) => ({
+                            name: p.Name,
+                            description: p.Description,
+                            type: p.Type,
+                            isRequired: p.IsRequired,
+                            defaultValue: p.DefaultValue
+                        }))
+                    });
+                }
+            });
+        }
+
+        // Process each action tool configuration for specific action tools
+        for (const tool of actionTools) {
+            if (tool.execute) {
+                const actionPattern = tool.actionName || '*';
+                const actions = await discoverActions(actionPattern, tool.actionCategory, systemUser);
+
+                // Add specific execution tools for each matching action
+                for (const action of actions) {
+                    addActionExecuteTool(action, systemUser);
+                }
+            }
+        }
     }
+}
+
+/**
+ * Discovers actions matching a given name pattern and optional category.
+ *
+ * @param pattern - The name pattern to match (supports wildcards)
+ * @param category - Optional category name to filter actions
+ * @param userContext - User context for ActionEngine configuration
+ * @returns Array of matching action entities
+ */
+async function discoverActions(pattern: string, category: string | undefined, userContext: UserInfo): Promise<ActionEntityExtended[]> {
+    const actionEngine = ActionEngineServer.Instance;
+    await actionEngine.Config(false, userContext);
+
+    let actions = actionEngine.Actions.filter((a: ActionEntityExtended) => a.Status === 'Active');
+
+    // Filter by category if specified
+    if (category && category !== '*') {
+        const categoryLower = category.toLowerCase();
+        actions = actions.filter((a: ActionEntityExtended) => a.Category?.toLowerCase().includes(categoryLower));
+    }
+
+    // Filter by pattern
+    if (pattern === '*') {
+        return actions;
+    }
+
+    const isWildcardPattern = pattern.includes('*');
+    if (!isWildcardPattern) {
+        // Exact match
+        return actions.filter((a: ActionEntityExtended) => a.Name === pattern);
+    }
+
+    // Convert wildcard pattern to regex
+    const regexPattern = pattern
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // Escape special chars except *
+        .replace(/\*/g, '.*'); // Convert * to .*
+
+    const regex = new RegExp(`^${regexPattern}$`, 'i');
+    return actions.filter((a: ActionEntityExtended) => a.Name && regex.test(a.Name));
+}
+
+/**
+ * Creates and registers an execution tool for a specific Action.
+ *
+ * @param action - The action entity to create an execution tool for
+ * @param systemUser - System user for loading action parameters
+ */
+function addActionExecuteTool(action: ActionEntityExtended, _systemUser: UserInfo): void {
+    const actionEngine = ActionEngineServer.Instance;
+    const actionParams = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action.ID);
+
+    // Build Zod schema for action parameters
+    const paramSchema: Record<string, z.ZodTypeAny> = {};
+    for (const param of actionParams) {
+        let zodType: z.ZodTypeAny;
+
+        switch (param.Type?.toLowerCase()) {
+            case 'int':
+            case 'integer':
+            case 'number':
+            case 'decimal':
+            case 'float':
+                zodType = z.number();
+                break;
+            case 'boolean':
+            case 'bool':
+                zodType = z.boolean();
+                break;
+            case 'object':
+            case 'json':
+                zodType = z.record(z.unknown());
+                break;
+            case 'array':
+                zodType = z.array(z.unknown());
+                break;
+            default:
+                zodType = z.string();
+        }
+
+        if (!param.IsRequired) {
+            zodType = zodType.optional();
+        }
+
+        paramSchema[param.Name] = zodType.describe(param.Description || param.Name);
+    }
+
+    const safeName = (action.Name || 'Unknown').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+
+    addToolWithFilter({
+        name: `Execute_${safeName}_Action`,
+        description: `Execute the ${action.Name || 'Unknown'} action. ${action.Description || ''}`,
+        parameters: z.object(paramSchema),
+        async execute(props: Record<string, unknown>, context: {session?: {user?: UserInfo}}) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ success: false, error: "No authenticated user in session" });
+            }
+            try {
+                const runParams: RunActionParams = {
+                    Action: action,
+                    ContextUser: sessionUser,
+                    Params: actionParams.map((p: ActionParamEntity) => ({
+                        Name: p.Name,
+                        Value: props[p.Name] ?? p.DefaultValue
+                    }))
+                };
+
+                const result = await ActionEngineServer.Instance.RunAction(runParams);
+
+                return JSON.stringify({
+                    success: result.Success,
+                    resultCode: result.ResultCode,
+                    message: result.Message,
+                    runId: result.RunID
+                });
+            } catch (error) {
+                return JSON.stringify({
+                    success: false,
+                    error: error instanceof Error ? error.message : String(error)
+                });
+            }
+        }
+    });
 }
 
 /**
@@ -560,7 +862,7 @@ async function loadAgentTools(systemUser: UserInfo): Promise<void> {
         await aiEngine.Config(false, systemUser);
         
         // Add discovery tool if any agent tool has discover enabled
-        const hasDiscovery = agentTools.some(tool => tool.discover);
+        const hasDiscovery = agentTools.some((tool: MCPServerAgentToolInfo) => tool.discover);
         if (hasDiscovery) {
             addToolWithFilter({
                 name: "Discover_Agents",
@@ -1024,6 +1326,524 @@ function loadAgentRunDiagnosticTools(): void {
             return JSON.stringify(response);
         }
     });
+}
+
+/*******************************************************************************
+ * QUERY TOOLS
+ ******************************************************************************/
+
+/**
+ * Loads query tools based on configuration.
+ *
+ * Creates tools for executing SQL queries with schema-based filtering:
+ * - `Run_SQL_Query` - Execute read-only SQL SELECT queries
+ * - `Get_Database_Schema` - Get schema information for available tables
+ */
+function loadQueryTools(): void {
+    const queryTools = _config.mcpServerSettings?.queryTools;
+
+    if (queryTools?.enabled) {
+        // Add SQL query execution tool
+        addToolWithFilter({
+            name: "Run_SQL_Query",
+            description: "Execute a read-only SQL SELECT query against the database. Only SELECT statements are allowed.",
+            parameters: z.object({
+                sql: z.string().describe("The SQL SELECT query to execute"),
+                maxRows: z.number().optional().default(1000).describe("Maximum number of rows to return (default: 1000)")
+            }),
+            async execute(props: {sql: string; maxRows?: number}, context: {session?: {user?: UserInfo}}) {
+                const sessionUser = context.session?.user;
+                if (!sessionUser) {
+                    return JSON.stringify({ error: "No authenticated user in session" });
+                }
+
+                try {
+                    // Validate that it's a SELECT query
+                    const trimmedSQL = props.sql.trim().toLowerCase();
+                    if (!trimmedSQL.startsWith('select')) {
+                        return JSON.stringify({
+                            success: false,
+                            error: "Only SELECT queries are allowed. Query must start with SELECT."
+                        });
+                    }
+
+                    // Check for dangerous keywords
+                    const dangerousKeywords = ['insert', 'update', 'delete', 'drop', 'truncate', 'alter', 'create', 'exec', 'execute'];
+                    for (const keyword of dangerousKeywords) {
+                        if (trimmedSQL.includes(keyword)) {
+                            return JSON.stringify({
+                                success: false,
+                                error: `Query contains forbidden keyword: ${keyword}`
+                            });
+                        }
+                    }
+
+                    // Apply schema filtering if configured
+                    const allowedSchemas = queryTools.allowedSchemas;
+                    const blockedSchemas = queryTools.blockedSchemas;
+
+                    // Execute via RunQuery
+                    const rq = new RunQuery();
+                    const result = await rq.RunQuery({
+                        SQL: props.sql,
+                        MaxRows: props.maxRows || 1000
+                    }, sessionUser);
+
+                    if (!result.Success) {
+                        return JSON.stringify({
+                            success: false,
+                            error: result.ErrorMessage
+                        });
+                    }
+
+                    return JSON.stringify({
+                        success: true,
+                        rowCount: result.Results?.length || 0,
+                        results: result.Results
+                    });
+                } catch (error) {
+                    return JSON.stringify({
+                        success: false,
+                        error: error instanceof Error ? error.message : String(error)
+                    });
+                }
+            }
+        });
+
+        // Add schema discovery tool
+        addToolWithFilter({
+            name: "Get_Database_Schema",
+            description: "Get information about database tables and their columns",
+            parameters: z.object({
+                schemaFilter: z.string().optional().describe("Filter by schema name (e.g., 'dbo', '__mj')"),
+                tableFilter: z.string().optional().describe("Filter by table name pattern")
+            }),
+            async execute(props: {schemaFilter?: string; tableFilter?: string}, context: {session?: {user?: UserInfo}}) {
+                const sessionUser = context.session?.user;
+                if (!sessionUser) {
+                    return JSON.stringify({ error: "No authenticated user in session" });
+                }
+
+                const md = new Metadata();
+                let entities = md.Entities;
+
+                // Apply schema filter
+                if (props.schemaFilter) {
+                    const schemaLower = props.schemaFilter.toLowerCase();
+                    entities = entities.filter((e: EntityInfo) => e.SchemaName.toLowerCase() === schemaLower);
+                }
+
+                // Apply table/entity filter
+                if (props.tableFilter) {
+                    const filterLower = props.tableFilter.toLowerCase();
+                    if (props.tableFilter.includes('*')) {
+                        const regexPattern = props.tableFilter
+                            .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+                            .replace(/\*/g, '.*');
+                        const regex = new RegExp(`^${regexPattern}$`, 'i');
+                        entities = entities.filter((e: EntityInfo) => regex.test(e.Name));
+                    } else {
+                        entities = entities.filter((e: EntityInfo) => e.Name.toLowerCase().includes(filterLower));
+                    }
+                }
+
+                // Apply allowed/blocked schemas from config
+                const queryToolsConfig = _config.mcpServerSettings?.queryTools;
+                if (queryToolsConfig?.allowedSchemas?.length) {
+                    const allowed = queryToolsConfig.allowedSchemas.map((s: string) => s.toLowerCase());
+                    entities = entities.filter((e: EntityInfo) => allowed.includes(e.SchemaName.toLowerCase()));
+                }
+                if (queryToolsConfig?.blockedSchemas?.length) {
+                    const blocked = queryToolsConfig.blockedSchemas.map((s: string) => s.toLowerCase());
+                    entities = entities.filter((e: EntityInfo) => !blocked.includes(e.SchemaName.toLowerCase()));
+                }
+
+                return JSON.stringify(entities.map((e: EntityInfo) => ({
+                    schema: e.SchemaName,
+                    table: e.BaseTable,
+                    entityName: e.Name,
+                    columns: e.Fields.map((f: EntityFieldInfo) => ({
+                        name: f.Name,
+                        type: f.Type,
+                        length: f.Length,
+                        nullable: f.AllowsNull,
+                        isPrimaryKey: f.IsPrimaryKey
+                    }))
+                })));
+            }
+        });
+    }
+}
+
+/*******************************************************************************
+ * PROMPT TOOLS
+ ******************************************************************************/
+
+/**
+ * Loads AI Prompt tools based on configuration.
+ *
+ * Creates tools for discovering and executing AI prompts:
+ * - `Discover_Prompts` - Lists available AI prompts
+ * - `Run_Prompt` - Execute any prompt by name or ID
+ * - `Execute_[PromptName]_Prompt` - Specific tools for each configured prompt
+ */
+async function loadPromptTools(systemUser: UserInfo): Promise<void> {
+    const promptTools = _config.mcpServerSettings?.promptTools;
+
+    if (promptTools && promptTools.length > 0) {
+        // Ensure AIEngine is configured
+        const aiEngine = AIEngine.Instance;
+        await aiEngine.Config(false, systemUser);
+
+        // Add discovery tool if any prompt tool has discover enabled
+        const hasDiscovery = promptTools.some((tool: MCPServerPromptToolInfo) => tool.discover);
+        if (hasDiscovery) {
+            addToolWithFilter({
+                name: "Discover_Prompts",
+                description: "List available AI Prompts based on a name pattern and/or category (* for all)",
+                parameters: z.object({
+                    pattern: z.string().optional().describe("Name pattern to match prompts (supports wildcards)"),
+                    category: z.string().optional().describe("Category name to filter prompts")
+                }),
+                async execute(props: {pattern?: string; category?: string}, context: {session?: {user?: UserInfo}}) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ error: "No authenticated user in session" });
+                    }
+
+                    const aiEngine = AIEngine.Instance;
+                    await aiEngine.Config(false, sessionUser);
+
+                    let prompts = aiEngine.Prompts;
+
+                    // Filter by category
+                    if (props.category && props.category !== '*') {
+                        const categoryLower = props.category.toLowerCase();
+                        prompts = prompts.filter((p: AIPromptEntityExtended) => p.Category?.toLowerCase().includes(categoryLower));
+                    }
+
+                    // Filter by pattern
+                    const pattern = props.pattern || '*';
+                    if (pattern !== '*') {
+                        if (pattern.includes('*')) {
+                            const regexPattern = pattern
+                                .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+                                .replace(/\*/g, '.*');
+                            const regex = new RegExp(`^${regexPattern}$`, 'i');
+                            prompts = prompts.filter((p: AIPromptEntityExtended) => p.Name && regex.test(p.Name));
+                        } else {
+                            prompts = prompts.filter((p: AIPromptEntityExtended) => p.Name === pattern);
+                        }
+                    }
+
+                    return JSON.stringify(prompts.map((p: AIPromptEntityExtended) => ({
+                        id: p.ID,
+                        name: p.Name,
+                        description: p.Description || '',
+                        category: p.Category,
+                        templateText: p.TemplateText?.substring(0, 200) + (p.TemplateText && p.TemplateText.length > 200 ? '...' : ''),
+                        responseFormat: p.ResponseFormat
+                    })));
+                }
+            });
+        }
+
+        // Add general prompt execution tool if any tool has execute enabled
+        const hasExecute = promptTools.some((tool: MCPServerPromptToolInfo) => tool.execute);
+        if (hasExecute) {
+            addToolWithFilter({
+                name: "Run_Prompt",
+                description: "Execute any AI Prompt by name or ID with the specified data",
+                parameters: z.object({
+                    promptName: z.string().optional().describe("Name of the prompt to execute"),
+                    promptId: z.string().optional().describe("ID of the prompt to execute"),
+                    data: z.record(z.unknown()).optional().describe("Data to pass to the prompt template"),
+                    modelId: z.string().optional().describe("Optional model ID to use for execution")
+                }),
+                async execute(props: {promptName?: string; promptId?: string; data?: Record<string, unknown>; modelId?: string}, context: {session?: {user?: UserInfo}}) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ success: false, error: "No authenticated user in session" });
+                    }
+
+                    try {
+                        const aiEngine = AIEngine.Instance;
+                        await aiEngine.Config(false, sessionUser);
+
+                        let prompt: AIPromptEntityExtended | undefined;
+
+                        if (props.promptId) {
+                            prompt = aiEngine.Prompts.find((p: AIPromptEntityExtended) => p.ID === props.promptId);
+                            if (!prompt) {
+                                return JSON.stringify({
+                                    success: false,
+                                    error: `Prompt not found with ID: ${props.promptId}`
+                                });
+                            }
+                        } else if (props.promptName) {
+                            prompt = aiEngine.Prompts.find((p: AIPromptEntityExtended) => p.Name?.toLowerCase() === props.promptName?.toLowerCase());
+                            if (!prompt) {
+                                return JSON.stringify({
+                                    success: false,
+                                    error: `Prompt not found with name: ${props.promptName}`
+                                });
+                            }
+                        } else {
+                            return JSON.stringify({
+                                success: false,
+                                error: "Either promptName or promptId must be provided"
+                            });
+                        }
+
+                        // Execute the prompt
+                        const runner = new AIPromptRunner();
+                        const promptParams = new AIPromptParams();
+                        promptParams.prompt = prompt;
+                        promptParams.data = props.data || {};
+                        promptParams.contextUser = sessionUser;
+
+                        const result = await runner.ExecutePrompt(promptParams);
+
+                        return JSON.stringify({
+                            success: result.success,
+                            result: result.result,
+                            rawOutput: result.rawOutput,
+                            tokensUsed: result.tokensUsed,
+                            errorMessage: result.errorMessage
+                        });
+                    } catch (error) {
+                        return JSON.stringify({
+                            success: false,
+                            error: error instanceof Error ? error.message : String(error)
+                        });
+                    }
+                }
+            });
+        }
+    }
+}
+
+/*******************************************************************************
+ * REPORT TOOLS
+ ******************************************************************************/
+
+/**
+ * Loads Report tools based on configuration.
+ *
+ * Creates tools for discovering and executing reports:
+ * - `Discover_Reports` - Lists available reports
+ * - `Run_Report` - Execute any report by name or ID
+ */
+async function loadReportTools(systemUser: UserInfo): Promise<void> {
+    const reportTools = _config.mcpServerSettings?.reportTools;
+
+    if (reportTools && reportTools.length > 0) {
+        // Add discovery tool if any report tool has discover enabled
+        const hasDiscovery = reportTools.some((tool: MCPServerReportToolInfo) => tool.discover);
+        if (hasDiscovery) {
+            addToolWithFilter({
+                name: "Discover_Reports",
+                description: "List available Reports based on a name pattern and/or category",
+                parameters: z.object({
+                    pattern: z.string().optional().describe("Name pattern to match reports (supports wildcards)"),
+                    category: z.string().optional().describe("Category name to filter reports")
+                }),
+                async execute(props: {pattern?: string; category?: string}, context: {session?: {user?: UserInfo}}) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ error: "No authenticated user in session" });
+                    }
+
+                    const rv = new RunView();
+                    let filter = '';
+
+                    if (props.category && props.category !== '*') {
+                        filter = `Category LIKE '%${props.category}%'`;
+                    }
+
+                    const result = await rv.RunView<ReportEntity>({
+                        EntityName: 'Reports',
+                        ExtraFilter: filter || undefined,
+                        OrderBy: 'Name',
+                        ResultType: 'entity_object'
+                    }, sessionUser);
+
+                    if (!result.Success) {
+                        return JSON.stringify({ error: result.ErrorMessage });
+                    }
+
+                    let reports = result.Results || [];
+
+                    // Filter by pattern
+                    const pattern = props.pattern || '*';
+                    if (pattern !== '*') {
+                        if (pattern.includes('*')) {
+                            const regexPattern = pattern
+                                .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+                                .replace(/\*/g, '.*');
+                            const regex = new RegExp(`^${regexPattern}$`, 'i');
+                            reports = reports.filter((r: ReportEntity) => r.Name && regex.test(r.Name));
+                        } else {
+                            reports = reports.filter((r: ReportEntity) => r.Name === pattern);
+                        }
+                    }
+
+                    return JSON.stringify(reports.map((r: ReportEntity) => ({
+                        id: r.ID,
+                        name: r.Name,
+                        description: r.Description || '',
+                        category: r.Category
+                    })));
+                }
+            });
+        }
+
+        // Add report execution tool if any tool has execute enabled
+        const hasExecute = reportTools.some((tool: MCPServerReportToolInfo) => tool.execute);
+        if (hasExecute) {
+            addToolWithFilter({
+                name: "Run_Report",
+                description: "Execute a Report by name or ID",
+                parameters: z.object({
+                    reportName: z.string().optional().describe("Name of the report to execute"),
+                    reportId: z.string().optional().describe("ID of the report to execute"),
+                    maxRows: z.number().optional().default(1000).describe("Maximum number of rows to return")
+                }),
+                async execute(props: {reportName?: string; reportId?: string; maxRows?: number}, context: {session?: {user?: UserInfo}}) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ success: false, error: "No authenticated user in session" });
+                    }
+
+                    try {
+                        let reportId = props.reportId;
+
+                        // Look up by name if no ID provided
+                        if (!reportId && props.reportName) {
+                            const rv = new RunView();
+                            const result = await rv.RunView<ReportEntity>({
+                                EntityName: 'Reports',
+                                ExtraFilter: `Name = '${props.reportName.replace(/'/g, "''")}'`,
+                                ResultType: 'entity_object'
+                            }, sessionUser);
+
+                            if (!result.Success || !result.Results?.length) {
+                                return JSON.stringify({
+                                    success: false,
+                                    error: `Report not found with name: ${props.reportName}`
+                                });
+                            }
+                            reportId = result.Results[0].ID;
+                        }
+
+                        if (!reportId) {
+                            return JSON.stringify({
+                                success: false,
+                                error: "Either reportName or reportId must be provided"
+                            });
+                        }
+
+                        // Execute the report
+                        const runReport = new RunReport();
+                        const reportParams: RunReportParams = {
+                            ReportID: reportId
+                        };
+
+                        const result = await runReport.RunReport(reportParams, sessionUser);
+
+                        return JSON.stringify({
+                            success: result.Success,
+                            rowCount: result.Results?.length || 0,
+                            executionTime: result.ExecutionTime,
+                            results: (result.Results || []).slice(0, props.maxRows || 1000),
+                            errorMessage: result.ErrorMessage
+                        });
+                    } catch (error) {
+                        return JSON.stringify({
+                            success: false,
+                            error: error instanceof Error ? error.message : String(error)
+                        });
+                    }
+                }
+            });
+        }
+    }
+}
+
+/*******************************************************************************
+ * COMMUNICATION TOOLS
+ ******************************************************************************/
+
+/**
+ * Loads Communication tools based on configuration.
+ *
+ * Creates tools for sending messages via various communication channels:
+ * - `Send_Email` - Send an email via configured provider
+ * - `Get_Communication_Providers` - List available communication providers
+ */
+function loadCommunicationTools(): void {
+    const commTools = _config.mcpServerSettings?.communicationTools;
+
+    if (commTools?.enabled) {
+        // Add email sending tool
+        addToolWithFilter({
+            name: "Send_Email",
+            description: "Send an email message. Note: Requires email provider to be configured.",
+            parameters: z.object({
+                to: z.string().describe("Recipient email address"),
+                subject: z.string().describe("Email subject"),
+                body: z.string().describe("Email body (can be HTML)"),
+                isHtml: z.boolean().optional().default(true).describe("Whether body is HTML (default: true)")
+            }),
+            async execute(props: {to: string; subject: string; body: string; isHtml?: boolean}, context: {session?: {user?: UserInfo}}) {
+                const sessionUser = context.session?.user;
+                if (!sessionUser) {
+                    return JSON.stringify({ success: false, error: "No authenticated user in session" });
+                }
+
+                try {
+                    // Note: This is a placeholder - actual implementation would use CommunicationEngine
+                    // For now, return a message indicating that communication would be sent
+                    return JSON.stringify({
+                        success: false,
+                        error: "Email sending requires CommunicationEngine configuration. Please configure your email provider.",
+                        note: "This tool is a placeholder. Full implementation requires proper CommunicationEngine integration."
+                    });
+                } catch (error) {
+                    return JSON.stringify({
+                        success: false,
+                        error: error instanceof Error ? error.message : String(error)
+                    });
+                }
+            }
+        });
+
+        // Add provider discovery tool
+        addToolWithFilter({
+            name: "Get_Communication_Providers",
+            description: "List available communication providers configured in the system",
+            parameters: z.object({}),
+            async execute(_props: Record<string, never>, context: {session?: {user?: UserInfo}}) {
+                const sessionUser = context.session?.user;
+                if (!sessionUser) {
+                    return JSON.stringify({ error: "No authenticated user in session" });
+                }
+
+                const rv = new RunView();
+                const result = await rv.RunView({
+                    EntityName: 'Communication Providers',
+                    OrderBy: 'Name',
+                    Fields: ['ID', 'Name', 'Description', 'Status', 'SupportsSending']
+                }, sessionUser);
+
+                if (!result.Success) {
+                    return JSON.stringify({ error: result.ErrorMessage });
+                }
+
+                return JSON.stringify(result.Results || []);
+            }
+        });
+    }
 }
 
 /*******************************************************************************

@@ -94,6 +94,33 @@ const mcpServerEntityToolInfoSchema = z.object({
 const mcpServerActionToolInfoSchema = z.object({
   actionName: z.string().optional(),
   actionCategory: z.string().optional(),
+  discover: z.boolean().optional().default(false),
+  execute: z.boolean().optional().default(false),
+});
+
+const mcpServerQueryToolInfoSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  allowedSchemas: z.array(z.string()).optional(),
+  blockedSchemas: z.array(z.string()).optional(),
+});
+
+const mcpServerPromptToolInfoSchema = z.object({
+  promptName: z.string().optional(),
+  promptCategory: z.string().optional(),
+  discover: z.boolean().optional().default(false),
+  execute: z.boolean().optional().default(false),
+});
+
+const mcpServerReportToolInfoSchema = z.object({
+  reportName: z.string().optional(),
+  reportCategory: z.string().optional(),
+  discover: z.boolean().optional().default(false),
+  execute: z.boolean().optional().default(false),
+});
+
+const mcpServerCommunicationToolInfoSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  allowedProviders: z.array(z.string()).optional(),
 });
 
 const mcpServerAgentToolInfoSchema = z.object({
@@ -109,6 +136,10 @@ const mcpServerInfoSchema = z.object({
   entityTools: z.array(mcpServerEntityToolInfoSchema).optional(),
   actionTools: z.array(mcpServerActionToolInfoSchema).optional(),
   agentTools: z.array(mcpServerAgentToolInfoSchema).optional(),
+  queryTools: mcpServerQueryToolInfoSchema.optional(),
+  promptTools: z.array(mcpServerPromptToolInfoSchema).optional(),
+  reportTools: z.array(mcpServerReportToolInfoSchema).optional(),
+  communicationTools: mcpServerCommunicationToolInfoSchema.optional(),
   enableMCPServer: z.boolean().optional().default(false),
   systemApiKey: z.string().optional(),
 });
@@ -137,6 +168,13 @@ const configInfoSchema = z.object({
 
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
+export type MCPServerEntityToolInfo = z.infer<typeof mcpServerEntityToolInfoSchema>;
+export type MCPServerActionToolInfo = z.infer<typeof mcpServerActionToolInfoSchema>;
+export type MCPServerAgentToolInfo = z.infer<typeof mcpServerAgentToolInfoSchema>;
+export type MCPServerQueryToolInfo = z.infer<typeof mcpServerQueryToolInfoSchema>;
+export type MCPServerPromptToolInfo = z.infer<typeof mcpServerPromptToolInfoSchema>;
+export type MCPServerReportToolInfo = z.infer<typeof mcpServerReportToolInfoSchema>;
+export type MCPServerCommunicationToolInfo = z.infer<typeof mcpServerCommunicationToolInfoSchema>;
 
 // Config will be loaded asynchronously - exports are populated by initConfig()
 export let configInfo: ConfigInfo;
