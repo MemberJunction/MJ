@@ -16,9 +16,12 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/actions": "3.2.0",
+    "@memberjunction/actions-base": "3.2.0",
     "@memberjunction/ai": "3.2.0",
     "@memberjunction/ai-agents": "3.2.0",
     "@memberjunction/ai-core-plus": "3.2.0",
+    "@memberjunction/ai-prompts": "3.2.0",
     "@memberjunction/aiengine": "3.2.0",
     "@memberjunction/config": "3.2.0",
     "@memberjunction/core": "3.2.0",
