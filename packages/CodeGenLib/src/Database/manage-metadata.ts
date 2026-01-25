@@ -624,7 +624,8 @@ export class ManageMetadataBase {
 
   /**
    * Applies soft PK/FK configuration from config/database-metadata-config.json if it exists.
-   * This sets IsSoftPrimaryKey=1 for soft PKs, and RelatedEntityID/RelatedEntityFieldName + IsSoftForeignKey=1 for soft FKs.
+   * For soft PKs: Sets BOTH IsPrimaryKey=1 AND IsSoftPrimaryKey=1 (IsPrimaryKey is source of truth, IsSoftPrimaryKey protects from schema sync).
+   * For soft FKs: Sets RelatedEntityID/RelatedEntityFieldName + IsSoftForeignKey=1 (RelatedEntityID is source of truth, IsSoftForeignKey protects from schema sync).
    */
   protected async applySoftPKFKConfig(pool: sql.ConnectionPool): Promise<boolean> {
     const configPath = path.join(process.cwd(), 'config', 'database-metadata-config.json');
@@ -658,17 +659,18 @@ export class ManageMetadataBase {
 
         const entityId = entityResult.recordset[0].ID;
 
-        // Process primary keys - set IsSoftPrimaryKey = 1
+        // Process primary keys - set BOTH IsPrimaryKey = 1 AND IsSoftPrimaryKey = 1
+        // IsPrimaryKey is the source of truth, IsSoftPrimaryKey protects it from schema sync
         if (table.primaryKeys && table.primaryKeys.length > 0) {
           for (const pk of table.primaryKeys) {
             const updateResult = await pool
               .request()
               .input('entityId', sql.UniqueIdentifier, entityId)
               .input('fieldName', sql.NVarChar, pk.fieldName)
-              .query(`UPDATE [${schema}].[EntityField] SET [IsSoftPrimaryKey] = 1 WHERE [EntityID] = @entityId AND [Name] = @fieldName`);
+              .query(`UPDATE [${schema}].[EntityField] SET [IsPrimaryKey] = 1, [IsSoftPrimaryKey] = 1 WHERE [EntityID] = @entityId AND [Name] = @fieldName`);
 
             if (updateResult.rowsAffected[0] > 0) {
-              logStatus(`         ✓ Set IsSoftPrimaryKey=1 for ${table.tableName}.${pk.fieldName}`);
+              logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${table.tableName}.${pk.fieldName}`);
               totalPKs++;
             }
           }
