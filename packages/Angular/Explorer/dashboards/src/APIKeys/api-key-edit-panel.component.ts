@@ -1,6 +1,7 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { APIKeyEntity, APIScopeEntity, APIKeyScopeEntity, APIKeyUsageLogEntity } from '@memberjunction/core-entities';
+import { GraphQLDataProvider, GraphQLEncryptionClient } from '@memberjunction/graphql-dataprovider';
 
 /** Tree shaking prevention function */
 export function LoadAPIKeyEditPanel(): void {
@@ -98,6 +99,16 @@ export class APIKeyEditPanelComponent implements OnChanges {
     async ngOnChanges(changes: SimpleChanges): Promise<void> {
         if (changes['KeyId'] && this.KeyId) {
             await this.loadKey();
+        }
+    }
+
+    /**
+     * Handle escape key to close panel
+     */
+    @HostListener('document:keydown.escape')
+    public onEscapeKey(): void {
+        if (this.Visible && !this.IsSaving && !this.IsRevoking) {
+            this.close();
         }
     }
 
@@ -362,7 +373,7 @@ export class APIKeyEditPanelComponent implements OnChanges {
     }
 
     /**
-     * Confirm and execute revoke
+     * Confirm and execute revoke using GraphQL client
      */
     public async confirmRevoke(): Promise<void> {
         if (!this.APIKey || this.RevokeConfirmText !== 'REVOKE') return;
@@ -371,15 +382,19 @@ export class APIKeyEditPanelComponent implements OnChanges {
         this.ErrorMessage = '';
 
         try {
-            this.APIKey.Status = 'Revoked';
-            const result = await this.APIKey.Save();
+            const provider = Metadata.Provider as GraphQLDataProvider;
+            const encryptionClient = new GraphQLEncryptionClient(provider);
 
-            if (result) {
+            const result = await encryptionClient.RevokeAPIKey(this.APIKey.ID);
+
+            if (result.Success) {
+                // Update local state to reflect the change
+                this.APIKey.Status = 'Revoked';
                 this.ShowRevokeConfirm = false;
                 this.SuccessMessage = 'API key has been revoked';
                 this.Revoked.emit(this.APIKey);
             } else {
-                this.ErrorMessage = 'Failed to revoke key';
+                this.ErrorMessage = result.Error || 'Failed to revoke key';
             }
         } catch (error) {
             console.error('Error revoking key:', error);
