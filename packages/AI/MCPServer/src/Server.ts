@@ -433,15 +433,39 @@ async function registerAllTools(
         );
     };
 
-    // Register Get_All_Entities tool
+    // Register Get_Entity_List tool - ultra-lightweight list of all entities
     addToolWithFilter({
-        name: "Get_All_Entities",
-        description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
+        name: "Get_Entity_List",
+        description: "Retrieves a list of all entity names. Use Get_Single_Entity(entityName) to get full details including description, fields, and relationships for a specific entity.",
         parameters: z.object({}),
         async execute() {
             const md = new Metadata();
-            const output = JSON.stringify(md.Entities, null, 2);
-            return output;
+            // Just return entity names - minimal payload
+            const entityNames = md.Entities.map(e => e.Name);
+            return JSON.stringify(entityNames);
+        }
+    });
+
+    // Register Get_Single_Entity tool - full details for one entity
+    addToolWithFilter({
+        name: "Get_Single_Entity",
+        description: "Retrieves complete details for a single entity including all fields, relationships, and metadata. Use Get_Entity_List first to find entity names.",
+        parameters: z.object({
+            entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'AI Models')")
+        }),
+        async execute(params: Record<string, unknown>) {
+            const entityName = params.entityName as string;
+            const md = new Metadata();
+            const entity = md.Entities.find(e =>
+                e.Name.toLowerCase() === entityName.toLowerCase()
+            );
+            if (!entity) {
+                return JSON.stringify({
+                    error: `Entity '${entityName}' not found`,
+                    suggestion: "Use Get_Entity_List to see available entity names"
+                });
+            }
+            return JSON.stringify(entity, null, 2);
         }
     });
 
@@ -582,10 +606,34 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 transports.set(sessionId, transport);
                 console.log(`[SSE] Transport created with session ID: ${sessionId}`);
 
-                // Clean up on connection close
+                // Set up keepalive ping to prevent connection timeout (every 15 seconds)
+                const keepaliveInterval = setInterval(() => {
+                    if (!res.writableEnded) {
+                        // SSE comment line (starts with colon) - keeps connection alive
+                        res.write(':ping\n\n');
+                        console.log(`[SSE] Keepalive ping sent for session: ${sessionId}`);
+                    }
+                }, 15000);
+
+                // Log various connection events for debugging
                 res.on('close', () => {
-                    console.log(`[SSE] Connection closed for session: ${sessionId}`);
+                    console.log(`[SSE] Connection CLOSED for session: ${sessionId}`);
+                    console.log(`[SSE]   - writableEnded: ${res.writableEnded}`);
+                    console.log(`[SSE]   - writableFinished: ${res.writableFinished}`);
+                    clearInterval(keepaliveInterval);
                     transports.delete(sessionId);
+                });
+
+                res.on('error', (err) => {
+                    console.error(`[SSE] Connection ERROR for session: ${sessionId}`, err);
+                });
+
+                req.on('close', () => {
+                    console.log(`[SSE] Request closed by CLIENT for session: ${sessionId}`);
+                });
+
+                req.on('error', (err) => {
+                    console.error(`[SSE] Request ERROR for session: ${sessionId}`, err);
                 });
 
                 // Connect the server to the transport
@@ -605,20 +653,61 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         // Message endpoint for receiving MCP messages from clients
         app.post('/mcp/messages', async (req: Request, res: Response) => {
             const sessionId = req.query.sessionId as string;
+            console.log(`[Messages] Received POST for session: ${sessionId}`);
 
             if (!sessionId) {
+                console.log('[Messages] Error: Missing sessionId');
                 res.status(400).json({ error: 'Missing sessionId query parameter' });
                 return;
             }
 
             const transport = transports.get(sessionId);
             if (!transport) {
+                console.log(`[Messages] Error: Session not found: ${sessionId}`);
                 res.status(404).json({ error: 'Session not found' });
                 return;
             }
 
+            // Buffer the body for logging, then pass to transport
+            const chunks: Buffer[] = [];
+            for await (const chunk of req) {
+                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            }
+            const bodyBuffer = Buffer.concat(chunks);
+            const bodyString = bodyBuffer.toString('utf8');
+
+            // Log the request
             try {
-                await transport.handlePostMessage(req, res);
+                const parsed = JSON.parse(bodyString);
+                console.log(`[Messages] Request: method=${parsed.method || 'N/A'}, id=${parsed.id || 'N/A'}`);
+                if (parsed.params) {
+                    const paramsStr = JSON.stringify(parsed.params);
+                    console.log(`[Messages] Params: ${paramsStr.substring(0, 500)}${paramsStr.length > 500 ? '...' : ''}`);
+                }
+            } catch {
+                console.log(`[Messages] Raw body: ${bodyString.substring(0, 500)}`);
+            }
+
+            // Create a new readable stream from the buffered body for the transport
+            const { Readable } = await import('stream');
+            const bodyStream = new Readable({
+                read() {
+                    this.push(bodyBuffer);
+                    this.push(null);
+                }
+            });
+
+            // Create a mock request with the buffered body stream
+            const mockReq = Object.assign(bodyStream, {
+                headers: req.headers,
+                method: req.method,
+                url: req.url,
+                query: req.query
+            });
+
+            try {
+                await transport.handlePostMessage(mockReq as unknown as Request, res);
+                console.log(`[Messages] Response sent for session: ${sessionId}`);
             } catch (error) {
                 console.error('[Messages] Error handling message:', error);
                 if (!res.headersSent) {
@@ -2436,8 +2525,9 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
         const listingFilterOptions = { ...filterOptions };
         activeFilterOptions = {}; // Temporarily clear filters to get all tool names
 
-        // Add built-in tool
-        registeredToolNames.push("Get_All_Entities");
+        // Add built-in tools
+        registeredToolNames.push("Get_Entity_List");
+        registeredToolNames.push("Get_Single_Entity");
 
         // Add agent run diagnostic tools
         registeredToolNames.push("List_Recent_Agent_Runs");
