@@ -1,9 +1,11 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, ViewChild } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
 import { APIKeyEntity, APIScopeEntity, APIKeyUsageLogEntity } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
+import { APIKeyFilter, APIKeyListComponent } from './api-key-list.component';
+import { APIKeyCreateResult } from './api-key-create-dialog.component';
 
 /** Activity types for recent activity display */
 type ActivityAction = 'Created' | 'Updated' | 'Revoked' | 'Used' | 'Extended';
@@ -26,6 +28,9 @@ interface ScopeStat {
     iconClass: string;
 }
 
+/** Current view type */
+type ViewType = 'overview' | 'list';
+
 /** Tree shaking prevention function */
 export function LoadAPIKeysResource(): void {
     // This function prevents tree shaking
@@ -46,8 +51,14 @@ export function LoadAPIKeysResource(): void {
     styleUrls: ['./api-keys-resource.component.css']
 })
 export class APIKeysResourceComponent extends BaseResourceComponent implements OnDestroy {
+    @ViewChild('keyList') keyListComponent: APIKeyListComponent | undefined;
+
     private destroy$ = new Subject<void>();
     private md = new Metadata();
+
+    // View state
+    public CurrentView: ViewType = 'overview';
+    public ListFilter: APIKeyFilter = 'all';
 
     // Loading states
     public IsLoading = true;
@@ -65,6 +76,11 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public RecentActivity: ActivityItem[] = [];
     public ScopeStats: ScopeStat[] = [];
     public TopUsedKeys: APIKeyEntity[] = [];
+
+    // Dialog states
+    public ShowCreateDialog = false;
+    public ShowEditPanel = false;
+    public SelectedKeyId: string | null = null;
 
     // Scope category colors
     private readonly categoryColors: Record<string, string> = {
@@ -280,6 +296,84 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      */
     public async refresh(): Promise<void> {
         await this.loadData();
+        if (this.keyListComponent) {
+            await this.keyListComponent.loadKeys();
+        }
+    }
+
+    /**
+     * Switch to list view
+     */
+    public showListView(filter: APIKeyFilter = 'all'): void {
+        this.ListFilter = filter;
+        this.CurrentView = 'list';
+    }
+
+    /**
+     * Switch to overview
+     */
+    public showOverview(): void {
+        this.CurrentView = 'overview';
+    }
+
+    /**
+     * Open create dialog
+     */
+    public openCreateDialog(): void {
+        this.ShowCreateDialog = true;
+    }
+
+    /**
+     * Handle key created
+     */
+    public async onKeyCreated(result: APIKeyCreateResult): Promise<void> {
+        if (result.success) {
+            await this.refresh();
+        }
+    }
+
+    /**
+     * Handle create dialog closed
+     */
+    public onCreateDialogClosed(): void {
+        this.ShowCreateDialog = false;
+    }
+
+    /**
+     * Open edit panel for a key
+     */
+    public openEditPanel(key: APIKeyEntity): void {
+        this.SelectedKeyId = key.ID;
+        this.ShowEditPanel = true;
+    }
+
+    /**
+     * Handle key from list selected
+     */
+    public onKeySelected(key: APIKeyEntity): void {
+        this.openEditPanel(key);
+    }
+
+    /**
+     * Handle key updated
+     */
+    public async onKeyUpdated(): Promise<void> {
+        await this.refresh();
+    }
+
+    /**
+     * Handle key revoked
+     */
+    public async onKeyRevoked(): Promise<void> {
+        await this.refresh();
+    }
+
+    /**
+     * Handle edit panel closed
+     */
+    public onEditPanelClosed(): void {
+        this.ShowEditPanel = false;
+        this.SelectedKeyId = null;
     }
 
     /**
@@ -425,53 +519,20 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     }
 
     /**
-     * Navigate to create new key
-     */
-    public createNewKey(): void {
-        // Emit event to parent to open key creation dialog
-        this.Data.Configuration = { action: 'create' };
-        // This will be handled by the parent component
-    }
-
-    /**
-     * View all keys with filter
-     */
-    public viewAllKeys(filter?: string): void {
-        this.Data.Configuration = { action: 'list', filter };
-    }
-
-    /**
-     * View expiring keys
-     */
-    public viewExpiringKeys(): void {
-        this.viewAllKeys('expiring');
-    }
-
-    /**
-     * View a specific key
-     */
-    public viewKey(key: APIKeyEntity): void {
-        this.Data.Configuration = { action: 'view', keyId: key.ID };
-    }
-
-    /**
      * View activity for a key
      */
     public onActivityClick(activity: ActivityItem): void {
-        this.Data.Configuration = { action: 'view', keyId: activity.keyId };
-    }
-
-    /**
-     * View usage logs
-     */
-    public viewUsageLogs(): void {
-        this.Data.Configuration = { action: 'logs' };
+        const key = this.APIKeys.find(k => k.ID === activity.keyId);
+        if (key) {
+            this.openEditPanel(key);
+        }
     }
 
     /**
      * View scope details
      */
     public onScopeClick(stat: ScopeStat): void {
-        this.Data.Configuration = { action: 'scopes', category: stat.category };
+        // Could open a scope management view in the future
+        console.log('Scope category clicked:', stat.category);
     }
 }

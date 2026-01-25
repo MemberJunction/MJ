@@ -138,6 +138,9 @@ import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 // API Keys Dashboard Components
 import { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
+import { APIKeyCreateDialogComponent } from './APIKeys/api-key-create-dialog.component';
+import { APIKeyEditPanelComponent } from './APIKeys/api-key-edit-panel.component';
+import { APIKeyListComponent } from './APIKeys/api-key-list.component';
 
 
 
@@ -243,7 +246,10 @@ import { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component'
     DashboardBrowserResourceComponent,
     DashboardShareDialogComponent,
     // API Keys Dashboard Components
-    APIKeysResourceComponent
+    APIKeysResourceComponent,
+    APIKeyCreateDialogComponent,
+    APIKeyEditPanelComponent,
+    APIKeyListComponent
   ],
   imports: [
     CommonModule,
@@ -355,7 +361,10 @@ import { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component'
     DashboardBrowserResourceComponent,
     DashboardShareDialogComponent,
     // API Keys Dashboard Components
-    APIKeysResourceComponent
+    APIKeysResourceComponent,
+    APIKeyCreateDialogComponent,
+    APIKeyEditPanelComponent,
+    APIKeyListComponent
   ]
 })
 export class DashboardsModule { }
