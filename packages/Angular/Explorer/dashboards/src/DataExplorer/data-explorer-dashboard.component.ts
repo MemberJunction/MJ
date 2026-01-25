@@ -8,7 +8,7 @@ import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
-import { ApplicationEntityEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { ApplicationEntityEntity, ResourceData, UserInfoEngine, ViewGridAggregatesConfig } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,
@@ -923,7 +923,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       if (parsed && Array.isArray(parsed.columnSettings)) {
         return {
           columnSettings: parsed.columnSettings,
-          sortSettings: parsed.sortSettings || []
+          sortSettings: parsed.sortSettings || [],
+          aggregates: parsed.aggregates || undefined
         };
       }
 
@@ -1169,7 +1170,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         // Update currentGridState to reflect saved state
         this.currentGridState = {
           columnSettings: gridState.columnSettings as ViewGridStateConfig['columnSettings'],
-          sortSettings: gridState.sortSettings as ViewGridStateConfig['sortSettings']
+          sortSettings: gridState.sortSettings as ViewGridStateConfig['sortSettings'],
+          aggregates: gridState.aggregates
         };
 
         // Show success notification
@@ -1190,14 +1192,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /**
    * Build GridState in Kendo-compatible format
-   * Format: { columnSettings: [{ID, Name, DisplayName, hidden, width, orderIndex}], sortSettings: [{field, dir}] }
+   * Format: { columnSettings: [...], sortSettings: [...], aggregates: {...} }
    *
    * Priority for column settings:
    * 1. If event.columns provided (from config panel) - use those
    * 2. If currentGridState exists (from grid interactions) - use that
    * 3. Otherwise return null
    */
-  private buildGridState(event: ViewSaveEvent): { columnSettings: object[]; sortSettings?: object[] } | null {
+  private buildGridState(event: ViewSaveEvent): { columnSettings: object[]; sortSettings?: object[]; aggregates?: ViewGridAggregatesConfig } | null {
     let columnSettings: object[];
 
     // First check if the event has columns configured (from config panel)
@@ -1239,7 +1241,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       sortSettings = this.currentGridState.sortSettings;
     }
 
-    return { columnSettings, sortSettings };
+    // Build aggregate settings from event or current state
+    let aggregates: ViewGridAggregatesConfig | undefined;
+    if (event.aggregatesConfig) {
+      aggregates = event.aggregatesConfig;
+    } else if (this.currentGridState?.aggregates) {
+      aggregates = this.currentGridState.aggregates;
+    }
+
+    return { columnSettings, sortSettings, aggregates };
   }
 
   /**

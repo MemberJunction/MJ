@@ -7,7 +7,10 @@ import {
   ViewGridColumnSetting,
   ColumnFormat,
   ColumnTextStyle,
-  ColumnConditionalRule
+  ColumnConditionalRule,
+  ViewGridAggregatesConfig,
+  ViewGridAggregate,
+  DEFAULT_AGGREGATE_DISPLAY
 } from '@memberjunction/core-entities';
 import {
   CompositeFilterDescriptor,
@@ -61,6 +64,8 @@ export interface ViewSaveEvent {
   smartFilterPrompt: string;
   /** Traditional filter state in Kendo-compatible JSON format */
   filterState: CompositeFilterDescriptor | null;
+  /** Aggregates configuration */
+  aggregatesConfig: ViewGridAggregatesConfig | null;
 }
 
 /**
@@ -175,8 +180,13 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   // Filter mode: 'smart' or 'traditional' (mutually exclusive)
   public filterMode: 'smart' | 'traditional' = 'smart';
 
+  // Aggregates state
+  public aggregates: ViewGridAggregate[] = [];
+  public showAggregateDialog: boolean = false;
+  public editingAggregate: ViewGridAggregate | null = null;
+
   // UI state
-  public activeTab: 'columns' | 'sorting' | 'filters' | 'settings' = 'columns';
+  public activeTab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings' = 'columns';
   @Input() isSaving: boolean = false;
   public columnSearchText: string = '';
 
@@ -415,6 +425,13 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       // Default to smart mode (promote AI filtering)
       this.filterMode = 'smart';
       this.smartFilterEnabled = true;
+    }
+
+    // Load aggregates from currentGridState if available
+    if (this.currentGridState?.aggregates?.expressions) {
+      this.aggregates = [...this.currentGridState.aggregates.expressions];
+    } else {
+      this.aggregates = [];
     }
 
     this.cdr.detectChanges();
@@ -1259,7 +1276,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       sortItems: [...this.sortItems],
       smartFilterEnabled: this.smartFilterEnabled,
       smartFilterPrompt: this.smartFilterPrompt,
-      filterState: this.hasActiveFilters() ? this.filterState : null
+      filterState: this.hasActiveFilters() ? this.filterState : null,
+      aggregatesConfig: this.buildAggregatesConfig()
     });
   }
 
@@ -1281,7 +1299,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       sortItems: [...this.sortItems],
       smartFilterEnabled: this.smartFilterEnabled,
       smartFilterPrompt: this.smartFilterPrompt,
-      filterState: this.hasActiveFilters() ? this.filterState : null
+      filterState: this.hasActiveFilters() ? this.filterState : null,
+      aggregatesConfig: this.buildAggregatesConfig()
     });
   }
 
@@ -1304,7 +1323,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       sortItems: [...this.sortItems],
       smartFilterEnabled: this.smartFilterEnabled,
       smartFilterPrompt: this.smartFilterPrompt,
-      filterState: this.hasActiveFilters() ? this.filterState : null
+      filterState: this.hasActiveFilters() ? this.filterState : null,
+      aggregatesConfig: this.buildAggregatesConfig()
     });
   }
 
@@ -1320,7 +1340,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   /**
    * Set the active tab
    */
-  setActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'settings'): void {
+  setActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings'): void {
     this.activeTab = tab;
     this.formatEditingColumn = null; // Close format editor when switching tabs
     this.cdr.detectChanges();
@@ -1433,5 +1453,136 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     }
     format.cellStyle[prop] = value;
     this.cdr.detectChanges();
+  }
+
+  // ========================================
+  // AGGREGATE MANAGEMENT
+  // ========================================
+
+  /**
+   * Open dialog to add a new aggregate
+   */
+  openAddAggregateDialog(): void {
+    this.editingAggregate = null;
+    this.showAggregateDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Open dialog to edit an existing aggregate
+   */
+  editAggregate(aggregate: ViewGridAggregate): void {
+    this.editingAggregate = { ...aggregate };
+    this.showAggregateDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Close the aggregate dialog
+   */
+  closeAggregateDialog(): void {
+    this.showAggregateDialog = false;
+    this.editingAggregate = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle saving an aggregate from the dialog
+   */
+  onAggregateSave(aggregate: ViewGridAggregate): void {
+    const existingIndex = this.aggregates.findIndex(a => a.id === aggregate.id);
+
+    if (existingIndex >= 0) {
+      // Update existing
+      this.aggregates[existingIndex] = aggregate;
+    } else {
+      // Add new with order at end
+      aggregate.order = this.aggregates.length;
+      this.aggregates.push(aggregate);
+    }
+
+    this.closeAggregateDialog();
+  }
+
+  /**
+   * Remove an aggregate
+   */
+  removeAggregate(aggregate: ViewGridAggregate): void {
+    const index = this.aggregates.findIndex(a => a.id === aggregate.id);
+    if (index >= 0) {
+      this.aggregates.splice(index, 1);
+      // Re-order remaining aggregates
+      this.aggregates.forEach((a, i) => a.order = i);
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Toggle aggregate enabled state
+   */
+  toggleAggregateEnabled(aggregate: ViewGridAggregate): void {
+    aggregate.enabled = !aggregate.enabled;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Move aggregate up in order
+   */
+  moveAggregateUp(aggregate: ViewGridAggregate): void {
+    const index = this.aggregates.indexOf(aggregate);
+    if (index > 0) {
+      const prev = this.aggregates[index - 1];
+      this.aggregates[index - 1] = aggregate;
+      this.aggregates[index] = prev;
+      this.aggregates.forEach((a, i) => a.order = i);
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Move aggregate down in order
+   */
+  moveAggregateDown(aggregate: ViewGridAggregate): void {
+    const index = this.aggregates.indexOf(aggregate);
+    if (index < this.aggregates.length - 1) {
+      const next = this.aggregates[index + 1];
+      this.aggregates[index + 1] = aggregate;
+      this.aggregates[index] = next;
+      this.aggregates.forEach((a, i) => a.order = i);
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Get enabled aggregates count
+   */
+  get enabledAggregatesCount(): number {
+    return this.aggregates.filter(a => a.enabled !== false).length;
+  }
+
+  /**
+   * Get card aggregates
+   */
+  get cardAggregates(): ViewGridAggregate[] {
+    return this.aggregates.filter(a => a.displayType === 'card');
+  }
+
+  /**
+   * Get column aggregates
+   */
+  get columnAggregates(): ViewGridAggregate[] {
+    return this.aggregates.filter(a => a.displayType === 'column');
+  }
+
+  /**
+   * Build aggregates config from current state
+   */
+  private buildAggregatesConfig(): ViewGridAggregatesConfig | null {
+    if (this.aggregates.length === 0) return null;
+
+    return {
+      display: { ...DEFAULT_AGGREGATE_DISPLAY },
+      expressions: [...this.aggregates]
+    };
   }
 }

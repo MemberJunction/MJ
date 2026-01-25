@@ -12,8 +12,8 @@ import {
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { BaseEntity, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { UserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle } from '@memberjunction/core-entities';
+import { BaseEntity, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
+import { UserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
 import {
   ColDef,
   GridReadyEvent,
@@ -889,8 +889,55 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   // ========================================
+  // Aggregate Inputs
+  // ========================================
+
+  /**
+   * Aggregate configuration for the grid.
+   * When provided, aggregate expressions are calculated alongside data and displayed:
+   * - Column-bound aggregates appear in a pinned bottom row
+   * - Card-bound aggregates are exposed via AggregateValues for use with AggregatePanelComponent
+   */
+  @Input()
+  set AggregatesConfig(value: ViewGridAggregatesConfig | null) {
+    this._aggregatesConfig = value;
+  }
+  get AggregatesConfig(): ViewGridAggregatesConfig | null {
+    return this._aggregatesConfig;
+  }
+
+  /**
+   * Returns the aggregate values map, keyed by expression or id.
+   * Use this to pass values to AggregatePanelComponent.
+   */
+  public get AggregateValuesMap(): Map<string, AggregateValue> {
+    return this._aggregateValues;
+  }
+
+  /**
+   * Returns the raw aggregate results from the last RunView call.
+   */
+  public get AggregateResultsList(): AggregateResult[] {
+    return this._aggregateResults;
+  }
+
+  /**
+   * Whether aggregates are currently loading.
+   */
+  public get AggregatesLoading(): boolean {
+    return this._aggregatesLoading;
+  }
+
+  // ========================================
   // Event Outputs
   // ========================================
+
+  // Aggregate Results
+  /**
+   * Emitted when aggregate results are loaded.
+   * Contains the array of AggregateResult objects and a values map for easy lookup.
+   */
+  @Output() AggregatesLoaded = new EventEmitter<{ results: AggregateResult[]; values: Map<string, AggregateValue>; executionTime?: number }>();
 
   // Row Selection
   @Output() BeforeRowSelect = new EventEmitter<BeforeRowSelectEventArgs>();
@@ -1121,6 +1168,12 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private _editingRowKey: string | null = null;
   private _editingField: string | null = null;
   private _pendingChanges: PendingChange[] = [];
+
+  // Aggregate state
+  private _aggregatesConfig: ViewGridAggregatesConfig | null = null;
+  private _aggregateResults: AggregateResult[] = [];
+  private _aggregateValues: Map<string, AggregateValue> = new Map();
+  private _aggregatesLoading: boolean = false;
 
   // ========================================
   // Public Read-Only Properties
@@ -1460,7 +1513,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         if (!this._gridState && gridState.columnSettings?.length) {
           this._gridState = {
             columnSettings: gridState.columnSettings,
-            sortSettings: gridState.sortSettings || []
+            sortSettings: gridState.sortSettings || [],
+            aggregates: gridState.aggregates
           };
         }
 
@@ -1471,6 +1525,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
             direction: s.dir,
             index
           }));
+        }
+
+        // Apply aggregates from user defaults if present and not already set
+        if (gridState.aggregates && !this._aggregatesConfig) {
+          this._aggregatesConfig = gridState.aggregates;
         }
       }
     } catch (error) {
@@ -1492,7 +1551,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       const settingKey = `default-view-setting/${this._entityInfo.Name}`;
       const gridStateJson: ViewGridState = {
         columnSettings: state.columnSettings,
-        sortSettings: state.sortSettings
+        sortSettings: state.sortSettings,
+        aggregates: state.aggregates
       };
 
       await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridStateJson));
@@ -1524,8 +1584,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         if (gridState.columnSettings?.length) {
           this._gridState = {
             columnSettings: gridState.columnSettings,
-            sortSettings: gridState.sortSettings || []
+            sortSettings: gridState.sortSettings || [],
+            aggregates: gridState.aggregates
           };
+        }
+        // Apply aggregates from view's GridState if present
+        if (gridState.aggregates && !this._aggregatesConfig) {
+          this._aggregatesConfig = gridState.aggregates;
         }
       } catch (e) {
         console.warn('Failed to parse view GridState:', e);
@@ -1569,6 +1634,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           index: index
         }));
         this.applySortStateToGrid();
+      }
+
+      // Apply aggregates from GridState if present
+      if (this._gridState.aggregates) {
+        this._aggregatesConfig = this._gridState.aggregates;
       }
     }
   }
@@ -2501,16 +2571,29 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
 
     this.loading = true;
+    this._aggregatesLoading = true;
     this.errorMessage = '';
     this.cdr.detectChanges();
 
     const startTime = performance.now();
 
     try {
+      // Build aggregate expressions from config if present
+      let aggregateExpressions: AggregateExpression[] | undefined;
+      if (this._aggregatesConfig?.expressions?.length) {
+        aggregateExpressions = this._aggregatesConfig.expressions
+          .filter(agg => agg.enabled !== false && agg.expression)
+          .map(agg => ({
+            expression: agg.expression,
+            alias: agg.id || agg.label || agg.expression
+          }));
+      }
+
       const rv = new RunView();
       const result = await rv.RunView<BaseEntity>({
         ...runViewParams,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
+        Aggregates: aggregateExpressions
       });
 
       const loadTimeMs = performance.now() - startTime;
@@ -2519,6 +2602,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this._allData = result.Results || [];
         this.totalRowCount = result.TotalRowCount || this._allData.length;
         this.processData();
+
+        // Process aggregate results
+        this.processAggregateResults(result.AggregateResults, result.AggregateExecutionTime);
 
         // Reapply sort state to grid after data load to maintain visual indicators
         // Use Promise.resolve() to defer until after Angular's change detection cycle
@@ -2770,6 +2856,46 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
 
       return row;
+    });
+
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Process aggregate results from RunView and emit the AggregatesLoaded event.
+   * Builds the value map for easy lookup by expression or id.
+   */
+  private processAggregateResults(results: AggregateResult[] | undefined, executionTime?: number): void {
+    this._aggregatesLoading = false;
+
+    if (!results || results.length === 0) {
+      this._aggregateResults = [];
+      this._aggregateValues.clear();
+      return;
+    }
+
+    this._aggregateResults = results;
+    this._aggregateValues.clear();
+
+    // Build the values map, keyed by alias (which is set to id or expression)
+    for (const result of results) {
+      if (!result.error) {
+        this._aggregateValues.set(result.alias, result.value);
+      }
+    }
+
+    // Also map by expression for easy lookup
+    for (const result of results) {
+      if (!result.error && result.expression !== result.alias) {
+        this._aggregateValues.set(result.expression, result.value);
+      }
+    }
+
+    // Emit the aggregates loaded event
+    this.AggregatesLoaded.emit({
+      results: this._aggregateResults,
+      values: this._aggregateValues,
+      executionTime
     });
 
     this.cdr.detectChanges();
@@ -3207,7 +3333,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Build the grid state JSON matching ViewGridState format
       const gridStateJson: ViewGridState = {
         columnSettings: state.columnSettings,
-        sortSettings: state.sortSettings
+        sortSettings: state.sortSettings,
+        aggregates: state.aggregates
       };
 
       // Update the view entity's GridState
@@ -3319,7 +3446,12 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       dir: s.dir
     }));
 
-    return { columnSettings, sortSettings };
+    // Include current aggregates config in the state
+    return {
+      columnSettings,
+      sortSettings,
+      aggregates: this._aggregatesConfig || this._gridState?.aggregates
+    };
   }
 
   private applySortStateToGrid(): void {
