@@ -13,7 +13,7 @@ The `database-metadata-config.json` file allows you to define primary keys and f
 
 1. **Optional Configuration**: If `database-metadata-config.json` exists in the `/config/` directory, CodeGen reads it and applies the metadata
 2. **Constraint-Based Fallback**: If the file doesn't exist, CodeGen uses standard database constraint detection
-3. **Discovered Metadata**: Configuration values populate the `IsSoftPrimaryKey`, `SoftFKRelatedEntityID`, and `SoftFKRelatedEntityFieldName` fields in the database
+3. **Discovered Metadata**: Configuration values populate the `IsSoftPrimaryKey` and `IsSoftForeignKey` fields, with soft FK values stored directly in `RelatedEntityID` and `RelatedEntityFieldName`
 4. **Transparent Integration**: Throughout MemberJunction (GraphQL, BaseEntity, UI), soft PKs/FKs work exactly like constraint-based ones
 
 ## Setup
@@ -102,7 +102,8 @@ const entity = md.Entities.find(e => e.Name === 'Orders');
 entity.PrimaryKeys; // Includes both constraint-based AND soft PKs
 
 const field = entity.Fields.find(f => f.Name === 'CustomerID');
-field.EffectiveRelatedEntityID; // Returns soft FK if no constraint exists
+field.RelatedEntityID; // Contains soft FK value (same field used for hard FKs)
+field.IsSoftForeignKey; // true if this is a soft FK (no database constraint)
 ```
 
 ### GraphQL
@@ -123,7 +124,7 @@ query {
 
 ## SQL Updates (Alternative Approach)
 
-Instead of using the configuration file and script, you can also manually update the metadata directly in SQL:
+Instead of using the configuration file, you can manually update the metadata directly in SQL:
 
 ```sql
 -- Mark a field as a soft primary key
@@ -133,9 +134,11 @@ WHERE [Name] = 'OrderID'
   AND [EntityID] = (SELECT ID FROM [__mj].[Entity] WHERE Name = 'Orders');
 
 -- Mark a field as a soft foreign key
+-- Note: IsSoftForeignKey flag protects these values from being overwritten by CodeGen
 UPDATE [__mj].[EntityField]
-SET [SoftFKRelatedEntityID] = (SELECT ID FROM [__mj].[Entity] WHERE Name = 'Customers'),
-    [SoftFKRelatedEntityFieldName] = 'ID'
+SET [RelatedEntityID] = (SELECT ID FROM [__mj].[Entity] WHERE Name = 'Customers'),
+    [RelatedEntityFieldName] = 'ID',
+    [IsSoftForeignKey] = 1
 WHERE [Name] = 'CustomerID'
   AND [EntityID] = (SELECT ID FROM [__mj].[Entity] WHERE Name = 'Orders');
 

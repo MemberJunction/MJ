@@ -298,6 +298,11 @@ export class EntityFieldInfo extends BaseInfo {
      */
     IsSoftPrimaryKey: boolean = null
     /**
+     * Indicates this field is a soft foreign key (metadata-defined, not a database constraint).
+     * When set to 1, RelatedEntityID and RelatedEntityFieldName are preserved and not overwritten by CodeGen schema sync.
+     */
+    IsSoftForeignKey: boolean = null
+    /**
      * If true, the field is a unique key for the entity. There can be zero to many unique key fields per entity.
      */
     IsUnique: boolean = null
@@ -325,15 +330,6 @@ export class EntityFieldInfo extends BaseInfo {
     IsNameField: boolean = null 
     RelatedEntityID: string = null
     RelatedEntityFieldName: string = null
-    /**
-     * Entity ID that this soft foreign key points to. Used for metadata-defined FKs without database constraints.
-     * The view uses COALESCE so existing code checking RelatedEntityID works automatically.
-     */
-    SoftFKRelatedEntityID: string = null
-    /**
-     * Field name in the related entity that this soft FK points to. Defaults to the PK of the related entity if not specified.
-     */
-    SoftFKRelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
     RelatedEntityNameFieldMap: string = null
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
