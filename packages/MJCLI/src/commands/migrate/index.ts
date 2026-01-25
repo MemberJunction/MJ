@@ -82,12 +82,15 @@ export default class Migrate extends Command {
         ];
 
         // Add placeholder arguments from config
-        // Extract placeholders from flywayConfig.advanced.placeHolders Map
-        if (flywayConfig.advanced?.placeHolderReplacement && flywayConfig.advanced?.placeHolders) {
-          const placeholders = flywayConfig.advanced.placeHolders as Map<string, string>;
-          placeholders.forEach((value, key) => {
+        // Read directly from config.SQLOutput.schemaPlaceholders since node-flyway doesn't use them
+        const schemaPlaceholders = config.SQLOutput?.schemaPlaceholders;
+        if (schemaPlaceholders && schemaPlaceholders.length > 0) {
+          schemaPlaceholders.forEach(({ schema, placeholder }) => {
+            const cleanPlaceholder = placeholder.replace(/^\$\{|\}$/g, '');
+            // Skip Flyway built-in placeholders
+            if (cleanPlaceholder.startsWith('flyway:')) return;
             // Flyway CLI format: -placeholders.PLACEHOLDER_NAME=value
-            baseArgs.push(`-placeholders.${key}=${value}`);
+            baseArgs.push(`-placeholders.${cleanPlaceholder}=${schema}`);
           });
         }
 
@@ -99,65 +102,46 @@ export default class Migrate extends Command {
           return path.isAbsolute(cleanLoc) ? loc : `filesystem:${path.resolve(cleanLoc)}`;
         });
 
-        // First try validate to catch checksum mismatches
-        // Use ignoreMigrationPatterns to ignore pending repeatable migrations (R__ files)
-        // This prevents false failures when R__ migrations haven't been applied yet
-        const validateArgs = [
+        // Skip validation and go straight to migrate
+        // node-flyway already tried and failed, so we just need to run the actual migration
+        const migrateArgs = [
           ...baseArgs,
+          `-baselineVersion=${config.baselineVersion}`,
+          `-baselineOnMigrate=${config.baselineOnMigrate}`,
           `-locations=${absoluteMigrationPaths.join(',')}`,
-          `-ignoreMigrationPatterns=*:pending`,
-          'validate'
+          'migrate'
         ];
 
-        const validateResult = spawnSync(flywayExePath, validateArgs, { encoding: 'utf8' });
-        const validateOutput = validateResult.stderr || validateResult.stdout || '';
+        const migrateResult = spawnSync(flywayExePath, migrateArgs, { encoding: 'utf8' });
+        const migrateOutput = migrateResult.stderr || migrateResult.stdout || '';
 
-        // Check if validation failed (ignoring "pending" repeatable migration warnings)
-        const hasPendingOnlyError = validateOutput.includes('repeatable migration not applied') &&
-                                     !validateOutput.includes('checksum mismatch');
+        // Check if output contains error messages even if exit code is 0
+        // Exclude SQL Server informational messages and recompilation warnings
+        const hasErrorsInOutput = (migrateOutput.toLowerCase().includes('error') &&
+                                   !migrateOutput.includes('Error Code: 0') &&      // Informational messages
+                                   !migrateOutput.includes('Error Code: 15070')) || // Recompilation warnings
+                                   migrateOutput.toLowerCase().includes('incorrect syntax') ||
+                                   migrateOutput.toLowerCase().includes('must be the only statement');
 
-        if ((validateResult.status !== 0 || validateOutput.toLowerCase().includes('validate failed')) && !hasPendingOnlyError) {
-          this.analyzeFlywayError(validateOutput, config);
-        } else {
-          // Validation passed, try migrate to see the actual SQL error
-          const migrateArgs = [
-            ...baseArgs,
-            `-baselineVersion=${config.baselineVersion}`,
-            `-baselineOnMigrate=${config.baselineOnMigrate}`,
-            `-locations=${absoluteMigrationPaths.join(',')}`,
-            'migrate'
-          ];
-
-          const migrateResult = spawnSync(flywayExePath, migrateArgs, { encoding: 'utf8', shell: true });
-          const migrateOutput = migrateResult.stderr || migrateResult.stdout || '';
-
-          // Check if output contains error messages even if exit code is 0
-          // Exclude SQL Server recompilation warnings (Error Code: 15070)
-          const hasErrorsInOutput = (migrateOutput.toLowerCase().includes('error') &&
-                                     !migrateOutput.includes('Error Code: 15070')) ||
-                                     migrateOutput.toLowerCase().includes('incorrect syntax') ||
-                                     migrateOutput.toLowerCase().includes('must be the only statement');
-
-          if (migrateResult.status === 0 && !hasErrorsInOutput) {
-            // Migration actually succeeded - don't throw error
-            spinner.succeed('Migrations complete');
-            this.log(`Execution time: ${result.additionalDetails.executionTime / 1000}s`);
-            if (flags.verbose) {
-              this.logToStderr('\n💡 Note: Migration succeeded but node-flyway had trouble parsing the response.');
-              this.logToStderr('   This is a known issue with node-flyway and does not affect migration success.\n');
-            }
-            return;
-          } else if (migrateResult.status === 0 && hasErrorsInOutput) {
-            // Exit code was 0 but output contains errors - SQL script likely has error handling
-            spinner.fail();
-            this.logToStderr('\n⚠️  Migration completed but errors were detected in output:\n');
-            this.analyzeFlywayError(migrateOutput, config);
-          } else {
-            // Migration failed with non-zero exit code
-            spinner.fail();
-            this.logToStderr('\n❌ Migration failed:\n');
-            this.analyzeFlywayError(migrateOutput, config);
+        if (migrateResult.status === 0 && !hasErrorsInOutput) {
+          // Migration actually succeeded - don't throw error
+          spinner.succeed('Migrations complete');
+          this.log(`Execution time: ${result.additionalDetails.executionTime / 1000}s`);
+          if (flags.verbose) {
+            this.logToStderr('\n💡 Note: Migration succeeded but node-flyway had trouble parsing the response.');
+            this.logToStderr('   This is a known issue with node-flyway and does not affect migration success.\n');
           }
+          return;
+        } else if (migrateResult.status === 0 && hasErrorsInOutput) {
+          // Exit code was 0 but output contains errors - SQL script likely has error handling
+          spinner.fail();
+          this.logToStderr('\n⚠️  Migration completed but errors were detected in output:\n');
+          this.analyzeFlywayError(migrateOutput, config);
+        } else {
+          // Migration failed with non-zero exit code
+          spinner.fail();
+          this.logToStderr('\n❌ Migration failed:\n');
+          this.analyzeFlywayError(migrateOutput, config);
         }
       } catch (err: any) {
         spinner.fail();
