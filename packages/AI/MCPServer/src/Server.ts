@@ -15,7 +15,9 @@
 
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
-import { FastMCP } from "fastmcp";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
 import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
@@ -28,7 +30,7 @@ import { ChatMessage } from "@memberjunction/ai";
 import { CredentialEngine } from "@memberjunction/credentials";
 import { EncryptionEngine } from "@memberjunction/encryption";
 import * as http from 'http';
-import { ActionEngineBase, ActionEntityExtended, RunActionParams } from "@memberjunction/actions-base";
+import { ActionEntityExtended, RunActionParams } from "@memberjunction/actions-base";
 import { ActionEngineServer } from "@memberjunction/actions";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
@@ -52,9 +54,8 @@ export interface ToolFilterOptions {
 /**
  * Session context stored for each authenticated MCP connection.
  * Contains the API key information and the authenticated user.
- * Extends Record<string, unknown> to satisfy FastMCP's generic constraint.
  */
-interface MCPSessionContext extends Record<string, unknown> {
+interface MCPSessionContext {
     /** The raw API key used for authentication */
     apiKey: string;
     /** The database ID of the API key record */
@@ -80,8 +81,8 @@ let _config!: ConfigInfo;
 /** MCP server port - populated after config is loaded */
 let mcpServerPort!: number;
 
-/** FastMCP server instance - initialized in initializeServer() */
-let server: FastMCP<MCPSessionContext>;
+/** Map of SSE transports keyed by session ID for message endpoint routing */
+const transports: Map<string, SSEServerTransport> = new Map();
 
 /*******************************************************************************
  * DATABASE CONFIGURATION
@@ -129,7 +130,7 @@ function buildPoolConfig(): sql.config {
  * @param request - The incoming HTTP request
  * @returns The extracted API key string, or null if not found
  */
-function extractAPIKeyFromRequest(request: http.IncomingMessage): string | null {
+function extractAPIKeyFromRequest(request: Request | http.IncomingMessage): string | null {
     // Check dedicated API key headers first
     let apiKey = request.headers['x-api-key'] as string
         || request.headers['x-mj-api-key'] as string;
@@ -160,7 +161,7 @@ function extractAPIKeyFromRequest(request: http.IncomingMessage): string | null 
  * @param request - The incoming HTTP request
  * @returns Object containing endpoint, method, IP address, and user agent
  */
-function extractRequestContext(request: http.IncomingMessage): {
+function extractRequestContext(request: Request | http.IncomingMessage): {
     endpoint: string;
     method: string;
     ipAddress: string | null;
@@ -184,8 +185,8 @@ function extractRequestContext(request: http.IncomingMessage): {
     if (forwardedFor) {
         // X-Forwarded-For can be a comma-separated list; take the first one
         ipAddress = (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor).split(',')[0].trim();
-    } else {
-        ipAddress = request.socket?.remoteAddress || null;
+    } else if ('socket' in request && request.socket) {
+        ipAddress = request.socket.remoteAddress || null;
     }
 
     return {
@@ -198,7 +199,6 @@ function extractRequestContext(request: http.IncomingMessage): {
 
 /**
  * Authenticates an incoming MCP request using API key authentication.
- * This function is called by FastMCP for each incoming connection.
  *
  * Authentication flow:
  * 1. Extract API key from request headers/query params
@@ -210,7 +210,7 @@ function extractRequestContext(request: http.IncomingMessage): {
  * @returns Promise resolving to the session context with authenticated user
  * @throws Error if authentication fails (invalid/missing key, inactive user, etc.)
  */
-async function authenticateRequest(request: http.IncomingMessage): Promise<MCPSessionContext> {
+async function authenticateRequest(request: Request | http.IncomingMessage): Promise<MCPSessionContext> {
     const apiKey = extractAPIKeyFromRequest(request);
 
     console.log(`[Auth] API key found: ${apiKey ? 'yes' : 'no'}`);
@@ -261,7 +261,7 @@ async function authenticateRequest(request: http.IncomingMessage): Promise<MCPSe
             throw new Error(validation.error || 'Invalid API key');
         }
 
-        console.log(`✅ Authenticated via API key for user: ${validation.user?.Email}`);
+        console.log(`Authenticated via API key for user: ${validation.user?.Email}`);
         return { apiKey, apiKeyId: validation.apiKeyId!, user: validation.user! };
     } catch (error) {
         console.error(`[Auth] Exception during validation:`, error);
@@ -356,29 +356,6 @@ function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): 
 }
 
 /**
- * Registers a tool with the MCP server, applying the active filter options.
- *
- * This wrapper:
- * 1. Always adds the tool name to registeredToolNames for --list-tools
- * 2. Only registers the tool with the server if it passes the active filters
- *
- * @param toolConfig - The FastMCP tool configuration object
- */
-function addToolWithFilter(toolConfig: Parameters<typeof server.addTool>[0]): void {
-    const toolName = toolConfig.name;
-
-    // Always track the tool name for --list-tools
-    registeredToolNames.push(toolName);
-
-    // Check if tool should be included based on active filters
-    if (!shouldIncludeTool(toolName, activeFilterOptions)) {
-        return; // Skip this tool
-    }
-
-    server.addTool(toolConfig);
-}
-
-/**
  * Performs smart text truncation that preserves both the beginning and end of content.
  * This is useful for debugging large I/O data where both the start and end are important.
  *
@@ -415,6 +392,80 @@ function truncateText(text: string | null | undefined, maxChars: number): { valu
 }
 
 /*******************************************************************************
+ * TOOL REGISTRATION HELPERS
+ ******************************************************************************/
+
+/**
+ * Helper type for tool configuration used during registration
+ */
+interface ToolConfig {
+    name: string;
+    description: string;
+    parameters: z.ZodObject<z.ZodRawShape>;
+    execute: (props: Record<string, unknown>, sessionContext: MCPSessionContext) => Promise<string>;
+}
+
+/**
+ * Registers all tools with the MCP server for a specific authenticated session.
+ * This function is called per-connection to create user-scoped tool handlers.
+ *
+ * @param server - The McpServer instance to register tools on
+ * @param sessionContext - The authenticated session context with user info
+ * @param systemUser - System user for server initialization tasks
+ */
+async function registerAllTools(
+    server: McpServer,
+    sessionContext: MCPSessionContext,
+    systemUser: UserInfo
+): Promise<void> {
+    // Helper to register a tool with filter check
+    const addToolWithFilter = (config: ToolConfig): void => {
+        registeredToolNames.push(config.name);
+
+        if (!shouldIncludeTool(config.name, activeFilterOptions)) {
+            return;
+        }
+
+        // Use registerTool with explicit type assertions to avoid infinite type inference
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (server as any).registerTool(
+            config.name,
+            {
+                description: config.description,
+                inputSchema: config.parameters.shape
+            },
+            async (params: Record<string, unknown>) => {
+                const result = await config.execute(params, sessionContext);
+                return {
+                    content: [{ type: "text" as const, text: result }]
+                };
+            }
+        );
+    };
+
+    // Register Get_All_Entities tool
+    addToolWithFilter({
+        name: "Get_All_Entities",
+        description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
+        parameters: z.object({}),
+        async execute() {
+            const md = new Metadata();
+            const output = JSON.stringify(md.Entities, null, 2);
+            return output;
+        }
+    });
+
+    // Load all tool categories
+    await loadEntityTools(addToolWithFilter);
+    await loadActionTools(addToolWithFilter, systemUser, sessionContext);
+    await loadAgentTools(addToolWithFilter, systemUser, sessionContext);
+    loadAgentRunDiagnosticTools(addToolWithFilter, sessionContext);
+    loadQueryTools(addToolWithFilter, sessionContext);
+    await loadPromptTools(addToolWithFilter, systemUser, sessionContext);
+    loadCommunicationTools(addToolWithFilter, sessionContext);
+}
+
+/*******************************************************************************
  * SERVER INITIALIZATION
  ******************************************************************************/
 
@@ -425,8 +476,8 @@ function truncateText(text: string | null | undefined, maxChars: number): { valu
  * 1. Establishes database connection using configured credentials
  * 2. Sets up SQL Server client and MemberJunction metadata
  * 3. Loads API keys into the CredentialEngine cache for fast validation
- * 4. Registers all configured tools (entities, agents, actions)
- * 5. Starts the FastMCP server with SSE transport
+ * 4. Sets up Express server with SSE transport for MCP protocol
+ * 5. Creates per-connection MCP server instances with authenticated user context
  *
  * The server uses API key authentication. Each authenticated request gets a session
  * with the user context from the API key, which is used for all tool executions.
@@ -451,7 +502,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         _config = await initConfig();
         mcpServerPort = _config.mcpServerSettings?.port || 3100;
 
-        // Store filter options for use by addToolWithFilter
+        // Store filter options for use by tool registration
         activeFilterOptions = filterOptions;
 
         // Clear any previously registered tool names
@@ -466,13 +517,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         const poolConfig = buildPoolConfig();
         const pool = new sql.ConnectionPool(poolConfig);
         await pool.connect();
-
-        // Create FastMCP server with API key authentication
-        server = new FastMCP<MCPSessionContext>({
-            name: "MemberJunction",
-            version: "1.0.0",
-            authenticate: authenticateRequest
-        });
 
         // Setup SQL Server client
         const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
@@ -491,40 +535,120 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         await CredentialEngine.Instance.Config(false, systemUser);
         console.log(`API keys loaded successfully. Count: ${CredentialEngine.Instance.APIKeys.length}`);
 
-        // Register tools
-        addToolWithFilter({
-            name: "Get_All_Entities",
-            description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
-            parameters: z.object({}),
-            async execute() {
-                const md = new Metadata();
-                const output = JSON.stringify(md.Entities, null, 2);
-                return output;
+        // Create Express app for SSE transport
+        const app = express();
+
+        // Enable JSON parsing for POST requests EXCEPT /mcp/messages
+        // SSEServerTransport.handlePostMessage needs the raw body stream
+        app.use((req: Request, res: Response, next: NextFunction) => {
+            if (req.path === '/mcp/messages') {
+                // Skip JSON parsing - the SSE transport handles it
+                next();
+            } else {
+                express.json()(req, res, next);
             }
         });
-        await loadEntityTools();
-        await loadActionTools(systemUser);
-        await loadAgentTools(systemUser);
-        loadAgentRunDiagnosticTools();
-        loadQueryTools();
-        await loadPromptTools(systemUser);
-        loadCommunicationTools();
-        console.log("Tools loaded successfully.");
 
-        // Configure server options with API key authentication
-        const serverOptions = {
-            transportType: "sse" as const,
-            sse: {
-                endpoint: "/mcp" as `/${string}`,
-                port: mcpServerPort
+        // Enable CORS for MCP Inspector and other browser-based clients
+        app.use((req: Request, res: Response, next: NextFunction) => {
+            res.header('Access-Control-Allow-Origin', '*');
+            res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, x-mj-api-key');
+
+            // Handle preflight requests
+            if (req.method === 'OPTIONS') {
+                res.sendStatus(200);
+                return;
             }
-        };
+            next();
+        });
 
-        // Start server with SSE transport
-        server.start(serverOptions);
+        // SSE endpoint for establishing MCP connections
+        app.get('/mcp/sse', async (req: Request, res: Response) => {
+            console.log('[SSE] New connection request');
 
-        console.log(`MemberJunction MCP Server running on port ${mcpServerPort}`);
-        console.log(`Server endpoint available at: http://localhost:${mcpServerPort}/mcp`);
+            try {
+                // Authenticate the request
+                const sessionContext = await authenticateRequest(req);
+                console.log(`[SSE] Authenticated user: ${sessionContext.user.Email}`);
+
+                // Create a new MCP server for this connection
+                const mcpServer = new McpServer({
+                    name: "MemberJunction",
+                    version: "1.0.0"
+                });
+
+                // Register all tools with user-scoped context
+                await registerAllTools(mcpServer, sessionContext, systemUser);
+                console.log(`[SSE] Tools registered for user: ${sessionContext.user.Email}`);
+
+                // Create SSE transport for this connection
+                const transport = new SSEServerTransport('/mcp/messages', res);
+
+                // Store transport for message routing
+                const sessionId = transport.sessionId;
+                transports.set(sessionId, transport);
+                console.log(`[SSE] Transport created with session ID: ${sessionId}`);
+
+                // Clean up on connection close
+                res.on('close', () => {
+                    console.log(`[SSE] Connection closed for session: ${sessionId}`);
+                    transports.delete(sessionId);
+                });
+
+                // Connect the server to the transport
+                await mcpServer.connect(transport);
+                console.log(`[SSE] MCP server connected for session: ${sessionId}`);
+
+            } catch (error) {
+                console.error('[SSE] Authentication or connection error:', error);
+                if (!res.headersSent) {
+                    res.status(401).json({
+                        error: error instanceof Error ? error.message : 'Authentication failed'
+                    });
+                }
+            }
+        });
+
+        // Message endpoint for receiving MCP messages from clients
+        app.post('/mcp/messages', async (req: Request, res: Response) => {
+            const sessionId = req.query.sessionId as string;
+
+            if (!sessionId) {
+                res.status(400).json({ error: 'Missing sessionId query parameter' });
+                return;
+            }
+
+            const transport = transports.get(sessionId);
+            if (!transport) {
+                res.status(404).json({ error: 'Session not found' });
+                return;
+            }
+
+            try {
+                await transport.handlePostMessage(req, res);
+            } catch (error) {
+                console.error('[Messages] Error handling message:', error);
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        error: error instanceof Error ? error.message : 'Internal server error'
+                    });
+                }
+            }
+        });
+
+        // Health check endpoint
+        app.get('/health', (_req: Request, res: Response) => {
+            res.json({ status: 'ok', timestamp: new Date().toISOString() });
+        });
+
+        // Start the Express server
+        app.listen(mcpServerPort, () => {
+            console.log(`MemberJunction MCP Server running on port ${mcpServerPort}`);
+            console.log(`SSE endpoint: http://localhost:${mcpServerPort}/mcp/sse`);
+            console.log(`Messages endpoint: http://localhost:${mcpServerPort}/mcp/messages`);
+        });
+
     } catch (error) {
         console.error("Failed to initialize MCP server:", error);
     }
@@ -534,6 +658,8 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
  * TOOL LOADERS
  ******************************************************************************/
 
+type AddToolFn = (config: ToolConfig) => void;
+
 /**
  * Loads and registers action tools based on configuration.
  *
@@ -542,9 +668,15 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
  * - `Run_Action` - General tool to execute any action by name/ID
  * - `Execute_[ActionName]_Action` - Specific tools for each configured action
  *
+ * @param addToolWithFilter - Function to register tools with filter check
  * @param systemUser - System user for context when discovering and configuring actions
+ * @param sessionContext - The authenticated session context
  */
-async function loadActionTools(systemUser: UserInfo): Promise<void> {
+async function loadActionTools(
+    addToolWithFilter: AddToolFn,
+    systemUser: UserInfo,
+    sessionContext: MCPSessionContext
+): Promise<void> {
     const actionTools = _config.mcpServerSettings?.actionTools;
 
     if (actionTools && actionTools.length > 0) {
@@ -562,12 +694,9 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
                     pattern: z.string().optional().describe("Name pattern to match actions (supports wildcards: *, *Action, Action*, *Action*)"),
                     category: z.string().optional().describe("Category name to filter actions")
                 }),
-                async execute(props: any, context: any) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ error: "No authenticated user in session" });
-                    }
-                    const actions = await discoverActions(props.pattern || '*', props.category, sessionUser);
+                async execute(props) {
+                    const sessionUser = sessionContext.user;
+                    const actions = await discoverActions(props.pattern as string || '*', props.category as string | undefined, sessionUser);
                     return JSON.stringify(actions.map(action => ({
                         id: action.ID,
                         name: action.Name,
@@ -593,11 +722,8 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
                     actionId: z.string().optional().describe("ID of the action to execute"),
                     params: z.record(z.unknown()).optional().describe("Parameters for the action as key-value pairs")
                 }),
-                async execute(props: any, context: any) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ success: false, error: "No authenticated user in session" });
-                    }
+                async execute(props) {
+                    const sessionUser = sessionContext.user;
                     try {
                         const actionEngine = ActionEngineServer.Instance;
                         await actionEngine.Config(false, sessionUser);
@@ -613,7 +739,7 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
                                 });
                             }
                         } else if (props.actionName) {
-                            action = actionEngine.Actions.find((a: ActionEntityExtended) => a.Name?.toLowerCase() === props.actionName?.toLowerCase()) || null;
+                            action = actionEngine.Actions.find((a: ActionEntityExtended) => a.Name?.toLowerCase() === (props.actionName as string)?.toLowerCase()) || null;
                             if (!action) {
                                 return JSON.stringify({
                                     success: false,
@@ -629,13 +755,14 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
 
                         // Build action params
                         const actionParams = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action!.ID);
+                        const paramsRecord = props.params as Record<string, unknown> | undefined;
                         const runParams: RunActionParams = {
                             Action: action,
                             ContextUser: sessionUser,
                             Filters: [],
                             Params: actionParams.map((p: ActionParamEntity) => ({
                                 Name: p.Name,
-                                Value: props.params?.[p.Name] ?? p.DefaultValue,
+                                Value: paramsRecord?.[p.Name] ?? p.DefaultValue,
                                 Type: (p.Type as 'Input' | 'Output' | 'Both') || 'Input'
                             }))
                         };
@@ -666,12 +793,8 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
                     actionName: z.string().optional().describe("Name of the action"),
                     actionId: z.string().optional().describe("ID of the action")
                 }),
-                async execute(props: any, context: any) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ error: "No authenticated user in session" });
-                    }
-
+                async execute(props) {
+                    const sessionUser = sessionContext.user;
                     const actionEngine = ActionEngineServer.Instance;
                     await actionEngine.Config(false, sessionUser);
 
@@ -679,7 +802,7 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
                     if (props.actionId) {
                         action = actionEngine.Actions.find((a: ActionEntityExtended) => a.ID === props.actionId) || null;
                     } else if (props.actionName) {
-                        action = actionEngine.Actions.find((a: ActionEntityExtended) => a.Name?.toLowerCase() === props.actionName?.toLowerCase()) || null;
+                        action = actionEngine.Actions.find((a: ActionEntityExtended) => a.Name?.toLowerCase() === (props.actionName as string)?.toLowerCase()) || null;
                     }
 
                     if (!action) {
@@ -711,7 +834,7 @@ async function loadActionTools(systemUser: UserInfo): Promise<void> {
 
                 // Add specific execution tools for each matching action
                 for (const action of actions) {
-                    addActionExecuteTool(action, systemUser);
+                    addActionExecuteTool(addToolWithFilter, action, sessionContext);
                 }
             }
         }
@@ -761,10 +884,15 @@ async function discoverActions(pattern: string, category: string | undefined, us
 /**
  * Creates and registers an execution tool for a specific Action.
  *
+ * @param addToolWithFilter - Function to register tools with filter check
  * @param action - The action entity to create an execution tool for
- * @param systemUser - System user for loading action parameters
+ * @param sessionContext - The authenticated session context
  */
-function addActionExecuteTool(action: ActionEntityExtended, _systemUser: UserInfo): void {
+function addActionExecuteTool(
+    addToolWithFilter: AddToolFn,
+    action: ActionEntityExtended,
+    sessionContext: MCPSessionContext
+): void {
     const actionEngine = ActionEngineServer.Instance;
     const actionParams = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action.ID);
 
@@ -809,11 +937,8 @@ function addActionExecuteTool(action: ActionEntityExtended, _systemUser: UserInf
         name: `Execute_${safeName}_Action`,
         description: `Execute the ${action.Name || 'Unknown'} action. ${action.Description || ''}`,
         parameters: z.object(paramSchema),
-        async execute(props: any, context: any) {
-            const sessionUser = context.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ success: false, error: "No authenticated user in session" });
-            }
+        async execute(props) {
+            const sessionUser = sessionContext.user;
             try {
                 const runParams: RunActionParams = {
                     Action: action,
@@ -854,16 +979,22 @@ function addActionExecuteTool(action: ActionEntityExtended, _systemUser: UserInf
  * - `Get_Agent_Run_Status` - Check status of agent executions
  * - `Cancel_Agent_Run` - Cancel running agent executions
  *
+ * @param addToolWithFilter - Function to register tools with filter check
  * @param systemUser - System user for context when discovering and configuring agents
+ * @param sessionContext - The authenticated session context
  */
-async function loadAgentTools(systemUser: UserInfo): Promise<void> {
+async function loadAgentTools(
+    addToolWithFilter: AddToolFn,
+    systemUser: UserInfo,
+    sessionContext: MCPSessionContext
+): Promise<void> {
     const agentTools = _config.mcpServerSettings?.agentTools;
-    
+
     if (agentTools && agentTools.length > 0) {
         // Ensure AIEngine is configured
         const aiEngine = AIEngine.Instance;
         await aiEngine.Config(false, systemUser);
-        
+
         // Add discovery tool if any agent tool has discover enabled
         const hasDiscovery = agentTools.some((tool: MCPServerAgentToolInfo) => tool.discover);
         if (hasDiscovery) {
@@ -873,14 +1004,9 @@ async function loadAgentTools(systemUser: UserInfo): Promise<void> {
                 parameters: z.object({
                     pattern: z.string().describe("Name pattern to match agents (supports wildcards: *, *Agent, Agent*, *Agent*)")
                 }),
-                // async execute(props: any) {
-                //     const agents = await discoverAgents(props.pattern, contextUser);
-                async execute(props: any, context: any) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ error: "No authenticated user in session" });
-                    }
-                    const agents = await discoverAgents(props.pattern, sessionUser);
+                async execute(props) {
+                    const sessionUser = sessionContext.user;
+                    const agents = await discoverAgents(props.pattern as string, sessionUser);
                     return JSON.stringify(agents.map(agent => ({
                         id: agent.ID,
                         name: agent.Name,
@@ -891,7 +1017,7 @@ async function loadAgentTools(systemUser: UserInfo): Promise<void> {
                 }
             });
         }
-        
+
         // Add general agent execution tool if any tool has execute enabled
         const hasExecute = agentTools.some(tool => tool.execute);
         if (hasExecute) {
@@ -905,59 +1031,57 @@ async function loadAgentTools(systemUser: UserInfo): Promise<void> {
                         role: z.enum(['user', 'assistant', 'system']),
                         content: z.string()
                     })).optional().describe("Conversation history for context"),
-                    data: z.record(z.any()).optional().describe("Template data for the agent"),
+                    data: z.record(z.unknown()).optional().describe("Template data for the agent"),
                     waitForCompletion: z.boolean().optional().default(true).describe("Wait for agent to complete before returning")
                 }),
-                async execute(props: any, context: any) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ success: false, error: "No authenticated user in session" });
-                    }
+                async execute(props) {
+                    const sessionUser = sessionContext.user;
                     try {
                         // Find the agent
                         const aiEngine = AIEngine.Instance;
                         await aiEngine.Config(false, sessionUser);
-                        
+
                         let agent: AIAgentEntityExtended | null = null;
-                        
+
                         if (props.agentId) {
                             agent = aiEngine.Agents.find(a => a.ID === props.agentId) || null;
                             if (!agent) {
-                                return JSON.stringify({ 
-                                    success: false, 
-                                    error: `Agent not found with ID: ${props.agentId}` 
+                                return JSON.stringify({
+                                    success: false,
+                                    error: `Agent not found with ID: ${props.agentId}`
                                 });
                             }
                         } else if (props.agentName) {
-                            agent = aiEngine.Agents.find(a => a.Name?.toLowerCase() === props.agentName.toLowerCase()) || null;
+                            agent = aiEngine.Agents.find(a => a.Name?.toLowerCase() === (props.agentName as string).toLowerCase()) || null;
                             if (!agent) {
-                                return JSON.stringify({ 
-                                    success: false, 
-                                    error: `Agent not found with name: ${props.agentName}` 
+                                return JSON.stringify({
+                                    success: false,
+                                    error: `Agent not found with name: ${props.agentName}`
                                 });
                             }
                         } else {
-                            return JSON.stringify({ 
-                                success: false, 
-                                error: "Either agentName or agentId must be provided" 
+                            return JSON.stringify({
+                                success: false,
+                                error: "Either agentName or agentId must be provided"
                             });
                         }
-                        
+
                         // Convert conversation history to ChatMessage format
-                        const messages: ChatMessage[] = props.conversationHistory?.map((msg: any) => ({
-                            role: msg.role,
+                        const historyArray = props.conversationHistory as Array<{ role: string; content: string }> | undefined;
+                        const messages: ChatMessage[] = historyArray?.map((msg) => ({
+                            role: msg.role as 'user' | 'assistant' | 'system',
                             content: msg.content
                         })) || [];
-                        
+
                         // Execute the agent
                         const agentRunner = new AgentRunner();
                         const result = await agentRunner.RunAgent({
                             agent,
                             conversationMessages: messages,
                             contextUser: sessionUser,
-                            data: props.data
+                            data: props.data as Record<string, unknown>
                         });
-                        
+
                         if (props.waitForCompletion) {
                             // Return the full result
                             return JSON.stringify({
@@ -989,15 +1113,15 @@ async function loadAgentTools(systemUser: UserInfo): Promise<void> {
         for (const tool of agentTools) {
             const agentPattern = tool.agentName || "*";
             const agents = await discoverAgents(agentPattern, systemUser);
-            
+
             // Add tools for each matching agent
             for (const agent of agents) {
                 if (tool.execute) {
-                    addAgentExecuteTool(agent);
+                    addAgentExecuteTool(addToolWithFilter, agent, sessionContext);
                 }
             }
         }
-        
+
         // Add status tool if any agent tool has status enabled
         const hasStatus = agentTools.some(tool => tool.status);
         if (hasStatus) {
@@ -1007,14 +1131,11 @@ async function loadAgentTools(systemUser: UserInfo): Promise<void> {
                 parameters: z.object({
                     runId: z.string().describe("The agent run ID")
                 }),
-                async execute(props: any, context: any) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ error: "No authenticated user in session" });
-                    }
+                async execute(props) {
+                    const sessionUser = sessionContext.user;
                     const md = new Metadata();
                     const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
-                    const loaded = await agentRun.Load(props.runId);
+                    const loaded = await agentRun.Load(props.runId as string);
 
                     if (!loaded) {
                         return JSON.stringify({ error: "Run not found" });
@@ -1042,16 +1163,13 @@ async function loadAgentTools(systemUser: UserInfo): Promise<void> {
                 parameters: z.object({
                     runId: z.string().describe("The run ID of the agent execution to cancel")
                 }),
-                async execute(props: any, context: any) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ success: false, message: "No authenticated user in session" });
-                    }
+                async execute(props) {
+                    const sessionUser = sessionContext.user;
                     // Note: Actual cancellation would require the agent to check the cancellation token
                     // For now, we can update the status to indicate cancellation was requested
                     const md = new Metadata();
                     const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
-                    const loaded = await agentRun.Load(props.runId);
+                    const loaded = await agentRun.Load(props.runId as string);
 
                     if (!loaded || agentRun.Status !== 'Running') {
                         return JSON.stringify({ success: false, message: "Run not found or not running" });
@@ -1080,8 +1198,11 @@ async function loadAgentTools(systemUser: UserInfo): Promise<void> {
  *
  * These tools help users debug agent behavior, audit executions, and
  * troubleshoot failures without needing direct database access.
+ *
+ * @param addToolWithFilter - Function to register tools with filter check
+ * @param sessionContext - The authenticated session context
  */
-function loadAgentRunDiagnosticTools(): void {
+function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContext: MCPSessionContext): void {
     // Tool 1: List Recent Agent Runs
     addToolWithFilter({
         name: "List_Recent_Agent_Runs",
@@ -1092,14 +1213,11 @@ function loadAgentRunDiagnosticTools(): void {
             days: z.number().default(7).describe("Number of days to look back"),
             limit: z.number().default(10).describe("Maximum number of runs to return")
         }),
-        async execute(props: any, context: any) {
-            const sessionUser = context.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ error: "No authenticated user in session" });
-            }
+        async execute(props) {
+            const sessionUser = sessionContext.user;
             const rv = new RunView();
             const cutoffDate = new Date();
-            cutoffDate.setDate(cutoffDate.getDate() - props.days);
+            cutoffDate.setDate(cutoffDate.getDate() - (props.days as number));
             const dateFilter = `StartedAt >= '${cutoffDate.toISOString()}'`;
 
             let filter = dateFilter;
@@ -1114,7 +1232,7 @@ function loadAgentRunDiagnosticTools(): void {
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: filter,
                 OrderBy: 'StartedAt DESC',
-                MaxRows: props.limit,
+                MaxRows: props.limit as number,
                 Fields: ['ID', 'AgentID', 'Agent', 'Status', 'StartedAt', 'CompletedAt', 'TotalTokensUsed', 'TotalCost', 'ErrorMessage']
             }, sessionUser);
 
@@ -1133,14 +1251,11 @@ function loadAgentRunDiagnosticTools(): void {
         parameters: z.object({
             runId: z.string().describe("The agent run ID to summarize")
         }),
-        async execute(props: any, context: any) {
-            const sessionUser = context.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ error: "No authenticated user in session" });
-            }
+        async execute(props) {
+            const sessionUser = sessionContext.user;
             const md = new Metadata();
             const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
-            const loaded = await agentRun.Load(props.runId);
+            const loaded = await agentRun.Load(props.runId as string);
 
             if (!loaded) {
                 return JSON.stringify({ error: "Agent run not found" });
@@ -1209,11 +1324,8 @@ function loadAgentRunDiagnosticTools(): void {
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             maxChars: z.number().default(5000).describe("Maximum characters for I/O data (0 = no truncation)")
         }),
-        async execute(props: any, context: any) {
-            const sessionUser = context.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ error: "No authenticated user in session" });
-            }
+        async execute(props) {
+            const sessionUser = sessionContext.user;
             const rv = new RunView();
             const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
@@ -1227,13 +1339,14 @@ function loadAgentRunDiagnosticTools(): void {
             }
 
             const steps = stepsResult.Results || [];
-            if (props.stepNumber < 1 || props.stepNumber > steps.length) {
+            const stepNumber = props.stepNumber as number;
+            if (stepNumber < 1 || stepNumber > steps.length) {
                 return JSON.stringify({ error: `Invalid step number. Run has ${steps.length} steps.` });
             }
 
-            const step = steps[props.stepNumber - 1];
-            const inputData = truncateText(step.InputData, props.maxChars);
-            const outputData = truncateText(step.OutputData, props.maxChars);
+            const step = steps[stepNumber - 1];
+            const inputData = truncateText(step.InputData, props.maxChars as number);
+            const outputData = truncateText(step.OutputData, props.maxChars as number);
 
             const detail = {
                 stepNumber: step.StepNumber,
@@ -1272,11 +1385,8 @@ function loadAgentRunDiagnosticTools(): void {
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             outputFile: z.string().optional().describe("File path to write JSON output (optional)")
         }),
-        async execute(props: any, context: any) {
-            const sessionUser = context.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ error: "No authenticated user in session" });
-            }
+        async execute(props) {
+            const sessionUser = sessionContext.user;
             const rv = new RunView();
             const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
@@ -1290,17 +1400,18 @@ function loadAgentRunDiagnosticTools(): void {
             }
 
             const steps = stepsResult.Results || [];
-            if (props.stepNumber < 1 || props.stepNumber > steps.length) {
+            const stepNumber = props.stepNumber as number;
+            if (stepNumber < 1 || stepNumber > steps.length) {
                 return JSON.stringify({ error: `Invalid step number. Run has ${steps.length} steps.` });
             }
 
-            const step = steps[props.stepNumber - 1];
+            const step = steps[stepNumber - 1];
             const stepData = step.GetAll();
 
             // Determine output file path
-            const runIdShort = props.runId.substring(0, 8);
-            const defaultFile = `./agent-run-${runIdShort}-step-${props.stepNumber}.json`;
-            const filePath = path.resolve(process.cwd(), props.outputFile || defaultFile);
+            const runIdShort = (props.runId as string).substring(0, 8);
+            const defaultFile = `./agent-run-${runIdShort}-step-${stepNumber}.json`;
+            const filePath = path.resolve(process.cwd(), (props.outputFile as string) || defaultFile);
 
             // Write to file
             const jsonContent = JSON.stringify(stepData, null, 2);
@@ -1342,8 +1453,11 @@ function loadAgentRunDiagnosticTools(): void {
  * - `Discover_Queries` - List available stored queries
  * - `Run_Query` - Execute a stored query by name or ID
  * - `Get_Database_Schema` - Get schema information for available entities
+ *
+ * @param addToolWithFilter - Function to register tools with filter check
+ * @param sessionContext - The authenticated session context
  */
-function loadQueryTools(): void {
+function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSessionContext): void {
     const queryTools = _config.mcpServerSettings?.queryTools;
 
     if (queryTools?.enabled) {
@@ -1355,11 +1469,8 @@ function loadQueryTools(): void {
                 pattern: z.string().optional().describe("Name pattern to match queries (supports wildcards: *, *Query, Query*, *Query*)"),
                 category: z.string().optional().describe("Category name or path to filter queries (e.g., 'Reports', '/MJ/AI/')")
             }),
-            async execute(props: any, context: any) {
-                const sessionUser = context.session?.user;
-                if (!sessionUser) {
-                    return JSON.stringify({ error: "No authenticated user in session" });
-                }
+            async execute(props) {
+                const sessionUser = sessionContext.user;
 
                 try {
                     const rv = new RunView();
@@ -1378,7 +1489,7 @@ function loadQueryTools(): void {
                     let queries = result.Results || [];
 
                     // Filter by pattern if provided
-                    const pattern = props.pattern || '*';
+                    const pattern = (props.pattern as string) || '*';
                     if (pattern !== '*') {
                         if (pattern.includes('*')) {
                             const regexPattern = pattern
@@ -1418,11 +1529,8 @@ function loadQueryTools(): void {
                 parameters: z.record(z.unknown()).optional().describe("Parameters to pass to parameterized queries"),
                 maxRows: z.number().optional().describe("Maximum number of rows to return")
             }),
-            async execute(props: any, context: any) {
-                const sessionUser = context.session?.user;
-                if (!sessionUser) {
-                    return JSON.stringify({ error: "No authenticated user in session" });
-                }
+            async execute(props) {
+                const sessionUser = sessionContext.user;
 
                 if (!props.queryName && !props.queryId) {
                     return JSON.stringify({
@@ -1434,11 +1542,11 @@ function loadQueryTools(): void {
                 try {
                     const rq = new RunQuery();
                     const result = await rq.RunQuery({
-                        QueryID: props.queryId,
-                        QueryName: props.queryName,
-                        CategoryPath: props.categoryPath,
-                        Parameters: props.parameters,
-                        MaxRows: props.maxRows
+                        QueryID: props.queryId as string | undefined,
+                        QueryName: props.queryName as string | undefined,
+                        CategoryPath: props.categoryPath as string | undefined,
+                        Parameters: props.parameters as Record<string, unknown> | undefined,
+                        MaxRows: props.maxRows as number | undefined
                     }, sessionUser);
 
                     if (!result.Success) {
@@ -1470,31 +1578,27 @@ function loadQueryTools(): void {
                 schemaFilter: z.string().optional().describe("Filter by schema name (e.g., 'dbo', '__mj')"),
                 entityFilter: z.string().optional().describe("Filter by entity name pattern")
             }),
-            async execute(props: any, context: any) {
-                const sessionUser = context.session?.user;
-                if (!sessionUser) {
-                    return JSON.stringify({ error: "No authenticated user in session" });
-                }
-
+            async execute(props) {
                 const md = new Metadata();
                 let entities = md.Entities;
 
                 // Apply schema filter
                 if (props.schemaFilter) {
-                    const schemaLower = props.schemaFilter.toLowerCase();
+                    const schemaLower = (props.schemaFilter as string).toLowerCase();
                     entities = entities.filter((e: EntityInfo) => e.SchemaName.toLowerCase() === schemaLower);
                 }
 
                 // Apply entity filter
                 if (props.entityFilter) {
-                    if (props.entityFilter.includes('*')) {
-                        const regexPattern = props.entityFilter
+                    const entityFilter = props.entityFilter as string;
+                    if (entityFilter.includes('*')) {
+                        const regexPattern = entityFilter
                             .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
                             .replace(/\*/g, '.*');
                         const regex = new RegExp(`^${regexPattern}$`, 'i');
                         entities = entities.filter((e: EntityInfo) => regex.test(e.Name));
                     } else {
-                        const filterLower = props.entityFilter.toLowerCase();
+                        const filterLower = entityFilter.toLowerCase();
                         entities = entities.filter((e: EntityInfo) => e.Name.toLowerCase().includes(filterLower));
                     }
                 }
@@ -1540,8 +1644,16 @@ function loadQueryTools(): void {
  * - `Discover_Prompts` - Lists available AI prompts
  * - `Run_Prompt` - Execute any prompt by name or ID
  * - `Execute_[PromptName]_Prompt` - Specific tools for each configured prompt
+ *
+ * @param addToolWithFilter - Function to register tools with filter check
+ * @param systemUser - System user for initialization
+ * @param sessionContext - The authenticated session context
  */
-async function loadPromptTools(systemUser: UserInfo): Promise<void> {
+async function loadPromptTools(
+    addToolWithFilter: AddToolFn,
+    systemUser: UserInfo,
+    sessionContext: MCPSessionContext
+): Promise<void> {
     const promptTools = _config.mcpServerSettings?.promptTools;
 
     if (promptTools && promptTools.length > 0) {
@@ -1559,11 +1671,8 @@ async function loadPromptTools(systemUser: UserInfo): Promise<void> {
                     pattern: z.string().optional().describe("Name pattern to match prompts (supports wildcards)"),
                     category: z.string().optional().describe("Category name to filter prompts")
                 }),
-                async execute(props: any, context: any) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ error: "No authenticated user in session" });
-                    }
+                async execute(props) {
+                    const sessionUser = sessionContext.user;
 
                     const aiEngine = AIEngine.Instance;
                     await aiEngine.Config(false, sessionUser);
@@ -1572,12 +1681,12 @@ async function loadPromptTools(systemUser: UserInfo): Promise<void> {
 
                     // Filter by category
                     if (props.category && props.category !== '*') {
-                        const categoryLower = props.category.toLowerCase();
+                        const categoryLower = (props.category as string).toLowerCase();
                         prompts = prompts.filter((p: AIPromptEntityExtended) => p.Category?.toLowerCase().includes(categoryLower));
                     }
 
                     // Filter by pattern
-                    const pattern = props.pattern || '*';
+                    const pattern = (props.pattern as string) || '*';
                     if (pattern !== '*') {
                         if (pattern.includes('*')) {
                             const regexPattern = pattern
@@ -1614,11 +1723,8 @@ async function loadPromptTools(systemUser: UserInfo): Promise<void> {
                     data: z.record(z.unknown()).optional().describe("Data to pass to the prompt template"),
                     modelId: z.string().optional().describe("Optional model ID to use for execution")
                 }),
-                async execute(props: any, context: any) {
-                    const sessionUser = context.session?.user;
-                    if (!sessionUser) {
-                        return JSON.stringify({ success: false, error: "No authenticated user in session" });
-                    }
+                async execute(props) {
+                    const sessionUser = sessionContext.user;
 
                     try {
                         const aiEngine = AIEngine.Instance;
@@ -1635,7 +1741,7 @@ async function loadPromptTools(systemUser: UserInfo): Promise<void> {
                                 });
                             }
                         } else if (props.promptName) {
-                            prompt = aiEngine.Prompts.find((p: AIPromptEntityExtended) => p.Name?.toLowerCase() === props.promptName?.toLowerCase());
+                            prompt = aiEngine.Prompts.find((p: AIPromptEntityExtended) => p.Name?.toLowerCase() === (props.promptName as string)?.toLowerCase());
                             if (!prompt) {
                                 return JSON.stringify({
                                     success: false,
@@ -1653,7 +1759,7 @@ async function loadPromptTools(systemUser: UserInfo): Promise<void> {
                         const runner = new AIPromptRunner();
                         const promptParams = new AIPromptParams();
                         promptParams.prompt = prompt;
-                        promptParams.data = props.data || {};
+                        promptParams.data = (props.data as Record<string, unknown>) || {};
                         promptParams.contextUser = sessionUser;
 
                         const result = await runner.ExecutePrompt(promptParams);
@@ -1686,8 +1792,11 @@ async function loadPromptTools(systemUser: UserInfo): Promise<void> {
  * Creates tools for sending messages via various communication channels:
  * - `Send_Email` - Send an email via configured provider
  * - `Get_Communication_Providers` - List available communication providers
+ *
+ * @param addToolWithFilter - Function to register tools with filter check
+ * @param sessionContext - The authenticated session context
  */
-function loadCommunicationTools(): void {
+function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MCPSessionContext): void {
     const commTools = _config.mcpServerSettings?.communicationTools;
 
     if (commTools?.enabled) {
@@ -1701,12 +1810,7 @@ function loadCommunicationTools(): void {
                 body: z.string().describe("Email body (can be HTML)"),
                 isHtml: z.boolean().optional().default(true).describe("Whether body is HTML (default: true)")
             }),
-            async execute(_props: any, context: any) {
-                const sessionUser = context.session?.user;
-                if (!sessionUser) {
-                    return JSON.stringify({ success: false, error: "No authenticated user in session" });
-                }
-
+            async execute(_props) {
                 try {
                     // Note: This is a placeholder - actual implementation would use CommunicationEngine
                     // For now, return a message indicating that communication would be sent
@@ -1729,12 +1833,8 @@ function loadCommunicationTools(): void {
             name: "Get_Communication_Providers",
             description: "List available communication providers configured in the system",
             parameters: z.object({}),
-            async execute(_props: any, context: any) {
-                const sessionUser = context.session?.user;
-                if (!sessionUser) {
-                    return JSON.stringify({ error: "No authenticated user in session" });
-                }
-
+            async execute() {
+                const sessionUser = sessionContext.user;
                 const rv = new RunView();
                 const result = await rv.RunView({
                     EntityName: 'Communication Providers',
@@ -1803,9 +1903,15 @@ async function discoverAgents(pattern: string, userContext?: UserInfo): Promise<
  * - Optional template data
  * - Synchronous or asynchronous execution modes
  *
+ * @param addToolWithFilter - Function to register tools with filter check
  * @param agent - The agent entity to create an execution tool for
+ * @param sessionContext - The authenticated session context
  */
-function addAgentExecuteTool(agent: AIAgentEntityExtended): void {
+function addAgentExecuteTool(
+    addToolWithFilter: AddToolFn,
+    agent: AIAgentEntityExtended,
+    sessionContext: MCPSessionContext
+): void {
     const agentRunner = new AgentRunner();
 
     addToolWithFilter({
@@ -1816,18 +1922,16 @@ function addAgentExecuteTool(agent: AIAgentEntityExtended): void {
                 role: z.enum(['user', 'assistant', 'system']),
                 content: z.string()
             })).optional().describe("Conversation history for context"),
-            data: z.record(z.any()).optional().describe("Template data for the agent"),
+            data: z.record(z.unknown()).optional().describe("Template data for the agent"),
             waitForCompletion: z.boolean().optional().default(true).describe("Wait for agent to complete before returning")
         }),
-        async execute(props: any, context: any) {
-            const sessionUser = context.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ success: false, error: "No authenticated user in session" });
-            }
+        async execute(props) {
+            const sessionUser = sessionContext.user;
             try {
                 // Convert conversation history to ChatMessage format
-                const messages: ChatMessage[] = props.conversationHistory?.map((msg: any) => ({
-                    role: msg.role,
+                const historyArray = props.conversationHistory as Array<{ role: string; content: string }> | undefined;
+                const messages: ChatMessage[] = historyArray?.map((msg) => ({
+                    role: msg.role as 'user' | 'assistant' | 'system',
                     content: msg.content
                 })) || [];
 
@@ -1836,9 +1940,9 @@ function addAgentExecuteTool(agent: AIAgentEntityExtended): void {
                     agent,
                     conversationMessages: messages,
                     contextUser: sessionUser,
-                    data: props.data
+                    data: props.data as Record<string, unknown>
                 });
-                
+
                 if (props.waitForCompletion) {
                     // Return the full result
                     return JSON.stringify({
@@ -1881,8 +1985,10 @@ function addAgentExecuteTool(agent: AIAgentEntityExtended): void {
  * - RunView: Query records with filtering and sorting
  *
  * Entity matching supports wildcards in both entityName and schemaName.
+ *
+ * @param addToolWithFilter - Function to register tools with filter check
  */
-async function loadEntityTools(): Promise<void> {
+async function loadEntityTools(addToolWithFilter: AddToolFn): Promise<void> {
     const entityTools = _config.mcpServerSettings?.entityTools;
 
     if (entityTools && entityTools.length > 0) {
@@ -1893,19 +1999,19 @@ async function loadEntityTools(): Promise<void> {
             const matchingEntities = getMatchingEntitiesForTool(md.Entities, tool);
             matchingEntities.forEach((entity) => {
                 if (tool.get) {
-                    addEntityGetTool(entity);
+                    addEntityGetTool(addToolWithFilter, entity);
                 }
                 if (tool.create) {
-                    addEntityCreateTool(entity);
+                    addEntityCreateTool(addToolWithFilter, entity);
                 }
                 if (tool.update) {
-                    addEntityUpdateTool(entity);
+                    addEntityUpdateTool(addToolWithFilter, entity);
                 }
                 if (tool.delete) {
-                    addEntityDeleteTool(entity);
+                    addEntityDeleteTool(addToolWithFilter, entity);
                 }
                 if (tool.runView) {
-                    addEntityRunViewTool(entity);
+                    addEntityRunViewTool(addToolWithFilter, entity);
                 }
             });
         });
@@ -1916,54 +2022,50 @@ async function loadEntityTools(): Promise<void> {
  * Creates a RunView tool for querying entity records.
  * Allows filtering, sorting, and field selection.
  *
+ * @param addToolWithFilter - Function to register tools with filter check
  * @param entity - The entity to create the tool for
  */
-function addEntityRunViewTool(entity: EntityInfo): void {
+function addEntityRunViewTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
     const paramObject = z.object({
         extraFilter: z.string().optional(),
         orderBy: z.string().optional(),
         fields: z.array(z.string()).optional(),
-    })
-    const toolConfig = {
+    });
+
+    addToolWithFilter({
         name: `Run_${entity.ClassName}_View`,
         description: `Returns data from the ${entity.Name} entity, optionally filtered by extraFilter and ordered by orderBy`,
         parameters: paramObject,
-        async execute (props: any, context: any) {
-            const sessionUser = context.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ error: "No authenticated user in session" });
-            }
+        async execute(props, sessionContext) {
+            const sessionUser = sessionContext.user;
             const rv = new RunView();
             const result = await rv.RunView({
                 EntityName: entity.Name,
-                ExtraFilter: props.extraFilter ? props.extraFilter : undefined,
-                OrderBy: props.orderBy ? props.orderBy : undefined,
-                Fields: props.fields ? props.fields : undefined,
+                ExtraFilter: props.extraFilter ? props.extraFilter as string : undefined,
+                OrderBy: props.orderBy ? props.orderBy as string : undefined,
+                Fields: props.fields ? props.fields as string[] : undefined,
             }, sessionUser);
             return JSON.stringify(result);
         }
-    };
-    addToolWithFilter(toolConfig);
+    });
 }
 
 /**
  * Creates a tool for creating new records in an entity.
  * Parameters are generated from the entity's non-readonly fields.
  *
+ * @param addToolWithFilter - Function to register tools with filter check
  * @param entity - The entity to create the tool for
  */
-function addEntityCreateTool(entity: EntityInfo): void {
+function addEntityCreateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
     const paramObject = getEntityParamObject(entity, true, false, false);
 
-    const toolConfig = {
+    addToolWithFilter({
         name: `Create_${entity.ClassName}_Record`,
         description: `Creates a new record in the ${entity.Name} entity`,
         parameters: z.object(paramObject),
-        async execute (props: any, context: any) {
-            const sessionUser = context.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ success: false, record: undefined, errorMessage: "No authenticated user in session" });
-            }
+        async execute(props, sessionContext) {
+            const sessionUser = sessionContext.user;
             const md = new Metadata();
             const record = await md.GetEntityObject(entity.Name, sessionUser);
             record.SetMany(props, true);
@@ -1975,28 +2077,25 @@ function addEntityCreateTool(entity: EntityInfo): void {
                 return JSON.stringify({success, record: await convertEntityObjectToJSON(record), errorMessage: undefined });
             }
         }
-    };
-    addToolWithFilter(toolConfig);
+    });
 }
 
 /**
  * Creates a tool for updating existing records in an entity.
  * Requires primary key fields to identify the record, plus optional fields to update.
  *
+ * @param addToolWithFilter - Function to register tools with filter check
  * @param entity - The entity to create the tool for
  */
-function addEntityUpdateTool(entity: EntityInfo): void {
+function addEntityUpdateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
     const paramObject = getEntityParamObject(entity, true, true, true);
 
-    const toolConfig = {
+    addToolWithFilter({
         name: `Update_${entity.ClassName}_Record`,
         description: `Updates the specified record in the ${entity.Name} entity`,
         parameters: z.object(paramObject),
-        async execute (props: any, context: any) {
-            const sessionUser = context.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ success: false, record: undefined, errorMessage: "No authenticated user in session" });
-            }
+        async execute(props, sessionContext) {
+            const sessionUser = sessionContext.user;
             const md = new Metadata();
             const record = await md.GetEntityObject(entity.Name, sessionUser);
             const loaded = await record.InnerLoad(new CompositeKey(
@@ -2022,27 +2121,25 @@ function addEntityUpdateTool(entity: EntityInfo): void {
                 return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
             }
         }
-    };
-    addToolWithFilter(toolConfig);
+    });
 }
 
 /**
  * Creates a tool for deleting records from an entity.
  * Only requires the primary key field(s) to identify the record.
  *
+ * @param addToolWithFilter - Function to register tools with filter check
  * @param entity - The entity to create the tool for
  */
-function addEntityDeleteTool(entity: EntityInfo): void {
+function addEntityDeleteTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
     const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
-    const toolConfig = {
+
+    addToolWithFilter({
         name: `Delete_${entity.ClassName}_Record`,
         description: `Deletes the specified record from the ${entity.Name} entity`,
         parameters: z.object(pkeyParams),
-        async execute (props: any, context: any) {
-            const sessionUser = context.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ success: false, record: undefined, errorMessage: "No authenticated user in session" });
-            }
+        async execute(props, sessionContext) {
+            const sessionUser = sessionContext.user;
             const md = new Metadata();
             const record = await md.GetEntityObject(entity.Name, sessionUser);
             const loaded = await record.InnerLoad(new CompositeKey(
@@ -2063,8 +2160,7 @@ function addEntityDeleteTool(entity: EntityInfo): void {
                 return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
             }
         }
-    };
-    addToolWithFilter(toolConfig);
+    });
 }
 
 
@@ -2194,34 +2290,29 @@ function getEntityPrimaryKeyParamsObject(entity: EntityInfo): Record<string, z.Z
 /**
  * Creates a tool for retrieving a single record from an entity by primary key.
  *
+ * @param addToolWithFilter - Function to register tools with filter check
  * @param entity - The entity to create the tool for
  */
-function addEntityGetTool(entity: EntityInfo): void {
+function addEntityGetTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
     const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
 
-    const toolConfig = {
+    addToolWithFilter({
         name: `Get_${entity.ClassName}_Record`,
         description: `Retrieves the specified record from the ${entity.Name} entity`,
         parameters: z.object(pkeyParams),
-        async execute (props: unknown, context: unknown) {
-            const ctx = context as { session?: MCPSessionContext };
-            const sessionUser = ctx.session?.user;
-            if (!sessionUser) {
-                return JSON.stringify({ error: "No authenticated user in session" });
-            }
-            const p = props as Record<string, unknown>;
+        async execute(props, sessionContext) {
+            const sessionUser = sessionContext.user;
             const md = new Metadata();
             const record = await md.GetEntityObject(entity.Name, sessionUser);
             await record.InnerLoad(new CompositeKey(
                 entity.PrimaryKeys.map((pk) => ({
                     FieldName: pk.Name,
-                    Value: p[pk.Name]
+                    Value: props[pk.Name]
                 }))
             ));
             return await convertEntityObjectToJSON(record);
         }
-    };
-    addToolWithFilter(toolConfig);
+    });
 }
 
 /**
