@@ -1251,28 +1251,20 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Converts to recordOpened event for seamless navigation integration
    */
   onForeignKeyClick(event: ForeignKeyClickEvent): void {
-    console.log('[FK Debug] entity-viewer onForeignKeyClick received:', event);
-
     // Look up the related entity by name
     const md = new Metadata();
     const relatedEntity = event.relatedEntityName
       ? md.Entities.find(e => e.Name === event.relatedEntityName)
       : md.Entities.find(e => e.ID === event.relatedEntityId);
 
-    console.log('[FK Debug] Looking for entity:', { name: event.relatedEntityName, id: event.relatedEntityId });
-    console.log('[FK Debug] Found relatedEntity:', relatedEntity?.Name);
-
     if (!relatedEntity) {
-      console.warn(`[FK Debug] Could not find related entity for FK navigation: ${event.relatedEntityName || event.relatedEntityId}`);
       return;
     }
 
     // Create composite key from the FK value using the static factory method
     const compositeKey = CompositeKey.FromID(event.recordId);
-    console.log('[FK Debug] Created compositeKey:', compositeKey);
 
     // Emit recordOpened for the related entity (record is undefined since it's not loaded)
-    console.log('[FK Debug] Emitting recordOpened with:', { entity: relatedEntity.Name, compositeKey });
     this.recordOpened.emit({
       entity: relatedEntity,
       compositeKey

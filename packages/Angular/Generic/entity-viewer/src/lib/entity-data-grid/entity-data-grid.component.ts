@@ -2078,8 +2078,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     let fkField: EntityFieldInfo | undefined = field;
     let relatedEntityName = isForeignKey ? field.RelatedEntity : undefined;
 
-    console.log(`[FK Debug] applyFieldFormatter for field: ${field.Name}, RelatedEntityID: ${field.RelatedEntityID}, IsVirtual: ${field.IsVirtual}, isForeignKey: ${isForeignKey}`);
-
     // If this field doesn't have RelatedEntityID but is virtual, check for a corresponding FK field
     // Pattern: for a field named "Category", look for "CategoryID" with RelatedEntityID
     if (!isForeignKey && field.IsVirtual && this._entityInfo) {
@@ -2087,12 +2085,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       const correspondingFkField = this._entityInfo.Fields.find(
         f => f.Name.toLowerCase() === potentialFkFieldName.toLowerCase() && f.RelatedEntityID
       );
-      console.log(`[FK Debug] Checking for corresponding FK field: ${potentialFkFieldName}, found: ${correspondingFkField?.Name}`);
       if (correspondingFkField) {
         isForeignKey = true;
         fkField = correspondingFkField;
         relatedEntityName = correspondingFkField.RelatedEntity;
-        console.log(`[FK Debug] Found corresponding FK field! fkField: ${fkField.Name}, relatedEntityName: ${relatedEntityName}`);
       }
     }
 
@@ -2139,11 +2135,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           fkValue = displayValue;
         }
 
-        console.log(`[FK Debug] Rendering FK cell for field: ${field.Name}, fkField: ${fkField.Name}, fkValue: ${fkValue}, displayValue: ${displayValue}`);
-
         // Skip if we don't have a valid FK value
         if (!fkValue) {
-          console.log(`[FK Debug] No fkValue, returning plain span`);
           return `<span>${HighlightUtil.escapeHtml(displayValue)}</span>`;
         }
 
@@ -2162,7 +2155,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
         // NOTE: Do NOT add onclick="event.stopPropagation()" here - it prevents AG Grid's cellClicked from firing
         const linkHtml = `<a href="javascript:void(0)" class="cell-link cell-fk-link" ${dataAttrs}>${displayText}</a>`;
-        console.log(`[FK Debug] Generated FK link HTML (first 200 chars):`, linkHtml.substring(0, 200));
+
         return linkHtml;
       }
 
@@ -3054,25 +3047,17 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * for the parent component to handle navigation.
    */
   onAgCellClicked(event: CellClickedEvent): void {
-    console.log('[FK Debug] onAgCellClicked fired', { column: event.column?.getColId(), value: event.value });
-
     // Check if the click was on an FK link
     const target = event.event?.target as HTMLElement;
     if (!target) {
-      console.log('[FK Debug] No target element');
       return;
     }
-
-    console.log('[FK Debug] Target element:', target.tagName, target.className, target.outerHTML?.substring(0, 200));
 
     // Look for the FK link element (may be the target or a parent)
     const fkLink = target.closest('.cell-fk-link') as HTMLElement;
     if (!fkLink) {
-      console.log('[FK Debug] No .cell-fk-link found in ancestors');
       return;
     }
-
-    console.log('[FK Debug] Found FK link element:', fkLink.outerHTML?.substring(0, 300));
 
     // Prevent the row click handler from firing
     event.event?.stopPropagation();
@@ -3083,10 +3068,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     const fieldName = fkLink.dataset['fieldName'];
     const relatedEntityName = fkLink.dataset['relatedEntityName'];
 
-    console.log('[FK Debug] Extracted data attributes:', { relatedEntityId, recordId, fieldName, relatedEntityName });
-
     if (relatedEntityId && recordId && fieldName) {
-      console.log('[FK Debug] Emitting ForeignKeyClick event');
       this.ForeignKeyClick.emit({
         relatedEntityId,
         recordId,
@@ -3094,7 +3076,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         relatedEntityName
       });
     } else {
-      console.log('[FK Debug] Missing required data attributes, not emitting');
+      //console.log('[FK Debug] Missing required data attributes, not emitting');
     }
   }
 
