@@ -1712,10 +1712,82 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this.applySortStateToGrid();
       }
 
-      // Apply aggregates from GridState if present
+      // Apply aggregates from GridState if present and fetch their values
       if (this._gridState.aggregates) {
         this._aggregatesConfig = this._gridState.aggregates;
+        // Fetch aggregate values when gridState aggregates change
+        this.refreshAggregates();
       }
+    }
+  }
+
+  /**
+   * Fetch aggregate values without reloading data.
+   * Used when gridState changes and includes new aggregate config.
+   * This runs a RunView with MaxRows=0 to get only aggregate results.
+   */
+  public async refreshAggregates(): Promise<void> {
+    const effectiveAggConfig = this.EffectiveAggregatesConfig;
+    if (!effectiveAggConfig?.expressions?.length) {
+      this._aggregateResults = [];
+      this._aggregateValues.clear();
+      this._aggregatesLoading = false;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // Need entity info to run the query
+    if (!this._entityInfo) {
+      return;
+    }
+
+    this._aggregatesLoading = true;
+    this.cdr.detectChanges();
+
+    try {
+      // Build aggregate expressions
+      const aggregateExpressions: AggregateExpression[] = effectiveAggConfig.expressions
+        .filter(agg => agg.enabled !== false && agg.expression)
+        .map(agg => ({
+          expression: agg.expression,
+          alias: agg.id || agg.label || agg.expression
+        }));
+
+      if (aggregateExpressions.length === 0) {
+        this._aggregateResults = [];
+        this._aggregateValues.clear();
+        this._aggregatesLoading = false;
+        this.cdr.detectChanges();
+        return;
+      }
+
+      const rv = new RunView();
+
+      // Build the ExtraFilter from params or view entity
+      let extraFilter: string | undefined;
+      if (this._params?.ExtraFilter) {
+        extraFilter = this._params.ExtraFilter;
+      } else if (this._viewEntity?.WhereClause) {
+        extraFilter = this._viewEntity.WhereClause;
+      }
+
+      const result = await rv.RunView({
+        EntityName: this._entityInfo.Name,
+        MaxRows: 0, // Only get aggregates, no row data
+        ExtraFilter: extraFilter,
+        Aggregates: aggregateExpressions
+      });
+
+      if (result.Success) {
+        this.processAggregateResults(result.AggregateResults, result.AggregateExecutionTime);
+      } else {
+        this._aggregatesLoading = false;
+        this.cdr.detectChanges();
+      }
+    } catch (error) {
+      console.error('[EntityDataGrid] Error fetching aggregates:', error);
+      this._aggregatesLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
