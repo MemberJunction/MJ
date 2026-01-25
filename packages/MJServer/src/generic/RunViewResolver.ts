@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
@@ -15,6 +15,52 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
  * back the results, and have your own type checking in place, this resolver can be used.
  *
  */
+
+//****************************************************************************
+// INPUT/OUTPUT TYPE for Aggregates
+//****************************************************************************
+
+/**
+ * Input type for a single aggregate expression
+ */
+@InputType()
+export class AggregateExpressionInput {
+  @Field(() => String, {
+    description: 'SQL expression for the aggregate (e.g., "SUM(OrderTotal)", "COUNT(*)", "AVG(Price)")'
+  })
+  expression: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'Optional alias for the result (used in error messages and debugging)'
+  })
+  alias?: string;
+}
+
+/**
+ * Output type for a single aggregate result
+ */
+@ObjectType()
+export class AggregateResultOutput {
+  @Field(() => String, { description: 'The expression that was calculated' })
+  expression: string;
+
+  @Field(() => String, { description: 'The alias (or expression if no alias provided)' })
+  alias: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'The calculated value as a JSON string (preserves type information)'
+  })
+  value?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'Error message if calculation failed'
+  })
+  error?: string;
+}
+
 //****************************************************************************
 // INPUT TYPE for Running Views
 //****************************************************************************
@@ -111,6 +157,12 @@ export class RunViewByIDInput {
     description: 'If a value > 0 is provided, this value will be used to offset the rows returned.',
   })
   StartRow?: number;
+
+  @Field(() => [AggregateExpressionInput], {
+    nullable: true,
+    description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
+  })
+  Aggregates?: AggregateExpressionInput[];
 }
 
 @InputType()
@@ -206,6 +258,12 @@ export class RunViewByNameInput {
     description: 'If a value > 0 is provided, this value will be used to offset the rows returned.',
   })
   StartRow?: number;
+
+  @Field(() => [AggregateExpressionInput], {
+    nullable: true,
+    description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
+  })
+  Aggregates?: AggregateExpressionInput[];
 }
 
 @InputType()
@@ -287,6 +345,12 @@ export class RunDynamicViewInput {
     description: 'If a value > 0 is provided, this value will be used to offset the rows returned.',
   })
   StartRow?: number;
+
+  @Field(() => [AggregateExpressionInput], {
+    nullable: true,
+    description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
+  })
+  Aggregates?: AggregateExpressionInput[];
 }
 
 @InputType()
@@ -382,6 +446,12 @@ export class RunViewGenericInput {
     description: 'If a value > 0 is provided, this value will be used to offset the rows returned.',
   })
   StartRow?: number;
+
+  @Field(() => [AggregateExpressionInput], {
+    nullable: true,
+    description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
+  })
+  Aggregates?: AggregateExpressionInput[];
 }
 
 //****************************************************************************
@@ -410,23 +480,42 @@ export class RunViewWithCacheCheckInput {
 }
 
 @ObjectType()
+export class DifferentialDataOutput {
+  @Field(() => [RunViewGenericResultRow], {
+    description: 'Records that have been created or updated since the client\'s maxUpdatedAt'
+  })
+  updatedRows: RunViewGenericResultRow[];
+
+  @Field(() => [String], {
+    description: 'Primary key values (as concatenated strings) of records that have been deleted'
+  })
+  deletedRecordIDs: string[];
+}
+
+@ObjectType()
 export class RunViewWithCacheCheckResultOutput {
   @Field(() => Int, { description: 'The index of this view in the batch request' })
   viewIndex: number;
 
-  @Field(() => String, { description: "'current', 'stale', or 'error'" })
+  @Field(() => String, { description: "'current', 'differential', 'stale', or 'error'" })
   status: string;
 
   @Field(() => [RunViewGenericResultRow], {
     nullable: true,
-    description: 'Fresh results - only populated when status is stale'
+    description: 'Fresh results - only populated when status is stale (full refresh)'
   })
   Results?: RunViewGenericResultRow[];
 
-  @Field(() => String, { nullable: true, description: 'Max __mj_UpdatedAt from results when stale' })
+  @Field(() => DifferentialDataOutput, {
+    nullable: true,
+    description: 'Differential update data - only populated when status is differential'
+  })
+  differentialData?: DifferentialDataOutput;
+
+  @Field(() => String, { nullable: true, description: 'Max __mj_UpdatedAt from results when stale or differential' })
   maxUpdatedAt?: string;
 
-  @Field(() => Int, { nullable: true, description: 'Row count of results when stale' })
+  @Field(() => Int, { nullable: true, description: 'Row count of results when stale or differential (total after applying delta)' })
   rowCount?: number;
 
   @Field(() => String, { nullable: true, description: 'Error message if status is error' })
@@ -499,6 +588,18 @@ export class RunViewResult {
 
   @Field(() => Boolean, { nullable: false })
   Success: boolean;
+
+  @Field(() => [AggregateResultOutput], {
+    nullable: true,
+    description: 'Results of aggregate calculations, in same order as input Aggregates array. Only present if Aggregates were requested.'
+  })
+  AggregateResults?: AggregateResultOutput[];
+
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Execution time for aggregate query specifically (in milliseconds). Only present if Aggregates were requested.'
+  })
+  AggregateExecutionTime?: number;
 }
 
 @ObjectType()
@@ -523,6 +624,18 @@ export class RunViewGenericResult {
 
   @Field(() => Boolean, { nullable: false })
   Success: boolean;
+
+  @Field(() => [AggregateResultOutput], {
+    nullable: true,
+    description: 'Results of aggregate calculations, in same order as input Aggregates array. Only present if Aggregates were requested.'
+  })
+  AggregateResults?: AggregateResultOutput[];
+
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Execution time for aggregate query specifically (in milliseconds). Only present if Aggregates were requested.'
+  })
+  AggregateExecutionTime?: number;
 }
 
 @Resolver(RunViewResultRow)
@@ -548,6 +661,9 @@ export class RunViewResolver extends ResolverBase {
         RowCount: rawData?.RowCount,
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
+        Success: rawData?.Success,
+        AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
+        AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
     } catch (err) {
       console.log(err);
@@ -576,6 +692,9 @@ export class RunViewResolver extends ResolverBase {
         RowCount: rawData?.RowCount,
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
+        Success: rawData?.Success,
+        AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
+        AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
     } catch (err) {
       console.log(err);
@@ -602,6 +721,9 @@ export class RunViewResolver extends ResolverBase {
         RowCount: rawData?.RowCount,
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
+        Success: rawData?.Success,
+        AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
+        AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
     } catch (err) {
       console.log(err);
@@ -617,7 +739,8 @@ export class RunViewResolver extends ResolverBase {
   ) {
     try {
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-      const rawData: RunViewGenericResult[] = await super.RunViewsGeneric(input, provider, userPayload);
+      // Note: RunViewsGeneric returns the core RunViewResult type, not the GraphQL type
+      const rawData = await super.RunViewsGeneric(input, provider, userPayload);
       if (!rawData) {
         return null;
       }
@@ -634,6 +757,8 @@ export class RunViewResolver extends ResolverBase {
           TotalRowCount: data?.TotalRowCount,
           ExecutionTime: data?.ExecutionTime,
           Success: data?.Success,
+          AggregateResults: this.processAggregateResults(data?.AggregateResults),
+          AggregateExecutionTime: data?.AggregateExecutionTime,
         });
       }
 
@@ -805,7 +930,7 @@ export class RunViewResolver extends ResolverBase {
   ) {
     try {
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-      const rawData: RunViewGenericResult[] = await super.RunViewsGeneric(input, provider, userPayload);
+      const rawData = await super.RunViewsGeneric(input, provider, userPayload);
       if (!rawData) {
         return null;
       }
@@ -827,6 +952,8 @@ export class RunViewResolver extends ResolverBase {
           ExecutionTime: data?.ExecutionTime,
           Success: data?.Success,
           ErrorMessage: data?.ErrorMessage,
+          AggregateResults: this.processAggregateResults(data?.AggregateResults),
+          AggregateExecutionTime: data?.AggregateExecutionTime,
         });
       }
 
@@ -886,13 +1013,43 @@ export class RunViewResolver extends ResolverBase {
         const inputItem = input[index];
         const entity = provider.Entities.find(e => e.Name === inputItem.params.EntityName);
 
+        // If we have differential data but no entity, that's a configuration error
+        if (result.status === 'differential' && result.differentialData && !entity) {
+          throw new Error(
+            `Entity '${inputItem.params.EntityName}' not found in provider metadata but server returned differential data. ` +
+            `This may indicate a metadata sync issue.`
+          );
+        }
+
+        if (result.status === 'differential' && result.differentialData && entity) {
+          // Process differential data into GraphQL-compatible format
+          const processedUpdatedRows = this.processRawData(
+            result.differentialData.updatedRows as Record<string, unknown>[],
+            entity.ID,
+            entity
+          );
+          return {
+            viewIndex: result.viewIndex,
+            status: result.status,
+            Results: undefined,
+            differentialData: {
+              updatedRows: processedUpdatedRows,
+              deletedRecordIDs: result.differentialData.deletedRecordIDs,
+            },
+            maxUpdatedAt: result.maxUpdatedAt,
+            rowCount: result.rowCount,
+            errorMessage: result.errorMessage,
+          };
+        }
+
         if (result.status === 'stale' && result.results && entity) {
-          // Process raw data into GraphQL-compatible format
+          // Process raw data into GraphQL-compatible format (full refresh)
           const processedRows = this.processRawData(result.results as Record<string, unknown>[], entity.ID, entity);
           return {
             viewIndex: result.viewIndex,
             status: result.status,
             Results: processedRows,
+            differentialData: undefined,
             maxUpdatedAt: result.maxUpdatedAt,
             rowCount: result.rowCount,
             errorMessage: result.errorMessage,
@@ -903,6 +1060,7 @@ export class RunViewResolver extends ResolverBase {
           viewIndex: result.viewIndex,
           status: result.status,
           Results: undefined,
+          differentialData: undefined,
           maxUpdatedAt: result.maxUpdatedAt,
           rowCount: result.rowCount,
           errorMessage: result.errorMessage,
@@ -929,13 +1087,13 @@ export class RunViewResolver extends ResolverBase {
     const returnResult = [];
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
-      
+
       // Build the primary key array from the entity's primary key fields
       const primaryKey: KeyValuePairOutputType[] = entityInfo.PrimaryKeys.map(pk => ({
         FieldName: pk.Name,
         Value: row[pk.Name]?.toString() || ''
       }));
-      
+
       returnResult.push({
         PrimaryKey: primaryKey,
         EntityID: entityId,
@@ -943,5 +1101,24 @@ export class RunViewResolver extends ResolverBase {
       });
     }
     return returnResult;
+  }
+
+  /**
+   * Transform core AggregateResult[] to GraphQL AggregateResultOutput[].
+   * Converts the value to a JSON string to preserve type information across GraphQL.
+   */
+  protected processAggregateResults(aggregateResults: AggregateResult[] | undefined): AggregateResultOutput[] | undefined {
+    if (!aggregateResults || aggregateResults.length === 0) {
+      return undefined;
+    }
+
+    return aggregateResults.map(result => ({
+      expression: result.expression,
+      alias: result.alias,
+      value: result.value !== null && result.value !== undefined
+        ? JSON.stringify(result.value)
+        : undefined,
+      error: result.error
+    }));
   }
 }

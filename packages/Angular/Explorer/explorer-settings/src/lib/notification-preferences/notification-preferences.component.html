@@ -1,0 +1,94 @@
+<div class="notification-preferences-container">
+    <mj-loading *ngIf="loading" text="Loading notification preferences..."></mj-loading>
+
+    <div class="content" *ngIf="!loading">
+        <!-- Empty state -->
+        <div class="empty-state" *ngIf="viewModels.length === 0">
+            <i class="fa-solid fa-bell-slash"></i>
+            <p>No notification types configured yet.</p>
+        </div>
+
+        <!-- Notification type cards -->
+        <div class="notification-types-grid">
+            <div class="notification-type-card"
+                 *ngFor="let vm of viewModels"
+                 [class.changed]="vm.changed">
+
+                <div class="card-header" [style.border-left-color]="getTypeColor(vm.type)">
+                    <div class="icon-wrapper" [style.background-color]="getTypeColor(vm.type) + '20'">
+                        <i [class]="'fa-solid ' + getTypeIcon(vm.type)" [style.color]="getTypeColor(vm.type)"></i>
+                    </div>
+                    <div class="header-text">
+                        <h4>{{ vm.type.Name }}</h4>
+                        <p class="type-description">{{ vm.type.Description }}</p>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Delivery channel checkboxes -->
+                    <div class="preference-row">
+                        <label class="delivery-label">Delivery Channels</label>
+
+                        <div class="delivery-checkboxes">
+                            <label class="channel-checkbox">
+                                <input type="checkbox"
+                                       [(ngModel)]="vm.inAppEnabled"
+                                       (change)="onChannelChange(vm)"
+                                       [disabled]="!getAllowUserPreference(vm.type)">
+                                <i class="fa-solid fa-bell"></i>
+                                <span>In-App</span>
+                            </label>
+
+                            <label class="channel-checkbox">
+                                <input type="checkbox"
+                                       [(ngModel)]="vm.emailEnabled"
+                                       (change)="onChannelChange(vm)"
+                                       [disabled]="!getAllowUserPreference(vm.type)">
+                                <i class="fa-solid fa-envelope"></i>
+                                <span>Email</span>
+                            </label>
+
+                            <label class="channel-checkbox">
+                                <input type="checkbox"
+                                       [(ngModel)]="vm.smsEnabled"
+                                       (change)="onChannelChange(vm)"
+                                       [disabled]="!getAllowUserPreference(vm.type)">
+                                <i class="fa-solid fa-mobile"></i>
+                                <span>SMS</span>
+                            </label>
+                        </div>
+
+                        <div class="info-message" *ngIf="!getAllowUserPreference(vm.type)">
+                            <i class="fa-solid fa-info-circle"></i>
+                            This notification type's delivery channels cannot be customized.
+                        </div>
+                    </div>
+
+                    <!-- Auto-expire info -->
+                    <div class="metadata-row" *ngIf="getTypeAutoExpireDays(vm.type)">
+                        <i class="fa-solid fa-clock"></i>
+                        <span class="metadata-text">
+                            Auto-marks as read after {{ getTypeAutoExpireDays(vm.type) }} day(s)
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="actions" *ngIf="hasChanges">
+            <button class="btn btn-secondary"
+                    (click)="cancel()"
+                    [disabled]="saving">
+                Cancel
+            </button>
+            <button class="btn btn-primary"
+                    (click)="save()"
+                    [disabled]="saving">
+                <i class="fa-solid fa-spinner fa-spin" *ngIf="saving"></i>
+                <i class="fa-solid fa-save" *ngIf="!saving"></i>
+                {{ saving ? 'Saving...' : 'Save Preferences' }}
+            </button>
+        </div>
+    </div>
+</div>

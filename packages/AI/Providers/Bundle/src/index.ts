@@ -12,7 +12,7 @@
  */
 
 // Import all AI provider loaders
-import { LoadOpenAILLM, LoadOpenAIEmbedding } from '@memberjunction/ai-openai';
+import { LoadOpenAILLM, LoadOpenAIEmbedding, LoadOpenAIImageGenerator } from '@memberjunction/ai-openai';
 import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
 import { LoadAzureLLM, LoadAzureEmbedding } from '@memberjunction/ai-azure';
 import { LoadBedrockLLM, LoadBedrockEmbedding } from '@memberjunction/ai-bedrock';
@@ -20,7 +20,7 @@ import { LoadBettyBotLLM } from '@memberjunction/ai-betty-bot';
 import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
 import { LoadCohereReranker } from '@memberjunction/ai-cohere';
 import { LoadElevenLabsAudioGenerator } from '@memberjunction/ai-elevenlabs';
-import { LoadGeminiLLM } from '@memberjunction/ai-gemini';
+import { LoadGeminiLLM, LoadGeminiImageGenerator } from '@memberjunction/ai-gemini';
 import { LoadGroqLLM } from '@memberjunction/ai-groq';
 import { LoadHeyGenVideoGenerator } from '@memberjunction/ai-heygen';
 import { LoadLMStudioLLM } from '@memberjunction/ai-lmstudio';
@@ -32,6 +32,7 @@ import { LoadRexRecommendationsProvider } from '@memberjunction/ai-recommendatio
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 import { LoadVertexLLM } from '@memberjunction/ai-vertex';
 import { LoadxAILLM } from '@memberjunction/ai-xai';
+import { LoadFLUXImageGenerator } from '@memberjunction/ai-blackforestlabs';
 
 /**
  * Loads all standard AI providers to prevent tree shaking.
@@ -76,6 +77,11 @@ export function LoadAIProviders(): void {
     // Audio/Video Providers
     LoadElevenLabsAudioGenerator();
     LoadHeyGenVideoGenerator();
+
+    // Image Generation Providers
+    LoadOpenAIImageGenerator();
+    LoadGeminiImageGenerator();
+    LoadFLUXImageGenerator();
 
     // Specialized Providers
     LoadRexRecommendationsProvider();

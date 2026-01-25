@@ -89,6 +89,7 @@ import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 // Data Explorer Dashboard Components
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
+import { DataExplorerResourceComponent } from './DataExplorer/data-explorer-resource.component';
 import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
 import { ViewSelectorComponent } from './DataExplorer/components/view-selector/view-selector.component';
 // ViewConfigPanelComponent now imported from @memberjunction/ng-entity-viewer via EntityViewerModule
@@ -126,6 +127,20 @@ import { ListsCategoriesResource } from './Lists/components/lists-categories-res
 import { ListsOperationsResource } from './Lists/components/lists-operations-resource.component';
 import { VennDiagramComponent } from './Lists/components/venn-diagram/venn-diagram.component';
 import { ListSetOperationsService } from './Lists/services/list-set-operations.service';
+// Query Browser Components
+import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
+// Dashboard Browser Components (Coming Soon Placeholder)
+import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
+import { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
+// Query Viewer Module
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
+// Dashboard Viewer Module
+import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
+// API Keys Dashboard Components
+import { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
+import { APIKeyCreateDialogComponent } from './APIKeys/api-key-create-dialog.component';
+import { APIKeyEditPanelComponent } from './APIKeys/api-key-edit-panel.component';
+import { APIKeyListComponent } from './APIKeys/api-key-list.component';
 
 
 
@@ -193,6 +208,7 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     TestRunDetailPanelComponent,
     // Data Explorer Dashboard Components
     DataExplorerDashboardComponent,
+    DataExplorerResourceComponent,
     ExplorerNavigationPanelComponent,
     ViewSelectorComponent,
     // ViewConfigPanelComponent now comes from EntityViewerModule
@@ -223,7 +239,17 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsOperationsResource,
-    VennDiagramComponent
+    VennDiagramComponent,
+    // Query Browser Components
+    QueryBrowserResourceComponent,
+    // Dashboard Browser Components
+    DashboardBrowserResourceComponent,
+    DashboardShareDialogComponent,
+    // API Keys Dashboard Components
+    APIKeysResourceComponent,
+    APIKeyCreateDialogComponent,
+    APIKeyEditPanelComponent,
+    APIKeyListComponent
   ],
   imports: [
     CommonModule,
@@ -258,7 +284,9 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     FilterBuilderModule,
     EntityRelationshipDiagramModule,
     ListManagementModule,
-    ExportServiceModule
+    ExportServiceModule,
+    QueryViewerModule,
+    DashboardViewerModule
   ],
   providers: [
     AIInstrumentationService,
@@ -297,8 +325,9 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     TestingAnalyticsResourceComponent,
     TestingVersionResourceComponent,
     TestingFeedbackResourceComponent,
-    // Export Data Explorer Dashboard
+    // Export Data Explorer Dashboard and Resource
     DataExplorerDashboardComponent,
+    DataExplorerResourceComponent,
     // Export Home Dashboard
     HomeDashboardComponent,
     // Export Communication Dashboard
@@ -325,7 +354,17 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsOperationsResource,
-    VennDiagramComponent
+    VennDiagramComponent,
+    // Query Browser Components
+    QueryBrowserResourceComponent,
+    // Dashboard Browser Components
+    DashboardBrowserResourceComponent,
+    DashboardShareDialogComponent,
+    // API Keys Dashboard Components
+    APIKeysResourceComponent,
+    APIKeyCreateDialogComponent,
+    APIKeyEditPanelComponent,
+    APIKeyListComponent
   ]
 })
 export class DashboardsModule { }

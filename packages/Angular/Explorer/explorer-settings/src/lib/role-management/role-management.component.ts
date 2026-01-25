@@ -55,6 +55,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   public showCreateDialog = false;
   public showEditDialog = false;
   public showDeleteConfirm = false;
+  public showMobileFilters = false;
   public expandedRoleId: string | null = null;
 
   // Role permissions (simplified view)

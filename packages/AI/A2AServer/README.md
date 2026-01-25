@@ -21,6 +21,7 @@ A2A is an open protocol developed by Google that enables communication and inter
 - Configurable entity access permissions
 - Wildcard pattern matching for entity and agent capability configuration
 - Agent discovery, execution, monitoring, and cancellation
+- **API key authentication** for secure access to task endpoints
 
 ## Installation
 
@@ -132,6 +133,94 @@ Each agent capability configuration supports:
 - `execute` (boolean): Allow executing agents
 - `monitor` (boolean): Allow monitoring agent run status
 - `cancel` (boolean): Allow cancelling agent runs
+
+## Authentication
+
+The A2A server requires API key authentication for all task-related endpoints. This ensures secure access and enables usage tracking.
+
+### Required Header
+
+All requests to `/a2a/tasks/*` endpoints must include the `X-API-Key` header with a valid MemberJunction API key:
+
+```bash
+curl -X POST http://localhost:3200/a2a/tasks/send \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: mj_sk_your_api_key_here" \
+  -d '{"message": {"parts": [{"type": "text", "content": "Get user with ID 123"}]}}'
+```
+
+### API Key Format
+
+MemberJunction API keys follow the format `mj_sk_*` (e.g., `mj_sk_abc123...`). These keys are:
+- Created through the MemberJunction API Key management system
+- Associated with a specific user account
+- Used to authenticate requests and track usage
+
+### Public Endpoints
+
+The agent card discovery endpoint is **public** and does not require authentication:
+
+```bash
+# No authentication required
+curl http://localhost:3200/a2a/agent-card
+```
+
+The agent card response includes authentication requirements so clients know what credentials are needed:
+
+```json
+{
+  "name": "MemberJunction",
+  "authentication": {
+    "type": "apiKey",
+    "scheme": "X-API-Key"
+  },
+  "capabilities": { ... }
+}
+```
+
+### Protected Endpoints
+
+The following endpoints require a valid API key:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/a2a/tasks/send` | POST | Create or update a task |
+| `/a2a/tasks/sendSubscribe` | POST | Create task with SSE streaming |
+| `/a2a/tasks/:taskId` | GET | Get task status |
+| `/a2a/tasks/:taskId/cancel` | POST | Cancel a running task |
+
+### Error Responses
+
+**Missing API Key (401)**
+```json
+{
+  "error": {
+    "code": 401,
+    "message": "Missing API key. Provide X-API-Key header with a valid MJ API key."
+  }
+}
+```
+
+**Invalid API Key (401)**
+```json
+{
+  "error": {
+    "code": 401,
+    "message": "Invalid API key"
+  }
+}
+```
+
+### Usage Logging
+
+All API key usage is automatically logged with:
+- Endpoint accessed
+- HTTP method
+- Client IP address
+- User agent
+- Timestamp
+
+This enables monitoring and auditing of API access patterns.
 
 ## Usage
 

@@ -66,9 +66,15 @@ export type ComponentQueryDataRequirement = {
 
     /**
      * This is only provided when requesting a NEW query be created. For existing queries, this will be undefined.
-     * This SQL can use Nunjucks syntax/templating for parameters including the custom filters defined in 
+     * This SQL can use Nunjucks syntax/templating for parameters including the custom filters defined in
      */
     newQuerySQL?: string;
+
+    /**
+     * Indicates whether this query was newly created (true) or matched an existing query (false).
+     * Set by the Query Designer agent during query processing.
+     */
+    isNew?: boolean;
 }
 
 /**

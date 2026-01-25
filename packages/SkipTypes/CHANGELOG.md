@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/skip-types
 
+## 3.2.0
+
+### Patch Changes
+
+- cbd2714: Improve error handling and stability across Skip integration, component artifacts, and metadata sync
+- Updated dependencies [cbd2714]
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/data-context@3.2.0
+  - @memberjunction/core@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/interactive-component-types@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/data-context@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

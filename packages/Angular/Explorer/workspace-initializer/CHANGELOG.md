@@ -1,5 +1,33 @@
 # @memberjunction/ng-workspace-initializer
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [293d656]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/ng-explorer-core@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/ng-shared@3.2.0
+  - @memberjunction/ng-shared-generic@3.2.0
+  - @memberjunction/ng-auth-services@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [8c0b624]
+  - @memberjunction/graphql-dataprovider@3.1.1
+  - @memberjunction/ng-shared@3.1.1
+  - @memberjunction/ng-explorer-core@3.1.1
+  - @memberjunction/ng-auth-services@3.1.1
+  - @memberjunction/ng-shared-generic@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/global@3.1.1
+
 ## 3.0.0
 
 ### Major Changes

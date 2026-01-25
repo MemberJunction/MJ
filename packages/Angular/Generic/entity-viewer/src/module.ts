@@ -13,6 +13,8 @@ import { PillComponent } from './lib/pill/pill.component';
 import { PaginationComponent } from './lib/pagination/pagination.component';
 import { EntityDataGridComponent } from './lib/entity-data-grid/entity-data-grid.component';
 import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-panel.component';
+import { AggregatePanelComponent } from './lib/aggregate-panel/aggregate-panel.component';
+import { AggregateSetupDialogComponent } from './lib/aggregate-setup-dialog/aggregate-setup-dialog.component';
 
 /**
  * EntityViewerModule - Provides components for viewing entity data
@@ -44,7 +46,9 @@ import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-pa
     PillComponent,
     PaginationComponent,
     EntityDataGridComponent,
-    ViewConfigPanelComponent
+    ViewConfigPanelComponent,
+    AggregatePanelComponent,
+    AggregateSetupDialogComponent
   ],
   imports: [
     CommonModule,
@@ -61,7 +65,9 @@ import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-pa
     PillComponent,
     PaginationComponent,
     EntityDataGridComponent,
-    ViewConfigPanelComponent
+    ViewConfigPanelComponent,
+    AggregatePanelComponent,
+    AggregateSetupDialogComponent
   ]
 })
 export class EntityViewerModule { }

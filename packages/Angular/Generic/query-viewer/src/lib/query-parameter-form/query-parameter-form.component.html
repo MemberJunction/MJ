@@ -1,0 +1,141 @@
+<!-- Query Parameter Form - Slide-in Panel -->
+<div class="param-form-overlay"
+     *ngIf="IsOpen && ShowOverlay"
+     @fadeIn
+     (click)="Cancel()">
+</div>
+
+<div class="param-form-panel"
+     *ngIf="IsOpen"
+     @slideIn
+     [style.width.px]="PanelWidth">
+    <!-- Header -->
+    <div class="panel-header">
+        <div class="header-content">
+            <i class="fa-solid fa-sliders header-icon"></i>
+            <div class="header-text">
+                <h3 class="header-title">Query Parameters</h3>
+                <span class="header-subtitle" *ngIf="QueryInfo">{{ QueryInfo.Name }}</span>
+            </div>
+        </div>
+        <button class="close-btn" (click)="Cancel()" title="Close">
+            <i class="fa-solid fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Form Content -->
+    <div class="panel-content">
+        <!-- No parameters message -->
+        <div class="no-params" *ngIf="Fields.length === 0">
+            <i class="fa-solid fa-check-circle no-params-icon"></i>
+            <p>This query has no parameters</p>
+            <button class="btn btn-primary" (click)="Submit()">
+                Run Query
+            </button>
+        </div>
+
+        <!-- Parameter fields -->
+        <div class="param-fields" *ngIf="Fields.length > 0">
+            <div class="param-field"
+                 *ngFor="let field of Fields; trackBy: TrackByField"
+                 [class.has-error]="field.error && field.touched"
+                 [class.required]="field.info.IsRequired">
+
+                <!-- Label -->
+                <label class="field-label" [for]="'param-' + field.info.Name">
+                    {{ field.info.Name }}
+                    <span class="required-indicator" *ngIf="field.info.IsRequired">*</span>
+                    <span class="field-type">({{ field.info.Type }})</span>
+                </label>
+
+                <!-- Description -->
+                <p class="field-description" *ngIf="field.info.Description">
+                    {{ field.info.Description }}
+                </p>
+
+                <!-- String input -->
+                <ng-container *ngIf="field.info.Type === 'string'">
+                    <input type="text"
+                           class="form-input"
+                           [id]="'param-' + field.info.Name"
+                           [value]="GetStringValue(field.value)"
+                           [placeholder]="GetPlaceholder(field.info)"
+                           (input)="OnInputChange(field, $event)">
+                </ng-container>
+
+                <!-- Number input -->
+                <ng-container *ngIf="field.info.Type === 'number'">
+                    <input type="number"
+                           class="form-input"
+                           [id]="'param-' + field.info.Name"
+                           [value]="GetNumberValue(field.value)"
+                           [placeholder]="GetPlaceholder(field.info)"
+                           (input)="OnNumberInputChange(field, $event)">
+                </ng-container>
+
+                <!-- Date input -->
+                <ng-container *ngIf="field.info.Type === 'date'">
+                    <input type="date"
+                           class="form-input"
+                           [id]="'param-' + field.info.Name"
+                           [value]="GetDateValue(field.value)"
+                           (input)="OnDateInputChange(field, $event)">
+                </ng-container>
+
+                <!-- Boolean input -->
+                <ng-container *ngIf="field.info.Type === 'boolean'">
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox"
+                               [id]="'param-' + field.info.Name"
+                               [checked]="GetBooleanValue(field.value)"
+                               (change)="OnCheckboxChange(field, $event)">
+                        <label [for]="'param-' + field.info.Name" class="checkbox-label">
+                            {{ GetBooleanValue(field.value) ? 'Yes' : 'No' }}
+                        </label>
+                    </div>
+                </ng-container>
+
+                <!-- Array input (comma-separated) -->
+                <ng-container *ngIf="field.info.Type === 'array'">
+                    <input type="text"
+                           class="form-input"
+                           [id]="'param-' + field.info.Name"
+                           [value]="GetArrayDisplayValue(field.value)"
+                           [placeholder]="GetPlaceholder(field.info) || 'Enter values separated by commas'"
+                           (input)="OnArrayInputChange(field, $event)">
+                    <span class="field-hint">Enter multiple values separated by commas</span>
+                </ng-container>
+
+                <!-- Error message -->
+                <span class="field-error" *ngIf="field.error && field.touched">
+                    <i class="fa-solid fa-exclamation-circle"></i>
+                    {{ field.error }}
+                </span>
+
+                <!-- Sample value hint -->
+                <span class="field-sample" *ngIf="field.info.SampleValue && !field.error">
+                    Example: {{ field.info.SampleValue }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="panel-footer" *ngIf="Fields.length > 0">
+        <button class="btn btn-secondary" (click)="Reset()" title="Reset to defaults">
+            <i class="fa-solid fa-undo"></i>
+            Reset
+        </button>
+        <div class="footer-right">
+            <button class="btn btn-secondary" (click)="Cancel()">
+                Cancel
+            </button>
+            <button class="btn btn-primary"
+                    [disabled]="!CanSubmit"
+                    (click)="Submit()">
+                <i class="fa-solid fa-play"></i>
+                Run Query
+            </button>
+        </div>
+    </div>
+</div>

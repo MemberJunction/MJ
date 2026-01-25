@@ -3,7 +3,6 @@ import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { ApplicationEntity, UserApplicationEntity } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication, UserAppConfig } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
-import { DragEndEvent } from '@progress/kendo-angular-sortable';
 
 /**
  * Represents an app item in the configuration UI
@@ -48,6 +47,11 @@ export class UserAppConfigComponent {
   // Panel collapse state (for mobile)
   availablePanelCollapsed = false;
   selectedPanelCollapsed = false;
+
+  // Native drag-and-drop state
+  draggedItem: AppConfigItem | null = null;
+  draggedIndex = -1;
+  dropTargetIndex = -1;
 
   constructor(
     private appManager: ApplicationManager,
@@ -147,18 +151,73 @@ export class UserAppConfigComponent {
   }
 
   /**
-   * Handles drag-and-drop reordering of active apps
+   * Native drag start handler
    */
-  onDragEnd(event: DragEndEvent): void {
-    if (event.index >= 0) {
+  onDragStart(event: DragEvent, item: AppConfigItem, index: number): void {
+    this.draggedItem = item;
+    this.draggedIndex = index;
+
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', index.toString());
+    }
+  }
+
+  /**
+   * Native drag over handler - allows drop
+   */
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+  }
+
+  /**
+   * Native drag enter handler - tracks drop target
+   */
+  onDragEnter(event: DragEvent, index: number): void {
+    event.preventDefault();
+    this.dropTargetIndex = index;
+  }
+
+  /**
+   * Native drag end handler - cleanup
+   */
+  onDragEnd(event: DragEvent): void {
+    this.draggedItem = null;
+    this.draggedIndex = -1;
+    this.dropTargetIndex = -1;
+  }
+
+  /**
+   * Native drop handler - reorder items
+   */
+  onDrop(event: DragEvent): void {
+    event.preventDefault();
+
+    if (this.draggedIndex >= 0 && this.dropTargetIndex >= 0 && this.draggedIndex !== this.dropTargetIndex) {
+      // Remove item from old position
+      const [movedItem] = this.activeApps.splice(this.draggedIndex, 1);
+
+      // Insert at new position
+      this.activeApps.splice(this.dropTargetIndex, 0, movedItem);
+
       // Update sequences based on new order
-      this.activeApps.forEach((item, index) => {
-        if (item.sequence !== index) {
-          item.sequence = index;
+      this.activeApps.forEach((item, idx) => {
+        if (item.sequence !== idx) {
+          item.sequence = idx;
           item.isDirty = true;
         }
       });
+
+      this.cdr.detectChanges();
     }
+
+    // Reset drag state
+    this.draggedItem = null;
+    this.draggedIndex = -1;
+    this.dropTargetIndex = -1;
   }
 
   /**

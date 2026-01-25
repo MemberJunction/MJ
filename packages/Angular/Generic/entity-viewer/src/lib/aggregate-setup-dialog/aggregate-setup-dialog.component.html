@@ -1,0 +1,327 @@
+<!-- Dialog Backdrop -->
+@if (IsOpen) {
+  <div class="dialog-backdrop" (click)="onClose()"></div>
+}
+
+<!-- Dialog Panel -->
+<div class="dialog-panel" [class.open]="IsOpen">
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="header-title">
+      <i class="fa-solid fa-chart-simple"></i>
+      <span>{{ Aggregate ? 'Edit Aggregate' : 'Add Aggregate' }}</span>
+    </div>
+    <button class="close-btn" (click)="onClose()" title="Close">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Mode Selector -->
+  <div class="mode-selector">
+    <button
+      class="mode-btn"
+      [class.active]="Mode === 'simple'"
+      (click)="setMode('simple')"
+      title="Pick a column and function">
+      <i class="fa-solid fa-wand-sparkles"></i>
+      <span>Simple</span>
+    </button>
+    <button
+      class="mode-btn"
+      [class.active]="Mode === 'advanced'"
+      (click)="setMode('advanced')"
+      title="Write custom SQL expression">
+      <i class="fa-solid fa-code"></i>
+      <span>Advanced</span>
+    </button>
+    <button
+      class="mode-btn"
+      [class.active]="Mode === 'smart'"
+      (click)="setMode('smart')"
+      title="Describe in natural language">
+      <i class="fa-solid fa-wand-magic-sparkles"></i>
+      <span>Smart</span>
+    </button>
+  </div>
+
+  <!-- Content -->
+  <div class="dialog-content">
+    <!-- Simple Mode -->
+    @if (Mode === 'simple') {
+      <div class="mode-content simple-mode">
+        <div class="mode-description">
+          <i class="fa-solid fa-info-circle"></i>
+          <span>Select a column and an aggregate function to calculate</span>
+        </div>
+
+        <!-- Function Selection -->
+        <div class="form-section">
+          <label class="form-label">Function</label>
+          <div class="function-grid">
+            @for (func of AggregateFunctions; track func.value) {
+              <button
+                class="function-btn"
+                [class.active]="SelectedFunction === func.value"
+                (click)="selectFunction(func.value)"
+                [title]="func.label">
+                <i [class]="func.icon"></i>
+                <span>{{ func.label }}</span>
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- Column Selection -->
+        <div class="form-section">
+          <label class="form-label">Column</label>
+          <select
+            class="form-select"
+            [(ngModel)]="SelectedColumn"
+            (ngModelChange)="onColumnSelected($event)">
+            <option value="">Select a column...</option>
+            @for (field of AvailableFields; track field.ID) {
+              <option [value]="field.Name">{{ getFieldDisplayLabel(field) }}</option>
+            }
+          </select>
+          @if (SelectedFunction !== 'COUNT' && SelectedFunction !== 'COUNT_DISTINCT' && NumericFields.length === 0) {
+            <div class="field-hint warning">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <span>No numeric fields available. Use COUNT or switch to Advanced mode.</span>
+            </div>
+          }
+          @if (SelectedFunction === 'COUNT' && !SelectedColumn) {
+            <div class="field-hint info">
+              <i class="fa-solid fa-info-circle"></i>
+              <span>No column selected - will count all records (COUNT(*))</span>
+            </div>
+          }
+        </div>
+
+        <!-- Preview -->
+        @if (SelectedFunction && (SelectedColumn || SelectedFunction === 'COUNT')) {
+          <div class="expression-preview">
+            <label class="preview-label">Expression Preview</label>
+            <code class="preview-code">{{
+              !SelectedColumn && SelectedFunction === 'COUNT' ? 'COUNT(*)' :
+              SelectedFunction === 'COUNT_DISTINCT' ? 'COUNT(DISTINCT ' + SelectedColumn + ')' :
+              SelectedFunction + '(' + SelectedColumn + ')'
+            }}</code>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Advanced Mode -->
+    @if (Mode === 'advanced') {
+      <div class="mode-content advanced-mode">
+        <div class="mode-description">
+          <i class="fa-solid fa-info-circle"></i>
+          <span>Write a custom SQL aggregate expression. Use field names as they appear in the database.</span>
+        </div>
+
+        <div class="form-section">
+          <label class="form-label">SQL Expression</label>
+          <textarea
+            class="form-textarea code-input"
+            [(ngModel)]="Expression"
+            placeholder="e.g., SUM(Amount * Quantity) or COUNT(CASE WHEN Status = 'Active' THEN 1 END)"
+            rows="3"
+          ></textarea>
+          <div class="field-hint">
+            <i class="fa-solid fa-lightbulb"></i>
+            <span>Tip: Use brackets for column names with spaces, e.g., [Total Amount]</span>
+          </div>
+        </div>
+
+        <!-- Quick Examples -->
+        <div class="form-section">
+          <label class="form-label examples-label">Quick Examples</label>
+          <div class="example-chips">
+            <button class="example-chip" (click)="Expression = 'SUM(Amount)'">
+              SUM(Amount)
+            </button>
+            <button class="example-chip" (click)="Expression = 'AVG(Price * Quantity)'">
+              AVG(Price * Quantity)
+            </button>
+            <button class="example-chip" (click)="Expression = 'COUNT(CASE WHEN Status = \'Active\' THEN 1 END)'">
+              COUNT with condition
+            </button>
+            <button class="example-chip" (click)="Expression = 'SUM(CASE WHEN Type = \'Credit\' THEN Amount ELSE -Amount END)'">
+              Conditional SUM
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Smart Mode -->
+    @if (Mode === 'smart') {
+      <div class="mode-content smart-mode">
+        <div class="mode-description">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          <span>Describe what you want to calculate in plain English. AI will generate the expression.</span>
+        </div>
+
+        <div class="form-section">
+          <label class="form-label">What would you like to calculate?</label>
+          <div class="smart-input-container">
+            <textarea
+              class="form-textarea smart-input"
+              [(ngModel)]="SmartPrompt"
+              [disabled]="!!GeneratedExpression"
+              placeholder="e.g., 'Total revenue from completed orders' or 'Average order value for premium customers'"
+              rows="3"
+            ></textarea>
+            @if (!GeneratedExpression) {
+              <button
+                class="generate-btn"
+                [disabled]="!SmartPrompt.trim() || IsGenerating"
+                (click)="onGenerateFromPrompt()">
+                @if (IsGenerating) {
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <span>Generating...</span>
+                } @else {
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  <span>Generate</span>
+                }
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- Generated Expression -->
+        @if (GeneratedExpression) {
+          <div class="generated-section">
+            <div class="generated-header">
+              <label class="form-label">Generated Expression</label>
+              <button class="clear-generated-btn" (click)="clearGeneratedExpression()" title="Edit prompt">
+                <i class="fa-solid fa-pen"></i>
+                <span>Edit Prompt</span>
+              </button>
+            </div>
+            <code class="generated-code">{{ GeneratedExpression }}</code>
+            <div class="generated-info">
+              <i class="fa-solid fa-info-circle"></i>
+              <span>This expression was generated from your description. Clear it to edit the prompt.</span>
+            </div>
+          </div>
+        }
+
+        <!-- Smart Mode Tips -->
+        <div class="smart-tips">
+          <div class="tips-header">
+            <i class="fa-solid fa-lightbulb"></i>
+            <span>Tips for better results:</span>
+          </div>
+          <ul class="tips-list">
+            <li>Be specific about which fields to use</li>
+            <li>Mention any conditions or filters</li>
+            <li>Specify the type of calculation (sum, average, count, etc.)</li>
+          </ul>
+        </div>
+      </div>
+    }
+
+    <!-- Common Configuration -->
+    <div class="config-section">
+      <div class="section-divider">
+        <span>Display Options</span>
+      </div>
+
+      <!-- Label -->
+      <div class="form-section">
+        <label class="form-label required">Label</label>
+        <input
+          type="text"
+          class="form-input"
+          [(ngModel)]="Label"
+          placeholder="e.g., Total Revenue, Average Order Value"
+        />
+      </div>
+
+      <!-- Description (optional) -->
+      <div class="form-section">
+        <label class="form-label">Description <span class="optional">(optional)</span></label>
+        <input
+          type="text"
+          class="form-input"
+          [(ngModel)]="Description"
+          placeholder="Brief explanation of what this shows"
+        />
+      </div>
+
+      <!-- Display Type -->
+      <div class="form-section">
+        <label class="form-label">Display As</label>
+        <div class="display-type-toggle">
+          <button
+            class="display-type-btn"
+            [class.active]="DisplayType === 'card'"
+            (click)="DisplayType = 'card'">
+            <i class="fa-solid fa-id-card"></i>
+            <span>Card</span>
+            <small>Shows in summary panel</small>
+          </button>
+          <button
+            class="display-type-btn"
+            [class.active]="DisplayType === 'column'"
+            (click)="DisplayType = 'column'">
+            <i class="fa-solid fa-table-columns"></i>
+            <span>Column Footer</span>
+            <small>Shows at bottom of grid</small>
+          </button>
+        </div>
+      </div>
+
+      <!-- Icon Selection -->
+      <div class="form-section">
+        <label class="form-label">Icon <span class="optional">(optional)</span></label>
+        <div class="icon-selector">
+          @if (Icon) {
+            <div class="selected-icon">
+              <i [class]="Icon"></i>
+              <button class="clear-icon-btn" (click)="clearIcon()" title="Remove icon">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+          }
+          <div class="icon-grid">
+            @for (icon of CommonIcons; track icon) {
+              <button
+                class="icon-btn"
+                [class.active]="Icon === icon"
+                (click)="selectIcon(icon)"
+                [title]="icon">
+                <i [class]="icon"></i>
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="dialog-footer">
+    <div class="footer-left">
+      <button
+        class="footer-btn save-btn primary"
+        [disabled]="!IsValid"
+        (click)="onSave()">
+        <i class="fa-solid fa-check"></i>
+        <span>{{ Aggregate ? 'Update' : 'Add' }} Aggregate</span>
+      </button>
+    </div>
+    <button class="footer-btn cancel-btn" (click)="onClose()">
+      Cancel
+    </button>
+  </div>
+
+  <!-- Validation Message -->
+  @if (ValidationMessage) {
+    <div class="validation-message">
+      <i class="fa-solid fa-exclamation-circle"></i>
+      <span>{{ ValidationMessage }}</span>
+    </div>
+  }
+</div>

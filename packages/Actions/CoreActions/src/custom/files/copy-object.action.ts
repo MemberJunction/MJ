@@ -11,7 +11,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Copy Storage Object',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'Azure Blob Storage'
  *   }, {
  *     Name: 'SourceObjectName',
@@ -30,7 +30,7 @@ export class CopyObjectAction extends BaseFileStorageAction {
      * Copy a file object
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - SourceObjectName: Required - Source file path
      *   - DestinationObjectName: Required - Destination file path
      *

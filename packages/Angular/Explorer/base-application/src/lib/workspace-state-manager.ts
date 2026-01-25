@@ -596,6 +596,44 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Update the configuration of a specific tab.
+   * Merges the provided partial configuration with the existing tab configuration.
+   * @param tabId The ID of the tab to update
+   * @param configUpdate Partial configuration to merge with existing configuration
+   */
+  UpdateTabConfiguration(tabId: string, configUpdate: Partial<WorkspaceTab['configuration']>): void {
+    const config = this.configuration$.value;
+    if (!config) {
+      return;
+    }
+
+    const updatedTabs = config.tabs.map(tab => {
+      if (tab.id === tabId) {
+        return {
+          ...tab,
+          configuration: {
+            ...tab.configuration,
+            ...configUpdate
+          }
+        };
+      }
+      return tab;
+    });
+
+    this.UpdateConfiguration({
+      ...config,
+      tabs: updatedTabs
+    });
+  }
+
+  /**
+   * Get the ID of the currently active tab
+   */
+  GetActiveTabId(): string | null {
+    return this.configuration$.value?.activeTabId ?? null;
+  }
+
+  /**
    * Generate UUID for new tabs
    */
   private generateUUID(): string {

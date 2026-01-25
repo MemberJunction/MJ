@@ -22,7 +22,7 @@
       }
 
       <!-- Record Count -->
-      @if (effectiveConfig.showRecordCount && entity) {
+      @if (effectiveConfig.showRecordCount && effectiveEntity) {
         <div class="record-count">
           @if (filteredRecordCount !== totalRecordCount) {
             <span>{{ filteredRecordCount | number }} of {{ totalRecordCount | number }} records</span>
@@ -116,20 +116,20 @@
     </div>
 
     <!-- Empty state: no entity selected -->
-    <div class="empty-state" [hidden]="!!entity">
+    <div class="empty-state" [hidden]="!!effectiveEntity">
       <i class="fa-solid fa-database"></i>
       <p>Select an entity to view records</p>
     </div>
 
     <!-- Empty state: no records found -->
-    <div class="empty-state" [hidden]="!entity || filteredRecords.length > 0 || isLoading">
+    <div class="empty-state" [hidden]="!effectiveEntity || filteredRecords.length > 0 || isLoading">
       <i class="fa-solid fa-inbox"></i>
       <p>{{ debouncedFilterText ? 'No matching records' : 'No records found' }}</p>
     </div>
 
     <!-- Grid View - always rendered, visibility controlled by hidden -->
     <mj-entity-data-grid
-      [hidden]="effectiveViewMode !== 'grid' || !entity"
+      [hidden]="effectiveViewMode !== 'grid' || !effectiveEntity"
       [Data]="filteredRecords"
       [Params]="gridParams"
       [FilterText]="debouncedFilterText"
@@ -149,13 +149,14 @@
       (RefreshButtonClick)="onGridRefreshRequested()"
       (DeleteButtonClick)="onGridDeleteRequested($event)"
       (ExportButtonClick)="onGridExportRequested()"
-      (AddToListRequested)="onGridAddToListRequested($event)">
+      (AddToListRequested)="onGridAddToListRequested($event)"
+      (ForeignKeyClick)="onForeignKeyClick($event)">
     </mj-entity-data-grid>
 
     <!-- Cards View - always rendered, visibility controlled by hidden -->
     <mj-entity-cards
-      [hidden]="effectiveViewMode !== 'cards' || !entity"
-      [entity]="entity"
+      [hidden]="effectiveViewMode !== 'cards' || !effectiveEntity"
+      [entity]="effectiveEntity"
       [records]="filteredRecords"
       [selectedRecordId]="selectedRecordId"
       [cardTemplate]="cardTemplate"
@@ -181,7 +182,7 @@
   </div>
 
   <!-- Pagination - only show when there's more data to load OR we've loaded more than one page -->
-  @if (effectiveConfig.showPagination && entity && (pagination.hasMore || pagination.totalRecords > effectiveConfig.pageSize)) {
+  @if (effectiveConfig.showPagination && effectiveEntity && (pagination.hasMore || pagination.totalRecords > effectiveConfig.pageSize)) {
     <mj-pagination
       [pagination]="pagination"
       [loadedRecordCount]="filteredRecords.length"

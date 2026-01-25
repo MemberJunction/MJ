@@ -11,7 +11,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Get Storage Download URL',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'Azure Blob Storage'
  *   }, {
  *     Name: 'ObjectName',
@@ -27,7 +27,7 @@ export class GetDownloadUrlAction extends BaseFileStorageAction {
      * Generate a pre-authenticated download URL
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - ObjectName: Required - Name/path of the object
      *
      * @returns Operation result with:

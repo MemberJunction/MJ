@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 3.2.0
+
+### Minor Changes
+
+- 6806a6c: Add enterprise file storage accounts with credential-based authentication
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/interactive-component-types@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/actions-base@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- 8c0b624: no migration
+  - @memberjunction/ai-core-plus@3.1.1
+  - @memberjunction/actions-base@3.1.1
+  - @memberjunction/interactive-component-types@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/global@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

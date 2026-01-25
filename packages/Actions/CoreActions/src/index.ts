@@ -84,6 +84,7 @@ export * from './custom/ai/summarize-content.action';
 export * from './custom/ai/find-candidate-agents.action';
 export * from './custom/ai/find-candidate-actions.action';
 export * from './custom/ai/load-agent-spec.action';
+export * from './custom/ai/generate-image.action';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';
@@ -162,7 +163,7 @@ import { LoadDeleteObjectAction } from './custom/files/delete-object.action';
 import { LoadCreateDirectoryAction } from './custom/files/create-directory.action';
 import { LoadDeleteDirectoryAction } from './custom/files/delete-directory.action';
 import { LoadSearchStorageFilesAction } from './custom/files/search-storage-files.action';
-import { LoadListStorageProvidersAction } from './custom/files/list-storage-providers.action';
+import { LoadListStorageAccountsAction } from './custom/files/list-storage-providers.action';
 import { LoadHTTPRequestAction } from './custom/integration/http-request.action';
 import { LoadGraphQLQueryAction } from './custom/integration/graphql-query.action';
 import { LoadOAuthFlowAction } from './custom/integration/oauth-flow.action';
@@ -180,6 +181,7 @@ import { LoadSummarizeContentAction } from './custom/ai/summarize-content.action
 import { LoadFindBestAgentAction } from './custom/ai/find-candidate-agents.action';
 import { LoadFindBestActionAction } from './custom/ai/find-candidate-actions.action';
 import { LoadLoadAgentSpecAction } from './custom/ai/load-agent-spec.action';
+import { LoadGenerateImageAction } from './custom/ai/generate-image.action';
 import { LoadCheckUserPermissionAction } from './custom/user-management/check-user-permission.action';
 import { LoadCreateUserAction } from './custom/user-management/create-user.action';
 import { LoadCreateEmployeeAction } from './custom/user-management/create-employee.action';
@@ -256,7 +258,7 @@ export function LoadAllCoreActions() {
     LoadCreateDirectoryAction();
     LoadDeleteDirectoryAction();
     LoadSearchStorageFilesAction();
-    LoadListStorageProvidersAction();
+    LoadListStorageAccountsAction();
     LoadHTTPRequestAction();
     LoadGraphQLQueryAction();
     LoadOAuthFlowAction();
@@ -273,6 +275,7 @@ export function LoadAllCoreActions() {
     LoadFindBestAgentAction();
     LoadFindBestActionAction();
     LoadLoadAgentSpecAction();
+    LoadGenerateImageAction();
     LoadCheckUserPermissionAction();
     LoadCreateUserAction();
     LoadCreateEmployeeAction();

@@ -152,7 +152,15 @@
                     <i class="fas fa-code"></i>
                   </div>
                   <div class="card-title-info">
-                    <h4 class="card-title">{{ query.name }}</h4>
+                    <div class="title-with-badge">
+                      <h4 class="card-title">{{ query.name }}</h4>
+                      @if (query.isNew) {
+                        <span class="new-query-badge" title="This query was newly created for this component">
+                          <i class="fas fa-sparkles"></i>
+                          NEW
+                        </span>
+                      }
+                    </div>
                     <p class="card-path">{{ query.categoryPath }}</p>
                     @if (query.description) {
                       <p class="card-description">{{ query.description }}</p>

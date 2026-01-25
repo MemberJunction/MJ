@@ -1,0 +1,113 @@
+<!-- Add Part Dialog -->
+<div class="add-part-dialog-overlay" *ngIf="visible" (click)="onCancel()">
+    <div class="add-part-dialog" (click)="$event.stopPropagation()">
+        <!-- Step 1: Select Part Type -->
+        <ng-container *ngIf="step === 'select-type'">
+            <!-- Header -->
+            <div class="dialog-header">
+                <h3>
+                    <i class="fa-solid fa-plus-circle"></i>
+                    Add Part
+                </h3>
+                <button class="close-button" (click)="onCancel()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="dialog-content">
+                <p class="instruction">Select a part type to add to your dashboard:</p>
+
+                <div class="part-type-grid">
+                    <div
+                        *ngFor="let partType of partTypes"
+                        class="part-type-card"
+                        (click)="onPartTypeSelect(partType)">
+                        <div class="card-icon">
+                            <i [class]="partType.Icon || 'fa-solid fa-puzzle-piece'"></i>
+                        </div>
+                        <div class="card-content">
+                            <span class="card-title">{{ partType.Name }}</span>
+                            <span class="card-description" *ngIf="partType.Description">
+                                {{ partType.Description }}
+                            </span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right card-arrow"></i>
+                    </div>
+                </div>
+
+                <div class="no-types" *ngIf="partTypes.length === 0">
+                    <div class="warning-icon">
+                        <i class="fa-solid fa-exclamation-triangle"></i>
+                    </div>
+                    <h4>No part types available</h4>
+                    <p>Dashboard part types have not been configured in the system.</p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="dialog-footer">
+                <button class="btn-secondary" (click)="onCancel()">Cancel</button>
+            </div>
+        </ng-container>
+
+        <!-- Step 2: Configure Part -->
+        <ng-container *ngIf="step === 'configure'">
+            <!-- Header -->
+            <div class="dialog-header">
+                <button class="back-button" (click)="goBack()">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h3>
+                    <i [class]="selectedPartType?.Icon || 'fa-solid fa-puzzle-piece'"></i>
+                    Configure {{ getConfigTypeName() }} Part
+                </h3>
+                <button class="close-button" (click)="onCancel()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Content - Dynamic Config Panel -->
+            <div class="dialog-content config-content">
+                <!-- Loading state -->
+                <div class="loading-state" *ngIf="isLoadingPanel">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    <span>Loading configuration panel...</span>
+                </div>
+
+                <!-- Error state -->
+                <div class="error-state" *ngIf="loadError && !isLoadingPanel">
+                    <i class="fa-solid fa-exclamation-triangle"></i>
+                    <span>{{ loadError }}</span>
+                    <p class="error-hint">You can still add this part with default settings.</p>
+                </div>
+
+                <!-- Dynamic config panel container -->
+                <ng-container #configPanelContainer></ng-container>
+
+                <!-- No config panel available (custom type) -->
+                <div class="config-placeholder" *ngIf="!hasConfigPanel() && !isLoadingPanel && !loadError">
+                    <i class="fa-solid fa-cog"></i>
+                    <p>This part type uses default configuration.</p>
+                </div>
+
+                <!-- Validation Errors -->
+                <div class="validation-errors" *ngIf="currentResult && currentResult.errors.length > 0">
+                    <div class="error-item" *ngFor="let error of currentResult.errors">
+                        <i class="fa-solid fa-exclamation-circle"></i>
+                        {{ error }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="dialog-footer">
+                <button class="btn-primary" (click)="addPart()" [disabled]="!canAddPart && !loadError">
+                    <i class="fa-solid fa-plus"></i>
+                    Add Part
+                </button>
+                <button class="btn-secondary" (click)="onCancel()">Cancel</button>
+            </div>
+        </ng-container>
+    </div>
+</div>

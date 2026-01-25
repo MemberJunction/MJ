@@ -1,6 +1,6 @@
 export * from './generic/baseModel'
 export * from './generic/baseLLM';
-export * from './generic/baseDiffusion';
+export * from './generic/baseImage';
 export * from './generic/baseReranker';
 export * from './generic/chat.types';
 export * from './generic/classify.types';
