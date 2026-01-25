@@ -1417,17 +1417,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * and triggering data load if allowed.
    */
   private async onParamsChanged(): Promise<void> {
-    const callId = Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-    console.log('[AGG-TRACE] 0. onParamsChanged START, callId=' + callId, {
-      hasParams: !!this._params,
-      ViewID: this._params?.ViewID,
-      ViewName: this._params?.ViewName,
-      EntityName: this._params?.EntityName
-    });
-
     if (!this._params) {
       // Params cleared - reset view entity
-      console.log('[AGG-TRACE] 0a. onParamsChanged early return - no params, callId=' + callId);
       this._viewEntity = null;
       return;
     }
@@ -1453,85 +1444,49 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // (The parent may have set allowLoad=false for the previous view, which shouldn't prevent loading the new view)
     this._allowLoad = true;
 
-    console.log('[AGG-TRACE] 1. onParamsChanged: Reset aggregates, _aggregatesConfig=null, _gridState=null, _allowLoad=true');
-
     try {
-      console.log('[AGG-TRACE] 1a. Entered try block. Checking params:', {
-        hasViewEntity: !!this._params.ViewEntity,
-        ViewID: this._params.ViewID,
-        ViewName: this._params.ViewName,
-        EntityName: this._params.EntityName
-      });
-
       // If using a stored view, load the view entity first
       if (this._params.ViewEntity) {
-        console.log('[AGG-TRACE] 1b. ViewEntity branch - starting');
         // ViewEntity was provided directly
         this._viewEntity = this._params.ViewEntity as UserViewEntityExtended;
         this._entityInfo = this.getEntityInfoFromViewEntity(this._viewEntity);
         this.applyViewEntitySettings();
-        this.logAggregateState('2. After applyViewEntitySettings (ViewEntity)');
       } else if (this._params.ViewID) {
-        console.log('[AGG-TRACE] 1b. ViewID branch - starting, ViewID=' + this._params.ViewID);
         // Load view entity by ID from engine
         const cachedView = this.getViewFromEngine(this._params.ViewID);
-        console.log('[AGG-TRACE] 1c. ViewID branch - cachedView result:', !!cachedView, cachedView?.Name);
         if (cachedView) {
           this._viewEntity = cachedView;
         } else {
           // View not in cache - use ViewInfo (which also uses engine)
-          console.log('[AGG-TRACE] 1d. ViewID branch - awaiting ViewInfo.GetViewEntity');
           this._viewEntity = await ViewInfo.GetViewEntity(this._params.ViewID);
-          console.log('[AGG-TRACE] 1e. ViewID branch - got view from ViewInfo:', !!this._viewEntity);
         }
-        console.log('[AGG-TRACE] 1f. ViewID branch - calling getEntityInfoFromViewEntity');
         this._entityInfo = this.getEntityInfoFromViewEntity(this._viewEntity);
-        console.log('[AGG-TRACE] 1g. ViewID branch - calling applyViewEntitySettings');
         this.applyViewEntitySettings();
-        this.logAggregateState('2. After applyViewEntitySettings (ViewID=' + this._params.ViewID + ')');
       } else if (this._params.ViewName) {
-        console.log('[AGG-TRACE] 1b. ViewName branch - starting, ViewName=' + this._params.ViewName);
         // Load view entity by name from engine
         const cachedView = this.getViewFromEngineByName(this._params.ViewName);
-        console.log('[AGG-TRACE] 1c. ViewName branch - cachedView result:', !!cachedView, cachedView?.Name);
         if (cachedView) {
           this._viewEntity = cachedView;
         } else {
           // View not in cache - use ViewInfo (which also uses engine)
-          console.log('[AGG-TRACE] 1d. ViewName branch - awaiting ViewInfo.GetViewEntityByName');
           this._viewEntity = await ViewInfo.GetViewEntityByName(this._params.ViewName);
-          console.log('[AGG-TRACE] 1e. ViewName branch - got view from ViewInfo:', !!this._viewEntity);
         }
-        console.log('[AGG-TRACE] 1f. ViewName branch - calling getEntityInfoFromViewEntity');
         this._entityInfo = this.getEntityInfoFromViewEntity(this._viewEntity);
-        console.log('[AGG-TRACE] 1g. ViewName branch - calling applyViewEntitySettings');
         this.applyViewEntitySettings();
-        this.logAggregateState('2. After applyViewEntitySettings (ViewName=' + this._params.ViewName + ')');
       } else if (this._params.EntityName) {
-        console.log('[AGG-TRACE] 1b. EntityName branch - starting, EntityName=' + this._params.EntityName);
         // Dynamic view - just get entity metadata
         this._viewEntity = null;
         const md = new Metadata();
         this._entityInfo = md.Entities.find(e => e.Name === this._params!.EntityName) || null;
-        console.log('[AGG-TRACE] 1c. EntityName branch - got entityInfo:', !!this._entityInfo);
 
         // Reset columns to force regeneration from metadata when switching to dynamic view
         // This ensures we don't carry over column config from a previous saved view
         this._columns = [];
 
         // For dynamic views, try to load user's saved defaults
-        console.log('[AGG-TRACE] 1d. EntityName branch - checking autoPersist:', this._autoPersistState, 'hasEntityInfo:', !!this._entityInfo);
         if (this._entityInfo && this._autoPersistState) {
           this.loadUserDefaultGridState(this._entityInfo.Name);
         }
-        console.log('[AGG-TRACE] 2. Branch taken: EntityName=' + this._params.EntityName + ', _aggregatesConfig after load:', !!this._aggregatesConfig);
-      } else {
-        console.log('[AGG-TRACE] 2. NO BRANCH TAKEN - params:', {
-          ViewEntity: !!this._params.ViewEntity,
-          ViewID: this._params.ViewID,
-          ViewName: this._params.ViewName,
-          EntityName: this._params.EntityName
-        });
       }
 
       // Generate columns if not already set
@@ -1543,18 +1498,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       this.buildAgColumnDefs();
 
       // Load data if auto-refresh is enabled
-      console.log('[AGG-TRACE] onParamsChanged: About to call loadData, _autoRefreshOnParamsChange=', this._autoRefreshOnParamsChange);
       if (this._autoRefreshOnParamsChange) {
         await this.loadData(false);
-      } else {
-        console.log('[AGG-TRACE] onParamsChanged: loadData skipped - autoRefresh disabled');
       }
     } catch (error) {
-      console.error('[AGG-TRACE] CAUGHT EXCEPTION in onParamsChanged:', error);
       this.errorMessage = error instanceof Error ? error.message : 'Failed to load view';
       this.cdr.detectChanges();
     } finally {
-      console.log('[AGG-TRACE] onParamsChanged finally block - finished');
       // Re-enable persistence now that the new view is fully loaded
       this._suppressPersist = false;
     }
@@ -1628,20 +1578,12 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Uses UserInfoEngine to retrieve settings stored with key format: "default-view-setting/{entityName}"
    */
   private loadUserDefaultGridState(entityName: string): void {
-    console.log('[AGG-TRACE] loadUserDefaultGridState called for entity:', entityName);
     try {
       const settingKey = `default-view-setting/${entityName}`;
       const savedState = UserInfoEngine.Instance.GetSetting(settingKey);
-      console.log('[AGG-TRACE] loadUserDefaultGridState - savedState exists:', !!savedState);
 
       if (savedState) {
         const gridState = JSON.parse(savedState) as ViewGridState;
-        console.log('[AGG-TRACE] loadUserDefaultGridState - parsed gridState:', {
-          hasColumnSettings: !!gridState.columnSettings?.length,
-          hasSortSettings: !!gridState.sortSettings?.length,
-          hasAggregates: !!gridState.aggregates,
-          aggregatesCount: gridState.aggregates?.expressions?.length || 0
-        });
 
         // Only apply if not already set via props (props take precedence)
         if (!this._gridState && gridState.columnSettings?.length) {
@@ -1650,7 +1592,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
             sortSettings: gridState.sortSettings || [],
             aggregates: gridState.aggregates
           };
-          console.log('[AGG-TRACE] loadUserDefaultGridState - set _gridState with aggregates:', !!gridState.aggregates);
         }
 
         // Apply sort state if not already set
@@ -1665,15 +1606,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         // Apply aggregates from user defaults if present and not already set
         if (gridState.aggregates && !this._aggregatesConfig) {
           this._aggregatesConfig = gridState.aggregates;
-          console.log('[AGG-TRACE] loadUserDefaultGridState - set _aggregatesConfig:', gridState.aggregates.expressions?.length, 'expressions');
-        } else {
-          console.log('[AGG-TRACE] loadUserDefaultGridState - did NOT set _aggregatesConfig:', {
-            hasAggregatesInState: !!gridState.aggregates,
-            _aggregatesConfigAlreadySet: !!this._aggregatesConfig
-          });
         }
-      } else {
-        console.log('[AGG-TRACE] loadUserDefaultGridState - no saved state found for key:', settingKey);
       }
     } catch (error) {
       console.error('[entity-data-grid] Failed to load user default grid state:', error);
@@ -1685,13 +1618,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Uses UserInfoEngine to store settings with key format: "default-view-setting/{entityName}"
    */
   private async persistUserDefaultGridState(state: ViewGridStateConfig): Promise<void> {
-    console.log('[AGG-TRACE] persistUserDefaultGridState called:', {
-      entityName: this._entityInfo?.Name,
-      hasColumnSettings: !!state.columnSettings?.length,
-      hasAggregates: !!state.aggregates,
-      aggregatesCount: state.aggregates?.expressions?.length || 0
-    });
-
     if (!this._entityInfo) {
       this._pendingUserDefaultsToPersist = null;
       return;
@@ -1704,7 +1630,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         sortSettings: state.sortSettings,
         aggregates: state.aggregates
       };
-      console.log('[AGG-TRACE] persistUserDefaultGridState - saving to key:', settingKey, 'with aggregates:', !!gridStateJson.aggregates);
 
       await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridStateJson));
       // Clear pending state and reset dirty flag after successful save
@@ -1727,22 +1652,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private applyViewEntitySettings(): void {
     if (!this._viewEntity) return;
 
-    console.log('[AGG-TRACE] applyViewEntitySettings called:', {
-      hasGridStateJson: !!this._viewEntity.GridState,
-      _gridStateAlreadySet: !!this._gridState,
-      _aggregatesConfigAlreadySet: !!this._aggregatesConfig
-    });
-
     // Only apply grid state from view entity if not already set via props
     // (gridState input takes precedence)
     if (!this._gridState && this._viewEntity.GridState) {
       try {
         const gridState = JSON.parse(this._viewEntity.GridState) as ViewGridState;
-        console.log('[AGG-TRACE] Parsed GridState from view:', {
-          hasColumnSettings: !!gridState.columnSettings?.length,
-          hasAggregates: !!gridState.aggregates,
-          aggregatesCount: gridState.aggregates?.expressions?.length || 0
-        });
         if (gridState.columnSettings?.length) {
           this._gridState = {
             columnSettings: gridState.columnSettings,
@@ -1753,15 +1667,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         // Apply aggregates from view's GridState if present
         if (gridState.aggregates && !this._aggregatesConfig) {
           this._aggregatesConfig = gridState.aggregates;
-          console.log('[AGG-TRACE] Set _aggregatesConfig from GridState:', gridState.aggregates.expressions?.length || 0, 'expressions');
         }
       } catch (e) {
         console.warn('Failed to parse view GridState:', e);
       }
-    } else {
-      console.log('[AGG-TRACE] Skipped GridState parsing:', {
-        reason: this._gridState ? '_gridState already set' : 'no GridState JSON on view'
-      });
     }
 
     // Only apply sort state if:
@@ -2629,19 +2538,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   // ========================================
 
   async loadData(isAutoRefresh: boolean = false): Promise<void> {
-    console.log('[AGG-TRACE] loadData called:', {
-      _useExternalData: this._useExternalData,
-      hasParams: !!this._params,
-      ViewID: this._params?.ViewID,
-      ViewName: this._params?.ViewName,
-      ViewEntity: !!this._params?.ViewEntity,
-      EntityName: this._params?.EntityName,
-      _allowLoad: this._allowLoad,
-      _paginationMode: this._paginationMode
-    });
-
     if (this._useExternalData) {
-      console.log('[AGG-TRACE] loadData: early return - useExternalData');
       this.processData();
       return;
     }
@@ -2655,13 +2552,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     );
 
     if (!hasDataSource) {
-      console.log('[AGG-TRACE] loadData: early return - no data source');
       return;
     }
 
     // Check AllowLoad for deferred loading
     if (!this._allowLoad) {
-      console.log('[AGG-TRACE] loadData: early return - allowLoad is false');
       return;
     }
 
@@ -2764,13 +2659,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
             alias: agg.id || agg.label || agg.expression
           }));
       }
-
-      // Log aggregate request for debugging
-      console.log('[AGG-TRACE] 3. executeLoadData:', {
-        effectiveConfigExpressions: effectiveAggConfig?.expressions?.length || 0,
-        aggregatesSentToServer: aggregateExpressions?.length || 0,
-        configSource: this._aggregatesConfig ? '_aggregatesConfig' : (this._gridState?.aggregates ? '_gridState' : 'none')
-      });
 
       const rv = new RunView();
       const result = await rv.RunView<BaseEntity>({
@@ -3051,11 +2939,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private processAggregateResults(results: AggregateResult[] | undefined, executionTime?: number): void {
     this._aggregatesLoading = false;
 
-    console.log('[AGG-TRACE] 4. processAggregateResults:', {
-      resultsReceived: results?.length || 0,
-      expectedFromConfig: this.EffectiveAggregatesConfig?.expressions?.length || 0
-    });
-
     if (!results || results.length === 0) {
       this._aggregateResults = [];
       this._aggregateValues.clear();
@@ -3086,28 +2969,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       executionTime
     });
 
-    console.log('[AGG-TRACE] 5. After processAggregateResults:', {
-      valuesMapSize: this._aggregateValues.size,
-      cardAggregatesCount: this.CardAggregates.length,
-      columnAggregatesCount: this.ColumnAggregates.length,
-      showPanel: this.ShowAggregatePanel,
-      showSummary: this.ShowAggregateSummary
-    });
-
     this.cdr.detectChanges();
-  }
-
-  /**
-   * Helper to log aggregate state for debugging
-   */
-  private logAggregateState(context: string): void {
-    console.log(`[AGG-TRACE] ${context}:`, {
-      _aggregatesConfig: this._aggregatesConfig?.expressions?.length || 0,
-      _gridStateAggregates: this._gridState?.aggregates?.expressions?.length || 0,
-      effectiveConfig: this.EffectiveAggregatesConfig?.expressions?.length || 0,
-      _aggregateValuesSize: this._aggregateValues.size,
-      hasViewGridState: !!this._viewEntity?.GridState
-    });
   }
 
   private getRowKey(entity: BaseEntity): string {

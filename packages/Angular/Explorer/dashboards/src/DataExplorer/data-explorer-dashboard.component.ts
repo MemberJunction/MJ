@@ -1076,10 +1076,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.stateService.setViewModified(false);
           // Update currentGridState from the saved view to refresh the grid
           this.currentGridState = this.parseViewGridState(newView);
+          // Force change detection to ensure grid picks up the new gridState
+          this.cdr.detectChanges();
           // Refresh the view selector dropdown
           await this.viewSelectorRef?.loadViews();
-          // Note: For new views, ngOnChanges will trigger refresh automatically
-          // because selectedViewEntity reference changes
+          // Refresh the entity viewer data to apply saved aggregates and fetch their values
+          this.entityViewerRef?.refresh();
         }
       } else {
         // Update existing view
@@ -1173,6 +1175,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           sortSettings: gridState.sortSettings as ViewGridStateConfig['sortSettings'],
           aggregates: gridState.aggregates
         };
+
+        // Force change detection to ensure grid picks up the new gridState
+        this.cdr.detectChanges();
+
+        // Refresh the entity viewer data to apply saved aggregates and fetch their values
+        this.entityViewerRef?.refresh();
 
         // Show success notification
         this.showNotification('Default view settings saved', 'success', 2500);
