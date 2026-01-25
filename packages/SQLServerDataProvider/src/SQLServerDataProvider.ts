@@ -23,6 +23,8 @@ import {
   IMetadataProvider,
   IRunViewProvider,
   RunViewResult,
+  AggregateResult,
+  AggregateValue,
   EntityInfo,
   EntityFieldInfo,
   ApplicationInfo,
@@ -111,7 +113,7 @@ import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, SQLExpressionValidator } from '@memberjunction/global';
 
 /**
  * Represents a single field change in the DiffObjects comparison result
@@ -1399,6 +1401,11 @@ export class SQLServerDataProvider
   protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
     // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
 
+    // Log aggregate input for debugging
+    if (params?.Aggregates?.length) {
+      LogStatus(`[SQLServerDataProvider] InternalRunView received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}, aggregates=${JSON.stringify(params.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+    }
+
     const startTime = new Date();
     try {
       if (params) {
@@ -1568,22 +1575,119 @@ export class SQLServerDataProvider
           viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
         }
 
-        // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
-        const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL, undefined, undefined, contextUser);
+        // Build aggregate SQL if aggregates are requested
+        let aggregateSQL: string | null = null;
+        let aggregateValidationErrors: AggregateResult[] = [];
+        if (params.Aggregates && params.Aggregates.length > 0) {
+          const aggregateBuild = this.buildAggregateSQL(
+            params.Aggregates,
+            entityInfo,
+            entityInfo.SchemaName,
+            entityInfo.BaseView,
+            whereSQL
+          );
+          aggregateSQL = aggregateBuild.aggregateSQL;
+          aggregateValidationErrors = aggregateBuild.validationErrors;
+        }
 
-        // finally, if we have a countSQL, we need to run that to get the row count
-        // Run the count query if:
-        // 1. We're using pagination (always need total count for pagination)
-        // 2. ResultType is 'count_only'
-        // 3. The number of returned rows equals the max limit (might be more rows available)
-        let rowCount = null;
+        // Execute queries in parallel for better performance
+        // - Data query (if not count_only)
+        // - Count query (if needed)
+        // - Aggregate query (if aggregates requested)
+        const queries: Promise<unknown>[] = [];
+        const queryKeys: string[] = [];
+
+        // Data query
+        if (params.ResultType !== 'count_only') {
+          queries.push(this.ExecuteSQL(viewSQL, undefined, undefined, contextUser));
+          queryKeys.push('data');
+        }
+
+        // Count query (run in parallel if we'll need it)
         const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
-        if (countSQL && (usingPagination || params.ResultType === 'count_only' || (maxRowsUsed && retData.length === maxRowsUsed))) {
+        const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
+        if (willNeedCount) {
+          queries.push(this.ExecuteSQL(countSQL, undefined, undefined, contextUser));
+          queryKeys.push('count');
+        }
+
+        // Aggregate query (runs in parallel with data/count queries)
+        const aggregateStartTime = Date.now();
+        if (aggregateSQL) {
+          queries.push(this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser));
+          queryKeys.push('aggregate');
+        }
+
+        // Execute all queries in parallel
+        const results = await Promise.all(queries);
+
+        // Map results back to their queries
+        const resultMap: Record<string, unknown> = {};
+        queryKeys.forEach((key, index) => {
+          resultMap[key] = results[index];
+        });
+
+        // Process data results
+        const retData = resultMap['data'] as Record<string, unknown>[] || [];
+
+        // Process count results - also check if we need count based on result length
+        let rowCount = null;
+        if (willNeedCount && resultMap['count']) {
+          const countResult = resultMap['count'] as { TotalRowCount: number }[];
+          if (countResult && countResult.length > 0) {
+            rowCount = countResult[0].TotalRowCount;
+          }
+        } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
+          // Need to run count query because we hit the limit
           const countResult = await this.ExecuteSQL(countSQL, undefined, undefined, contextUser);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;
           }
         }
+
+        // Process aggregate results
+        let aggregateResults: AggregateResult[] | undefined = undefined;
+        let aggregateExecutionTime: number | undefined = undefined;
+        if (params.Aggregates && params.Aggregates.length > 0) {
+          aggregateExecutionTime = Date.now() - aggregateStartTime;
+
+          if (resultMap['aggregate']) {
+            // Map raw aggregate results back to original expressions
+            const rawAggregateResult = resultMap['aggregate'] as Record<string, unknown>[];
+            if (rawAggregateResult && rawAggregateResult.length > 0) {
+              const row = rawAggregateResult[0];
+              aggregateResults = [];
+              let validExprIndex = 0;
+
+              for (let i = 0; i < params.Aggregates.length; i++) {
+                const agg = params.Aggregates[i];
+                const alias = agg.alias || agg.expression;
+
+                // Check if this expression had a validation error
+                const validationError = aggregateValidationErrors.find(e => e.expression === agg.expression);
+                if (validationError) {
+                  aggregateResults.push(validationError);
+                } else {
+                  // Get the value from the result using the numbered alias
+                  const rawValue = row[`Agg_${validExprIndex}`];
+                  // Cast to AggregateValue - SQL Server returns numbers, strings, dates, or null
+                  const value: AggregateValue = rawValue === undefined ? null : rawValue as AggregateValue;
+                  aggregateResults.push({
+                    expression: agg.expression,
+                    alias: alias,
+                    value: value,
+                    error: undefined
+                  });
+                  validExprIndex++;
+                }
+              }
+            }
+          } else if (aggregateValidationErrors.length > 0) {
+            // All expressions had validation errors
+            aggregateResults = aggregateValidationErrors;
+          }
+        }
+
         const stopTime = new Date();
 
         if (
@@ -1613,17 +1717,19 @@ export class SQLServerDataProvider
           );
         }
 
-        const result =  {
+        const result: RunViewResult<T> = {
           RowCount:
             params.ResultType === 'count_only'
               ? rowCount
               : retData.length /*this property should be total row count if the ResultType='count_only' otherwise it should be the row count of the returned rows */,
           TotalRowCount: rowCount ? rowCount : retData.length,
-          Results: retData,
+          Results: retData as T[],
           UserViewRunID: userViewRunID,
           ExecutionTime: stopTime.getTime() - startTime.getTime(),
           Success: true,
           ErrorMessage: null,
+          AggregateResults: aggregateResults,
+          AggregateExecutionTime: aggregateExecutionTime,
         };
 
         return result;
@@ -2225,6 +2331,154 @@ export class SQLServerDataProvider
     }
 
     return true;
+  }
+
+  /**
+   * Validates and builds an aggregate SQL query from the provided aggregate expressions.
+   * Uses the SQLExpressionValidator to ensure expressions are safe from SQL injection.
+   *
+   * @param aggregates - Array of aggregate expressions to validate and build
+   * @param entityInfo - Entity metadata for field reference validation
+   * @param schemaName - Schema name for the table
+   * @param baseView - Base view name for the table
+   * @param whereSQL - WHERE clause to apply (without the WHERE keyword)
+   * @returns Object with aggregateSQL string and any validation errors
+   */
+  protected buildAggregateSQL(
+    aggregates: { expression: string; alias?: string }[],
+    entityInfo: EntityInfo,
+    schemaName: string,
+    baseView: string,
+    whereSQL: string
+  ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
+    if (!aggregates || aggregates.length === 0) {
+      return { aggregateSQL: null, validationErrors: [] };
+    }
+
+    const validator = SQLExpressionValidator.Instance;
+    const validationErrors: AggregateResult[] = [];
+    const validExpressions: string[] = [];
+    const fieldNames = entityInfo.Fields.map(f => f.Name);
+
+    for (let i = 0; i < aggregates.length; i++) {
+      const agg = aggregates[i];
+      const alias = agg.alias || agg.expression;
+
+      // Validate the expression using SQLExpressionValidator
+      const result = validator.validate(agg.expression, {
+        context: 'aggregate',
+        entityFields: fieldNames
+      });
+
+      if (!result.valid) {
+        // Record the error but continue processing other expressions
+        validationErrors.push({
+          expression: agg.expression,
+          alias: alias,
+          value: null,
+          error: result.error || 'Validation failed'
+        });
+      } else {
+        // Expression is valid, add to the query with an alias
+        // Use a numbered alias for the SQL to make result mapping easier
+        validExpressions.push(`${agg.expression} AS [Agg_${i}]`);
+      }
+    }
+
+    if (validExpressions.length === 0) {
+      return { aggregateSQL: null, validationErrors };
+    }
+
+    // Build the aggregate SQL query
+    let aggregateSQL = `SELECT ${validExpressions.join(', ')} FROM [${schemaName}].${baseView}`;
+    if (whereSQL && whereSQL.length > 0) {
+      aggregateSQL += ` WHERE ${whereSQL}`;
+    }
+
+    return { aggregateSQL, validationErrors };
+  }
+
+  /**
+   * Executes the aggregate query and maps results back to the original expressions.
+   *
+   * @param aggregateSQL - The aggregate SQL query to execute
+   * @param aggregates - Original aggregate expressions (for result mapping)
+   * @param validationErrors - Any validation errors from buildAggregateSQL
+   * @param contextUser - User context for query execution
+   * @returns Array of AggregateResult objects
+   */
+  protected async executeAggregateQuery(
+    aggregateSQL: string | null,
+    aggregates: { expression: string; alias?: string }[],
+    validationErrors: AggregateResult[],
+    contextUser?: UserInfo
+  ): Promise<{ results: AggregateResult[]; executionTime: number }> {
+    const startTime = Date.now();
+
+    if (!aggregateSQL) {
+      // No valid expressions to execute, return only validation errors
+      return { results: validationErrors, executionTime: 0 };
+    }
+
+    try {
+      const queryResult = await this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser);
+      const executionTime = Date.now() - startTime;
+
+      if (!queryResult || queryResult.length === 0) {
+        // Query returned no results, which shouldn't happen for aggregates
+        // Return validation errors plus null values for valid expressions
+        const nullResults = aggregates
+          .filter((_, i) => !validationErrors.some(e => e.expression === aggregates[i].expression))
+          .map(agg => ({
+            expression: agg.expression,
+            alias: agg.alias || agg.expression,
+            value: null,
+            error: undefined
+          }));
+        return { results: [...validationErrors, ...nullResults], executionTime };
+      }
+
+      // Map query results back to original expressions
+      const row = queryResult[0];
+      const results: AggregateResult[] = [];
+      let validExprIndex = 0;
+
+      for (let i = 0; i < aggregates.length; i++) {
+        const agg = aggregates[i];
+        const alias = agg.alias || agg.expression;
+
+        // Check if this expression had a validation error
+        const validationError = validationErrors.find(e => e.expression === agg.expression);
+        if (validationError) {
+          results.push(validationError);
+        } else {
+          // Get the value from the result using the numbered alias
+          const value = row[`Agg_${validExprIndex}`];
+          results.push({
+            expression: agg.expression,
+            alias: alias,
+            value: value ?? null,
+            error: undefined
+          });
+          validExprIndex++;
+        }
+      }
+
+      return { results, executionTime };
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Return all expressions with the error
+      const errorResults = aggregates.map(agg => ({
+        expression: agg.expression,
+        alias: agg.alias || agg.expression,
+        value: null,
+        error: errorMessage
+      }));
+
+      return { results: errorResults, executionTime };
+    }
   }
 
   protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: UserViewEntityExtended): string {

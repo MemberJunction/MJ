@@ -1001,6 +1001,8 @@ export class ViewGridState {
     columnSettings?: ViewGridColumnSetting[];
     /** Filter state (Kendo-compatible format) */
     filter?: ViewFilterInfo;
+    /** Aggregate calculations and display configuration */
+    aggregates?: ViewGridAggregatesConfig;
 }
 
 /**
@@ -1065,3 +1067,191 @@ export interface ViewDisplayState {
     /** Grid-specific configuration */
     grid?: ViewGridDisplayState;
 }
+
+/**
+ * Display location for aggregate values
+ */
+export type AggregateDisplayType = 'column' | 'card';
+
+/**
+ * Value formatting options for aggregates
+ */
+export interface AggregateValueFormat {
+    /** Number of decimal places */
+    decimals?: number;
+    /** Currency code (ISO 4217) for currency format, e.g., 'USD', 'EUR' */
+    currencyCode?: string;
+    /** Show thousands separator */
+    thousandsSeparator?: boolean;
+    /** Prefix to add before value (e.g., '$') */
+    prefix?: string;
+    /** Suffix to add after value (e.g., '%') */
+    suffix?: string;
+    /** Date format for date aggregates */
+    dateFormat?: string;
+}
+
+/**
+ * Conditional styling for aggregate values
+ */
+export interface AggregateConditionalStyle {
+    /** Condition operator */
+    operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'between';
+    /** Value to compare against */
+    value: number | string;
+    /** Second value for 'between' operator */
+    value2?: number | string;
+    /** Style class to apply: 'success' (green), 'warning' (yellow), 'danger' (red), 'info' (blue), 'muted' (gray) */
+    style: 'success' | 'warning' | 'danger' | 'info' | 'muted';
+}
+
+/**
+ * Configuration for a single aggregate expression.
+ * Each aggregate can optionally have a `smartPrompt` for AI-generated expressions.
+ */
+export interface ViewGridAggregate {
+    /**
+     * Unique ID for this aggregate (for UI reference).
+     * Auto-generated if not provided.
+     */
+    id?: string;
+
+    /**
+     * SQL expression to calculate.
+     * Examples:
+     *   - "SUM(OrderTotal)"
+     *   - "COUNT(*)"
+     *   - "SUM(Quantity * Price * (1 - Discount/100))"
+     *
+     * If smartPrompt is set and expression is empty, the expression will be
+     * auto-generated from the natural language prompt.
+     */
+    expression: string;
+
+    /**
+     * Natural language prompt for AI-generated expression.
+     * When set, the server will use AI to generate/update the expression
+     * based on this description.
+     *
+     * Examples:
+     *   - "Total revenue"
+     *   - "Average order size excluding cancelled orders"
+     *   - "Count of unique customers"
+     *
+     * The generated expression is stored in `expression` for caching.
+     * Re-generation only happens when smartPrompt changes.
+     */
+    smartPrompt?: string;
+
+    /**
+     * Display type:
+     * - 'column': Show in pinned row under a specific column
+     * - 'card': Show in summary card panel
+     */
+    displayType: AggregateDisplayType;
+
+    /**
+     * For 'column' displayType: which column to display under.
+     * Should match a field name in the grid.
+     */
+    column?: string;
+
+    /** Human-readable label */
+    label: string;
+
+    /** Optional description (shown in tooltip) */
+    description?: string;
+
+    /** Value formatting */
+    format?: AggregateValueFormat;
+
+    /** Icon for card display (Font Awesome class) */
+    icon?: string;
+
+    /**
+     * Conditional styling rules (applied in order, first match wins).
+     * Used for visual indicators like red/yellow/green based on value.
+     */
+    conditionalStyles?: AggregateConditionalStyle[];
+
+    /**
+     * Whether this aggregate is enabled (visible).
+     * Allows users to toggle without deleting configuration.
+     */
+    enabled?: boolean;
+
+    /**
+     * Sort order for display (lower = earlier).
+     * Cards are sorted by this, columns use column order.
+     */
+    order?: number;
+}
+
+/**
+ * Display settings for the aggregate panel/row
+ */
+export interface ViewGridAggregateDisplay {
+    /** Whether to show column-bound aggregates in pinned row */
+    showColumnAggregates?: boolean;
+
+    /** Where to show column aggregates: pinned top or bottom row */
+    columnPosition?: 'top' | 'bottom';
+
+    /** Whether to show card aggregates in a panel */
+    showCardAggregates?: boolean;
+
+    /** Where to show the card panel */
+    cardPosition?: 'right' | 'bottom';
+
+    /** Card panel width in pixels (for 'right' position) */
+    cardPanelWidth?: number;
+
+    /** Card layout style */
+    cardLayout?: 'horizontal' | 'vertical' | 'grid';
+
+    /** Number of columns for 'grid' layout */
+    cardGridColumns?: number;
+
+    /** Card panel title (optional) */
+    cardPanelTitle?: string;
+
+    /** Whether card panel is collapsible */
+    cardPanelCollapsible?: boolean;
+
+    /** Whether card panel starts collapsed */
+    cardPanelStartCollapsed?: boolean;
+}
+
+/**
+ * Complete aggregate configuration for a view's grid state
+ */
+export interface ViewGridAggregatesConfig {
+    /** Display settings for aggregate panel/row */
+    display?: ViewGridAggregateDisplay;
+
+    /**
+     * Aggregate expressions and their display configuration.
+     *
+     * Each aggregate can optionally have a `smartPrompt` for AI-generated expressions.
+     * When smartPrompt is set:
+     *   - If expression is empty, server generates it from the prompt
+     *   - If expression exists, it's cached; regenerate only when smartPrompt changes
+     */
+    expressions?: ViewGridAggregate[];
+}
+
+/**
+ * Default display settings for aggregates
+ */
+export const DEFAULT_AGGREGATE_DISPLAY: Required<ViewGridAggregateDisplay> = {
+    showColumnAggregates: true,
+    columnPosition: 'bottom',
+    showCardAggregates: true,
+    cardPosition: 'right',
+    cardPanelWidth: 280,
+    cardLayout: 'vertical',
+    cardGridColumns: 2,
+    cardPanelTitle: 'Summary',
+    cardPanelCollapsible: true,
+    cardPanelStartCollapsed: false
+};

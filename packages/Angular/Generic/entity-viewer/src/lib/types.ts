@@ -113,8 +113,8 @@ export interface RecordSelectedEvent {
  * Event emitted when a record should be opened (double-click or open button)
  */
 export interface RecordOpenedEvent {
-  /** The entity record to open */
-  record: BaseEntity;
+  /** The entity record to open (may be undefined for FK navigation where record isn't loaded) */
+  record?: BaseEntity;
   /** The entity metadata */
   entity: EntityInfo;
   /** The composite key of the record */
@@ -203,32 +203,11 @@ export interface LoadMoreEvent {
 }
 
 /**
- * Column configuration from a User View's GridState
- * This is an alias to ViewGridColumnSetting from core-entities for backward compatibility
- * @deprecated Use ViewGridColumnSetting from @memberjunction/core-entities directly
- */
-export type ViewColumnConfig = ViewGridColumnSetting;
-
-/**
- * Sort configuration from a User View's GridState
- * This is an alias to ViewGridSortSetting from core-entities for backward compatibility
- * @deprecated Use ViewGridSortSetting from @memberjunction/core-entities directly
- */
-export type ViewSortConfig = ViewGridSortSetting;
-
-/**
- * Grid state configuration from a User View
- * This is an alias to ViewGridState from core-entities for backward compatibility
- * @deprecated Use ViewGridState from @memberjunction/core-entities directly
- */
-export type ViewGridStateConfig = ViewGridState;
-
-/**
  * Event emitted when grid state changes (column resize, reorder, etc.)
  */
 export interface GridStateChangedEvent {
   /** The updated grid state */
-  gridState: ViewGridStateConfig;
+  gridState: ViewGridState;
   /** What changed: 'columns', 'sort', 'filter' */
   changeType: 'columns' | 'sort' | 'filter';
 }
@@ -387,6 +366,12 @@ export interface CardState {
 export interface GridDisplayState {
   /** Row height preference */
   rowHeight?: 'compact' | 'normal' | 'comfortable';
+  /**
+   * Enable text wrapping in grid cells
+   * When true, long text will wrap to multiple lines and rows will auto-size
+   * @default false
+   */
+  wrapText?: boolean;
 }
 
 /**
