@@ -55,6 +55,13 @@
         "ResourceType": "Dashboards",
         "RecordID": "@lookup:Dashboards.Name=SQL Logging?allowDefer",
         "isDefault": true
+      },
+      {
+        "Label": "API Keys",
+        "Icon": "fa-solid fa-key",
+        "ResourceType": "Custom",
+        "DriverClass": "APIKeysResource",
+        "isDefault": false
       }
     ]
   },

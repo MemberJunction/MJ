@@ -136,6 +136,8 @@ import { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-shar
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 // Dashboard Viewer Module
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
+// API Keys Dashboard Components
+import { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
 
 
 
@@ -239,7 +241,9 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     QueryBrowserResourceComponent,
     // Dashboard Browser Components
     DashboardBrowserResourceComponent,
-    DashboardShareDialogComponent
+    DashboardShareDialogComponent,
+    // API Keys Dashboard Components
+    APIKeysResourceComponent
   ],
   imports: [
     CommonModule,
@@ -349,7 +353,9 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     QueryBrowserResourceComponent,
     // Dashboard Browser Components
     DashboardBrowserResourceComponent,
-    DashboardShareDialogComponent
+    DashboardShareDialogComponent,
+    // API Keys Dashboard Components
+    APIKeysResourceComponent
   ]
 })
 export class DashboardsModule { }

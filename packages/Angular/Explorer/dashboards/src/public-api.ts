@@ -26,6 +26,8 @@ import { LoadDashboardBrowserResource } from './DashboardBrowser/dashboard-brows
 // Home Application and Dashboard
 import { LoadHomeApplication } from './Home/home-application';
 import { LoadHomeDashboard } from './Home/home-dashboard.component';
+// API Keys
+import { LoadAPIKeysResource } from './APIKeys/api-keys-resource.component';
 
 import {
   LoadActionsOverviewResource,
@@ -170,6 +172,9 @@ export {
 export { HomeApplication, LoadHomeApplication } from './Home/home-application';
 export { HomeDashboardComponent, LoadHomeDashboard } from './Home/home-dashboard.component';
 
+// API Keys
+export { APIKeysResourceComponent, LoadAPIKeysResource } from './APIKeys/api-keys-resource.component';
+
 // Module
 export * from './module';
 
@@ -239,3 +244,6 @@ LoadDashboardBrowserResource();
 // Home Application and Dashboard loader
 LoadHomeApplication();
 LoadHomeDashboard();
+
+// API Keys resource loader
+LoadAPIKeysResource();
