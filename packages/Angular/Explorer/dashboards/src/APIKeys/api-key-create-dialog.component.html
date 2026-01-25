@@ -4,6 +4,9 @@
             <i class="fa-solid fa-key"></i>
             <span>Generate New API Key</span>
         </div>
+        <button kendoButton fillMode="flat" (click)="close()" class="dialog-close-btn" title="Close (Esc)">
+            <i class="fa-solid fa-times"></i>
+        </button>
     </kendo-dialog-titlebar>
 
     <!-- Step Indicator -->
@@ -160,16 +163,16 @@
         <div class="key-details">
             <div class="detail-row">
                 <span class="detail-label">Label:</span>
-                <span class="detail-value">{{CreatedKey?.Label}}</span>
+                <span class="detail-value">{{Label}}</span>
             </div>
-            <div class="detail-row" *ngIf="CreatedKey?.Description">
+            <div class="detail-row" *ngIf="Description">
                 <span class="detail-label">Description:</span>
-                <span class="detail-value">{{CreatedKey?.Description}}</span>
+                <span class="detail-value">{{Description}}</span>
             </div>
             <div class="detail-row">
                 <span class="detail-label">Expires:</span>
                 <span class="detail-value">
-                    {{CreatedKey?.ExpiresAt ? (CreatedKey?.ExpiresAt | date:'MMMM d, yyyy') : 'Never'}}
+                    {{NeverExpires ? 'Never' : (ExpiresAt | date:'MMMM d, yyyy')}}
                 </span>
             </div>
             <div class="detail-row">

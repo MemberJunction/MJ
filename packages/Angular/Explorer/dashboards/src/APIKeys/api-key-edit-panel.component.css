@@ -694,3 +694,24 @@
     margin: 8px 0 0 0;
     font-size: 13px;
 }
+
+/* Close Button in Titlebar */
+:host ::ng-deep kendo-window-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.window-close-btn {
+    margin-left: auto;
+    color: #6b7280;
+    transition: color 0.2s ease;
+}
+
+.window-close-btn:hover {
+    color: #1f2937;
+}
+
+.window-close-btn i {
+    font-size: 18px;
+}
