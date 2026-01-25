@@ -1,4 +1,4 @@
-import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { AggregateExpression, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
@@ -82,7 +82,8 @@ export type RunViewGenericParams = {
   forceAuditLog?: boolean;
   auditLogDescription?: string;
   resultType?: string;
-  userPayload?: UserPayload; 
+  userPayload?: UserPayload;
+  aggregates?: AggregateExpression[];
 };
 
 
