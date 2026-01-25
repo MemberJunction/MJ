@@ -541,6 +541,25 @@ export interface IMetadataProvider {
 }
 
 /**
+ * Single aggregate result value - can be a number, string, Date, boolean, or null
+ */
+export type AggregateValue = number | string | Date | boolean | null;
+
+/**
+ * Result of a single aggregate expression calculation
+ */
+export interface AggregateResult {
+    /** The expression that was calculated */
+    expression: string;
+    /** The alias (or expression if no alias provided) */
+    alias: string;
+    /** The calculated value */
+    value: AggregateValue;
+    /** If calculation failed, the error message */
+    error?: string;
+}
+
+/**
  * Result of a RunView() execution.
  * Contains the query results along with execution metadata like timing,
  * row counts, and error information.
@@ -576,6 +595,18 @@ export type RunViewResult<T = any> = {
      * If Success is false, this will contain a message describing the error condition.
      */
     ErrorMessage: string;
+
+    /**
+     * Results of aggregate calculations, in same order as input Aggregates array.
+     * Only present if Aggregates were requested in RunViewParams.
+     */
+    AggregateResults?: AggregateResult[];
+
+    /**
+     * Execution time for aggregate query specifically (in milliseconds).
+     * Only present if Aggregates were requested.
+     */
+    AggregateExecutionTime?: number;
 }
 
 /**
@@ -695,6 +726,11 @@ export type RunViewWithCacheCheckResult<T = unknown> = {
      * Error message if status is 'error'
      */
     errorMessage?: string;
+    /**
+     * Aggregate results - populated when status is 'stale' or 'differential' and aggregates were requested.
+     * For 'differential', aggregates are always re-computed fresh (can't be incrementally updated).
+     */
+    aggregateResults?: AggregateResult[];
 }
 
 /**

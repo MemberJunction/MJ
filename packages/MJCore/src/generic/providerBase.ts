@@ -480,7 +480,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     TotalRowCount: cached.results.length,
                     ExecutionTime: 0, // Cached, no execution time
                     ErrorMessage: '',
-                    UserViewRunID: ''
+                    UserViewRunID: '',
+                    AggregateResults: cached.aggregateResults // Include cached aggregate results
                 };
                 cacheStatus = 'hit';
             } else {
@@ -564,7 +565,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         TotalRowCount: cached.results.length,
                         ExecutionTime: 0,
                         ErrorMessage: '',
-                        UserViewRunID: ''
+                        UserViewRunID: '',
+                        AggregateResults: cached.aggregateResults // Include cached aggregate results
                     };
                     // if needed this will transform each result into an entity object
                     await this.TransformSimpleObjectToEntityObject(param, cachedViewResult, contextUser);
@@ -752,7 +754,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     TotalRowCount: cached.rowCount,
                     ExecutionTime: 0,
                     ErrorMessage: '',
-                    UserViewRunID: ''
+                    UserViewRunID: '',
+                    AggregateResults: cached.aggregateResults // Include cached aggregate results
                 };
                 // Transform to entity objects if needed
                 await this.TransformSimpleObjectToEntityObject(param, cachedResult, contextUser);
@@ -790,7 +793,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     checkResult.differentialData.deletedRecordIDs,
                     primaryKeyFieldName,
                     checkResult.maxUpdatedAt || new Date().toISOString(),
-                    checkResult.rowCount || 0
+                    checkResult.rowCount || 0,
+                    checkResult.aggregateResults // Pass fresh aggregate results (can't be differentially computed)
                 );
 
                 if (merged) {
@@ -801,7 +805,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         TotalRowCount: merged.rowCount,
                         ExecutionTime: 0,
                         ErrorMessage: '',
-                        UserViewRunID: ''
+                        UserViewRunID: '',
+                        // Include aggregate results - either fresh from server or from merged cache
+                        AggregateResults: checkResult.aggregateResults || merged.aggregateResults
                     };
                     // Transform to entity objects if needed
                     await this.TransformSimpleObjectToEntityObject(param, mergedResult, contextUser);
@@ -826,7 +832,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 TotalRowCount: checkResult.rowCount || 0,
                 ExecutionTime: 0,
                 ErrorMessage: '',
-                UserViewRunID: ''
+                UserViewRunID: '',
+                AggregateResults: checkResult.aggregateResults // Include fresh aggregate results
             };
 
             // Update the local cache with fresh data (don't await - fire and forget for performance)
@@ -839,7 +846,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     param,
                     checkResult.results || [],
                     checkResult.maxUpdatedAt,
-                    checkResult.rowCount
+                    checkResult.aggregateResults // Include aggregate results in cache
                 ).catch(e => LogError(`Failed to update cache: ${e}`));
             }
 
@@ -956,7 +963,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 preResult.fingerprint,
                 params,
                 result.Results,
-                maxUpdatedAt
+                maxUpdatedAt,
+                result.AggregateResults // Include aggregate results in cache
             );
         }
 
@@ -998,7 +1006,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     fingerprint,
                     params[i],
                     results[i].Results,
-                    maxUpdatedAt
+                    maxUpdatedAt,
+                    results[i].AggregateResults // Include aggregate results in cache
                 ));
             }
         }
