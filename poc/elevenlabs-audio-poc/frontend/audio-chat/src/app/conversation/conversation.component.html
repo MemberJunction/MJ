@@ -1,0 +1,78 @@
+<div class="conversation-container">
+  <mat-card class="conversation-card">
+    <mat-card-header>
+      <mat-card-title>ElevenLabs Voice Assistant</mat-card-title>
+      <mat-card-subtitle>Real-time conversational AI</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <!-- Status Section -->
+      <div class="status-section">
+        <div class="status-indicator" [class.connected]="status.isConnected">
+          <mat-icon>{{ status.isConnected ? 'wifi' : 'wifi_off' }}</mat-icon>
+          <span>{{ status.statusText }}</span>
+        </div>
+
+        <div class="activity-indicators">
+          <div class="indicator" [class.active]="status.isConnected">
+            <div>
+              <mat-icon>mic</mat-icon>
+              <span>Microphone Active</span>
+            </div>
+            <div class="volume-bar" *ngIf="status.isConnected">
+              <div class="volume-level" [style.width.%]="inputVolume * 100"></div>
+            </div>
+          </div>
+          <div class="indicator" [class.active]="status.isAgentSpeaking">
+            <div>
+              <mat-icon>volume_up</mat-icon>
+              <span>Agent Speaking</span>
+            </div>
+            <div class="volume-bar" *ngIf="status.isConnected">
+              <div class="volume-level agent" [style.width.%]="outputVolume * 100"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transcript Section -->
+      <div class="transcript-section">
+        <h3>Conversation</h3>
+        <div class="messages-container">
+          <div *ngIf="messages.length === 0" class="no-messages">
+            No messages yet. Start the conversation!
+          </div>
+          <div *ngFor="let message of messages"
+               class="message"
+               [class.user-message]="message.type === 'user'"
+               [class.agent-message]="message.type === 'agent'">
+            <div class="message-header">
+              <mat-icon>{{ message.type === 'user' ? 'person' : 'smart_toy' }}</mat-icon>
+              <span class="message-label">{{ message.type === 'user' ? 'You' : 'Agent' }}</span>
+              <span class="message-time">{{ message.timestamp | date:'shortTime' }}</span>
+            </div>
+            <div class="message-text">{{ message.text }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls Section -->
+      <div class="controls-section">
+        <button mat-raised-button
+                color="primary"
+                (click)="startConversation()"
+                [disabled]="status.isConnected">
+          <mat-icon>play_arrow</mat-icon>
+          Start Conversation
+        </button>
+
+        <button mat-raised-button
+                (click)="endConversation()"
+                [disabled]="!status.isConnected">
+          <mat-icon>stop</mat-icon>
+          End Conversation
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>
