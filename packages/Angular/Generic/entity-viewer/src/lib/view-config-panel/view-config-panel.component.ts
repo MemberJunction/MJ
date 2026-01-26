@@ -7,7 +7,11 @@ import {
   ViewGridColumnSetting,
   ColumnFormat,
   ColumnTextStyle,
-  ColumnConditionalRule
+  ColumnConditionalRule,
+  ViewGridAggregatesConfig,
+  ViewGridAggregate,
+  DEFAULT_AGGREGATE_DISPLAY,
+  UserInfoEngine
 } from '@memberjunction/core-entities';
 import {
   CompositeFilterDescriptor,
@@ -61,6 +65,8 @@ export interface ViewSaveEvent {
   smartFilterPrompt: string;
   /** Traditional filter state in Kendo-compatible JSON format */
   filterState: CompositeFilterDescriptor | null;
+  /** Aggregates configuration */
+  aggregatesConfig: ViewGridAggregatesConfig | null;
 }
 
 /**
@@ -175,8 +181,13 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   // Filter mode: 'smart' or 'traditional' (mutually exclusive)
   public filterMode: 'smart' | 'traditional' = 'smart';
 
+  // Aggregates state
+  public aggregates: ViewGridAggregate[] = [];
+  public showAggregateDialog: boolean = false;
+  public editingAggregate: ViewGridAggregate | null = null;
+
   // UI state
-  public activeTab: 'columns' | 'sorting' | 'filters' | 'settings' = 'columns';
+  public activeTab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings' = 'columns';
   @Input() isSaving: boolean = false;
   public columnSearchText: string = '';
 
@@ -190,12 +201,22 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
   // Panel resize state
   public isResizing: boolean = false;
-  public panelWidth: number = 450;
+  public panelWidth: number = 520;
   private readonly MIN_PANEL_WIDTH = 360;
   private readonly MAX_PANEL_WIDTH = 800;
-  private readonly DEFAULT_PANEL_WIDTH = 450;
+  private readonly DEFAULT_PANEL_WIDTH = 520;
+  /** Width threshold below which tabs show icons only */
+  private readonly ICON_ONLY_THRESHOLD = 440;
+  private readonly PANEL_WIDTH_SETTING_KEY = 'view-config-panel/width';
   private resizeStartX: number = 0;
   private resizeStartWidth: number = 0;
+
+  /**
+   * Whether tabs should show icons only (narrow panel mode)
+   */
+  get isIconOnlyMode(): boolean {
+    return this.panelWidth < this.ICON_ONLY_THRESHOLD;
+  }
 
   private metadata = new Metadata();
 
@@ -260,11 +281,42 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     document.removeEventListener('mouseup', this.onResizeEnd);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+    // Persist the panel width to user settings
+    this.savePanelWidth();
     this.cdr.detectChanges();
   };
 
   ngOnInit(): void {
+    this.loadSavedPanelWidth();
     this.initializeFromEntity();
+  }
+
+  /**
+   * Load saved panel width from user settings
+   */
+  private loadSavedPanelWidth(): void {
+    try {
+      const savedWidth = UserInfoEngine.Instance.GetSetting(this.PANEL_WIDTH_SETTING_KEY);
+      if (savedWidth) {
+        const width = parseInt(savedWidth, 10);
+        if (!isNaN(width) && width >= this.MIN_PANEL_WIDTH && width <= this.MAX_PANEL_WIDTH) {
+          this.panelWidth = width;
+        }
+      }
+    } catch (error) {
+      console.warn('[ViewConfigPanel] Failed to load saved panel width:', error);
+    }
+  }
+
+  /**
+   * Save panel width to user settings
+   */
+  private async savePanelWidth(): Promise<void> {
+    try {
+      await UserInfoEngine.Instance.SetSetting(this.PANEL_WIDTH_SETTING_KEY, String(this.panelWidth));
+    } catch (error) {
+      console.warn('[ViewConfigPanel] Failed to save panel width:', error);
+    }
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -273,6 +325,11 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       this.activeTab = 'columns';
       this.columnSearchText = '';
       this.formatEditingColumn = null;
+      // Also close any open aggregate dialog
+      this.showAggregateDialog = false;
+      this.editingAggregate = null;
+      // Re-initialize from entity to get fresh state
+      this.initializeFromEntity();
     }
 
     if (changes['entity'] || changes['viewEntity'] || changes['currentGridState']) {
@@ -415,6 +472,13 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       // Default to smart mode (promote AI filtering)
       this.filterMode = 'smart';
       this.smartFilterEnabled = true;
+    }
+
+    // Load aggregates from currentGridState if available
+    if (this.currentGridState?.aggregates?.expressions) {
+      this.aggregates = [...this.currentGridState.aggregates.expressions];
+    } else {
+      this.aggregates = [];
     }
 
     this.cdr.detectChanges();
@@ -1259,7 +1323,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       sortItems: [...this.sortItems],
       smartFilterEnabled: this.smartFilterEnabled,
       smartFilterPrompt: this.smartFilterPrompt,
-      filterState: this.hasActiveFilters() ? this.filterState : null
+      filterState: this.hasActiveFilters() ? this.filterState : null,
+      aggregatesConfig: this.buildAggregatesConfig()
     });
   }
 
@@ -1281,7 +1346,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       sortItems: [...this.sortItems],
       smartFilterEnabled: this.smartFilterEnabled,
       smartFilterPrompt: this.smartFilterPrompt,
-      filterState: this.hasActiveFilters() ? this.filterState : null
+      filterState: this.hasActiveFilters() ? this.filterState : null,
+      aggregatesConfig: this.buildAggregatesConfig()
     });
   }
 
@@ -1304,7 +1370,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       sortItems: [...this.sortItems],
       smartFilterEnabled: this.smartFilterEnabled,
       smartFilterPrompt: this.smartFilterPrompt,
-      filterState: this.hasActiveFilters() ? this.filterState : null
+      filterState: this.hasActiveFilters() ? this.filterState : null,
+      aggregatesConfig: this.buildAggregatesConfig()
     });
   }
 
@@ -1320,7 +1387,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   /**
    * Set the active tab
    */
-  setActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'settings'): void {
+  setActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings'): void {
     this.activeTab = tab;
     this.formatEditingColumn = null; // Close format editor when switching tabs
     this.cdr.detectChanges();
@@ -1433,5 +1500,183 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     }
     format.cellStyle[prop] = value;
     this.cdr.detectChanges();
+  }
+
+  // ========================================
+  // AGGREGATE MANAGEMENT
+  // ========================================
+
+  /**
+   * Open dialog to add a new aggregate
+   */
+  openAddAggregateDialog(): void {
+    this.editingAggregate = null;
+    this.showAggregateDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Open dialog to edit an existing aggregate
+   */
+  editAggregate(aggregate: ViewGridAggregate): void {
+    this.editingAggregate = { ...aggregate };
+    this.showAggregateDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Close the aggregate dialog
+   */
+  closeAggregateDialog(): void {
+    this.showAggregateDialog = false;
+    this.editingAggregate = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle saving an aggregate from the dialog
+   */
+  onAggregateSave(aggregate: ViewGridAggregate): void {
+    const existingIndex = this.aggregates.findIndex(a => a.id === aggregate.id);
+
+    if (existingIndex >= 0) {
+      // Update existing
+      this.aggregates[existingIndex] = aggregate;
+    } else {
+      // Add new with order at end
+      aggregate.order = this.aggregates.length;
+      this.aggregates.push(aggregate);
+    }
+
+    this.closeAggregateDialog();
+  }
+
+  /**
+   * Remove an aggregate
+   */
+  removeAggregate(aggregate: ViewGridAggregate): void {
+    const index = this.aggregates.findIndex(a => a.id === aggregate.id);
+    if (index >= 0) {
+      this.aggregates.splice(index, 1);
+      // Re-order remaining aggregates
+      this.aggregates.forEach((a, i) => a.order = i);
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Toggle aggregate enabled state
+   */
+  toggleAggregateEnabled(aggregate: ViewGridAggregate, event?: MouseEvent): void {
+    // Stop event propagation to prevent any parent handlers
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    console.log('[ViewConfigPanel] toggleAggregateEnabled called:', {
+      aggregateId: aggregate.id,
+      aggregateLabel: aggregate.label,
+      currentEnabled: aggregate.enabled,
+      allAggregates: this.aggregates.map(a => ({ id: a.id, label: a.label, enabled: a.enabled }))
+    });
+
+    // Try to find by ID first, fall back to object reference if ID is missing
+    let index = -1;
+    if (aggregate.id) {
+      index = this.aggregates.findIndex(a => a.id === aggregate.id);
+    }
+    // Fallback: find by object reference or label
+    if (index < 0) {
+      index = this.aggregates.indexOf(aggregate);
+    }
+    if (index < 0 && aggregate.label) {
+      index = this.aggregates.findIndex(a => a.label === aggregate.label && a.expression === aggregate.expression);
+    }
+
+    console.log('[ViewConfigPanel] Found index:', index, 'in array of length:', this.aggregates.length);
+
+    if (index >= 0) {
+      // Create a new object with toggled enabled state to ensure change detection
+      const currentEnabled = this.aggregates[index].enabled;
+      const newEnabledState = currentEnabled === false ? true : false;
+      console.log('[ViewConfigPanel] Toggling from', currentEnabled, 'to', newEnabledState);
+
+      const updatedAggregate: ViewGridAggregate = {
+        ...this.aggregates[index],
+        enabled: newEnabledState
+      };
+      // Replace entire array to trigger change detection
+      const newAggregates = [...this.aggregates];
+      newAggregates[index] = updatedAggregate;
+      this.aggregates = newAggregates;
+
+      console.log('[ViewConfigPanel] After toggle, aggregates:', this.aggregates.map(a => ({ id: a.id, label: a.label, enabled: a.enabled })));
+
+      this.cdr.detectChanges();
+    } else {
+      console.error('[ViewConfigPanel] Could not find aggregate in array:', aggregate);
+    }
+  }
+
+  /**
+   * Move aggregate up in order
+   */
+  moveAggregateUp(aggregate: ViewGridAggregate): void {
+    const index = this.aggregates.indexOf(aggregate);
+    if (index > 0) {
+      const prev = this.aggregates[index - 1];
+      this.aggregates[index - 1] = aggregate;
+      this.aggregates[index] = prev;
+      this.aggregates.forEach((a, i) => a.order = i);
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Move aggregate down in order
+   */
+  moveAggregateDown(aggregate: ViewGridAggregate): void {
+    const index = this.aggregates.indexOf(aggregate);
+    if (index < this.aggregates.length - 1) {
+      const next = this.aggregates[index + 1];
+      this.aggregates[index + 1] = aggregate;
+      this.aggregates[index] = next;
+      this.aggregates.forEach((a, i) => a.order = i);
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Get enabled aggregates count
+   */
+  get enabledAggregatesCount(): number {
+    return this.aggregates.filter(a => a.enabled !== false).length;
+  }
+
+  /**
+   * Get card aggregates
+   */
+  get cardAggregates(): ViewGridAggregate[] {
+    return this.aggregates.filter(a => a.displayType === 'card');
+  }
+
+  /**
+   * Get column aggregates
+   */
+  get columnAggregates(): ViewGridAggregate[] {
+    return this.aggregates.filter(a => a.displayType === 'column');
+  }
+
+  /**
+   * Build aggregates config from current state
+   */
+  private buildAggregatesConfig(): ViewGridAggregatesConfig | null {
+    if (this.aggregates.length === 0) return null;
+
+    return {
+      display: { ...DEFAULT_AGGREGATE_DISPLAY },
+      expressions: [...this.aggregates]
+    };
   }
 }

@@ -1,210 +1,291 @@
 <div class="role-management-container">
-  <!-- Action Buttons -->
-  <div class="action-buttons">
-    <button class="mj-btn mj-btn-secondary" (click)="refreshData()" [disabled]="isLoading">
-      <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
-      Refresh
-    </button>
-    <button class="mj-btn mj-btn-primary" (click)="createNewRole()">
-      <i class="fa-solid fa-plus"></i>
-      Add Role
-    </button>
-  </div>
+  <!-- Sticky Header Section -->
+  <div class="sticky-header">
+    <!-- Action Buttons -->
+    <div class="action-buttons" role="toolbar" aria-label="Role management actions">
+      <button
+        class="mj-btn mj-btn-secondary mj-btn-icon-mobile"
+        (click)="refreshData()"
+        [disabled]="isLoading"
+        aria-label="Refresh role list"
+      >
+        <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading" aria-hidden="true"></i>
+        <span class="btn-text">Refresh</span>
+      </button>
+      <button
+        class="mj-btn mj-btn-primary mj-btn-icon-mobile"
+        (click)="createNewRole()"
+        aria-label="Add new role"
+      >
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span class="btn-text">Add Role</span>
+      </button>
+    </div>
 
-  <!-- Stats Cards -->
-  <div class="mj-grid mj-grid-4">
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-total">
-        <i class="fa-solid fa-user-tag"></i>
+    <!-- Stats Cards -->
+    <div class="mj-grid-4" role="region" aria-label="Role statistics">
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-total" aria-hidden="true">
+          <i class="fa-solid fa-user-tag"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Total roles count">{{ stats.totalRoles }}</div>
+          <div class="stat-label">Total Roles</div>
+        </div>
       </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.totalRoles }}</div>
-        <div class="stat-label">Total Roles</div>
-      </div>
-    </div>
-    
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-system">
-        <i class="fa-solid fa-shield-halved"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.systemRoles }}</div>
-        <div class="stat-label">System Roles</div>
-      </div>
-    </div>
-    
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-custom">
-        <i class="fa-solid fa-user-tag"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.customRoles }}</div>
-        <div class="stat-label">Custom Roles</div>
-      </div>
-    </div>
-    
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-active">
-        <i class="fa-solid fa-check-circle"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.activeRoles }}</div>
-        <div class="stat-label">Active Roles</div>
-      </div>
-    </div>
-  </div>
 
-  <!-- Filters Section -->
-  <div class="filters-section">
-    <div class="filters-row">
-      <!-- Search -->
-      <div class="search-container">
-        <i class="fa-solid fa-search search-icon"></i>
-        <input 
-          type="text" 
-          class="search-input" 
-          placeholder="Search roles by name or description..."
-          (input)="onSearchChange($event)"
-          [value]="filters$.value.search"
-        />
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-system" aria-hidden="true">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="System roles count">{{ stats.systemRoles }}</div>
+          <div class="stat-label">System Roles</div>
+        </div>
       </div>
-      
-      <!-- Type Filter -->
-      <div class="filter-group">
-        <label class="filter-label">Type</label>
-        <div class="filter-buttons">
-          <button 
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.type === 'all'"
-            (click)="onTypeFilterChange('all')"
-          >
-            All
-          </button>
-          <button 
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.type === 'system'"
-            (click)="onTypeFilterChange('system')"
-          >
-            System
-          </button>
-          <button 
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.type === 'custom'"
-            (click)="onTypeFilterChange('custom')"
-          >
-            Custom
-          </button>
+
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-custom" aria-hidden="true">
+          <i class="fa-solid fa-user-tag"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Custom roles count">{{ stats.customRoles }}</div>
+          <div class="stat-label">Custom Roles</div>
+        </div>
+      </div>
+
+      <div class="mj-card">
+        <div class="stat-icon stat-icon-active" aria-hidden="true">
+          <i class="fa-solid fa-check-circle"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Active roles count">{{ stats.activeRoles }}</div>
+          <div class="stat-label">Active Roles</div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Loading State -->
-  @if (isLoading) {
-    <div class="loading-container">
-      <div class="loading-spinner">
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
+    <!-- Filters Section -->
+    <div class="filters-section" role="search" aria-label="Filter roles">
+      <div class="filters-row">
+        <!-- Mobile: Search + Filter Button Container -->
+        <div class="mobile-search-container">
+          <!-- Search - Enhanced prominent search box -->
+          <div class="mj-search">
+            <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
+            <input
+              type="text"
+              class="mj-search-input"
+              placeholder="Search roles by name or description..."
+              (input)="onSearchChange($event)"
+              [value]="filters$.value.search"
+              aria-label="Search roles by name or description"
+            />
+          </div>
+
+          <!-- Filter Button (Mobile Only) -->
+          <button
+            class="filter-button"
+            (click)="showMobileFilters = true"
+            aria-label="Open filters"
+          >
+            <i class="fa-solid fa-filter" aria-hidden="true"></i>
+            <span>Filters</span>
+          </button>
+        </div>
+
+        <!-- Type Filter (Desktop) -->
+        <div class="mj-filter-group">
+          <label class="mj-filter-label" id="type-filter-label">Type</label>
+          <div class="mj-filter-buttons" role="group" aria-labelledby="type-filter-label">
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.type === 'all'"
+              (click)="onTypeFilterChange('all')"
+              [attr.aria-pressed]="filters$.value.type === 'all'"
+            >
+              All
+            </button>
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.type === 'system'"
+              (click)="onTypeFilterChange('system')"
+              [attr.aria-pressed]="filters$.value.type === 'system'"
+            >
+              System
+            </button>
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.type === 'custom'"
+              (click)="onTypeFilterChange('custom')"
+              [attr.aria-pressed]="filters$.value.type === 'custom'"
+            >
+              Custom
+            </button>
+          </div>
+        </div>
       </div>
-      <div class="loading-text">Loading roles...</div>
     </div>
-  }
+  </div><!-- End Sticky Header -->
 
-  <!-- Error State -->
-  @if (error && !isLoading) {
-    <div class="error-container">
-      <div class="error-content">
-        <i class="fa-solid fa-exclamation-triangle error-icon"></i>
-        <p class="error-message">{{ error }}</p>
-        <button class="retry-button" (click)="loadInitialData()">
-          <i class="fa-solid fa-refresh"></i>
-          Try Again
-        </button>
+  <!-- Scrollable Content Section -->
+  <div class="scrollable-content">
+    <!-- Loading State -->
+    @if (isLoading) {
+      <div class="loading-container" role="status" aria-live="polite" aria-busy="true">
+        <mj-loading text="Loading roles..." size="medium"></mj-loading>
       </div>
-    </div>
-  }
+    }
 
-  <!-- Content Area -->
-  @if (!isLoading && !error) {
-    <div class="content-area">
-      <div class="roles-list">
-        @for (role of filteredRoles; track role.ID) {
-          <div class="role-card" [class.expanded]="isRoleExpanded(role.ID)">
-            <div class="role-header" (click)="toggleRoleExpansion(role.ID)">
-              <div class="role-info">
-                <div class="role-icon-wrapper">
-                  <i [class]="'fa-solid ' + getRoleIcon(role)"></i>
+    <!-- Error State -->
+    @if (error && !isLoading) {
+      <div class="error-container" role="alert" aria-live="assertive">
+        <div class="error-content">
+          <i class="fa-solid fa-exclamation-triangle error-icon" aria-hidden="true"></i>
+          <p class="error-message">{{ error }}</p>
+          <button class="mj-btn mj-btn-primary" (click)="loadInitialData()" aria-label="Retry loading roles">
+            <i class="fa-solid fa-refresh" aria-hidden="true"></i>
+            Try Again
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Content Area -->
+    @if (!isLoading && !error) {
+      <div class="content-area">
+        <div class="roles-list" role="list" aria-label="Roles list">
+          @for (role of filteredRoles; track role.ID) {
+            <div
+              class="role-card"
+              [class.expanded]="isRoleExpanded(role.ID)"
+              role="listitem"
+              [attr.aria-expanded]="isRoleExpanded(role.ID)"
+            >
+              <div
+                class="role-header"
+                (click)="toggleRoleExpansion(role.ID)"
+                tabindex="0"
+                (keydown.enter)="toggleRoleExpansion(role.ID)"
+                (keydown.space)="toggleRoleExpansion(role.ID); $event.preventDefault()"
+                role="button"
+                [attr.aria-label]="'Toggle details for ' + role.Name"
+              >
+                <div class="role-info">
+                  <div class="role-icon-wrapper" aria-hidden="true">
+                    <i [class]="'fa-solid ' + getRoleIcon(role)"></i>
+                  </div>
+                  <div class="role-details">
+                    <h3 class="role-name">{{ role.Name }}</h3>
+                    <p class="role-description">{{ role.Description || 'No description available' }}</p>
+                  </div>
                 </div>
-                <div class="role-details">
-                  <h3 class="role-name">{{ role.Name }}</h3>
-                  <p class="role-description">{{ role.Description || 'No description available' }}</p>
+
+                <div class="role-meta">
+                  <span class="role-type-badge" [class]="getRoleTypeClass(role)">
+                    {{ getRoleTypeLabel(role) }}
+                  </span>
+                  <div class="role-actions" (click)="$event.stopPropagation()">
+                    <button
+                      class="mj-btn mj-btn-ghost mj-btn-sm"
+                      (click)="editRole(role)"
+                      title="Edit"
+                      [attr.aria-label]="'Edit ' + role.Name"
+                      [disabled]="isSystemRole(role)"
+                    >
+                      <i class="fa-solid fa-edit" aria-hidden="true"></i>
+                    </button>
+                    <button
+                      class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                      (click)="confirmDeleteRole(role)"
+                      title="Delete"
+                      [attr.aria-label]="'Delete ' + role.Name"
+                      [disabled]="isSystemRole(role)"
+                    >
+                      <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                  <button class="expand-btn" aria-label="Toggle details">
+                    <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                  </button>
                 </div>
               </div>
-              
-              <div class="role-meta">
-                <span class="role-type-badge" [class]="getRoleTypeClass(role)">
-                  {{ getRoleTypeLabel(role) }}
-                </span>
-                <div class="role-actions" (click)="$event.stopPropagation()">
-                  <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editRole(role)" title="Edit" [disabled]="isSystemRole(role)">
-                    <i class="fa-solid fa-edit"></i>
-                  </button>
-                  <button class="mj-btn mj-btn-ghost mj-btn-sm text-danger" (click)="confirmDeleteRole(role)" title="Delete" [disabled]="isSystemRole(role)">
-                    <i class="fa-solid fa-trash"></i>
-                  </button>
+
+              @if (isRoleExpanded(role.ID)) {
+                <div class="role-content">
+                  <!-- Mobile-only actions bar -->
+                  <div class="mobile-actions-bar" (click)="$event.stopPropagation()">
+                    <span class="role-type-badge" [class]="getRoleTypeClass(role)">
+                      {{ getRoleTypeLabel(role) }}
+                    </span>
+                    <div class="mobile-action-buttons">
+                      <button
+                        class="mj-btn mj-btn-ghost mj-btn-sm"
+                        (click)="editRole(role)"
+                        title="Edit"
+                        [attr.aria-label]="'Edit ' + role.Name"
+                        [disabled]="isSystemRole(role)"
+                      >
+                        <i class="fa-solid fa-edit" aria-hidden="true"></i>
+                        <span class="btn-label">Edit</span>
+                      </button>
+                      <button
+                        class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                        (click)="confirmDeleteRole(role)"
+                        title="Delete"
+                        [attr.aria-label]="'Delete ' + role.Name"
+                        [disabled]="isSystemRole(role)"
+                      >
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                        <span class="btn-label">Delete</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="role-stats">
+                    <div class="stat-item">
+                      <i class="fa-solid fa-users" aria-hidden="true"></i>
+                      <span class="stat-label">Users:</span>
+                      <span class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                      <i class="fa-solid fa-calendar" aria-hidden="true"></i>
+                      <span class="stat-label">Created:</span>
+                      <span class="stat-value">{{ role.__mj_CreatedAt | date:'short' }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                      <span class="stat-label">Updated:</span>
+                      <span class="stat-value">{{ role.__mj_UpdatedAt | date:'short' }}</span>
+                    </div>
+                  </div>
+
+                  <div class="permissions-preview">
+                    <h4 class="section-title">
+                      <i class="fa-solid fa-key" aria-hidden="true"></i>
+                      Permissions Preview
+                    </h4>
+                    <p class="permissions-note">Full permission management available in the Permissions tab</p>
+                  </div>
                 </div>
-                <button class="expand-btn">
-                  <i class="fa-solid fa-chevron-down"></i>
-                </button>
-              </div>
+              }
             </div>
-            
-            @if (isRoleExpanded(role.ID)) {
-              <div class="role-content">
-                <div class="role-stats">
-                  <div class="stat-item">
-                    <i class="fa-solid fa-users"></i>
-                    <span class="stat-label">Users:</span>
-                    <span class="stat-value">0</span><!-- UserCount would come from a join -->
-                  </div>
-                  <div class="stat-item">
-                    <i class="fa-solid fa-calendar"></i>
-                    <span class="stat-label">Created:</span>
-                    <span class="stat-value">{{ role.__mj_CreatedAt | date:'short' }}</span>
-                  </div>
-                  <div class="stat-item">
-                    <i class="fa-solid fa-clock"></i>
-                    <span class="stat-label">Updated:</span>
-                    <span class="stat-value">{{ role.__mj_UpdatedAt | date:'short' }}</span>
-                  </div>
-                </div>
-                
-                <div class="permissions-preview">
-                  <h4 class="section-title">
-                    <i class="fa-solid fa-key"></i>
-                    Permissions Preview
-                  </h4>
-                  <p class="permissions-note">Full permission management available in the Permissions tab</p>
-                </div>
-              </div>
-            }
-          </div>
-        }
-        
-        @if (filteredRoles.length === 0) {
-          <div class="empty-state">
-            <i class="fa-solid fa-user-tag empty-icon"></i>
-            <p class="empty-text">No roles found</p>
-            <p class="empty-subtext">Try adjusting your filters or create a new role</p>
-          </div>
-        }
+          }
+
+          @if (filteredRoles.length === 0) {
+            <div class="empty-state" role="status">
+              <i class="fa-solid fa-user-tag empty-icon" aria-hidden="true"></i>
+              <p class="empty-text">No roles found</p>
+              <p class="empty-subtext">Try adjusting your filters or create a new role</p>
+            </div>
+          }
+        </div>
       </div>
-    </div>
-  }
+    }
+  </div><!-- End Scrollable Content -->
 
   <!-- Role Create/Edit Dialog -->
-  <mj-role-dialog 
+  <mj-role-dialog
     [data]="roleDialogData"
     [visible]="showRoleDialog"
     (result)="onRoleDialogResult($event)">
@@ -212,29 +293,148 @@
 
   <!-- Delete Confirmation Dialog -->
   @if (showDeleteConfirm && selectedRole) {
-    <div class="modal-backdrop" (click)="showDeleteConfirm = false">
-      <div class="modal-dialog" (click)="$event.stopPropagation()">
+    <div
+      class="modal-backdrop"
+      (click)="showDeleteConfirm = false"
+      role="presentation"
+    >
+      <div
+        class="modal-dialog"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-dialog-title"
+        aria-describedby="delete-dialog-desc"
+      >
         <div class="modal-header">
-          <h3 class="modal-title">
-            <i class="fa-solid fa-exclamation-triangle text-danger"></i>
+          <h3 class="modal-title" id="delete-dialog-title">
+            <i class="fa-solid fa-exclamation-triangle text-danger" aria-hidden="true"></i>
             Confirm Delete
           </h3>
-          <button class="modal-close" (click)="showDeleteConfirm = false">
-            <i class="fa-solid fa-times"></i>
+          <button
+            class="modal-close"
+            (click)="showDeleteConfirm = false"
+            aria-label="Close dialog"
+          >
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
           </button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" id="delete-dialog-desc">
           <p>Are you sure you want to delete the role <strong>{{ selectedRole.Name }}</strong>?</p>
           <p class="text-warning">
-            <i class="fa-solid fa-warning"></i>
+            <i class="fa-solid fa-warning" aria-hidden="true"></i>
             This will affect all users assigned to this role.
           </p>
         </div>
         <div class="modal-footer">
-          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">Cancel</button>
-          <button class="mj-btn mj-btn-primary text-danger" (click)="deleteRole()">
-            <i class="fa-solid fa-trash"></i>
-            Delete Role
+          <!-- Primary action (Delete) on LEFT per MD3 design guide -->
+          <button class="mj-btn mj-btn-danger" (click)="deleteRole()" [disabled]="isLoading">
+            @if (isLoading) {
+              <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+              Deleting...
+            } @else {
+              <i class="fa-solid fa-trash" aria-hidden="true"></i>
+              Delete Role
+            }
+          </button>
+          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Mobile Filter Modal -->
+  @if (showMobileFilters) {
+    <div
+      class="filter-modal-backdrop"
+      (click)="showMobileFilters = false"
+      role="presentation"
+    >
+      <div
+        class="filter-modal"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="filter-modal-title"
+      >
+        <div class="filter-modal-header">
+          <h3 class="filter-modal-title" id="filter-modal-title">
+            <i class="fa-solid fa-filter" aria-hidden="true"></i>
+            Filters
+          </h3>
+          <button
+            class="filter-modal-close"
+            (click)="showMobileFilters = false"
+            aria-label="Close filters"
+          >
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <div class="filter-modal-body">
+          <div class="filter-options-container">
+            <!-- Type Filter -->
+            <div class="filter-group">
+              <h4 class="filter-group-label">Type</h4>
+              <div class="filter-group-options">
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.type === 'all'"
+                >
+                  <input
+                    type="radio"
+                    name="type"
+                    value="all"
+                    [checked]="filters$.value.type === 'all'"
+                    (change)="onTypeFilterChange('all')"
+                  />
+                  <span class="filter-option-label">All Roles</span>
+                </label>
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.type === 'system'"
+                >
+                  <input
+                    type="radio"
+                    name="type"
+                    value="system"
+                    [checked]="filters$.value.type === 'system'"
+                    (change)="onTypeFilterChange('system')"
+                  />
+                  <span class="filter-option-label">System Roles</span>
+                </label>
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.type === 'custom'"
+                >
+                  <input
+                    type="radio"
+                    name="type"
+                    value="custom"
+                    [checked]="filters$.value.type === 'custom'"
+                    (change)="onTypeFilterChange('custom')"
+                  />
+                  <span class="filter-option-label">Custom Roles</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-modal-footer">
+          <button
+            class="mj-btn mj-btn-primary"
+            (click)="showMobileFilters = false"
+          >
+            Apply Filters
+          </button>
+          <button
+            class="mj-btn mj-btn-secondary"
+            (click)="showMobileFilters = false"
+          >
+            Cancel
           </button>
         </div>
       </div>

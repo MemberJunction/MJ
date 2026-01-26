@@ -21,7 +21,9 @@
     "@memberjunction/ai-azure": "3.2.0",
     "@memberjunction/ai-bedrock": "3.2.0",
     "@memberjunction/ai-betty-bot": "3.2.0",
+    "@memberjunction/ai-blackforestlabs": "3.2.0",
     "@memberjunction/ai-cerebras": "3.2.0",
+    "@memberjunction/ai-cohere": "3.2.0",
     "@memberjunction/ai-elevenlabs": "3.2.0",
     "@memberjunction/ai-gemini": "3.2.0",
     "@memberjunction/ai-groq": "3.2.0",
@@ -35,8 +37,7 @@
     "@memberjunction/ai-recommendations-rex": "3.2.0",
     "@memberjunction/ai-vectors-pinecone": "3.2.0",
     "@memberjunction/ai-vertex": "3.2.0",
-    "@memberjunction/ai-xai": "3.2.0",
-    "@memberjunction/ai-blackforestlabs": "3.2.0"
+    "@memberjunction/ai-xai": "3.2.0"
   },
   "repository": {
     "type": "git",

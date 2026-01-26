@@ -2,14 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Kendo UI Angular imports
-import { GridModule } from '@progress/kendo-angular-grid';
-import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { SortableModule } from '@progress/kendo-angular-sortable';
+import { WindowModule } from '@progress/kendo-angular-dialog';
 
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -33,7 +26,6 @@ import { RoleManagementComponent } from './role-management/role-management.compo
 import { ApplicationManagementComponent } from './application-management/application-management.component';
 import { EntityPermissionsComponent } from './entity-permissions/entity-permissions.component';
 import { UserProfileSettingsComponent } from './user-profile-settings/user-profile-settings.component';
-import { NotificationPreferencesComponent } from './notification-preferences/notification-preferences.component';
 
 // Dialog components
 import { RoleDialogComponent } from './role-management/role-dialog/role-dialog.component';
@@ -41,6 +33,7 @@ import { UserDialogComponent } from './user-management/user-dialog/user-dialog.c
 import { PermissionDialogComponent } from './entity-permissions/permission-dialog/permission-dialog.component';
 import { ApplicationDialogComponent } from './application-management/application-dialog/application-dialog.component';
 import { UserAppConfigComponent } from './user-app-config/user-app-config.component';
+import { NotificationPreferencesComponent } from './notification-preferences/notification-preferences.component';
 
 @NgModule({
   declarations: [
@@ -52,37 +45,30 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     ApplicationManagementComponent,
     EntityPermissionsComponent,
     UserProfileSettingsComponent,
-    NotificationPreferencesComponent,
     // Dialog components
     RoleDialogComponent,
     UserDialogComponent,
     PermissionDialogComponent,
     ApplicationDialogComponent,
-    UserAppConfigComponent
+    UserAppConfigComponent,
+    NotificationPreferencesComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    GridModule,
-    DialogsModule,
-    WindowModule,
-    ExcelExportModule,
     CompareRecordsModule,
     ContainerDirectivesModule,
-    ButtonsModule,
-    DropDownsModule,
     EntityPermissionsModule,
     MJTabStripModule,
     EntityFormDialogModule,
-    IndicatorsModule,
     UserViewGridModule,
     SimpleRecordListModule,
     JoinGridModule,
     CodeEditorModule,
     SharedSettingsModule,
-    SortableModule,
-    SharedGenericModule
+    SharedGenericModule,
+    WindowModule
   ],
   exports: [
     // Main dashboard components
@@ -93,13 +79,13 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     ApplicationManagementComponent,
     EntityPermissionsComponent,
     UserProfileSettingsComponent,
-    NotificationPreferencesComponent,
     // Dialog components
     RoleDialogComponent,
     UserDialogComponent,
     PermissionDialogComponent,
     ApplicationDialogComponent,
-    UserAppConfigComponent
+    UserAppConfigComponent,
+    NotificationPreferencesComponent
   ]
 })
 export class ExplorerSettingsModule { }

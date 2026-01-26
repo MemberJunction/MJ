@@ -1,0 +1,636 @@
+[
+  {
+    "_comments": [
+      "Action Execution Logs - action audit trail"
+    ],
+    "fields": {
+      "Name": "Action Execution Logs",
+      "BaseView": "vwActionExecutionLogs",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Action Execution Logs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.469Z",
+      "checksum": "f64e29cbfa5584987ddaa5c4b88238de0c906cd4e7bca3c1d23567c3ee0866fc"
+    }
+  },
+  {
+    "_comments": [
+      "Audit Logs - core audit entity"
+    ],
+    "fields": {
+      "Name": "Audit Logs",
+      "BaseView": "vwAuditLogs",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Audit Logs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.489Z",
+      "checksum": "218804968ddfe2ed5a32c0123c9072d4adea24d7ef5b765e4d7736a8df079092"
+    }
+  },
+  {
+    "_comments": [
+      "Communication Logs - communication audit trail"
+    ],
+    "fields": {
+      "Name": "Communication Logs",
+      "BaseView": "vwCommunicationLogs",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Communication Logs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.510Z",
+      "checksum": "196e6c5a97a5fb8a069e7e66566f672353d55d21fd7956b9d8930d458816b556"
+    }
+  },
+  {
+    "_comments": [
+      "Communication Runs - communication execution history"
+    ],
+    "fields": {
+      "Name": "Communication Runs",
+      "BaseView": "vwCommunicationRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Communication Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.529Z",
+      "checksum": "97bd06aca5dfeeb0cf06a9e45c9ef8bbca636c7ca3715009c36715dafce3d656"
+    }
+  },
+  {
+    "_comments": [
+      "Company Integration Run API Logs - integration API call logs"
+    ],
+    "fields": {
+      "Name": "Company Integration Run API Logs",
+      "BaseView": "vwCompanyIntegrationRunAPILogs",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Company Integration Run API Logs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.549Z",
+      "checksum": "0385a71541af2bc9fad5e045743b116e224915d8de4ee5773804083a2a3d10f7"
+    }
+  },
+  {
+    "_comments": [
+      "Company Integration Run Details - integration run details"
+    ],
+    "fields": {
+      "Name": "Company Integration Run Details",
+      "BaseView": "vwCompanyIntegrationRunDetails",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Company Integration Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.568Z",
+      "checksum": "078572c6948c51f0b6e38ec425d587682e873f843945d8da6439b14f038fb555"
+    }
+  },
+  {
+    "_comments": [
+      "Company Integration Runs - integration execution history"
+    ],
+    "fields": {
+      "Name": "Company Integration Runs",
+      "BaseView": "vwCompanyIntegrationRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Company Integration Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.587Z",
+      "checksum": "46e0e9e6175e9267dd456b7c9e705e986fe39b6fc12e47e5bd4db539046edb33"
+    }
+  },
+  {
+    "_comments": [
+      "Content Process Runs - content processing execution history"
+    ],
+    "fields": {
+      "Name": "Content Process Runs",
+      "BaseView": "vwContentProcessRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Content Process Runs"
+    }
+  },
+  {
+    "_comments": [
+      "Conversation Details - high-volume chat history"
+    ],
+    "fields": {
+      "Name": "Conversation Details",
+      "BaseView": "vwConversationDetails",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Conversation Details"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.604Z",
+      "checksum": "b46a7aa5c5e32275ea8f0e96b3f96f3c7f6dd36e30e37cb9ff1fc74ecdae31db"
+    }
+  },
+  {
+    "_comments": [
+      "Conversations - chat conversation records"
+    ],
+    "fields": {
+      "Name": "Conversations",
+      "BaseView": "vwConversations",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Conversations"
+    }
+  },
+  {
+    "_comments": [
+      "Duplicate Run Detail Matches - duplicate detection results"
+    ],
+    "fields": {
+      "Name": "Duplicate Run Detail Matches",
+      "BaseView": "vwDuplicateRunDetailMatches",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Duplicate Run Detail Matches"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.802Z",
+      "checksum": "8c36bd8eb42c56afc5addeddfced1805d437414ee52e5c39855989c8d814fbd9"
+    }
+  },
+  {
+    "_comments": [
+      "Duplicate Run Details - duplicate detection details"
+    ],
+    "fields": {
+      "Name": "Duplicate Run Details",
+      "BaseView": "vwDuplicateRunDetails",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Duplicate Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.823Z",
+      "checksum": "5def75302ef7dfbc3a980b71efee01a3c73fdcb105c90bbe8d57db19650bb355"
+    }
+  },
+  {
+    "_comments": [
+      "Duplicate Runs - duplicate detection execution history"
+    ],
+    "fields": {
+      "Name": "Duplicate Runs",
+      "BaseView": "vwDuplicateRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Duplicate Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.842Z",
+      "checksum": "3b9f21dff73f65b541d65da48ee1cb029845bcd6cb4db495ec22593d66742a0b"
+    }
+  },
+  {
+    "_comments": [
+      "Entity Document Runs - document generation execution history"
+    ],
+    "fields": {
+      "Name": "Entity Document Runs",
+      "BaseView": "vwEntityDocumentRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Entity Document Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.862Z",
+      "checksum": "1d1f10233e64a1c04f6c944d98d03ca733b9d45998c40f81db0e27bd2a578e1f"
+    }
+  },
+  {
+    "_comments": [
+      "Error Logs - system error tracking"
+    ],
+    "fields": {
+      "Name": "Error Logs",
+      "BaseView": "vwErrorLogs",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Error Logs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.881Z",
+      "checksum": "873d413526e4acc0908155c492789d82ddd1f584662228e3533dde07975f7e1d"
+    }
+  },
+  {
+    "_comments": [
+      "AI Agent Run Medias - AI agent run media attachments"
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Run Medias",
+      "BaseView": "vwAIAgentRunMedias",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: AI Agent Run Medias"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.901Z",
+      "checksum": "d26ca866a8b2787cbaccd20f43649ffeacf72229a4c283c04bec432f4fc7aab5"
+    }
+  },
+  {
+    "_comments": [
+      "AI Agent Run Steps - AI agent execution steps"
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Run Steps",
+      "BaseView": "vwAIAgentRunSteps",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: AI Agent Run Steps"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.921Z",
+      "checksum": "29643bebe3644c6216402e51cad4e01effb0076f4c27876e180d03a940657c25"
+    }
+  },
+  {
+    "_comments": [
+      "AI Agent Runs - AI agent execution history"
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Runs",
+      "BaseView": "vwAIAgentRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: AI Agent Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.940Z",
+      "checksum": "9e1addcb1cdcf11b89dc9c35a259d845988daacb2dc280c38260f23f12fe000c"
+    }
+  },
+  {
+    "_comments": [
+      "AI Prompt Run Medias - AI prompt run media attachments"
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompt Run Medias",
+      "BaseView": "vwAIPromptRunMedias",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: AI Prompt Run Medias"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.960Z",
+      "checksum": "2118a88846222b38094e4d5316a0c4067aa778ebb17cc8fa8b6b23521658c081"
+    }
+  },
+  {
+    "_comments": [
+      "AI Prompt Runs - AI prompt execution history"
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompt Runs",
+      "BaseView": "vwAIPromptRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: AI Prompt Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:11.976Z",
+      "checksum": "5e8733a565295a44701609b1fda694815b9f652c8f22aa2f0bbe90f7dd2f99dc"
+    }
+  },
+  {
+    "_comments": [
+      "API Key Usage Logs - API key audit trail"
+    ],
+    "fields": {
+      "Name": "MJ: API Key Usage Logs",
+      "BaseView": "vwAPIKeyUsageLogs",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: API Key Usage Logs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.165Z",
+      "checksum": "9c84451a96453b041912c9707e4ee6f2db07184922c0f6f6abca843d17045e6b"
+    }
+  },
+  {
+    "_comments": [
+      "Conversation Detail Artifacts - artifacts from conversation details"
+    ],
+    "fields": {
+      "Name": "MJ: Conversation Detail Artifacts",
+      "BaseView": "vwConversationDetailArtifacts",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: Conversation Detail Artifacts"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.186Z",
+      "checksum": "6dfab61420719612ad931e84267e14d71cf901b58867bfe3e7012ea4094f2c87"
+    }
+  },
+  {
+    "_comments": [
+      "Conversation Detail Attachments - attachments in conversations"
+    ],
+    "fields": {
+      "Name": "MJ: Conversation Detail Attachments",
+      "BaseView": "vwConversationDetailAttachments",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: Conversation Detail Attachments"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.208Z",
+      "checksum": "da7923000cb629ce25be72f4b81ff267ecddd7b72ed6ba09fdceadd50288d3e7"
+    }
+  },
+  {
+    "_comments": [
+      "Conversation Detail Ratings - user feedback on conversations"
+    ],
+    "fields": {
+      "Name": "MJ: Conversation Detail Ratings",
+      "BaseView": "vwConversationDetailRatings",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: Conversation Detail Ratings"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.229Z",
+      "checksum": "b49e840aad8701ef6dc40c60b948ff31fcfa6bb84234f3958377b8770cafbf2f"
+    }
+  },
+  {
+    "_comments": [
+      "Scheduled Job Runs - scheduled job execution history"
+    ],
+    "fields": {
+      "Name": "MJ: Scheduled Job Runs",
+      "BaseView": "vwScheduledJobRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: Scheduled Job Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.249Z",
+      "checksum": "b683d3894f6ff2ccba2813667ca101dcc757a8c7f08284a8ef5474f53b352f2c"
+    }
+  },
+  {
+    "_comments": [
+      "Test Run Feedbacks - test feedback records"
+    ],
+    "fields": {
+      "Name": "MJ: Test Run Feedbacks",
+      "BaseView": "vwTestRunFeedbacks",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: Test Run Feedbacks"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.270Z",
+      "checksum": "cab85eccb50b9b0d51b19becfec075ce5d15bfc81bcb9f676228e29a98b1ef02"
+    }
+  },
+  {
+    "_comments": [
+      "Test Runs - test execution history"
+    ],
+    "fields": {
+      "Name": "MJ: Test Runs",
+      "BaseView": "vwTestRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: Test Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.289Z",
+      "checksum": "2a07dc4102f25bf550f907cf51919f1d69e0af41714aa0ae85bd0158bb0bf9b1"
+    }
+  },
+  {
+    "_comments": [
+      "Test Suite Runs - test suite execution history"
+    ],
+    "fields": {
+      "Name": "MJ: Test Suite Runs",
+      "BaseView": "vwTestSuiteRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=MJ: Test Suite Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.309Z",
+      "checksum": "6da2304696cad0d60b92f2ebe1948acc921aac18659c3779b77688d4c50913d5"
+    }
+  },
+  {
+    "_comments": [
+      "Queue Tasks - transient task queue data"
+    ],
+    "fields": {
+      "Name": "Queue Tasks",
+      "BaseView": "vwQueueTasks",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Queue Tasks"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.331Z",
+      "checksum": "65bc684a33c879f60a5e0972a7254b1e0d4dfbf4fce1320d3e647e03dc89c8d0"
+    }
+  },
+  {
+    "_comments": [
+      "Recommendation Runs - recommendation engine execution history"
+    ],
+    "fields": {
+      "Name": "Recommendation Runs",
+      "BaseView": "vwRecommendationRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Recommendation Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.347Z",
+      "checksum": "e2c523b1bb627a42660501422da84aacf0b0cc2ff02b71b2cb00cb1e4aab257a"
+    }
+  },
+  {
+    "_comments": [
+      "Record Change Replay Runs - part of record change system"
+    ],
+    "fields": {
+      "Name": "Record Change Replay Runs",
+      "BaseView": "vwRecordChangeReplayRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Record Change Replay Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.513Z",
+      "checksum": "e7a0f20f992966b1726bca0170c62e9f4c39fd7df9c39ef82ce52c91d1557d78"
+    }
+  },
+  {
+    "_comments": [
+      "Record Changes - the tracking entity itself, must not track itself"
+    ],
+    "fields": {
+      "Name": "Record Changes",
+      "BaseView": "vwRecordChanges",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Record Changes"
+    }
+  },
+  {
+    "_comments": [
+      "Record Merge Deletion Logs - merge deletion audit trail"
+    ],
+    "fields": {
+      "Name": "Record Merge Deletion Logs",
+      "BaseView": "vwRecordMergeDeletionLogs",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Record Merge Deletion Logs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.533Z",
+      "checksum": "8c27d3d336422e5f971f9ff968b44bcd4696459eda5531a6209d70bfa1896e73"
+    }
+  },
+  {
+    "_comments": [
+      "Record Merge Logs - merge operation audit trail"
+    ],
+    "fields": {
+      "Name": "Record Merge Logs",
+      "BaseView": "vwRecordMergeLogs",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Record Merge Logs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.552Z",
+      "checksum": "31b75a656a9281921f9a08541e15d99d78b498396df1dccd490f54a06fd79069"
+    }
+  },
+  {
+    "_comments": [
+      "User Record Logs - user activity audit trail"
+    ],
+    "fields": {
+      "Name": "User Record Logs",
+      "BaseView": "vwUserRecordLogs",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=User Record Logs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.573Z",
+      "checksum": "b695ac54e4eaf65a760bbe6e1aef14d722163735ea16634281f2f8be59afb075"
+    }
+  },
+  {
+    "_comments": [
+      "User View Run Details - view execution details"
+    ],
+    "fields": {
+      "Name": "User View Run Details",
+      "BaseView": "vwUserViewRunDetails",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=User View Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.592Z",
+      "checksum": "8d29ae46e0fc4faf51bfb239cf91b9cda52a9753380347794774ffbbb9ddadfe"
+    }
+  },
+  {
+    "_comments": [
+      "User View Runs - view execution history"
+    ],
+    "fields": {
+      "Name": "User View Runs",
+      "BaseView": "vwUserViewRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=User View Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.611Z",
+      "checksum": "c7d79760677cd1c3e123c45bc8e4f276909ac221de6b86aebdb120ffdd35db72"
+    }
+  },
+  {
+    "_comments": [
+      "Workflow Runs - workflow execution history"
+    ],
+    "fields": {
+      "Name": "Workflow Runs",
+      "BaseView": "vwWorkflowRuns",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:Entities.Name=Workflow Runs"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:12.627Z",
+      "checksum": "4b9ae411d13acb81ec7e20d07cd75dd5a58aba3549ed8af54f0cfa7c9367ea2a"
+    }
+  }
+]

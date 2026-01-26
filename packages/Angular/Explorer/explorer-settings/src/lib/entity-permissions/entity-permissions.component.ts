@@ -75,7 +75,8 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   // UI State
   public expandedEntityId: string | null = null;
   public viewMode: 'grid' | 'list' = 'list';
-  
+  public showMobileFilters = false;
+
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 

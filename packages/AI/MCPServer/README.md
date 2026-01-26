@@ -257,6 +257,149 @@ You can use wildcards in `entityName` and `schemaName`:
 - `*Users`: Match entities/schemas ending with "Users"
 - `*Users*`: Match entities/schemas containing "Users"
 
+### Action Tools
+
+Action tools allow AI models to discover and execute MemberJunction Actions.
+
+```javascript
+actionTools: [
+  {
+    // Action matching (supports wildcards)
+    actionName: '*',              // Action name pattern (use '*' for all actions)
+    actionCategory: 'Workflow',   // Optional category filter
+
+    // Operations to enable
+    discover: true,   // Enable action discovery
+    execute: true     // Enable action execution
+  }
+]
+```
+
+#### Action Tool Naming
+
+- `Discover_Actions`: Lists available actions based on name/category pattern
+- `Run_Action`: General tool to execute any action by name or ID
+- `Get_Action_Params`: Get parameter definitions for a specific action
+- `Execute_[ActionName]_Action`: Specific tools for each configured action
+
+#### Action Tool Parameters and Responses
+
+**Discover_Actions**
+- Parameters:
+  - `pattern` (optional): Wildcard pattern to match action names
+  - `category` (optional): Category name to filter actions
+- Returns: Array of action metadata (id, name, description, category, type, status, paramCount)
+
+**Run_Action**
+- Parameters:
+  - `actionName` (optional): Name of the action to execute
+  - `actionId` (optional): ID of the action to execute
+  - `params` (optional): Parameters for the action as key-value pairs
+- Returns: `{ success: boolean, resultCode?: string, message?: string, runId?: string }`
+
+**Get_Action_Params**
+- Parameters:
+  - `actionName` (optional): Name of the action
+  - `actionId` (optional): ID of the action
+- Returns: `{ actionId, actionName, description, params: [{ name, description, type, isRequired, defaultValue }] }`
+
+### Query Tools
+
+Query tools allow AI models to execute SQL queries against the database.
+
+```javascript
+queryTools: {
+  enabled: true,
+  allowedSchemas: ['dbo', 'sales'],  // Optional: restrict to specific schemas
+  blockedSchemas: ['__mj']           // Optional: block specific schemas
+}
+```
+
+#### Query Tool Naming
+
+- `Run_SQL_Query`: Execute a read-only SQL SELECT query
+- `Get_Database_Schema`: Get schema information for available tables
+
+#### Query Tool Parameters and Responses
+
+**Run_SQL_Query**
+- Parameters:
+  - `sql`: The SQL SELECT query to execute (must start with SELECT)
+  - `maxRows` (optional): Maximum number of rows to return (default: 1000)
+- Returns: `{ success: boolean, rowCount: number, results: [], error?: string }`
+
+**Get_Database_Schema**
+- Parameters:
+  - `schemaFilter` (optional): Filter by schema name
+  - `tableFilter` (optional): Filter by table name pattern
+- Returns: Array of table information with columns
+
+### Prompt Tools
+
+Prompt tools allow AI models to discover and execute MemberJunction AI Prompts.
+
+```javascript
+promptTools: [
+  {
+    promptName: '*',           // Prompt name pattern
+    promptCategory: 'System',  // Optional category filter
+    discover: true,            // Enable prompt discovery
+    execute: true              // Enable prompt execution
+  }
+]
+```
+
+#### Prompt Tool Naming
+
+- `Discover_Prompts`: Lists available AI prompts
+- `Run_Prompt`: Execute any prompt by name or ID
+
+#### Prompt Tool Parameters and Responses
+
+**Discover_Prompts**
+- Parameters:
+  - `pattern` (optional): Wildcard pattern to match prompt names
+  - `category` (optional): Category name to filter prompts
+- Returns: Array of prompt metadata (id, name, description, category, responseFormat)
+
+**Run_Prompt**
+- Parameters:
+  - `promptName` (optional): Name of the prompt to execute
+  - `promptId` (optional): ID of the prompt to execute
+  - `data` (optional): Data to pass to the prompt template
+  - `modelId` (optional): Specific model ID to use
+- Returns: `{ success: boolean, result: any, rawOutput?: string, tokensUsed?: number, errorMessage?: string }`
+
+### Communication Tools
+
+Communication tools allow AI models to send messages through configured communication channels.
+
+```javascript
+communicationTools: {
+  enabled: true,
+  allowedProviders: ['SendGrid', 'Twilio']  // Optional: restrict to specific providers
+}
+```
+
+#### Communication Tool Naming
+
+- `Send_Email`: Send an email message (requires provider configuration)
+- `Get_Communication_Providers`: List available communication providers
+
+#### Communication Tool Parameters and Responses
+
+**Send_Email**
+- Parameters:
+  - `to`: Recipient email address
+  - `subject`: Email subject
+  - `body`: Email body (can be HTML)
+  - `isHtml` (optional): Whether body is HTML (default: true)
+- Returns: `{ success: boolean, error?: string }`
+
+**Get_Communication_Providers**
+- Parameters: None
+- Returns: Array of provider metadata (id, name, description, status, supportsSending)
+
 ## Connecting Models to the Server
 
 The server endpoint is available at:
@@ -305,25 +448,229 @@ The primary endpoint for Server-Sent Events (SSE) based MCP protocol communicati
 
 The MCP protocol uses JSON-RPC 2.0 over Server-Sent Events for communication.
 
-## Security
+## Security and Authentication
 
-By default, the server runs without authentication. For production, you should configure authentication in the server options:
+The MCP Server uses API key authentication to secure access. All requests must include a valid API key in the request headers.
+
+### Authentication Overview
+
+- **Authentication Method**: API Key via HTTP headers or Bearer token
+- **Supported Headers**:
+  - `x-api-key` - Primary header
+  - `x-mj-api-key` - Alternative header
+  - `Authorization: Bearer <key>` - OAuth-style Bearer token
+- **Query Parameter Fallback**: `?apiKey=<key>` or `?api_key=<key>`
+- **Key Format**: `mj_sk_` prefix followed by 64 hex characters (e.g., `mj_sk_abc123...`)
+- **Storage**: Keys are stored as SHA-256 hashes in the database for security
+- **User Context**: Each API key is associated with a MemberJunction user account - all tool operations execute with that user's permissions
+
+### Creating API Keys
+
+API keys are managed through the `EncryptionEngine` class in the `@memberjunction/encryption` package. This provides a clean, type-safe API using MemberJunction's BaseEntity pattern.
+
+```typescript
+import { EncryptionEngine } from '@memberjunction/encryption';
+
+// Create an API key for a user
+const result = await EncryptionEngine.Instance.CreateAPIKey({
+  userId: 'user-guid-here',
+  label: 'MCP Server Integration',
+  description: 'Used for Claude Desktop MCP connections',
+  expiresAt: new Date('2025-12-31') // Optional - omit for non-expiring keys
+}, contextUser);
+
+if (result.success) {
+  // IMPORTANT: Save this key immediately - it cannot be recovered!
+  console.log('Your API Key:', result.rawKey);
+  console.log('API Key ID:', result.apiKeyId);
+} else {
+  console.error('Failed to create API key:', result.error);
+}
+```
+
+The `CreateAPIKey` method:
+- Generates a secure key with format `mj_sk_[64 hex characters]`
+- Stores only the SHA-256 hash in the database (never the raw key)
+- Creates the database record using proper BaseEntity patterns
+- Returns the raw key exactly once - it cannot be retrieved later
+
+#### Other API Key Methods
+
+The `EncryptionEngine` also provides these API key management methods:
+
+```typescript
+// Generate a key without storing it (for manual storage scenarios)
+const { raw, hash } = EncryptionEngine.Instance.GenerateAPIKey();
+
+// Hash a key for validation
+const keyHash = EncryptionEngine.Instance.HashAPIKey(rawKey);
+
+// Validate key format
+const isValid = EncryptionEngine.Instance.IsValidAPIKeyFormat(rawKey);
+
+// Validate a key and get the associated user
+const validation = await EncryptionEngine.Instance.ValidateAPIKey(rawKey, contextUser);
+if (validation.isValid) {
+  console.log('User:', validation.user);
+  console.log('API Key ID:', validation.apiKeyId);
+}
+
+// Revoke an API key
+const revoked = await EncryptionEngine.Instance.RevokeAPIKey(apiKeyId, contextUser);
+```
+
+### API Key Schema
+
+The API Key system uses four tables:
+
+**APIKey Table:**
+- `ID`: Unique identifier
+- `Hash`: SHA-256 hash of the raw API key (64 hex characters)
+- `UserID`: Foreign key to User - the account context for this key
+- `Label`: Friendly name (e.g., "Production MCP Client", "CI/CD Pipeline")
+- `Description`: Optional detailed description
+- `Status`: `Active` or `Revoked`
+- `ExpiresAt`: Optional expiration timestamp (NULL = never expires)
+- `LastUsedAt`: Automatically updated on each use
+- `CreatedByUserID`: User who created the key
+
+**APIScope Table:**
+- Defines reusable permission definitions (e.g., `entities:read`, `agents:execute`)
+- Organized by category (Entities, Agents, Admin)
+
+**APIKeyScope Table:**
+- Junction table linking API keys to scopes
+- Enables fine-grained permission control (coming soon)
+
+**APIKeyUsageLog Table:**
+- Tracks API key usage for analytics and debugging
+- Records endpoint, operation, response time, IP address, etc.
+
+### Using API Keys
+
+#### With HTTP Headers
+
+```bash
+# Using x-api-key header (recommended)
+curl -H "x-api-key: mj_sk_YOUR_API_KEY_HERE" \
+  http://localhost:3100/mcp
+
+# Using x-mj-api-key header (alternative)
+curl -H "x-mj-api-key: mj_sk_YOUR_API_KEY_HERE" \
+  http://localhost:3100/mcp
+
+# Using Authorization Bearer token (OAuth-style)
+curl -H "Authorization: Bearer mj_sk_YOUR_API_KEY_HERE" \
+  http://localhost:3100/mcp
+
+# Using query parameter (useful for SSE connections)
+curl "http://localhost:3100/mcp?apiKey=mj_sk_YOUR_API_KEY_HERE"
+```
+
+#### With MCP Clients
+
+Configure your MCP client to include the API key in headers:
+
+```typescript
+// Example MCP client configuration
+const client = new MCPClient({
+  url: 'http://localhost:3100/mcp',
+  headers: {
+    'x-api-key': 'mj_sk_YOUR_API_KEY_HERE'
+  }
+});
+```
+
+#### With Claude Desktop
+
+Add to your Claude Desktop MCP server configuration:
+
+```json
+{
+  "mcpServers": {
+    "memberjunction": {
+      "command": "npx",
+      "args": ["-y", "@memberjunction/ai-mcp-server"],
+      "env": {
+        "X_API_KEY": "mj_sk_YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+### System API Key (Development Mode)
+
+For backward compatibility and development, you can configure a system API key in your `mj.config.cjs`:
 
 ```javascript
-// Example using basic auth
-const serverOptions = {
-  transportType: "sse",
-  sse: {
-    endpoint: "/mcp",
-    port: 3100
-  },
-  auth: {
-    type: "basic",
-    username: "user",
-    password: "pass"
+module.exports = {
+  mcpServerSettings: {
+  systemApiKey: true,  // Allows requests without API key header
+    // ... other settings
   }
-};
+}
 ```
+
+**⚠️ Warning**: System API key mode is for development only. Always use proper API key authentication in production.
+ 
+### Security Best Practices
+
+1. **Never Commit Keys**: Add API keys to `.gitignore` and use environment variables
+2. **Rotate Keys**: Regularly rotate keys, especially for production systems
+3. **Use Expiration**: Set expiration dates for temporary or test keys
+4. **Monitor Usage**: Review APIKeyUsageLog for suspicious activity
+5. **Label Keys**: Use descriptive labels to track what each key is used for
+6. **Revoke Unused Keys**: Clean up keys that are no longer needed
+7. **Store Securely**: Save raw keys in a secure password manager or secrets vault
+
+### Authentication Flow
+
+1. Client sends request with API key via header, Bearer token, or query parameter
+2. Server extracts API key from (in order of priority):
+   - `x-api-key` header
+   - `x-mj-api-key` header
+   - `Authorization: Bearer <key>` header
+   - `apiKey` or `api_key` query parameter
+3. Server validates key format (must match `mj_sk_[64 hex chars]`)
+4. Server hashes the key (SHA-256) and looks up in CredentialEngine cache
+5. Server checks:
+   - Key exists and hash matches
+   - Status is `Active`
+   - Not expired (ExpiresAt is NULL or in future)
+   - Associated user account is active
+6. Server loads the full user from the database using the key's UserID
+7. Server updates `LastUsedAt` timestamp and logs usage
+8. Session is created with the authenticated user context
+9. All tool executions use this user's permissions
+
+### Troubleshooting Authentication
+
+**"API key required"**
+- Ensure you're including the `x-api-key`, `x-mj-api-key`, or `Authorization: Bearer` header
+- Check that the header value is not empty
+- Try using the query parameter: `?apiKey=mj_sk_...`
+
+**"Invalid API key format"**
+- Key must start with `mj_sk_` prefix
+- Key must be exactly 70 characters total (`mj_sk_` + 64 hex chars)
+
+**"API key not found"**
+- The key hash doesn't match any record in the database
+- Verify you're using the raw key, not the hash
+- Check that the key was inserted into `__mj.APIKey`
+
+**"API key has been revoked"**
+- The key's Status field is set to 'Revoked'
+- Create a new key or update the Status back to 'Active'
+
+**"API key has expired"**
+- The ExpiresAt timestamp is in the past
+- Update the expiration date or create a new key
+
+**"User account is inactive"**
+- The associated user's IsActive field is false
+- Activate the user account or create a key for an active user
 
 ## Complete Example
 

@@ -3240,6 +3240,28 @@ export class MJAIAgentNote_ {
     @MaxLength(16)
     EmbeddingModelID?: string;
         
+    @Field({nullable: true, description: `Foreign key to Entity table identifying which entity type is used for primary scoping. NULL means this is a global note.`}) 
+    @MaxLength(16)
+    PrimaryScopeEntityID?: string;
+        
+    @Field({nullable: true, description: `The record ID within the primary scope entity. NULL means global note. When set with empty SecondaryScopes, indicates primary-scope-only note.`}) 
+    @MaxLength(200)
+    PrimaryScopeRecordID?: string;
+        
+    @Field({nullable: true, description: `JSON object containing additional scope dimensions. Empty/NULL with PrimaryScopeRecordID set = org-level note. Populated = fully-scoped note.`}) 
+    SecondaryScopes?: string;
+        
+    @Field({nullable: true, description: `Timestamp of when this note was last accessed/injected into agent context. Used for lifecycle management and cleanup.`}) 
+    @MaxLength(10)
+    LastAccessedAt?: Date;
+        
+    @Field(() => Int, {description: `Number of times this note has been accessed/injected into agent context. Used for analytics and determining note value.`}) 
+    AccessCount: number;
+        
+    @Field({nullable: true, description: `Optional expiration timestamp. Notes past this date are candidates for archival. NULL means no expiration.`}) 
+    @MaxLength(10)
+    ExpiresAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -3270,6 +3292,10 @@ export class MJAIAgentNote_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     EmbeddingModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    PrimaryScopeEntity?: string;
         
 }
 
@@ -3322,6 +3348,24 @@ export class CreateMJAIAgentNoteInput {
 
     @Field({ nullable: true })
     EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes: string | null;
+
+    @Field({ nullable: true })
+    LastAccessedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    AccessCount?: number;
+
+    @Field({ nullable: true })
+    ExpiresAt: Date | null;
 }
     
 
@@ -3374,6 +3418,24 @@ export class UpdateMJAIAgentNoteInput {
 
     @Field({ nullable: true })
     EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID?: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes?: string | null;
+
+    @Field({ nullable: true })
+    LastAccessedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    AccessCount?: number;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3898,6 +3960,21 @@ if this limit is exceeded.`})
     @Field({nullable: true, description: `JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.`}) 
     AgentTypePromptParams?: string;
         
+    @Field({nullable: true, description: `JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`}) 
+    ScopeConfig?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default.`}) 
+    NoteRetentionDays?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default.`}) 
+    ExampleRetentionDays?: number;
+        
+    @Field(() => Boolean, {description: `Whether automatic archival of stale notes/examples is enabled for this agent. Default true.`}) 
+    AutoArchiveEnabled: boolean;
+        
+    @Field({nullable: true, description: `JSON configuration for optional reranking of retrieved memory items. Schema: { enabled: boolean, rerankerModelId: string, retrievalMultiplier: number (default 3), minRelevanceThreshold: number (default 0.5), rerankPromptId?: string, contextFields?: string[], fallbackOnError: boolean (default true) }. When null or disabled, vector search results are used directly without reranking.`}) 
+    RerankerConfiguration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -4160,6 +4237,21 @@ export class CreateMJAIAgentInput {
 
     @Field({ nullable: true })
     AgentTypePromptParams: string | null;
+
+    @Field({ nullable: true })
+    ScopeConfig: string | null;
+
+    @Field(() => Int, { nullable: true })
+    NoteRetentionDays?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ExampleRetentionDays?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoArchiveEnabled?: boolean;
+
+    @Field({ nullable: true })
+    RerankerConfiguration: string | null;
 }
     
 
@@ -4329,6 +4421,21 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     AgentTypePromptParams?: string | null;
+
+    @Field({ nullable: true })
+    ScopeConfig?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    NoteRetentionDays?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ExampleRetentionDays?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoArchiveEnabled?: boolean;
+
+    @Field({ nullable: true })
+    RerankerConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17261,6 +17368,12 @@ export class MJEntity_ {
     @Field(() => [MJRecordLink_])
     MJ_RecordLinks_SourceEntityIDArray: MJRecordLink_[]; // Link to MJ_RecordLinks
     
+    @Field(() => [MJAIAgentExample_])
+    MJ_AIAgentExamples_PrimaryScopeEntityIDArray: MJAIAgentExample_[]; // Link to MJ_AIAgentExamples
+    
+    @Field(() => [MJAIAgentNote_])
+    AIAgentNotes_PrimaryScopeEntityIDArray: MJAIAgentNote_[]; // Link to AIAgentNotes
+    
     @Field(() => [MJGeneratedCode_])
     GeneratedCodes_LinkedEntityIDArray: MJGeneratedCode_[]; // Link to GeneratedCodes
     
@@ -17269,6 +17382,9 @@ export class MJEntity_ {
     
     @Field(() => [MJTestRun_])
     MJ_TestRuns_TargetLogEntityIDArray: MJTestRun_[]; // Link to MJ_TestRuns
+    
+    @Field(() => [MJAIAgentRun_])
+    MJ_AIAgentRuns_PrimaryScopeEntityIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
     
 }
 
@@ -18093,6 +18209,28 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAIAgentExample_])
+    async MJ_AIAgentExamples_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentExamples] WHERE [PrimaryScopeEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Examples', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Examples', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentNote_])
+    async AIAgentNotes_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [PrimaryScopeEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJGeneratedCode_])
     async GeneratedCodes_LinkedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Generated Codes', userPayload);
@@ -18123,6 +18261,17 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRuns] WHERE [TargetLogEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Test Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentRun_])
+    async MJ_AIAgentRuns_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [PrimaryScopeEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -26674,6 +26823,28 @@ export class MJAIAgentExample_ {
     @MaxLength(16)
     EmbeddingModelID?: string;
         
+    @Field({nullable: true, description: `Foreign key to Entity table identifying which entity type is used for primary scoping. NULL means this is a global example.`}) 
+    @MaxLength(16)
+    PrimaryScopeEntityID?: string;
+        
+    @Field({nullable: true, description: `The record ID within the primary scope entity. NULL means global example. When set with empty SecondaryScopes, indicates primary-scope-only example.`}) 
+    @MaxLength(200)
+    PrimaryScopeRecordID?: string;
+        
+    @Field({nullable: true, description: `JSON object containing additional scope dimensions. Empty/NULL with PrimaryScopeRecordID set = org-level example. Populated = fully-scoped example.`}) 
+    SecondaryScopes?: string;
+        
+    @Field({nullable: true, description: `Timestamp of when this example was last accessed/used for agent context. Used for lifecycle management and cleanup.`}) 
+    @MaxLength(10)
+    LastAccessedAt?: Date;
+        
+    @Field(() => Int, {description: `Number of times this example has been accessed/used. Used for analytics and determining example value.`}) 
+    AccessCount: number;
+        
+    @Field({nullable: true, description: `Optional expiration timestamp. Examples past this date are candidates for archival. NULL means no expiration.`}) 
+    @MaxLength(10)
+    ExpiresAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -26700,6 +26871,10 @@ export class MJAIAgentExample_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     EmbeddingModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    PrimaryScopeEntity?: string;
         
 }
 
@@ -26755,6 +26930,24 @@ export class CreateMJAIAgentExampleInput {
 
     @Field({ nullable: true })
     EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes: string | null;
+
+    @Field({ nullable: true })
+    LastAccessedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    AccessCount?: number;
+
+    @Field({ nullable: true })
+    ExpiresAt: Date | null;
 }
     
 
@@ -26810,6 +27003,24 @@ export class UpdateMJAIAgentExampleInput {
 
     @Field({ nullable: true })
     EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID?: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes?: string | null;
+
+    @Field({ nullable: true })
+    LastAccessedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    AccessCount?: number;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -28521,6 +28732,17 @@ each time the agent processes a prompt step.`})
     @MaxLength(16)
     TestRunID?: string;
         
+    @Field({nullable: true, description: `Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)`}) 
+    @MaxLength(16)
+    PrimaryScopeEntityID?: string;
+        
+    @Field({nullable: true, description: `The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.`}) 
+    @MaxLength(200)
+    PrimaryScopeRecordID?: string;
+        
+    @Field({nullable: true, description: `JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`}) 
+    SecondaryScopes?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -28563,6 +28785,10 @@ each time the agent processes a prompt step.`})
     @Field({nullable: true}) 
     @MaxLength(510)
     TestRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    PrimaryScopeEntity?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
@@ -28713,6 +28939,15 @@ export class CreateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     TestRunID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes: string | null;
 }
     
 
@@ -28837,6 +29072,15 @@ export class UpdateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     TestRunID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID?: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -59219,11 +59463,11 @@ export class MJUser_ {
     @Field(() => [MJDashboardPermission_])
     MJ_DashboardPermissions_SharedByUserIDArray: MJDashboardPermission_[]; // Link to MJ_DashboardPermissions
     
-    @Field(() => [MJUserNotificationPreference_])
-    MJ_UserNotificationPreferences_UserIDArray: MJUserNotificationPreference_[]; // Link to MJ_UserNotificationPreferences
-    
     @Field(() => [MJAPIKey_])
     MJ_APIKeys_UserIDArray: MJAPIKey_[]; // Link to MJ_APIKeys
+    
+    @Field(() => [MJUserNotificationPreference_])
+    MJ_UserNotificationPreferences_UserIDArray: MJUserNotificationPreference_[]; // Link to MJ_UserNotificationPreferences
     
     @Field(() => [MJResourcePermission_])
     ResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to ResourcePermissions
@@ -60036,17 +60280,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJUserNotificationPreference_])
-    async MJ_UserNotificationPreferences_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Notification Preferences', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotificationPreferences] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Notification Preferences', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Notification Preferences', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJAPIKey_])
     async MJ_APIKeys_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Keys', userPayload);
@@ -60055,6 +60288,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeys] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Keys', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Keys', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJUserNotificationPreference_])
+    async MJ_UserNotificationPreferences_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Notification Preferences', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotificationPreferences] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Notification Preferences', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Notification Preferences', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

@@ -1,21 +1,36 @@
-/* Modern Dialog Styling - Matching Dashboard Design */
+/* ==============================================
+   Permission Dialog - Material Design 3
+   Color Palette:
+   --navy: #092340
+   --light-blue: #AAE7FD
+   --gray-600: #F4F4F4
+   --gray-700: #D9D9D9
+   --gray-800: #AAA
+   --gray-900: #333
+   --mj-blue: #0076B6
+   --white-color: #FFF
+   --shadow: 0 4px 12px rgba(0, 0, 0, 0.25)
+   --border-radius: 1rem
+   ============================================== */
+
+/* Kendo Window Styling */
 :host ::ng-deep .k-window {
   border: none;
-  border-radius: 12px;
-  box-shadow: 0 19px 38px rgba(0, 0, 0, 0.30), 0 15px 12px rgba(0, 0, 0, 0.22);
-  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  background: #FFF;
   overflow: hidden;
 }
 
 :host ::ng-deep .k-window-titlebar {
-  background: linear-gradient(135deg, #ffc107 0%, #e6a704 100%);
+  background: linear-gradient(135deg, #0076B6 0%, #092340 100%);
   border: none;
   padding: 24px 32px;
   min-height: 70px;
 }
 
 :host ::ng-deep .k-window-titlebar .k-window-title {
-  display: none; /* Hide default title */
+  display: none;
 }
 
 :host ::ng-deep .k-window-titlebar .k-window-actions {
@@ -27,8 +42,8 @@
 :host ::ng-deep .k-window-titlebar .k-window-actions .k-button {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-  border-radius: 6px;
+  color: #FFF;
+  border-radius: 0.5rem;
   width: 32px;
   height: 32px;
   min-width: auto;
@@ -41,13 +56,13 @@
 
 :host ::ng-deep .k-window-content {
   padding: 0;
-  background: #ffffff;
+  background: #FFF;
 }
 
 /* Custom Title Bar */
 .dialog-header {
   position: relative;
-  color: #ffffff;
+  color: #FFF;
 }
 
 .dialog-header .dialog-title {
@@ -66,7 +81,7 @@
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
+  border-radius: 0.5rem;
   font-size: 14px;
 }
 
@@ -80,7 +95,7 @@
 /* Modal Content Areas */
 .dialog-content {
   padding: 0;
-  background: #ffffff;
+  background: #FFF;
 }
 
 .dialog-content .content-section {
@@ -88,13 +103,13 @@
 }
 
 .dialog-content .content-section:not(:last-child) {
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid #D9D9D9;
 }
 
 .dialog-footer {
   padding: 24px 32px;
-  background: #fafafa;
-  border-top: 1px solid #e0e0e0;
+  background: #F4F4F4;
+  border-top: 1px solid #D9D9D9;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -102,7 +117,7 @@
 }
 
 .dialog-footer .footer-info .changes-indicator {
-  color: #ffc107;
+  color: #F5A623;
   font-size: 12px;
   font-weight: 500;
   display: flex;
@@ -127,7 +142,7 @@
 .form-section .section-header .section-title {
   font-size: 16px;
   font-weight: 600;
-  color: #212121;
+  color: #333;
   margin: 0 0 4px 0;
   display: flex;
   align-items: center;
@@ -135,21 +150,21 @@
 }
 
 .form-section .section-header .section-title i {
-  color: #ffc107;
+  color: #0076B6;
   font-size: 14px;
 }
 
 .form-section .section-header .section-description {
   font-size: 12px;
-  color: #666666;
+  color: #AAA;
   margin: 0;
 }
 
 /* Entity Info Card */
 .entity-info-card {
-  background: #fafafa;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  background: #F4F4F4;
+  border: 1px solid #D9D9D9;
+  border-radius: 0.75rem;
   padding: 24px;
 }
 
@@ -172,29 +187,29 @@
 }
 
 .entity-info-card .entity-meta .meta-item i {
-  color: #ffc107;
+  color: #0076B6;
   width: 16px;
   font-size: 14px;
 }
 
 .entity-info-card .entity-meta .meta-item .meta-label {
   font-size: 12px;
-  color: #666666;
+  color: #AAA;
   font-weight: 500;
 }
 
 .entity-info-card .entity-meta .meta-item .meta-value {
   font-size: 12px;
-  color: #212121;
+  color: #333;
   font-weight: 500;
 }
 
 /* Permissions Table */
 .permissions-table-container {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border: 1px solid #D9D9D9;
+  border-radius: 0.75rem;
   overflow: hidden;
-  background: #ffffff;
+  background: #FFF;
 }
 
 .permissions-table-container .permissions-table {
@@ -203,7 +218,7 @@
 }
 
 .permissions-table-container .permissions-table thead {
-  background: #fafafa;
+  background: #F4F4F4;
 }
 
 .permissions-table-container .permissions-table thead th {
@@ -211,8 +226,8 @@
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: #212121;
-  border-bottom: 1px solid #e0e0e0;
+  color: #333;
+  border-bottom: 1px solid #D9D9D9;
   white-space: nowrap;
 }
 
@@ -227,7 +242,7 @@
 }
 
 .permissions-table-container .permissions-table thead th.permission-column i {
-  color: #ffc107;
+  color: #0076B6;
   margin-right: 4px;
 }
 
@@ -237,26 +252,26 @@
 }
 
 .permissions-table-container .permissions-table tbody tr {
-  transition: all 0.15s ease;
+  transition: all 0.3s ease;
 }
 
 .permissions-table-container .permissions-table tbody tr:hover {
-  background: rgba(255, 193, 7, 0.05);
+  background: rgba(0, 118, 182, 0.05);
 }
 
 .permissions-table-container .permissions-table tbody tr.has-changes {
-  background: rgba(0, 188, 212, 0.05);
-  border-left: 3px solid #00bcd4;
+  background: rgba(170, 231, 253, 0.2);
+  border-left: 3px solid #0076B6;
 }
 
 .permissions-table-container .permissions-table tbody tr.is-new {
   background: rgba(76, 175, 80, 0.05);
-  border-left: 3px solid #4caf50;
+  border-left: 3px solid #4CAF50;
 }
 
 .permissions-table-container .permissions-table tbody tr td {
   padding: 16px 24px;
-  border-bottom: 1px solid #fafafa;
+  border-bottom: 1px solid #F4F4F4;
 }
 
 .permissions-table-container .permissions-table tbody tr td.role-name .role-info {
@@ -266,7 +281,7 @@
 }
 
 .permissions-table-container .permissions-table tbody tr td.role-name .role-info i {
-  color: #ffc107;
+  color: #0076B6;
   width: 16px;
 }
 
@@ -281,12 +296,12 @@
 
 .permissions-table-container .permissions-table tbody tr td.role-name .role-info .new-badge {
   background: rgba(76, 175, 80, 0.1);
-  color: #4caf50;
+  color: #4CAF50;
 }
 
 .permissions-table-container .permissions-table tbody tr td.role-name .role-info .changed-badge {
-  background: rgba(0, 188, 212, 0.1);
-  color: #00bcd4;
+  background: rgba(170, 231, 253, 0.3);
+  color: #0076B6;
 }
 
 .permissions-table-container .permissions-table tbody tr td.permission-cell,
@@ -307,8 +322,8 @@
 }
 
 .permission-toggle .permission-checkbox:checked + .permission-label .checkbox-indicator {
-  background: #ffc107;
-  border-color: #ffc107;
+  background: #0076B6;
+  border-color: #0076B6;
 }
 
 .permission-toggle .permission-checkbox:checked + .permission-label .checkbox-indicator::after {
@@ -317,7 +332,7 @@
 }
 
 .permission-toggle .permission-checkbox:focus + .permission-label .checkbox-indicator {
-  box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.2);
+  box-shadow: 0 0 0 3px rgba(170, 231, 253, 0.6);
 }
 
 .permission-toggle .permission-label {
@@ -330,11 +345,11 @@
 .permission-toggle .checkbox-indicator {
   width: 20px;
   height: 20px;
-  border: 2px solid #bdbdbd;
+  border: 2px solid #D9D9D9;
   border-radius: 4px;
-  background: #ffffff;
+  background: #FFF;
   position: relative;
-  transition: all 0.15s ease;
+  transition: all 0.3s ease;
 }
 
 .permission-toggle .checkbox-indicator::after {
@@ -344,11 +359,11 @@
   top: 2px;
   width: 4px;
   height: 8px;
-  border: solid #ffffff;
+  border: solid #FFF;
   border-width: 0 2px 2px 0;
   opacity: 0;
   transform: rotate(45deg) scale(0.8);
-  transition: all 0.15s ease;
+  transition: all 0.3s ease;
 }
 
 /* Action Buttons */
@@ -356,9 +371,9 @@
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 6px;
+  border-radius: 0.5rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -366,12 +381,12 @@
 }
 
 .btn-icon.btn-danger {
-  background: rgba(244, 67, 54, 0.1);
-  color: #f44336;
+  background: rgba(211, 47, 47, 0.1);
+  color: #D32F2F;
 }
 
 .btn-icon.btn-danger:hover {
-  background: rgba(244, 67, 54, 0.2);
+  background: rgba(211, 47, 47, 0.2);
   transform: scale(1.05);
 }
 
@@ -379,12 +394,12 @@
 .empty-permissions {
   text-align: center;
   padding: 32px;
-  color: #666666;
+  color: #AAA;
 }
 
 .empty-permissions i {
   font-size: 2rem;
-  color: #bdbdbd;
+  color: #D9D9D9;
   margin-bottom: 16px;
 }
 
@@ -395,7 +410,7 @@
 
 .empty-permissions .empty-subtext {
   font-size: 12px;
-  color: #9e9e9e;
+  color: #AAA;
   margin: 0;
 }
 
@@ -403,7 +418,7 @@
 .add-role-section {
   margin-top: 32px;
   padding-top: 24px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid #D9D9D9;
 }
 
 .add-role-section .add-role-header {
@@ -413,13 +428,13 @@
 .add-role-section .add-role-header h4 {
   font-size: 14px;
   font-weight: 600;
-  color: #212121;
+  color: #333;
   margin: 0 0 4px 0;
 }
 
 .add-role-section .add-role-header p {
   font-size: 12px;
-  color: #666666;
+  color: #AAA;
   margin: 0;
 }
 
@@ -431,13 +446,13 @@
 
 .add-role-section .available-roles .role-chip {
   padding: 8px 16px;
-  border: 1px solid #bdbdbd;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #212121;
+  border: 1px solid #D9D9D9;
+  border-radius: 0.75rem;
+  background: #FFF;
+  color: #333;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -445,18 +460,18 @@
 
 .add-role-section .available-roles .role-chip i {
   font-size: 12px;
-  color: #ffc107;
+  color: #0076B6;
 }
 
 .add-role-section .available-roles .role-chip:hover {
-  border-color: #ffc107;
-  background: rgba(255, 193, 7, 0.05);
+  border-color: #0076B6;
+  background: rgba(170, 231, 253, 0.3);
   transform: translateY(-1px);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .add-role-section .available-roles .no-available-roles {
-  color: #9e9e9e;
+  color: #AAA;
   font-style: italic;
   margin: 0;
 }
@@ -464,7 +479,7 @@
 /* Alert Messages */
 .alert {
   padding: 16px 24px;
-  border-radius: 8px;
+  border-radius: 0.75rem;
   margin-bottom: 24px;
   display: flex;
   align-items: flex-start;
@@ -478,24 +493,24 @@
 }
 
 .alert.alert-error {
-  background: rgba(244, 67, 54, 0.1);
-  border: 1px solid rgba(244, 67, 54, 0.2);
-  color: #c62828;
+  background: rgba(211, 47, 47, 0.1);
+  border: 1px solid rgba(211, 47, 47, 0.2);
+  color: #B71C1C;
 }
 
 .alert.alert-error i {
-  color: #f44336;
+  color: #D32F2F;
 }
 
 /* Button Styles */
 .dialog-footer .btn {
   padding: 8px 24px;
-  border-radius: 6px;
+  border-radius: 1rem;
   font-size: 14px;
   font-weight: 500;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.3s ease;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -512,25 +527,25 @@
 }
 
 .dialog-footer .btn.btn-secondary {
-  background: #ffffff;
-  color: #666666;
-  border-color: #bdbdbd;
+  background: #FFF;
+  color: #333;
+  border-color: #D9D9D9;
 }
 
 .dialog-footer .btn.btn-secondary:hover:not(:disabled) {
-  background: #f8f9fa;
-  border-color: #757575;
-  color: #212121;
+  background: #F4F4F4;
+  border-color: #0076B6;
+  color: #0076B6;
 }
 
 .dialog-footer .btn.btn-primary {
-  background: #ffc107;
-  color: #ffffff;
+  background: #0076B6;
+  color: #FFF;
 }
 
 .dialog-footer .btn.btn-primary:hover:not(:disabled) {
-  background: #ffb300;
-  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+  background: #092340;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   transform: translateY(-1px);
 }
 
@@ -547,44 +562,44 @@
     width: calc(100vw - 24px) !important;
     height: calc(100vh - 24px) !important;
   }
-  
+
   :host ::ng-deep .k-window-titlebar {
     padding: 16px 24px;
     min-height: 60px;
   }
-  
+
   .dialog-content .content-section {
     padding: 24px 16px;
   }
-  
+
   .dialog-footer {
     padding: 16px 24px;
     flex-direction: column;
   }
-  
+
   .dialog-footer .footer-info,
   .dialog-footer .footer-actions {
     width: 100%;
   }
-  
+
   .dialog-footer .footer-actions {
     display: flex;
     gap: 16px;
   }
-  
+
   .dialog-footer .footer-actions .btn {
     flex: 1;
     justify-content: center;
   }
-  
+
   .permissions-table-container {
     overflow-x: auto;
   }
-  
+
   .permissions-table-container .permissions-table {
     min-width: 600px;
   }
-  
+
   .available-roles .role-chip {
     flex: 1;
     min-width: 120px;
