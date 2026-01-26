@@ -1,0 +1,200 @@
+[
+  {
+    "fields": {
+      "Name": "query",
+      "FullPath": "query",
+      "ParentID": null,
+      "Category": "Queries",
+      "Description": "Parent scope for RunQuery operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "6B4F338F-7D29-4E08-9224-4C6B28AB77F0"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:53.908Z",
+      "checksum": "33ac4016a5eb855250825bc674680b33ac36e5673d1f7c1f8d35c52ed8718235"
+    }
+  },
+  {
+    "fields": {
+      "Name": "run",
+      "FullPath": "query:run",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=query",
+      "Category": "Queries",
+      "Description": "Execute queries via RunQuery",
+      "ResourceType": "Query",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "BC484BC3-AC25-49A8-911E-EAF05E72DF42"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:53.931Z",
+      "checksum": "8856ac5f8c536d82a0257750ab72cc178bcd70ba0144ddf0d3521a5102713a58"
+    }
+  },
+  {
+    "fields": {
+      "Name": "view",
+      "FullPath": "view",
+      "ParentID": null,
+      "Category": "Views",
+      "Description": "Parent scope for RunView operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "ED5E88F4-2CAE-45B5-B452-1F5F6F034507"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:53.911Z",
+      "checksum": "6e339fbde095e566d0f088184b72ddfe32fc42c411571e264dfdaf2d86d69fd8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "run",
+      "FullPath": "view:run",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=view",
+      "Category": "Views",
+      "Description": "Execute views via RunView",
+      "ResourceType": "View",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "E29B56DA-C650-4493-96D8-D0BB7C6A8DFF"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:53.943Z",
+      "checksum": "b3d6b7b258cc31eb7b60b5689789d2317ea35a80e74a57b45523315be7651e0d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "agent",
+      "FullPath": "agent",
+      "ParentID": null,
+      "Category": "Agents",
+      "Description": "Parent scope for agent operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "E26DD357-399D-47E2-B831-54743E47A870"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:53.913Z",
+      "checksum": "e40e5047241400e9802777c9860f97cfd9e3ed72f0b0ee3b22176142102925e3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "agent:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=agent",
+      "Category": "Agents",
+      "Description": "Execute AI agents",
+      "ResourceType": "Agent",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "D9F4DC9A-EBDD-47FB-9934-441549051A5B"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:53.954Z",
+      "checksum": "e83c4ac5f677a38efc9bcb0a9267d18fda35b432fc8b6503eea2335e671010ea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "entity",
+      "FullPath": "",
+      "ParentID": null,
+      "Category": "Entities",
+      "Description": "Parent scope for entity CRUD operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "8E46B18C-8DBF-43A8-943E-E1039326105C"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:09:08.191Z",
+      "checksum": "4fae053d14734da561da5dbf9fbbe3b52af05ec3e3cb8af4a701bf8809f258b8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "create",
+      "FullPath": "",
+      "ParentID": "@lookup:MJ: API Scopes.Name=entity",
+      "Category": "Entities",
+      "Description": "Create entity records",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "A428AA6F-0C1F-4752-AC53-B57B15BE8ACD"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:09:08.226Z",
+      "checksum": "59d9f3561c64dc258070058df1a78602217d851062721f12af8b6620e55ad511"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "",
+      "ParentID": "@lookup:MJ: API Scopes.Name=entity",
+      "Category": "Entities",
+      "Description": "Read entity records",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "88DC0CDF-444B-49E4-AF6D-A057F21FC04E"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:09:08.240Z",
+      "checksum": "dfe7f22b74a840fd394e37416f44324580bc8e3953ee74f13f2bb37126bb6fb2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "update",
+      "FullPath": "",
+      "ParentID": "@lookup:MJ: API Scopes.Name=entity",
+      "Category": "Entities",
+      "Description": "Update entity records",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "7640DE54-C91B-4B19-8B82-3CA9A7E443B1"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:09:08.253Z",
+      "checksum": "96af808d06305de605f919ac922a629ef238e0393d9f8dc8ec59b59626642b92"
+    }
+  },
+  {
+    "fields": {
+      "Name": "delete",
+      "FullPath": "",
+      "ParentID": "@lookup:MJ: API Scopes.Name=entity",
+      "Category": "Entities",
+      "Description": "Delete entity records",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "76782769-F2DC-483A-9176-1D0677F8DAF1"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:09:08.265Z",
+      "checksum": "49a70beb984372ec5d1aabe0e7b592423b77e96aa4ad88f1053d6d53e8e5d5a6"
+    }
+  }
+]
