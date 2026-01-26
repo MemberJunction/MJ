@@ -1,11 +1,11 @@
-<kendo-window *ngIf="Visible"
-              [width]="700"
-              [height]="600"
-              [resizable]="true"
-              [draggable]="true"
-              (close)="close()">
-    <kendo-window-titlebar>
-        <div class="window-title">
+<!-- Slide-out Backdrop -->
+<div class="slideout-backdrop" *ngIf="Visible" (click)="close()"></div>
+
+<!-- Slide-out Panel -->
+<div class="slideout-panel" [class.open]="Visible">
+    <!-- Header -->
+    <div class="slideout-header">
+        <div class="slideout-title">
             <i class="fa-solid fa-key"></i>
             <span>API Key Details</span>
             <span class="key-status" [class.active]="APIKey?.Status === 'Active'"
@@ -13,14 +13,14 @@
                 {{APIKey?.Status}}
             </span>
         </div>
-        <button kendoButton fillMode="flat" (click)="close()" class="window-close-btn" title="Close (Esc)">
+        <button class="slideout-close" (click)="close()" title="Close (Esc)">
             <i class="fa-solid fa-times"></i>
         </button>
-    </kendo-window-titlebar>
+    </div>
 
     <mj-loading *ngIf="IsLoading" text="Loading key details..."></mj-loading>
 
-    <div class="panel-content" *ngIf="!IsLoading && APIKey">
+    <ng-container *ngIf="!IsLoading && APIKey">
         <!-- Success/Error Messages -->
         <div class="message success" *ngIf="SuccessMessage">
             <i class="fa-solid fa-check-circle"></i>
@@ -32,104 +32,179 @@
         </div>
 
         <!-- Tabs -->
-        <div class="tab-bar">
-            <button class="tab-btn" [class.active]="ActiveTab === 'details'"
+        <div class="slideout-tabs">
+            <button class="slideout-tab" [class.active]="ActiveTab === 'details'"
                     (click)="ActiveTab = 'details'">
                 <i class="fa-solid fa-info-circle"></i>
                 Details
             </button>
-            <button class="tab-btn" [class.active]="ActiveTab === 'scopes'"
+            <button class="slideout-tab" [class.active]="ActiveTab === 'scopes'"
                     (click)="ActiveTab = 'scopes'">
                 <i class="fa-solid fa-shield-halved"></i>
                 Permissions
-                <span class="badge" *ngIf="HasScopeChanges">!</span>
+                <span class="tab-badge unsaved" *ngIf="HasScopeChanges">!</span>
             </button>
-            <button class="tab-btn" [class.active]="ActiveTab === 'usage'"
+            <button class="slideout-tab" [class.active]="ActiveTab === 'usage'"
                     (click)="ActiveTab = 'usage'">
                 <i class="fa-solid fa-chart-line"></i>
                 Usage
             </button>
         </div>
 
-        <!-- Details Tab -->
-        <div class="tab-content" *ngIf="ActiveTab === 'details'">
-            <div class="key-info-card">
-                <div class="info-header">
-                    <div class="info-row">
-                        <span class="info-label">Key Hash</span>
-                        <code class="hash-value">{{APIKey.Hash}}</code>
+        <div class="slideout-content">
+            <!-- Details Tab -->
+            <div class="tab-panel" *ngIf="ActiveTab === 'details'">
+                <div class="key-info-card">
+                    <div class="info-header">
+                        <div class="info-row">
+                            <span class="info-label">Key Hash</span>
+                            <code class="hash-value">{{APIKey.Hash}}</code>
+                        </div>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Created</span>
+                            <span class="info-value">{{formatDate(APIKey.__mj_CreatedAt)}}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Created By</span>
+                            <span class="info-value">{{APIKey.CreatedByUser}}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Owner</span>
+                            <span class="info-value">{{APIKey.User}}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Last Used</span>
+                            <span class="info-value" [class.never-used]="!APIKey.LastUsedAt">
+                                {{APIKey.LastUsedAt ? formatDate(APIKey.LastUsedAt) : 'Never'}}
+                            </span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="info-grid">
-                    <div class="info-item">
-                        <span class="info-label">Created</span>
-                        <span class="info-value">{{formatDate(APIKey.__mj_CreatedAt)}}</span>
+                <!-- Editable Fields -->
+                <div class="edit-section">
+                    <div class="section-header">
+                        <h4>Key Configuration</h4>
+                        <button class="edit-toggle" *ngIf="APIKey.Status === 'Active'"
+                                (click)="toggleEdit()">
+                            <i class="fa-solid" [class.fa-pencil]="!IsEditing" [class.fa-times]="IsEditing"></i>
+                            {{IsEditing ? 'Cancel' : 'Edit'}}
+                        </button>
                     </div>
-                    <div class="info-item">
-                        <span class="info-label">Created By</span>
-                        <span class="info-value">{{APIKey.CreatedByUser}}</span>
+
+                    <div class="form-field">
+                        <label>Label</label>
+                        <input kendoTextBox [(ngModel)]="EditLabel"
+                               [disabled]="!IsEditing"
+                               class="form-input" />
                     </div>
-                    <div class="info-item">
-                        <span class="info-label">Owner</span>
-                        <span class="info-value">{{APIKey.User}}</span>
+
+                    <div class="form-field">
+                        <label>Description</label>
+                        <textarea kendoTextArea [(ngModel)]="EditDescription"
+                                  [disabled]="!IsEditing"
+                                  [rows]="3"
+                                  class="form-textarea"></textarea>
                     </div>
-                    <div class="info-item">
-                        <span class="info-label">Last Used</span>
-                        <span class="info-value" [class.never-used]="!APIKey.LastUsedAt">
-                            {{APIKey.LastUsedAt ? formatDate(APIKey.LastUsedAt) : 'Never'}}
-                        </span>
+
+                    <div class="form-field">
+                        <label>Expiration</label>
+                        <div class="expiration-field">
+                            <kendo-datepicker [(ngModel)]="EditExpiresAt"
+                                              [disabled]="!IsEditing"
+                                              [min]="getMinDate()"
+                                              format="MMM d, yyyy"
+                                              placeholder="Never expires">
+                            </kendo-datepicker>
+                            <button class="clear-btn" *ngIf="IsEditing && EditExpiresAt"
+                                    (click)="EditExpiresAt = null">
+                                <i class="fa-solid fa-times"></i>
+                                Never expires
+                            </button>
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Editable Fields -->
-            <div class="edit-section">
-                <div class="section-header">
-                    <h4>Key Configuration</h4>
-                    <button class="edit-toggle" *ngIf="APIKey.Status === 'Active'"
-                            (click)="toggleEdit()">
-                        <i class="fa-solid" [class.fa-pencil]="!IsEditing" [class.fa-times]="IsEditing"></i>
-                        {{IsEditing ? 'Cancel' : 'Edit'}}
-                    </button>
-                </div>
-
-                <div class="form-field">
-                    <label>Label</label>
-                    <input kendoTextBox [(ngModel)]="EditLabel"
-                           [disabled]="!IsEditing"
-                           class="form-input" />
-                </div>
-
-                <div class="form-field">
-                    <label>Description</label>
-                    <textarea kendoTextArea [(ngModel)]="EditDescription"
-                              [disabled]="!IsEditing"
-                              [rows]="3"
-                              class="form-textarea"></textarea>
-                </div>
-
-                <div class="form-field">
-                    <label>Expiration</label>
-                    <div class="expiration-field">
-                        <kendo-datepicker [(ngModel)]="EditExpiresAt"
-                                          [disabled]="!IsEditing"
-                                          [min]="getMinDate()"
-                                          format="MMM d, yyyy"
-                                          placeholder="Never expires">
-                        </kendo-datepicker>
-                        <button class="clear-btn" *ngIf="IsEditing && EditExpiresAt"
-                                (click)="EditExpiresAt = null">
-                            <i class="fa-solid fa-times"></i>
-                            Never expires
+                    <div class="edit-actions" *ngIf="IsEditing">
+                        <button kendoButton [themeColor]="'primary'"
+                                [disabled]="IsSaving"
+                                (click)="saveChanges()">
+                            <mj-loading *ngIf="IsSaving" [showText]="false" size="small"></mj-loading>
+                            <span *ngIf="!IsSaving">
+                                <i class="fa-solid fa-save"></i>
+                                Save Changes
+                            </span>
                         </button>
                     </div>
                 </div>
 
-                <div class="edit-actions" *ngIf="IsEditing">
+                <!-- Revoke Section -->
+                <div class="danger-zone" *ngIf="APIKey.Status === 'Active'">
+                    <h4>Danger Zone</h4>
+                    <div class="revoke-section" *ngIf="!ShowRevokeConfirm">
+                        <div class="revoke-info">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <div>
+                                <strong>Revoke this API key</strong>
+                                <p>Once revoked, this key will immediately stop working. This action cannot be undone.</p>
+                            </div>
+                        </div>
+                        <button class="revoke-btn" (click)="startRevoke()">
+                            <i class="fa-solid fa-ban"></i>
+                            Revoke Key
+                        </button>
+                    </div>
+
+                    <div class="revoke-confirm" *ngIf="ShowRevokeConfirm">
+                        <div class="confirm-warning">
+                            <i class="fa-solid fa-skull-crossbones"></i>
+                            <div>
+                                <strong>Are you absolutely sure?</strong>
+                                <p>This will permanently revoke the API key. Any applications using this key will immediately lose access.</p>
+                            </div>
+                        </div>
+                        <div class="confirm-input">
+                            <label>Type <code>REVOKE</code> to confirm:</label>
+                            <input kendoTextBox [(ngModel)]="RevokeConfirmText"
+                                   placeholder="REVOKE" />
+                        </div>
+                        <div class="confirm-actions">
+                            <button kendoButton (click)="cancelRevoke()">Cancel</button>
+                            <button class="confirm-revoke-btn"
+                                    [disabled]="RevokeConfirmText !== 'REVOKE' || IsRevoking"
+                                    (click)="confirmRevoke()">
+                                <mj-loading *ngIf="IsRevoking" [showText]="false" size="small"></mj-loading>
+                                <span *ngIf="!IsRevoking">
+                                    <i class="fa-solid fa-ban"></i>
+                                    Revoke Key
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Revoked Notice -->
+                <div class="revoked-notice" *ngIf="APIKey.Status === 'Revoked'">
+                    <i class="fa-solid fa-ban"></i>
+                    <div>
+                        <strong>This API key has been revoked</strong>
+                        <p>It can no longer be used for authentication. Consider deleting this record if no longer needed.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scopes Tab -->
+            <div class="tab-panel scopes-panel" *ngIf="ActiveTab === 'scopes'">
+                <div class="scopes-header">
+                    <div class="scopes-info">
+                        <span class="scope-count">{{getAssignedScopeCount()}} permissions assigned</span>
+                    </div>
                     <button kendoButton [themeColor]="'primary'"
+                            *ngIf="HasScopeChanges && APIKey.Status === 'Active'"
                             [disabled]="IsSaving"
-                            (click)="saveChanges()">
+                            (click)="saveScopeChanges()">
                         <mj-loading *ngIf="IsSaving" [showText]="false" size="small"></mj-loading>
                         <span *ngIf="!IsSaving">
                             <i class="fa-solid fa-save"></i>
@@ -137,163 +212,105 @@
                         </span>
                     </button>
                 </div>
+
+                <mj-loading *ngIf="IsLoadingScopes" text="Loading permissions..."></mj-loading>
+
+                <div class="scope-categories" *ngIf="!IsLoadingScopes">
+                    <div class="scope-category" *ngFor="let category of ScopeCategories">
+                        <div class="category-header" (click)="toggleCategory(category)">
+                            <div class="category-left">
+                                <i [class]="category.icon" [style.color]="category.color"></i>
+                                <span class="category-name">{{category.name}}</span>
+                                <span class="category-count">
+                                    {{getSelectedCount(category)}}/{{category.scopes.length}}
+                                </span>
+                            </div>
+                            <div class="category-right">
+                                <label class="category-all-toggle"
+                                       (click)="$event.stopPropagation()"
+                                       *ngIf="APIKey.Status === 'Active'">
+                                    <input type="checkbox" kendoCheckBox
+                                           [checked]="category.allSelected"
+                                           (change)="toggleCategoryAll(category)" />
+                                    <span>All</span>
+                                </label>
+                                <i class="fa-solid expand-icon" [class.fa-chevron-down]="!category.expanded"
+                                   [class.fa-chevron-up]="category.expanded"></i>
+                            </div>
+                        </div>
+
+                        <div class="category-scopes" *ngIf="category.expanded">
+                            <div class="scope-item" *ngFor="let item of category.scopes">
+                                <label class="scope-label">
+                                    <input type="checkbox" kendoCheckBox
+                                           [(ngModel)]="item.selected"
+                                           [disabled]="APIKey.Status === 'Revoked'"
+                                           (change)="onScopeChange()" />
+                                    <div class="scope-info">
+                                        <span class="scope-name">{{item.scope.Name}}</span>
+                                        <span class="scope-desc" *ngIf="item.scope.Description">
+                                            {{item.scope.Description}}
+                                        </span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Revoke Section -->
-            <div class="danger-zone" *ngIf="APIKey.Status === 'Active'">
-                <h4>Danger Zone</h4>
-                <div class="revoke-section" *ngIf="!ShowRevokeConfirm">
-                    <div class="revoke-info">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                        <div>
-                            <strong>Revoke this API key</strong>
-                            <p>Once revoked, this key will immediately stop working. This action cannot be undone.</p>
-                        </div>
-                    </div>
-                    <button class="revoke-btn" (click)="startRevoke()">
-                        <i class="fa-solid fa-ban"></i>
-                        Revoke Key
-                    </button>
-                </div>
+            <!-- Usage Tab -->
+            <div class="tab-panel usage-panel" *ngIf="ActiveTab === 'usage'">
+                <mj-loading *ngIf="IsLoadingLogs" text="Loading usage logs..."></mj-loading>
 
-                <div class="revoke-confirm" *ngIf="ShowRevokeConfirm">
-                    <div class="confirm-warning">
-                        <i class="fa-solid fa-skull-crossbones"></i>
-                        <div>
-                            <strong>Are you absolutely sure?</strong>
-                            <p>This will permanently revoke the API key. Any applications using this key will immediately lose access.</p>
+                <div class="usage-content" *ngIf="!IsLoadingLogs">
+                    <div class="usage-stats">
+                        <div class="stat-card">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <div class="stat-value">{{UsageLogs.length}}</div>
+                            <div class="stat-label">Total Requests</div>
+                        </div>
+                        <div class="stat-card">
+                            <i class="fa-solid fa-clock"></i>
+                            <div class="stat-value">
+                                {{UsageLogs.length > 0 ? formatRelativeTime(UsageLogs[0].timestamp) : 'Never'}}
+                            </div>
+                            <div class="stat-label">Last Used</div>
                         </div>
                     </div>
-                    <div class="confirm-input">
-                        <label>Type <code>REVOKE</code> to confirm:</label>
-                        <input kendoTextBox [(ngModel)]="RevokeConfirmText"
-                               placeholder="REVOKE" />
-                    </div>
-                    <div class="confirm-actions">
-                        <button kendoButton (click)="cancelRevoke()">Cancel</button>
-                        <button class="confirm-revoke-btn"
-                                [disabled]="RevokeConfirmText !== 'REVOKE' || IsRevoking"
-                                (click)="confirmRevoke()">
-                            <mj-loading *ngIf="IsRevoking" [showText]="false" size="small"></mj-loading>
-                            <span *ngIf="!IsRevoking">
-                                <i class="fa-solid fa-ban"></i>
-                                Revoke Key
+
+                    <div class="usage-logs" *ngIf="UsageLogs.length > 0">
+                        <div class="log-header">
+                            <span class="col-time">Time</span>
+                            <span class="col-endpoint">Endpoint</span>
+                            <span class="col-status">Status</span>
+                            <span class="col-duration">Duration</span>
+                        </div>
+                        <div class="log-item" *ngFor="let log of UsageLogs">
+                            <span class="col-time">{{formatRelativeTime(log.timestamp)}}</span>
+                            <span class="col-endpoint">
+                                <span class="method-badge">{{log.method}}</span>
+                                {{log.endpoint}}
                             </span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Revoked Notice -->
-            <div class="revoked-notice" *ngIf="APIKey.Status === 'Revoked'">
-                <i class="fa-solid fa-ban"></i>
-                <div>
-                    <strong>This API key has been revoked</strong>
-                    <p>It can no longer be used for authentication. Consider deleting this record if no longer needed.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Scopes Tab -->
-        <div class="tab-content scopes-tab" *ngIf="ActiveTab === 'scopes'">
-            <div class="scopes-header">
-                <div class="scopes-info">
-                    <span class="scope-count">{{getAssignedScopeCount()}} permissions assigned</span>
-                </div>
-                <button kendoButton [themeColor]="'primary'"
-                        *ngIf="HasScopeChanges && APIKey.Status === 'Active'"
-                        [disabled]="IsSaving"
-                        (click)="saveScopeChanges()">
-                    <mj-loading *ngIf="IsSaving" [showText]="false" size="small"></mj-loading>
-                    <span *ngIf="!IsSaving">
-                        <i class="fa-solid fa-save"></i>
-                        Save Changes
-                    </span>
-                </button>
-            </div>
-
-            <mj-loading *ngIf="IsLoadingScopes" text="Loading permissions..."></mj-loading>
-
-            <div class="scope-categories" *ngIf="!IsLoadingScopes">
-                <div class="scope-category" *ngFor="let category of ScopeCategories">
-                    <div class="category-header" (click)="toggleCategory(category)">
-                        <div class="category-left">
-                            <i [class]="category.icon" [style.color]="category.color"></i>
-                            <span class="category-name">{{category.name}}</span>
-                            <span class="category-count">
-                                {{getSelectedCount(category)}}/{{category.scopes.length}}
+                            <span class="col-status" [ngClass]="getStatusClass(log.statusCode)">
+                                {{log.statusCode}}
                             </span>
+                            <span class="col-duration">{{log.responseTime}}ms</span>
                         </div>
-                        <i class="fa-solid" [class.fa-chevron-down]="!category.expanded"
-                           [class.fa-chevron-up]="category.expanded"></i>
                     </div>
 
-                    <div class="category-scopes" *ngIf="category.expanded">
-                        <div class="scope-item" *ngFor="let item of category.scopes">
-                            <label class="scope-label">
-                                <input type="checkbox" kendoCheckBox
-                                       [(ngModel)]="item.selected"
-                                       [disabled]="APIKey.Status === 'Revoked'"
-                                       (change)="onScopeChange()" />
-                                <div class="scope-info">
-                                    <span class="scope-name">{{item.scope.Name}}</span>
-                                    <span class="scope-desc" *ngIf="item.scope.Description">
-                                        {{item.scope.Description}}
-                                    </span>
-                                </div>
-                            </label>
-                        </div>
+                    <div class="empty-state" *ngIf="UsageLogs.length === 0">
+                        <i class="fa-solid fa-chart-area"></i>
+                        <span>No usage logs yet</span>
+                        <p>Usage will be recorded when this API key is used for authentication</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Usage Tab -->
-        <div class="tab-content usage-tab" *ngIf="ActiveTab === 'usage'">
-            <mj-loading *ngIf="IsLoadingLogs" text="Loading usage logs..."></mj-loading>
-
-            <div class="usage-content" *ngIf="!IsLoadingLogs">
-                <div class="usage-stats">
-                    <div class="stat-card">
-                        <i class="fa-solid fa-chart-line"></i>
-                        <div class="stat-value">{{UsageLogs.length}}</div>
-                        <div class="stat-label">Total Requests</div>
-                    </div>
-                    <div class="stat-card">
-                        <i class="fa-solid fa-clock"></i>
-                        <div class="stat-value">
-                            {{UsageLogs.length > 0 ? formatRelativeTime(UsageLogs[0].timestamp) : 'Never'}}
-                        </div>
-                        <div class="stat-label">Last Used</div>
-                    </div>
-                </div>
-
-                <div class="usage-logs" *ngIf="UsageLogs.length > 0">
-                    <div class="log-header">
-                        <span class="col-time">Time</span>
-                        <span class="col-endpoint">Endpoint</span>
-                        <span class="col-status">Status</span>
-                        <span class="col-duration">Duration</span>
-                    </div>
-                    <div class="log-item" *ngFor="let log of UsageLogs">
-                        <span class="col-time">{{formatRelativeTime(log.timestamp)}}</span>
-                        <span class="col-endpoint">
-                            <span class="method-badge">{{log.method}}</span>
-                            {{log.endpoint}}
-                        </span>
-                        <span class="col-status" [ngClass]="getStatusClass(log.statusCode)">
-                            {{log.statusCode}}
-                        </span>
-                        <span class="col-duration">{{log.responseTime}}ms</span>
-                    </div>
-                </div>
-
-                <div class="empty-state" *ngIf="UsageLogs.length === 0">
-                    <i class="fa-solid fa-chart-area"></i>
-                    <span>No usage logs yet</span>
-                    <p>Usage will be recorded when this API key is used for authentication</p>
-                </div>
-            </div>
+        <!-- Footer -->
+        <div class="slideout-footer">
+            <button kendoButton (click)="close()">Close</button>
         </div>
-    </div>
-</kendo-window>
+    </ng-container>
+</div>

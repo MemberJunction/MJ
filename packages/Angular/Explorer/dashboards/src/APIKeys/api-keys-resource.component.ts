@@ -32,7 +32,7 @@ interface ScopeStat {
 type ViewType = 'overview' | 'list';
 
 /** Main tab type */
-type MainTab = 'keys' | 'applications' | 'scopes';
+type MainTab = 'keys' | 'applications' | 'scopes' | 'usage';
 
 /** Tree shaking prevention function */
 export function LoadAPIKeysResource(): void {
@@ -64,6 +64,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public CurrentView: ViewType = 'overview';
     public ListFilter: APIKeyFilter = 'all';
     public MainTab: MainTab = 'keys';
+    public NavOpen = false;
 
     // Application and scope counts for tab badges
     public ApplicationCount = 0;
@@ -588,6 +589,20 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         if (tab === 'keys') {
             this.CurrentView = 'overview';
         }
+    }
+
+    /**
+     * Toggle mobile navigation
+     */
+    public toggleNav(): void {
+        this.NavOpen = !this.NavOpen;
+    }
+
+    /**
+     * Close mobile navigation
+     */
+    public closeNav(): void {
+        this.NavOpen = false;
     }
 
     /**

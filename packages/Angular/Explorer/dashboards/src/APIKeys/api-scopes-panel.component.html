@@ -121,16 +121,19 @@
 
     <!-- Create/Edit Dialog -->
     <kendo-window *ngIf="ShowCreateDialog || ShowEditDialog"
-                  [width]="550"
-                  [height]="500"
+                  [width]="560"
+                  [minWidth]="420"
+                  [minHeight]="480"
                   [resizable]="true"
+                  [draggable]="true"
+                  [top]="80"
                   (close)="closeDialogs()">
         <kendo-window-titlebar>
             <div class="dialog-title">
                 <i class="fa-solid fa-shield-halved"></i>
                 <span>{{EditingScope ? 'Edit Scope' : 'New Scope'}}</span>
             </div>
-            <button kendoButton fillMode="flat" (click)="closeDialogs()" class="window-close-btn" title="Close">
+            <button kendoButton fillMode="flat" (click)="closeDialogs()" class="window-close-btn" title="Close (Esc)">
                 <i class="fa-solid fa-times"></i>
             </button>
         </kendo-window-titlebar>
@@ -154,7 +157,7 @@
                                     [defaultItem]="{ FullPath: '(No Parent - Root Level)', ID: null }">
                 </kendo-dropdownlist>
                 <span class="field-hint" *ngIf="SelectedParentScope">
-                    Full path will be: {{SelectedParentScope.FullPath}}:{{EditName || '...'}}
+                    Full path will be: <code>{{SelectedParentScope.FullPath}}:{{EditName || '...'}}</code>
                 </span>
             </div>
 
@@ -187,8 +190,10 @@
             <div class="form-field">
                 <label class="checkbox-label">
                     <input type="checkbox" kendoCheckBox [(ngModel)]="EditIsActive" />
-                    <span>Active</span>
-                    <span class="checkbox-hint">Inactive scopes cannot be assigned to keys or applications</span>
+                    <div>
+                        <span>Active</span>
+                        <span class="checkbox-hint">Inactive scopes cannot be assigned to keys or applications</span>
+                    </div>
                 </label>
             </div>
 

@@ -1,28 +1,43 @@
-<div class="api-keys-container">
+<div class="api-keys-dashboard" [class.panel-open]="ShowCreateDialog || ShowEditPanel" [class.nav-open]="NavOpen">
     <mj-loading *ngIf="IsLoading" text="Loading API Keys..."></mj-loading>
 
     <ng-container *ngIf="!IsLoading">
-        <!-- Main Navigation Tabs -->
-        <div class="main-tabs">
-            <button class="main-tab" [class.active]="MainTab === 'keys'" (click)="switchTab('keys')">
-                <i class="fa-solid fa-key"></i>
-                <span>API Keys</span>
-                <span class="tab-badge">{{TotalKeys}}</span>
-            </button>
-            <button class="main-tab" [class.active]="MainTab === 'applications'" (click)="switchTab('applications')">
-                <i class="fa-solid fa-cube"></i>
-                <span>Applications</span>
-                <span class="tab-badge">{{ApplicationCount}}</span>
-            </button>
-            <button class="main-tab" [class.active]="MainTab === 'scopes'" (click)="switchTab('scopes')">
-                <i class="fa-solid fa-shield-halved"></i>
-                <span>Scopes</span>
-                <span class="tab-badge">{{ScopeCount}}</span>
-            </button>
+        <!-- Left Navigation Sidebar -->
+        <div class="dashboard-nav">
+            <div class="nav-header">
+                <div class="nav-title">
+                    <i class="fa-solid fa-key"></i>
+                    <span>API Keys</span>
+                </div>
+            </div>
+            <div class="nav-items">
+                <button class="nav-item" [class.active]="MainTab === 'keys'" (click)="switchTab('keys'); closeNav()">
+                    <i class="fa-solid fa-key"></i>
+                    <span class="nav-label">API Keys</span>
+                    <span class="nav-badge">{{TotalKeys}}</span>
+                </button>
+                <button class="nav-item" [class.active]="MainTab === 'applications'" (click)="switchTab('applications'); closeNav()">
+                    <i class="fa-solid fa-cube"></i>
+                    <span class="nav-label">Applications</span>
+                    <span class="nav-badge">{{ApplicationCount}}</span>
+                </button>
+                <button class="nav-item" [class.active]="MainTab === 'scopes'" (click)="switchTab('scopes'); closeNav()">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span class="nav-label">Scopes</span>
+                    <span class="nav-badge">{{ScopeCount}}</span>
+                </button>
+                <button class="nav-item" [class.active]="MainTab === 'usage'" (click)="switchTab('usage'); closeNav()">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span class="nav-label">Usage Analytics</span>
+                </button>
+            </div>
         </div>
 
-        <!-- Keys Tab Content -->
-        <ng-container *ngIf="MainTab === 'keys'">
+        <!-- Main Content Area -->
+        <div class="dashboard-content">
+            <div class="content-wrapper">
+                <!-- Keys Tab Content -->
+                <ng-container *ngIf="MainTab === 'keys'">
             <!-- Overview View -->
             <ng-container *ngIf="CurrentView === 'overview'">
                 <!-- Header with Actions -->
@@ -328,19 +343,34 @@
             </ng-container>
         </ng-container>
 
-        <!-- Applications Tab Content -->
-        <ng-container *ngIf="MainTab === 'applications'">
-            <mj-api-applications-panel
-                (ApplicationUpdated)="onDataUpdated()">
-            </mj-api-applications-panel>
-        </ng-container>
+                <!-- Applications Tab Content -->
+                <ng-container *ngIf="MainTab === 'applications'">
+                    <mj-api-applications-panel
+                        (ApplicationUpdated)="onDataUpdated()">
+                    </mj-api-applications-panel>
+                </ng-container>
 
-        <!-- Scopes Tab Content -->
-        <ng-container *ngIf="MainTab === 'scopes'">
-            <mj-api-scopes-panel
-                (ScopeUpdated)="onDataUpdated()">
-            </mj-api-scopes-panel>
-        </ng-container>
+                <!-- Scopes Tab Content -->
+                <ng-container *ngIf="MainTab === 'scopes'">
+                    <mj-api-scopes-panel
+                        (ScopeUpdated)="onDataUpdated()">
+                    </mj-api-scopes-panel>
+                </ng-container>
+
+                <!-- Usage Tab Content -->
+                <ng-container *ngIf="MainTab === 'usage'">
+                    <mj-api-usage-panel></mj-api-usage-panel>
+                </ng-container>
+            </div><!-- /.content-wrapper -->
+        </div><!-- /.dashboard-content -->
+
+        <!-- Mobile Navigation Toggle -->
+        <button class="mobile-nav-toggle" (click)="toggleNav()">
+            <i class="fa-solid" [class.fa-bars]="!NavOpen" [class.fa-times]="NavOpen"></i>
+        </button>
+
+        <!-- Mobile Navigation Overlay -->
+        <div class="mobile-nav-overlay" (click)="closeNav()"></div>
     </ng-container>
 
     <!-- Create Dialog -->

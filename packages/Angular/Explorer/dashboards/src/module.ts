@@ -143,6 +143,7 @@ import { APIKeyEditPanelComponent } from './APIKeys/api-key-edit-panel.component
 import { APIKeyListComponent } from './APIKeys/api-key-list.component';
 import { APIApplicationsPanelComponent } from './APIKeys/api-applications-panel.component';
 import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
+import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
 
 
 
@@ -253,7 +254,8 @@ import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
     APIKeyEditPanelComponent,
     APIKeyListComponent,
     APIApplicationsPanelComponent,
-    APIScopesPanelComponent
+    APIScopesPanelComponent,
+    APIUsagePanelComponent
   ],
   imports: [
     CommonModule,
@@ -370,7 +372,8 @@ import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
     APIKeyEditPanelComponent,
     APIKeyListComponent,
     APIApplicationsPanelComponent,
-    APIScopesPanelComponent
+    APIScopesPanelComponent,
+    APIUsagePanelComponent
   ]
 })
 export class DashboardsModule { }
