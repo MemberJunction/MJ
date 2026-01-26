@@ -1168,35 +1168,64 @@ ALTER TABLE APIScope ALTER COLUMN FullPath NVARCHAR(MAX) NOT NULL;
 
 ### Phase 2: Seed Data
 
-1. Create standard APIApplication records
-2. Build scope hierarchy (app-agnostic)
+Seed data will be managed via the `/metadata/` folder and `mj-sync` tool rather than raw INSERT statements. This ensures:
+- Version-controlled, declarative configuration
+- Consistent UUIDs across environments
+- Easy updates and reviews via pull requests
+
+**Metadata files to create:**
+
+```
+metadata/
+├── api-applications/
+│   ├── .mjapi-application.json
+│   ├── .mcp-server-application.json
+│   └── .portal-application.json
+├── api-scopes/
+│   ├── .entity-scope.json          # Parent scope
+│   ├── .entity-runview-scope.json  # Child: entity:runview
+│   ├── .entity-create-scope.json   # Child: entity:create
+│   ├── .agent-scope.json           # Parent scope
+│   └── .agent-execute-scope.json   # Child: agent:execute
+└── api-application-scopes/
+    ├── .mcp-entity-runview.json    # MCP ceiling for entity:runview
+    ├── .mcp-agent-execute.json     # MCP ceiling for agent:execute
+    ├── .mjapi-entity-runview.json  # MJAPI ceiling for entity:runview
+    └── .mjapi-mutation-run.json    # MJAPI ceiling for mutation:run
+```
+
+**Example metadata file** (`metadata/api-applications/.mjapi-application.json`):
+```json
+{
+  "entity": "API Applications",
+  "fields": {
+    "Name": "MJAPI",
+    "Description": "MemberJunction GraphQL API",
+    "IsActive": true
+  }
+}
+```
+
+**Example scope with parent reference** (`metadata/api-scopes/.entity-runview-scope.json`):
+```json
+{
+  "entity": "API Scopes",
+  "fields": {
+    "Name": "runview",
+    "FullPath": "entity:runview",
+    "ParentID": "@lookup:API Scopes.Name=entity",
+    "ResourceType": "Entity",
+    "Category": "Entities",
+    "IsActive": true
+  }
+}
+```
+
+**Seed data tasks:**
+1. Create standard APIApplication records (MJAPI, MCPServer, Portal)
+2. Build scope hierarchy (app-agnostic) with parent references
 3. Define each app's scope ceiling with patterns via APIApplicationScope
 4. Migrate existing flat scopes to hierarchical structure
-
-```sql
--- Seed applications
-INSERT INTO APIApplication (ID, Name, Description, IsActive) VALUES
-    (NEWID(), 'MJAPI', 'MemberJunction GraphQL API', 1),
-    (NEWID(), 'MCPServer', 'Model Context Protocol Server', 1),
-    (NEWID(), 'Portal', 'Web Portal Application', 1);
-
--- Build scope hierarchy (app-agnostic)
-INSERT INTO APIScope (ID, ParentID, Name, FullPath, ResourceType) VALUES
-    (@scope_entity, NULL, 'entity', 'entity', NULL),
-    (@scope_entity_runview, @scope_entity, 'runview', 'entity:runview', 'Entity'),
-    (@scope_entity_create, @scope_entity, 'create', 'entity:create', 'Entity'),
-    (@scope_agent, NULL, 'agent', 'agent', NULL),
-    (@scope_agent_execute, @scope_agent, 'execute', 'agent:execute', 'Agent');
-
--- Define app scope ceilings WITH PATTERNS
-INSERT INTO APIApplicationScope (ApplicationID, ScopeID, ResourcePattern, PatternType, IsDeny, Priority) VALUES
-    -- MCP: all entity operations, all agents
-    (@mcpAppId, @scope_entity_runview, '*', 'Include', 0, 0),
-    (@mcpAppId, @scope_agent_execute, '*', 'Include', 0, 0),
-    -- MJAPI: all operations
-    (@mjapiAppId, @scope_entity_runview, '*', 'Include', 0, 0),
-    (@mjapiAppId, @scope_mutation_run, '*', 'Include', 0, 0);
-```
 
 ### Phase 3: Package Implementation
 
