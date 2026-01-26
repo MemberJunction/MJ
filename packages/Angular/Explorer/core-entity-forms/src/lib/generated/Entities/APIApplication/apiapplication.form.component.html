@@ -3,25 +3,17 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Scope Definition Section -->
+    <!-- Application Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="scopeDefinition"
-        sectionName="Scope Definition"
-        icon="fa fa-key"
+        sectionKey="applicationDetails"
+        sectionName="Application Details"
+        icon="fa fa-code"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Category"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -37,60 +29,18 @@
 
     </mj-collapsible-panel>
 
-    <!-- Scope Hierarchy Section -->
+    <!-- Operational Status Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="scopeHierarchy"
-        sectionName="Scope Hierarchy"
-        icon="fa fa-sitemap"
+        sectionKey="operationalStatus"
+        sectionName="Operational Status"
+        icon="fa fa-toggle-on"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="FullPath"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ResourceType"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="IsActive"
             Type="checkbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Parent"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RootParentID"
-            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -138,7 +88,7 @@
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Application Scopes','ScopeID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Application Scopes','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('MJ: API Application Scopes')"
                 [AllowLoad]="IsSectionExpanded('mJAPIApplicationScopes')"
                 [ShowToolbar]="false"
@@ -148,45 +98,45 @@
         </div>
     </mj-collapsible-panel>
 
-    <!-- MJ: API Key Scopes Section -->
+    <!-- MJ: API Key Usage Logs Section -->
     <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAPIKeyScopes"
-        sectionName="MJ: API Key Scopes"
+        sectionKey="mJAPIKeyUsageLogs"
+        sectionName="MJ: API Key Usage Logs"
         icon="fa fa-key"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAPIKeyScopes')"
+        [badgeCount]="GetSectionRowCount('mJAPIKeyUsageLogs')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Scopes','ScopeID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Key Scopes')"
-                [AllowLoad]="IsSectionExpanded('mJAPIKeyScopes')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Usage Logs','ApplicationID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Usage Logs')"
+                [AllowLoad]="IsSectionExpanded('mJAPIKeyUsageLogs')"
                 [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJAPIKeyScopes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAPIKeyUsageLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
-    <!-- MJ: API Scopes Section -->
+    <!-- MJ: API Key Applications Section -->
     <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAPIScopes"
-        sectionName="MJ: API Scopes"
+        sectionKey="mJAPIKeyApplications"
+        sectionName="MJ: API Key Applications"
         icon="fa fa-key"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAPIScopes')"
+        [badgeCount]="GetSectionRowCount('mJAPIKeyApplications')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Scopes','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Scopes')"
-                [AllowLoad]="IsSectionExpanded('mJAPIScopes')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Applications','ApplicationID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Applications')"
+                [AllowLoad]="IsSectionExpanded('mJAPIKeyApplications')"
                 [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJAPIScopes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAPIKeyApplications', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
