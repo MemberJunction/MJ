@@ -2,308 +2,344 @@
     <mj-loading *ngIf="IsLoading" text="Loading API Keys..."></mj-loading>
 
     <ng-container *ngIf="!IsLoading">
-        <!-- Overview View -->
-        <ng-container *ngIf="CurrentView === 'overview'">
-            <!-- Header with Actions -->
-            <div class="overview-header">
-                <div class="header-left">
-                    <h2 class="overview-title">API Keys Management</h2>
-                    <p class="overview-subtitle">Manage API keys for external integrations and services</p>
-                </div>
-                <div class="header-actions">
-                    <button class="btn-refresh" (click)="refresh()" title="Refresh">
-                        <i class="fa-solid fa-refresh"></i>
-                    </button>
-                    <button class="btn-primary" *ngIf="UserCanCreateKeys" (click)="openCreateDialog()">
-                        <i class="fa-solid fa-plus"></i>
-                        <span>Generate New Key</span>
-                    </button>
-                </div>
-            </div>
+        <!-- Main Navigation Tabs -->
+        <div class="main-tabs">
+            <button class="main-tab" [class.active]="MainTab === 'keys'" (click)="switchTab('keys')">
+                <i class="fa-solid fa-key"></i>
+                <span>API Keys</span>
+                <span class="tab-badge">{{TotalKeys}}</span>
+            </button>
+            <button class="main-tab" [class.active]="MainTab === 'applications'" (click)="switchTab('applications')">
+                <i class="fa-solid fa-cube"></i>
+                <span>Applications</span>
+                <span class="tab-badge">{{ApplicationCount}}</span>
+            </button>
+            <button class="main-tab" [class.active]="MainTab === 'scopes'" (click)="switchTab('scopes')">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>Scopes</span>
+                <span class="tab-badge">{{ScopeCount}}</span>
+            </button>
+        </div>
 
-            <!-- Health Score Banner -->
-            <div class="health-banner" [ngClass]="getHealthClass()">
-                <div class="health-score-container">
-                    <div class="health-score-ring">
-                        <svg viewBox="0 0 36 36" class="circular-chart">
-                            <path class="circle-bg"
-                                d="M18 2.0845
-                                   a 15.9155 15.9155 0 0 1 0 31.831
-                                   a 15.9155 15.9155 0 0 1 0 -31.831"
-                            />
-                            <path class="circle"
-                                [attr.stroke-dasharray]="getHealthScore() + ', 100'"
-                                d="M18 2.0845
-                                   a 15.9155 15.9155 0 0 1 0 31.831
-                                   a 15.9155 15.9155 0 0 1 0 -31.831"
-                            />
-                        </svg>
-                        <div class="health-score-value">{{getHealthScore()}}</div>
+        <!-- Keys Tab Content -->
+        <ng-container *ngIf="MainTab === 'keys'">
+            <!-- Overview View -->
+            <ng-container *ngIf="CurrentView === 'overview'">
+                <!-- Header with Actions -->
+                <div class="overview-header">
+                    <div class="header-left">
+                        <h2 class="overview-title">API Keys Management</h2>
+                        <p class="overview-subtitle">Manage API keys for external integrations and services</p>
                     </div>
-                </div>
-                <div class="health-info">
-                    <div class="health-label">{{getHealthLabel()}}</div>
-                    <div class="health-details">
-                        <span *ngIf="ExpiredKeys > 0" class="health-alert" (click)="showListView('expired')">
-                            <i class="fa-solid fa-circle-exclamation"></i>
-                            {{ExpiredKeys}} expired
-                        </span>
-                        <span *ngIf="ExpiringSoonCount > 0" class="health-warning-text" (click)="showListView('expiring')">
-                            <i class="fa-solid fa-clock"></i>
-                            {{ExpiringSoonCount}} expiring soon
-                        </span>
-                        <span *ngIf="NeverUsedKeys > 0" class="health-info-text" (click)="showListView('never-used')">
-                            <i class="fa-solid fa-question-circle"></i>
-                            {{NeverUsedKeys}} never used
-                        </span>
-                        <span *ngIf="ExpiredKeys === 0 && ExpiringSoonCount === 0 && NeverUsedKeys === 0" class="health-ok">
-                            <i class="fa-solid fa-check-circle"></i>
-                            All keys healthy
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- KPI Cards Row -->
-            <div class="kpi-row">
-                <div class="kpi-card clickable" (click)="showListView('all')">
-                    <div class="kpi-icon">
-                        <i class="fa-solid fa-key"></i>
-                    </div>
-                    <div class="kpi-content">
-                        <div class="kpi-value">{{TotalKeys}}</div>
-                        <div class="kpi-label">Total Keys</div>
-                    </div>
-                    <div class="kpi-trend">
-                        <i class="fa-solid fa-arrow-right"></i>
-                    </div>
-                </div>
-
-                <div class="kpi-card active clickable" (click)="showListView('active')">
-                    <div class="kpi-icon">
-                        <i class="fa-solid fa-check-circle"></i>
-                    </div>
-                    <div class="kpi-content">
-                        <div class="kpi-value">{{ActiveKeys}}</div>
-                        <div class="kpi-label">Active</div>
-                    </div>
-                    <div class="kpi-trend success">
-                        <span class="percentage">{{TotalKeys > 0 ? (ActiveKeys / TotalKeys * 100).toFixed(0) : 100}}%</span>
-                    </div>
-                </div>
-
-                <div class="kpi-card clickable" [class.warning]="ExpiringSoonCount > 0" (click)="showListView('expiring')">
-                    <div class="kpi-icon">
-                        <i class="fa-solid fa-clock"></i>
-                    </div>
-                    <div class="kpi-content">
-                        <div class="kpi-value">{{ExpiringSoonCount}}</div>
-                        <div class="kpi-label">Expiring Soon</div>
-                    </div>
-                    <div class="kpi-trend warning" *ngIf="ExpiringSoonCount > 0">
-                        <i class="fa-solid fa-arrow-right"></i>
-                    </div>
-                </div>
-
-                <div class="kpi-card clickable" [class.danger]="RevokedKeys > 0" (click)="showListView('revoked')">
-                    <div class="kpi-icon">
-                        <i class="fa-solid fa-ban"></i>
-                    </div>
-                    <div class="kpi-content">
-                        <div class="kpi-value">{{RevokedKeys}}</div>
-                        <div class="kpi-label">Revoked</div>
-                    </div>
-                </div>
-
-                <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fa-solid fa-shield-halved"></i>
-                    </div>
-                    <div class="kpi-content">
-                        <div class="kpi-value">{{ScopeStats.length}}</div>
-                        <div class="kpi-label">Scope Categories</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Content Grid -->
-            <div class="content-grid">
-                <!-- Recently Used Keys -->
-                <div class="panel keys-panel">
-                    <div class="panel-header">
-                        <div class="panel-title">
-                            <i class="fa-solid fa-key"></i>
-                            <span>Recently Used Keys</span>
-                        </div>
-                        <button class="panel-action" (click)="showListView('all')">
-                            View All <i class="fa-solid fa-arrow-right"></i>
+                    <div class="header-actions">
+                        <button class="btn-refresh" (click)="refresh()" title="Refresh">
+                            <i class="fa-solid fa-refresh"></i>
+                        </button>
+                        <button class="btn-primary" *ngIf="UserCanCreateKeys" (click)="openCreateDialog()">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Generate New Key</span>
                         </button>
                     </div>
-                    <div class="panel-body">
-                        <div class="key-list" *ngIf="TopUsedKeys.length > 0">
-                            <div class="key-item" *ngFor="let key of TopUsedKeys" (click)="openEditPanel(key)">
-                                <div class="key-icon" [class.active]="key.Status === 'Active'">
-                                    <i class="fa-solid fa-key"></i>
-                                </div>
-                                <div class="key-info">
-                                    <div class="key-label">{{key.Label}}</div>
-                                    <div class="key-meta">
-                                        <span class="key-user">{{key.User}}</span>
-                                        <span class="key-hash">...{{key.Hash.slice(-8)}}</span>
-                                    </div>
-                                </div>
-                                <div class="key-status">
-                                    <div class="last-used">{{formatDate(key.LastUsedAt)}}</div>
-                                    <div class="expiration" [ngClass]="getExpirationClass(key)">
-                                        {{formatExpiration(key.ExpiresAt)}}
-                                    </div>
-                                </div>
-                            </div>
+                </div>
+
+                <!-- Health Score Banner -->
+                <div class="health-banner" [ngClass]="getHealthClass()">
+                    <div class="health-score-container">
+                        <div class="health-score-ring">
+                            <svg viewBox="0 0 36 36" class="circular-chart">
+                                <path class="circle-bg"
+                                    d="M18 2.0845
+                                       a 15.9155 15.9155 0 0 1 0 31.831
+                                       a 15.9155 15.9155 0 0 1 0 -31.831"
+                                />
+                                <path class="circle"
+                                    [attr.stroke-dasharray]="getHealthScore() + ', 100'"
+                                    d="M18 2.0845
+                                       a 15.9155 15.9155 0 0 1 0 31.831
+                                       a 15.9155 15.9155 0 0 1 0 -31.831"
+                                />
+                            </svg>
+                            <div class="health-score-value">{{getHealthScore()}}</div>
                         </div>
-                        <div class="empty-state" *ngIf="TopUsedKeys.length === 0">
+                    </div>
+                    <div class="health-info">
+                        <div class="health-label">{{getHealthLabel()}}</div>
+                        <div class="health-details">
+                            <span *ngIf="ExpiredKeys > 0" class="health-alert" (click)="showListView('expired')">
+                                <i class="fa-solid fa-circle-exclamation"></i>
+                                {{ExpiredKeys}} expired
+                            </span>
+                            <span *ngIf="ExpiringSoonCount > 0" class="health-warning-text" (click)="showListView('expiring')">
+                                <i class="fa-solid fa-clock"></i>
+                                {{ExpiringSoonCount}} expiring soon
+                            </span>
+                            <span *ngIf="NeverUsedKeys > 0" class="health-info-text" (click)="showListView('never-used')">
+                                <i class="fa-solid fa-question-circle"></i>
+                                {{NeverUsedKeys}} never used
+                            </span>
+                            <span *ngIf="ExpiredKeys === 0 && ExpiringSoonCount === 0 && NeverUsedKeys === 0" class="health-ok">
+                                <i class="fa-solid fa-check-circle"></i>
+                                All keys healthy
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Cards Row -->
+                <div class="kpi-row">
+                    <div class="kpi-card clickable" (click)="showListView('all')">
+                        <div class="kpi-icon">
                             <i class="fa-solid fa-key"></i>
-                            <span>No active keys with recent usage</span>
+                        </div>
+                        <div class="kpi-content">
+                            <div class="kpi-value">{{TotalKeys}}</div>
+                            <div class="kpi-label">Total Keys</div>
+                        </div>
+                        <div class="kpi-trend">
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card active clickable" (click)="showListView('active')">
+                        <div class="kpi-icon">
+                            <i class="fa-solid fa-check-circle"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <div class="kpi-value">{{ActiveKeys}}</div>
+                            <div class="kpi-label">Active</div>
+                        </div>
+                        <div class="kpi-trend success">
+                            <span class="percentage">{{TotalKeys > 0 ? (ActiveKeys / TotalKeys * 100).toFixed(0) : 100}}%</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card clickable" [class.warning]="ExpiringSoonCount > 0" (click)="showListView('expiring')">
+                        <div class="kpi-icon">
+                            <i class="fa-solid fa-clock"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <div class="kpi-value">{{ExpiringSoonCount}}</div>
+                            <div class="kpi-label">Expiring Soon</div>
+                        </div>
+                        <div class="kpi-trend warning" *ngIf="ExpiringSoonCount > 0">
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card clickable" [class.danger]="RevokedKeys > 0" (click)="showListView('revoked')">
+                        <div class="kpi-icon">
+                            <i class="fa-solid fa-ban"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <div class="kpi-value">{{RevokedKeys}}</div>
+                            <div class="kpi-label">Revoked</div>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card clickable" (click)="switchTab('scopes')">
+                        <div class="kpi-icon">
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <div class="kpi-value">{{ScopeStats.length}}</div>
+                            <div class="kpi-label">Scope Categories</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Scope Categories -->
-                <div class="panel scope-panel">
-                    <div class="panel-header">
-                        <div class="panel-title">
-                            <i class="fa-solid fa-shield-halved"></i>
-                            <span>Permission Scopes</span>
-                        </div>
-                        <span class="panel-subtitle">Available scope categories</span>
-                    </div>
-                    <div class="panel-body">
-                        <div class="scope-chart" *ngIf="ScopeStats.length > 0">
-                            <!-- Visual Donut Chart -->
-                            <div class="donut-chart-container">
-                                <svg viewBox="0 0 100 100" class="donut-chart">
-                                    <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" stroke-width="12"/>
-                                    <ng-container *ngFor="let stat of ScopeStats; let i = index">
-                                        <circle
-                                            cx="50" cy="50" r="40"
-                                            fill="none"
-                                            [attr.stroke]="stat.color"
-                                            stroke-width="12"
-                                            [attr.stroke-dasharray]="stat.percentage * 2.51 + ' ' + (251 - stat.percentage * 2.51)"
-                                            [attr.stroke-dashoffset]="getDonutOffset(i)"
-                                            class="donut-segment"
-                                            (click)="onScopeClick(stat)"
-                                        />
-                                    </ng-container>
-                                </svg>
-                                <div class="donut-center">
-                                    <div class="donut-total">{{ScopeStats.length}}</div>
-                                    <div class="donut-label">Categories</div>
-                                </div>
+                <!-- Content Grid -->
+                <div class="content-grid">
+                    <!-- Recently Used Keys -->
+                    <div class="panel keys-panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <i class="fa-solid fa-key"></i>
+                                <span>Recently Used Keys</span>
                             </div>
-                            <!-- Legend -->
-                            <div class="scope-legend">
-                                <div class="legend-item" *ngFor="let stat of ScopeStats" (click)="onScopeClick(stat)">
-                                    <div class="legend-color" [style.backgroundColor]="stat.color"></div>
-                                    <div class="legend-info">
-                                        <div class="legend-name">
-                                            <i [class]="stat.iconClass"></i>
-                                            {{stat.category}}
+                            <button class="panel-action" (click)="showListView('all')">
+                                View All <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                        </div>
+                        <div class="panel-body">
+                            <div class="key-list" *ngIf="TopUsedKeys.length > 0">
+                                <div class="key-item" *ngFor="let key of TopUsedKeys" (click)="openEditPanel(key)">
+                                    <div class="key-icon" [class.active]="key.Status === 'Active'">
+                                        <i class="fa-solid fa-key"></i>
+                                    </div>
+                                    <div class="key-info">
+                                        <div class="key-label">{{key.Label}}</div>
+                                        <div class="key-meta">
+                                            <span class="key-user">{{key.User}}</span>
+                                            <span class="key-hash">...{{key.Hash.slice(-8)}}</span>
                                         </div>
-                                        <div class="legend-value">{{stat.count}} scopes</div>
                                     </div>
-                                    <i class="fa-solid fa-chevron-right legend-arrow"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="empty-state" *ngIf="ScopeStats.length === 0">
-                            <i class="fa-solid fa-shield-halved"></i>
-                            <span>No scopes configured</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Activity -->
-                <div class="panel activity-panel">
-                    <div class="panel-header">
-                        <div class="panel-title">
-                            <i class="fa-solid fa-clock-rotate-left"></i>
-                            <span>Recent Activity</span>
-                        </div>
-                    </div>
-                    <div class="panel-body">
-                        <div class="activity-list" *ngIf="RecentActivity.length > 0">
-                            <div class="activity-item" *ngFor="let activity of RecentActivity" (click)="onActivityClick(activity)">
-                                <div class="activity-icon" [ngClass]="getActionClass(activity.action)">
-                                    <i [class]="getActionIcon(activity.action)"></i>
-                                </div>
-                                <div class="activity-info">
-                                    <div class="activity-name">{{activity.keyLabel}}</div>
-                                    <div class="activity-meta">
-                                        <span class="activity-action">{{activity.action}}</span>
-                                        <span class="activity-user" *ngIf="activity.user">by {{activity.user}}</span>
+                                    <div class="key-status">
+                                        <div class="last-used">{{formatDate(key.LastUsedAt)}}</div>
+                                        <div class="expiration" [ngClass]="getExpirationClass(key)">
+                                            {{formatExpiration(key.ExpiresAt)}}
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="activity-time">
-                                    {{formatDate(activity.date)}}
-                                </div>
+                            </div>
+                            <div class="empty-state" *ngIf="TopUsedKeys.length === 0">
+                                <i class="fa-solid fa-key"></i>
+                                <span>No active keys with recent usage</span>
                             </div>
                         </div>
-                        <div class="empty-state" *ngIf="RecentActivity.length === 0">
-                            <i class="fa-solid fa-inbox"></i>
-                            <span>No recent activity</span>
+                    </div>
+
+                    <!-- Scope Categories -->
+                    <div class="panel scope-panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <i class="fa-solid fa-shield-halved"></i>
+                                <span>Permission Scopes</span>
+                            </div>
+                            <span class="panel-subtitle">Available scope categories</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="scope-chart" *ngIf="ScopeStats.length > 0">
+                                <!-- Visual Donut Chart -->
+                                <div class="donut-chart-container">
+                                    <svg viewBox="0 0 100 100" class="donut-chart">
+                                        <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" stroke-width="12"/>
+                                        <ng-container *ngFor="let stat of ScopeStats; let i = index">
+                                            <circle
+                                                cx="50" cy="50" r="40"
+                                                fill="none"
+                                                [attr.stroke]="stat.color"
+                                                stroke-width="12"
+                                                [attr.stroke-dasharray]="stat.percentage * 2.51 + ' ' + (251 - stat.percentage * 2.51)"
+                                                [attr.stroke-dashoffset]="getDonutOffset(i)"
+                                                class="donut-segment"
+                                                (click)="onScopeClick(stat)"
+                                            />
+                                        </ng-container>
+                                    </svg>
+                                    <div class="donut-center">
+                                        <div class="donut-total">{{ScopeStats.length}}</div>
+                                        <div class="donut-label">Categories</div>
+                                    </div>
+                                </div>
+                                <!-- Legend -->
+                                <div class="scope-legend">
+                                    <div class="legend-item" *ngFor="let stat of ScopeStats" (click)="onScopeClick(stat)">
+                                        <div class="legend-color" [style.backgroundColor]="stat.color"></div>
+                                        <div class="legend-info">
+                                            <div class="legend-name">
+                                                <i [class]="stat.iconClass"></i>
+                                                {{stat.category}}
+                                            </div>
+                                            <div class="legend-value">{{stat.count}} scopes</div>
+                                        </div>
+                                        <i class="fa-solid fa-chevron-right legend-arrow"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="empty-state" *ngIf="ScopeStats.length === 0">
+                                <i class="fa-solid fa-shield-halved"></i>
+                                <span>No scopes configured</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="panel activity-panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                <span>Recent Activity</span>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="activity-list" *ngIf="RecentActivity.length > 0">
+                                <div class="activity-item" *ngFor="let activity of RecentActivity" (click)="onActivityClick(activity)">
+                                    <div class="activity-icon" [ngClass]="getActionClass(activity.action)">
+                                        <i [class]="getActionIcon(activity.action)"></i>
+                                    </div>
+                                    <div class="activity-info">
+                                        <div class="activity-name">{{activity.keyLabel}}</div>
+                                        <div class="activity-meta">
+                                            <span class="activity-action">{{activity.action}}</span>
+                                            <span class="activity-user" *ngIf="activity.user">by {{activity.user}}</span>
+                                        </div>
+                                    </div>
+                                    <div class="activity-time">
+                                        {{formatDate(activity.date)}}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="empty-state" *ngIf="RecentActivity.length === 0">
+                                <i class="fa-solid fa-inbox"></i>
+                                <span>No recent activity</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Quick Actions -->
-            <div class="quick-actions" *ngIf="UserCanCreateKeys">
-                <div class="quick-actions-title">Quick Actions</div>
-                <div class="quick-actions-grid">
-                    <button class="quick-action" (click)="openCreateDialog()">
-                        <i class="fa-solid fa-plus"></i>
-                        <span>Generate Key</span>
-                    </button>
-                    <button class="quick-action" (click)="showListView('all')">
-                        <i class="fa-solid fa-list"></i>
-                        <span>View All Keys</span>
-                    </button>
-                    <button class="quick-action" (click)="showListView('expiring')">
-                        <i class="fa-solid fa-clock"></i>
-                        <span>Expiring Keys</span>
-                    </button>
-                    <button class="quick-action" (click)="showListView('never-used')">
-                        <i class="fa-solid fa-question-circle"></i>
-                        <span>Never Used</span>
+                <!-- Quick Actions -->
+                <div class="quick-actions" *ngIf="UserCanCreateKeys">
+                    <div class="quick-actions-title">Quick Actions</div>
+                    <div class="quick-actions-grid">
+                        <button class="quick-action" (click)="openCreateDialog()">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Generate Key</span>
+                        </button>
+                        <button class="quick-action" (click)="showListView('all')">
+                            <i class="fa-solid fa-list"></i>
+                            <span>View All Keys</span>
+                        </button>
+                        <button class="quick-action" (click)="showListView('expiring')">
+                            <i class="fa-solid fa-clock"></i>
+                            <span>Expiring Keys</span>
+                        </button>
+                        <button class="quick-action" (click)="showListView('never-used')">
+                            <i class="fa-solid fa-question-circle"></i>
+                            <span>Never Used</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Security Notice -->
+                <div class="security-notice">
+                    <i class="fa-solid fa-shield-check"></i>
+                    <div class="notice-content">
+                        <strong>Security Best Practices:</strong>
+                        API keys should be rotated regularly and revoked when no longer needed.
+                        Keys are hashed and stored securely - the raw key is only shown once at creation time.
+                        All API key usage is logged for audit purposes.
+                    </div>
+                </div>
+            </ng-container>
+
+            <!-- List View -->
+            <ng-container *ngIf="CurrentView === 'list'">
+                <div class="list-view-header">
+                    <button class="back-btn" (click)="showOverview()">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        Back to Overview
                     </button>
                 </div>
-            </div>
-
-            <!-- Security Notice -->
-            <div class="security-notice">
-                <i class="fa-solid fa-shield-check"></i>
-                <div class="notice-content">
-                    <strong>Security Best Practices:</strong>
-                    API keys should be rotated regularly and revoked when no longer needed.
-                    Keys are hashed and stored securely - the raw key is only shown once at creation time.
-                    All API key usage is logged for audit purposes.
-                </div>
-            </div>
+                <mj-api-key-list #keyList
+                    [Filter]="ListFilter"
+                    (KeySelected)="onKeySelected($event)"
+                    (CreateRequested)="openCreateDialog()">
+                </mj-api-key-list>
+            </ng-container>
         </ng-container>
 
-        <!-- List View -->
-        <ng-container *ngIf="CurrentView === 'list'">
-            <div class="list-view-header">
-                <button class="back-btn" (click)="showOverview()">
-                    <i class="fa-solid fa-arrow-left"></i>
-                    Back to Overview
-                </button>
-            </div>
-            <mj-api-key-list #keyList
-                [Filter]="ListFilter"
-                (KeySelected)="onKeySelected($event)"
-                (CreateRequested)="openCreateDialog()">
-            </mj-api-key-list>
+        <!-- Applications Tab Content -->
+        <ng-container *ngIf="MainTab === 'applications'">
+            <mj-api-applications-panel
+                (ApplicationUpdated)="onDataUpdated()">
+            </mj-api-applications-panel>
+        </ng-container>
+
+        <!-- Scopes Tab Content -->
+        <ng-container *ngIf="MainTab === 'scopes'">
+            <mj-api-scopes-panel
+                (ScopeUpdated)="onDataUpdated()">
+            </mj-api-scopes-panel>
         </ng-container>
     </ng-container>
 

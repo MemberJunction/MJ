@@ -141,6 +141,8 @@ import { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component'
 import { APIKeyCreateDialogComponent } from './APIKeys/api-key-create-dialog.component';
 import { APIKeyEditPanelComponent } from './APIKeys/api-key-edit-panel.component';
 import { APIKeyListComponent } from './APIKeys/api-key-list.component';
+import { APIApplicationsPanelComponent } from './APIKeys/api-applications-panel.component';
+import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
 
 
 
@@ -249,7 +251,9 @@ import { APIKeyListComponent } from './APIKeys/api-key-list.component';
     APIKeysResourceComponent,
     APIKeyCreateDialogComponent,
     APIKeyEditPanelComponent,
-    APIKeyListComponent
+    APIKeyListComponent,
+    APIApplicationsPanelComponent,
+    APIScopesPanelComponent
   ],
   imports: [
     CommonModule,
@@ -364,7 +368,9 @@ import { APIKeyListComponent } from './APIKeys/api-key-list.component';
     APIKeysResourceComponent,
     APIKeyCreateDialogComponent,
     APIKeyEditPanelComponent,
-    APIKeyListComponent
+    APIKeyListComponent,
+    APIApplicationsPanelComponent,
+    APIScopesPanelComponent
   ]
 })
 export class DashboardsModule { }

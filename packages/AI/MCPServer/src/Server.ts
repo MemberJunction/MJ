@@ -31,7 +31,7 @@ import { AIEngine, LoadAIEngine } from "@memberjunction/aiengine";
 import { LoadAIProviders } from "@memberjunction/ai-provider-bundle";
 import { ChatMessage } from "@memberjunction/ai";
 import { CredentialEngine } from "@memberjunction/credentials";
-import { EncryptionEngine } from "@memberjunction/encryption";
+import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import * as http from 'http';
 import { ActionEntityExtended, RunActionParams } from "@memberjunction/actions-base";
 import { ActionEngineServer } from "@memberjunction/actions";
@@ -244,37 +244,38 @@ async function authenticateRequest(request: Request | http.IncomingMessage): Pro
         // Extract request context for logging
         const requestContext = extractRequestContext(request);
 
-        const validation = await EncryptionEngine.Instance.ValidateAPIKey(
+        const apiKeyEngine = GetAPIKeyEngine();
+        const validation = await apiKeyEngine.ValidateAPIKey(
             {
-                rawKey: apiKey,
-                endpoint: requestContext.endpoint,
-                method: requestContext.method,
-                operation: null, // MCP tool name not known at auth time
-                statusCode: 200, // Auth succeeded if we get here
-                responseTimeMs: null, // Not available at auth time
-                ipAddress: requestContext.ipAddress,
-                userAgent: requestContext.userAgent,
+                RawKey: apiKey,
+                Endpoint: requestContext.endpoint,
+                Method: requestContext.method,
+                Operation: undefined, // MCP tool name not known at auth time
+                StatusCode: 200, // Auth succeeded if we get here
+                ResponseTimeMs: undefined, // Not available at auth time
+                IPAddress: requestContext.ipAddress ?? undefined,
+                UserAgent: requestContext.userAgent ?? undefined,
             },
             systemUser
         );
 
-        console.log(`[Auth] Validation result: isValid=${validation.isValid}, user=${validation.user?.Email}`);
+        console.log(`[Auth] Validation result: IsValid=${validation.IsValid}, user=${validation.User?.Email}`);
 
-        if (!validation.isValid) {
-            console.error(`[Auth] Validation failed: ${validation.error}`);
-            throw new Error(validation.error || 'Invalid API key');
+        if (!validation.IsValid) {
+            console.error(`[Auth] Validation failed: ${validation.Error}`);
+            throw new Error(validation.Error || 'Invalid API key');
         }
 
         // Get the user from UserCache to ensure EntityPermissions are loaded
-        // The validation.user might not have permissions populated
-        const cachedUser = UserCache.Instance.Users.find(u => u.ID === validation.user?.ID);
+        // The validation.User might not have permissions populated
+        const cachedUser = UserCache.Instance.Users.find(u => u.ID === validation.User?.ID);
         if (!cachedUser) {
-            console.error(`[Auth] User ${validation.user?.Email} not found in UserCache`);
+            console.error(`[Auth] User ${validation.User?.Email} not found in UserCache`);
             throw new Error('User not found in cache. Ensure user is active and has logged in.');
         }
 
         console.log(`Authenticated via API key for user: ${cachedUser.Email}`);
-        return { apiKey, apiKeyId: validation.apiKeyId!, user: cachedUser };
+        return { apiKey, apiKeyId: validation.APIKeyId!, user: cachedUser };
     } catch (error) {
         console.error(`[Auth] Exception during validation:`, error);
         throw error;

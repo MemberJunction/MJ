@@ -1,6 +1,6 @@
 import { EntityInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
-import { EncryptionEngine } from "@memberjunction/encryption";
+import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import express, { Request, Response, NextFunction } from 'express';
 import * as sql from 'mssql';
 import { z } from "zod";
@@ -153,21 +153,22 @@ async function authenticateRequest(req: Request, res: Response, next: NextFuncti
 
         const requestContext = extractRequestContext(req);
 
-        const validationResult = await EncryptionEngine.Instance.ValidateAPIKey(
+        const apiKeyEngine = GetAPIKeyEngine();
+        const validationResult = await apiKeyEngine.ValidateAPIKey(
             {
-                rawKey: apiKey,
-                endpoint: requestContext.endpoint,
-                method: requestContext.method,
-                operation: null, // Could extract from request body if available
-                statusCode: 200, // Auth succeeded if we get past validation
-                responseTimeMs: null, // Not available at auth time
-                ipAddress: requestContext.ipAddress,
-                userAgent: requestContext.userAgent,
+                RawKey: apiKey,
+                Endpoint: requestContext.endpoint,
+                Method: requestContext.method,
+                Operation: undefined, // Could extract from request body if available
+                StatusCode: 200, // Auth succeeded if we get past validation
+                ResponseTimeMs: undefined, // Not available at auth time
+                IPAddress: requestContext.ipAddress ?? undefined,
+                UserAgent: requestContext.userAgent ?? undefined,
             },
             systemUser
         );
 
-        if (!validationResult.isValid) {
+        if (!validationResult.IsValid) {
             LogStatus(`A2A Server: Invalid API key attempt from ${requestContext.ipAddress}`);
             res.status(401).json({
                 error: {
@@ -179,8 +180,8 @@ async function authenticateRequest(req: Request, res: Response, next: NextFuncti
         }
 
         // Store the authenticated user on the request for use in handlers
-        (req as RequestWithUser).authenticatedUser = validationResult.user!;
-        (req as RequestWithUser).apiKeyId = validationResult.apiKeyId;
+        (req as RequestWithUser).authenticatedUser = validationResult.User!;
+        (req as RequestWithUser).apiKeyId = validationResult.APIKeyId;
 
         next();
     } catch (error) {

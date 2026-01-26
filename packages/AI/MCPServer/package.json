@@ -18,6 +18,7 @@
   "dependencies": {
     "@memberjunction/actions": "3.2.0",
     "@memberjunction/actions-base": "3.2.0",
+    "@memberjunction/api-keys": "3.2.0",
     "@memberjunction/ai": "3.2.0",
     "@memberjunction/ai-agents": "3.2.0",
     "@memberjunction/ai-core-plus": "3.2.0",

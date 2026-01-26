@@ -2,6 +2,67 @@
     padding: 24px;
     height: 100%;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Main Navigation Tabs */
+.main-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    background: var(--card-background, #ffffff);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+}
+
+.main-tab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary, #6b7280);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.main-tab:hover {
+    background: var(--item-hover, #f3f4f6);
+    color: var(--text-primary, #1f2937);
+}
+
+.main-tab.active {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.main-tab i {
+    font-size: 16px;
+}
+
+.tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 20px;
+    padding: 0 8px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.main-tab.active .tab-badge {
+    background: rgba(255, 255, 255, 0.25);
 }
 
 /* List View Header */

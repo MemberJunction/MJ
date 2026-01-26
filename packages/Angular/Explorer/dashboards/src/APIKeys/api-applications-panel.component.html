@@ -1,0 +1,252 @@
+<div class="applications-panel">
+    <mj-loading *ngIf="IsLoading" text="Loading applications..."></mj-loading>
+
+    <ng-container *ngIf="!IsLoading">
+        <!-- Header -->
+        <div class="panel-header">
+            <div class="header-left">
+                <h3 class="panel-title">
+                    <i class="fa-solid fa-cube"></i>
+                    API Applications
+                </h3>
+                <p class="panel-subtitle">Manage applications and their default scope permissions</p>
+            </div>
+            <button class="btn-create" (click)="openCreateDialog()">
+                <i class="fa-solid fa-plus"></i>
+                New Application
+            </button>
+        </div>
+
+        <!-- Messages -->
+        <div class="message success" *ngIf="SuccessMessage">
+            <i class="fa-solid fa-check-circle"></i>
+            {{SuccessMessage}}
+        </div>
+        <div class="message error" *ngIf="ErrorMessage">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            {{ErrorMessage}}
+        </div>
+
+        <!-- Applications Grid -->
+        <div class="applications-grid">
+            <div class="app-card" *ngFor="let appItem of Applications"
+                 [class.inactive]="!appItem.application.IsActive"
+                 [class.expanded]="appItem.expanded">
+                <div class="app-header" (click)="toggleExpanded(appItem)">
+                    <div class="app-icon">
+                        <i class="fa-solid fa-cube"></i>
+                    </div>
+                    <div class="app-info">
+                        <div class="app-name">
+                            {{appItem.application.Name}}
+                            <span class="status-badge" [class.active]="appItem.application.IsActive"
+                                  [class.inactive]="!appItem.application.IsActive">
+                                {{appItem.application.IsActive ? 'Active' : 'Inactive'}}
+                            </span>
+                        </div>
+                        <div class="app-description" *ngIf="appItem.application.Description">
+                            {{appItem.application.Description}}
+                        </div>
+                    </div>
+                    <div class="app-stats">
+                        <div class="scope-count">
+                            <i class="fa-solid fa-shield-halved"></i>
+                            {{appItem.scopeCount}} scopes
+                        </div>
+                        <i class="fa-solid expand-icon"
+                           [class.fa-chevron-down]="!appItem.expanded"
+                           [class.fa-chevron-up]="appItem.expanded"></i>
+                    </div>
+                </div>
+
+                <!-- Expanded Content -->
+                <div class="app-details" *ngIf="appItem.expanded">
+                    <div class="details-section">
+                        <h4>Scope Ceiling Rules</h4>
+                        <div class="scope-rules" *ngIf="appItem.scopes.length > 0">
+                            <div class="scope-rule" *ngFor="let scope of appItem.scopes">
+                                <div class="rule-icon" [ngClass]="getPatternClass(scope.PatternType, scope.IsDeny)">
+                                    <i [class]="getPatternIcon(scope.PatternType, scope.IsDeny)"></i>
+                                </div>
+                                <div class="rule-info">
+                                    <div class="rule-scope">{{getScopeName(scope.ScopeID)}}</div>
+                                    <div class="rule-pattern">
+                                        <code>{{scope.ResourcePattern}}</code>
+                                        <span class="pattern-type">{{scope.PatternType}}</span>
+                                        <span class="priority" *ngIf="scope.Priority > 0">
+                                            Priority: {{scope.Priority}}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="empty-scopes" *ngIf="appItem.scopes.length === 0">
+                            <i class="fa-solid fa-shield-xmark"></i>
+                            <span>No scope rules defined - all access denied by default</span>
+                        </div>
+                    </div>
+
+                    <div class="details-actions">
+                        <button class="btn-secondary" (click)="openScopesDialog(appItem); $event.stopPropagation()">
+                            <i class="fa-solid fa-shield-halved"></i>
+                            Manage Scopes
+                        </button>
+                        <button class="btn-secondary" (click)="openEditDialog(appItem); $event.stopPropagation()">
+                            <i class="fa-solid fa-pencil"></i>
+                            Edit
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div class="empty-state" *ngIf="Applications.length === 0">
+                <i class="fa-solid fa-cube"></i>
+                <span>No applications configured</span>
+                <p>Create an application to define scope ceilings for API key access</p>
+            </div>
+        </div>
+    </ng-container>
+
+    <!-- Create/Edit Dialog -->
+    <kendo-window *ngIf="ShowCreateDialog || ShowEditDialog"
+                  [width]="500"
+                  [height]="380"
+                  [resizable]="true"
+                  (close)="closeDialogs()">
+        <kendo-window-titlebar>
+            <div class="dialog-title">
+                <i class="fa-solid fa-cube"></i>
+                <span>{{EditingApplication ? 'Edit Application' : 'New Application'}}</span>
+            </div>
+            <button kendoButton fillMode="flat" (click)="closeDialogs()" class="window-close-btn" title="Close">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </kendo-window-titlebar>
+
+        <div class="dialog-content">
+            <div class="form-field">
+                <label>Application Name *</label>
+                <input kendoTextBox [(ngModel)]="EditName"
+                       placeholder="e.g., MJAPI, MCP Server, Portal"
+                       class="form-input" />
+            </div>
+
+            <div class="form-field">
+                <label>Description</label>
+                <textarea kendoTextArea [(ngModel)]="EditDescription"
+                          placeholder="Describe the application's purpose..."
+                          [rows]="3"
+                          class="form-textarea"></textarea>
+            </div>
+
+            <div class="form-field">
+                <label class="checkbox-label">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="EditIsActive" />
+                    <span>Active</span>
+                    <span class="checkbox-hint">Inactive applications cannot be used with API keys</span>
+                </label>
+            </div>
+
+            <div class="dialog-actions">
+                <button kendoButton [themeColor]="'primary'"
+                        [disabled]="!EditName.trim() || IsSaving"
+                        (click)="saveApplication()">
+                    <mj-loading *ngIf="IsSaving" [showText]="false" size="small"></mj-loading>
+                    <span *ngIf="!IsSaving">
+                        <i class="fa-solid fa-save"></i>
+                        {{EditingApplication ? 'Update' : 'Create'}}
+                    </span>
+                </button>
+                <button kendoButton (click)="closeDialogs()">Cancel</button>
+            </div>
+        </div>
+    </kendo-window>
+
+    <!-- Scopes Assignment Dialog -->
+    <kendo-window *ngIf="ShowScopesDialog"
+                  [width]="700"
+                  [height]="600"
+                  [resizable]="true"
+                  (close)="closeDialogs()">
+        <kendo-window-titlebar>
+            <div class="dialog-title">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>Scope Ceiling Rules - {{SelectedApplication?.application?.Name}}</span>
+            </div>
+            <button kendoButton fillMode="flat" (click)="closeDialogs()" class="window-close-btn" title="Close">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </kendo-window-titlebar>
+
+        <div class="dialog-content scopes-dialog">
+            <p class="scopes-hint">
+                <i class="fa-solid fa-info-circle"></i>
+                Define the maximum permissions this application can grant to API keys.
+                API keys cannot exceed these limits even if they request higher permissions.
+            </p>
+
+            <div class="scopes-list">
+                <div class="scope-item" *ngFor="let selection of ScopeSelections">
+                    <div class="scope-header">
+                        <label class="scope-checkbox">
+                            <input type="checkbox" kendoCheckBox
+                                   [(ngModel)]="selection.selected" />
+                            <div class="scope-details">
+                                <span class="scope-path">{{selection.scope.FullPath || selection.scope.Name}}</span>
+                                <span class="scope-desc" *ngIf="selection.scope.Description">
+                                    {{selection.scope.Description}}
+                                </span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="scope-config" *ngIf="selection.selected">
+                        <div class="config-row">
+                            <div class="config-field">
+                                <label>Resource Pattern</label>
+                                <input kendoTextBox [(ngModel)]="selection.pattern"
+                                       placeholder="* (all resources)"
+                                       class="pattern-input" />
+                            </div>
+                            <div class="config-field narrow">
+                                <label>Type</label>
+                                <kendo-dropdownlist [(ngModel)]="selection.patternType"
+                                                    [data]="['Include', 'Exclude']"
+                                                    [valuePrimitive]="true">
+                                </kendo-dropdownlist>
+                            </div>
+                            <div class="config-field narrow">
+                                <label>Priority</label>
+                                <kendo-numerictextbox [(ngModel)]="selection.priority"
+                                                      [min]="0" [max]="1000"
+                                                      [format]="'n0'">
+                                </kendo-numerictextbox>
+                            </div>
+                        </div>
+                        <div class="config-row">
+                            <label class="deny-checkbox">
+                                <input type="checkbox" kendoCheckBox [(ngModel)]="selection.isDeny" />
+                                <span>Deny Rule</span>
+                                <span class="deny-hint">(Deny rules override allow rules)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dialog-actions">
+                <button kendoButton [themeColor]="'primary'"
+                        [disabled]="IsSaving"
+                        (click)="saveScopeAssignments()">
+                    <mj-loading *ngIf="IsSaving" [showText]="false" size="small"></mj-loading>
+                    <span *ngIf="!IsSaving">
+                        <i class="fa-solid fa-save"></i>
+                        Save Scope Rules
+                    </span>
+                </button>
+                <button kendoButton (click)="closeDialogs()">Cancel</button>
+            </div>
+        </div>
+    </kendo-window>
+</div>

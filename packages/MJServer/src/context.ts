@@ -16,7 +16,7 @@ import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
 import { Metadata } from '@memberjunction/core';
-import { EncryptionEngine } from '@memberjunction/encryption';
+import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -76,26 +76,27 @@ export const getUserPayload = async (
     if (userApiKey && userApiKey !== String(undefined)) {
       // Use system user as context for validation operations
       const systemUser = await getSystemUser(readOnlyDataSource);
-      const validationResult = await EncryptionEngine.Instance.ValidateAPIKey(
+      const apiKeyEngine = GetAPIKeyEngine();
+      const validationResult = await apiKeyEngine.ValidateAPIKey(
         {
-          rawKey: userApiKey,
-          endpoint: requestContext?.endpoint ?? '/api',
-          method: requestContext?.method ?? 'POST',
-          operation: requestContext?.operationName ?? null,
-          statusCode: 200, // Auth succeeded if we get here
-          responseTimeMs: null, // Not available at auth time
-          ipAddress: requestContext?.ipAddress ?? null,
-          userAgent: requestContext?.userAgent ?? null,
+          RawKey: userApiKey,
+          Endpoint: requestContext?.endpoint ?? '/api',
+          Method: requestContext?.method ?? 'POST',
+          Operation: requestContext?.operationName ?? null,
+          StatusCode: 200, // Auth succeeded if we get here
+          ResponseTimeMs: undefined, // Not available at auth time
+          IPAddress: requestContext?.ipAddress ?? null,
+          UserAgent: requestContext?.userAgent ?? null,
         },
         systemUser
       );
 
-      if (validationResult.isValid && validationResult.user) {
+      if (validationResult.IsValid && validationResult.User) {
         return {
-          userRecord: validationResult.user,
-          email: validationResult.user.Email,
+          userRecord: validationResult.User,
+          email: validationResult.User.Email,
           sessionId,
-          apiKeyId: validationResult.apiKeyId,
+          apiKeyId: validationResult.APIKeyId,
         };
       }
 

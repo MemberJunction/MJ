@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef } from '@ang
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
-import { APIKeyEntity, APIScopeEntity, APIKeyUsageLogEntity, ResourceData } from '@memberjunction/core-entities';
+import { APIKeyEntity, APIScopeEntity, APIKeyUsageLogEntity, APIApplicationEntity, ResourceData } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { APIKeyFilter, APIKeyListComponent } from './api-key-list.component';
 import { APIKeyCreateResult } from './api-key-create-dialog.component';
@@ -30,6 +30,9 @@ interface ScopeStat {
 
 /** Current view type */
 type ViewType = 'overview' | 'list';
+
+/** Main tab type */
+type MainTab = 'keys' | 'applications' | 'scopes';
 
 /** Tree shaking prevention function */
 export function LoadAPIKeysResource(): void {
@@ -60,6 +63,11 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     // View state
     public CurrentView: ViewType = 'overview';
     public ListFilter: APIKeyFilter = 'all';
+    public MainTab: MainTab = 'keys';
+
+    // Application and scope counts for tab badges
+    public ApplicationCount = 0;
+    public ScopeCount = 0;
 
     // Loading states
     public IsLoading = true;
@@ -143,6 +151,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
                 this.loadAPIKeys(),
                 this.loadScopeStats(),
                 this.loadRecentActivity(),
+                this.loadCounts(),
                 this.checkPermissions()
             ]);
             this.calculateStatistics();
@@ -153,6 +162,28 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
             this.NotifyLoadComplete();
             this.cdr.markForCheck();
         }
+    }
+
+    /**
+     * Load application and scope counts for tab badges
+     */
+    private async loadCounts(): Promise<void> {
+        const rv = new RunView();
+        const [appsResult, scopesResult] = await rv.RunViews([
+            {
+                EntityName: 'MJ: API Applications',
+                ResultType: 'simple',
+                Fields: ['ID']
+            },
+            {
+                EntityName: 'MJ: API Scopes',
+                ResultType: 'simple',
+                Fields: ['ID']
+            }
+        ]);
+
+        this.ApplicationCount = appsResult.Success ? appsResult.Results.length : 0;
+        this.ScopeCount = scopesResult.Success ? scopesResult.Results.length : 0;
     }
 
     /**
@@ -542,10 +573,28 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     }
 
     /**
-     * View scope details
+     * View scope details - now navigates to scopes tab
      */
-    public onScopeClick(stat: ScopeStat): void {
-        // Could open a scope management view in the future
-        console.log('Scope category clicked:', stat.category);
+    public onScopeClick(_stat: ScopeStat): void {
+        this.MainTab = 'scopes';
+    }
+
+    /**
+     * Switch to a main tab
+     */
+    public switchTab(tab: MainTab): void {
+        this.MainTab = tab;
+        // Reset to overview when switching back to keys
+        if (tab === 'keys') {
+            this.CurrentView = 'overview';
+        }
+    }
+
+    /**
+     * Handle updates from child panels
+     */
+    public async onDataUpdated(): Promise<void> {
+        await this.loadCounts();
+        this.cdr.markForCheck();
     }
 }
