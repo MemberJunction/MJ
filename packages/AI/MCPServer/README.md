@@ -257,6 +257,149 @@ You can use wildcards in `entityName` and `schemaName`:
 - `*Users`: Match entities/schemas ending with "Users"
 - `*Users*`: Match entities/schemas containing "Users"
 
+### Action Tools
+
+Action tools allow AI models to discover and execute MemberJunction Actions.
+
+```javascript
+actionTools: [
+  {
+    // Action matching (supports wildcards)
+    actionName: '*',              // Action name pattern (use '*' for all actions)
+    actionCategory: 'Workflow',   // Optional category filter
+
+    // Operations to enable
+    discover: true,   // Enable action discovery
+    execute: true     // Enable action execution
+  }
+]
+```
+
+#### Action Tool Naming
+
+- `Discover_Actions`: Lists available actions based on name/category pattern
+- `Run_Action`: General tool to execute any action by name or ID
+- `Get_Action_Params`: Get parameter definitions for a specific action
+- `Execute_[ActionName]_Action`: Specific tools for each configured action
+
+#### Action Tool Parameters and Responses
+
+**Discover_Actions**
+- Parameters:
+  - `pattern` (optional): Wildcard pattern to match action names
+  - `category` (optional): Category name to filter actions
+- Returns: Array of action metadata (id, name, description, category, type, status, paramCount)
+
+**Run_Action**
+- Parameters:
+  - `actionName` (optional): Name of the action to execute
+  - `actionId` (optional): ID of the action to execute
+  - `params` (optional): Parameters for the action as key-value pairs
+- Returns: `{ success: boolean, resultCode?: string, message?: string, runId?: string }`
+
+**Get_Action_Params**
+- Parameters:
+  - `actionName` (optional): Name of the action
+  - `actionId` (optional): ID of the action
+- Returns: `{ actionId, actionName, description, params: [{ name, description, type, isRequired, defaultValue }] }`
+
+### Query Tools
+
+Query tools allow AI models to execute SQL queries against the database.
+
+```javascript
+queryTools: {
+  enabled: true,
+  allowedSchemas: ['dbo', 'sales'],  // Optional: restrict to specific schemas
+  blockedSchemas: ['__mj']           // Optional: block specific schemas
+}
+```
+
+#### Query Tool Naming
+
+- `Run_SQL_Query`: Execute a read-only SQL SELECT query
+- `Get_Database_Schema`: Get schema information for available tables
+
+#### Query Tool Parameters and Responses
+
+**Run_SQL_Query**
+- Parameters:
+  - `sql`: The SQL SELECT query to execute (must start with SELECT)
+  - `maxRows` (optional): Maximum number of rows to return (default: 1000)
+- Returns: `{ success: boolean, rowCount: number, results: [], error?: string }`
+
+**Get_Database_Schema**
+- Parameters:
+  - `schemaFilter` (optional): Filter by schema name
+  - `tableFilter` (optional): Filter by table name pattern
+- Returns: Array of table information with columns
+
+### Prompt Tools
+
+Prompt tools allow AI models to discover and execute MemberJunction AI Prompts.
+
+```javascript
+promptTools: [
+  {
+    promptName: '*',           // Prompt name pattern
+    promptCategory: 'System',  // Optional category filter
+    discover: true,            // Enable prompt discovery
+    execute: true              // Enable prompt execution
+  }
+]
+```
+
+#### Prompt Tool Naming
+
+- `Discover_Prompts`: Lists available AI prompts
+- `Run_Prompt`: Execute any prompt by name or ID
+
+#### Prompt Tool Parameters and Responses
+
+**Discover_Prompts**
+- Parameters:
+  - `pattern` (optional): Wildcard pattern to match prompt names
+  - `category` (optional): Category name to filter prompts
+- Returns: Array of prompt metadata (id, name, description, category, responseFormat)
+
+**Run_Prompt**
+- Parameters:
+  - `promptName` (optional): Name of the prompt to execute
+  - `promptId` (optional): ID of the prompt to execute
+  - `data` (optional): Data to pass to the prompt template
+  - `modelId` (optional): Specific model ID to use
+- Returns: `{ success: boolean, result: any, rawOutput?: string, tokensUsed?: number, errorMessage?: string }`
+
+### Communication Tools
+
+Communication tools allow AI models to send messages through configured communication channels.
+
+```javascript
+communicationTools: {
+  enabled: true,
+  allowedProviders: ['SendGrid', 'Twilio']  // Optional: restrict to specific providers
+}
+```
+
+#### Communication Tool Naming
+
+- `Send_Email`: Send an email message (requires provider configuration)
+- `Get_Communication_Providers`: List available communication providers
+
+#### Communication Tool Parameters and Responses
+
+**Send_Email**
+- Parameters:
+  - `to`: Recipient email address
+  - `subject`: Email subject
+  - `body`: Email body (can be HTML)
+  - `isHtml` (optional): Whether body is HTML (default: true)
+- Returns: `{ success: boolean, error?: string }`
+
+**Get_Communication_Providers**
+- Parameters: None
+- Returns: Array of provider metadata (id, name, description, status, supportsSending)
+
 ## Connecting Models to the Server
 
 The server endpoint is available at:

@@ -55,6 +55,13 @@
         "ResourceType": "Dashboards",
         "RecordID": "@lookup:Dashboards.Name=SQL Logging?allowDefer",
         "isDefault": true
+      },
+      {
+        "Label": "API Keys",
+        "Icon": "fa-solid fa-key",
+        "ResourceType": "Custom",
+        "DriverClass": "APIKeysResource",
+        "isDefault": false
       }
     ]
   },
@@ -65,7 +72,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2026-01-21T05:01:18.770Z",
-    "checksum": "4966da5f2d377469c0b5436ce7014d206a566b60d1ee12c51a9823a4f306762d"
+    "lastModified": "2026-01-26T00:17:10.738Z",
+    "checksum": "d1da5bfc0051749d62a7d316b2a85026a0e0c2b167da888f7d5542f1ac68ee73"
   }
 }

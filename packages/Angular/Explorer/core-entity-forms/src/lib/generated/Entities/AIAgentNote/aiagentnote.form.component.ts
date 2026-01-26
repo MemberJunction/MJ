@@ -17,7 +17,7 @@ export class AIAgentNoteFormComponent extends BaseFormComponent {
             { sectionKey: 'scopeReferences', sectionName: 'Scope & References', isExpanded: true },
             { sectionKey: 'noteDetails', sectionName: 'Note Details', isExpanded: true },
             { sectionKey: 'embeddingAIData', sectionName: 'Embedding & AI Data', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'usageLifecycle', sectionName: 'Usage & Lifecycle', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

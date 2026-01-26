@@ -26,6 +26,8 @@ import { LoadDashboardBrowserResource } from './DashboardBrowser/dashboard-brows
 // Home Application and Dashboard
 import { LoadHomeApplication } from './Home/home-application';
 import { LoadHomeDashboard } from './Home/home-dashboard.component';
+// API Keys
+import { LoadAPIKeysResource } from './APIKeys/api-keys-resource.component';
 
 import {
   LoadActionsOverviewResource,
@@ -170,6 +172,12 @@ export {
 export { HomeApplication, LoadHomeApplication } from './Home/home-application';
 export { HomeDashboardComponent, LoadHomeDashboard } from './Home/home-dashboard.component';
 
+// API Keys
+export { APIKeysResourceComponent, LoadAPIKeysResource } from './APIKeys/api-keys-resource.component';
+export { APIKeyCreateDialogComponent, LoadAPIKeyCreateDialog, APIKeyCreateResult } from './APIKeys/api-key-create-dialog.component';
+export { APIKeyEditPanelComponent, LoadAPIKeyEditPanel } from './APIKeys/api-key-edit-panel.component';
+export { APIKeyListComponent, LoadAPIKeyList, APIKeyFilter } from './APIKeys/api-key-list.component';
+
 // Module
 export * from './module';
 
@@ -239,3 +247,12 @@ LoadDashboardBrowserResource();
 // Home Application and Dashboard loader
 LoadHomeApplication();
 LoadHomeDashboard();
+
+// API Keys resource loaders
+LoadAPIKeysResource();
+import { LoadAPIKeyCreateDialog } from './APIKeys/api-key-create-dialog.component';
+import { LoadAPIKeyEditPanel } from './APIKeys/api-key-edit-panel.component';
+import { LoadAPIKeyList } from './APIKeys/api-key-list.component';
+LoadAPIKeyCreateDialog();
+LoadAPIKeyEditPanel();
+LoadAPIKeyList();
