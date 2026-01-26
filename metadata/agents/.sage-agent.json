@@ -9,7 +9,20 @@
       "ModelSelectionMode": "Agent",
       "ArtifactCreationMode": "System Only",
       "ExposeAsAction": true,
-      "IconClass": "fa-brands fa-superpowers"
+      "IconClass": "fa-brands fa-superpowers",
+      "InjectNotes": true,
+      "MaxNotesToInject": 10,
+      "NoteInjectionStrategy": "Relevant",
+      "InjectExamples": true,
+      "MaxExamplesToInject": 5,
+      "ExampleInjectionStrategy": "Semantic",
+      "RerankerConfiguration": {
+        "enabled": true,
+        "rerankerModelId": "@lookup:AI Models.Name=rerank-v3.5",
+        "retrievalMultiplier": 3,
+        "minRelevanceThreshold": 0.5,
+        "fallbackOnError": true
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Modalities": [
@@ -404,8 +417,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-01-02T21:23:18.798Z",
-      "checksum": "087a4ef01d5d8c913e0457e80b8043c49947f9f3c5f553bb87080718766ef193"
+      "lastModified": "2026-01-26T00:17:05.839Z",
+      "checksum": "bccc9eb84698093c701e2ecd2587dee8dce949743bffaaa77789dfd9c0e73283"
     }
   }
 ]

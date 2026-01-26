@@ -23,6 +23,61 @@ import { AIAgentEntityExtended } from './AIAgentExtended';
 import { AIPromptEntityExtended } from './AIPromptExtended';
 import { MediaModality } from './prompt.types';
 
+/**
+ * Scope context for multi-tenant SaaS deployments.
+ *
+ * Allows SaaS applications to scope agent memory (notes/examples) by custom entity
+ * hierarchies without hardcoding any specific schema into MJ core. The scoping pattern
+ * uses a primary scope (indexed for fast filtering) plus secondary scopes (JSON for flexibility).
+ *
+ * Scope levels for retrieval (cascading inheritance):
+ * - Global: primaryRecordId is null/undefined - applies to all users
+ * - Primary-only: primaryRecordId set, no secondary - applies to all under primary scope
+ * - Fully-scoped: both primary and secondary set - most specific
+ *
+ * @since 2.130.0
+ *
+ * @example
+ * ```typescript
+ * // Izzy customer service app scoping
+ * params.userScope = {
+ *     primaryEntityName: 'Organizations',
+ *     primaryRecordId: organization.ID,
+ *     secondary: {
+ *         ContactID: contact.ID,
+ *         TeamID: contact.SupportTeamID
+ *     }
+ * };
+ *
+ * // Skip analytics app scoping
+ * params.userScope = {
+ *     primaryEntityName: 'Skip Tenants',
+ *     primaryRecordId: tenant.ID,
+ *     secondary: {
+ *         AnalystID: analyst.ID
+ *     }
+ * };
+ * ```
+ */
+export interface UserScope {
+    /**
+     * Primary scope entity name (e.g., "Organizations", "Tenants").
+     * This should match an Entity name in MemberJunction.
+     */
+    primaryEntityName?: string;
+    /**
+     * Primary scope record ID - the actual record ID within the primary entity.
+     * This is the main indexed filter for performance.
+     */
+    primaryRecordId?: string;
+    /**
+     * Additional scope dimensions as key-value pairs.
+     * Keys are field names (e.g., "ContactID", "TeamID"), values are record IDs.
+     * Stored as JSON and used for fine-grained filtering after primary scope.
+     */
+    secondary?: Record<string, string>;
+}
+
 // Import loop operation types from their dedicated modules
 // These are in separate files so they can be @include'd in prompt templates
 // Exported directly from index.ts, not re-exported here
@@ -445,6 +500,29 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     userId?: string;
     /** Optional company ID for scoping context memory (notes/examples) */
     companyId?: string;
+    /**
+     * Optional scope context for multi-tenant SaaS deployments.
+     *
+     * When provided, agent memory (notes/examples) will be scoped to the specified
+     * entity hierarchy. This enables tenant isolation and hierarchical retrieval
+     * (global → org-level → fully-scoped notes).
+     *
+     * The scope is recorded in AIAgentRun and propagated to Memory Manager for
+     * creating properly scoped notes/examples. The Context Injector uses it for
+     * hierarchical retrieval.
+     *
+     * @since 2.130.0
+     *
+     * @example
+     * ```typescript
+     * params.userScope = {
+     *     primaryEntityName: 'Organizations',
+     *     primaryRecordId: 'org-123',
+     *     secondary: { ContactID: '456', TeamID: 'alpha' }
+     * };
+     * ```
+     */
+    userScope?: UserScope;
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */

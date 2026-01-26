@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Agent Memory Cleanup - Daily at 3 AM UTC",
+      "Description": "Archives stale notes and examples based on per-agent retention policies. Archives notes not accessed within NoteRetentionDays (default 90), examples with SuccessScore < 50 after ExampleRetentionDays (default 180), and any items past their ExpiresAt timestamp.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=AgentScheduledJobDriver",
+      "CronExpression": "0 0 3 * * *",
+      "Timezone": "UTC",
+      "Status": "Active",
+      "Configuration": {
+        "AgentID": "@lookup:AI Agents.Name=Memory Cleanup Agent",
+        "InitialMessage": "Archive stale notes and examples based on retention policies"
+      }
+    },
+    "primaryKey": {
+      "ID": "BF5E6418-2B5D-4D2A-BBAF-6CEB20AFE585"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:06.791Z",
+      "checksum": "b4cf20665f7c208f4a9b9d502e3f35bdd61a6d85589eec30fdabf35e77fca60c"
+    }
+  }
+]

@@ -61,6 +61,30 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="ParentRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="LastRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ScheduledJobRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="RootParentRunID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -284,6 +308,14 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ConversationDetail"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -433,17 +465,37 @@
 
     </mj-collapsible-panel>
 
-    <!-- Details Section -->
+    <!-- Testing & Validation Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
+        sectionKey="testingValidation"
+        sectionName="Testing & Validation"
+        icon="fa fa-vial"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="TestRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Scope & Multi-Tenant Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="scopeMultiTenant"
+        sectionName="Scope & Multi-Tenant"
+        icon="fa fa-layer-group"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TestRunID"
+            FieldName="PrimaryScopeEntityID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -453,7 +505,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ParentRun"
+            FieldName="PrimaryScopeRecordID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -461,30 +513,32 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ConversationDetail"
-            Type="textbox"
+            FieldName="SecondaryScopes"
+            Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="LastRun"
+            FieldName="PrimaryScopeEntity"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
-            FieldName="ScheduledJobRun"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="TestRun"
             Type="textbox"
             [EditMode]="EditMode"
