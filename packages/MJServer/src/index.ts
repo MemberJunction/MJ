@@ -71,6 +71,7 @@ import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-de
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
+import { VoiceConversationHandler } from './websocket/VoiceConversationHandler.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -98,6 +99,7 @@ export * from './agents/skip-agent.js';
 export * from './agents/skip-sdk.js';
 
 export * from './resolvers/AskSkipResolver.js';
+export * from './websocket/VoiceConversationHandler.js';
 export * from './resolvers/ColorResolver.js';
 export * from './resolvers/ComponentRegistryResolver.js';
 export * from './resolvers/DatasetResolver.js';
@@ -239,7 +241,29 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   const httpServer = createServer(app);
 
-  const webSocketServer = new WebSocketServer({ server: httpServer, path: graphqlRootPath });
+  // Initialize voice conversation WebSocket handler
+  const voiceConversationHandler = new VoiceConversationHandler(dataSources);
+
+  // Create GraphQL WebSocket server in noServer mode to avoid conflicts
+  const webSocketServer = new WebSocketServer({ noServer: true });
+
+  // Centralized WebSocket upgrade handler to route requests to appropriate server
+  httpServer.on('upgrade', (request, socket, head) => {
+    const url = new URL(request.url!, `http://${request.headers.host}`);
+
+    if (url.pathname === '/voice-conversation') {
+      // Route to voice conversation handler
+      voiceConversationHandler.handleUpgradeRequest(request, socket, head);
+    } else if (url.pathname === graphqlRootPath || url.pathname === '/') {
+      // Route to GraphQL WebSocket handler
+      webSocketServer.handleUpgrade(request, socket, head, (ws) => {
+        webSocketServer.emit('connection', ws, request);
+      });
+    } else {
+      // Unknown path - close connection
+      socket.destroy();
+    }
+  });
   const serverCleanup = useServer(
     {
       schema,

@@ -201,4 +201,30 @@ export class DialogService {
 
     return dialogRef;
   }
+
+  /**
+   * Open a dialog with a custom component
+   * @param component The component class to display in the dialog
+   * @param options Dialog configuration options
+   * @returns DialogRef - Access component instance via dialogRef.content.instance
+   */
+  openComponent(
+    component: Function,
+    options: {
+      title?: string;
+      width?: number;
+      height?: number;
+      minWidth?: number;
+      minHeight?: number;
+    } = {}
+  ): DialogRef {
+    return this.kendoDialogService.open({
+      title: options.title || '',
+      content: component,
+      width: options.width || 800,
+      height: options.height,
+      minWidth: options.minWidth || 600,
+      minHeight: options.minHeight
+    });
+  }
 }

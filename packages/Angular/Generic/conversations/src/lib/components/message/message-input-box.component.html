@@ -30,6 +30,17 @@
       <i class="fa-solid fa-paperclip"></i>
     </button>
 
+    <!-- Voice Streaming Button - Positioned over editor -->
+    <button
+      *ngIf="enableVoiceInput"
+      class="voice-button-icon"
+      [disabled]="disabled"
+      (click)="onVoiceStreamingClick(); $event.stopPropagation()"
+      title="Start voice conversation"
+    >
+      <i class="fa-solid fa-microphone"></i>
+    </button>
+
     <!-- Send Button (Icon Only) - Positioned over editor -->
     <button
       class="send-button-icon"

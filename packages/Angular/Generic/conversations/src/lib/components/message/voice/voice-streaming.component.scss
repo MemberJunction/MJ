@@ -1,0 +1,350 @@
+.voice-streaming-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1rem;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.voice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+// Central Visual Indicator
+.visual-indicator-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.visual-indicator {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: #e0e0e0;
+  transition: all 0.3s ease;
+
+  i {
+    font-size: 2rem;
+    color: #9e9e9e;
+    z-index: 3;
+    transition: all 0.3s ease;
+  }
+
+  .pulse-ring,
+  .pulse-ring-2 {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    opacity: 0;
+    z-index: 1;
+  }
+
+  // User recording state - Blue/Green pulse
+  &.recording {
+    background: linear-gradient(135deg, #4caf50 0%, #2196f3 100%);
+    box-shadow: 0 4px 20px rgba(33, 150, 243, 0.4);
+
+    i {
+      color: white;
+    }
+
+    .pulse-ring {
+      border: 3px solid #2196f3;
+      animation: recording-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    .pulse-ring-2 {
+      border: 3px solid #4caf50;
+      animation: recording-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite 1s;
+    }
+  }
+
+  // Agent speaking state - Orange/Red pulse
+  &.agent-speaking {
+    background: linear-gradient(135deg, #ff5722 0%, #ff9800 100%);
+    box-shadow: 0 4px 20px rgba(255, 87, 34, 0.4);
+
+    i {
+      color: white;
+    }
+
+    .pulse-ring {
+      border: 3px solid #ff5722;
+      animation: agent-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    .pulse-ring-2 {
+      border: 3px solid #ff9800;
+      animation: agent-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite 0.75s;
+    }
+  }
+
+  // Idle state - Gray
+  &.idle {
+    background-color: #f5f5f5;
+    border: 2px solid #e0e0e0;
+
+    i {
+      color: #9e9e9e;
+    }
+  }
+}
+
+.status-text {
+  min-height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+
+  &.recording {
+    background-color: rgba(33, 150, 243, 0.1);
+    color: #1976d2;
+  }
+
+  &.agent-speaking {
+    background-color: rgba(255, 87, 34, 0.1);
+    color: #e64a19;
+  }
+
+  &.idle {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: #757575;
+  }
+}
+
+// Recording pulse animation (Blue/Green)
+@keyframes recording-pulse {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.8);
+  }
+}
+
+// Agent speaking pulse animation (Orange/Red)
+@keyframes agent-pulse {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2);
+  }
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.75rem;
+
+  .btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    i {
+      font-size: 1rem;
+    }
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+
+    &.btn-primary {
+      background-color: #1976d2;
+      color: white;
+
+      &:hover {
+        background-color: #1565c0;
+      }
+    }
+
+    &.btn-warning {
+      background-color: #ff9800;
+      color: white;
+
+      &:hover {
+        background-color: #f57c00;
+      }
+    }
+
+    &.btn-danger {
+      background-color: #d32f2f;
+      color: white;
+
+      &:hover {
+        background-color: #c62828;
+      }
+    }
+  }
+
+  .interrupt-button {
+    animation: interrupt-highlight 2s ease-in-out infinite;
+  }
+}
+
+@keyframes interrupt-highlight {
+  0%, 100% {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(255, 152, 0, 0.5);
+  }
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background-color: #ffebee;
+  border-left: 4px solid #d32f2f;
+  border-radius: 4px;
+  color: #c62828;
+  font-weight: 500;
+
+  i {
+    font-size: 1.25rem;
+    color: #d32f2f;
+  }
+}
+
+.transcript-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  padding: 1rem;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.transcript-section {
+  padding: 1rem;
+  border-radius: 8px;
+  animation: fade-in 0.3s ease;
+
+  &.user-section {
+    background-color: #e3f2fd;
+    border-left: 4px solid #1976d2;
+  }
+
+  &.agent-section {
+    background-color: #f3e5f5;
+    border-left: 4px solid #7b1fa2;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.transcript-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+
+  i {
+    font-size: 1rem;
+  }
+
+  .user-section & {
+    color: #1565c0;
+  }
+
+  .agent-section & {
+    color: #6a1b9a;
+  }
+}
+
+.transcript-text {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #333;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.transcript-placeholder,
+.session-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+  color: #999;
+
+  i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+
+  p {
+    font-size: 1rem;
+    margin: 0;
+  }
+}
+
+.session-placeholder {
+  flex: 1;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}

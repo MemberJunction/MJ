@@ -1,0 +1,101 @@
+<div class="voice-streaming-container">
+  <!-- Header with status indicators -->
+  <div class="voice-header">
+    <!-- Central Visual Indicator -->
+    <div class="visual-indicator-wrapper">
+      <div class="visual-indicator"
+           [class.recording]="isRecording && !isAgentSpeaking"
+           [class.agent-speaking]="isAgentSpeaking"
+           [class.idle]="!isRecording && !isAgentSpeaking">
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring-2"></div>
+        <i class="fa-solid fa-microphone"></i>
+      </div>
+      <div class="status-text">
+        @if (isRecording && !isAgentSpeaking) {
+          <span class="status-label recording">Listening...</span>
+        }
+        @if (isAgentSpeaking) {
+          <span class="status-label agent-speaking">Agent Speaking</span>
+        }
+        @if (!isRecording && !isAgentSpeaking && isSessionActive) {
+          <span class="status-label idle">Ready</span>
+        }
+      </div>
+    </div>
+
+    <div class="action-buttons">
+      @if (!isSessionActive) {
+        <button class="btn btn-primary" (click)="startSession()">
+          <i class="fa-solid fa-play"></i>
+          Start Conversation
+        </button>
+      }
+
+      @if (isSessionActive) {
+        @if (isAgentSpeaking) {
+          <button class="btn btn-warning interrupt-button" (click)="interrupt()">
+            <i class="fa-solid fa-hand"></i>
+            Interrupt
+          </button>
+        }
+
+        <button class="btn btn-danger" (click)="endSession()">
+          <i class="fa-solid fa-stop"></i>
+          End Conversation
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Error display -->
+  @if (errorMessage) {
+    <div class="error-message">
+      <i class="fa-solid fa-exclamation-triangle"></i>
+      {{ errorMessage }}
+    </div>
+  }
+
+  <!-- Transcript area -->
+  @if (isSessionActive) {
+    <div class="transcript-container">
+      <!-- User transcript -->
+      @if (userTranscript) {
+        <div class="transcript-section user-section">
+          <div class="transcript-label">
+            <i class="fa-solid fa-user"></i>
+            <span>You:</span>
+          </div>
+          <div class="transcript-text">{{ userTranscript }}</div>
+        </div>
+      }
+
+      <!-- Agent response -->
+      @if (agentResponse) {
+        <div class="transcript-section agent-section">
+          <div class="transcript-label">
+            <i class="fa-solid fa-robot"></i>
+            <span>Agent:</span>
+          </div>
+          <div class="transcript-text">{{ agentResponse }}</div>
+        </div>
+      }
+
+      <!-- Placeholder when no activity -->
+      @if (!userTranscript && !agentResponse) {
+        <div class="transcript-placeholder">
+          <i class="fa-solid fa-microphone-lines"></i>
+          <p>Speak to begin...</p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Session not active placeholder -->
+  @if (!isSessionActive && !errorMessage) {
+    <div class="session-placeholder">
+      <i class="fa-solid fa-headset"></i>
+      <p>Click "Start Conversation" to begin a voice session</p>
+    </div>
+  }
+</div>

@@ -73,6 +73,7 @@
             @for (attachment of attachments; track attachment.id) {
               <div class="attachment-item"
                    [class.image-attachment]="attachment.type === 'Image'"
+                   [class.audio-attachment]="attachment.type === 'Audio'"
                    (click)="onAttachmentClick(attachment)">
                 @if (attachment.type === 'Image') {
                   <img
@@ -83,12 +84,26 @@
                   <div class="attachment-overlay">
                     <i class="fas fa-expand"></i>
                   </div>
+                } @else if (attachment.type === 'Audio') {
+                  <!-- Inline audio player for voice messages -->
+                  <div class="audio-player-container" (click)="$event.stopPropagation()">
+                    <audio controls preload="metadata" class="audio-player">
+                      <source [src]="attachment.contentUrl" [type]="attachment.mimeType || 'audio/mpeg'">
+                      Your browser does not support the audio element.
+                    </audio>
+                    <div class="audio-metadata">
+                      <i class="fas fa-microphone"></i>
+                      <span class="file-name">{{ attachment.fileName || 'Voice message' }}</span>
+                      @if (attachment.durationSeconds) {
+                        <span class="duration">({{ formatDuration(attachment.durationSeconds) }})</span>
+                      }
+                    </div>
+                  </div>
                 } @else {
                   <div class="attachment-file">
                     <i class="fas"
                        [ngClass]="{
                          'fa-file-video': attachment.type === 'Video',
-                         'fa-file-audio': attachment.type === 'Audio',
                          'fa-file': attachment.type === 'Document'
                        }"></i>
                     <span class="file-name">{{ attachment.fileName || 'File' }}</span>

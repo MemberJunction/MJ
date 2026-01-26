@@ -40,11 +40,15 @@ export class MessageInputBoxComponent {
   @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB
   @Input() acceptedFileTypes: string = 'image/*';
 
+  // Voice streaming settings
+  @Input() enableVoiceInput: boolean = true;
+
   @Output() textSubmitted = new EventEmitter<string>();
   @Output() valueChange = new EventEmitter<string>();
   @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
   @Output() attachmentError = new EventEmitter<string>();
   @Output() attachmentClicked = new EventEmitter<PendingAttachment>();
+  @Output() voiceStreamingRequested = new EventEmitter<void>();
 
   get canSend(): boolean {
     const hasText = this.value.trim().length > 0;
@@ -179,5 +183,12 @@ export class MessageInputBoxComponent {
    */
   openFilePicker(): void {
     this.mentionEditor?.openFilePicker();
+  }
+
+  /**
+   * Handle voice streaming button click
+   */
+  onVoiceStreamingClick(): void {
+    this.voiceStreamingRequested.emit();
   }
 }

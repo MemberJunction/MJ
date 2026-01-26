@@ -20,14 +20,23 @@
         "source": "ts",
         "applyTo": "closedDocuments",
         "fileLocation": ["relative", "${cwd}"],
-        "pattern": "$tsc",
+        "severity": "error",
+        "pattern": {
+          "regexp": "^([^\\s].*)[\\(:](\\d+)[,:](\\d+)(?:\\):|:)\\s+(error|warning|info)\\s+(TS\\d+)\\s*:\\s*(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "code": 5,
+          "message": 6
+        },
         "background": {
           "activeOnStart": true,
           "beginsPattern": {
-            "regexp": "(.*?)"
+            "regexp": ".*"
           },
           "endsPattern": {
-            "regexp": "Compiled |Failed to compile."
+            "regexp": "Application bundle generation complete\\.|Compiled successfully\\.|Compiled with warnings\\.|Build at:"
           }
         }
       },

@@ -55,15 +55,14 @@
       "preLaunchTask": "start MJExplorer",
       "name": "MJExplorer",
       "url": "http://localhost:4201",
-      "cwd": "${workspaceFolder}/packages/MJExplorer",
+      "webRoot": "${workspaceFolder}",
       "sourceMaps": true,
-      "webRoot": "${workspaceFolder}/packages",
       "sourceMapPathOverrides": {
-        "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*",
-        "../src/*": "${workspaceFolder}/packages/GraphQLDataProvider/src/*",
-        "*/packages/*": "${workspaceFolder}/*"
+        "webpack:///../Angular/*": "${workspaceFolder}/packages/Angular/*",
+        "webpack:///./*": "${webRoot}/*",
+        "webpack://?:*/*": "${webRoot}/*"
       },
-      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"]
+      "skipFiles": ["<node_internals>/**", "**/zone.js/**"]
     },
     {
       "type": "node",

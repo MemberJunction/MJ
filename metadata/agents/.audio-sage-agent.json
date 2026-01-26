@@ -1,0 +1,74 @@
+[
+  {
+    "fields": {
+      "Name": "Audio Sage",
+      "Description": "Voice-enabled Sage using Eleven Labs for audio interaction. Handles voice input/output through conversational AI.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "DriverClass": "AudioSageAgent",
+      "Status": "Active",
+      "IconClass": "fa-microphone",
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": false
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Modalities": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Input",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "1FD0D704-9C41-4C32-A7D5-1F8FF515D078"
+          },
+          "sync": {
+            "lastModified": "2026-01-25T20:49:31.422Z",
+            "checksum": "00e36a48b7a4f56e44f40dc075709d9eb975952444a00cb7b4146eac817bdc02"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Output",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "1BB8B9C1-AF83-4B4E-8289-F96AA123D727"
+          },
+          "sync": {
+            "lastModified": "2026-01-25T20:49:31.432Z",
+            "checksum": "f534e868563903f7796240c2c21fb45f1a7f74c080bfd1c1d2a92a70e53401af"
+          }
+        }
+      ],
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Audio Sage System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7BE8A1A2-C2EF-4752-A6B1-D2C34F2644F5"
+          },
+          "sync": {
+            "lastModified": "2026-01-25T20:49:31.453Z",
+            "checksum": "5660ec27adf271916e3078d841cd005801f161ae86ed20d719df0cd8b4b94424"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CD48F144-5A36-455C-A0E1-E3A0779DBAC6"
+    },
+    "sync": {
+      "lastModified": "2026-01-25T20:49:31.376Z",
+      "checksum": "7caca86fd4f458fb0d1d2769b014ffaccb4a4ffb637d66ad552949f7addf17cd"
+    }
+  }
+]

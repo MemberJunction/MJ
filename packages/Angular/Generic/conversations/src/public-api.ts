@@ -31,6 +31,7 @@ export * from './lib/services/artifact-permission.service';
 export * from './lib/services/artifact-use-tracking.service';
 export * from './lib/services/collection-state.service';
 export * from './lib/services/conversation-attachment.service';
+export * from './lib/services/voice-conversation.service';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
@@ -66,3 +67,5 @@ export * from './lib/components/notification/activity-indicator.component';
 export * from './lib/components/toast/toast.component';
 export * from './lib/components/global-tasks/global-tasks-panel.component';
 export * from './lib/components/attachment/image-viewer.component';
+
+export * from './lib/components/message/voice/voice-streaming.component';

@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "Name": "Audio Sage System Prompt",
+    "Description": "Voice-optimized system prompt for Audio Sage agent using Eleven Labs for audio interaction",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:templates/audio-sage/audio-sage.template.md",
+    "Status": "Active",
+    "ResponseFormat": "JSON",
+    "SelectionStrategy": "Specific",
+    "PowerPreference": "Highest",
+    "ParallelizationMode": "None",
+    "MaxRetries": 2,
+    "RetryDelayMS": 1000,
+    "RetryStrategy": "Fixed",
+    "PromptRole": "System",
+    "PromptPosition": "First",
+    "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+  },
+  "primaryKey": {
+    "ID": "A671D195-040A-45F3-AD6F-B533D8C632AD"
+  },
+  "sync": {
+    "lastModified": "2026-01-25T20:59:29.120Z",
+    "checksum": "1fa8e9bd25ffa8651218387a22e0a870068e04cddcf4c368af59af4b27504469"
+  }
+}

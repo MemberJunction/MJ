@@ -13,6 +13,7 @@ import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { NotificationModule } from '@progress/kendo-angular-notification';
 import { UploadsModule } from '@progress/kendo-angular-upload';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
+import { ProgressBarModule } from '@progress/kendo-angular-progressbar';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -72,6 +73,7 @@ import { ArtifactCollectionPickerModalComponent } from './components/collection/
 import { ArtifactShareModalComponent } from './components/artifact/artifact-share-modal.component';
 import { GlobalTasksPanelComponent } from './components/global-tasks/global-tasks-panel.component';
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
+import { VoiceStreamingComponent } from './components/message/voice/voice-streaming.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -120,7 +122,8 @@ const COMPONENTS = [
   ToastComponent,
   InputDialogComponent,
   GlobalTasksPanelComponent,
-  ImageViewerComponent
+  ImageViewerComponent,
+  VoiceStreamingComponent
 ];
 
 @NgModule({
@@ -143,6 +146,7 @@ const COMPONENTS = [
     NotificationModule,
     UploadsModule,
     DateInputsModule,
+    ProgressBarModule,
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,

@@ -13,6 +13,7 @@ export * from './agent-spec-sync';
 export * from './agents/architect-agent';
 export * from './agents/builder-agent';
 export * from './agents/planning-designer-agent';
+export * from './agents/audio-sage-agent';
 
 /**
  * Loads the Agent Manager Core module and ensures all agent classes are registered.

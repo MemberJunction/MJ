@@ -19,6 +19,7 @@
   "author": "MemberJunction",
   "license": "ISC",
   "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.32.0",
     "@memberjunction/ai-agents": "3.2.0",
     "@memberjunction/ai-core-plus": "3.2.0",
     "@memberjunction/ai-engine-base": "3.2.0",

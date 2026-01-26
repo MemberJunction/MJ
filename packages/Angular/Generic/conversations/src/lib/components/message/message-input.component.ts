@@ -18,6 +18,7 @@ import { ConversationAttachmentService } from '../../services/conversation-attac
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
+import { VoiceStreamingComponent } from './voice/voice-streaming.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
@@ -41,6 +42,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() maxAttachments: number = 10; // Maximum number of attachments per message
   @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // Maximum size per attachment (20MB default)
   @Input() acceptedFileTypes: string = 'image/*'; // Accepted MIME types pattern
+  @Input() enableVoiceInput: boolean = true; // Whether to show voice streaming button
   @Input() artifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded artifact data for performance
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, AIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
@@ -334,6 +336,70 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    */
   onAttachmentError(error: string): void {
     this.toastService.error(error);
+  }
+
+  /**
+   * Handle voice streaming button click - opens voice streaming dialog
+   */
+  async onVoiceStreamingRequested(): Promise<void> {
+    if (!this.conversationId) {
+      this.toastService.error('Cannot start voice session: No active conversation');
+      return;
+    }
+
+    try {
+      // Create a conversation detail for the voice session
+      const voiceDetail = await this.dataCache.createConversationDetail(this.currentUser);
+      voiceDetail.ConversationID = this.conversationId;
+      voiceDetail.Role = 'User';
+      voiceDetail.Message = '🎤 Voice conversation started...';
+      voiceDetail.Status = 'In-Progress';
+
+      const saved = await voiceDetail.Save();
+      if (!saved) {
+        this.toastService.error('Failed to create voice session record');
+        return;
+      }
+
+      // Emit the message so it appears in the UI
+      this.messageSent.emit(voiceDetail);
+
+      // Open the voice streaming dialog
+      const dialogRef = this.dialogService.openComponent(VoiceStreamingComponent, {
+        title: 'Voice Conversation',
+        width: 600,
+        minWidth: 400,
+        height: 500
+      });
+
+      const instance = dialogRef.content.instance as VoiceStreamingComponent;
+      instance.conversationDetailId = voiceDetail.ID;
+
+      // Start the session automatically when dialog opens
+      Promise.resolve().then(() => {
+        instance.startSession().catch((error: unknown) => {
+          console.error('Failed to start voice session:', error);
+          this.toastService.error('Failed to start voice session');
+          dialogRef.close();
+        });
+      });
+
+      // Handle session end
+      const subscription = instance.sessionEnded.subscribe(() => {
+        dialogRef.close();
+      });
+
+      // Cleanup on dialog close
+      dialogRef.result.subscribe(() => {
+        subscription.unsubscribe();
+        // Update the conversation detail status when session ends
+        voiceDetail.Status = 'Complete';
+        voiceDetail.Save();
+      });
+    } catch (error: unknown) {
+      console.error('Failed to start voice session:', error);
+      this.toastService.error('Failed to start voice session');
+    }
   }
 
   /**

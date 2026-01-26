@@ -16,11 +16,13 @@
     [maxAttachments]="maxAttachments"
     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
     [acceptedFileTypes]="acceptedFileTypes"
+    [enableVoiceInput]="enableVoiceInput"
     [currentUser]="currentUser"
     [rows]="3"
     [(value)]="messageText"
     (textSubmitted)="onTextSubmitted($event)"
     (attachmentsChanged)="onAttachmentsChanged($event)"
-    (attachmentError)="onAttachmentError($event)">
+    (attachmentError)="onAttachmentError($event)"
+    (voiceStreamingRequested)="onVoiceStreamingRequested()">
   </mj-message-input-box>
 </div>

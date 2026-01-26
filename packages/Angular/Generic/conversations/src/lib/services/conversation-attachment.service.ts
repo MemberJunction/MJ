@@ -193,7 +193,8 @@ export class ConversationAttachmentService {
       width: entity.Width ?? undefined,
       height: entity.Height ?? undefined,
       thumbnailUrl: thumbnailUrl,
-      contentUrl: contentUrl
+      contentUrl: contentUrl,
+      durationSeconds: entity.DurationSeconds ?? undefined
     };
   }
 

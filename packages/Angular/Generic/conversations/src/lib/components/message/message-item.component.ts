@@ -35,6 +35,7 @@ export interface MessageAttachment {
   height?: number;
   thumbnailUrl?: string;
   contentUrl?: string;
+  durationSeconds?: number; // For audio/video attachments
 }
 
 /**
@@ -978,6 +979,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  /**
+   * Format duration in seconds to MM:SS format
+   */
+  public formatDuration(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
   /**
