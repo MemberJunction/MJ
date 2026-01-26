@@ -1,4 +1,5 @@
 {
+  "$schema": "./database-metadata-config.schema.json",
   "description": "Database metadata configuration for MemberJunction CodeGen. This file allows you to define soft primary keys and foreign keys for tables that may not have database constraints. Copy this file to database-metadata-config.json and customize for your database.",
   "version": "1.0",
   "tables": [

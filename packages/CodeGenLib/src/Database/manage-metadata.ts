@@ -623,20 +623,27 @@ export class ManageMetadataBase {
   }
 
   /**
-   * Applies soft PK/FK configuration from config/database-metadata-config.json if it exists.
+   * Applies soft PK/FK configuration from a JSON file specified in mj.config.cjs (additionalSchemaInfo property).
    * For soft PKs: Sets BOTH IsPrimaryKey=1 AND IsSoftPrimaryKey=1 (IsPrimaryKey is source of truth, IsSoftPrimaryKey protects from schema sync).
    * For soft FKs: Sets RelatedEntityID/RelatedEntityFieldName + IsSoftForeignKey=1 (RelatedEntityID is source of truth, IsSoftForeignKey protects from schema sync).
+   * All UPDATE statements are logged to migration files via LogSQLAndExecute() for CI/CD traceability.
    */
   protected async applySoftPKFKConfig(pool: sql.ConnectionPool): Promise<boolean> {
-    const configPath = path.join(process.cwd(), 'config', 'database-metadata-config.json');
+    // Check if additionalSchemaInfo is configured in mj.config.cjs
+    if (!configInfo.additionalSchemaInfo) {
+      // No additional schema info configured - this is fine, it's optional
+      return true;
+    }
+
+    const configPath = path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo);
 
     if (!fs.existsSync(configPath)) {
-      // Config file doesn't exist - this is fine, it's optional
+      logStatus(`         ⚠️  additionalSchemaInfo configured but file not found: ${configPath}`);
       return true;
     }
 
     try {
-      logStatus(`         Found config/database-metadata-config.json, applying soft PK/FK configuration...`);
+      logStatus(`         Found ${configInfo.additionalSchemaInfo}, applying soft PK/FK configuration...`);
       const configContent = fs.readFileSync(configPath, 'utf-8');
       const config = JSON.parse(configContent);
 
@@ -645,12 +652,9 @@ export class ManageMetadataBase {
       const schema = mj_core_schema();
 
       for (const table of config.tables || []) {
-        // Look up entity ID
-        const entityResult = await pool
-          .request()
-          .input('schemaName', sql.NVarChar, table.schemaName)
-          .input('tableName', sql.NVarChar, table.tableName)
-          .query(`SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = @schemaName AND BaseTable = @tableName`);
+        // Look up entity ID (SELECT query - no need to log to migration file)
+        const entityLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${table.schemaName}' AND BaseTable = '${table.tableName}'`;
+        const entityResult = await pool.request().query(entityLookupSQL);
 
         if (entityResult.recordset.length === 0) {
           logStatus(`         ⚠️  Entity not found for ${table.schemaName}.${table.tableName} - skipping`);
@@ -663,13 +667,14 @@ export class ManageMetadataBase {
         // IsPrimaryKey is the source of truth, IsSoftPrimaryKey protects it from schema sync
         if (table.primaryKeys && table.primaryKeys.length > 0) {
           for (const pk of table.primaryKeys) {
-            const updateResult = await pool
-              .request()
-              .input('entityId', sql.UniqueIdentifier, entityId)
-              .input('fieldName', sql.NVarChar, pk.fieldName)
-              .query(`UPDATE [${schema}].[EntityField] SET [IsPrimaryKey] = 1, [IsSoftPrimaryKey] = 1 WHERE [EntityID] = @entityId AND [Name] = @fieldName`);
+            const sSQL = `UPDATE [${schema}].[EntityField]
+                          SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(),
+                              [IsPrimaryKey] = 1,
+                              [IsSoftPrimaryKey] = 1
+                          WHERE [EntityID] = '${entityId}' AND [Name] = '${pk.fieldName}'`;
+            const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft PK for ${table.schemaName}.${table.tableName}.${pk.fieldName}`);
 
-            if (updateResult.rowsAffected[0] > 0) {
+            if (result !== null) {
               logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${table.tableName}.${pk.fieldName}`);
               totalPKs++;
             }
@@ -679,12 +684,9 @@ export class ManageMetadataBase {
         // Process foreign keys - set RelatedEntityID, RelatedEntityFieldName, and IsSoftForeignKey = 1
         if (table.foreignKeys && table.foreignKeys.length > 0) {
           for (const fk of table.foreignKeys) {
-            // Look up related entity ID
-            const relatedEntityResult = await pool
-              .request()
-              .input('schemaName', sql.NVarChar, fk.relatedSchema)
-              .input('tableName', sql.NVarChar, fk.relatedTable)
-              .query(`SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = @schemaName AND BaseTable = @tableName`);
+            // Look up related entity ID (SELECT query - no need to log to migration file)
+            const relatedLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${fk.relatedSchema}' AND BaseTable = '${fk.relatedTable}'`;
+            const relatedEntityResult = await pool.request().query(relatedLookupSQL);
 
             if (relatedEntityResult.recordset.length === 0) {
               logStatus(`         ⚠️  Related entity not found for ${fk.relatedSchema}.${fk.relatedTable} - skipping FK ${fk.fieldName}`);
@@ -693,17 +695,15 @@ export class ManageMetadataBase {
 
             const relatedEntityId = relatedEntityResult.recordset[0].ID;
 
-            const updateResult = await pool
-              .request()
-              .input('entityId', sql.UniqueIdentifier, entityId)
-              .input('fieldName', sql.NVarChar, fk.fieldName)
-              .input('relatedEntityId', sql.UniqueIdentifier, relatedEntityId)
-              .input('relatedFieldName', sql.NVarChar, fk.relatedField)
-              .query(
-                `UPDATE [${schema}].[EntityField] SET [RelatedEntityID] = @relatedEntityId, [RelatedEntityFieldName] = @relatedFieldName, [IsSoftForeignKey] = 1 WHERE [EntityID] = @entityId AND [Name] = @fieldName`,
-              );
+            const sSQL = `UPDATE [${schema}].[EntityField]
+                          SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(),
+                              [RelatedEntityID] = '${relatedEntityId}',
+                              [RelatedEntityFieldName] = '${fk.relatedField}',
+                              [IsSoftForeignKey] = 1
+                          WHERE [EntityID] = '${entityId}' AND [Name] = '${fk.fieldName}'`;
+            const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${table.schemaName}.${table.tableName}.${fk.fieldName} → ${fk.relatedTable}.${fk.relatedField}`);
 
-            if (updateResult.rowsAffected[0] > 0) {
+            if (result !== null) {
               logStatus(`         ✓ Set soft FK for ${table.tableName}.${fk.fieldName} → ${fk.relatedTable}.${fk.relatedField}`);
               totalFKs++;
             }
@@ -1829,11 +1829,17 @@ NumberedRows AS (
   }
 
   /**
-   * Checks if a table has a soft primary key defined in the config/database-metadata-config.json file
+   * Checks if a table has a soft primary key defined in the additionalSchemaInfo JSON file (configured in mj.config.cjs)
    */
   protected hasSoftPrimaryKeyInConfig(schemaName: string, tableName: string): boolean {
-    const configPath = path.join(currentWorkingDirectory, 'config/database-metadata-config.json');
+    // Check if additionalSchemaInfo is configured
+    if (!configInfo.additionalSchemaInfo) {
+      return false;
+    }
+
+    const configPath = path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo);
     if (!fs.existsSync(configPath)) {
+      logStatus(`         [Soft PK Check] Config file not found at: ${configPath}`);
       return false;
     }
 
@@ -1841,14 +1847,20 @@ NumberedRows AS (
       const configContent = fs.readFileSync(configPath, 'utf-8');
       const config = JSON.parse(configContent);
       if (!config || !config.tables) {
+        logStatus(`         [Soft PK Check] Config file found but no tables array`);
         return false;
       }
       const tableConfig = config.tables.find(
         (t: { schemaName?: string; tableName?: string }) =>
           t.schemaName?.toLowerCase() === schemaName?.toLowerCase() && t.tableName?.toLowerCase() === tableName?.toLowerCase(),
       );
-      return Boolean(tableConfig?.primaryKeys && tableConfig.primaryKeys.length > 0);
+      const found = Boolean(tableConfig?.primaryKeys && tableConfig.primaryKeys.length > 0);
+      if (!found) {
+        logStatus(`         [Soft PK Check] No config found for ${schemaName}.${tableName} (config has ${config.tables.length} tables)`);
+      }
+      return found;
     } catch (e) {
+      logStatus(`         [Soft PK Check] Error reading config: ${e}`);
       return false;
     }
   }
@@ -2028,7 +2040,7 @@ NumberedRows AS (
 
         LogStatus(`   Created new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`);
       } else {
-        LogStatus(`   Skipping new entity ${newEntity.TableName} because it doesn't qualify to be created. Reason: ${validationMessage}`);
+        LogStatus(`   Skipping new entity ${newEntity.SchemaName}.${newEntity.TableName} because it doesn't qualify to be created. Reason: ${validationMessage}`);
         return;
       }
     } catch (e) {

@@ -441,6 +441,13 @@ const configInfoSchema = z.object({
   graphqlPort: z.coerce.number().int().positive().default(4000),
 
   verboseOutput: z.boolean().optional().default(false),
+
+  /**
+   * Optional path to a JSON file containing additional schema information for tables
+   * without database constraints (soft PKs/FKs). Path is relative to the config file location.
+   * Example: './config/database-metadata-config.json'
+   */
+  additionalSchemaInfo: z.string().optional(),
 });
 
 /**
@@ -581,6 +588,10 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     indexes: false,
     fullTextSearch: false,
   },
+
+  // No additional schema info by default - users can specify a path to a JSON file
+  // containing soft PK/FK definitions for tables without database constraints
+  additionalSchemaInfo: undefined,
 };
 
 /**

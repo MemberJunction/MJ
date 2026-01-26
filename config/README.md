@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `database-metadata-config.json` file allows you to define primary keys and foreign keys for tables that may not have database constraints. This is useful for:
+MemberJunction supports defining primary keys and foreign keys for tables that don't have database constraints. This is useful for:
 
 - **Legacy databases** without proper PK/FK constraints
 - **Imported data** from systems with different schemas
@@ -11,22 +11,41 @@ The `database-metadata-config.json` file allows you to define primary keys and f
 
 ## How It Works
 
-1. **Optional Configuration**: If `database-metadata-config.json` exists in the `/config/` directory, CodeGen reads it and applies the metadata
-2. **Constraint-Based Fallback**: If the file doesn't exist, CodeGen uses standard database constraint detection
-3. **Discovered Metadata**: Configuration values populate the `IsSoftPrimaryKey` and `IsSoftForeignKey` fields, with soft FK values stored directly in `RelatedEntityID` and `RelatedEntityFieldName`
-4. **Transparent Integration**: Throughout MemberJunction (GraphQL, BaseEntity, UI), soft PKs/FKs work exactly like constraint-based ones
+1. **Configuration via mj.config.cjs**: Specify the path to your JSON config file using the `additionalSchemaInfo` property
+2. **Constraint-Based Fallback**: If not configured, CodeGen uses standard database constraint detection
+3. **Discovered Metadata**: Configuration values set `IsPrimaryKey=1` + `IsSoftPrimaryKey=1` for PKs, and `RelatedEntityID` + `IsSoftForeignKey=1` for FKs
+4. **CI/CD Integration**: All UPDATE statements are logged to migration files (`migrations/v3/CodeGen_Run_*.sql`)
+5. **Transparent Integration**: Throughout MemberJunction (GraphQL, BaseEntity, UI), soft PKs/FKs work exactly like constraint-based ones
 
 ## Setup
 
-1. Copy `database-metadata-config.template.json` to `database-metadata-config.json`
-2. Edit the file to define your table metadata:
-   - Specify primary key fields for tables without PK constraints
-   - Define foreign key relationships for tables without FK constraints
-3. Run the workflow:
-   ```bash
-   npm run mj:migrate    # Apply schema changes (adds soft PK/FK columns)
-   npm run mj:codegen    # Applies config + generates code
-   ```
+### Step 1: Configure mj.config.cjs
+
+Add the `additionalSchemaInfo` property to your `mj.config.cjs` file:
+
+```javascript
+module.exports = {
+  // ... other config properties ...
+
+  // Path to your soft PK/FK configuration file (relative to mj.config.cjs)
+  additionalSchemaInfo: './config/database-metadata-config.json',
+};
+```
+
+### Step 2: Create the JSON Config File
+
+Copy `database-metadata-config.template.json` to `database-metadata-config.json` and edit it:
+
+```bash
+cp config/database-metadata-config.template.json config/database-metadata-config.json
+```
+
+### Step 3: Run CodeGen
+
+```bash
+npm run mj:migrate    # Apply schema changes (adds soft PK/FK columns)
+npm run mj:codegen    # Applies config + generates code
+```
 
 ## Configuration Format
 
@@ -122,6 +141,14 @@ query {
 - Relationship navigation works with soft relationships
 - Grid displays foreign key values using soft metadata
 
+## CI/CD Integration
+
+All soft PK/FK UPDATE statements are logged to the migration file (`migrations/v3/CodeGen_Run_*.sql`). This ensures:
+
+- **Traceability**: Every metadata change is recorded
+- **Reproducibility**: Changes can be replayed in CI/CD pipelines
+- **Auditability**: Full history of what CodeGen modified
+
 ## SQL Updates (Alternative Approach)
 
 Instead of using the configuration file, you can manually update the metadata directly in SQL:
@@ -129,7 +156,7 @@ Instead of using the configuration file, you can manually update the metadata di
 ```sql
 -- Mark a field as a soft primary key
 UPDATE [__mj].[EntityField]
-SET [IsSoftPrimaryKey] = 1
+SET [IsPrimaryKey] = 1, [IsSoftPrimaryKey] = 1
 WHERE [Name] = 'OrderID'
   AND [EntityID] = (SELECT ID FROM [__mj].[Entity] WHERE Name = 'Orders');
 
@@ -146,9 +173,21 @@ WHERE [Name] = 'CustomerID'
 npm run mj:codegen
 ```
 
+## Troubleshooting
+
+### Tables skipped with "No primary key found"
+- Verify `additionalSchemaInfo` is set in `mj.config.cjs`
+- Verify `schemaName` in your JSON config matches your database exactly (case-insensitive)
+- Check CodeGen output for: `[Soft PK Check] No config found for <schema>.<table>`
+
+### Config file not found
+- Ensure path in `additionalSchemaInfo` is relative to the `mj.config.cjs` location
+- Check CodeGen output for the actual path being searched
+
 ## Notes
 
-- **One FK per field**: Each field can only have one foreign key (database constraint)
-- **CodeGen once**: With this configuration, you only need to run CodeGen once
+- **One FK per field**: Each field can only have one foreign key
+- **IsPrimaryKey is source of truth**: The `IsSoftPrimaryKey` flag just protects from schema sync overwriting
+- **RelatedEntityID is source of truth**: The `IsSoftForeignKey` flag just protects from schema sync overwriting
 - **No constraint changes**: This doesn't modify your actual database schema
 - **Backward compatible**: Existing databases with proper constraints work as before
