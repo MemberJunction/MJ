@@ -52,6 +52,58 @@
   },
   {
     "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=entity:read",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "CC44433E-F36B-1410-8DD9-00021F8B792E"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=entity:create",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "B644433E-F36B-1410-8DD9-00021F8B792E"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=entity:update",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "D644433E-F36B-1410-8DD9-00021F8B792E"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=entity:delete",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "C244433E-F36B-1410-8DD9-00021F8B792E"
+    }
+  },
+  {
+    "fields": {
       "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
       "ScopeID": "@lookup:MJ: API Scopes.FullPath=view:run",
       "ResourcePattern": "*",
