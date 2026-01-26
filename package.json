@@ -26,7 +26,7 @@
     "packages/Credentials/*"
   ],
   "scripts": {
-    "prebuild": "node -e \"try { require('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
+    "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
     "build": "npm run build:stream",
     "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",
     "build:generated": "turbo --log-order=stream build --filter=\"mj_generatedentities\" --filter=\"mj_generatedactions\"",
