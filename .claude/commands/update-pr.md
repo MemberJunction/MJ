@@ -1,0 +1,6 @@
+- Update the PR specified by the user either by URL or by PR # in the current repo. If not specified, ask the user to provide the PR#
+- use `gh` cli command to do the following
+  - first check to make sure this PR is open, do **not** modify closed or merged PRs, notify the user if they are asking for this that you can't do that
+  - next, use the `gh` cli to get a list of all the commits within the PR and read the commit messages and look at the scope of the included files
+  - build a comprehensive PR description and title and then use `gh api repos` to update the PR for the user. Do **not** attempt to use `gh pr edit` as that command isn't reliable
+  - notify the user when done and provide a link to GitHub so they can easily click on it and go see it
