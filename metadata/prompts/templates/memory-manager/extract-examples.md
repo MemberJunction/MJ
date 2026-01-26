@@ -109,21 +109,21 @@ Return **only high-quality examples (successScore ≥70, confidence ≥70)** in 
   "examples": [
     {
       "type": "Example",
-      "agentId": "agent-uuid-required",
-      "userId": null,
-      "companyId": null,
       "exampleInput": "Show me Q1 sales data for our top products",
       "exampleOutput": "Here's Q1 data (April-June): Widget Pro: $450K (+15%), Gadget Plus: $320K",
       "successScore": 85,
       "confidence": 90,
       "scopeLevel": "organization",
-      "sourceConversationId": "conv-uuid",
-      "sourceConversationDetailId": "detail-uuid",
-      "sourceAgentRunId": null
+      "sourceConversationId": "<use actual conversation ID from input>",
+      "sourceConversationDetailId": "<use actual message ID from input>"
     }
   ]
 }
 ```
+
+**Important**:
+- Do NOT include `agentId`, `userId`, or `companyId` - these are automatically inherited from the source conversation.
+- Use the ACTUAL IDs from the conversation data - do NOT invent placeholder UUIDs.
 
 ## Quality Standards
 
