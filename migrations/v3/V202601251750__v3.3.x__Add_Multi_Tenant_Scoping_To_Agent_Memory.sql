@@ -4345,7 +4345,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
          (
             '79fad22e-7080-4283-b3dd-ed140949e39a',
             'A24EF5EC-D32C-4A53-85A9-364E322451E6', -- Entity: AI Agent Notes
-            100055,
+            100060,
             'PrimaryScopeEntity',
             'Primary Scope Entity',
             NULL,
@@ -4540,7 +4540,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
          (
             '2273625c-67fc-40e6-96f7-ff4cc09bbaa9',
             '3A139346-CC48-479A-A53B-8892664F5DFD', -- Entity: MJ: AI Agent Examples
-            100055,
+            100060,
             'PrimaryScopeEntity',
             'Primary Scope Entity',
             NULL,
