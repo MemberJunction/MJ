@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
 import { RoleEntity } from '@memberjunction/core-entities';
-import { WindowModule } from '@progress/kendo-angular-dialog';
 
 export interface RoleDialogData {
   role?: RoleEntity;
