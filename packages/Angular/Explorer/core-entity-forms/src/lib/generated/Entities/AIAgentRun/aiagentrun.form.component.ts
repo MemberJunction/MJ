@@ -22,6 +22,7 @@ export class AIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'configurationOverrides', sectionName: 'Configuration & Overrides', isExpanded: false },
             { sectionKey: 'testingValidation', sectionName: 'Testing & Validation', isExpanded: false },
             { sectionKey: 'scopeMultiTenant', sectionName: 'Scope & Multi-Tenant', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'aIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },

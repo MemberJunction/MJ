@@ -18,7 +18,7 @@ export class AIAgentExampleFormComponent extends BaseFormComponent {
             { sectionKey: 'exampleDetails', sectionName: 'Example Details', isExpanded: true },
             { sectionKey: 'sourceProvenance', sectionName: 'Source Provenance', isExpanded: false },
             { sectionKey: 'semanticIndexing', sectionName: 'Semantic Indexing', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'usageLifecycle', sectionName: 'Usage & Lifecycle', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -259,26 +259,34 @@
 
     </mj-collapsible-panel>
 
-    <!-- Details Section -->
+    <!-- Usage & Lifecycle Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
+        sectionKey="usageLifecycle"
+        sectionName="Usage & Lifecycle"
+        icon="fa fa-history"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SourceConversationDetail"
-            Type="textbox"
+            FieldName="LastAccessedAt"
+            Type="datepicker"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SourceAIAgentRun"
-            Type="textbox"
+            FieldName="AccessCount"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ExpiresAt"
+            Type="datepicker"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
