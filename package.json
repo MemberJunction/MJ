@@ -2,6 +2,7 @@
   "name": "memberjunction-workspace",
   "version": "1.0.10",
   "license": "ISC",
+  "packageManager": "npm@11.7.0",
   "workspaces": [
     "packages/*",
     "packages/Actions/*",
