@@ -52,6 +52,22 @@ ALTER TABLE ${flyway:defaultSchema}.APIScope ADD
     IsActive BIT NOT NULL DEFAULT 1;
 GO
 
+-- Drop the UNIQUE constraint on Name column that started in 3.2 (replaced by FullPath unique constraint)
+DECLARE @ConstraintName NVARCHAR(200);
+SELECT @ConstraintName = kc.name
+FROM sys.key_constraints kc
+INNER JOIN sys.index_columns ic ON kc.unique_index_id = ic.index_id AND kc.parent_object_id = ic.object_id
+INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+WHERE kc.parent_object_id = OBJECT_ID('${flyway:defaultSchema}.APIScope')
+  AND kc.type = 'UQ'
+  AND c.name = 'Name';
+
+IF @ConstraintName IS NOT NULL
+BEGIN
+    EXEC('ALTER TABLE ${flyway:defaultSchema}.APIScope DROP CONSTRAINT ' + @ConstraintName);
+END
+GO
+
 -- Backfill FullPath from Name for existing scopes
 UPDATE ${flyway:defaultSchema}.APIScope SET FullPath = Name WHERE FullPath IS NULL;
 GO
@@ -80,6 +96,10 @@ AFTER INSERT, UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    -- Prevent recursive trigger firing
+    IF TRIGGER_NESTLEVEL() > 1
+        RETURN;
 
     -- Only run if Name or ParentID changed (or new insert)
     IF UPDATE(Name) OR UPDATE(ParentID) OR NOT EXISTS (SELECT 1 FROM deleted)
