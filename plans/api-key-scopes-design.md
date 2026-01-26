@@ -1,7 +1,7 @@
 # MemberJunction API Key Authorization System - Design Document
 
 ## Document Status
-- **Version**: 1.1
+- **Version**: 1.2
 - **Date**: January 26, 2026
 - **Author**: MJ Development Team
 - **Status**: Draft - Pending Review
@@ -13,11 +13,11 @@
 This document proposes enhancements to MemberJunction's API Key authorization system to support **fine-grained, pattern-based access control** across multiple applications (MJAPI, MCP Server, Portal, etc.). The design enables:
 
 1. **Application-level restriction**: API keys optionally bound to specific applications
-2. **Application scope ceiling**: Each app defines which scopes it can ever use
+2. **Application scope ceiling with patterns**: Each app defines scope + resource patterns it can use
 3. **Hierarchical scopes**: Permission tree with inheritance (app-agnostic, reusable)
-4. **Pattern-based resources**: Wildcards and patterns instead of exhaustive entity lists
-5. **Include/Exclude rules**: Flexible permission grants with exceptions
-6. **Deny trumps all**: Explicit deny rules for security boundaries
+4. **Two-level pattern matching**: App ceiling patterns AND key-level patterns
+5. **Include/Exclude rules**: Flexible permission grants with exceptions at both levels
+6. **Deny trumps all**: Explicit deny rules for security boundaries at both levels
 7. **Enhanced audit logging**: Detailed scope evaluation tracking
 
 ### Critical Design Principle
@@ -266,107 +266,123 @@ request.time < timestamp("2025-12-31T00:00:00Z")
 
 1. **User permissions are the ceiling**: Scopes narrow, never expand
 2. **Scopes are app-agnostic**: Reusable across applications
-3. **Apps define their scope ceiling**: Each app declares which scopes it can use
+3. **Apps define their scope ceiling with patterns**: Each app declares which scopes + resource patterns it can use
 4. **API keys optionally bound to apps**: NULL = works with all apps
-5. **Explicit grant required**: No scopes = no access (deny by default)
-6. **Deny trumps allow**: Any deny rule blocks access immediately
+5. **Two-level pattern evaluation**: App ceiling patterns checked first, then key patterns
+6. **Deny trumps allow at both levels**: Any deny rule blocks access immediately
 7. **Pattern-based resources**: Avoid scope explosion with wildcards
 
 ### Conceptual Model
 
-```mermaid
-flowchart TB
-    subgraph APIKey["API Key"]
-        KeyInfo["UserID: user-123 (max permissions ceiling)<br/>Status: Active<br/>ExpiresAt: 2027-01-01"]
-    end
-
-    subgraph AppBinding["Application Binding (Optional)"]
-        direction LR
-        MCP["MCP Server"]
-        MJAPI["MJAPI"]
-        Portal["Portal"]
-    end
-
-    subgraph ScopeRules["Scope Rules (APIKeyScope)"]
-        Rule1["Scope: entity:runview<br/>Pattern: Users,Accounts,Products<br/>PatternType: Include<br/>IsDeny: false"]
-        Rule2["Scope: agent:execute<br/>Pattern: Skip*<br/>PatternType: Include<br/>IsDeny: false"]
-        Rule3["Scope: entity:runview<br/>Pattern: EmployeeSalaries,Credentials<br/>PatternType: Include<br/>IsDeny: true ← BLOCKS ACCESS"]
-    end
-
-    APIKey --> AppBinding
-    AppBinding --> ScopeRules
-
-    style Rule3 fill:#ffcccc
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              API KEY                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ UserID: user-123 (max permissions ceiling)                          │    │
+│  │ Status: Active                                                      │    │
+│  │ ExpiresAt: 2027-01-01                                               │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                         │
+│         ┌──────────────────────────┼──────────────────────────┐             │
+│         ▼                          ▼                          ▼             │
+│  ┌─────────────┐           ┌─────────────┐           ┌─────────────┐        │
+│  │ Application │           │ Application │           │ Application │        │
+│  │   MCP       │           │   MJAPI     │           │   Portal    │        │
+│  │  (optional) │           │  (optional) │           │  (optional) │        │
+│  └─────────────┘           └─────────────┘           └─────────────┘        │
+│         │                          │                          │             │
+│         ▼                          ▼                          ▼             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                      SCOPE RULES (APIKeyScope)                       │    │
+│  │  ┌───────────────────────────────────────────────────────────────┐  │    │
+│  │  │ Scope: entity:runview                                          │  │    │
+│  │  │ Pattern: Users,Accounts,Products                               │  │    │
+│  │  │ PatternType: Include | IsDeny: false                          │  │    │
+│  │  └───────────────────────────────────────────────────────────────┘  │    │
+│  │  ┌───────────────────────────────────────────────────────────────┐  │    │
+│  │  │ Scope: agent:execute                                           │  │    │
+│  │  │ Pattern: Skip*                                                 │  │    │
+│  │  │ PatternType: Include | IsDeny: false                          │  │    │
+│  │  └───────────────────────────────────────────────────────────────┘  │    │
+│  │  ┌───────────────────────────────────────────────────────────────┐  │    │
+│  │  │ Scope: entity:runview                                          │  │    │
+│  │  │ Pattern: EmployeeSalaries,Credentials                          │  │    │
+│  │  │ PatternType: Include | IsDeny: TRUE  ← BLOCKS ACCESS          │  │    │
+│  │  └───────────────────────────────────────────────────────────────┘  │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Three-Tier Permission Model
 
-```mermaid
-flowchart TB
-    subgraph Tier1["Tier 1: User Permissions (Ceiling)"]
-        User["User's Role + RLS<br/>Maximum possible access"]
-    end
-
-    subgraph Tier2["Tier 2: Application Ceiling"]
-        AppCeiling["APIApplicationScope<br/>What scopes this app CAN use"]
-    end
-
-    subgraph Tier3["Tier 3: API Key Scopes"]
-        KeyScopes["APIKeyScope + Pattern<br/>What this key IS allowed"]
-    end
-
-    subgraph Result["Effective Permissions"]
-        Effective["Intersection of all three tiers"]
-    end
-
-    Tier1 --> Tier2
-    Tier2 --> Tier3
-    Tier3 --> Result
-
-    style Tier1 fill:#e1f5fe
-    style Tier2 fill:#fff3e0
-    style Tier3 fill:#e8f5e9
-    style Result fill:#f3e5f5
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    TIER 1: User Permissions (Ceiling)                        │
+│                                                                              │
+│   User's Role + RLS = Maximum possible access                               │
+│   Example: User can access Accounts, Users, but NOT EmployeeSalaries        │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              TIER 2: Application Ceiling (APIApplicationScope)               │
+│                                                                              │
+│   What scopes + resource patterns this APP can use                          │
+│   NOW INCLUDES: ResourcePattern, PatternType, IsDeny, Priority              │
+│                                                                              │
+│   Example: MCP can use entity:runview for pattern "MJ:*,Users,Accounts"     │
+│            MCP CANNOT use mutation scopes at all                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                   TIER 3: API Key Scopes (APIKeyScope)                       │
+│                                                                              │
+│   What scopes + resource patterns THIS KEY is allowed                       │
+│   INCLUDES: ResourcePattern, PatternType, IsDeny, Priority                  │
+│                                                                              │
+│   Example: Key can use entity:runview for "Users,Accounts" only             │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         EFFECTIVE PERMISSIONS                                │
+│                                                                              │
+│                    Intersection of all three tiers                          │
+│                                                                              │
+│   Final access = User CAN access AND App ALLOWS AND Key GRANTS              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Scope Hierarchy (App-Agnostic)
 
-```mermaid
-graph TD
-    subgraph EntityScopes["Entity Scopes"]
-        entity["entity"]
-        entity --> runview["runview<br/>(ResourceType: Entity)"]
-        entity --> create["create<br/>(ResourceType: Entity)"]
-        entity --> update["update<br/>(ResourceType: Entity)"]
-        entity --> delete["delete<br/>(ResourceType: Entity)"]
-    end
-
-    subgraph AgentScopes["Agent Scopes"]
-        agent["agent"]
-        agent --> execute["execute<br/>(ResourceType: Agent)"]
-    end
-
-    subgraph QueryScopes["Query Scopes"]
-        query["query"]
-        query --> run["run<br/>(ResourceType: Query)"]
-    end
-
-    subgraph MutationScopes["Mutation Scopes"]
-        mutation["mutation"]
-        mutation --> mutrun["run<br/>(ResourceType: Mutation)"]
-    end
-
-    subgraph AdminScopes["Admin Scopes"]
-        admin["admin"]
-        admin --> users["users"]
-        admin --> keys["keys"]
-        users --> usersRead["read"]
-        users --> usersManage["manage"]
-        keys --> keysManage["manage"]
-    end
+```
+APIScope Tree (ParentID creates hierarchy):
+│
+├── entity
+│   ├── runview     (ResourceType = 'Entity')
+│   ├── create      (ResourceType = 'Entity')
+│   ├── update      (ResourceType = 'Entity')
+│   └── delete      (ResourceType = 'Entity')
+│
+├── agent
+│   └── execute     (ResourceType = 'Agent')
+│
+├── query
+│   └── run         (ResourceType = 'Query')
+│
+├── mutation
+│   └── run         (ResourceType = 'Mutation')
+│
+└── admin
+    ├── users
+    │   ├── read
+    │   └── manage
+    └── keys
+        └── manage
 ```
 
-**Key Change**: Scopes are now **app-agnostic**. The `APIApplicationScope` junction table defines which scopes each application is allowed to use.
+**Key Change**: Scopes are now **app-agnostic**. The `APIApplicationScope` junction table defines which scopes (with patterns) each application is allowed to use.
 
 ---
 
@@ -374,96 +390,95 @@ graph TD
 
 ### Entity Relationship Diagram
 
-```mermaid
-erDiagram
-    User ||--o{ APIKey : owns
-    User ||--o{ APIKey : creates
+```
+┌─────────────────────────┐              ┌─────────────────────────┐
+│     APIApplication      │              │         User            │
+├─────────────────────────┤              ├─────────────────────────┤
+│ ID (PK)                 │              │ ID (PK)                 │
+│ Name (UK)               │              │ Email                   │
+│ Description             │              │ ...                     │
+│ IsActive                │              └──────────┬──────────────┘
+└──────────┬──────────────┘                         │
+           │                                        │
+           │ 1:M                                    │ 1:M
+           ▼                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                 APIKey                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ID (PK)                                                                      │
+│ Hash (UK)                                                                    │
+│ UserID (FK) ──────────────────────────────────────────────► User             │
+│ Label                                                                        │
+│ Description                                                                  │
+│ Status (Active/Revoked)                                                      │
+│ ExpiresAt                                                                    │
+│ LastUsedAt                                                                   │
+│ CreatedByUserID (FK) ─────────────────────────────────────► User             │
+└───────┬─────────────────────────────────────────────────┬────────────────────┘
+        │                                                 │
+        │ 1:M                                             │ 1:M
+        ▼                                                 ▼
+┌───────────────────────────┐               ┌─────────────────────────────────┐
+│   APIKeyApplication       │               │         APIKeyScope             │
+├───────────────────────────┤               ├─────────────────────────────────┤
+│ ID (PK)                   │               │ ID (PK)                         │
+│ APIKeyID (FK)             │               │ APIKeyID (FK)                   │
+│ ApplicationID (FK)        │               │ ScopeID (FK)                    │
+└───────────────────────────┘               │ ResourcePattern                 │
+                                            │ PatternType (Include/Exclude)   │
+                                            │ IsDeny                          │
+                                            │ Priority                        │
+                                            └─────────────┬───────────────────┘
+                                                          │
+           ┌──────────────────────────────────────────────┘
+           │ M:1
+           ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              APIScope                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ID (PK)                                                                      │
+│ ParentID (FK, self-reference) ← Creates hierarchy                           │
+│ Name                                                                         │
+│ FullPath (UK) (e.g., 'entity:runview')                                      │
+│ Category                                                                     │
+│ ResourceType ('Entity', 'Agent', 'Query', 'Mutation', NULL)                 │
+│ Description                                                                  │
+│ IsActive                                                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+           ▲
+           │ M:1
+           │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         APIApplicationScope                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ID (PK)                                                                      │
+│ ApplicationID (FK)                                                           │
+│ ScopeID (FK)                                                                 │
+│ ResourcePattern          ← NEW: Pattern matching at app level               │
+│ PatternType (Include/Exclude) ← NEW                                         │
+│ IsDeny                   ← NEW: Deny rules at app level                     │
+│ Priority                 ← NEW: Rule ordering                               │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-    APIKey ||--o{ APIKeyApplication : "bound to (optional)"
-    APIKey ||--o{ APIKeyScope : "has rules"
-    APIKey ||--o{ APIKeyUsageLog : "logged"
 
-    APIApplication ||--o{ APIKeyApplication : "allows keys"
-    APIApplication ||--o{ APIApplicationScope : "can use scopes"
-    APIApplication ||--o{ APIKeyUsageLog : "logged"
-
-    APIScope ||--o{ APIKeyScope : "granted via"
-    APIScope ||--o{ APIApplicationScope : "available to"
-    APIScope ||--o| APIScope : "parent"
-
-    User {
-        uuid ID PK
-        string Email
-    }
-
-    APIApplication {
-        uuid ID PK
-        string Name UK
-        string Description
-        bit IsActive
-    }
-
-    APIScope {
-        uuid ID PK
-        uuid ParentID FK "self-reference"
-        string Name
-        string FullPath UK
-        string Category
-        string ResourceType "Entity,Agent,Query,Mutation,NULL"
-        string Description
-        bit IsActive
-    }
-
-    APIApplicationScope {
-        uuid ID PK
-        uuid ApplicationID FK
-        uuid ScopeID FK
-    }
-
-    APIKey {
-        uuid ID PK
-        string Hash UK
-        uuid UserID FK "max permissions"
-        string Label
-        string Description
-        string Status "Active,Revoked"
-        datetime ExpiresAt
-        datetime LastUsedAt
-        uuid CreatedByUserID FK
-    }
-
-    APIKeyApplication {
-        uuid ID PK
-        uuid APIKeyID FK
-        uuid ApplicationID FK
-    }
-
-    APIKeyScope {
-        uuid ID PK
-        uuid APIKeyID FK
-        uuid ScopeID FK
-        string ResourcePattern "Users,Accounts or Skip* or *"
-        string PatternType "Include,Exclude"
-        bit IsDeny
-        int Priority
-    }
-
-    APIKeyUsageLog {
-        uuid ID PK
-        uuid APIKeyID FK
-        uuid ApplicationID FK
-        string Endpoint
-        string Operation
-        string Method
-        int StatusCode
-        int ResponseTimeMs
-        string IPAddress
-        string UserAgent
-        string RequestedResource
-        string ScopesEvaluated "JSON"
-        string AuthorizationResult
-        string DeniedReason
-    }
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           APIKeyUsageLog                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ID (PK)                                                                      │
+│ APIKeyID (FK)                                                                │
+│ ApplicationID (FK)                                                           │
+│ Endpoint                                                                     │
+│ Operation                                                                    │
+│ Method                                                                       │
+│ StatusCode                                                                   │
+│ ResponseTimeMs                                                               │
+│ IPAddress                                                                    │
+│ UserAgent                                                                    │
+│ RequestedResource        ← What they tried to access                        │
+│ ScopesEvaluated (JSON)   ← Detailed evaluation log                          │
+│ AuthorizationResult      ← Allowed/Denied/NoScopesRequired                  │
+│ DeniedReason             ← Why access was denied                            │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### New Tables
@@ -495,6 +510,7 @@ ALTER TABLE ${flyway:defaultSchema}.APIScope
 
 -- =============================================================================
 -- API APPLICATION SCOPES - Which scopes each app CAN use (app's ceiling)
+-- NOW WITH PATTERN MATCHING - same structure as APIKeyScope
 -- =============================================================================
 CREATE TABLE ${flyway:defaultSchema}.APIApplicationScope (
     ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
@@ -512,10 +528,9 @@ CREATE TABLE ${flyway:defaultSchema}.APIApplicationScope (
     IsDeny BIT NOT NULL DEFAULT 0,
 
     -- For ordering/priority when multiple rules match
-    Priority INT NOT NULL DEFAULT 0;           -- Higher = evaluated first
+    Priority INT NOT NULL DEFAULT 0,           -- Higher = evaluated first
 
-
-    CONSTRAINT UQ_APIApplicationScope UNIQUE (ApplicationID, ScopeID)
+    CONSTRAINT UQ_APIApplicationScope UNIQUE (ApplicationID, ScopeID, ResourcePattern)
 );
 
 -- =============================================================================
@@ -571,50 +586,73 @@ ALTER TABLE ${flyway:defaultSchema}.APIKeyUsageLog ADD
 
 ### Flow Diagram
 
-```mermaid
-flowchart TD
-    Start([Request: apiKey, appId, scopePath, resource])
-
-    ValidateKey{1. Validate API Key<br/>format, hash, expiry, user status}
-    ValidateKey -->|Invalid| Denied
-
-    CheckAppBinding{2. Check App Binding<br/>Key has app restrictions?}
-    ValidateKey -->|Valid| CheckAppBinding
-
-    CheckAppBinding -->|No restrictions| CheckAppCeiling
-    CheckAppBinding -->|Has restrictions| CheckKeyApp
-
-    CheckKeyApp{Key bound to<br/>this app?}
-    CheckKeyApp -->|No| Denied
-    CheckKeyApp -->|Yes| CheckAppCeiling
-
-    CheckAppCeiling{3. Check App Ceiling<br/>App can use this scope?}
-    CheckAppCeiling -->|No| Denied
-    CheckAppCeiling -->|Yes| LoadRules
-
-    LoadRules[4. Load Scope Rules<br/>Order by Priority DESC, IsDeny DESC]
-    LoadRules --> EvaluateRules
-
-    EvaluateRules{5. Evaluate Rules<br/>Match scope path + pattern}
-
-    DenyMatch{Deny rule<br/>matches?}
-    EvaluateRules --> DenyMatch
-    DenyMatch -->|Yes| Denied
-
-    AllowMatch{Allow rule<br/>matches?}
-    DenyMatch -->|No| AllowMatch
-    AllowMatch -->|Yes| Allowed
-
-    NoMatch{More rules?}
-    AllowMatch -->|No| NoMatch
-    NoMatch -->|Yes| EvaluateRules
-    NoMatch -->|No| Denied
-
-    Denied([DENIED<br/>Log reason])
-    Allowed([ALLOWED])
-
-    style Denied fill:#ffcccc
-    style Allowed fill:#ccffcc
+```
+                    Request: {apiKey, appId, scopePath, resource}
+                                        │
+                                        ▼
+                    ┌───────────────────────────────────────┐
+                    │     1. VALIDATE API KEY               │
+                    │     (format, hash, expiry, user)      │
+                    └───────────────────┬───────────────────┘
+                                        │
+                              ┌─────────┴─────────┐
+                              │     Valid?        │
+                              └─────────┬─────────┘
+                                   No ──┤ Yes
+                                   │    ▼
+                                   │   ┌───────────────────────────────────────┐
+                                   │   │     2. CHECK APP BINDING              │
+                                   │   │     (Key has app restrictions?)       │
+                                   │   └───────────────────┬───────────────────┘
+                                   │                       │
+                                   │             ┌─────────┴─────────┐
+                                   │             │ No restrictions   │ Has restrictions
+                                   │             └─────────┬─────────┘─────────────┐
+                                   │                       │                       │
+                                   │                       │               ┌───────┴───────┐
+                                   │                       │               │ Key bound to  │
+                                   │                       │               │ this app?     │
+                                   │                       │               └───────┬───────┘
+                                   │                       │                  No ──┤ Yes
+                                   │                       │                  │    │
+                                   │                       ▼                  │    ▼
+                                   │   ┌───────────────────────────────────────────────────┐
+                                   │   │     3. EVALUATE APP CEILING (APIApplicationScope) │
+                                   │   │     Load app's scope rules, check pattern match   │
+                                   │   │     (ordered by Priority DESC, IsDeny DESC)       │
+                                   │   └───────────────────┬───────────────────────────────┘
+                                   │                       │
+                                   │             ┌─────────┴─────────┐
+                                   │             │ App deny match?   │
+                                   │             └─────────┬─────────┘
+                                   │                Yes ───┤ No
+                                   │                │      ▼
+                                   │                │    ┌─────────┴─────────┐
+                                   │                │    │ App allow match?  │
+                                   │                │    └─────────┬─────────┘
+                                   │                │         No ──┤ Yes
+                                   │                │         │    ▼
+                                   │                │         │   ┌───────────────────────────────────────┐
+                                   │                │         │   │     4. EVALUATE KEY SCOPES (APIKeyScope) │
+                                   │                │         │   │     Load key's scope rules, check pattern │
+                                   │                │         │   │     (ordered by Priority DESC, IsDeny DESC)│
+                                   │                │         │   └───────────────────┬───────────────────────┘
+                                   │                │         │                       │
+                                   │                │         │             ┌─────────┴─────────┐
+                                   │                │         │             │ Key deny match?   │
+                                   │                │         │             └─────────┬─────────┘
+                                   │                │         │                Yes ───┤ No
+                                   │                │         │                │      ▼
+                                   │                │         │                │    ┌─────────┴─────────┐
+                                   │                │         │                │    │ Key allow match?  │
+                                   │                │         │                │    └─────────┬─────────┘
+                                   │                │         │                │         No ──┤ Yes
+                                   │                │         │                │         │    │
+                                   ▼                ▼         ▼                ▼         ▼    ▼
+                    ┌────────────────────────────────────────────────────┐    ┌─────────────────┐
+                    │                    DENIED                          │    │     ALLOWED     │
+                    │                 (Log reason)                       │    └─────────────────┘
+                    └────────────────────────────────────────────────────┘
 ```
 
 ### Pseudocode
@@ -630,7 +668,8 @@ interface AuthorizationRequest {
 interface AuthorizationResult {
     allowed: boolean;
     reason: string;
-    matchedRule?: APIKeyScope;
+    matchedAppRule?: APIApplicationScope;
+    matchedKeyRule?: APIKeyScope;
     evaluatedRules: EvaluatedRule[];
 }
 
@@ -652,54 +691,119 @@ function evaluateAccess(request: AuthorizationRequest): AuthorizationResult {
     }
     // If keyApps is empty, key works with all apps
 
-    // 2. Check application scope ceiling
-    const appScopes = loadApplicationScopes(request.applicationId);
-    if (!appScopes.includes(request.scopePath)) {
+    // 2. Evaluate application scope ceiling (with pattern matching)
+    const appResult = evaluateAppCeiling(
+        request.applicationId,
+        request.scopePath,
+        request.resource
+    );
+    evaluatedRules.push(...appResult.evaluatedRules);
+
+    if (!appResult.allowed) {
         return {
             allowed: false,
-            reason: 'Application cannot use this scope',
-            evaluatedRules: []
+            reason: appResult.reason,
+            matchedAppRule: appResult.matchedRule,
+            evaluatedRules
         };
     }
 
-    // 3. Load all scope rules for this key, ordered by Priority DESC, IsDeny DESC
-    const rules = loadScopeRules(request.apiKeyId, request.scopePath);
+    // 3. Evaluate API key scope rules (with pattern matching)
+    const keyResult = evaluateKeyScopes(
+        request.apiKeyId,
+        request.scopePath,
+        request.resource
+    );
+    evaluatedRules.push(...keyResult.evaluatedRules);
 
-    // 4. Evaluate rules in order
+    return {
+        allowed: keyResult.allowed,
+        reason: keyResult.reason,
+        matchedAppRule: appResult.matchedRule,
+        matchedKeyRule: keyResult.matchedRule,
+        evaluatedRules
+    };
+}
+
+function evaluateAppCeiling(
+    applicationId: string,
+    scopePath: string,
+    resource: string
+): EvaluationResult {
+    // Load app's scope rules, ordered by Priority DESC, IsDeny DESC
+    const rules = loadApplicationScopeRules(applicationId, scopePath);
+
     for (const rule of rules) {
-        const matchResult = evaluateRule(rule, request.resource);
-        evaluatedRules.push(matchResult);
+        const matchResult = evaluateRule(rule, resource);
 
         if (matchResult.matched) {
             if (rule.IsDeny) {
-                // Deny rules always win
                 return {
                     allowed: false,
-                    reason: `Denied by rule: ${rule.ID}`,
+                    reason: `Application denies access: ${rule.ID}`,
                     matchedRule: rule,
-                    evaluatedRules
+                    evaluatedRules: [matchResult]
                 };
             }
 
             // First matching allow rule wins
             return {
                 allowed: true,
-                reason: 'Matched allow rule',
+                reason: 'Application allows access',
                 matchedRule: rule,
-                evaluatedRules
+                evaluatedRules: [matchResult]
             };
         }
     }
 
-    // 5. No matching rules = denied (explicit grant required)
+    // No matching rules at app level = app doesn't support this scope/resource
     return {
         allowed: false,
-        reason: 'No matching scope rules',
-        evaluatedRules
+        reason: 'Application does not allow this scope/resource combination',
+        evaluatedRules: []
     };
 }
 
-function evaluateRule(rule: APIKeyScope, resource: string): EvaluatedRule {
+function evaluateKeyScopes(
+    apiKeyId: string,
+    scopePath: string,
+    resource: string
+): EvaluationResult {
+    // Load key's scope rules, ordered by Priority DESC, IsDeny DESC
+    const rules = loadKeyScopeRules(apiKeyId, scopePath);
+
+    for (const rule of rules) {
+        const matchResult = evaluateRule(rule, resource);
+
+        if (matchResult.matched) {
+            if (rule.IsDeny) {
+                return {
+                    allowed: false,
+                    reason: `Denied by key rule: ${rule.ID}`,
+                    matchedRule: rule,
+                    evaluatedRules: [matchResult]
+                };
+            }
+
+            // First matching allow rule wins
+            return {
+                allowed: true,
+                reason: 'Matched key allow rule',
+                matchedRule: rule,
+                evaluatedRules: [matchResult]
+            };
+        }
+    }
+
+    // No matching rules = denied (explicit grant required)
+    return {
+        allowed: false,
+        reason: 'No matching key scope rules',
+        evaluatedRules: []
+    };
+}
+
+function evaluateRule(rule: ScopeRule, resource: string): EvaluatedRule {
     // Handle NULL pattern as wildcard (match all)
     if (!rule.ResourcePattern) {
         return { rule, matched: true, patternMatched: '*' };
@@ -738,7 +842,7 @@ function globMatch(value: string, pattern: string): boolean {
 
 ### Evaluation Order
 
-Rules are evaluated in the following order:
+Rules are evaluated in the following order at **each level** (app and key):
 1. **Priority DESC**: Higher priority rules evaluated first
 2. **IsDeny DESC**: Within same priority, deny rules before allow rules
 3. **Specificity**: More specific patterns implicitly have higher priority
@@ -749,24 +853,22 @@ Rules are evaluated in the following order:
 
 ### Package Structure
 
-```mermaid
-graph TB
-    subgraph APIKeysPackage["@memberjunction/api-keys"]
-        Index["index.ts<br/>Public exports"]
-        Engine["APIKeyEngine.ts<br/>Main orchestrator"]
-        Evaluator["ScopeEvaluator.ts<br/>Rule evaluation"]
-        AppRegistry["ApplicationRegistry.ts<br/>App validation"]
-        Logger["UsageLogger.ts<br/>Audit logging"]
-        Matcher["PatternMatcher.ts<br/>Glob matching"]
-        Types["interfaces.ts<br/>Types"]
-    end
-
-    Engine --> Evaluator
-    Engine --> AppRegistry
-    Engine --> Logger
-    Evaluator --> Matcher
-    Index --> Engine
-    Index --> Types
+```
+packages/
+└── APIKeys/                              # NEW PACKAGE
+    ├── src/
+    │   ├── index.ts                      # Public exports
+    │   ├── APIKeyEngine.ts               # Main orchestrator
+    │   ├── ScopeEvaluator.ts             # Pattern matching, rule evaluation
+    │   │   ├── evaluateAppCeiling()      # App-level pattern check
+    │   │   └── evaluateKeyScopes()       # Key-level pattern check
+    │   ├── ApplicationRegistry.ts        # App registration/validation
+    │   ├── UsageLogger.ts                # Enhanced audit logging
+    │   ├── PatternMatcher.ts             # Glob pattern matching
+    │   └── interfaces.ts                 # Types and interfaces
+    ├── package.json
+    ├── tsconfig.json
+    └── README.md
 ```
 
 ### Component Responsibilities
@@ -774,37 +876,42 @@ graph TB
 | Component | Responsibility |
 |-----------|---------------|
 | `APIKeyEngine` | Main entry point, coordinates validation and evaluation |
-| `ScopeEvaluator` | Loads scope rules, evaluates access, determines result |
-| `ApplicationRegistry` | Validates app registration, checks app scope ceiling, key-app bindings |
-| `UsageLogger` | Enhanced logging with scope evaluation details |
-| `PatternMatcher` | Glob/wildcard pattern matching engine |
+| `ScopeEvaluator` | Two-level evaluation: app ceiling patterns, then key scope patterns |
+| `ApplicationRegistry` | Validates app registration, loads app scope ceiling rules |
+| `UsageLogger` | Enhanced logging with both app and key evaluation details |
+| `PatternMatcher` | Glob/wildcard pattern matching engine (shared by both levels) |
 
 ### Integration Points
 
-```mermaid
-flowchart TB
-    subgraph MJAPI["MJAPI"]
-        GetUserPayload["getUserPayload()"]
-        GraphQLMiddleware["GraphQL Middleware"]
-        GetUserPayload --> EncryptionEngine
-        EncryptionEngine --> APIKeyEngine
-        GraphQLMiddleware --> APIKeyEngine
-    end
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              MJAPI                                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  getUserPayload()                                                    │    │
+│  │       │                                                              │    │
+│  │       ▼                                                              │    │
+│  │  EncryptionEngine.ValidateAPIKey()                                   │    │
+│  │       │                                                              │    │
+│  │       ▼                                                              │    │
+│  │  APIKeyEngine.evaluateAccess(appId='MJAPI', scope, resource)        │    │
+│  │       │                                                              │    │
+│  │       ├── Check app ceiling (APIApplicationScope patterns)          │    │
+│  │       └── Check key scopes (APIKeyScope patterns)                   │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-    subgraph MCPServer["MCP Server"]
-        ToolHandler["Tool Handler"]
-        RunViewTool["RunView Tool"]
-        ToolHandler --> APIKeyEngine
-        RunViewTool --> APIKeyEngine
-    end
-
-    subgraph APIKeysPkg["@memberjunction/api-keys"]
-        APIKeyEngine["APIKeyEngine.evaluateAccess()"]
-    end
-
-    subgraph EncryptionPkg["@memberjunction/encryption"]
-        EncryptionEngine["EncryptionEngine.ValidateAPIKey()"]
-    end
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           MCP Server                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  Tool Handler                                                        │    │
+│  │       │                                                              │    │
+│  │       ▼                                                              │    │
+│  │  APIKeyEngine.evaluateAccess(appId='MCPServer', scope, resource)    │    │
+│  │       │                                                              │    │
+│  │       ├── Check app ceiling (MCPServer can't use mutation scopes)   │    │
+│  │       └── Check key scopes (what this specific key allows)          │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -834,10 +941,21 @@ VALUES (@keyId, @scope_entity_runview, 'Users,Accounts,Products,Orders,Invoices'
 
 **Evaluation Example**:
 ```
-Request: entity:runview, 'Users' → ALLOWED (matches pattern)
-Request: entity:runview, 'Employees' → DENIED (no matching rule)
-Request: agent:execute, 'SkipAnalysisAgent' → ALLOWED (matches pattern)
-Request: agent:execute, 'DifferentAgent' → DENIED (no matching rule)
+Request: entity:runview, 'Users'
+  → App ceiling check: MCP allows entity:runview for '*' → PASS
+  → Key scope check: 'Users' matches 'Users,Accounts,...' → ALLOWED
+
+Request: entity:runview, 'Employees'
+  → App ceiling check: MCP allows entity:runview for '*' → PASS
+  → Key scope check: 'Employees' doesn't match pattern → DENIED
+
+Request: agent:execute, 'SkipAnalysisAgent'
+  → App ceiling check: MCP allows agent:execute for '*' → PASS
+  → Key scope check: matches 'SkipAnalysisAgent' → ALLOWED
+
+Request: agent:execute, 'DifferentAgent'
+  → App ceiling check: MCP allows agent:execute for '*' → PASS
+  → Key scope check: no matching rule → DENIED
 ```
 
 ### Use Case 2: MJAPI Key - Queries Starting with J, Ending with X
@@ -900,23 +1018,49 @@ INSERT INTO APIKeyScope (APIKeyID, ScopeID, ResourcePattern, PatternType, IsDeny
 VALUES (@keyId, @scope_entity_runview, '*', 'Include', 0, 0);
 ```
 
-### Use Case 5: Application Scope Ceiling
+### Use Case 5: Application Scope Ceiling with Patterns
 
-**Scenario**: MCP Server should never allow mutation scopes, only entity and agent scopes.
+**Scenario**: MCP Server should only allow entity access for MJ core entities and specific business entities.
 
 ```sql
--- Define MCP Server's scope ceiling
-INSERT INTO APIApplicationScope (ApplicationID, ScopeID) VALUES
-    (@mcpAppId, @scope_entity_runview),
-    (@mcpAppId, @scope_entity_create),
-    (@mcpAppId, @scope_entity_update),
-    (@mcpAppId, @scope_entity_delete),
-    (@mcpAppId, @scope_agent_execute),
-    (@mcpAppId, @scope_query_run);
--- Note: mutation scopes NOT included
+-- Define MCP Server's scope ceiling WITH PATTERNS
+-- MCP can use entity:runview, but only for specific entity patterns
+INSERT INTO APIApplicationScope (ApplicationID, ScopeID, ResourcePattern, PatternType, IsDeny, Priority) VALUES
+    -- Allow all MJ: prefixed entities
+    (@mcpAppId, @scope_entity_runview, 'MJ: *', 'Include', 0, 0),
+    -- Allow specific business entities
+    (@mcpAppId, @scope_entity_runview, 'Users,Accounts,Products,Orders', 'Include', 0, 0),
+    -- DENY sensitive entities at app level (even if key grants access)
+    (@mcpAppId, @scope_entity_runview, 'EmployeeSalaries,Credentials,APIKeys', 'Include', 1, 100);
 
--- Even if an API key has mutation scope, MCP won't allow it
--- because mutation:run is not in MCP's APIApplicationScope
+-- MCP can run agents, but only Skip* agents
+INSERT INTO APIApplicationScope (ApplicationID, ScopeID, ResourcePattern, PatternType, IsDeny, Priority) VALUES
+    (@mcpAppId, @scope_agent_execute, 'Skip*', 'Include', 0, 0);
+
+-- MCP CANNOT use mutation scopes at all (no records = not allowed)
+```
+
+**Evaluation Example**:
+```
+Request via MCP: entity:runview, 'Users'
+  → App ceiling: 'Users' matches 'Users,Accounts,...' → PASS
+  → Key scope check: (depends on key rules)
+
+Request via MCP: entity:runview, 'EmployeeSalaries'
+  → App ceiling: DENIED by app-level deny rule (Priority 100)
+  → Key scope check: NEVER REACHED - blocked at app level
+
+Request via MCP: mutation:run, 'CreateUser'
+  → App ceiling: MCP has no rules for mutation scope → DENIED
+  → Key scope check: NEVER REACHED - app doesn't support mutation
+
+Request via MCP: agent:execute, 'SkipAnalysisAgent'
+  → App ceiling: 'SkipAnalysisAgent' matches 'Skip*' → PASS
+  → Key scope check: (depends on key rules)
+
+Request via MCP: agent:execute, 'DangerousAgent'
+  → App ceiling: 'DangerousAgent' doesn't match 'Skip*' → DENIED
+  → Key scope check: NEVER REACHED - blocked at app level
 ```
 
 ---
@@ -940,12 +1084,13 @@ interface APIKeyUsageLogEntry {
 
     // NEW FIELDS
     RequestedResource: string;
-    ScopesEvaluated: ScopeEvaluation[];
+    ScopesEvaluated: ScopeEvaluation[];      // Both app and key evaluations
     AuthorizationResult: 'Allowed' | 'Denied' | 'NoScopesRequired';
     DeniedReason: string | null;
 }
 
 interface ScopeEvaluation {
+    level: 'application' | 'key';            // Which level was evaluated
     scopeId: string;
     scopePath: string;
     pattern: string;
@@ -973,6 +1118,17 @@ interface ScopeEvaluation {
     "RequestedResource": "SkipAnalysisAgent",
     "ScopesEvaluated": [
         {
+            "level": "application",
+            "scopeId": "scope-agent-execute",
+            "scopePath": "agent:execute",
+            "pattern": "Skip*",
+            "patternType": "Include",
+            "isDeny": false,
+            "matched": true,
+            "result": "Allowed"
+        },
+        {
+            "level": "key",
             "scopeId": "scope-agent-execute",
             "scopePath": "agent:execute",
             "pattern": "SkipAnalysisAgent",
@@ -1001,20 +1157,20 @@ interface ScopeEvaluation {
 -- Add columns with NULL/defaults so existing data works
 ALTER TABLE APIScope ADD
     ParentID UNIQUEIDENTIFIER NULL,
-    FullPath NVARCHAR(500) NULL,
+    FullPath NVARCHAR(MAX) NULL,
     ResourceType NVARCHAR(50) NULL,
     IsActive BIT NOT NULL DEFAULT 1;
 
 -- Backfill FullPath from Name for existing scopes
 UPDATE APIScope SET FullPath = Name WHERE FullPath IS NULL;
-ALTER TABLE APIScope ALTER COLUMN FullPath NVARCHAR(500) NOT NULL;
+ALTER TABLE APIScope ALTER COLUMN FullPath NVARCHAR(MAX) NOT NULL;
 ```
 
 ### Phase 2: Seed Data
 
 1. Create standard APIApplication records
 2. Build scope hierarchy (app-agnostic)
-3. Define each app's scope ceiling via APIApplicationScope
+3. Define each app's scope ceiling with patterns via APIApplicationScope
 4. Migrate existing flat scopes to hierarchical structure
 
 ```sql
@@ -1032,18 +1188,20 @@ INSERT INTO APIScope (ID, ParentID, Name, FullPath, ResourceType) VALUES
     (@scope_agent, NULL, 'agent', 'agent', NULL),
     (@scope_agent_execute, @scope_agent, 'execute', 'agent:execute', 'Agent');
 
--- Define app scope ceilings
-INSERT INTO APIApplicationScope (ApplicationID, ScopeID) VALUES
-    (@mcpAppId, @scope_entity_runview),
-    (@mcpAppId, @scope_agent_execute),
-    (@mjapiAppId, @scope_entity_runview),
-    (@mjapiAppId, @scope_mutation_run);
+-- Define app scope ceilings WITH PATTERNS
+INSERT INTO APIApplicationScope (ApplicationID, ScopeID, ResourcePattern, PatternType, IsDeny, Priority) VALUES
+    -- MCP: all entity operations, all agents
+    (@mcpAppId, @scope_entity_runview, '*', 'Include', 0, 0),
+    (@mcpAppId, @scope_agent_execute, '*', 'Include', 0, 0),
+    -- MJAPI: all operations
+    (@mjapiAppId, @scope_entity_runview, '*', 'Include', 0, 0),
+    (@mjapiAppId, @scope_mutation_run, '*', 'Include', 0, 0);
 ```
 
 ### Phase 3: Package Implementation
 
 1. Create `@memberjunction/api-keys` package
-2. Implement ScopeEvaluator with pattern matching
+2. Implement two-level ScopeEvaluator (app ceiling + key scopes)
 3. Add integration points in MJAPI and MCP Server
 4. Enable enforcement with feature flag
 
@@ -1070,7 +1228,7 @@ INSERT INTO APIApplicationScope (ApplicationID, ScopeID) VALUES
 ### 2. Default Behavior for Keys Without Scopes
 
 **Question**: If an API key has NO scopes assigned, should it have:
-- **Full access** (backward compatibility, limited by user permissions)
+- **Full access** (backward compatibility, limited by user permissions and app ceiling)
 - **No access** (explicit grant required)
 
 **Recommendation**: Full access during migration, configurable per-deployment after.
@@ -1119,9 +1277,10 @@ This design provides MemberJunction with an enterprise-grade API authorization s
 2. **Avoids scope explosion**: Pattern matching eliminates need for thousands of entity-specific scopes
 3. **Maintains security**: User permissions remain the ceiling, deny rules trump allow
 4. **Scopes are reusable**: App-agnostic scopes shared across applications
-5. **Apps have ceilings**: Each app defines which scopes it can use via APIApplicationScope
-6. **Flexible key binding**: Keys work with all apps by default, optionally restricted
-7. **Provides audit trail**: Detailed scope evaluation logging for compliance and debugging
+5. **Two-level pattern matching**: App ceiling patterns AND key scope patterns
+6. **Apps have pattern-based ceilings**: Each app defines which scopes + resource patterns it can use
+7. **Flexible key binding**: Keys work with all apps by default, optionally restricted
+8. **Provides audit trail**: Detailed two-level scope evaluation logging for compliance and debugging
 
 The phased migration approach ensures backward compatibility while enabling organizations to adopt enhanced authorization controls at their own pace.
 
