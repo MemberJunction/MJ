@@ -19,6 +19,13 @@
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": []
+    },
+    "primaryKey": {
+      "ID": "A4998A55-C023-47B4-9A20-1FC965F4B5D3"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T00:17:05.054Z",
+      "checksum": "8925f5ad22adc85936ae43ab80b0e3cd688953d2c4a91414bedd5a7c50acde0e"
     }
   }
 ]
