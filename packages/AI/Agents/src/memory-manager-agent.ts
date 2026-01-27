@@ -20,8 +20,7 @@ const EXTRACTION_CONFIG = {
     maxNotesPerConversation: 2,   // Max notes from a single conversation (most should be zero)
     minConfidenceThreshold: 80,   // Minimum confidence to extract a note
     minContentLength: 20,         // Minimum note content length
-    cooldownHours: 24,            // Don't re-extract from same conversation within 24h
-    verboseLogging: false         // Enable detailed per-item logging (noisy, use for debugging)
+    cooldownHours: 24             // Don't re-extract from same conversation within 24h
 };
 
 /**
@@ -131,6 +130,9 @@ interface ExtractedExample {
  */
 @RegisterClass(BaseAgent, 'MemoryManagerAgent')
 export class MemoryManagerAgent extends BaseAgent {
+    /** Verbose logging flag from params.verbose */
+    private _verbose: boolean = false;
+
     /**
      * Get the last run timestamp for this agent to determine what to process.
      * For first run, returns null to process all history (limited by MaxRows).
@@ -164,7 +166,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const filteredAgents = allAgents.filter(a => a.Status === 'Active' && (a.InjectNotes || a.InjectExamples));
 
         // Debug logging only in verbose mode
-        if (EXTRACTION_CONFIG.verboseLogging) {
+        if (this._verbose) {
             LogStatus(`Memory Manager: AIEngine has ${allAgents.length} total agents cached`);
             if (filteredAgents.length > 0) {
                 const agentNames = filteredAgents.map(a => `${a.Name} (InjectNotes=${a.InjectNotes}, InjectExamples=${a.InjectExamples})`).join(', ');
@@ -261,7 +263,7 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         const totalMessages = conversations.reduce((sum, c) => sum + c.messages.length, 0);
-        if (EXTRACTION_CONFIG.verboseLogging) {
+        if (this._verbose) {
             LogStatus(`Memory Manager: Loaded ${conversations.length} conversations with ${totalMessages} total messages (positive: ${conversations.filter(c => c.hasPositiveRating).length}, negative: ${conversations.filter(c => c.hasNegativeRating).length}, unrated: ${conversations.filter(c => c.isUnrated).length})`);
         }
 
@@ -378,13 +380,13 @@ export class MemoryManagerAgent extends BaseAgent {
 
         if (!prompt) {
             LogError('Memory Manager note extraction prompt not found');
-            if (EXTRACTION_CONFIG.verboseLogging) {
+            if (this._verbose) {
                 LogStatus(`Memory Manager: Available prompts in MJ: System category: ${AIEngine.Instance.Prompts.filter(p => p.Category === 'MJ: System').map(p => p.Name).join(', ')}`);
             }
             return [];
         }
 
-        if (EXTRACTION_CONFIG.verboseLogging) {
+        if (this._verbose) {
             LogStatus(`Memory Manager: Found extraction prompt "${prompt.Name}" (ID: ${prompt.ID})`);
             LogStatus(`Memory Manager: Sending ${conversationThreads.length} conversation threads with ${conversationThreads.reduce((sum, t) => sum + t.messages.length, 0)} total messages for note extraction`);
             if (conversationThreads.length > 0) {
@@ -402,7 +404,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
         const result = await runner.ExecutePrompt<{ notes: ExtractedNote[] }>(params);
 
-        if (EXTRACTION_CONFIG.verboseLogging) {
+        if (this._verbose) {
             LogStatus(`Memory Manager: Extraction prompt result - success: ${result.success}, hasResult: ${!!result.result}`);
             if (result.errorMessage) {
                 LogStatus(`Memory Manager: Extraction error: ${result.errorMessage}`);
@@ -422,7 +424,7 @@ export class MemoryManagerAgent extends BaseAgent {
         if (typeof result.result === 'string') {
             try {
                 parsedResult = JSON.parse(result.result);
-                if (EXTRACTION_CONFIG.verboseLogging) {
+                if (this._verbose) {
                     LogStatus(`Memory Manager: Parsed string result into object with ${parsedResult.notes?.length || 0} notes`);
                 }
             } catch (e) {
@@ -440,13 +442,13 @@ export class MemoryManagerAgent extends BaseAgent {
         );
 
         if (candidateNotes.length === 0) {
-            if (EXTRACTION_CONFIG.verboseLogging) {
+            if (this._verbose) {
                 LogStatus('Memory Manager: No candidates passed confidence/length thresholds');
             }
             return [];
         }
 
-        if (EXTRACTION_CONFIG.verboseLogging) {
+        if (this._verbose) {
             LogStatus(`Memory Manager: ${candidateNotes.length} candidates passed confidence threshold (>=${EXTRACTION_CONFIG.minConfidenceThreshold})`);
         }
 
@@ -458,13 +460,13 @@ export class MemoryManagerAgent extends BaseAgent {
             if (existing.length < EXTRACTION_CONFIG.maxNotesPerConversation) {
                 existing.push(note);
                 notesByConversation.set(convId, existing);
-            } else if (EXTRACTION_CONFIG.verboseLogging) {
+            } else if (this._verbose) {
                 LogStatus(`Memory Manager: Skipping note (max ${EXTRACTION_CONFIG.maxNotesPerConversation} per conversation reached for ${convId})`);
             }
         }
 
         const sparseCandidates = Array.from(notesByConversation.values()).flat();
-        if (EXTRACTION_CONFIG.verboseLogging) {
+        if (this._verbose) {
             LogStatus(`Memory Manager: ${sparseCandidates.length} candidates after sparsity filter`);
         }
 
@@ -479,7 +481,7 @@ export class MemoryManagerAgent extends BaseAgent {
         for (const candidate of sparseCandidates) {
             // Check global max notes per run
             if (approvedNotes.length >= EXTRACTION_CONFIG.maxNotesPerRun) {
-                if (EXTRACTION_CONFIG.verboseLogging) {
+                if (this._verbose) {
                     LogStatus(`Memory Manager: Stopping - max notes per run (${EXTRACTION_CONFIG.maxNotesPerRun}) reached`);
                 }
                 break;
@@ -491,7 +493,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 n.Note && n.Note.toLowerCase().trim() === normalizedContent
             );
             if (exactMatch) {
-                if (EXTRACTION_CONFIG.verboseLogging) {
+                if (this._verbose) {
                     LogStatus(`Memory Manager: Skipping exact duplicate: "${candidate.content.substring(0, 50)}..."`);
                 }
                 continue;
@@ -528,22 +530,22 @@ export class MemoryManagerAgent extends BaseAgent {
 
                 if (dedupeResult.success && dedupeResult.result && dedupeResult.result.shouldAdd) {
                     approvedNotes.push(candidate);
-                    if (EXTRACTION_CONFIG.verboseLogging) {
+                    if (this._verbose) {
                         LogStatus(`Memory Manager: Approved note - ${dedupeResult.result.reason}`);
                     }
-                } else if (EXTRACTION_CONFIG.verboseLogging) {
+                } else if (this._verbose) {
                     LogStatus(`Memory Manager: Skipped duplicate note - ${dedupeResult.result?.reason || 'too similar to existing notes'}`);
                 }
             } else {
                 // No similar notes found or no deduplication prompt, add the note
                 approvedNotes.push(candidate);
-                if (EXTRACTION_CONFIG.verboseLogging) {
+                if (this._verbose) {
                     LogStatus(`Memory Manager: Approved note (no similar notes found): "${candidate.content.substring(0, 50)}..."`);
                 }
             }
         }
 
-        if (EXTRACTION_CONFIG.verboseLogging) {
+        if (this._verbose) {
             LogStatus(`Memory Manager: Final approved notes: ${approvedNotes.length}`);
         }
 
@@ -680,10 +682,10 @@ export class MemoryManagerAgent extends BaseAgent {
 
                 if (dedupeResult.success && dedupeResult.result && dedupeResult.result.shouldAdd) {
                     approvedExamples.push(candidate);
-                    if (EXTRACTION_CONFIG.verboseLogging) {
+                    if (this._verbose) {
                         LogStatus(`Memory Manager: Approved example - ${dedupeResult.result.reason}`);
                     }
-                } else if (EXTRACTION_CONFIG.verboseLogging) {
+                } else if (this._verbose) {
                     LogStatus(`Memory Manager: Skipped duplicate example - ${dedupeResult.result?.reason || 'too similar'}`);
                 }
             } else {
@@ -844,7 +846,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
                 // AgentID must come from source run - LLM doesn't know real agent IDs
                 if (!sourceRun?.AgentID) {
-                    if (EXTRACTION_CONFIG.verboseLogging) {
+                    if (this._verbose) {
                         LogStatus(`Memory Manager: Skipping example - no source run to inherit AgentID from`);
                     }
                     continue;
@@ -904,6 +906,9 @@ export class MemoryManagerAgent extends BaseAgent {
         config: AgentConfiguration
     ): Promise<{finalStep: BaseAgentNextStep<P>, stepCount: number}> {
         try {
+            // Use verbose flag from agent execution params
+            this._verbose = params.verbose ?? false;
+
             LogStatus('Memory Manager: Starting analysis cycle');
 
             const lastRunTime = await this.GetLastRunTime(params.agent.ID, params.contextUser!);
@@ -911,7 +916,7 @@ export class MemoryManagerAgent extends BaseAgent {
             // Load agents that have memory injection enabled
             const agentsUsingMemory = await this.LoadAgentsUsingMemory(params.contextUser!);
 
-            if (EXTRACTION_CONFIG.verboseLogging) {
+            if (this._verbose) {
                 const sinceMessage = lastRunTime ? `since ${lastRunTime.toISOString()}` : 'all history';
                 LogStatus(`Memory Manager: Processing ${sinceMessage}`);
                 LogStatus(`Memory Manager: Found ${agentsUsingMemory.length} agents with memory injection enabled`);
@@ -928,18 +933,18 @@ export class MemoryManagerAgent extends BaseAgent {
 
             // Load conversations with new activity (includes rating data)
             const conversations = await this.LoadConversationsWithNewActivity(lastRunTime, agentsUsingMemory, params.contextUser!);
-            if (EXTRACTION_CONFIG.verboseLogging) {
+            if (this._verbose) {
                 LogStatus(`Memory Manager: Found ${conversations.length} conversations with new activity`);
             }
 
             // Load high-value agent runs
             const agentRuns = await this.LoadHighValueAgentRuns(lastRunTime, params.contextUser!);
-            if (EXTRACTION_CONFIG.verboseLogging) {
+            if (this._verbose) {
                 LogStatus(`Memory Manager: Found ${agentRuns.length} high-value agent runs`);
             }
 
             if (conversations.length === 0 && agentRuns.length === 0) {
-                if (EXTRACTION_CONFIG.verboseLogging) {
+                if (this._verbose) {
                     LogStatus('Memory Manager: No data to process');
                 }
                 const finalStep: BaseAgentNextStep<P> = {
@@ -952,7 +957,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
             // Extract notes from conversations (with rating context)
             const extractedNotes = await this.ExtractNotesFromConversations(conversations, params.contextUser!);
-            if (EXTRACTION_CONFIG.verboseLogging) {
+            if (this._verbose) {
                 LogStatus(`Memory Manager: Extracted ${extractedNotes.length} potential notes`);
             }
 
@@ -969,7 +974,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 } as unknown as ConversationDetailEntity))
             );
             const extractedExamples = await this.ExtractExamples(conversationDetails, params.contextUser!);
-            if (EXTRACTION_CONFIG.verboseLogging) {
+            if (this._verbose) {
                 LogStatus(`Memory Manager: Extracted ${extractedExamples.length} potential examples`);
             }
 
@@ -990,14 +995,14 @@ export class MemoryManagerAgent extends BaseAgent {
                         // Enrich userId if not set
                         if (!example.userId && ctx.userId) {
                             example.userId = ctx.userId;
-                            if (EXTRACTION_CONFIG.verboseLogging) {
+                            if (this._verbose) {
                                 LogStatus(`Memory Manager: Enriched example with userId from conversation: ${ctx.userId}`);
                             }
                         }
                         // Enrich agentRunId if not set
                         if (!example.sourceAgentRunId && ctx.agentRunId) {
                             example.sourceAgentRunId = ctx.agentRunId;
-                            if (EXTRACTION_CONFIG.verboseLogging) {
+                            if (this._verbose) {
                                 LogStatus(`Memory Manager: Enriched example with agentRunId from conversation: ${ctx.agentRunId}`);
                             }
                         }
@@ -1005,7 +1010,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 }
                 // Clear invalid agentId (LLM sometimes returns placeholder values like "agent-12345")
                 if (example.agentId && !this.isValidUUID(example.agentId)) {
-                    if (EXTRACTION_CONFIG.verboseLogging) {
+                    if (this._verbose) {
                         LogStatus(`Memory Manager: Clearing invalid agentId "${example.agentId}" from example`);
                     }
                     example.agentId = '';
