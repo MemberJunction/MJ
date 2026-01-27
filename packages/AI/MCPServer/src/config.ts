@@ -124,6 +124,23 @@ const mcpServerAgentToolInfoSchema = z.object({
   cancel: z.boolean().optional().default(false),
 });
 
+/**
+ * Zod schema for OAuth authentication settings.
+ *
+ * Validates the auth configuration section with defaults:
+ * - mode: defaults to 'apiKey' for backward compatibility
+ * - resourceIdentifier: optional URL for OAuth audience validation
+ * - autoResourceIdentifier: defaults to true (auto-generate from server URL)
+ */
+const mcpServerAuthSettingsSchema = z.object({
+  /** Authentication mode: 'apiKey' | 'oauth' | 'both' | 'none' */
+  mode: z.enum(['apiKey', 'oauth', 'both', 'none']).default('apiKey'),
+  /** Resource identifier for OAuth audience validation (e.g., "https://mcp.example.com") */
+  resourceIdentifier: z.string().optional(),
+  /** Auto-generate resourceIdentifier from server URL if not specified */
+  autoResourceIdentifier: z.boolean().default(true),
+});
+
 const mcpServerInfoSchema = z.object({
   port: z.coerce.number().optional().default(3100),
   entityTools: z.array(mcpServerEntityToolInfoSchema).optional(),
@@ -134,6 +151,8 @@ const mcpServerInfoSchema = z.object({
   communicationTools: mcpServerCommunicationToolInfoSchema.optional(),
   enableMCPServer: z.boolean().optional().default(false),
   systemApiKey: z.string().optional(),
+  /** OAuth authentication settings for the MCP Server */
+  auth: mcpServerAuthSettingsSchema.optional(),
 });
 
 const configInfoSchema = z.object({
@@ -166,6 +185,7 @@ export type MCPServerAgentToolInfo = z.infer<typeof mcpServerAgentToolInfoSchema
 export type MCPServerQueryToolInfo = z.infer<typeof mcpServerQueryToolInfoSchema>;
 export type MCPServerPromptToolInfo = z.infer<typeof mcpServerPromptToolInfoSchema>;
 export type MCPServerCommunicationToolInfo = z.infer<typeof mcpServerCommunicationToolInfoSchema>;
+export type MCPServerAuthSettingsInfo = z.infer<typeof mcpServerAuthSettingsSchema>;
 
 // Config will be loaded asynchronously - exports are populated by initConfig()
 export let configInfo: ConfigInfo;
@@ -180,6 +200,8 @@ export let mcpServerSettings: ConfigInfo['mcpServerSettings'];
 export let mj_core_schema: string;
 export let dbReadOnlyUsername: string | undefined;
 export let dbReadOnlyPassword: string | undefined;
+/** OAuth authentication settings, resolved with defaults */
+export let mcpServerAuth: MCPServerAuthSettingsInfo;
 
 let _initialized = false;
 
@@ -213,8 +235,48 @@ export async function initConfig(): Promise<ConfigInfo> {
   dbReadOnlyUsername = configInfo.dbReadOnlyUsername;
   dbReadOnlyPassword = configInfo.dbReadOnlyPassword;
 
+  // Resolve auth settings with defaults
+  mcpServerAuth = resolveAuthSettings(configInfo.mcpServerSettings?.auth, configInfo.mcpServerSettings?.port);
+
   _initialized = true;
   return configInfo;
+}
+
+/**
+ * Resolves OAuth authentication settings with defaults.
+ *
+ * @param authConfig - The raw auth configuration from mj.config.cjs
+ * @param port - The MCP server port for auto-generating resourceIdentifier
+ * @returns Resolved auth settings with all defaults applied
+ */
+function resolveAuthSettings(
+  authConfig: z.infer<typeof mcpServerAuthSettingsSchema> | undefined,
+  port: number | undefined
+): MCPServerAuthSettingsInfo {
+  // Start with defaults
+  const defaults: MCPServerAuthSettingsInfo = {
+    mode: 'apiKey',
+    autoResourceIdentifier: true,
+  };
+
+  if (!authConfig) {
+    return defaults;
+  }
+
+  // Merge with config values
+  const resolved: MCPServerAuthSettingsInfo = {
+    mode: authConfig.mode ?? defaults.mode,
+    resourceIdentifier: authConfig.resourceIdentifier,
+    autoResourceIdentifier: authConfig.autoResourceIdentifier ?? defaults.autoResourceIdentifier,
+  };
+
+  // Auto-generate resourceIdentifier if needed
+  if (!resolved.resourceIdentifier && resolved.autoResourceIdentifier) {
+    const serverPort = port ?? 3100;
+    resolved.resourceIdentifier = `http://localhost:${serverPort}`;
+  }
+
+  return resolved;
 }
 
 /**

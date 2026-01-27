@@ -38,6 +38,31 @@ import { ActionEngineServer } from "@memberjunction/actions";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { ActionParamEntity } from "@memberjunction/core-entities";
+// OAuth authentication imports
+import {
+    MCPSessionContext as OAuthMCPSessionContext,
+    AuthMode,
+    AuthResult,
+    ProtectedResourceMetadata,
+} from './auth/types.js';
+import {
+    getAuthMode,
+    getResourceIdentifier,
+    isOAuthEnabled,
+    validateOAuthConfig,
+    logAuthConfig,
+} from './auth/OAuthConfig.js';
+import {
+    authenticateRequest as oauthAuthenticateRequest,
+    toSessionContext,
+    sendAuthErrorResponse,
+    AuthGateConfig,
+} from './auth/AuthGate.js';
+import {
+    buildProtectedResourceMetadata,
+    extractAuthorizationServers,
+} from './auth/ProtectedResourceMetadata.js';
+import { hasAuthProviders } from './auth/TokenValidator.js';
 
 // Load AI Engine and all providers to prevent tree shaking - REQUIRED for agent execution
 LoadAIEngine();
@@ -60,17 +85,26 @@ export interface ToolFilterOptions {
 
 /**
  * Session context stored for each authenticated MCP connection.
- * Contains the API key information and the authenticated user.
+ * Extended to support both API key and OAuth authentication.
  */
 interface MCPSessionContext {
-    /** The raw API key used for authentication */
-    apiKey: string;
-    /** The database ID of the API key record */
-    apiKeyId: string;
-    /** The SHA-256 hash of the API key (used for authorization calls) */
-    apiKeyHash: string;
-    /** The MemberJunction user associated with the API key */
+    /** The raw API key used for authentication (present when authMethod='apiKey') */
+    apiKey?: string;
+    /** The database ID of the API key record (present when authMethod='apiKey') */
+    apiKeyId?: string;
+    /** The SHA-256 hash of the API key (present when authMethod='apiKey') */
+    apiKeyHash?: string;
+    /** The MemberJunction user associated with the authenticated session */
     user: UserInfo;
+    /** Authentication method used for this session */
+    authMethod: 'apiKey' | 'oauth' | 'none';
+    /** OAuth-specific context (present when authMethod='oauth') */
+    oauth?: {
+        issuer: string;
+        subject: string;
+        email: string;
+        tokenExpiresAt: Date;
+    };
 }
 
 /*******************************************************************************
@@ -207,82 +241,104 @@ function extractRequestContext(request: Request | http.IncomingMessage): {
 }
 
 /**
- * Authenticates an incoming MCP request using API key authentication.
+ * Validates an API key and returns the validation result.
+ * This is used by the AuthGate middleware for API key authentication.
  *
- * Authentication flow:
- * 1. Extract API key from request headers/query params
- * 2. If no key but systemApiKey is configured, use system user (dev mode)
- * 3. Validate the API key against the database
- * 4. Return the session context with the authenticated user
- *
- * @param request - The incoming HTTP request from the MCP client
- * @returns Promise resolving to the session context with authenticated user
- * @throws Error if authentication fails (invalid/missing key, inactive user, etc.)
+ * @param apiKey - The raw API key to validate
+ * @param request - The incoming HTTP request (for logging context)
+ * @returns Validation result with user if valid
  */
-async function authenticateRequest(request: Request | http.IncomingMessage): Promise<MCPSessionContext> {
-    const apiKey = extractAPIKeyFromRequest(request);
-
-    console.log(`[Auth] API key found: ${apiKey ? 'yes' : 'no'}`);
-    if (apiKey) {
-        // Log masked key for debugging (show prefix and last 4 chars)
-        const masked = apiKey.length > 10
-            ? `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}`
-            : `${apiKey.substring(0, 3)}***`;
-        console.log(`[Auth] API key value (masked): ${masked}`);
-    }
-
-    if (!apiKey) {
-        throw new Error('API key required. Provide via x-api-key header.');
-    }
-
-    console.log(`[Auth] Validating API key...`);
+async function validateApiKey(
+    apiKey: string,
+    request: Request | http.IncomingMessage
+): Promise<{
+    valid: boolean;
+    user?: UserInfo;
+    apiKeyId?: string;
+    apiKeyHash?: string;
+    error?: string;
+}> {
     try {
-        // Use system user as context for the validation query itself
         const systemUser = UserCache.Instance.GetSystemUser();
         if (!systemUser) {
-            throw new Error('System user not found in UserCache for API key validation');
+            return { valid: false, error: 'System user not found for API key validation' };
         }
 
-        // Extract request context for logging
         const requestContext = extractRequestContext(request);
-
         const apiKeyEngine = GetAPIKeyEngine();
+
         const validation = await apiKeyEngine.ValidateAPIKey(
             {
                 RawKey: apiKey,
-                ApplicationName: 'MCPServer', // Check if key is bound to this application
+                ApplicationName: 'MCPServer',
                 Endpoint: requestContext.endpoint,
                 Method: requestContext.method,
-                Operation: undefined, // MCP tool name not known at auth time
-                StatusCode: 200, // Auth succeeded if we get here
-                ResponseTimeMs: undefined, // Not available at auth time
+                Operation: undefined,
+                StatusCode: 200,
+                ResponseTimeMs: undefined,
                 IPAddress: requestContext.ipAddress ?? undefined,
                 UserAgent: requestContext.userAgent ?? undefined,
             },
             systemUser
         );
 
-        console.log(`[Auth] Validation result: IsValid=${validation.IsValid}, user=${validation.User?.Email}`);
-
         if (!validation.IsValid) {
-            console.error(`[Auth] Validation failed: ${validation.Error}`);
-            throw new Error(validation.Error || 'Invalid API key');
+            return { valid: false, error: validation.Error || 'Invalid API key' };
         }
 
-        // Get the user from UserCache to ensure EntityPermissions are loaded
-        // The validation.User might not have permissions populated
+        // Get user from UserCache to ensure EntityPermissions are loaded
         const cachedUser = UserCache.Instance.Users.find(u => u.ID === validation.User?.ID);
         if (!cachedUser) {
-            console.error(`[Auth] User ${validation.User?.Email} not found in UserCache`);
-            throw new Error('User not found in cache. Ensure user is active and has logged in.');
+            return { valid: false, error: 'User not found in cache' };
         }
 
-        console.log(`Authenticated via API key for user: ${cachedUser.Email}`);
-        return { apiKey, apiKeyId: validation.APIKeyId!, apiKeyHash: validation.APIKeyHash!, user: cachedUser };
+        return {
+            valid: true,
+            user: cachedUser,
+            apiKeyId: validation.APIKeyId!,
+            apiKeyHash: validation.APIKeyHash!,
+        };
     } catch (error) {
-        console.error(`[Auth] Exception during validation:`, error);
-        throw error;
+        return {
+            valid: false,
+            error: error instanceof Error ? error.message : 'API key validation failed',
+        };
     }
+}
+
+/** AuthGate configuration - populated during server initialization */
+let authGateConfig: AuthGateConfig;
+
+/**
+ * Authenticates an incoming MCP request using the configured auth mode.
+ * Supports API key, OAuth Bearer token, both, or none (development).
+ *
+ * @param request - The incoming HTTP request from the MCP client
+ * @returns Promise resolving to the session context with authenticated user
+ * @throws Error if authentication fails
+ */
+async function authenticateRequest(request: Request | http.IncomingMessage): Promise<MCPSessionContext> {
+    const result = await oauthAuthenticateRequest(request, authGateConfig);
+
+    if (!result.authenticated) {
+        const error = result.error;
+        throw new Error(error?.message || 'Authentication failed');
+    }
+
+    return toSessionContext(result);
+}
+
+/**
+ * Authenticates a request and returns the full AuthResult for error handling.
+ * Use this when you need to send proper WWW-Authenticate headers on failure.
+ *
+ * @param request - The incoming HTTP request
+ * @returns The AuthResult with success/failure details
+ */
+async function authenticateRequestWithResult(
+    request: Request | http.IncomingMessage
+): Promise<AuthResult> {
+    return oauthAuthenticateRequest(request, authGateConfig);
 }
 
 /*******************************************************************************
@@ -659,6 +715,52 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         await CredentialEngine.Instance.Config(false, systemUser);
         console.log(`API keys loaded successfully. Count: ${CredentialEngine.Instance.APIKeys.length}`);
 
+        // Initialize AuthGate configuration for unified authentication
+        authGateConfig = {
+            validateApiKey: validateApiKey,
+            getSystemUser: () => UserCache.Instance.GetSystemUser(),
+        };
+
+        // Validate OAuth configuration if OAuth is enabled
+        const authMode = getAuthMode();
+        let effectiveAuthMode = authMode;
+        let configuredProviderNames: string[] = [];
+
+        if (authMode === 'oauth' || authMode === 'both') {
+            // Check if auth providers are configured
+            const providersConfigured = await hasAuthProviders();
+            const validationResult = validateOAuthConfig(providersConfigured);
+
+            if (validationResult.errors.length > 0) {
+                console.error(`[Auth] OAuth configuration errors: ${validationResult.errors.join('; ')}`);
+                if (authMode === 'oauth') {
+                    throw new Error(`OAuth configuration invalid: ${validationResult.errors.join('; ')}`);
+                }
+            }
+
+            if (validationResult.warnings.length > 0) {
+                for (const warning of validationResult.warnings) {
+                    console.warn(`[Auth] ${warning}`);
+                }
+            }
+
+            effectiveAuthMode = validationResult.effectiveMode;
+
+            // Get provider names for logging
+            if (providersConfigured) {
+                try {
+                    const { AuthProviderFactory } = await import('@memberjunction/server');
+                    const factory = AuthProviderFactory.getInstance();
+                    configuredProviderNames = factory.getAllProviders().map((p: { name: string }) => p.name);
+                } catch {
+                    // Ignore errors getting provider names - just for logging
+                }
+            }
+        }
+
+        // Log auth configuration
+        logAuthConfig(effectiveAuthMode, configuredProviderNames);
+
         // Create Express app for SSE transport
         const app = express();
 
@@ -689,13 +791,61 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             }
         });
 
+        // =====================================================================
+        // PROTECTED RESOURCE METADATA ENDPOINT (RFC 9728)
+        // =====================================================================
+        // This endpoint allows MCP clients to discover how to authenticate.
+        // It's required by the MCP Authorization specification when OAuth is enabled.
+        if (isOAuthEnabled()) {
+            app.get('/.well-known/oauth-protected-resource', async (_req: Request, res: Response) => {
+                try {
+                    // Dynamically import AuthProviderFactory to get configured providers
+                    const { AuthProviderFactory } = await import('@memberjunction/server');
+                    const factory = AuthProviderFactory.getInstance();
+                    const providers = factory.getAllProviders();
+
+                    // Extract issuer URLs from configured auth providers
+                    const authorizationServers = extractAuthorizationServers(
+                        providers.map((p: { issuer: string }) => ({ issuer: p.issuer }))
+                    );
+
+                    if (authorizationServers.length === 0) {
+                        console.warn('[OAuth] No authorization servers configured - metadata endpoint returning empty list');
+                    }
+
+                    const metadata: ProtectedResourceMetadata = buildProtectedResourceMetadata({
+                        authorizationServers,
+                        resourceName: 'MemberJunction MCP Server',
+                    });
+
+                    res.json(metadata);
+                    console.log(`[OAuth] Protected Resource Metadata served with ${authorizationServers.length} authorization server(s)`);
+                } catch (error) {
+                    console.error('[OAuth] Error building Protected Resource Metadata:', error);
+                    res.status(500).json({
+                        error: 'internal_error',
+                        message: 'Failed to generate protected resource metadata',
+                    });
+                }
+            });
+            console.log('[OAuth] Protected Resource Metadata endpoint registered at /.well-known/oauth-protected-resource');
+        }
+
         // SSE endpoint for establishing MCP connections
         app.get('/mcp/sse', async (req: Request, res: Response) => {
             console.log('[SSE] New connection request');
 
+            // Authenticate the request with full result for proper error handling
+            const authResult = await authenticateRequestWithResult(req);
+            if (!authResult.authenticated) {
+                console.log(`[SSE] Authentication failed: ${authResult.error?.message}`);
+                sendAuthErrorResponse(res, authResult);
+                return;
+            }
+
+            const sessionContext = toSessionContext(authResult);
+
             try {
-                // Authenticate the request
-                const sessionContext = await authenticateRequest(req);
                 console.log(`[SSE] Authenticated user: ${sessionContext.user.Email}`);
 
                 // Create a new MCP server for this connection
@@ -755,10 +905,11 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 console.log(`[SSE] MCP server connected for session: ${sessionId}`);
 
             } catch (error) {
-                console.error('[SSE] Authentication or connection error:', error);
+                console.error('[SSE] Connection error:', error);
                 if (!res.headersSent) {
-                    res.status(401).json({
-                        error: error instanceof Error ? error.message : 'Authentication failed'
+                    res.status(500).json({
+                        error: 'internal_error',
+                        message: error instanceof Error ? error.message : 'Connection failed'
                     });
                 }
             }
@@ -870,8 +1021,16 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
             // For new sessions (no session ID or unknown session ID with initialization request)
             // We need to authenticate and create a new transport
+            const authResult = await authenticateRequestWithResult(req);
+            if (!authResult.authenticated) {
+                console.log(`[StreamableHTTP] Authentication failed: ${authResult.error?.message}`);
+                sendAuthErrorResponse(res, authResult);
+                return;
+            }
+
+            const sessionContext = toSessionContext(authResult);
+
             try {
-                const sessionContext = await authenticateRequest(req);
                 console.log(`[StreamableHTTP] Authenticated user: ${sessionContext.user.Email}`);
 
                 // Create a new MCP server for this session
@@ -912,10 +1071,11 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 }
 
             } catch (error) {
-                console.error('[StreamableHTTP] Authentication or connection error:', error);
+                console.error('[StreamableHTTP] Connection error:', error);
                 if (!res.headersSent) {
-                    res.status(401).json({
-                        error: error instanceof Error ? error.message : 'Authentication failed'
+                    res.status(500).json({
+                        error: 'internal_error',
+                        message: error instanceof Error ? error.message : 'Connection failed'
                     });
                 }
             }
@@ -927,6 +1087,11 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             console.log(`SSE endpoint: http://localhost:${mcpServerPort}/mcp/sse`);
             console.log(`Messages endpoint: http://localhost:${mcpServerPort}/mcp/messages`);
             console.log(`Streamable HTTP endpoint: http://localhost:${mcpServerPort}/mcp`);
+
+            // Log OAuth-specific endpoints if enabled
+            if (isOAuthEnabled()) {
+                console.log(`Protected Resource Metadata: http://localhost:${mcpServerPort}/.well-known/oauth-protected-resource`);
+            }
         });
 
     } catch (error) {

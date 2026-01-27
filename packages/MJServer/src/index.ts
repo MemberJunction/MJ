@@ -81,7 +81,15 @@ export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export * from './directives/index.js';
 export * from './entitySubclasses/entityPermissions.server.js';
 export * from './types.js';
-export { TokenExpiredError, getSystemUser } from './auth/index.js';
+export {
+    TokenExpiredError,
+    getSystemUser,
+    getSigningKeys,
+    extractUserInfoFromPayload,
+    verifyUserRecord,
+    AuthProviderFactory,
+    IAuthProvider,
+} from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
 
 export * from './generic/PushStatusResolver.js';
