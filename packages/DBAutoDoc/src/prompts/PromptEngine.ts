@@ -63,6 +63,25 @@ export class PromptEngine {
   }
 
   /**
+   * Strip markdown code fences from JSON responses
+   * Some LLMs wrap JSON responses in ```json ... ``` markdown blocks
+   */
+  private stripMarkdownCodeFences(content: string): string {
+    let cleaned = content.trim();
+
+    // Check if content starts with markdown code fence
+    if (cleaned.startsWith('```')) {
+      // Remove opening fence (```json or just ```)
+      cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '');
+      // Remove closing fence
+      cleaned = cleaned.replace(/\n?```\s*$/, '');
+      cleaned = cleaned.trim();
+    }
+
+    return cleaned;
+  }
+
+  /**
    * Add custom Nunjucks filters
    * Pattern from Templates package
    */
@@ -196,7 +215,9 @@ export class PromptEngine {
       let parsedResult: T;
       if (options?.responseFormat === 'JSON') {
         try {
-          parsedResult = JSON.parse(content) as T;
+          // Strip markdown code fences before parsing (some LLMs wrap JSON in ```json ... ```)
+          const cleanedContent = this.stripMarkdownCodeFences(content);
+          parsedResult = JSON.parse(cleanedContent) as T;
         } catch (parseError) {
           return {
             success: false,
@@ -286,7 +307,9 @@ export class PromptEngine {
         const usage = chatResult.data.usage;
 
         try {
-          const parsed = JSON.parse(content) as T;
+          // Strip markdown code fences before parsing (some LLMs wrap JSON in ```json ... ```)
+          const cleanedContent = this.stripMarkdownCodeFences(content);
+          const parsed = JSON.parse(cleanedContent) as T;
           return {
             success: true,
             result: parsed,
