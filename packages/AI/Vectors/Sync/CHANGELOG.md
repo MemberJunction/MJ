@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [ca551dd]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/aiengine@3.3.0
+  - @memberjunction/ai-vectors@3.3.0
+  - @memberjunction/templates-base-types@3.3.0
+  - @memberjunction/templates@3.3.0
+  - @memberjunction/ai-vectors-pinecone@3.3.0
+  - @memberjunction/ai@3.3.0
+  - @memberjunction/ai-vectordb@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

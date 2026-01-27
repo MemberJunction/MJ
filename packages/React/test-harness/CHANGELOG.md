@@ -1,5 +1,19 @@
 # @memberjunction/react-test-harness
 
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [ca551dd]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/ai-core-plus@3.3.0
+  - @memberjunction/aiengine@3.3.0
+  - @memberjunction/react-runtime@3.3.0
+  - @memberjunction/ai-vectors-memory@3.3.0
+  - @memberjunction/interactive-component-types@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

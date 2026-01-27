@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-bedrock",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "MemberJunction Wrapper for Amazon Bedrock AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,8 +20,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.496.0",
-    "@memberjunction/ai": "3.2.0",
-    "@memberjunction/global": "3.2.0"
+    "@memberjunction/ai": "3.3.0",
+    "@memberjunction/global": "3.3.0"
   },
   "repository": {
     "type": "git",

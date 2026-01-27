@@ -1,5 +1,15 @@
 # @memberjunction/server-bootstrap
 
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [ad32a98]
+- Updated dependencies [6ccd9d0]
+- Updated dependencies [3f17579]
+  - @memberjunction/server@3.3.0
+  - @memberjunction/core@3.3.0
+
 ## 3.2.0
 
 ### Minor Changes

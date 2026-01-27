@@ -1,5 +1,17 @@
 # @memberjunction/ng-workspace-initializer
 
+## 3.3.0
+
+### Patch Changes
+
+- @memberjunction/ng-explorer-core@3.3.0
+- @memberjunction/ng-shared@3.3.0
+- @memberjunction/ng-shared-generic@3.3.0
+- @memberjunction/graphql-dataprovider@3.3.0
+- @memberjunction/ng-auth-services@3.3.0
+- @memberjunction/core@3.3.0
+- @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes
