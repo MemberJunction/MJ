@@ -389,7 +389,7 @@ export const ActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Other'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -399,8 +399,8 @@ export const ActionParamSchema = z.object({
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Scalar
     *   * Other
+    *   * Scalar
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
@@ -11816,6 +11816,158 @@ export const AIVendorSchema = z.object({
 export type AIVendorEntityType = z.infer<typeof AIVendorSchema>;
 
 /**
+ * zod schema definition for the entity MJ: API Application Scopes
+ */
+export const APIApplicationScopeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ApplicationID: z.string().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
+        * * Description: Reference to the application this ceiling rule applies to.`),
+    ScopeID: z.string().describe(`
+        * * Field Name: ScopeID
+        * * Display Name: Scope
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
+        * * Description: Reference to the scope this rule applies to.`),
+    ResourcePattern: z.string().nullable().describe(`
+        * * Field Name: ResourcePattern
+        * * Display Name: Resource Pattern
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Glob pattern for matching resources (e.g., Users,Accounts or Skip* or *). NULL means match all resources.`),
+    PatternType: z.union([z.literal('Exclude'), z.literal('Include')]).describe(`
+        * * Field Name: PatternType
+        * * Display Name: Pattern Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Include
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exclude
+    *   * Include
+        * * Description: How to interpret the pattern: Include (grant if matches) or Exclude (grant if does NOT match).`),
+    IsDeny: z.boolean().describe(`
+        * * Field Name: IsDeny
+        * * Display Name: Deny
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If true, this rule explicitly DENIES access. Deny rules trump allow rules at the same priority level.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Rule evaluation order. Higher priority rules are evaluated first. Within same priority, deny rules are evaluated before allow rules.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Application: z.string().describe(`
+        * * Field Name: Application
+        * * Display Name: Application Name
+        * * SQL Data Type: nvarchar(100)`),
+    Scope: z.string().describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type APIApplicationScopeEntityType = z.infer<typeof APIApplicationScopeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: API Applications
+ */
+export const APIApplicationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name identifying the application (e.g., MJAPI, MCPServer, Portal, CLI).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Human-readable description of the application and its purpose.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this application is currently active. Inactive applications reject all API key authentication.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type APIApplicationEntityType = z.infer<typeof APIApplicationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: API Key Applications
+ */
+export const APIKeyApplicationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    APIKeyID: z.string().describe(`
+        * * Field Name: APIKeyID
+        * * Display Name: API Key
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)
+        * * Description: Reference to the API key being bound to an application.`),
+    ApplicationID: z.string().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
+        * * Description: Reference to the application this key is authorized to use.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    APIKey: z.string().describe(`
+        * * Field Name: APIKey
+        * * Display Name: API Key Value
+        * * SQL Data Type: nvarchar(255)`),
+    Application: z.string().describe(`
+        * * Field Name: Application
+        * * Display Name: Application Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type APIKeyApplicationEntityType = z.infer<typeof APIKeyApplicationSchema>;
+
+/**
  * zod schema definition for the entity MJ: API Key Scopes
  */
 export const APIKeyScopeSchema = z.object({
@@ -11831,7 +11983,7 @@ export const APIKeyScopeSchema = z.object({
         * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)`),
     ScopeID: z.string().describe(`
         * * Field Name: ScopeID
-        * * Display Name: Scope
+        * * Display Name: Scope ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -11844,13 +11996,40 @@ export const APIKeyScopeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ResourcePattern: z.string().nullable().describe(`
+        * * Field Name: ResourcePattern
+        * * Display Name: Resource Pattern
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Glob pattern for matching resources (e.g., Users,Accounts or Skip* or *). NULL means match all resources under this scope.`),
+    PatternType: z.union([z.literal('Exclude'), z.literal('Include')]).describe(`
+        * * Field Name: PatternType
+        * * Display Name: Pattern Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Include
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exclude
+    *   * Include
+        * * Description: How to interpret the pattern: Include (grant if matches) or Exclude (grant if does NOT match).`),
+    IsDeny: z.boolean().describe(`
+        * * Field Name: IsDeny
+        * * Display Name: Deny Rule
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If true, this rule explicitly DENIES access. Deny rules trump allow rules at the same priority level.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Rule evaluation order. Higher priority rules are evaluated first. Within same priority, deny rules are evaluated before allow rules.`),
     APIKey: z.string().describe(`
         * * Field Name: APIKey
-        * * Display Name: API Key
+        * * Display Name: API Key Name
         * * SQL Data Type: nvarchar(255)`),
     Scope: z.string().describe(`
         * * Field Name: Scope
-        * * Display Name: Scope Name
+        * * Display Name: Scope
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -11892,7 +12071,7 @@ export const APIKeyUsageLogSchema = z.object({
         * * Description: HTTP response status code returned to the client (e.g., 200 for success, 401 for unauthorized, 500 for server error).`),
     ResponseTimeMs: z.number().nullable().describe(`
         * * Field Name: ResponseTimeMs
-        * * Display Name: Response Time (ms)
+        * * Display Name: Response Time
         * * SQL Data Type: int
         * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.`),
     IPAddress: z.string().nullable().describe(`
@@ -11915,10 +12094,46 @@ export const APIKeyUsageLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ApplicationID: z.string().nullable().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
+        * * Description: The application through which this request was made (MJAPI, MCPServer, etc.).`),
+    RequestedResource: z.string().nullable().describe(`
+        * * Field Name: RequestedResource
+        * * Display Name: Requested Resource
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The specific resource that was requested (e.g., entity name, agent name, query name).`),
+    ScopesEvaluated: z.string().nullable().describe(`
+        * * Field Name: ScopesEvaluated
+        * * Display Name: Scopes Evaluated
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array containing detailed evaluation of each scope rule checked during authorization.`),
+    AuthorizationResult: z.union([z.literal('Allowed'), z.literal('Denied'), z.literal('NoScopesRequired')]).describe(`
+        * * Field Name: AuthorizationResult
+        * * Display Name: Authorization Result
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Allowed
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allowed
+    *   * Denied
+    *   * NoScopesRequired
+        * * Description: Final authorization result: Allowed, Denied, or NoScopesRequired (for operations that do not require scope checks).`),
+    DeniedReason: z.string().nullable().describe(`
+        * * Field Name: DeniedReason
+        * * Display Name: Denied Reason
+        * * SQL Data Type: nvarchar(500)
+        * * Description: When authorization is denied, explains why (e.g., app ceiling blocked, no matching key scope, explicit deny rule).`),
     APIKey: z.string().describe(`
         * * Field Name: APIKey
-        * * Display Name: API Key
+        * * Display Name: API Key Value
         * * SQL Data Type: nvarchar(255)`),
+    Application: z.string().nullable().describe(`
+        * * Field Name: Application
+        * * Display Name: Application
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type APIKeyUsageLogEntityType = z.infer<typeof APIKeyUsageLogSchema>;
@@ -12010,12 +12225,12 @@ export const APIScopeSchema = z.object({
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Scope Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)
         * * Description: Unique scope identifier following the pattern category:permission (e.g., entities:read, agents:execute, admin:*). Supports wildcard (*) for broad permissions.`),
     Category: z.string().describe(`
         * * Field Name: Category
-        * * Display Name: Scope Category
+        * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
         * * Description: Grouping category for the scope (e.g., Entities, Agents, Admin). Used for organizing and filtering scopes in the UI.`),
     Description: z.string().nullable().describe(`
@@ -12033,6 +12248,36 @@ export const APIScopeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
+        * * Description: Reference to parent scope for hierarchical organization. NULL indicates a root-level scope.`),
+    FullPath: z.string().describe(`
+        * * Field Name: FullPath
+        * * Display Name: Full Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Full hierarchical path of the scope (e.g., entity:runview, agent:execute). Used for matching during authorization.`),
+    ResourceType: z.string().nullable().describe(`
+        * * Field Name: ResourceType
+        * * Display Name: Resource Type
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Type of resource this scope applies to (Entity, Agent, Query, Mutation, or NULL for abstract grouping scopes).`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this scope is currently active. Inactive scopes are ignored during authorization.`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type APIScopeEntityType = z.infer<typeof APIScopeSchema>;
@@ -21233,17 +21478,17 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Scalar
     *   * Other
+    *   * Scalar
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -50978,6 +51223,392 @@ export class AIVendorEntity extends BaseEntity<AIVendorEntityType> {
 
 
 /**
+ * MJ: API Application Scopes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIApplicationScope
+ * * Base View: vwAPIApplicationScopes
+ * * @description Defines the scope ceiling for each application with pattern-based rules. Controls which scopes and resource patterns an application can use, regardless of what API keys grant.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Application Scopes')
+export class APIApplicationScopeEntity extends BaseEntity<APIApplicationScopeEntityType> {
+    /**
+    * Loads the MJ: API Application Scopes record from the database
+    * @param ID: string - primary key value to load the MJ: API Application Scopes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIApplicationScopeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
+    * * Description: Reference to the application this ceiling rule applies to.
+    */
+    get ApplicationID(): string {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: ScopeID
+    * * Display Name: Scope
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
+    * * Description: Reference to the scope this rule applies to.
+    */
+    get ScopeID(): string {
+        return this.Get('ScopeID');
+    }
+    set ScopeID(value: string) {
+        this.Set('ScopeID', value);
+    }
+
+    /**
+    * * Field Name: ResourcePattern
+    * * Display Name: Resource Pattern
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Glob pattern for matching resources (e.g., Users,Accounts or Skip* or *). NULL means match all resources.
+    */
+    get ResourcePattern(): string | null {
+        return this.Get('ResourcePattern');
+    }
+    set ResourcePattern(value: string | null) {
+        this.Set('ResourcePattern', value);
+    }
+
+    /**
+    * * Field Name: PatternType
+    * * Display Name: Pattern Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Include
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exclude
+    *   * Include
+    * * Description: How to interpret the pattern: Include (grant if matches) or Exclude (grant if does NOT match).
+    */
+    get PatternType(): 'Exclude' | 'Include' {
+        return this.Get('PatternType');
+    }
+    set PatternType(value: 'Exclude' | 'Include') {
+        this.Set('PatternType', value);
+    }
+
+    /**
+    * * Field Name: IsDeny
+    * * Display Name: Deny
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If true, this rule explicitly DENIES access. Deny rules trump allow rules at the same priority level.
+    */
+    get IsDeny(): boolean {
+        return this.Get('IsDeny');
+    }
+    set IsDeny(value: boolean) {
+        this.Set('IsDeny', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Rule evaluation order. Higher priority rules are evaluated first. Within same priority, deny rules are evaluated before allow rules.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string {
+        return this.Get('Application');
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Scope(): string {
+        return this.Get('Scope');
+    }
+}
+
+
+/**
+ * MJ: API Applications - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIApplication
+ * * Base View: vwAPIApplications
+ * * @description Registry of applications that can consume MemberJunction APIs. Each application defines a scope ceiling that limits what API keys can access when used with that application.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Applications')
+export class APIApplicationEntity extends BaseEntity<APIApplicationEntityType> {
+    /**
+    * Loads the MJ: API Applications record from the database
+    * @param ID: string - primary key value to load the MJ: API Applications record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIApplicationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name identifying the application (e.g., MJAPI, MCPServer, Portal, CLI).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Human-readable description of the application and its purpose.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this application is currently active. Inactive applications reject all API key authentication.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: API Key Applications - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: APIKeyApplication
+ * * Base View: vwAPIKeyApplications
+ * * @description Optional binding of API keys to specific applications. If no records exist for a key, it works with all applications. If records exist, the key only works with those specific applications.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: API Key Applications')
+export class APIKeyApplicationEntity extends BaseEntity<APIKeyApplicationEntityType> {
+    /**
+    * Loads the MJ: API Key Applications record from the database
+    * @param ID: string - primary key value to load the MJ: API Key Applications record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof APIKeyApplicationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: APIKeyID
+    * * Display Name: API Key
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)
+    * * Description: Reference to the API key being bound to an application.
+    */
+    get APIKeyID(): string {
+        return this.Get('APIKeyID');
+    }
+    set APIKeyID(value: string) {
+        this.Set('APIKeyID', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
+    * * Description: Reference to the application this key is authorized to use.
+    */
+    get ApplicationID(): string {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: APIKey
+    * * Display Name: API Key Value
+    * * SQL Data Type: nvarchar(255)
+    */
+    get APIKey(): string {
+        return this.Get('APIKey');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string {
+        return this.Get('Application');
+    }
+}
+
+
+/**
  * MJ: API Key Scopes - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: APIKeyScope
@@ -51035,7 +51666,7 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
 
     /**
     * * Field Name: ScopeID
-    * * Display Name: Scope
+    * * Display Name: Scope ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
     */
@@ -51067,8 +51698,67 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
     }
 
     /**
+    * * Field Name: ResourcePattern
+    * * Display Name: Resource Pattern
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Glob pattern for matching resources (e.g., Users,Accounts or Skip* or *). NULL means match all resources under this scope.
+    */
+    get ResourcePattern(): string | null {
+        return this.Get('ResourcePattern');
+    }
+    set ResourcePattern(value: string | null) {
+        this.Set('ResourcePattern', value);
+    }
+
+    /**
+    * * Field Name: PatternType
+    * * Display Name: Pattern Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Include
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exclude
+    *   * Include
+    * * Description: How to interpret the pattern: Include (grant if matches) or Exclude (grant if does NOT match).
+    */
+    get PatternType(): 'Exclude' | 'Include' {
+        return this.Get('PatternType');
+    }
+    set PatternType(value: 'Exclude' | 'Include') {
+        this.Set('PatternType', value);
+    }
+
+    /**
+    * * Field Name: IsDeny
+    * * Display Name: Deny Rule
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If true, this rule explicitly DENIES access. Deny rules trump allow rules at the same priority level.
+    */
+    get IsDeny(): boolean {
+        return this.Get('IsDeny');
+    }
+    set IsDeny(value: boolean) {
+        this.Set('IsDeny', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Rule evaluation order. Higher priority rules are evaluated first. Within same priority, deny rules are evaluated before allow rules.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
     * * Field Name: APIKey
-    * * Display Name: API Key
+    * * Display Name: API Key Name
     * * SQL Data Type: nvarchar(255)
     */
     get APIKey(): string {
@@ -51077,7 +51767,7 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
 
     /**
     * * Field Name: Scope
-    * * Display Name: Scope Name
+    * * Display Name: Scope
     * * SQL Data Type: nvarchar(100)
     */
     get Scope(): string {
@@ -51196,7 +51886,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: ResponseTimeMs
-    * * Display Name: Response Time (ms)
+    * * Display Name: Response Time
     * * SQL Data Type: int
     * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.
     */
@@ -51254,12 +51944,93 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
     }
 
     /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
+    * * Description: The application through which this request was made (MJAPI, MCPServer, etc.).
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: RequestedResource
+    * * Display Name: Requested Resource
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The specific resource that was requested (e.g., entity name, agent name, query name).
+    */
+    get RequestedResource(): string | null {
+        return this.Get('RequestedResource');
+    }
+    set RequestedResource(value: string | null) {
+        this.Set('RequestedResource', value);
+    }
+
+    /**
+    * * Field Name: ScopesEvaluated
+    * * Display Name: Scopes Evaluated
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array containing detailed evaluation of each scope rule checked during authorization.
+    */
+    get ScopesEvaluated(): string | null {
+        return this.Get('ScopesEvaluated');
+    }
+    set ScopesEvaluated(value: string | null) {
+        this.Set('ScopesEvaluated', value);
+    }
+
+    /**
+    * * Field Name: AuthorizationResult
+    * * Display Name: Authorization Result
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Allowed
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allowed
+    *   * Denied
+    *   * NoScopesRequired
+    * * Description: Final authorization result: Allowed, Denied, or NoScopesRequired (for operations that do not require scope checks).
+    */
+    get AuthorizationResult(): 'Allowed' | 'Denied' | 'NoScopesRequired' {
+        return this.Get('AuthorizationResult');
+    }
+    set AuthorizationResult(value: 'Allowed' | 'Denied' | 'NoScopesRequired') {
+        this.Set('AuthorizationResult', value);
+    }
+
+    /**
+    * * Field Name: DeniedReason
+    * * Display Name: Denied Reason
+    * * SQL Data Type: nvarchar(500)
+    * * Description: When authorization is denied, explains why (e.g., app ceiling blocked, no matching key scope, explicit deny rule).
+    */
+    get DeniedReason(): string | null {
+        return this.Get('DeniedReason');
+    }
+    set DeniedReason(value: string | null) {
+        this.Set('DeniedReason', value);
+    }
+
+    /**
     * * Field Name: APIKey
-    * * Display Name: API Key
+    * * Display Name: API Key Value
     * * SQL Data Type: nvarchar(255)
     */
     get APIKey(): string {
         return this.Get('APIKey');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string | null {
+        return this.Get('Application');
     }
 }
 
@@ -51501,7 +52272,7 @@ export class APIScopeEntity extends BaseEntity<APIScopeEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: Scope Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     * * Description: Unique scope identifier following the pattern category:permission (e.g., entities:read, agents:execute, admin:*). Supports wildcard (*) for broad permissions.
     */
@@ -51514,7 +52285,7 @@ export class APIScopeEntity extends BaseEntity<APIScopeEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Scope Category
+    * * Display Name: Category
     * * SQL Data Type: nvarchar(100)
     * * Description: Grouping category for the scope (e.g., Entities, Agents, Admin). Used for organizing and filtering scopes in the UI.
     */
@@ -51556,6 +52327,78 @@ export class APIScopeEntity extends BaseEntity<APIScopeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
+    * * Description: Reference to parent scope for hierarchical organization. NULL indicates a root-level scope.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: FullPath
+    * * Display Name: Full Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Full hierarchical path of the scope (e.g., entity:runview, agent:execute). Used for matching during authorization.
+    */
+    get FullPath(): string {
+        return this.Get('FullPath');
+    }
+    set FullPath(value: string) {
+        this.Set('FullPath', value);
+    }
+
+    /**
+    * * Field Name: ResourceType
+    * * Display Name: Resource Type
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Type of resource this scope applies to (Entity, Agent, Query, Mutation, or NULL for abstract grouping scopes).
+    */
+    get ResourceType(): string | null {
+        return this.Get('ResourceType');
+    }
+    set ResourceType(value: string | null) {
+        this.Set('ResourceType', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this scope is currently active. Inactive scopes are ignored during authorization.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 

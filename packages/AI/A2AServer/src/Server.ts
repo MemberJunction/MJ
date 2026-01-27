@@ -1,6 +1,6 @@
 import { EntityInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
-import { EncryptionEngine } from "@memberjunction/encryption";
+import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import express, { Request, Response, NextFunction } from 'express';
 import * as sql from 'mssql';
 import { z } from "zod";
@@ -121,6 +121,60 @@ function extractRequestContext(req: Request): {
 }
 
 /**
+ * Authorization context for task processing
+ */
+interface AuthorizationContext {
+    apiKeyHash: string;
+    user: UserInfo;
+}
+
+/**
+ * Authorize an operation against the API key's scope permissions.
+ * Uses the two-level scope evaluation (application ceiling + key scopes).
+ *
+ * @param authContext - The authorization context with API key hash and user
+ * @param scopePath - The scope path (e.g., 'action:execute', 'agent:execute')
+ * @param resource - The specific resource being accessed
+ * @returns Object with allowed flag and error message if denied
+ */
+async function authorizeOperation(
+    authContext: AuthorizationContext,
+    scopePath: string,
+    resource: string
+): Promise<{ allowed: boolean; error?: string }> {
+    const systemUser = UserCache.Instance.Users[0];
+    if (!systemUser) {
+        return { allowed: false, error: 'System user not available for authorization' };
+    }
+
+    try {
+        const apiKeyEngine = GetAPIKeyEngine();
+        const result = await apiKeyEngine.Authorize(
+            authContext.apiKeyHash,
+            'A2AServer',
+            scopePath,
+            resource,
+            systemUser,
+            {
+                endpoint: '/a2a/tasks',
+                method: 'POST',
+                operation: scopePath,
+            }
+        );
+
+        if (!result.Allowed) {
+            LogStatus(`A2A Server: Authorization denied - ${result.Reason}`);
+            return { allowed: false, error: result.Reason };
+        }
+
+        return { allowed: true };
+    } catch (error) {
+        LogError('A2A Server: Authorization error', undefined, error);
+        return { allowed: false, error: error instanceof Error ? error.message : 'Authorization failed' };
+    }
+}
+
+/**
  * Authentication middleware for A2A endpoints.
  * Validates MJ API keys (X-API-Key header with mj_sk_* format).
  */
@@ -153,21 +207,23 @@ async function authenticateRequest(req: Request, res: Response, next: NextFuncti
 
         const requestContext = extractRequestContext(req);
 
-        const validationResult = await EncryptionEngine.Instance.ValidateAPIKey(
+        const apiKeyEngine = GetAPIKeyEngine();
+        const validationResult = await apiKeyEngine.ValidateAPIKey(
             {
-                rawKey: apiKey,
-                endpoint: requestContext.endpoint,
-                method: requestContext.method,
-                operation: null, // Could extract from request body if available
-                statusCode: 200, // Auth succeeded if we get past validation
-                responseTimeMs: null, // Not available at auth time
-                ipAddress: requestContext.ipAddress,
-                userAgent: requestContext.userAgent,
+                RawKey: apiKey,
+                ApplicationName: 'A2AServer', // Check if key is bound to this application
+                Endpoint: requestContext.endpoint,
+                Method: requestContext.method,
+                Operation: undefined, // Could extract from request body if available
+                StatusCode: 200, // Auth succeeded if we get past validation
+                ResponseTimeMs: undefined, // Not available at auth time
+                IPAddress: requestContext.ipAddress ?? undefined,
+                UserAgent: requestContext.userAgent ?? undefined,
             },
             systemUser
         );
 
-        if (!validationResult.isValid) {
+        if (!validationResult.IsValid) {
             LogStatus(`A2A Server: Invalid API key attempt from ${requestContext.ipAddress}`);
             res.status(401).json({
                 error: {
@@ -179,8 +235,9 @@ async function authenticateRequest(req: Request, res: Response, next: NextFuncti
         }
 
         // Store the authenticated user on the request for use in handlers
-        (req as RequestWithUser).authenticatedUser = validationResult.user!;
-        (req as RequestWithUser).apiKeyId = validationResult.apiKeyId;
+        (req as RequestWithUser).authenticatedUser = validationResult.User!;
+        (req as RequestWithUser).apiKeyId = validationResult.APIKeyId;
+        (req as RequestWithUser).apiKeyHash = validationResult.APIKeyHash;
 
         next();
     } catch (error) {
@@ -200,6 +257,7 @@ async function authenticateRequest(req: Request, res: Response, next: NextFuncti
 interface RequestWithUser extends Request {
     authenticatedUser?: UserInfo;
     apiKeyId?: string;
+    apiKeyHash?: string;
 }
 
 // Initialize A2A server
@@ -244,7 +302,11 @@ function setupRoutes() {
 
     // Send a message to a task
     app.post('/a2a/tasks/send', (req: Request, res: Response) => {
-        const result = handleTaskSend(req.body, (req as RequestWithUser).authenticatedUser);
+        const reqWithUser = req as RequestWithUser;
+        const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
+            ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
+            : undefined;
+        const result = handleTaskSend(req.body, reqWithUser.authenticatedUser, authContext);
         res.json(result);
     });
 
@@ -265,7 +327,11 @@ function setupRoutes() {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        handleTaskSendSubscribe(req.body, res, (req as RequestWithUser).authenticatedUser);
+        const reqWithUser = req as RequestWithUser;
+        const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
+            ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
+            : undefined;
+        handleTaskSendSubscribe(req.body, res, reqWithUser.authenticatedUser, authContext);
     });
 
     // Get a task's status
@@ -477,7 +543,7 @@ function getMatchingEntitiesForConfig(allEntities: EntityInfo[], config: any) {
     });
 }
 
-function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?: UserInfo) {
+function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     const { taskId, message } = requestBody as { taskId?: string; message?: { parts?: Part[] } };
 
     if (!taskId) {
@@ -506,7 +572,7 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
         tasks.set(newTaskId, task);
 
         // Process the task asynchronously with the authenticated user
-        processTask(task, authenticatedUser);
+        processTask(task, authenticatedUser, authContext);
 
         return {
             taskId: newTaskId,
@@ -547,7 +613,7 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
         }
 
         // Process the updated task with the authenticated user
-        processTask(task, authenticatedUser);
+        processTask(task, authenticatedUser, authContext);
 
         return {
             taskId: task.id,
@@ -556,8 +622,8 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
     }
 }
 
-function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo) {
-    const result = handleTaskSend(requestBody, authenticatedUser);
+function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
+    const result = handleTaskSend(requestBody, authenticatedUser, authContext);
     const task = tasks.get(result.taskId);
     
     if (!task) {
@@ -611,7 +677,7 @@ function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Resp
 }
 
 // Process a task using MemberJunction APIs
-async function processTask(task: Task, authenticatedUser?: UserInfo) {
+async function processTask(task: Task, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     try {
         task.status = 'in_progress';
         task.updated = new Date();
@@ -644,13 +710,13 @@ async function processTask(task: Task, authenticatedUser?: UserInfo) {
         // Parse the command and parameters
         let operation = 'unknown';
         let entityName = '';
-        let parameters: any = {};
+        let parameters: Record<string, unknown> = {};
 
         // Try to extract command and parameters from structured data first
         if (dataContent && typeof dataContent === 'object') {
-            operation = (dataContent as any).operation || 'unknown';
-            entityName = (dataContent as any).entity || '';
-            parameters = (dataContent as any).parameters || {};
+            operation = (dataContent as Record<string, unknown>).operation as string || 'unknown';
+            entityName = (dataContent as Record<string, unknown>).entity as string || '';
+            parameters = (dataContent as Record<string, unknown>).parameters as Record<string, unknown> || {};
         }
         // Otherwise parse from text
         else if (textContent) {
@@ -666,11 +732,48 @@ async function processTask(task: Task, authenticatedUser?: UserInfo) {
         try {
             // Check if this is an agent operation
             const agentOperations = ['discoverAgents', 'executeAgent', 'getAgentRunStatus', 'cancelAgentRun'];
-            
+
             if (agentOperations.includes(operation)) {
+                // Authorize agent operation if authContext is provided
+                if (authContext && operation === 'executeAgent') {
+                    const agentName = (parameters.agentName as string) || (parameters.agentId as string) || '*';
+                    const authResult = await authorizeOperation(authContext, 'agent:execute', agentName);
+                    if (!authResult.allowed) {
+                        operationResult = {
+                            success: false,
+                            errorMessage: `Authorization denied: ${authResult.error}`
+                        };
+                        throw new Error(operationResult.errorMessage);
+                    }
+                }
+
                 // Agent operation
                 operationResult = await agentOps.processOperation(operation, parameters);
             } else {
+                // Authorize entity operation if authContext is provided
+                if (authContext && entityName) {
+                    // Map entity operations to scopes
+                    const operationScopeMap: Record<string, string> = {
+                        'get': 'entity:read',
+                        'create': 'entity:create',
+                        'update': 'entity:update',
+                        'delete': 'entity:delete',
+                        'query': 'view:run',
+                        'runView': 'view:run'
+                    };
+                    const scopePath = operationScopeMap[operation];
+                    if (scopePath) {
+                        const authResult = await authorizeOperation(authContext, scopePath, entityName);
+                        if (!authResult.allowed) {
+                            operationResult = {
+                                success: false,
+                                errorMessage: `Authorization denied: ${authResult.error}`
+                            };
+                            throw new Error(operationResult.errorMessage);
+                        }
+                    }
+                }
+
                 // Regular entity operation
                 if (!entityName) {
                     throw new Error("Entity name not specified");

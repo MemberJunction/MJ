@@ -1,13 +1,135 @@
-.dialog-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-weight: 600;
-    font-size: 16px;
+/* ========================================
+   Slide-out Panel Styles
+   ======================================== */
+
+/* Backdrop */
+.slideout-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    animation: fadeIn 0.2s ease;
 }
 
-.dialog-title i {
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Slide-out Panel */
+.slideout-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 520px;
+    height: 100%;
+    max-height: 100%;
+    background: var(--card-background, #ffffff);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.15);
+    z-index: 101;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(100%);
+    overflow: hidden;
+}
+
+.slideout-panel.open {
+    transform: translateX(0);
+}
+
+/* Panel Header */
+.slideout-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #fafafa 0%, #f3f4f6 100%);
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.slideout-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 600;
+    font-size: 17px;
+    color: #1f2937;
+    flex: 1;
+    min-width: 0;
+}
+
+.slideout-title i {
     color: #f59e0b;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.slideout-close {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.slideout-close:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: #374151;
+}
+
+/* Panel Content */
+.slideout-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.step-panel {
+    padding: 24px;
+}
+
+/* Panel Footer */
+.slideout-footer {
+    display: flex;
+    gap: 12px;
+    padding: 16px 24px;
+    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    border-top: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+:host ::ng-deep .slideout-footer .k-button {
+    min-width: 100px;
+    padding: 10px 20px;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+:host ::ng-deep .slideout-footer .k-button-solid-primary {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    border: none;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+:host ::ng-deep .slideout-footer .k-button-solid-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+:host ::ng-deep .slideout-footer .k-button i {
+    margin: 0 5px;
 }
 
 /* Step Indicator */
@@ -508,38 +630,19 @@
     margin-bottom: 4px;
 }
 
-/* Dialog Actions */
-:host ::ng-deep kendo-dialog-actions {
-    padding: 16px 24px;
-    background: #f9fafb;
-    border-top: 1px solid #e5e7eb;
+/* Form input styling */
+:host ::ng-deep .form-input .k-input,
+:host ::ng-deep .form-textarea .k-input-inner,
+:host ::ng-deep .k-datepicker .k-input {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    border-color: #e5e7eb;
+    transition: all 0.2s ease;
 }
 
-:host ::ng-deep kendo-dialog-actions button {
-    min-width: 120px;
-}
-
-:host ::ng-deep kendo-dialog-actions button i {
-    margin: 0 4px;
-}
-
-/* Close Button in Titlebar */
-:host ::ng-deep kendo-dialog-titlebar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.dialog-close-btn {
-    margin-left: auto;
-    color: #6b7280;
-    transition: color 0.2s ease;
-}
-
-.dialog-close-btn:hover {
-    color: #1f2937;
-}
-
-.dialog-close-btn i {
-    font-size: 18px;
+:host ::ng-deep .form-input:focus-within,
+:host ::ng-deep .form-textarea:focus-within,
+:host ::ng-deep .k-datepicker:focus-within {
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
 }

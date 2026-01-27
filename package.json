@@ -2,6 +2,7 @@
   "name": "memberjunction-workspace",
   "version": "1.0.10",
   "license": "ISC",
+  "packageManager": "npm@11.7.0",
   "workspaces": [
     "packages/*",
     "packages/Actions/*",
@@ -25,6 +26,7 @@
     "packages/Credentials/*"
   ],
   "scripts": {
+    "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
     "build": "npm run build:stream",
     "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",
     "build:generated": "turbo --log-order=stream build --filter=\"mj_generatedentities\" --filter=\"mj_generatedactions\"",
@@ -67,7 +69,6 @@
     "extract-files": "~13.0.0",
     "simple-git": "^3.27.0"
   },
-  "packageManager": "npm@10.5.0",
   "devDependencies": {
     "@changesets/cli": "^2.27.12",
     "@typescript-eslint/eslint-plugin": "7.12.0",

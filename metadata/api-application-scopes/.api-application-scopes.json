@@ -1,0 +1,247 @@
+[
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=query:run",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "58E9530F-78D4-4891-A9D8-C01B616DDEFE"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:54.069Z",
+      "checksum": "f6b011440335a3f721f34766f7983e2b40f818e0706cf3330fb4519ab3c78d52"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=view:run",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "5BC6A3D6-9C86-4E0B-8B84-83C7109F1F6F"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:54.079Z",
+      "checksum": "242ff1a60fb7b66813963bec5e0d039aecdb42e58fbdab14077574a3e76f5b06"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=agent:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "051519B9-70E4-4724-BC7A-5AF4FD01A30A"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:54.089Z",
+      "checksum": "04d3abeeca17f82080e224934e635996e2ae8662a21d55689757cd151a477020"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=entity:read",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "CC44433E-F36B-1410-8DD9-00021F8B792E"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=entity:create",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "B644433E-F36B-1410-8DD9-00021F8B792E"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=entity:update",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "D644433E-F36B-1410-8DD9-00021F8B792E"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=entity:delete",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "C244433E-F36B-1410-8DD9-00021F8B792E"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=view:run",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "7D81D6DD-0F56-4281-8F77-53956544DDD5"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:54.099Z",
+      "checksum": "9059e47bc1f42e175e54d66794cb3af6cde6cf5d50a4f80e338731bb8fa021ff"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=agent:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "08CC5D9C-9F10-417A-BDFE-CE4B917EEB50"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:54.108Z",
+      "checksum": "2285914e6cc1f55283be693409507d52bf20c3a8f8daebe29a0830f27924d8d0"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=A2AServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=agent:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "BC99D040-2876-438E-999E-51344CAEABDC"
+    },
+    "sync": {
+      "lastModified": "2026-01-26T20:03:54.117Z",
+      "checksum": "6c3879750b69632f95502249bb519cb99b4a11ae87bc039acb73c571ad1ea335"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=action:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "E5F6A7B8-5678-9ABC-DEF0-123456789012"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=prompt:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "F6A7B8C9-6789-ABCD-EF01-234567890123"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=action:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "A7B8C9D0-789A-BCDE-F012-345678901234"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=prompt:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "B8C9D0E1-89AB-CDEF-0123-456789012345"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=query:run",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "C9D0E1F2-9ABC-DEF0-1234-567890123456"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=entity:read",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "D0E1F2A3-ABCD-EF01-2345-678901234567"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=A2AServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=action:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "E1F2A3B4-BCDE-F012-3456-789012345678"
+    }
+  }
+]
