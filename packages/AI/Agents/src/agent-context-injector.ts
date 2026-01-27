@@ -1,5 +1,5 @@
 import { LogError, LogStatus, RunView, UserInfo } from "@memberjunction/core";
-import { AIAgentNoteEntity, AIAgentExampleEntity } from "@memberjunction/core-entities";
+import { AIAgentNoteEntity, AIAgentExampleEntity, AIAgentNoteTypeEntity } from "@memberjunction/core-entities";
 import { AIEngine } from "@memberjunction/aiengine";
 import { UserScope } from "@memberjunction/ai-core-plus";
 import { RerankerConfiguration, RerankerService } from "@memberjunction/ai-reranker";
@@ -200,22 +200,25 @@ export class AgentContextInjector {
      */
     private async queryNotesWithScoping(params: GetNotesParams): Promise<AIAgentNoteEntity[]> {
         const filter = this.buildNotesScopingFilter(params);
-        // For 'Recent' strategy, sort by creation date only
-        // For other strategies (including 'All'), sort by priority first, then date
-        const orderBy = params.strategy === 'Recent'
-            ? '__mj_CreatedAt DESC'
-            : 'AgentNoteType.Priority ASC, __mj_CreatedAt DESC';
+        const orderBy = '__mj_CreatedAt DESC';
 
         const rv = new RunView();
         const result = await rv.RunView<AIAgentNoteEntity>({
             EntityName: 'AI Agent Notes',
             ExtraFilter: filter,
             OrderBy: orderBy,
-            MaxRows: params.maxNotes,
+            IgnoreMaxRows: params.strategy !== 'Recent',
+            MaxRows: params.strategy === 'Recent' ? params.maxNotes : undefined,
             ResultType: 'entity_object'
         }, params.contextUser);
 
-        return result.Success ? (result.Results || []) : [];
+        const notes = result.Success ? (result.Results || []) : [];
+        if (notes.length === 0) {
+            return [];
+        }
+
+        const sorted = this.sortNotes(notes, params.strategy, AIEngine.Instance.AgentNoteTypes);
+        return sorted.slice(0, params.maxNotes);
     }
 
     /**
@@ -446,6 +449,57 @@ export class AgentContextInjector {
                 return dateB - dateA;
             });
         }
+
+        return sorted;
+    }
+
+    /**
+     * Sort notes based on the specified strategy.
+     * For non-Recent strategies, uses AgentNoteType.Priority from cached note types.
+     */
+    private sortNotes(
+        notes: AIAgentNoteEntity[],
+        strategy: 'Relevant' | 'Recent' | 'All',
+        noteTypes: AIAgentNoteTypeEntity[]
+    ): AIAgentNoteEntity[] {
+        const sorted = [...notes];
+        const priorityByTypeId = new Map<string, number>();
+
+        for (const noteType of noteTypes) {
+            priorityByTypeId.set(noteType.ID, noteType.Priority);
+        }
+
+        const getPriority = (note: AIAgentNoteEntity): number => {
+            const noteTypeId = note.AgentNoteTypeID;
+            if (!noteTypeId) {
+                return Number.MAX_SAFE_INTEGER;
+            }
+
+            const priority = priorityByTypeId.get(noteTypeId);
+            return typeof priority === 'number' ? priority : Number.MAX_SAFE_INTEGER;
+        };
+
+        if (strategy === 'Recent') {
+            sorted.sort((a, b) => {
+                const dateA = a.__mj_CreatedAt?.getTime() ?? 0;
+                const dateB = b.__mj_CreatedAt?.getTime() ?? 0;
+                return dateB - dateA;
+            });
+            return sorted;
+        }
+
+        sorted.sort((a, b) => {
+            const priorityA = getPriority(a);
+            const priorityB = getPriority(b);
+
+            if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+            }
+
+            const dateA = a.__mj_CreatedAt?.getTime() ?? 0;
+            const dateB = b.__mj_CreatedAt?.getTime() ?? 0;
+            return dateB - dateA;
+        });
 
         return sorted;
     }
