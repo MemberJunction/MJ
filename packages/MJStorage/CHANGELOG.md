@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/storage
 
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [ca551dd]
+- Updated dependencies [da33601]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/credentials@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Minor Changes

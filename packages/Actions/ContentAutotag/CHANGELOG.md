@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [ca551dd]
+- Updated dependencies [d844955]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/core-actions@3.3.0
+  - @memberjunction/content-autotagging@3.3.0
+  - @memberjunction/actions-base@3.3.0
+  - @memberjunction/actions@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @memberjunction/credentials
 
+## 3.3.0
+
+### Patch Changes
+
+- da33601: no migration
+- Updated dependencies [ca551dd]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

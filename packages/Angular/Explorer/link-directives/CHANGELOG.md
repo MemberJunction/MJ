@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 3.3.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@3.3.0
+- @memberjunction/core@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

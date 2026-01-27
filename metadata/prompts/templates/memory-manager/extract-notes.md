@@ -6,14 +6,6 @@ You are the Memory Manager agent responsible for analyzing conversations and age
 
 Analyze the provided conversation threads to identify valuable learnings that should be captured as agent notes. Compare your findings against existing notes to avoid redundancy.
 
-## Important: Zero Notes is Expected
-
-**Most conversations don't need any notes extracted.** Typical transactional interactions (user asks question, agent answers) should result in zero memories. Only extract notes when you find something genuinely valuable for future personalization.
-
-Ask yourself: "Will this change how I respond to this user next time?"
-- If YES → Consider extracting
-- If NO → Don't extract
-
 ## Conversation Threads
 
 {% for thread in conversationThreads %}
@@ -153,32 +145,25 @@ Use these phrase patterns to determine appropriate scope level:
 - Keywords: maximum 3, lowercase only
 - Confidence < 80% → do not extract
 
-## Sparsity Guidelines
+## What to Extract
 
-**Be EXTREMELY selective** - most conversations should yield ZERO notes:
-
-**The "Future Value Test"**: Before extracting ANY note, ask:
-> "If this user contacts us again in a week, will this note help me serve them better?"
-
-If the answer isn't a clear YES, don't extract it.
-
-1. **Maximum 2 notes per conversation** - and zero is perfectly fine
-2. **Confidence must be ≥80%** - be confident before extracting
-3. **Avoid generic notes** - "User prefers good answers" is not useful
-4. **Err on the side of NOT extracting** - when in doubt, skip it
-
-### Only Extract When:
-- Information is SPECIFIC and ACTIONABLE
-- It will meaningfully improve future interactions
-- It's not something obvious or already known
-- The user clearly expressed or demonstrated the preference
+1. **Extract each distinct preference/fact as a separate note** - If a message contains multiple items (e.g., "I like apples and oranges"), create separate notes for each
+2. **ALWAYS capture user biographical details** when mentioned:
+   - Name (e.g., "My name is John", "I'm Sarah")
+   - Occupation/profession (e.g., "I'm a software engineer")
+   - Interests/hobbies (e.g., "I enjoy hiking")
+   - Personal history (e.g., "I lived in Tokyo for 5 years")
+   - Family/relationships (e.g., "I have two kids")
+   - Education (e.g., "I studied at MIT")
+   These should be extracted as **Context** notes with high confidence (90+)
+3. **Confidence must be ≥80%**
+4. **Avoid generic notes** - "User prefers good answers" is not useful
 
 ### Skip Extraction When:
 - The preference is vague or generic
 - It's a one-time request (unless explicitly stated as permanent)
 - Similar note already exists
 - Confidence is below 80%
-- No clear preference is expressed (neutral conversation)
 
 ### Concrete Examples
 
@@ -187,6 +172,17 @@ If the answer isn't a clear YES, don't extract it.
 - ✅ "User is vegetarian" → Affects all food suggestions
 - ✅ "User dislikes verbose explanations" → Changes response style
 - ✅ "Company uses metric units" → Affects all measurements
+
+**Multiple notes from single message** (split compound preferences):
+- ✅ "I like apples and oranges" → TWO separate notes:
+  - Note 1: { type: "Preference", content: "User likes apples" }
+  - Note 2: { type: "Preference", content: "User likes oranges" }
+- ✅ "I'm a data scientist and I work at Google" → TWO separate notes:
+  - Note 1: { type: "Context", content: "User's occupation is data scientist", confidence: 95 }
+  - Note 2: { type: "Context", content: "User works at Google", confidence: 95 }
+- ✅ "I grew up in Chicago and went to Northwestern" → TWO separate notes:
+  - Note 1: { type: "Context", content: "User grew up in Chicago", confidence: 95 }
+  - Note 2: { type: "Context", content: "User attended Northwestern University", confidence: 95 }
 
 **DO NOT extract these** (just session facts):
 - ❌ "User asked about pizza toppings" → Just logged a question

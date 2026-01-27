@@ -267,7 +267,7 @@ export class RerankerService {
         if (!driverClass) return null;
 
         // Standard MemberJunction API key naming convention
-        const envVar = `AI_VENDOR_API_KEY__${driverClass.toUpperCase()}`;
+        const envVar = `AI_VENDOR_API_KEY__${driverClass}`;
         const apiKey = process.env[envVar];
 
         if (apiKey && apiKey.trim().length > 0) {

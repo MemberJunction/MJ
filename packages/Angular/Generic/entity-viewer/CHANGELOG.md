@@ -1,5 +1,23 @@
 # @memberjunction/ng-entity-viewer
 
+## 3.3.0
+
+### Minor Changes
+
+- 27a65b9: migration from metadata updates
+
+### Patch Changes
+
+- Updated dependencies [ca551dd]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/ng-shared-generic@3.3.0
+  - @memberjunction/ng-export-service@3.3.0
+  - @memberjunction/ng-filter-builder@3.3.0
+  - @memberjunction/ng-timeline@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/export-engine@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

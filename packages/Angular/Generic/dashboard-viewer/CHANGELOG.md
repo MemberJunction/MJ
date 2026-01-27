@@ -1,5 +1,20 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [27a65b9]
+- Updated dependencies [ca551dd]
+  - @memberjunction/ng-entity-viewer@3.3.0
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/ng-artifacts@3.3.0
+  - @memberjunction/ng-query-viewer@3.3.0
+  - @memberjunction/ng-shared-generic@3.3.0
+  - @memberjunction/ng-trees@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes
