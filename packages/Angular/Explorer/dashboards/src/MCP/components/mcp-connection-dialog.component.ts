@@ -38,9 +38,10 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
 
     public connectionForm: FormGroup;
     public credentials: Array<{ ID: string; Name: string }> = [];
+    public companies: Array<{ ID: string; Name: string }> = [];
     public credentialTypes: CredentialTypeEntity[] = [];
     public IsSaving = false;
-    public IsLoadingCredentials = false;
+    public IsLoadingDropdowns = false;
     public ErrorMessage: string | null = null;
     public ShowCredentialDialog = false;
 
@@ -64,7 +65,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
     }
 
     ngOnInit(): void {
-        this.loadCredentials();
+        this.loadDropdownData();
     }
 
     ngOnChanges(changes: SimpleChanges): void {
@@ -80,6 +81,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
             MCPServerID: ['', Validators.required],
             Name: ['', [Validators.required, Validators.maxLength(200)]],
             Description: ['', Validators.maxLength(2000)],
+            CompanyID: [''],
             CredentialID: [''],
             AutoSyncTools: [true],
             LogToolCalls: [true],
@@ -98,6 +100,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
                 MCPServerID: this.connection.MCPServerID,
                 Name: this.connection.Name,
                 Description: this.connection.Description ?? '',
+                CompanyID: this.connection.CompanyID ?? '',
                 CredentialID: '',  // Would need to load from entity
                 AutoSyncTools: this.connection.AutoSyncTools,
                 LogToolCalls: this.connection.LogToolCalls,
@@ -113,6 +116,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
                 MCPServerID: '',
                 Name: '',
                 Description: '',
+                CompanyID: '',
                 CredentialID: '',
                 AutoSyncTools: true,
                 LogToolCalls: true,
@@ -128,12 +132,12 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
         this.cdr.detectChanges();
     }
 
-    private async loadCredentials(): Promise<void> {
-        this.IsLoadingCredentials = true;
+    private async loadDropdownData(): Promise<void> {
+        this.IsLoadingDropdowns = true;
         try {
             const rv = new RunView();
-            // Load credentials and credential types in parallel
-            const [credResult, typeResult] = await rv.RunViews([
+            // Load credentials, credential types, and companies in parallel
+            const [credResult, typeResult, companyResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Credentials',
                     Fields: ['ID', 'Name'],
@@ -144,6 +148,12 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
                     EntityName: 'MJ: Credential Types',
                     OrderBy: 'Category, Name',
                     ResultType: 'entity_object'
+                },
+                {
+                    EntityName: 'Companies',
+                    Fields: ['ID', 'Name'],
+                    OrderBy: 'Name',
+                    ResultType: 'simple'
                 }
             ]);
 
@@ -153,10 +163,13 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
             if (typeResult.Success) {
                 this.credentialTypes = typeResult.Results as CredentialTypeEntity[] || [];
             }
+            if (companyResult.Success) {
+                this.companies = companyResult.Results as Array<{ ID: string; Name: string }> || [];
+            }
         } catch (error) {
-            console.error('Failed to load credentials:', error);
+            console.error('Failed to load dropdown data:', error);
         } finally {
-            this.IsLoadingCredentials = false;
+            this.IsLoadingDropdowns = false;
             this.cdr.detectChanges();
         }
     }
@@ -228,6 +241,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
             entity.MCPServerID = formValue.MCPServerID;
             entity.Name = formValue.Name;
             entity.Description = formValue.Description || null;
+            entity.CompanyID = formValue.CompanyID || null;
             entity.CredentialID = formValue.CredentialID || null;
             entity.AutoSyncTools = formValue.AutoSyncTools;
             entity.LogToolCalls = formValue.LogToolCalls;

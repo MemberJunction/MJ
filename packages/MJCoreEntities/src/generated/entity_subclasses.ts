@@ -14939,7 +14939,7 @@ export const MCPServerConnectionSchema = z.object({
         * * Default Value: newsequentialid()`),
     MCPServerID: z.string().describe(`
         * * Field Name: MCPServerID
-        * * Display Name: MCP Server ID
+        * * Display Name: MCP Server
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Servers (vwMCPServers.ID)`),
     Name: z.string().describe(`
@@ -14962,12 +14962,12 @@ export const MCPServerConnectionSchema = z.object({
         * * Display Name: Custom Header Name
         * * SQL Data Type: nvarchar(100)
         * * Description: Custom header name for API key auth (default: X-API-Key)`),
-    CompanyID: z.string().describe(`
+    CompanyID: z.string().nullable().describe(`
         * * Field Name: CompanyID
         * * Display Name: Company
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
-        * * Description: FK to Company for multi-tenancy`),
+        * * Description: Optional company association. NULL means the connection is global and available to all companies. Non-NULL restricts the connection to that specific company.`),
     Status: z.string().describe(`
         * * Field Name: Status
         * * Display Name: Status
@@ -15040,7 +15040,7 @@ export const MCPServerConnectionSchema = z.object({
         * * Field Name: Credential
         * * Display Name: Credential
         * * SQL Data Type: nvarchar(200)`),
-    Company: z.string().describe(`
+    Company: z.string().nullable().describe(`
         * * Field Name: Company
         * * Display Name: Company
         * * SQL Data Type: nvarchar(50)`),
@@ -59830,7 +59830,7 @@ export class MCPServerConnectionEntity extends BaseEntity<MCPServerConnectionEnt
 
     /**
     * * Field Name: MCPServerID
-    * * Display Name: MCP Server ID
+    * * Display Name: MCP Server
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Servers (vwMCPServers.ID)
     */
@@ -59898,12 +59898,12 @@ export class MCPServerConnectionEntity extends BaseEntity<MCPServerConnectionEnt
     * * Display Name: Company
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
-    * * Description: FK to Company for multi-tenancy
+    * * Description: Optional company association. NULL means the connection is global and available to all companies. Non-NULL restricts the connection to that specific company.
     */
-    get CompanyID(): string {
+    get CompanyID(): string | null {
         return this.Get('CompanyID');
     }
-    set CompanyID(value: string) {
+    set CompanyID(value: string | null) {
         this.Set('CompanyID', value);
     }
 
@@ -60084,7 +60084,7 @@ export class MCPServerConnectionEntity extends BaseEntity<MCPServerConnectionEnt
     * * Display Name: Company
     * * SQL Data Type: nvarchar(50)
     */
-    get Company(): string {
+    get Company(): string | null {
         return this.Get('Company');
     }
 }

@@ -72,6 +72,20 @@
                     [valuePrimitive]="true">
                 </kendo-dropdownlist>
             </div>
+
+            <div class="form-group">
+                <label for="company">Company</label>
+                <kendo-dropdownlist
+                    id="company"
+                    formControlName="CompanyID"
+                    [data]="companies"
+                    textField="Name"
+                    valueField="ID"
+                    [valuePrimitive]="true"
+                    [defaultItem]="{ Name: 'Global (all companies)', ID: '' }">
+                </kendo-dropdownlist>
+                <span class="hint">Leave as Global to make this connection available to all companies</span>
+            </div>
         </div>
 
         <!-- Authentication Section -->
@@ -80,7 +94,7 @@
 
             <div class="form-group">
                 <label for="credential">Credential</label>
-                @if (IsLoadingCredentials) {
+                @if (IsLoadingDropdowns) {
                     <div class="loading-credentials">
                         <i class="fa-solid fa-spinner fa-spin"></i>
                         Loading credentials...

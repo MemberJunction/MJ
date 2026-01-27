@@ -44495,9 +44495,9 @@ export class MJMCPServerConnection_ {
     @MaxLength(200)
     CustomHeaderName?: string;
         
-    @Field({description: `FK to Company for multi-tenancy`}) 
+    @Field({nullable: true, description: `Optional company association. NULL means the connection is global and available to all companies. Non-NULL restricts the connection to that specific company.`}) 
     @MaxLength(16)
-    CompanyID: string;
+    CompanyID?: string;
         
     @Field() 
     @MaxLength(100)
@@ -44547,9 +44547,9 @@ export class MJMCPServerConnection_ {
     @MaxLength(400)
     Credential?: string;
         
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(100)
-    Company: string;
+    Company?: string;
         
     @Field(() => [MJMCPServerConnectionTool_])
     MJ_MCPServerConnectionTools_MCPServerConnectionIDArray: MJMCPServerConnectionTool_[]; // Link to MJ_MCPServerConnectionTools
@@ -44586,7 +44586,7 @@ export class CreateMJMCPServerConnectionInput {
     CustomHeaderName: string | null;
 
     @Field({ nullable: true })
-    CompanyID?: string;
+    CompanyID: string | null;
 
     @Field({ nullable: true })
     Status?: string;
@@ -44644,7 +44644,7 @@ export class UpdateMJMCPServerConnectionInput {
     CustomHeaderName?: string | null;
 
     @Field({ nullable: true })
-    CompanyID?: string;
+    CompanyID?: string | null;
 
     @Field({ nullable: true })
     Status?: string;
