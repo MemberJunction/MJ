@@ -25,6 +25,9 @@ import { MCPResourceComponent, LoadMCPResource } from './mcp-resource.component'
 import { MCPServerDialogComponent, LoadMCPServerDialog } from './components/mcp-server-dialog.component';
 import { MCPConnectionDialogComponent, LoadMCPConnectionDialog } from './components/mcp-connection-dialog.component';
 
+// MCP Services
+import { LoadMCPToolsService } from './services/mcp-tools.service';
+
 @NgModule({
     declarations: [
         MCPDashboardComponent,
@@ -60,4 +63,5 @@ export function LoadMCPModule(): void {
     LoadMCPResource();
     LoadMCPServerDialog();
     LoadMCPConnectionDialog();
+    LoadMCPToolsService();
 }

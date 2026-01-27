@@ -11,12 +11,13 @@
 
 import { Component, OnDestroy, ChangeDetectorRef, AfterViewInit, OnInit } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
-import { Subject, BehaviorSubject } from 'rxjs';
+import { Subject, BehaviorSubject, Subscription } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MCPServerEntity, MCPServerConnectionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
 
 /**
  * Interface for MCP Server data
@@ -183,6 +184,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     private skipUrlUpdate = true;
     private lastNavigatedUrl: string = '';
 
+    // Sync state
+    public SyncStates = new Map<string, MCPSyncState>();
+    private syncSubscriptions = new Map<string, Subscription>();
+
     // ========================================
     // Lifecycle
     // ========================================
@@ -192,7 +197,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     constructor(
         private cdr: ChangeDetectorRef,
         private router: Router,
-        private navigationService: NavigationService
+        private navigationService: NavigationService,
+        private mcpToolsService: MCPToolsService
     ) {
         super();
     }
@@ -333,6 +339,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
+        // Cleanup sync subscriptions
+        this.syncSubscriptions.forEach(sub => sub.unsubscribe());
+        this.syncSubscriptions.clear();
     }
 
     // ========================================
@@ -639,6 +648,66 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public viewToolDetails(tool: MCPToolData): void {
         // Could open a dialog or navigate to tool details
         console.log('View tool details:', tool);
+    }
+
+    // ========================================
+    // Sync Operations
+    // ========================================
+
+    /**
+     * Syncs tools for a specific connection
+     */
+    public async syncConnectionTools(connection: MCPConnectionData): Promise<void> {
+        const connectionId = connection.ID;
+
+        // Subscribe to sync state updates for this connection
+        if (!this.syncSubscriptions.has(connectionId)) {
+            const sub = this.mcpToolsService.getSyncState(connectionId)
+                .pipe(takeUntil(this.destroy$))
+                .subscribe(state => {
+                    this.SyncStates.set(connectionId, state);
+                    this.cdr.detectChanges();
+                });
+            this.syncSubscriptions.set(connectionId, sub);
+        }
+
+        try {
+            const result: MCPSyncResult = await this.mcpToolsService.syncTools(connectionId);
+
+            if (result.Success) {
+                // Reload data to show updated tools
+                await this.loadAllData();
+            } else {
+                this.ErrorMessage = `Sync failed: ${result.ErrorMessage}`;
+            }
+        } catch (error) {
+            this.ErrorMessage = `Sync error: ${error instanceof Error ? error.message : String(error)}`;
+        }
+
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Gets the sync state for a connection
+     */
+    public getSyncState(connectionId: string): MCPSyncState | undefined {
+        return this.SyncStates.get(connectionId);
+    }
+
+    /**
+     * Checks if a connection is currently syncing
+     */
+    public isSyncing(connectionId: string): boolean {
+        return this.mcpToolsService.isSyncing(connectionId);
+    }
+
+    /**
+     * Gets sync progress message for a connection
+     */
+    public getSyncProgressMessage(connectionId: string): string {
+        const state = this.SyncStates.get(connectionId);
+        if (!state?.progress) return '';
+        return state.progress.message;
     }
 
     // ========================================

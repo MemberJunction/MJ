@@ -249,6 +249,17 @@
                                                 </span>
                                             </div>
                                             <div class="card-actions">
+                                                <button kendoButton
+                                                        fillMode="flat"
+                                                        (click)="syncConnectionTools(conn)"
+                                                        [disabled]="isSyncing(conn.ID)"
+                                                        title="Sync Tools">
+                                                    @if (isSyncing(conn.ID)) {
+                                                        <i class="fa-solid fa-sync fa-spin"></i>
+                                                    } @else {
+                                                        <i class="fa-solid fa-sync"></i>
+                                                    }
+                                                </button>
                                                 <button kendoButton fillMode="flat" (click)="editConnection(conn)" title="Edit">
                                                     <i class="fa-solid fa-pen"></i>
                                                 </button>
@@ -257,6 +268,30 @@
                                                 </button>
                                             </div>
                                         </div>
+                                        <!-- Sync Progress Banner -->
+                                        @if (isSyncing(conn.ID)) {
+                                            <div class="sync-progress-banner">
+                                                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                                                <span class="sync-message">{{ getSyncProgressMessage(conn.ID) || 'Syncing...' }}</span>
+                                            </div>
+                                        }
+                                        <!-- Sync Result Banner -->
+                                        @if (getSyncState(conn.ID)?.lastResult && !isSyncing(conn.ID)) {
+                                            <div class="sync-result-banner"
+                                                 [class.success]="getSyncState(conn.ID)?.lastResult?.Success"
+                                                 [class.error]="!getSyncState(conn.ID)?.lastResult?.Success">
+                                                @if (getSyncState(conn.ID)?.lastResult?.Success) {
+                                                    <i class="fa-solid fa-check-circle"></i>
+                                                    <span>Synced: {{ getSyncState(conn.ID)?.lastResult?.Added }} added,
+                                                          {{ getSyncState(conn.ID)?.lastResult?.Updated }} updated,
+                                                          {{ getSyncState(conn.ID)?.lastResult?.Deprecated }} deprecated
+                                                    </span>
+                                                } @else {
+                                                    <i class="fa-solid fa-exclamation-circle"></i>
+                                                    <span>{{ getSyncState(conn.ID)?.lastResult?.ErrorMessage }}</span>
+                                                }
+                                            </div>
+                                        }
                                         <div class="card-body">
                                             @if (conn.Description) {
                                                 <p class="description">{{ conn.Description }}</p>

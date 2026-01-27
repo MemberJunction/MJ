@@ -229,7 +229,12 @@ export class MCPClientManager {
             // Get credentials if needed
             let credentials: MCPCredentialData | undefined;
             if (connectionConfig.CredentialID && serverConfig.DefaultAuthType !== 'None') {
-                credentials = await this.getCredentials(connectionConfig.CredentialID, contextUser);
+                try {
+                    credentials = await this.getCredentials(connectionConfig.CredentialID, contextUser);
+                } catch (error) {
+                    // Log warning but proceed without credentials if auth isn't strictly required
+                    LogStatus(`[MCPClient] Warning: Could not load credentials for connection ${connectionId}. Proceeding without authentication.`);
+                }
             }
 
             // Create transport
@@ -780,6 +785,24 @@ export class MCPClientManager {
         return this.logger;
     }
 
+    /**
+     * Gets information about an active connection
+     *
+     * @param connectionId - Connection ID
+     * @returns Connection info or null if not connected
+     */
+    public getConnectionInfo(connectionId: string): { serverName: string; connectionName: string; connectedAt: Date } | null {
+        const connection = this.connections.get(connectionId);
+        if (!connection) {
+            return null;
+        }
+        return {
+            serverName: connection.serverConfig.Name,
+            connectionName: connection.connectionConfig.Name,
+            connectedAt: connection.connectedAt
+        };
+    }
+
     // ========================================
     // Private Helper Methods
     // ========================================
@@ -1163,7 +1186,12 @@ export class MCPClientManager {
     }
 
     /**
-     * Checks if user has permission for a connection
+     * Checks if user has permission for a connection.
+     *
+     * Permission logic:
+     * 1. If NO permission records exist for this connection, it's "open" - anyone can use it
+     * 2. If permission records exist, user must have an explicit grant (direct or via role)
+     * 3. Admins always have access
      */
     private async checkPermission(
         connectionId: string,
@@ -1171,23 +1199,44 @@ export class MCPClientManager {
         permission: 'execute' | 'modify' | 'viewCredentials'
     ): Promise<boolean> {
         try {
+            // Admins always have access
+            const hasAdminRole = contextUser.UserRoles?.some(
+                role => role.Role?.toLowerCase() === 'admin' || role.Role?.toLowerCase() === 'administrator'
+            ) ?? false;
+            if (hasAdminRole) {
+                return true;
+            }
+
             const rv = new RunView();
-            const result = await rv.RunView<MCPConnectionPermission>({
+
+            // First, check if ANY permissions exist for this connection
+            const allPermissions = await rv.RunView<MCPConnectionPermission>({
                 EntityName: MCPClientManager.ENTITY_MCP_PERMISSIONS,
-                ExtraFilter: `MCPServerConnectionID = '${connectionId}' AND (UserID = '${contextUser.ID}' OR RoleID IN (SELECT RoleID FROM vwUserRoles WHERE UserID = '${contextUser.ID}'))`,
+                ExtraFilter: `MCPServerConnectionID = '${connectionId}'`,
                 ResultType: 'simple'
             }, contextUser);
 
-            if (!result.Success || !result.Results || result.Results.length === 0) {
-                // No specific permissions - check if user has admin role
-                const hasAdminRole = contextUser.UserRoles?.some(
-                    role => role.Role?.toLowerCase() === 'admin' || role.Role?.toLowerCase() === 'administrator'
-                ) ?? false;
-                return hasAdminRole;
+            // If no permissions are configured for this connection, it's open to all
+            if (!allPermissions.Success || !allPermissions.Results || allPermissions.Results.length === 0) {
+                return true;
+            }
+
+            // Permissions exist - check if user has explicit access
+            const md = new Metadata();
+            const userRolesSchema = md.EntityByName("User Roles")?.SchemaName ?? '__mj';
+            const userPermissions = await rv.RunView<MCPConnectionPermission>({
+                EntityName: MCPClientManager.ENTITY_MCP_PERMISSIONS,
+                ExtraFilter: `MCPServerConnectionID = '${connectionId}' AND (UserID = '${contextUser.ID}' OR RoleID IN (SELECT RoleID FROM [${userRolesSchema}].vwUserRoles WHERE UserID = '${contextUser.ID}'))`,
+                ResultType: 'simple'
+            }, contextUser);
+
+            if (!userPermissions.Success || !userPermissions.Results || userPermissions.Results.length === 0) {
+                // Permissions exist but user doesn't have any
+                return false;
             }
 
             // Check if any permission grants the requested access
-            for (const perm of result.Results) {
+            for (const perm of userPermissions.Results) {
                 switch (permission) {
                     case 'execute':
                         if (perm.CanExecute) return true;

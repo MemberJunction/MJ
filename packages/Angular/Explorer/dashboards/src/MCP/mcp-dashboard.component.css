@@ -386,6 +386,55 @@
     color: #9e9e9e;
 }
 
+/* Sync Progress & Result Banners */
+.sync-progress-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: linear-gradient(90deg, rgba(33, 150, 243, 0.1), rgba(33, 150, 243, 0.05));
+    border-bottom: 1px solid rgba(33, 150, 243, 0.2);
+    color: #1976d2;
+    font-size: 13px;
+}
+
+.sync-progress-banner i {
+    color: #2196f3;
+}
+
+.sync-progress-banner .sync-message {
+    flex: 1;
+}
+
+.sync-result-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid;
+}
+
+.sync-result-banner.success {
+    background: rgba(76, 175, 80, 0.08);
+    border-color: rgba(76, 175, 80, 0.2);
+    color: #388e3c;
+}
+
+.sync-result-banner.success i {
+    color: #4caf50;
+}
+
+.sync-result-banner.error {
+    background: rgba(244, 67, 54, 0.08);
+    border-color: rgba(244, 67, 54, 0.2);
+    color: #d32f2f;
+}
+
+.sync-result-banner.error i {
+    color: #f44336;
+}
+
 /* Data Table */
 .data-table {
     overflow: auto;

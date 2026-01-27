@@ -34,3 +34,12 @@ export {
     LoadMCPConnectionDialog,
     ConnectionDialogResult
 } from './components/mcp-connection-dialog.component';
+
+// Services
+export {
+    MCPToolsService,
+    LoadMCPToolsService,
+    MCPSyncResult,
+    MCPSyncProgress,
+    MCPSyncState
+} from './services/mcp-tools.service';
