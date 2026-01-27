@@ -329,6 +329,12 @@ protected async CheckAPIKeyScopeAuthorization(
     }
 
     // Get system user for authorization call
+    // NOTE: We use system user here because Authorize() needs to run internal
+    // database queries (loading scope rules, logging decisions). The system user
+    // ensures these queries work regardless of what permissions the API key's
+    // user has. The API key's associated user (in userPayload.userRecord) is
+    // used later when the actual operation executes - their permissions are
+    // the ultimate ceiling that scopes can only narrow, never expand.
     const systemUser = UserCache.Instance.Users.find(u => u.Type === 'System');
     if (!systemUser) {
         throw new Error('System user not found');
@@ -489,7 +495,76 @@ async RunAIAgent(...) {
 
 ---
 
-## Part 6: Report Deprecation
+## Part 6: Angular UI - API Key Dashboard Warnings
+
+### Location
+`packages/Angular/Generic/dashboards/src/lib/api-keys/`
+
+### Required UX Enhancements
+
+#### 1. Empty Scopes Warning (On Create/Save)
+When a user creates or saves an API key with **NO scopes assigned**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ⚠️  Warning: No Scopes Assigned                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  This API key has no scopes assigned and will NOT be able to   │
+│  perform any operations. API keys require explicit scopes to    │
+│  access MemberJunction resources.                               │
+│                                                                 │
+│  Would you like to:                                             │
+│                                                                 │
+│  [ Add Scopes Now ]     [ Save Anyway (Key Will Be Inactive) ] │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 2. Full Access Scope Danger Warning
+When a user attempts to add the `full_access` scope:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  🚨 DANGER: Full Access Scope                                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  You are about to grant UNRESTRICTED ACCESS to this API key.   │
+│                                                                 │
+│  The full_access scope allows this key to perform ANY           │
+│  operation the associated user can perform, including:          │
+│                                                                 │
+│  • Read, create, update, and delete ALL entities                │
+│  • Execute ALL agents, actions, and prompts                     │
+│  • Access ALL queries and views                                 │
+│  • Manage API keys and user data                                │
+│                                                                 │
+│  ⚠️  Only use this for trusted system integrations.             │
+│                                                                 │
+│  Type "CONFIRM" to proceed:  [____________]                     │
+│                                                                 │
+│  [ Cancel ]                            [ Grant Full Access ]    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Implementation Notes:**
+- The confirm button should be disabled until user types "CONFIRM"
+- Log this action prominently in the audit trail
+- Consider requiring admin role to add full_access scope
+
+#### 3. Visual Indicators in Scope List
+- Show `full_access` scope with red/danger styling
+- Show warning icon next to keys with no scopes
+- Show "god mode" badge on keys with full_access
+
+### Files to Update
+- `packages/Angular/Generic/dashboards/src/lib/api-keys/` - Main API keys dashboard component
+- Add confirmation dialogs and warning components
+
+---
+
+## Part 7: Report Deprecation
 
 ### Files to Update
 
@@ -523,36 +598,52 @@ async CreateReportFromConversationDetailID(...): Promise<ReportEntity> {
 
 ## Part 7: Implementation Order
 
-### Phase 1: Configuration & Metadata Updates (Estimated: Small)
-1. Update `packages/APIKeys/src/APIKeyEngine.ts` - change `defaultBehaviorNoScopes` to `'deny'`
-2. Update `/metadata/api-scopes/.api-scopes.json` with new scope hierarchy (including `full_access`)
-3. Update `/metadata/api-application-scopes/.api-application-scopes.json` with application ceilings
-4. Run `mj-sync push` to populate database
+### Phase 1: Configuration & Metadata Updates
+- [x] 1.1 Update `packages/APIKeys/src/APIKeyEngine.ts` - change `defaultBehaviorNoScopes` to `'deny'` ✅
+- [x] 1.2 Update `/metadata/api-scopes/.api-scopes.json` with new scope hierarchy (including `full_access`) ✅
+- [x] 1.3 Update `/metadata/api-application-scopes/.api-application-scopes.json` with application ceilings ✅
 
-### Phase 2: ResolverBase Update (Estimated: Small)
-1. Add `CheckAPIKeyScopeAuthorization` method to ResolverBase
-2. Add imports for `GetAPIKeyEngine` and `AuthorizationError`
-3. Integrate calls into CreateRecord, UpdateRecord, DeleteRecord, RunViewGenericInternal
+### Phase 2: ResolverBase Update
+- [x] 2.1 Add `CheckAPIKeyScopeAuthorization` method to ResolverBase ✅
+- [x] 2.2 Add imports for `GetAPIKeyEngine` and `AuthorizationError` ✅
+- [x] 2.3 Integrate calls into CreateRecord, UpdateRecord, DeleteRecord, RunViewGenericInternal ✅
 
-### Phase 3: Custom Resolver Updates (Estimated: Medium)
-1. Update each custom resolver to call `CheckAPIKeyScopeAuthorization`
-2. Add scope checks before main operation logic
-3. Deprecate ReportResolver
+### Phase 3: Custom Resolver Updates
+- [ ] 3.1 ActionResolver - add scope check
+- [ ] 3.2 RunAIAgentResolver - add scope check
+- [ ] 3.3 RunAIPromptResolver - add scope checks (prompt + embedding)
+- [ ] 3.4 QueryResolver - add scope check
+- [ ] 3.5 GetDataContextDataResolver - add scope check
+- [ ] 3.6 RunTemplateResolver - add scope check
+- [ ] 3.7 TaskResolver - add scope check
+- [ ] 3.8 DatasetResolver - add scope check
+- [ ] 3.9 MergeRecordsResolver - add scope check
+- [ ] 3.10 APIKeyResolver - add scope checks
+- [ ] 3.11 EntityCommunicationsResolver - add scope check
+- [ ] 3.12 UserResolver - add scope check
+- [ ] 3.13 ReportResolver - add deprecation stubs
 
-### Phase 4: MCP Server Updates (Estimated: Medium)
-1. Add `scopeInfo` to all 16 unprotected tools
-2. Test each tool with API key having/lacking scopes
+### Phase 4: MCP Server Updates
+- [ ] 4.1 Add scopeInfo to discovery/metadata tools (9 tools)
+- [ ] 4.2 Add scopeInfo to diagnostic/monitoring tools (6 tools)
+- [ ] 4.3 Add scopeInfo to communication tools (1 tool)
 
-### Phase 5: A2A Server Updates (Estimated: Small)
-1. Add authorization to endpoint handlers
-2. Add operation scope mapping in processTask
-3. Test each operation
+### Phase 5: A2A Server Updates
+- [ ] 5.1 Add authorization to GET /a2a/tasks/:taskId endpoint
+- [ ] 5.2 Add authorization to POST /a2a/tasks/:taskId/cancel endpoint
+- [ ] 5.3 Add scope mapping for discoverAgents operation
+- [ ] 5.4 Add scope mapping for getAgentRunStatus operation
+- [ ] 5.5 Add scope mapping for cancelAgentRun operation
 
-### Phase 6: Testing & Validation (Estimated: Medium)
-1. Create test API keys with various scope combinations
-2. Verify OAuth/JWT auth bypasses scope checks
-3. Verify API key auth enforces scopes
-4. Verify logging captures authorization decisions
+### Phase 6: Angular UI - API Key Dashboard
+- [ ] 6.1 Add empty scopes warning dialog
+- [ ] 6.2 Add full_access danger confirmation dialog
+- [ ] 6.3 Add visual indicators for scope status
+
+### Phase 7: Server Architecture Evaluation
+- [ ] 7.1 Evaluate current MCP, A2A, and MJAPI server separation
+- [ ] 7.2 Analyze feasibility of unifying into a single deployable API with optional modules
+- [ ] 7.3 Document findings, pros/cons, and recommendations
 
 ---
 

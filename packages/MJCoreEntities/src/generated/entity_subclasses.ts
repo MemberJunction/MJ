@@ -12277,6 +12277,11 @@ export const APIScopeSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this scope is currently active. Inactive scopes are ignored during authorization.`),
+    UIConfig: z.string().nullable().describe(`
+        * * Field Name: UIConfig
+        * * Display Name: UI Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for UI presentation. Schema: { "icon": "fa-solid fa-xxx", "color": "#hexcolor" }. Icon should be a Font Awesome class. Color should be a hex color code.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -52937,6 +52942,19 @@ export class APIScopeEntity extends BaseEntity<APIScopeEntityType> {
     }
     set IsActive(value: boolean) {
         this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: UIConfig
+    * * Display Name: UI Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for UI presentation. Schema: { "icon": "fa-solid fa-xxx", "color": "#hexcolor" }. Icon should be a Font Awesome class. Color should be a hex color code.
+    */
+    get UIConfig(): string | null {
+        return this.Get('UIConfig');
+    }
+    set UIConfig(value: string | null) {
+        this.Set('UIConfig', value);
     }
 
     /**

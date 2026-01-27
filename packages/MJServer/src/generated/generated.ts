@@ -36110,6 +36110,9 @@ export class MJAPIScope_ {
     @Field(() => Boolean, {description: `Whether this scope is currently active. Inactive scopes are ignored during authorization.`}) 
     IsActive: boolean;
         
+    @Field({nullable: true, description: `JSON configuration for UI presentation. Schema: { "icon": "fa-solid fa-xxx", "color": "#hexcolor" }. Icon should be a Font Awesome class. Color should be a hex color code.`}) 
+    UIConfig?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
@@ -36157,6 +36160,9 @@ export class CreateMJAPIScopeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field({ nullable: true })
+    UIConfig: string | null;
 }
     
 
@@ -36188,6 +36194,9 @@ export class UpdateMJAPIScopeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field({ nullable: true })
+    UIConfig?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
