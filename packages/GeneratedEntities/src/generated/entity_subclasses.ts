@@ -1101,6 +1101,65 @@ export const CredentialSchema = z.object({
 export type CredentialEntityType = z.infer<typeof CredentialSchema>;
 
 /**
+ * zod schema definition for the entity Flyway _schema _histories__Izzy
+ */
+export const flyway_schema_history__IzzySchema = z.object({
+    installed_rank: z.number().describe(`
+        * * Field Name: installed_rank
+        * * Display Name: installed _rank
+        * * SQL Data Type: int`),
+    version: z.string().nullable().describe(`
+        * * Field Name: version
+        * * Display Name: version
+        * * SQL Data Type: nvarchar(50)`),
+    description: z.string().nullable().describe(`
+        * * Field Name: description
+        * * Display Name: description
+        * * SQL Data Type: nvarchar(200)`),
+    type: z.string().describe(`
+        * * Field Name: type
+        * * Display Name: type
+        * * SQL Data Type: nvarchar(20)`),
+    script: z.string().describe(`
+        * * Field Name: script
+        * * Display Name: script
+        * * SQL Data Type: nvarchar(1000)`),
+    checksum: z.number().nullable().describe(`
+        * * Field Name: checksum
+        * * Display Name: checksum
+        * * SQL Data Type: int`),
+    installed_by: z.string().describe(`
+        * * Field Name: installed_by
+        * * Display Name: installed _by
+        * * SQL Data Type: nvarchar(100)`),
+    installed_on: z.date().describe(`
+        * * Field Name: installed_on
+        * * Display Name: installed _on
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()`),
+    execution_time: z.number().describe(`
+        * * Field Name: execution_time
+        * * Display Name: execution _time
+        * * SQL Data Type: int`),
+    success: z.boolean().describe(`
+        * * Field Name: success
+        * * Display Name: success
+        * * SQL Data Type: bit`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type flyway_schema_history__IzzyEntityType = z.infer<typeof flyway_schema_history__IzzySchema>;
+
+/**
  * zod schema definition for the entity Izzy Action Categories
  */
 export const IzzyActionCategorySchema = z.object({
@@ -4659,6 +4718,178 @@ export class CredentialEntity extends BaseEntity<CredentialEntityType> {
 
 
 /**
+ * Flyway _schema _histories__Izzy - strongly typed entity sub-class
+ * * Schema: Izzy
+ * * Base Table: flyway_schema_history
+ * * Base View: vwFlyway_schema_histories__Izzy
+ * * Primary Key: installed_rank
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Flyway _schema _histories__Izzy')
+export class flyway_schema_history__IzzyEntity extends BaseEntity<flyway_schema_history__IzzyEntityType> {
+    /**
+    * Loads the Flyway _schema _histories__Izzy record from the database
+    * @param installed_rank: number - primary key value to load the Flyway _schema _histories__Izzy record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof flyway_schema_history__IzzyEntity
+    * @method
+    * @override
+    */
+    public async Load(installed_rank: number, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'installed_rank', Value: installed_rank });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: installed_rank
+    * * Display Name: installed _rank
+    * * SQL Data Type: int
+    */
+    get installed_rank(): number {
+        return this.Get('installed_rank');
+    }
+    set installed_rank(value: number) {
+        this.Set('installed_rank', value);
+    }
+
+    /**
+    * * Field Name: version
+    * * Display Name: version
+    * * SQL Data Type: nvarchar(50)
+    */
+    get version(): string | null {
+        return this.Get('version');
+    }
+    set version(value: string | null) {
+        this.Set('version', value);
+    }
+
+    /**
+    * * Field Name: description
+    * * Display Name: description
+    * * SQL Data Type: nvarchar(200)
+    */
+    get description(): string | null {
+        return this.Get('description');
+    }
+    set description(value: string | null) {
+        this.Set('description', value);
+    }
+
+    /**
+    * * Field Name: type
+    * * Display Name: type
+    * * SQL Data Type: nvarchar(20)
+    */
+    get type(): string {
+        return this.Get('type');
+    }
+    set type(value: string) {
+        this.Set('type', value);
+    }
+
+    /**
+    * * Field Name: script
+    * * Display Name: script
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get script(): string {
+        return this.Get('script');
+    }
+    set script(value: string) {
+        this.Set('script', value);
+    }
+
+    /**
+    * * Field Name: checksum
+    * * Display Name: checksum
+    * * SQL Data Type: int
+    */
+    get checksum(): number | null {
+        return this.Get('checksum');
+    }
+    set checksum(value: number | null) {
+        this.Set('checksum', value);
+    }
+
+    /**
+    * * Field Name: installed_by
+    * * Display Name: installed _by
+    * * SQL Data Type: nvarchar(100)
+    */
+    get installed_by(): string {
+        return this.Get('installed_by');
+    }
+    set installed_by(value: string) {
+        this.Set('installed_by', value);
+    }
+
+    /**
+    * * Field Name: installed_on
+    * * Display Name: installed _on
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
+    */
+    get installed_on(): Date {
+        return this.Get('installed_on');
+    }
+    set installed_on(value: Date) {
+        this.Set('installed_on', value);
+    }
+
+    /**
+    * * Field Name: execution_time
+    * * Display Name: execution _time
+    * * SQL Data Type: int
+    */
+    get execution_time(): number {
+        return this.Get('execution_time');
+    }
+    set execution_time(value: number) {
+        this.Set('execution_time', value);
+    }
+
+    /**
+    * * Field Name: success
+    * * Display Name: success
+    * * SQL Data Type: bit
+    */
+    get success(): boolean {
+        return this.Get('success');
+    }
+    set success(value: boolean) {
+        this.Set('success', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * Izzy Action Categories - strongly typed entity sub-class
  * * Schema: Izzy
  * * Base Table: IzzyActionCategory
@@ -5774,48 +6005,6 @@ export class OrganizationSettingEntity extends BaseEntity<OrganizationSettingEnt
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for Organization Settings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: When the record’s Scope is set to 'Organization', the ChannelID must be left empty because the setting applies to the entire organization. When the Scope is 'Channel', a specific ChannelID must be provided so the setting can be linked to that channel.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateChannelIDComparedToScope(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * When the record’s Scope is set to 'Organization', the ChannelID must be left empty because the setting applies to the entire organization. When the Scope is 'Channel', a specific ChannelID must be provided so the setting can be linked to that channel.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateChannelIDComparedToScope(result: ValidationResult) {
-    	// If Scope is 'Organization', ChannelID must be null
-    	if (this.Scope === 'Organization' && this.ChannelID != null) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"ChannelID",
-    			"When Scope is set to 'Organization', ChannelID must be empty.",
-    			this.ChannelID,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    	// If Scope is 'Channel', ChannelID must be provided
-    	if (this.Scope === 'Channel' && this.ChannelID == null) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"ChannelID",
-    			"When Scope is set to 'Channel', a valid ChannelID is required.",
-    			this.ChannelID,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**

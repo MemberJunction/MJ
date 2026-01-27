@@ -163,6 +163,9 @@ import { AIPromptRunFormComponent, LoadAIPromptRunFormComponent } from "./Entiti
 import { AIVendorTypeDefinitionFormComponent, LoadAIVendorTypeDefinitionFormComponent } from "./Entities/AIVendorTypeDefinition/aivendortypedefinition.form.component";
 import { AIVendorTypeFormComponent, LoadAIVendorTypeFormComponent } from "./Entities/AIVendorType/aivendortype.form.component";
 import { AIVendorFormComponent, LoadAIVendorFormComponent } from "./Entities/AIVendor/aivendor.form.component";
+import { APIApplicationScopeFormComponent, LoadAPIApplicationScopeFormComponent } from "./Entities/APIApplicationScope/apiapplicationscope.form.component";
+import { APIApplicationFormComponent, LoadAPIApplicationFormComponent } from "./Entities/APIApplication/apiapplication.form.component";
+import { APIKeyApplicationFormComponent, LoadAPIKeyApplicationFormComponent } from "./Entities/APIKeyApplication/apikeyapplication.form.component";
 import { APIKeyScopeFormComponent, LoadAPIKeyScopeFormComponent } from "./Entities/APIKeyScope/apikeyscope.form.component";
 import { APIKeyUsageLogFormComponent, LoadAPIKeyUsageLogFormComponent } from "./Entities/APIKeyUsageLog/apikeyusagelog.form.component";
 import { APIKeyFormComponent, LoadAPIKeyFormComponent } from "./Entities/APIKey/apikey.form.component";
@@ -575,9 +578,9 @@ declarations: [
     AIVendorTypeDefinitionFormComponent,
     AIVendorTypeFormComponent,
     AIVendorFormComponent,
-    APIKeyScopeFormComponent,
-    APIKeyUsageLogFormComponent,
-    APIKeyFormComponent],
+    APIApplicationScopeFormComponent,
+    APIApplicationFormComponent,
+    APIKeyApplicationFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -603,6 +606,9 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    APIKeyScopeFormComponent,
+    APIKeyUsageLogFormComponent,
+    APIKeyFormComponent,
     APIScopeFormComponent,
     ArtifactPermissionFormComponent,
     ArtifactTypeFormComponent,
@@ -619,10 +625,7 @@ declarations: [
     ComponentRegistryFormComponent,
     ComponentFormComponent,
     ConversationArtifactPermissionFormComponent,
-    ConversationArtifactVersionFormComponent,
-    ConversationArtifactFormComponent,
-    ConversationDetailArtifactFormComponent,
-    ConversationDetailAttachmentFormComponent],
+    ConversationArtifactVersionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -648,6 +651,9 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    ConversationArtifactFormComponent,
+    ConversationDetailArtifactFormComponent,
+    ConversationDetailAttachmentFormComponent,
     ConversationDetailRatingFormComponent,
     CredentialCategoryFormComponent,
     CredentialTypeFormComponent,
@@ -664,10 +670,7 @@ declarations: [
     EnvironmentFormComponent,
     FileStorageAccountFormComponent,
     ListInvitationFormComponent,
-    ListShareFormComponent,
-    ProjectFormComponent,
-    PublicLinkFormComponent,
-    QueryParameterFormComponent],
+    ListShareFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -693,6 +696,9 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    ProjectFormComponent,
+    PublicLinkFormComponent,
+    QueryParameterFormComponent,
     RecordLinkFormComponent,
     ReportUserStateFormComponent,
     ReportVersionFormComponent,
@@ -709,10 +715,7 @@ declarations: [
     TestSuiteTestFormComponent,
     TestSuiteFormComponent,
     TestTypeFormComponent,
-    TestFormComponent,
-    UserNotificationPreferenceFormComponent,
-    UserNotificationTypeFormComponent,
-    UserSettingFormComponent],
+    TestFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -738,6 +741,9 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    UserNotificationPreferenceFormComponent,
+    UserNotificationTypeFormComponent,
+    UserSettingFormComponent,
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
     OutputTriggerTypeFormComponent,
@@ -754,10 +760,7 @@ declarations: [
     RecommendationRunFormComponent,
     RecommendationFormComponent,
     RecordChangeReplayRunFormComponent,
-    RecordChangeFormComponent,
-    RecordMergeDeletionLogFormComponent,
-    RecordMergeLogFormComponent,
-    ReportCategoryFormComponent],
+    RecordChangeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -783,6 +786,9 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    RecordMergeDeletionLogFormComponent,
+    RecordMergeLogFormComponent,
+    ReportCategoryFormComponent,
     ReportSnapshotFormComponent,
     ReportFormComponent,
     ResourceLinkFormComponent,
@@ -799,10 +805,7 @@ declarations: [
     TemplateCategoryFormComponent,
     TemplateContentTypeFormComponent,
     TemplateContentFormComponent,
-    TemplateParamFormComponent,
-    TemplateFormComponent,
-    UserApplicationEntityFormComponent,
-    UserApplicationFormComponent],
+    TemplateParamFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -828,6 +831,9 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    TemplateFormComponent,
+    UserApplicationEntityFormComponent,
+    UserApplicationFormComponent,
     UserFavoriteFormComponent,
     UserNotificationFormComponent,
     UserRecordLogFormComponent,
@@ -1032,6 +1038,9 @@ export function LoadCoreGeneratedForms() {
     LoadAIVendorTypeDefinitionFormComponent();
     LoadAIVendorTypeFormComponent();
     LoadAIVendorFormComponent();
+    LoadAPIApplicationScopeFormComponent();
+    LoadAPIApplicationFormComponent();
+    LoadAPIKeyApplicationFormComponent();
     LoadAPIKeyScopeFormComponent();
     LoadAPIKeyUsageLogFormComponent();
     LoadAPIKeyFormComponent();

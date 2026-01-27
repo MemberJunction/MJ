@@ -18,7 +18,7 @@ import { MaxLength } from 'class-validator';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
-import { APIKeyScopeEntity, APIKeyEntity, ChannelActionEntity, ChannelMessageAttachmentEntity, ChannelMessageEntity, ChannelRunEntity, ChannelTypeActionEntity, ChannelTypeEntity, ChannelEntity, ContactRoleEntity, ContactEntity, CredentialTypeEntity, CredentialEntity, IzzyActionCategoryEntity, IzzyActionOrganizationEntity, IzzyActionEntity, IzzyAIConfigurationEntity, OrganizationActionEntity, OrganizationContactEntity, OrganizationSettingEntity, OrganizationEntity, PlanEntity, ScopeEntity, SettingCategoryEntity, SettingEntity } from 'mj_generatedentities';
+import { APIKeyScopeEntity, APIKeyEntity, ChannelActionEntity, ChannelMessageAttachmentEntity, ChannelMessageEntity, ChannelRunEntity, ChannelTypeActionEntity, ChannelTypeEntity, ChannelEntity, ContactRoleEntity, ContactEntity, CredentialTypeEntity, CredentialEntity, flyway_schema_history__IzzyEntity, IzzyActionCategoryEntity, IzzyActionOrganizationEntity, IzzyActionEntity, IzzyAIConfigurationEntity, OrganizationActionEntity, OrganizationContactEntity, OrganizationSettingEntity, OrganizationEntity, PlanEntity, ScopeEntity, SettingCategoryEntity, SettingEntity } from 'mj_generatedentities';
     
 
 //****************************************************************************
@@ -3196,6 +3196,220 @@ export class IzzyCredentialResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Credentials', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Flyway _schema _histories__Izzy
+//****************************************************************************
+@ObjectType()
+export class Izzyflywayschemahistory_ {
+    @Field(() => Int) 
+    installed_rank: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    version?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(400)
+    description?: string;
+        
+    @Field() 
+    @MaxLength(40)
+    type: string;
+        
+    @Field() 
+    @MaxLength(2000)
+    script: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    checksum?: number;
+        
+    @Field() 
+    @MaxLength(200)
+    installed_by: string;
+        
+    @Field() 
+    @MaxLength(8)
+    installed_on: Date;
+        
+    @Field(() => Int) 
+    execution_time: number;
+        
+    @Field(() => Boolean) 
+    success: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for Flyway _schema _histories__Izzy
+//****************************************************************************
+@InputType()
+export class CreateIzzyflywayschemahistoryInput {
+    @Field(() => Int, { nullable: true })
+    installed_rank?: number;
+
+    @Field({ nullable: true })
+    version: string | null;
+
+    @Field({ nullable: true })
+    description: string | null;
+
+    @Field({ nullable: true })
+    type?: string;
+
+    @Field({ nullable: true })
+    script?: string;
+
+    @Field(() => Int, { nullable: true })
+    checksum: number | null;
+
+    @Field({ nullable: true })
+    installed_by?: string;
+
+    @Field({ nullable: true })
+    installed_on?: Date;
+
+    @Field(() => Int, { nullable: true })
+    execution_time?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    success?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Flyway _schema _histories__Izzy
+//****************************************************************************
+@InputType()
+export class UpdateIzzyflywayschemahistoryInput {
+    @Field(() => Int)
+    installed_rank: number;
+
+    @Field({ nullable: true })
+    version?: string | null;
+
+    @Field({ nullable: true })
+    description?: string | null;
+
+    @Field({ nullable: true })
+    type?: string;
+
+    @Field({ nullable: true })
+    script?: string;
+
+    @Field(() => Int, { nullable: true })
+    checksum?: number | null;
+
+    @Field({ nullable: true })
+    installed_by?: string;
+
+    @Field({ nullable: true })
+    installed_on?: Date;
+
+    @Field(() => Int, { nullable: true })
+    execution_time?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    success?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Flyway _schema _histories__Izzy
+//****************************************************************************
+@ObjectType()
+export class RunIzzyflywayschemahistoryViewResult {
+    @Field(() => [Izzyflywayschemahistory_])
+    Results: Izzyflywayschemahistory_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Izzyflywayschemahistory_)
+export class IzzyflywayschemahistoryResolver extends ResolverBase {
+    @Query(() => RunIzzyflywayschemahistoryViewResult)
+    async RunIzzyflywayschemahistoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunIzzyflywayschemahistoryViewResult)
+    async RunIzzyflywayschemahistoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunIzzyflywayschemahistoryViewResult)
+    async RunIzzyflywayschemahistoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'Flyway _schema _histories__Izzy';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => Izzyflywayschemahistory_, { nullable: true })
+    async Izzyflywayschemahistory(@Arg('installed_rank', () => Int) installed_rank: number, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Izzyflywayschemahistory_ | null> {
+        this.CheckUserReadPermissions('Flyway _schema _histories__Izzy', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [Izzy].[vwFlyway_schema_histories__Izzy] WHERE [installed_rank]=${installed_rank} ` + this.getRowLevelSecurityWhereClause(provider, 'Flyway _schema _histories__Izzy', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('Flyway _schema _histories__Izzy', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => Izzyflywayschemahistory_)
+    async CreateIzzyflywayschemahistory(
+        @Arg('input', () => CreateIzzyflywayschemahistoryInput) input: CreateIzzyflywayschemahistoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('Flyway _schema _histories__Izzy', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Izzyflywayschemahistory_)
+    async UpdateIzzyflywayschemahistory(
+        @Arg('input', () => UpdateIzzyflywayschemahistoryInput) input: UpdateIzzyflywayschemahistoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('Flyway _schema _histories__Izzy', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => Izzyflywayschemahistory_)
+    async DeleteIzzyflywayschemahistory(@Arg('installed_rank', () => Int) installed_rank: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'installed_rank', Value: installed_rank}]);
+        return this.DeleteRecord('Flyway _schema _histories__Izzy', key, options, provider, userPayload, pubSub);
     }
     
 }

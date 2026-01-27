@@ -73,8 +73,7 @@ declarations: [
     IzzyActionFormComponent,
     IzzyAIConfigurationFormComponent,
     OrganizationActionFormComponent,
-    OrganizationContactFormComponent,
-    OrganizationSettingFormComponent],
+    OrganizationContactFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -100,6 +99,7 @@ export class GeneratedForms_SubModule_0 { }
 
 @NgModule({
 declarations: [
+    OrganizationSettingFormComponent,
     OrganizationFormComponent,
     PlanFormComponent,
     ScopeFormComponent,
