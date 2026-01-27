@@ -30,7 +30,7 @@ async function handleSingleEnvironmentFile(dir, normalizedDir, archive, subDir, 
       CLIENT_ID: '',
       TENANT_ID: '',
       CLIENT_AUTHORITY: '',
-      AUTH_TYPE: 'MSAL',
+      AUTH_TYPE: 'msal',
       NODE_ENV: isDevelopment ? 'development' : 'production',
       AUTOSAVE_DEBOUNCE_MS: 1200,
       SEARCH_DEBOUNCE_MS: 800,
@@ -41,7 +41,7 @@ async function handleSingleEnvironmentFile(dir, normalizedDir, archive, subDir, 
       APPLICATION_INSTANCE: isDevelopment ? 'DEV' : fileName.includes('staging') ? 'STAGE' : 'PROD',
       AUTH0_DOMAIN: '',
       AUTH0_CLIENTID: '',
-    });
+    }, null, 2);
   }
 
   // Clear values for sensitive keys in the environment configuration
@@ -49,6 +49,9 @@ async function handleSingleEnvironmentFile(dir, normalizedDir, archive, subDir, 
   if (!fileContent.includes('export const environment = ')) {
     fileContent = `export const environment = ${fileContent}`;
   }
+
+  // Convert AUTH_TYPE to TypeScript 'as const' syntax
+  fileContent = fileContent.replace(/"AUTH_TYPE":\s*"msal"/, "AUTH_TYPE: 'msal' as const");
 
   // Append modified content to the archive
   archive.append(fileContent, { name: path.join(normalizedDir, subDir, fileName) });
