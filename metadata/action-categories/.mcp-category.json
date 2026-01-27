@@ -1,0 +1,10 @@
+[
+  {
+    "fields": {
+      "Name": "MCP",
+      "Description": "Model Context Protocol (MCP) actions for managing external tool servers and connections",
+      "ParentID": "@lookup:Action Categories.Name=System&ParentID=null",
+      "Status": "Active"
+    }
+  }
+]

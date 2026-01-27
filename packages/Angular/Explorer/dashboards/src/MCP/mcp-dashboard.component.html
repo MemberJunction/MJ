@@ -1,0 +1,425 @@
+<div class="mcp-dashboard">
+    <!-- Header -->
+    <div class="dashboard-header">
+        <div class="header-title">
+            <i class="fa-solid fa-plug-circle-bolt"></i>
+            <h1>MCP Management</h1>
+        </div>
+        <div class="header-actions">
+            <button kendoButton (click)="loadAllData()" [disabled]="IsLoading">
+                <i class="fa-solid fa-sync" [class.fa-spin]="IsLoading"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon servers">
+                <i class="fa-solid fa-server"></i>
+            </div>
+            <div class="stat-content">
+                <span class="stat-value">{{ stats.activeServers }}/{{ stats.totalServers }}</span>
+                <span class="stat-label">Active Servers</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon connections">
+                <i class="fa-solid fa-link"></i>
+            </div>
+            <div class="stat-content">
+                <span class="stat-value">{{ stats.activeConnections }}/{{ stats.totalConnections }}</span>
+                <span class="stat-label">Active Connections</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon tools">
+                <i class="fa-solid fa-wrench"></i>
+            </div>
+            <div class="stat-content">
+                <span class="stat-value">{{ stats.activeTools }}/{{ stats.totalTools }}</span>
+                <span class="stat-label">Active Tools</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon executions" [class.has-errors]="stats.failedExecutions > 0">
+                <i class="fa-solid fa-chart-line"></i>
+            </div>
+            <div class="stat-content">
+                <span class="stat-value">{{ stats.recentExecutions }}</span>
+                <span class="stat-label">Recent Executions (7d)</span>
+                @if (stats.failedExecutions > 0) {
+                    <span class="stat-error">{{ stats.failedExecutions }} failed</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Message -->
+    @if (ErrorMessage) {
+        <div class="error-banner">
+            <i class="fa-solid fa-exclamation-triangle"></i>
+            {{ ErrorMessage }}
+            <button class="close-btn" (click)="ErrorMessage = null">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+    }
+
+    <!-- Tabs -->
+    <div class="tabs-container">
+        <div class="tabs">
+            <button class="tab" [class.active]="ActiveTab === 'servers'" (click)="setActiveTab('servers')">
+                <i class="fa-solid fa-server"></i>
+                Servers
+                <span class="badge">{{ servers.length }}</span>
+            </button>
+            <button class="tab" [class.active]="ActiveTab === 'connections'" (click)="setActiveTab('connections')">
+                <i class="fa-solid fa-link"></i>
+                Connections
+                <span class="badge">{{ connections.length }}</span>
+            </button>
+            <button class="tab" [class.active]="ActiveTab === 'tools'" (click)="setActiveTab('tools')">
+                <i class="fa-solid fa-wrench"></i>
+                Tools
+                <span class="badge">{{ tools.length }}</span>
+            </button>
+            <button class="tab" [class.active]="ActiveTab === 'logs'" (click)="setActiveTab('logs')">
+                <i class="fa-solid fa-list-check"></i>
+                Execution Logs
+                <span class="badge">{{ executionLogs.length }}</span>
+            </button>
+        </div>
+
+        <!-- Search and Filters -->
+        <div class="filters-bar">
+            <div class="search-box">
+                <i class="fa-solid fa-search"></i>
+                <input type="text"
+                       placeholder="Search..."
+                       [ngModel]="(filters$ | async)?.searchTerm"
+                       (ngModelChange)="onSearchChange($event)">
+            </div>
+
+            @switch (ActiveTab) {
+                @case ('servers') {
+                    <select class="status-filter"
+                            [ngModel]="(filters$ | async)?.serverStatus"
+                            (ngModelChange)="onStatusFilterChange('server', $event)">
+                        <option value="all">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                    <button kendoButton themeColor="primary" (click)="createServer()">
+                        <i class="fa-solid fa-plus"></i>
+                        Add Server
+                    </button>
+                }
+                @case ('connections') {
+                    <select class="status-filter"
+                            [ngModel]="(filters$ | async)?.connectionStatus"
+                            (ngModelChange)="onStatusFilterChange('connection', $event)">
+                        <option value="all">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                        <option value="Error">Error</option>
+                    </select>
+                    <button kendoButton themeColor="primary" (click)="createConnection()">
+                        <i class="fa-solid fa-plus"></i>
+                        Add Connection
+                    </button>
+                }
+                @case ('tools') {
+                    <select class="status-filter"
+                            [ngModel]="(filters$ | async)?.toolStatus"
+                            (ngModelChange)="onStatusFilterChange('tool', $event)">
+                        <option value="all">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Deprecated">Deprecated</option>
+                    </select>
+                }
+                @case ('logs') {
+                    <select class="status-filter"
+                            [ngModel]="(filters$ | async)?.logStatus"
+                            (ngModelChange)="onStatusFilterChange('log', $event)">
+                        <option value="all">All Status</option>
+                        <option value="Success">Success</option>
+                        <option value="Error">Error</option>
+                        <option value="Running">Running</option>
+                    </select>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content-container">
+        @if (IsLoading) {
+            <mj-loading text="Loading MCP data..."></mj-loading>
+        } @else {
+            @switch (ActiveTab) {
+                <!-- Servers Tab -->
+                @case ('servers') {
+                    <div class="data-grid servers-grid">
+                        @if (filteredServers.length === 0) {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-server"></i>
+                                <p>No MCP servers configured</p>
+                                <button kendoButton themeColor="primary" (click)="createServer()">
+                                    Add Your First Server
+                                </button>
+                            </div>
+                        } @else {
+                            @for (server of filteredServers; track server.ID) {
+                                <div class="data-card">
+                                    <div class="card-header">
+                                        <div class="card-title">
+                                            <i [class]="getTransportIcon(server.TransportType)"></i>
+                                            <span class="name">{{ server.Name }}</span>
+                                            <span class="status-badge" [ngClass]="getStatusClass(server.Status)">
+                                                {{ server.Status }}
+                                            </span>
+                                        </div>
+                                        <div class="card-actions">
+                                            <button kendoButton fillMode="flat" (click)="editServer(server)" title="Edit">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </button>
+                                            <button kendoButton fillMode="flat" (click)="deleteServer(server)" title="Delete">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        @if (server.Description) {
+                                            <p class="description">{{ server.Description }}</p>
+                                        }
+                                        <div class="details-grid">
+                                            <div class="detail">
+                                                <span class="label">Transport</span>
+                                                <span class="value">{{ server.TransportType }}</span>
+                                            </div>
+                                            <div class="detail">
+                                                <span class="label">Auth</span>
+                                                <span class="value">{{ server.DefaultAuthType }}</span>
+                                            </div>
+                                            <div class="detail">
+                                                <span class="label">Connections</span>
+                                                <span class="value">{{ server.ConnectionCount }}</span>
+                                            </div>
+                                            <div class="detail">
+                                                <span class="label">Tools</span>
+                                                <span class="value">{{ server.ToolCount }}</span>
+                                            </div>
+                                            @if (server.ServerURL) {
+                                                <div class="detail full-width">
+                                                    <span class="label">URL</span>
+                                                    <span class="value url">{{ server.ServerURL }}</span>
+                                                </div>
+                                            }
+                                            @if (server.Command) {
+                                                <div class="detail full-width">
+                                                    <span class="label">Command</span>
+                                                    <span class="value command">{{ server.Command }}</span>
+                                                </div>
+                                            }
+                                            <div class="detail">
+                                                <span class="label">Last Sync</span>
+                                                <span class="value">{{ formatDate(server.LastSyncAt) }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+
+                <!-- Connections Tab -->
+                @case ('connections') {
+                    <div class="data-grid connections-grid">
+                        @if (filteredConnections.length === 0) {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-link"></i>
+                                <p>No connections configured</p>
+                                <button kendoButton themeColor="primary" (click)="createConnection()">
+                                    Add Your First Connection
+                                </button>
+                            </div>
+                        } @else {
+                            @for (conn of filteredConnections; track conn.ID) {
+                                <div class="data-card">
+                                    <div class="card-header">
+                                        <div class="card-title">
+                                            <i class="fa-solid fa-link"></i>
+                                            <span class="name">{{ conn.Name }}</span>
+                                            <span class="status-badge" [ngClass]="getStatusClass(conn.Status)">
+                                                {{ conn.Status }}
+                                            </span>
+                                        </div>
+                                        <div class="card-actions">
+                                            <button kendoButton fillMode="flat" (click)="editConnection(conn)" title="Edit">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </button>
+                                            <button kendoButton fillMode="flat" (click)="deleteConnection(conn)" title="Delete">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        @if (conn.Description) {
+                                            <p class="description">{{ conn.Description }}</p>
+                                        }
+                                        <div class="details-grid">
+                                            <div class="detail">
+                                                <span class="label">Server</span>
+                                                <span class="value">{{ conn.ServerName }}</span>
+                                            </div>
+                                            <div class="detail">
+                                                <span class="label">Auto Sync</span>
+                                                <span class="value">{{ conn.AutoSyncTools ? 'Yes' : 'No' }}</span>
+                                            </div>
+                                            <div class="detail">
+                                                <span class="label">Logging</span>
+                                                <span class="value">{{ conn.LogToolCalls ? 'Enabled' : 'Disabled' }}</span>
+                                            </div>
+                                            <div class="detail">
+                                                <span class="label">Last Connected</span>
+                                                <span class="value">{{ formatDate(conn.LastConnectedAt) }}</span>
+                                            </div>
+                                            @if (conn.LastErrorMessage) {
+                                                <div class="detail full-width error">
+                                                    <span class="label">Last Error</span>
+                                                    <span class="value">{{ conn.LastErrorMessage }}</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+
+                <!-- Tools Tab -->
+                @case ('tools') {
+                    <div class="data-table">
+                        @if (filteredTools.length === 0) {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-wrench"></i>
+                                <p>No tools discovered yet</p>
+                                <span class="hint">Tools are discovered when connections sync with MCP servers</span>
+                            </div>
+                        } @else {
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Tool Name</th>
+                                        <th>Title</th>
+                                        <th>Server</th>
+                                        <th>Status</th>
+                                        <th>Discovered</th>
+                                        <th>Last Seen</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (tool of filteredTools; track tool.ID) {
+                                        <tr (click)="viewToolDetails(tool)">
+                                            <td class="tool-name">
+                                                <i class="fa-solid fa-wrench"></i>
+                                                {{ tool.ToolName }}
+                                            </td>
+                                            <td>{{ tool.ToolTitle || '-' }}</td>
+                                            <td>{{ tool.ServerName }}</td>
+                                            <td>
+                                                <span class="status-badge" [ngClass]="getStatusClass(tool.Status)">
+                                                    {{ tool.Status }}
+                                                </span>
+                                            </td>
+                                            <td>{{ formatDate(tool.DiscoveredAt) }}</td>
+                                            <td>{{ formatDate(tool.LastSeenAt) }}</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                }
+
+                <!-- Logs Tab -->
+                @case ('logs') {
+                    <div class="data-table">
+                        @if (filteredLogs.length === 0) {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-list-check"></i>
+                                <p>No recent execution logs</p>
+                                <span class="hint">Logs appear when tools are executed via MCP connections</span>
+                            </div>
+                        } @else {
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Status</th>
+                                        <th>Tool</th>
+                                        <th>Connection</th>
+                                        <th>Started</th>
+                                        <th>Duration</th>
+                                        <th>Error</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (log of filteredLogs; track log.ID) {
+                                        <tr [class.error-row]="log.Status === 'Error'">
+                                            <td>
+                                                <span class="status-badge" [ngClass]="getStatusClass(log.Status)">
+                                                    @switch (log.Status) {
+                                                        @case ('Success') {
+                                                            <i class="fa-solid fa-check"></i>
+                                                        }
+                                                        @case ('Error') {
+                                                            <i class="fa-solid fa-times"></i>
+                                                        }
+                                                        @case ('Running') {
+                                                            <i class="fa-solid fa-spinner fa-spin"></i>
+                                                        }
+                                                    }
+                                                    {{ log.Status }}
+                                                </span>
+                                            </td>
+                                            <td class="tool-name">{{ log.ToolName }}</td>
+                                            <td>{{ log.ConnectionName }}</td>
+                                            <td>{{ formatDate(log.StartedAt) }}</td>
+                                            <td>{{ formatDuration(log.DurationMs) }}</td>
+                                            <td class="error-message" [title]="log.ErrorMessage || ''">
+                                                {{ log.ErrorMessage || '-' }}
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                }
+            }
+        }
+    </div>
+</div>
+
+<!-- Server Dialog -->
+@if (ShowServerDialog) {
+    <mj-mcp-server-dialog
+        [server]="EditingServer"
+        [visible]="ShowServerDialog"
+        (close)="onServerDialogClose($event)">
+    </mj-mcp-server-dialog>
+}
+
+<!-- Connection Dialog -->
+@if (ShowConnectionDialog) {
+    <mj-mcp-connection-dialog
+        [connection]="EditingConnection"
+        [servers]="servers"
+        [visible]="ShowConnectionDialog"
+        (close)="onConnectionDialogClose($event)">
+    </mj-mcp-connection-dialog>
+}

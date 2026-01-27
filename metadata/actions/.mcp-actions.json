@@ -1,0 +1,438 @@
+[
+  {
+    "fields": {
+      "Name": "Test MCP Connection",
+      "Description": "Tests connectivity to an MCP server and retrieves server information including name, version, capabilities, and connection latency. Use this action to verify an MCP server is reachable and responding correctly before attempting to execute tools.",
+      "DriverClass": "Test MCP Connection",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-plug-circle-check",
+      "CategoryID": "@lookup:Action Categories.Name=MCP&Parent=System"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConnectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MCP Server Connection to test. This should be a valid connection ID from the MCP Server Connections entity.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ServerName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the MCP server as reported by the server itself.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ServerVersion",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version of the MCP server.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LatencyMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Connection latency in milliseconds.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Capabilities",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Server capabilities object indicating supported features (tools, resources, prompts, etc.).",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Connection test succeeded. Server is reachable and responding."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required ConnectionID parameter was not provided."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONNECTION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to connect to the MCP server. Check server URL and network connectivity."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during the connection test."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "List MCP Tools",
+      "Description": "Retrieves the list of available tools from an MCP server connection. Returns tool names, descriptions, and input schemas for each tool. Use this action for discovery to understand what tools are available on a server before executing them.",
+      "DriverClass": "List MCP Tools",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list-check",
+      "CategoryID": "@lookup:Action Categories.Name=MCP&Parent=System"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConnectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MCP Server Connection to query for available tools.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tools",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of tool definitions. Each tool includes: name, description, and inputSchema (JSON Schema for parameters).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ToolCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of tools available on the server.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Successfully retrieved the list of tools from the MCP server."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required ConnectionID parameter was not provided."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LIST_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to retrieve tools from the server. Connection may be unavailable."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred while listing tools."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sync MCP Tools",
+      "Description": "Synchronizes tools from an MCP server to the local database. Discovers all available tools, adds new ones, updates existing tool definitions, and marks tools that are no longer available as deprecated. Use this action to keep the local tool catalog up to date with the server.",
+      "DriverClass": "Sync MCP Tools",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-arrows-rotate",
+      "CategoryID": "@lookup:Action Categories.Name=MCP&Parent=System"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConnectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MCP Server Connection to synchronize tools from.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Added",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of new tools added to the database.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Updated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of existing tools that were updated.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Deprecated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of tools marked as deprecated (no longer available on server).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Total",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of active tools after synchronization.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Tool synchronization completed successfully."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required ConnectionID parameter was not provided."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SYNC_FAILED",
+            "IsSuccess": false,
+            "Description": "Tool synchronization failed. Check connection and server availability."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during tool synchronization."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Execute MCP Tool",
+      "Description": "Executes a tool on an MCP server. Connects to the server if not already connected, calls the specified tool with provided arguments, and returns the result. This is the primary action for invoking external tool capabilities through MCP.",
+      "DriverClass": "Execute MCP Tool",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-play",
+      "CategoryID": "@lookup:Action Categories.Name=MCP&Parent=System"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConnectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MCP Server Connection to use for tool execution.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ToolName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the tool to execute. Must match a tool name available on the server.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Arguments",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Input arguments for the tool as a JSON object. The structure should match the tool's input schema.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Timeout",
+            "DefaultValue": "60000",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Request timeout in milliseconds. Default: 60000 (60 seconds).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ToolOutput",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of content blocks returned by the tool. Each block has a type (text, image, etc.) and content.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StructuredOutput",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Structured content returned by the tool, if available. This is the parsed/processed result.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DurationMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Execution duration in milliseconds.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsToolError",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating whether the tool returned an error response (as opposed to a connection/protocol error).",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Tool executed successfully and returned a result."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required parameter (ConnectionID or ToolName) was not provided."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "TOOL_ERROR",
+            "IsSuccess": false,
+            "Description": "The tool executed but returned an error. Check the error message for details."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTION_FAILED",
+            "IsSuccess": false,
+            "Description": "Tool execution failed due to connection or protocol error."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during tool execution."
+          }
+        }
+      ]
+    }
+  }
+]
