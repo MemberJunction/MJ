@@ -13,10 +13,10 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
-import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
 import { Metadata } from '@memberjunction/core';
-import { EncryptionEngine } from '@memberjunction/encryption';
+import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -76,26 +76,38 @@ export const getUserPayload = async (
     if (userApiKey && userApiKey !== String(undefined)) {
       // Use system user as context for validation operations
       const systemUser = await getSystemUser(readOnlyDataSource);
-      const validationResult = await EncryptionEngine.Instance.ValidateAPIKey(
+      const apiKeyEngine = GetAPIKeyEngine();
+      const validationResult = await apiKeyEngine.ValidateAPIKey(
         {
-          rawKey: userApiKey,
-          endpoint: requestContext?.endpoint ?? '/api',
-          method: requestContext?.method ?? 'POST',
-          operation: requestContext?.operationName ?? null,
-          statusCode: 200, // Auth succeeded if we get here
-          responseTimeMs: null, // Not available at auth time
-          ipAddress: requestContext?.ipAddress ?? null,
-          userAgent: requestContext?.userAgent ?? null,
+          RawKey: userApiKey,
+          ApplicationName: 'MJAPI', // Check if key is bound to this application
+          Endpoint: requestContext?.endpoint ?? '/api',
+          Method: requestContext?.method ?? 'POST',
+          Operation: requestContext?.operationName ?? null,
+          StatusCode: 200, // Auth succeeded if we get here
+          ResponseTimeMs: undefined, // Not available at auth time
+          IPAddress: requestContext?.ipAddress ?? null,
+          UserAgent: requestContext?.userAgent ?? null,
         },
         systemUser
       );
 
-      if (validationResult.isValid && validationResult.user) {
+      if (validationResult.IsValid && validationResult.User) {
+        // Get the user from UserCache to ensure UserRoles is properly populated
+        // The validationResult.User from APIKeyEngine doesn't include UserRoles
+        const cachedUser = UserCache.Instance.Users.find(
+          u => u.ID === validationResult.User.ID
+        );
+
+        // Use cached user if available, otherwise fall back to the validation result
+        const userRecord = cachedUser || validationResult.User;
+
         return {
-          userRecord: validationResult.user,
-          email: validationResult.user.Email,
+          userRecord,
+          email: userRecord.Email,
           sessionId,
-          apiKeyId: validationResult.apiKeyId,
+          apiKeyId: validationResult.APIKeyId,
+          apiKeyHash: validationResult.APIKeyHash,
         };
       }
 

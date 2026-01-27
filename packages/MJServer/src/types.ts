@@ -13,6 +13,8 @@ export type UserPayload = {
   apiKey?: string;
   /** ID of the MJ API key used for authentication (when using mj_sk_* format keys) */
   apiKeyId?: string;
+  /** SHA-256 hash of the MJ API key (used for scope authorization) */
+  apiKeyHash?: string;
 };
 
 /**

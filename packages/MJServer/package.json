@@ -53,6 +53,7 @@
     "@memberjunction/data-context": "3.2.0",
     "@memberjunction/data-context-server": "3.2.0",
     "@memberjunction/doc-utils": "3.2.0",
+    "@memberjunction/api-keys": "3.2.0",
     "@memberjunction/encryption": "3.2.0",
     "@memberjunction/entity-communications-server": "3.2.0",
     "@memberjunction/external-change-detection": "3.2.0",

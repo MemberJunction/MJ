@@ -2,7 +2,7 @@ import { Resolver, Mutation, Arg, Ctx } from "type-graphql";
 import { Field, InputType, ObjectType } from "type-graphql";
 import { LogError, Metadata } from "@memberjunction/core";
 import { APIKeyScopeEntity } from "@memberjunction/core-entities";
-import { EncryptionEngine } from "@memberjunction/encryption";
+import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import { AppContext } from "../types.js";
 
 /**
@@ -95,7 +95,7 @@ export class APIKeyResolver {
      * Creates a new API key with proper server-side cryptographic hashing.
      *
      * This mutation:
-     * 1. Generates a cryptographically secure API key using EncryptionEngine
+     * 1. Generates a cryptographically secure API key using APIKeyEngine
      * 2. Stores only the SHA-256 hash in the database (never the raw key)
      * 3. Returns the raw key ONCE - it cannot be recovered after this call
      * 4. Optionally assigns scope permissions to the key
@@ -119,33 +119,34 @@ export class APIKeyResolver {
                 };
             }
 
-            // Use EncryptionEngine to create the API key with proper server-side crypto
-            const result = await EncryptionEngine.Instance.CreateAPIKey(
+            // Use APIKeyEngine to create the API key with proper server-side crypto
+            const apiKeyEngine = GetAPIKeyEngine();
+            const result = await apiKeyEngine.CreateAPIKey(
                 {
-                    userId: user.ID,
-                    label: input.Label,
-                    description: input.Description,
-                    expiresAt: input.ExpiresAt
+                    UserId: user.ID,
+                    Label: input.Label,
+                    Description: input.Description,
+                    ExpiresAt: input.ExpiresAt
                 },
                 user
             );
 
-            if (!result.success) {
+            if (!result.Success) {
                 return {
                     Success: false,
-                    Error: result.error || "Failed to create API key"
+                    Error: result.Error || "Failed to create API key"
                 };
             }
 
             // Save scope associations if provided
-            if (input.ScopeIDs && input.ScopeIDs.length > 0 && result.apiKeyId) {
-                await this.saveScopeAssociations(result.apiKeyId, input.ScopeIDs, user);
+            if (input.ScopeIDs && input.ScopeIDs.length > 0 && result.APIKeyId) {
+                await this.saveScopeAssociations(result.APIKeyId, input.ScopeIDs, user);
             }
 
             return {
                 Success: true,
-                RawKey: result.rawKey,
-                APIKeyID: result.apiKeyId
+                RawKey: result.RawKey,
+                APIKeyID: result.APIKeyId
             };
         } catch (e) {
             const error = e as Error;
@@ -161,7 +162,7 @@ export class APIKeyResolver {
      * Revokes an API key, permanently disabling it.
      *
      * Once revoked, an API key cannot be reactivated. Users must create a new key.
-     * This uses EncryptionEngine.RevokeAPIKey() for consistency.
+     * This uses APIKeyEngine.RevokeAPIKey() for consistency.
      *
      * @param apiKeyId The database ID of the API key to revoke
      * @param ctx The GraphQL context with authenticated user
@@ -181,7 +182,8 @@ export class APIKeyResolver {
                 };
             }
 
-            const result = await EncryptionEngine.Instance.RevokeAPIKey(apiKeyId, user);
+            const apiKeyEngine = GetAPIKeyEngine();
+            const result = await apiKeyEngine.RevokeAPIKey(apiKeyId, user);
 
             if (result) {
                 return { Success: true };
