@@ -16,6 +16,10 @@ export interface NotesObservabilityOptions {
      * Parent step ID for hierarchical step logging
      */
     parentStepID?: string;
+    /**
+     * Step sequence number for the rerank step
+     */
+    stepNumber?: number;
 }
 
 /**
@@ -148,7 +152,8 @@ export class AgentContextInjector {
                 params.contextUser,
                 params.observability ? {
                     agentRunID: params.observability.agentRunID,
-                    parentStepID: params.observability.parentStepID
+                    parentStepID: params.observability.parentStepID,
+                    stepNumber: params.observability.stepNumber
                 } : undefined
             );
 
