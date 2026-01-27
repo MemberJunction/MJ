@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-shared-generic",
-  "version": "2.133.0",
+  "version": "3.2.0",
   "description": "MemberJunction: Generic Angular Shared Package - utility services and reusable elements used in any Angular application.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -27,8 +27,8 @@
     "rxjs": "^7.8.1"
   },
   "dependencies": {
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/core-entities": "2.133.0",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/core-entities": "3.2.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

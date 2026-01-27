@@ -1,47 +1,19 @@
 <div class="mj-page-container">
-  <!-- Header Section -->
-  <div class="mj-header">
-    <div class="mj-header-title">
-      <i class="fa-solid fa-cog"></i>
-      <h1>Settings</h1>
-    </div>
-    
-    <div class="mj-header-actions">
-      <div class="mj-search">
-        <i class="fa-solid fa-search mj-search-icon"></i>
-        <input 
-          type="text" 
-          class="mj-search-input" 
-          placeholder="Search settings..."
-          (input)="onSearchChange($event)"
-          [value]="searchTerm$.value"
-        />
-      </div>
-    </div>
-  </div>
-
   <!-- Loading State -->
   @if (isLoading) {
-    <div class="loading-container">
-      <div class="loading-content">
-        <div class="loading-spinner">
-          <div class="spinner-ring"></div>
-          <div class="spinner-ring"></div>
-          <div class="spinner-ring"></div>
-        </div>
-        <div class="loading-text">Loading settings...</div>
-      </div>
+    <div class="loading-container" role="status" aria-live="polite">
+      <mj-loading text="Loading settings..."></mj-loading>
     </div>
   }
 
   <!-- Error State -->
   @if (error && !isLoading) {
-    <div class="error-container">
+    <div class="error-container" role="alert">
       <div class="error-content">
-        <i class="fa-solid fa-exclamation-triangle error-icon"></i>
+        <i class="fa-solid fa-exclamation-triangle error-icon" aria-hidden="true"></i>
         <p class="error-message">{{ error }}</p>
         <button class="retry-button" (click)="loadInitialData()">
-          <i class="fa-solid fa-refresh"></i>
+          <i class="fa-solid fa-refresh" aria-hidden="true"></i>
           Try Again
         </button>
       </div>
@@ -55,15 +27,43 @@
       @if (!isMobile) {
         <div class="desktop-layout" style="display: flex;">
           <!-- Side Navigation -->
-          <nav class="side-navigation">
-            <ul class="nav-list">
-              @for (tab of tabs; track tab.id) {
-                <li 
+          <nav class="side-navigation" role="navigation" aria-label="Settings navigation">
+            <!-- Search Bar -->
+            <div class="nav-search">
+              <i class="fa-solid fa-search nav-search-icon" aria-hidden="true"></i>
+              <input
+                type="text"
+                class="nav-search-input"
+                placeholder="Search settings..."
+                (input)="onSearchChange($event)"
+                [value]="searchTerm$.value"
+                aria-label="Search settings"
+              />
+              @if (searchTerm$.value) {
+                <button
+                  class="nav-search-clear"
+                  (click)="clearSearch()"
+                  aria-label="Clear search"
+                  tabindex="0"
+                >
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              }
+            </div>
+
+            <ul class="nav-list" role="tablist" aria-orientation="vertical">
+              @for (tab of filteredTabs; track tab.id) {
+                <li
                   class="nav-item"
                   [class.active]="activeTab === tab.id"
                   (click)="onTabChange(tab.id)"
+                  (keydown.enter)="onTabChange(tab.id)"
+                  role="tab"
+                  [attr.aria-selected]="activeTab === tab.id"
+                  [attr.aria-controls]="'panel-' + tab.id"
+                  tabindex="0"
                 >
-                  <i [class]="tab.icon"></i>
+                  <i [class]="tab.icon" aria-hidden="true"></i>
                   <span class="nav-label">{{ tab.label }}</span>
                   @if (tab.badgeCount && tab.badgeCount > 0) {
                     <span class="nav-badge" [class]="'badge-' + (tab.badgeColor || 'primary')">
@@ -76,7 +76,7 @@
           </nav>
 
           <!-- Content Area -->
-          <div class="content-area">
+          <div class="content-area" role="tabpanel" [attr.id]="'panel-' + activeTab">
             <div class="tab-content">
               @switch (activeTab) {
                 @case ('general') {
@@ -94,7 +94,7 @@
                         </div>
                       </mj-settings-card>
 
-                      <mj-settings-card 
+                      <mj-settings-card
                         title="Preferences"
                         icon="fa-solid fa-sliders"
                         [expanded]="isSectionExpanded('preferences')"
@@ -105,22 +105,10 @@
                           <!-- Preferences content will go here -->
                         </div>
                       </mj-settings-card>
-
-                      <mj-settings-card 
-                        title="Notifications"
-                        icon="fa-solid fa-bell"
-                        [expanded]="isSectionExpanded('notifications')"
-                        (toggle)="toggleSection('notifications')"
-                      >
-                        <div class="card-content">
-                          <p>Configure how and when you receive notifications.</p>
-                          <!-- Notification settings will go here -->
-                        </div>
-                      </mj-settings-card>
                     </div>
                   </div>
                 }
-                
+
                 @case ('users') {
                   <div class="users-settings">
                     <h2 class="section-title">User Management</h2>
@@ -128,7 +116,7 @@
                     <mj-user-management></mj-user-management>
                   </div>
                 }
-                
+
                 @case ('roles') {
                   <div class="roles-settings">
                     <h2 class="section-title">Role Management</h2>
@@ -136,69 +124,88 @@
                     <mj-role-management></mj-role-management>
                   </div>
                 }
-                
+
                 @case ('applications') {
                   <div class="applications-settings">
                     <mj-application-management></mj-application-management>
                   </div>
                 }
-                
+
                 @case ('permissions') {
                   <div class="permissions-settings">
                     <mj-entity-permissions></mj-entity-permissions>
                   </div>
                 }
-                
+
+                @case ('notifications') {
+                  <div class="notifications-settings">
+                    <h2 class="section-title">Notifications</h2>
+                    <p class="section-description">Configure how and when you receive notifications</p>
+                    <mj-notification-preferences></mj-notification-preferences>
+                  </div>
+                }
+
                 @case ('advanced') {
                   <div class="advanced-settings">
                     <h2 class="section-title">Advanced Settings</h2>
                     <div class="beta-warning">
-                      <i class="fa-solid fa-flask"></i>
+                      <i class="fa-solid fa-flask" aria-hidden="true"></i>
                       <span>Beta features - Use with caution</span>
                     </div>
-                    
+
                     <!-- Tab Navigation -->
-                    <div class="advanced-tabs">
-                      <button 
+                    <div class="advanced-tabs" role="tablist" aria-label="Advanced settings tabs">
+                      <button
                         class="tab-btn"
                         [class.active]="advancedActiveTab === 'sql-logging'"
                         (click)="setAdvancedTab('sql-logging')"
+                        role="tab"
+                        [attr.aria-selected]="advancedActiveTab === 'sql-logging'"
+                        aria-controls="panel-sql-logging"
                       >
-                        <i class="fa-solid fa-database"></i>
+                        <i class="fa-solid fa-database" aria-hidden="true"></i>
                         SQL Logging
                       </button>
-                      <button 
+                      <button
                         class="tab-btn"
                         [class.active]="advancedActiveTab === 'performance'"
                         (click)="setAdvancedTab('performance')"
+                        role="tab"
+                        [attr.aria-selected]="advancedActiveTab === 'performance'"
+                        aria-controls="panel-performance"
                       >
-                        <i class="fa-solid fa-gauge-high"></i>
+                        <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
                         Performance
                       </button>
-                      <button 
+                      <button
                         class="tab-btn"
                         [class.active]="advancedActiveTab === 'developer'"
                         (click)="setAdvancedTab('developer')"
+                        role="tab"
+                        [attr.aria-selected]="advancedActiveTab === 'developer'"
+                        aria-controls="panel-developer"
                       >
-                        <i class="fa-solid fa-code"></i>
+                        <i class="fa-solid fa-code" aria-hidden="true"></i>
                         Developer Tools
                       </button>
                     </div>
-                    
+
                     <!-- Tab Content -->
                     <div class="advanced-tab-content">
                       @switch (advancedActiveTab) {
                         @case ('sql-logging') {
-                          <mj-sql-logging></mj-sql-logging>
+                          <div id="panel-sql-logging" role="tabpanel">
+                            <mj-sql-logging></mj-sql-logging>
+                          </div>
                         }
                         @case ('performance') {
-                          <div class="performance-settings">
+                          <div id="panel-performance" role="tabpanel" class="performance-settings">
                             <h3>Performance Settings</h3>
                             <p>Performance monitoring and optimization tools coming soon.</p>
                           </div>
                         }
                         @case ('developer') {
-                          <div class="developer-settings">
+                          <div id="panel-developer" role="tabpanel" class="developer-settings">
                             <h3>Developer Tools</h3>
                             <p>Advanced developer options coming soon.</p>
                           </div>
@@ -216,52 +223,211 @@
       <!-- Mobile Layout -->
       @if (isMobile) {
         <div class="mobile-layout">
-          <!-- Mobile Content -->
-          <div class="mobile-content">
-            @switch (activeTab) {
-              @case ('general') {
-                <div class="general-settings">
-                  <h2 class="section-title">General Settings</h2>
-                  <!-- Same content as desktop but responsive -->
-                </div>
-              }
-              @case ('users') {
-                <div class="users-settings">
-                  <h2 class="section-title">User Management</h2>
-                  <p class="section-description">Manage user accounts, roles, and permissions</p>
-                  <mj-user-management></mj-user-management>
-                </div>
-              }
-              <!-- Other cases similar to desktop -->
-            }
-          </div>
+          <!-- Mobile Header (Hidden when nav is open) -->
+          @if (!isMobileNavOpen) {
+            <header class="mobile-header">
+              <button
+                class="mobile-header-icon"
+                (click)="toggleMobileNav()"
+                aria-label="Toggle navigation menu"
+                [attr.aria-expanded]="isMobileNavOpen"
+              >
+                <i class="fa-solid fa-bars" aria-hidden="true"></i>
+              </button>
+              <h1 class="mobile-header-title">Settings</h1>
+              <div class="mobile-header-spacer"></div>
+            </header>
+          }
 
-          <!-- Mobile Bottom Navigation -->
-          <nav class="mobile-navigation">
-            <div class="nav-tabs">
-              @for (tab of tabs.slice(0, 5); track tab.id) {
-                <button 
-                  class="nav-tab"
+          <!-- Backdrop Overlay -->
+          @if (isMobileNavOpen) {
+            <div
+              class="mobile-nav-backdrop"
+              (click)="closeMobileNav()"
+              aria-hidden="true"
+            ></div>
+          }
+
+          <!-- Mobile Navigation Rail (Collapsible) -->
+          <nav
+            class="mobile-nav-rail"
+            [class.open]="isMobileNavOpen"
+            role="navigation"
+            aria-label="Settings navigation"
+          >
+            <!-- Navigation Header -->
+            <div class="nav-rail-header">
+              <span class="nav-rail-title">Settings</span>
+            </div>
+
+            <!-- Navigation Items -->
+            <div class="nav-rail-items" role="tablist">
+              @for (tab of filteredTabs; track tab.id) {
+                <button
+                  class="nav-rail-item"
                   [class.active]="activeTab === tab.id"
-                  (click)="onTabChange(tab.id)"
+                  (click)="onMobileTabChange(tab.id)"
+                  role="tab"
+                  [attr.aria-selected]="activeTab === tab.id"
+                  [attr.aria-label]="tab.label"
                 >
-                  <i [class]="tab.icon"></i>
+                  <i [class]="tab.icon" aria-hidden="true"></i>
+                  <span class="nav-rail-label">{{ tab.label }}</span>
                   @if (tab.badgeCount && tab.badgeCount > 0) {
-                    <span class="tab-badge" [class]="'badge-' + (tab.badgeColor || 'primary')">
+                    <span class="rail-badge" [class]="'badge-' + (tab.badgeColor || 'primary')">
                       {{ tab.badgeCount }}
                     </span>
                   }
-                  <span class="tab-label">{{ tab.label }}</span>
                 </button>
               }
-              @if (tabs.length > 5) {
-                <button class="nav-tab more-tab">
-                  <i class="fa-solid fa-ellipsis"></i>
-                  <span class="tab-label">More</span>
-                </button>
-              }
+
+              <!-- Close Navigation Item -->
+              <button
+                class="nav-rail-item nav-rail-close-item"
+                (click)="closeSettings()"
+                aria-label="Close settings"
+              >
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                <span class="nav-rail-label">Close</span>
+              </button>
             </div>
           </nav>
+
+          <!-- Mobile Content Area -->
+          <div class="mobile-content">
+            <div class="tab-content">
+              @switch (activeTab) {
+                @case ('general') {
+                  <div class="general-settings">
+                    <h2 class="section-title">General Settings</h2>
+                    <div class="mj-grid mj-grid-responsive">
+                      <mj-settings-card
+                        title="Profile Information"
+                        icon="fa-solid fa-user"
+                        [expanded]="isSectionExpanded('profile')"
+                        (toggle)="toggleSection('profile')"
+                      >
+                        <div class="card-content">
+                          <mj-user-profile-settings></mj-user-profile-settings>
+                        </div>
+                      </mj-settings-card>
+
+                      <mj-settings-card
+                        title="Preferences"
+                        icon="fa-solid fa-sliders"
+                        [expanded]="isSectionExpanded('preferences')"
+                        (toggle)="toggleSection('preferences')"
+                      >
+                        <div class="card-content">
+                          <p>Customize your experience with display and behavior preferences.</p>
+                        </div>
+                      </mj-settings-card>
+                    </div>
+                  </div>
+                }
+                @case ('users') {
+                  <div class="users-settings">
+                    <h2 class="section-title">User Management</h2>
+                    <p class="section-description">Manage user accounts, roles, and permissions</p>
+                    <mj-user-management></mj-user-management>
+                  </div>
+                }
+                @case ('roles') {
+                  <div class="roles-settings">
+                    <h2 class="section-title">Role Management</h2>
+                    <p class="section-description">Define and manage security roles.</p>
+                    <mj-role-management></mj-role-management>
+                  </div>
+                }
+                @case ('applications') {
+                  <div class="applications-settings">
+                    <mj-application-management></mj-application-management>
+                  </div>
+                }
+                @case ('permissions') {
+                  <div class="permissions-settings">
+                    <mj-entity-permissions></mj-entity-permissions>
+                  </div>
+                }
+                @case ('notifications') {
+                  <div class="notifications-settings">
+                    <h2 class="section-title">Notifications</h2>
+                    <p class="section-description">Configure how and when you receive notifications</p>
+                    <mj-notification-preferences></mj-notification-preferences>
+                  </div>
+                }
+                @case ('advanced') {
+                  <div class="advanced-settings">
+                    <h2 class="section-title">Advanced Settings</h2>
+                    <div class="beta-warning">
+                      <i class="fa-solid fa-flask" aria-hidden="true"></i>
+                      <span>Beta features - Use with caution</span>
+                    </div>
+
+                    <!-- Tab Navigation (Mobile) -->
+                    <div class="advanced-tabs" role="tablist" aria-label="Advanced settings tabs">
+                      <button
+                        class="tab-btn"
+                        [class.active]="advancedActiveTab === 'sql-logging'"
+                        (click)="setAdvancedTab('sql-logging')"
+                        role="tab"
+                        [attr.aria-selected]="advancedActiveTab === 'sql-logging'"
+                        aria-controls="panel-sql-logging-mobile"
+                      >
+                        <i class="fa-solid fa-database" aria-hidden="true"></i>
+                        SQL Logging
+                      </button>
+                      <button
+                        class="tab-btn"
+                        [class.active]="advancedActiveTab === 'performance'"
+                        (click)="setAdvancedTab('performance')"
+                        role="tab"
+                        [attr.aria-selected]="advancedActiveTab === 'performance'"
+                        aria-controls="panel-performance-mobile"
+                      >
+                        <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                        Performance
+                      </button>
+                      <button
+                        class="tab-btn"
+                        [class.active]="advancedActiveTab === 'developer'"
+                        (click)="setAdvancedTab('developer')"
+                        role="tab"
+                        [attr.aria-selected]="advancedActiveTab === 'developer'"
+                        aria-controls="panel-developer-mobile"
+                      >
+                        <i class="fa-solid fa-code" aria-hidden="true"></i>
+                        Developer Tools
+                      </button>
+                    </div>
+
+                    <!-- Tab Content (Mobile) -->
+                    <div class="advanced-tab-content">
+                      @switch (advancedActiveTab) {
+                        @case ('sql-logging') {
+                          <div id="panel-sql-logging-mobile" role="tabpanel">
+                            <mj-sql-logging></mj-sql-logging>
+                          </div>
+                        }
+                        @case ('performance') {
+                          <div id="panel-performance-mobile" role="tabpanel" class="performance-settings">
+                            <h3>Performance Settings</h3>
+                            <p>Performance monitoring and optimization tools coming soon.</p>
+                          </div>
+                        }
+                        @case ('developer') {
+                          <div id="panel-developer-mobile" role="tabpanel" class="developer-settings">
+                            <h3>Developer Tools</h3>
+                            <p>Advanced developer options coming soon.</p>
+                          </div>
+                        }
+                      }
+                    </div>
+                  </div>
+                }
+              }
+            </div>
+          </div>
         </div>
       }
     </div>

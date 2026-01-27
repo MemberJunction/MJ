@@ -281,36 +281,32 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
 
   /**
    * Update URL query string to reflect current state.
-   * Uses Angular Router for proper browser history integration.
+   * Uses NavigationService for proper URL management that respects app-scoped routes.
    */
   private updateUrl(): void {
-    const params = new URLSearchParams();
+    const queryParams: Record<string, string | null> = {};
 
     // Add collection ID
     const collectionId = this.collectionState.activeCollectionId;
     if (collectionId) {
-      params.set('collectionId', collectionId);
+      queryParams['collectionId'] = collectionId;
+    } else {
+      queryParams['collectionId'] = null;
     }
 
     // Add artifact ID if panel is open
     if (this.activeArtifactId) {
-      params.set('artifactId', this.activeArtifactId);
+      queryParams['artifactId'] = this.activeArtifactId;
       if (this.activeVersionNumber) {
-        params.set('versionNumber', this.activeVersionNumber.toString());
+        queryParams['versionNumber'] = this.activeVersionNumber.toString();
       }
+    } else {
+      queryParams['artifactId'] = null;
+      queryParams['versionNumber'] = null;
     }
 
-    // Get current path without query string
-    const currentUrl = this.router.url;
-    const currentPath = currentUrl.split('?')[0];
-    const queryString = params.toString();
-    const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
-
-    // Track this URL so we don't react to our own navigation
-    this.lastNavigatedUrl = newUrl;
-
-    // Use Angular Router for proper browser history integration
-    this.router.navigateByUrl(newUrl, { replaceUrl: false });
+    // Use NavigationService to update query params properly
+    this.navigationService.UpdateActiveTabQueryParams(queryParams);
   }
 
   /**

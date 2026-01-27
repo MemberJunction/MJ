@@ -23,6 +23,8 @@ import {
   IMetadataProvider,
   IRunViewProvider,
   RunViewResult,
+  AggregateResult,
+  AggregateValue,
   EntityInfo,
   EntityFieldInfo,
   ApplicationInfo,
@@ -75,6 +77,7 @@ import {
   RunQueryWithCacheCheckParams,
   RunQueriesWithCacheCheckResponse,
   RunQueryWithCacheCheckResult,
+  InMemoryLocalStorageProvider,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from './queryParameterProcessor';
 
@@ -111,6 +114,7 @@ import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
+import { MJGlobal, SQLExpressionValidator } from '@memberjunction/global';
 
 /**
  * Represents a single field change in the DiffObjects comparison result
@@ -251,18 +255,29 @@ export class SQLServerDataProvider
   private _transactionDepth: number = 0;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
-  
+
   // Query cache instance
   private queryCache = new QueryCache();
-  
+
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
-  private _sqlLoggingSessions: Map<string, SqlLoggingSessionImpl> = new Map();
-  
+  private static _sqlLoggingSessionsKey: string = 'MJ_SQLServerDataProvider_SqlLoggingSessions';
+  private get _sqlLoggingSessions(): Map<string, SqlLoggingSessionImpl> {
+    const g = MJGlobal.Instance.GetGlobalObjectStore();
+    if (g) {
+      if (!g[SQLServerDataProvider._sqlLoggingSessionsKey]) {
+        g[SQLServerDataProvider._sqlLoggingSessionsKey] = new Map<string, SqlLoggingSessionImpl>();
+      }
+      return g[SQLServerDataProvider._sqlLoggingSessionsKey];
+    } else {
+      throw new Error('No global object store available for SQL logging session');
+    }
+  }
+
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
   private _sqlQueue$ = new Subject<{
@@ -520,6 +535,17 @@ export class SQLServerDataProvider
       statementCount: session.statementCount,
       options: session.options,
     }));
+  }
+
+  /**
+   * Gets a specific SQL logging session by its ID.
+   * Returns the session if found, or undefined if not found.
+   *
+   * @param sessionId - The unique identifier of the session to retrieve
+   * @returns The SqlLoggingSession if found, undefined otherwise
+   */
+  public GetSqlLoggingSessionById(sessionId: string): SqlLoggingSession | undefined {
+    return this._sqlLoggingSessions.get(sessionId);
   }
 
   /**
@@ -1376,6 +1402,11 @@ export class SQLServerDataProvider
   protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
     // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
 
+    // Log aggregate input for debugging
+    if (params?.Aggregates?.length) {
+      LogStatus(`[SQLServerDataProvider] InternalRunView received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}, aggregates=${JSON.stringify(params.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+    }
+
     const startTime = new Date();
     try {
       if (params) {
@@ -1545,22 +1576,119 @@ export class SQLServerDataProvider
           viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
         }
 
-        // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
-        const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL, undefined, undefined, contextUser);
+        // Build aggregate SQL if aggregates are requested
+        let aggregateSQL: string | null = null;
+        let aggregateValidationErrors: AggregateResult[] = [];
+        if (params.Aggregates && params.Aggregates.length > 0) {
+          const aggregateBuild = this.buildAggregateSQL(
+            params.Aggregates,
+            entityInfo,
+            entityInfo.SchemaName,
+            entityInfo.BaseView,
+            whereSQL
+          );
+          aggregateSQL = aggregateBuild.aggregateSQL;
+          aggregateValidationErrors = aggregateBuild.validationErrors;
+        }
 
-        // finally, if we have a countSQL, we need to run that to get the row count
-        // Run the count query if:
-        // 1. We're using pagination (always need total count for pagination)
-        // 2. ResultType is 'count_only'
-        // 3. The number of returned rows equals the max limit (might be more rows available)
-        let rowCount = null;
+        // Execute queries in parallel for better performance
+        // - Data query (if not count_only)
+        // - Count query (if needed)
+        // - Aggregate query (if aggregates requested)
+        const queries: Promise<unknown>[] = [];
+        const queryKeys: string[] = [];
+
+        // Data query
+        if (params.ResultType !== 'count_only') {
+          queries.push(this.ExecuteSQL(viewSQL, undefined, undefined, contextUser));
+          queryKeys.push('data');
+        }
+
+        // Count query (run in parallel if we'll need it)
         const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
-        if (countSQL && (usingPagination || params.ResultType === 'count_only' || (maxRowsUsed && retData.length === maxRowsUsed))) {
+        const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
+        if (willNeedCount) {
+          queries.push(this.ExecuteSQL(countSQL, undefined, undefined, contextUser));
+          queryKeys.push('count');
+        }
+
+        // Aggregate query (runs in parallel with data/count queries)
+        const aggregateStartTime = Date.now();
+        if (aggregateSQL) {
+          queries.push(this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser));
+          queryKeys.push('aggregate');
+        }
+
+        // Execute all queries in parallel
+        const results = await Promise.all(queries);
+
+        // Map results back to their queries
+        const resultMap: Record<string, unknown> = {};
+        queryKeys.forEach((key, index) => {
+          resultMap[key] = results[index];
+        });
+
+        // Process data results
+        const retData = resultMap['data'] as Record<string, unknown>[] || [];
+
+        // Process count results - also check if we need count based on result length
+        let rowCount = null;
+        if (willNeedCount && resultMap['count']) {
+          const countResult = resultMap['count'] as { TotalRowCount: number }[];
+          if (countResult && countResult.length > 0) {
+            rowCount = countResult[0].TotalRowCount;
+          }
+        } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
+          // Need to run count query because we hit the limit
           const countResult = await this.ExecuteSQL(countSQL, undefined, undefined, contextUser);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;
           }
         }
+
+        // Process aggregate results
+        let aggregateResults: AggregateResult[] | undefined = undefined;
+        let aggregateExecutionTime: number | undefined = undefined;
+        if (params.Aggregates && params.Aggregates.length > 0) {
+          aggregateExecutionTime = Date.now() - aggregateStartTime;
+
+          if (resultMap['aggregate']) {
+            // Map raw aggregate results back to original expressions
+            const rawAggregateResult = resultMap['aggregate'] as Record<string, unknown>[];
+            if (rawAggregateResult && rawAggregateResult.length > 0) {
+              const row = rawAggregateResult[0];
+              aggregateResults = [];
+              let validExprIndex = 0;
+
+              for (let i = 0; i < params.Aggregates.length; i++) {
+                const agg = params.Aggregates[i];
+                const alias = agg.alias || agg.expression;
+
+                // Check if this expression had a validation error
+                const validationError = aggregateValidationErrors.find(e => e.expression === agg.expression);
+                if (validationError) {
+                  aggregateResults.push(validationError);
+                } else {
+                  // Get the value from the result using the numbered alias
+                  const rawValue = row[`Agg_${validExprIndex}`];
+                  // Cast to AggregateValue - SQL Server returns numbers, strings, dates, or null
+                  const value: AggregateValue = rawValue === undefined ? null : rawValue as AggregateValue;
+                  aggregateResults.push({
+                    expression: agg.expression,
+                    alias: alias,
+                    value: value,
+                    error: undefined
+                  });
+                  validExprIndex++;
+                }
+              }
+            }
+          } else if (aggregateValidationErrors.length > 0) {
+            // All expressions had validation errors
+            aggregateResults = aggregateValidationErrors;
+          }
+        }
+
         const stopTime = new Date();
 
         if (
@@ -1590,17 +1718,19 @@ export class SQLServerDataProvider
           );
         }
 
-        const result =  {
+        const result: RunViewResult<T> = {
           RowCount:
             params.ResultType === 'count_only'
               ? rowCount
               : retData.length /*this property should be total row count if the ResultType='count_only' otherwise it should be the row count of the returned rows */,
           TotalRowCount: rowCount ? rowCount : retData.length,
-          Results: retData,
+          Results: retData as T[],
           UserViewRunID: userViewRunID,
           ExecutionTime: stopTime.getTime() - startTime.getTime(),
           Success: true,
           ErrorMessage: null,
+          AggregateResults: aggregateResults,
+          AggregateExecutionTime: aggregateExecutionTime,
         };
 
         return result;
@@ -1698,11 +1828,20 @@ export class SQLServerDataProvider
       // Execute batched cache status check for all items that need it
       const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsNeedingCacheCheck, contextUser);
 
-      // Determine which items are current vs stale
-      const staleItems: Array<{ index: number; params: RunViewParams }> = [];
+      // Determine which items are current vs stale, and whether they support differential updates
+      const differentialItems: Array<{
+        index: number;
+        params: RunViewParams;
+        entityInfo: EntityInfo;
+        whereSQL: string;
+        clientMaxUpdatedAt: string;
+        clientRowCount: number;
+        serverStatus: { maxUpdatedAt?: string; rowCount?: number };
+      }> = [];
+      const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
       const currentResults: RunViewWithCacheCheckResult<T>[] = [];
 
-      for (const { index, item } of itemsNeedingCacheCheck) {
+      for (const { index, item, entityInfo, whereSQL } of itemsNeedingCacheCheck) {
         const serverStatus = cacheStatusResults.get(index);
         if (!serverStatus || !serverStatus.success) {
           errorResults.push({
@@ -1720,23 +1859,54 @@ export class SQLServerDataProvider
             status: 'current',
           });
         } else {
-          staleItems.push({ index, params: item.params });
+          // Cache is stale - check if entity supports differential updates
+          if (entityInfo.TrackRecordChanges) {
+            // Entity tracks record changes - we can do differential update
+            differentialItems.push({
+              index,
+              params: item.params,
+              entityInfo,
+              whereSQL,
+              clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
+              clientRowCount: item.cacheStatus!.rowCount,
+              serverStatus,
+            });
+          } else {
+            // Entity doesn't track record changes - fall back to full refresh
+            staleItemsNoTracking.push({ index, params: item.params });
+          }
         }
       }
 
-      // Run full queries in parallel for:
-      // 1. Items without cache status (no fingerprint from client)
-      // 2. Items with stale cache
-      const fullQueryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
+      // Run queries in parallel:
+      // 1. Items without cache status (no fingerprint from client) - full query
+      // 2. Items with stale cache but no tracking - full query
+      // 3. Items with stale cache and tracking - differential query
+      const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
+        // Full queries for items without cache status
         ...itemsWithoutCacheCheck.map(({ index, item }) =>
           this.runFullQueryAndReturn<T>(item.params, index, contextUser)
         ),
-        ...staleItems.map(({ index, params: viewParams }) =>
+        // Full queries for entities that don't track record changes
+        ...staleItemsNoTracking.map(({ index, params: viewParams }) =>
           this.runFullQueryAndReturn<T>(viewParams, index, contextUser)
+        ),
+        // Differential queries for entities that track record changes
+        ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
+          this.runDifferentialQueryAndReturn<T>(
+            viewParams,
+            entityInfo,
+            clientMaxUpdatedAt,
+            clientRowCount,
+            serverStatus,
+            whereSQL,
+            index,
+            contextUser
+          )
         ),
       ];
 
-      const fullQueryResults = await Promise.all(fullQueryPromises);
+      const fullQueryResults = await Promise.all(queryPromises);
 
       // Combine all results and sort by viewIndex
       const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
@@ -1939,6 +2109,193 @@ export class SQLServerDataProvider
     return maxDate ? maxDate.toISOString() : new Date().toISOString();
   }
 
+  /**
+   * Gets the IDs of records that have been deleted since a given timestamp.
+   * Uses the RecordChange table which tracks all deletions for entities with TrackRecordChanges enabled.
+   * @param entityID - The entity ID to check deletions for
+   * @param sinceTimestamp - ISO timestamp to check deletions since
+   * @param contextUser - Optional user context for permissions
+   * @returns Array of record IDs (in CompositeKey concatenated string format)
+   */
+  protected async getDeletedRecordIDsSince(
+    entityID: string,
+    sinceTimestamp: string,
+    contextUser?: UserInfo
+  ): Promise<string[]> {
+    try {
+      const sql = `
+        SELECT DISTINCT RecordID
+        FROM [${this.MJCoreSchemaName}].vwRecordChanges
+        WHERE EntityID = '${entityID}'
+          AND Type = 'Delete'
+          AND ChangedAt > '${sinceTimestamp}'
+      `;
+      const results = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
+      return results.map(r => r.RecordID);
+    } catch (e) {
+      LogError(e);
+      return [];
+    }
+  }
+
+  /**
+   * Gets rows that have been created or updated since a given timestamp.
+   * @param params - RunView parameters (used for entity, filter, etc.)
+   * @param entityInfo - Entity metadata
+   * @param sinceTimestamp - ISO timestamp to check updates since
+   * @param whereSQL - Pre-built WHERE clause from the original query
+   * @param contextUser - Optional user context for permissions
+   * @returns Array of updated/created rows
+   */
+  protected async getUpdatedRowsSince<T = unknown>(
+    params: RunViewParams,
+    entityInfo: EntityInfo,
+    sinceTimestamp: string,
+    whereSQL: string,
+    contextUser?: UserInfo
+  ): Promise<T[]> {
+    try {
+      // Add the timestamp filter to the existing WHERE clause
+      const timestampFilter = `__mj_UpdatedAt > '${sinceTimestamp}'`;
+      const combinedWhere = whereSQL
+        ? `(${whereSQL}) AND ${timestampFilter}`
+        : timestampFilter;
+
+      // Build field list
+      const fields = params.Fields && params.Fields.length > 0
+        ? params.Fields.map(f => `[${f}]`).join(', ')
+        : '*';
+
+      // Build the query
+      let sql = `SELECT ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView} WHERE ${combinedWhere}`;
+
+      // Add ORDER BY if specified
+      if (params.OrderBy && params.OrderBy.length > 0) {
+        if (!this.validateUserProvidedSQLClause(params.OrderBy)) {
+          throw new Error(`Invalid OrderBy clause: ${params.OrderBy}`);
+        }
+        sql += ` ORDER BY ${params.OrderBy}`;
+      }
+
+      const results = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
+      return results;
+    } catch (e) {
+      LogError(e);
+      return [];
+    }
+  }
+
+  /**
+   * Runs a differential query and returns only changes since the client's cached state.
+   * This includes updated/created rows and deleted record IDs.
+   *
+   * Validates that the differential can be safely applied by checking for "hidden" deletes
+   * (rows deleted outside of MJ's RecordChanges tracking, e.g., direct SQL deletes).
+   * If hidden deletes are detected, falls back to a full query with 'stale' status.
+   *
+   * @param params - RunView parameters
+   * @param entityInfo - Entity metadata
+   * @param clientMaxUpdatedAt - Client's cached maxUpdatedAt timestamp
+   * @param clientRowCount - Client's cached row count
+   * @param serverStatus - Current server status (for new row count)
+   * @param whereSQL - Pre-built WHERE clause
+   * @param viewIndex - Index for correlation in batch operations
+   * @param contextUser - Optional user context
+   * @returns RunViewWithCacheCheckResult with differential data, or falls back to full query if unsafe
+   */
+  protected async runDifferentialQueryAndReturn<T = unknown>(
+    params: RunViewParams,
+    entityInfo: EntityInfo,
+    clientMaxUpdatedAt: string,
+    clientRowCount: number,
+    serverStatus: { maxUpdatedAt?: string; rowCount?: number },
+    whereSQL: string,
+    viewIndex: number,
+    contextUser?: UserInfo
+  ): Promise<RunViewWithCacheCheckResult<T>> {
+    try {
+      // Get updated/created rows since client's timestamp
+      const updatedRows = await this.getUpdatedRowsSince<T>(
+        params,
+        entityInfo,
+        clientMaxUpdatedAt,
+        whereSQL,
+        contextUser
+      );
+
+      // Get deleted record IDs since client's timestamp
+      const deletedRecordIDs = await this.getDeletedRecordIDsSince(
+        entityInfo.ID,
+        clientMaxUpdatedAt,
+        contextUser
+      );
+
+      // === VALIDATION: Detect "hidden" deletes not tracked in RecordChanges ===
+      // Count how many returned rows are NEW (created after client's cache timestamp)
+      // vs rows that already existed and were just updated
+      const clientMaxUpdatedDate = new Date(clientMaxUpdatedAt);
+      const newInserts = updatedRows.filter(row => {
+        const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
+        if (!createdAt) return false;
+        return new Date(String(createdAt)) > clientMaxUpdatedDate;
+      }).length;
+
+      // Calculate implied deletes using the algebra:
+      // serverRowCount = clientRowCount - deletes + inserts
+      // Therefore: impliedDeletes = clientRowCount + newInserts - serverRowCount
+      const serverRowCount = serverStatus.rowCount ?? 0;
+      const impliedDeletes = clientRowCount + newInserts - serverRowCount;
+      const actualDeletes = deletedRecordIDs.length;
+
+      // Validate: if impliedDeletes < 0, there are unexplained rows on the server
+      // This could happen with direct SQL inserts that bypassed MJ's tracking
+      if (impliedDeletes < 0) {
+        LogStatus(
+          `Differential validation failed for ${entityInfo.Name}: impliedDeletes=${impliedDeletes} (negative). ` +
+          `clientRowCount=${clientRowCount}, newInserts=${newInserts}, serverRowCount=${serverRowCount}. ` +
+          `Falling back to full refresh.`
+        );
+        return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+      }
+
+      // Validate: if impliedDeletes > actualDeletes, there are "hidden" deletes
+      // not tracked in RecordChanges (e.g., direct SQL deletes)
+      if (impliedDeletes > actualDeletes) {
+        LogStatus(
+          `Differential validation failed for ${entityInfo.Name}: hidden deletes detected. ` +
+          `impliedDeletes=${impliedDeletes}, actualDeletes=${actualDeletes}. ` +
+          `clientRowCount=${clientRowCount}, newInserts=${newInserts}, serverRowCount=${serverRowCount}. ` +
+          `Falling back to full refresh.`
+        );
+        return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+      }
+
+      // Validation passed - safe to apply differential
+      // Extract maxUpdatedAt from the updated rows (or use server status)
+      const newMaxUpdatedAt = updatedRows.length > 0
+        ? this.extractMaxUpdatedAt(updatedRows)
+        : serverStatus.maxUpdatedAt || new Date().toISOString();
+
+      return {
+        viewIndex,
+        status: 'differential',
+        differentialData: {
+          updatedRows,
+          deletedRecordIDs,
+        },
+        maxUpdatedAt: newMaxUpdatedAt,
+        rowCount: serverStatus.rowCount,
+      };
+    } catch (e) {
+      LogError(e);
+      return {
+        viewIndex,
+        status: 'error',
+        errorMessage: e instanceof Error ? e.message : String(e),
+      };
+    }
+  }
+
   protected validateUserProvidedSQLClause(clause: string): boolean {
     // First, remove all string literals from the clause to avoid false positives
     // This regex matches both single and double quoted strings, handling escaped quotes
@@ -1975,6 +2332,154 @@ export class SQLServerDataProvider
     }
 
     return true;
+  }
+
+  /**
+   * Validates and builds an aggregate SQL query from the provided aggregate expressions.
+   * Uses the SQLExpressionValidator to ensure expressions are safe from SQL injection.
+   *
+   * @param aggregates - Array of aggregate expressions to validate and build
+   * @param entityInfo - Entity metadata for field reference validation
+   * @param schemaName - Schema name for the table
+   * @param baseView - Base view name for the table
+   * @param whereSQL - WHERE clause to apply (without the WHERE keyword)
+   * @returns Object with aggregateSQL string and any validation errors
+   */
+  protected buildAggregateSQL(
+    aggregates: { expression: string; alias?: string }[],
+    entityInfo: EntityInfo,
+    schemaName: string,
+    baseView: string,
+    whereSQL: string
+  ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
+    if (!aggregates || aggregates.length === 0) {
+      return { aggregateSQL: null, validationErrors: [] };
+    }
+
+    const validator = SQLExpressionValidator.Instance;
+    const validationErrors: AggregateResult[] = [];
+    const validExpressions: string[] = [];
+    const fieldNames = entityInfo.Fields.map(f => f.Name);
+
+    for (let i = 0; i < aggregates.length; i++) {
+      const agg = aggregates[i];
+      const alias = agg.alias || agg.expression;
+
+      // Validate the expression using SQLExpressionValidator
+      const result = validator.validate(agg.expression, {
+        context: 'aggregate',
+        entityFields: fieldNames
+      });
+
+      if (!result.valid) {
+        // Record the error but continue processing other expressions
+        validationErrors.push({
+          expression: agg.expression,
+          alias: alias,
+          value: null,
+          error: result.error || 'Validation failed'
+        });
+      } else {
+        // Expression is valid, add to the query with an alias
+        // Use a numbered alias for the SQL to make result mapping easier
+        validExpressions.push(`${agg.expression} AS [Agg_${i}]`);
+      }
+    }
+
+    if (validExpressions.length === 0) {
+      return { aggregateSQL: null, validationErrors };
+    }
+
+    // Build the aggregate SQL query
+    let aggregateSQL = `SELECT ${validExpressions.join(', ')} FROM [${schemaName}].${baseView}`;
+    if (whereSQL && whereSQL.length > 0) {
+      aggregateSQL += ` WHERE ${whereSQL}`;
+    }
+
+    return { aggregateSQL, validationErrors };
+  }
+
+  /**
+   * Executes the aggregate query and maps results back to the original expressions.
+   *
+   * @param aggregateSQL - The aggregate SQL query to execute
+   * @param aggregates - Original aggregate expressions (for result mapping)
+   * @param validationErrors - Any validation errors from buildAggregateSQL
+   * @param contextUser - User context for query execution
+   * @returns Array of AggregateResult objects
+   */
+  protected async executeAggregateQuery(
+    aggregateSQL: string | null,
+    aggregates: { expression: string; alias?: string }[],
+    validationErrors: AggregateResult[],
+    contextUser?: UserInfo
+  ): Promise<{ results: AggregateResult[]; executionTime: number }> {
+    const startTime = Date.now();
+
+    if (!aggregateSQL) {
+      // No valid expressions to execute, return only validation errors
+      return { results: validationErrors, executionTime: 0 };
+    }
+
+    try {
+      const queryResult = await this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser);
+      const executionTime = Date.now() - startTime;
+
+      if (!queryResult || queryResult.length === 0) {
+        // Query returned no results, which shouldn't happen for aggregates
+        // Return validation errors plus null values for valid expressions
+        const nullResults = aggregates
+          .filter((_, i) => !validationErrors.some(e => e.expression === aggregates[i].expression))
+          .map(agg => ({
+            expression: agg.expression,
+            alias: agg.alias || agg.expression,
+            value: null,
+            error: undefined
+          }));
+        return { results: [...validationErrors, ...nullResults], executionTime };
+      }
+
+      // Map query results back to original expressions
+      const row = queryResult[0];
+      const results: AggregateResult[] = [];
+      let validExprIndex = 0;
+
+      for (let i = 0; i < aggregates.length; i++) {
+        const agg = aggregates[i];
+        const alias = agg.alias || agg.expression;
+
+        // Check if this expression had a validation error
+        const validationError = validationErrors.find(e => e.expression === agg.expression);
+        if (validationError) {
+          results.push(validationError);
+        } else {
+          // Get the value from the result using the numbered alias
+          const value = row[`Agg_${validExprIndex}`];
+          results.push({
+            expression: agg.expression,
+            alias: alias,
+            value: value ?? null,
+            error: undefined
+          });
+          validExprIndex++;
+        }
+      }
+
+      return { results, executionTime };
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Return all expressions with the error
+      const errorResults = aggregates.map(agg => ({
+        expression: agg.expression,
+        alias: agg.alias || agg.expression,
+        value: null,
+        error: errorMessage
+      }));
+
+      return { results: errorResults, executionTime };
+    }
   }
 
   protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: UserViewEntityExtended): string {
@@ -5064,7 +5569,7 @@ export class SQLServerDataProvider
   }
 
   get LocalStorageProvider(): ILocalStorageProvider {
-    if (!this._localStorageProvider) this._localStorageProvider = new NodeLocalStorageProvider();
+    if (!this._localStorageProvider) this._localStorageProvider = new InMemoryLocalStorageProvider();
 
     return this._localStorageProvider;
   }
@@ -5106,8 +5611,7 @@ export class SQLServerDataProvider
     const e = this.Entities.find((e) => e.Name === entityName);
     if (!e) throw new Error(`Entity ${entityName} not found`);
     else {
-      let f = e.Fields.find((f) => f.IsNameField);
-      if (!f) f = e.Fields.find((f) => f.Name === 'Name');
+      const f = e.NameField;
       if (!f) {
         LogError(`Entity ${entityName} does not have an IsNameField or a field with the column name of Name, returning null, use recordId`);
         return null;
@@ -5135,56 +5639,5 @@ export class SQLServerDataProvider
   /**************************************************************************/
   protected get Metadata(): IMetadataProvider {
     return this;
-  }
-}
-
-/**
- * In-memory storage provider for Node.js server-side usage.
- * Uses a Map of Maps structure for category isolation:
- * Map<category, Map<key, value>>
- *
- * This implementation is purely in-memory and doesn't persist to disk.
- * Data is retained for the lifetime of the server process.
- */
-class NodeLocalStorageProvider implements ILocalStorageProvider {
-  private static readonly DEFAULT_CATEGORY = 'default';
-  private _storage: Map<string, Map<string, string>> = new Map();
-
-  /**
-   * Gets or creates a category map
-   */
-  private getCategoryMap(category: string): Map<string, string> {
-    const cat = category || NodeLocalStorageProvider.DEFAULT_CATEGORY;
-    let categoryMap = this._storage.get(cat);
-    if (!categoryMap) {
-      categoryMap = new Map();
-      this._storage.set(cat, categoryMap);
-    }
-    return categoryMap;
-  }
-
-  public async GetItem(key: string, category?: string): Promise<string | null> {
-    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    return categoryMap.get(key) ?? null;
-  }
-
-  public async SetItem(key: string, value: string, category?: string): Promise<void> {
-    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    categoryMap.set(key, value);
-  }
-
-  public async Remove(key: string, category?: string): Promise<void> {
-    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    categoryMap.delete(key);
-  }
-
-  public async ClearCategory(category: string): Promise<void> {
-    const cat = category || NodeLocalStorageProvider.DEFAULT_CATEGORY;
-    this._storage.delete(cat);
-  }
-
-  public async GetCategoryKeys(category: string): Promise<string[]> {
-    const categoryMap = this._storage.get(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    return categoryMap ? Array.from(categoryMap.keys()) : [];
   }
 }

@@ -1,0 +1,31 @@
+[
+  {
+    "fields": {
+      "Name": "Memory Cleanup Agent",
+      "Description": "System agent that archives stale notes and examples based on retention policies. Archives notes not accessed within NoteRetentionDays and low-scoring examples after ExampleRetentionDays. Runs on a daily schedule.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ArtifactCreationMode": "Never",
+      "ExposeAsAction": false,
+      "IsRestricted": true,
+      "InjectNotes": false,
+      "MaxNotesToInject": 0,
+      "NoteInjectionStrategy": "Recent",
+      "InjectExamples": false,
+      "MaxExamplesToInject": 0,
+      "ExampleInjectionStrategy": "Recent",
+      "IconClass": "fa-solid fa-broom"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": []
+    },
+    "primaryKey": {
+      "ID": "A4998A55-C023-47B4-9A20-1FC965F4B5D3"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T02:14:24.288Z",
+      "checksum": "8925f5ad22adc85936ae43ab80b0e3cd688953d2c4a91414bedd5a7c50acde0e"
+    }
+  }
+]

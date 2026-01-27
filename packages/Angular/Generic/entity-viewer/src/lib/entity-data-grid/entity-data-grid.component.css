@@ -844,6 +844,23 @@
   font-size: 13px;
 }
 
+/* Foreign key link cells */
+::ng-deep .cell-fk-link {
+  color: var(--grid-accent-color, #1976D2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s, text-decoration 0.15s;
+}
+
+::ng-deep .cell-fk-link:hover {
+  color: #1565C0;
+  text-decoration: underline;
+}
+
+::ng-deep .cell-fk-link:active {
+  color: #0D47A1;
+}
+
 /* URL cells */
 ::ng-deep .cell-url {
   overflow: hidden;
@@ -997,4 +1014,262 @@
 
 ::ng-deep .ag-theme-alpine .ag-header-cell:hover .ag-sort-indicator-icon {
   transform: scale(1.1);
+}
+
+/* ========================================
+   Enhanced Multi-Sort Indicators
+   These styles use :host to ensure they're scoped to this component
+   and !important to override AG Grid's built-in styles
+   ======================================== */
+
+/* Highlight sorted column headers with eye-catching background */
+/* Ascending = blue tint */
+:host ::ng-deep .ag-header-cell-sorted-asc {
+  background: linear-gradient(180deg, rgba(25, 118, 210, 0.15) 0%, rgba(25, 118, 210, 0.08) 100%) !important;
+  position: relative;
+}
+
+/* Descending = pink tint */
+:host ::ng-deep .ag-header-cell-sorted-desc {
+  background: linear-gradient(180deg, rgba(216, 27, 96, 0.15) 0%, rgba(216, 27, 96, 0.08) 100%) !important;
+  position: relative;
+}
+
+/* Bottom border accent for sorted columns - ascending = blue */
+:host ::ng-deep .ag-header-cell-sorted-asc::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #1976d2;
+}
+
+/* Bottom border accent for sorted columns - descending = pink */
+:host ::ng-deep .ag-header-cell-sorted-desc::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #d81b60;
+}
+
+/* Sorted column header text - ascending = blue, bold */
+:host ::ng-deep .ag-header-cell-sorted-asc .ag-header-cell-text {
+  color: #1976d2 !important;
+  font-weight: 700 !important;
+}
+
+/* Sorted column header text - descending = pink, bold */
+:host ::ng-deep .ag-header-cell-sorted-desc .ag-header-cell-text {
+  color: #d81b60 !important;
+  font-weight: 700 !important;
+}
+
+/* Sort icons - larger and more prominent */
+/* Ascending = blue */
+:host ::ng-deep .ag-sort-ascending-icon {
+  color: #1976d2 !important;
+}
+
+/* Descending = pink/magenta */
+:host ::ng-deep .ag-sort-descending-icon {
+  color: #d81b60 !important;
+}
+
+:host ::ng-deep .ag-sort-ascending-icon .ag-icon,
+:host ::ng-deep .ag-sort-descending-icon .ag-icon {
+  font-size: 14px !important;
+}
+
+/* Sort order number (1, 2, 3) - show as plain number, no bubble */
+/* This avoids AG Grid bug where .ag-sort-order is always present but empty when unsorted */
+/* The number is only visible when AG Grid populates it (i.e., when column is sorted) */
+/* Default blue for ascending */
+:host ::ng-deep .ag-sort-order {
+  margin-left: 4px;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: #1976d2 !important;
+}
+
+/* Sort order number - pink for descending */
+:host ::ng-deep .ag-header-cell-sorted-desc .ag-sort-order {
+  color: #d81b60 !important;
+}
+
+/* Hover state for sortable headers */
+:host ::ng-deep .ag-header-cell-sortable:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:host ::ng-deep .ag-header-cell-sortable:hover .ag-header-cell-text {
+  color: #1976d2;
+}
+
+/* ========================================
+   Aggregate Summary Row
+   ======================================== */
+
+.mj-aggregate-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+  border-top: 1px solid #e2e8f0;
+  font-size: 13px;
+  min-height: 44px;
+}
+
+.aggregate-summary-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: center;
+}
+
+.aggregate-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.aggregate-summary-item i {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.agg-summary-label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.agg-summary-value {
+  color: #1e293b;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.aggregate-loading {
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+}
+
+.aggregate-loading i {
+  font-size: 14px;
+}
+
+/* ========================================
+   AGGREGATE CARDS (displayed above grid)
+   ======================================== */
+
+.mj-aggregate-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.aggregate-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  min-width: 140px;
+  transition: all 0.15s ease;
+}
+
+.aggregate-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.aggregate-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  border-radius: 10px;
+  color: #0284c7;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.aggregate-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.aggregate-card-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aggregate-card-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.aggregate-card-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  color: #94a3b8;
+}
+
+.aggregate-card-loading i {
+  font-size: 16px;
+}
+
+/* ========================================
+   Text Wrapping Styles
+   ======================================== */
+
+/* Cell class for wrapped text */
+::ng-deep .cell-wrap-text {
+  white-space: normal !important;
+  word-wrap: break-word;
+  line-height: 1.4;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+/* Ensure AG Grid cells allow wrapping */
+::ng-deep .ag-cell.cell-wrap-text {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* Maintain minimum row height when wrapping */
+::ng-deep .ag-row[style*="auto-height"] {
+  min-height: 40px;
 }

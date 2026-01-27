@@ -21,12 +21,132 @@ import { ActionableCommand, AutomaticCommand } from './ui-commands';
 import { AIAgentRunEntityExtended } from './AIAgentRunExtended';
 import { AIAgentEntityExtended } from './AIAgentExtended';
 import { AIPromptEntityExtended } from './AIPromptExtended';
+import { MediaModality } from './prompt.types';
+
+/**
+ * Scope context for multi-tenant SaaS deployments.
+ *
+ * Allows SaaS applications to scope agent memory (notes/examples) by custom entity
+ * hierarchies without hardcoding any specific schema into MJ core. The scoping pattern
+ * uses a primary scope (indexed for fast filtering) plus secondary scopes (JSON for flexibility).
+ *
+ * Scope levels for retrieval (cascading inheritance):
+ * - Global: primaryRecordId is null/undefined - applies to all users
+ * - Primary-only: primaryRecordId set, no secondary - applies to all under primary scope
+ * - Fully-scoped: both primary and secondary set - most specific
+ *
+ * @since 2.130.0
+ *
+ * @example
+ * ```typescript
+ * // Izzy customer service app scoping
+ * params.userScope = {
+ *     primaryEntityName: 'Organizations',
+ *     primaryRecordId: organization.ID,
+ *     secondary: {
+ *         ContactID: contact.ID,
+ *         TeamID: contact.SupportTeamID
+ *     }
+ * };
+ *
+ * // Skip analytics app scoping
+ * params.userScope = {
+ *     primaryEntityName: 'Skip Tenants',
+ *     primaryRecordId: tenant.ID,
+ *     secondary: {
+ *         AnalystID: analyst.ID
+ *     }
+ * };
+ * ```
+ */
+export interface UserScope {
+    /**
+     * Primary scope entity name (e.g., "Organizations", "Tenants").
+     * This should match an Entity name in MemberJunction.
+     */
+    primaryEntityName?: string;
+    /**
+     * Primary scope record ID - the actual record ID within the primary entity.
+     * This is the main indexed filter for performance.
+     */
+    primaryRecordId?: string;
+    /**
+     * Additional scope dimensions as key-value pairs.
+     * Keys are field names (e.g., "ContactID", "TeamID"), values are record IDs.
+     * Stored as JSON and used for fine-grained filtering after primary scope.
+     */
+    secondary?: Record<string, string>;
+}
 
 // Import loop operation types from their dedicated modules
 // These are in separate files so they can be @include'd in prompt templates
 // Exported directly from index.ts, not re-exported here
 import type { ForEachOperation } from './foreach-operation';
 import type { WhileOperation } from './while-operation';
+
+/**
+ * Represents a media output that an agent has explicitly promoted to its outputs.
+ * This is the interface used in ExecuteAgentResult.mediaOutputs.
+ *
+ * Media can come from two sources:
+ * 1. Promoted from a prompt run (has promptRunMediaId)
+ * 2. Generated directly by agent code (has data or url)
+ *
+ * @since 3.1.0
+ */
+export interface MediaOutput {
+    /** Reference to source AIPromptRunMedia (if promoted from prompt execution) */
+    promptRunMediaId?: string;
+
+    /** The modality type */
+    modality: MediaModality;
+
+    /** MIME type of the media (e.g., 'image/png', 'audio/mp3') */
+    mimeType: string;
+
+    /** Base64 encoded data (only if NOT from prompt run) */
+    data?: string;
+
+    /** URL if available (some providers return URLs) */
+    url?: string;
+
+    /** Width in pixels (for images/video) */
+    width?: number;
+
+    /** Height in pixels (for images/video) */
+    height?: number;
+
+    /** Duration in seconds (for audio/video) */
+    durationSeconds?: number;
+
+    /** Agent-provided label for UI display */
+    label?: string;
+
+    /** Provider-specific metadata */
+    metadata?: Record<string, unknown>;
+
+    /**
+     * Placeholder reference ID for the ${media:xxx} pattern.
+     * Used to look up media when resolving placeholders in agent output.
+     * @since 3.1.0
+     */
+    refId?: string;
+
+    /**
+     * Controls whether this media should be persisted to the database.
+     * Default behavior (undefined or true): media is persisted to AIAgentRunMedia and ConversationDetailAttachment.
+     * Set to false for intercepted/working media that shouldn't be saved (e.g., generated but not used in output).
+     * @since 3.1.0
+     */
+    persist?: boolean;
+
+    /**
+     * Agent notes describing what this media represents.
+     * Used for internal tracking, debugging, and can be persisted for audit purposes.
+     * @since 3.1.0
+     */
+    description?: string;
+}
 
 
 /**
@@ -182,6 +302,13 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     forEach?: ForEachOperation;
     /** While operation details when step is 'While' (v2.112+) */
     while?: WhileOperation;
+    /**
+     * Media outputs to promote to the agent's final outputs.
+     * When set, these media items will be added to the agent's mediaOutputs collection
+     * and stored in AIAgentRunMedia.
+     * @since 3.1.0
+     */
+    promoteMediaOutputs?: MediaOutput[];
 }
 
 /**
@@ -242,6 +369,19 @@ export type ExecuteAgentResult<P = any> = {
         notes: any[]; // AIAgentNoteEntity[] - using any to avoid circular dependency
         examples: any[]; // AIAgentExampleEntity[] - using any to avoid circular dependency
     };
+
+    /**
+     * Multi-modal outputs generated by the agent.
+     * Contains media that the agent explicitly promoted to its outputs.
+     * This flows to ConversationDetailAttachment for UI display.
+     *
+     * Media items with `refId` are used for placeholder resolution (${media:xxx}).
+     * Media items with `persist: false` are excluded from database persistence.
+     * Sub-agents return their mediaOutputs to parents for bubbling up.
+     *
+     * @since 3.1.0
+     */
+    mediaOutputs?: MediaOutput[];
 }
 
 /**
@@ -360,6 +500,29 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     userId?: string;
     /** Optional company ID for scoping context memory (notes/examples) */
     companyId?: string;
+    /**
+     * Optional scope context for multi-tenant SaaS deployments.
+     *
+     * When provided, agent memory (notes/examples) will be scoped to the specified
+     * entity hierarchy. This enables tenant isolation and hierarchical retrieval
+     * (global → org-level → fully-scoped notes).
+     *
+     * The scope is recorded in AIAgentRun and propagated to Memory Manager for
+     * creating properly scoped notes/examples. The Context Injector uses it for
+     * hierarchical retrieval.
+     *
+     * @since 2.130.0
+     *
+     * @example
+     * ```typescript
+     * params.userScope = {
+     *     primaryEntityName: 'Organizations',
+     *     primaryRecordId: 'org-123',
+     *     secondary: { ContactID: '456', TeamID: 'alpha' }
+     * };
+     * ```
+     */
+    userScope?: UserScope;
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */

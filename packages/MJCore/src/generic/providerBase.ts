@@ -223,26 +223,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The view results
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        // Pre-processing: telemetry, validation, entity status check
-        const preResult = await this.PreRunView(params, contextUser);
-
-        // Check for cached result - end telemetry with cache hit info
-        if (preResult.cachedResult) {
-            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
-                cacheHit: true,
-                cacheStatus: preResult.cacheStatus,
-                resultCount: preResult.cachedResult.Results?.length ?? 0
-            });
-            return preResult.cachedResult as RunViewResult<T>;
-        }
-
-        // Execute the internal implementation
-        const result = await this.InternalRunView<T>(params, contextUser);
-
-        // Post-processing: transformation, cache storage, telemetry end
-        await this.PostRunView(result, params, preResult, contextUser);
-
-        return result;
+        // Delegate to RunViews with a single-element array to ensure smart cache check is used
+        // This guarantees that CacheLocal uses server-side validation (maxUpdatedAt + rowCount check)
+        // rather than blindly accepting stale local cache
+        const results = await this.RunViews<T>([params], contextUser);
+        return results[0];
     }
 
     /**
@@ -495,7 +480,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     TotalRowCount: cached.results.length,
                     ExecutionTime: 0, // Cached, no execution time
                     ErrorMessage: '',
-                    UserViewRunID: ''
+                    UserViewRunID: '',
+                    AggregateResults: cached.aggregateResults // Include cached aggregate results
                 };
                 cacheStatus = 'hit';
             } else {
@@ -579,7 +565,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         TotalRowCount: cached.results.length,
                         ExecutionTime: 0,
                         ErrorMessage: '',
-                        UserViewRunID: ''
+                        UserViewRunID: '',
+                        AggregateResults: cached.aggregateResults // Include cached aggregate results
                     };
                     // if needed this will transform each result into an entity object
                     await this.TransformSimpleObjectToEntityObject(param, cachedViewResult, contextUser);
@@ -767,7 +754,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     TotalRowCount: cached.rowCount,
                     ExecutionTime: 0,
                     ErrorMessage: '',
-                    UserViewRunID: ''
+                    UserViewRunID: '',
+                    AggregateResults: cached.aggregateResults // Include cached aggregate results
                 };
                 // Transform to entity objects if needed
                 await this.TransformSimpleObjectToEntityObject(param, cachedResult, contextUser);
@@ -788,8 +776,55 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     cacheMiss: false
                 };
             }
+        } else if (checkResult.status === 'differential') {
+            // Cache is stale but we have differential data - merge with cached data
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+
+            // Get entity info for primary key field name
+            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName?.trim().toLowerCase());
+            const primaryKeyFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
+
+            // Apply differential update to cache
+            if (param.CacheLocal && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
+                const merged = await LocalCacheManager.Instance.ApplyDifferentialUpdate(
+                    fingerprint,
+                    param,
+                    checkResult.differentialData.updatedRows,
+                    checkResult.differentialData.deletedRecordIDs,
+                    primaryKeyFieldName,
+                    checkResult.maxUpdatedAt || new Date().toISOString(),
+                    checkResult.rowCount || 0,
+                    checkResult.aggregateResults // Pass fresh aggregate results (can't be differentially computed)
+                );
+
+                if (merged) {
+                    const mergedResult: RunViewResult<T> = {
+                        Success: true,
+                        Results: merged.results as T[],
+                        RowCount: merged.rowCount,
+                        TotalRowCount: merged.rowCount,
+                        ExecutionTime: 0,
+                        ErrorMessage: '',
+                        UserViewRunID: '',
+                        // Include aggregate results - either fresh from server or from merged cache
+                        AggregateResults: checkResult.aggregateResults || merged.aggregateResults
+                    };
+                    // Transform to entity objects if needed
+                    await this.TransformSimpleObjectToEntityObject(param, mergedResult, contextUser);
+                    return { result: mergedResult, cacheHit: true, cacheMiss: false };
+                }
+            }
+
+            // Differential merge failed - this should not happen normally
+            // Throwing an exception rather than returning partial data which would be dangerous
+            // as the caller would have no way of knowing the data is incomplete
+            throw new Error(
+                `Differential cache merge failed for entity '${param.EntityName}'. ` +
+                `Cache fingerprint may be invalid or cache data corrupted. ` +
+                `Consider clearing the local cache and retrying.`
+            );
         } else if (checkResult.status === 'stale') {
-            // Cache is stale - use fresh data and update cache
+            // Cache is stale - use fresh data and update cache (entity doesn't support differential)
             const freshResult: RunViewResult<T> = {
                 Success: true,
                 Results: checkResult.results || [],
@@ -797,7 +832,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 TotalRowCount: checkResult.rowCount || 0,
                 ExecutionTime: 0,
                 ErrorMessage: '',
-                UserViewRunID: ''
+                UserViewRunID: '',
+                AggregateResults: checkResult.aggregateResults // Include fresh aggregate results
             };
 
             // Update the local cache with fresh data (don't await - fire and forget for performance)
@@ -810,7 +846,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     param,
                     checkResult.results || [],
                     checkResult.maxUpdatedAt,
-                    checkResult.rowCount
+                    checkResult.aggregateResults // Include aggregate results in cache
                 ).catch(e => LogError(`Failed to update cache: ${e}`));
             }
 
@@ -927,7 +963,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 preResult.fingerprint,
                 params,
                 result.Results,
-                maxUpdatedAt
+                maxUpdatedAt,
+                result.AggregateResults // Include aggregate results in cache
             );
         }
 
@@ -969,7 +1006,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     fingerprint,
                     params[i],
                     results[i].Results,
-                    maxUpdatedAt
+                    maxUpdatedAt,
+                    results[i].AggregateResults // Include aggregate results in cache
                 ));
             }
         }

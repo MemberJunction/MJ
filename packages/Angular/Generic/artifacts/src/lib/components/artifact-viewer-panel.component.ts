@@ -22,6 +22,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() environmentId!: string;
   @Input() versionNumber?: number; // Version to display
   @Input() showSaveToCollection: boolean = true; // Control whether Save to Collection button is shown
+  @Input() showHeader: boolean = true; // Control whether the header section is shown
+  @Input() showTabs: boolean = true; // Control whether the tab navigation is shown (false = show only Display tab content)
+  @Input() showCloseButton: boolean = true; // Control whether the close button is shown in header
+  @Input() showMaximizeButton: boolean = true; // Control whether the maximize/restore button is shown in header
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
   @Input() viewContext: 'conversation' | 'collection' | null = null; // Where artifact is being viewed
   @Input() contextCollectionId?: string; // If viewing in collection, which collection

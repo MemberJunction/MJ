@@ -75,8 +75,8 @@ export class ConfigLoader {
         connectionTimeout: 30000
       },
       ai: {
-        provider: 'openai',
-        model: 'gpt-4-turbo-preview',
+        provider: 'gemini',
+        model: 'gemini-3-flash-preview',
         apiKey: '',
         temperature: 0.1,
         maxTokens: 4000

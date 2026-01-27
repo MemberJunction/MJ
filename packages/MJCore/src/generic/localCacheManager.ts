@@ -1,6 +1,6 @@
 import { BaseSingleton } from "@memberjunction/global";
-import { DatasetItemFilterType, DatasetResultType, ILocalStorageProvider } from "./interfaces";
-import { RunViewParams } from "../views/runView";
+import { AggregateResult, DatasetItemFilterType, DatasetResultType, ILocalStorageProvider } from "./interfaces";
+import { AggregateExpression, RunViewParams } from "../views/runView";
 import { LogError } from "./logging";
 
 // ============================================================================
@@ -60,6 +60,35 @@ export interface CacheStats {
     hits: number;
     /** Number of cache misses since initialization */
     misses: number;
+}
+
+/**
+ * Structure of cached RunView data stored in the storage provider.
+ * Note: rowCount is NOT persisted - it is always derived from results.length
+ * to prevent data inconsistency.
+ */
+export interface CachedRunViewData {
+    /** The cached result rows */
+    results: unknown[];
+    /** The maximum __mj_UpdatedAt timestamp from the results */
+    maxUpdatedAt: string;
+    /** Cached aggregate results, if aggregates were requested */
+    aggregateResults?: AggregateResult[];
+}
+
+/**
+ * Return type for GetRunViewResult and ApplyDifferentialUpdate.
+ * Includes rowCount which is derived from results.length.
+ */
+export interface CachedRunViewResult {
+    /** The cached result rows */
+    results: unknown[];
+    /** The maximum __mj_UpdatedAt timestamp from the results */
+    maxUpdatedAt: string;
+    /** Row count - always derived from results.length */
+    rowCount: number;
+    /** Cached aggregate results, if aggregates were requested */
+    aggregateResults?: AggregateResult[];
 }
 
 /**
@@ -397,8 +426,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Generates a human-readable cache fingerprint for a RunView request.
      * This fingerprint uniquely identifies the query based on its parameters and connection.
      *
-     * Format: EntityName|filter|orderBy|resultType|maxRows|startRow|connection
-     * Example: Users|Active=1|Name ASC|simple|100|0|localhost
+     * Format: EntityName|filter|orderBy|resultType|maxRows|startRow|aggHash|connection
+     * Example: Users|Active=1|Name ASC|simple|100|0|a1b2c3d4|localhost
      *
      * @param params - The RunView parameters
      * @param connectionPrefix - Prefix identifying the connection (e.g., server URL) to differentiate caches across connections
@@ -412,16 +441,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const maxRows = params.MaxRows ?? -1;
         const startRow = params.StartRow ?? 0;
         const connection = connectionPrefix || '';
+        const aggHash = this.generateAggregateHash(params.Aggregates);
 
         // Build human-readable fingerprint with pipe separators
-        // Format: Entity|Filter|OrderBy|ResultType|MaxRows|StartRow|Connection
+        // Format: Entity|Filter|OrderBy|ResultType|MaxRows|StartRow|AggHash|Connection
         const parts = [
             entity,
             filter || '_',           // Use underscore for empty filter
             orderBy || '_',          // Use underscore for empty orderBy
             resultType,
             maxRows.toString(),
-            startRow.toString()
+            startRow.toString(),
+            aggHash                  // Aggregate hash (or '_' for no aggregates)
         ];
 
         // Only include connection if provided
@@ -433,25 +464,69 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Generates a hash string representing the aggregate expressions.
+     * This ensures different aggregate configurations get different fingerprints.
+     * @param aggregates - The aggregate expressions array
+     * @returns A hash string, or '_' if no aggregates
+     */
+    private generateAggregateHash(aggregates: AggregateExpression[] | undefined): string {
+        if (!aggregates || aggregates.length === 0) {
+            return '_';
+        }
+
+        // Create a deterministic string from aggregates (sorted by expression for consistency)
+        const aggString = aggregates
+            .map(a => `${a.expression}:${a.alias || ''}`)
+            .sort()
+            .join(';');
+
+        return this.simpleHash(aggString);
+    }
+
+    /**
+     * Simple hash function for creating short fingerprints from strings.
+     * Not cryptographic, just for deduplication/fingerprinting purposes.
+     * Uses djb2 algorithm.
+     * @param str - The string to hash
+     * @returns A hex string hash
+     */
+    private simpleHash(str: string): string {
+        let hash = 5381;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) + hash) + char; // hash * 33 + char
+        }
+        // Convert to hex and ensure positive
+        return (hash >>> 0).toString(16);
+    }
+
+    /**
      * Stores a RunView result in the cache.
+     *
+     * Note: rowCount is NOT persisted - it is always derived from results.length
+     * when reading to prevent data inconsistency.
      *
      * @param fingerprint - The cache fingerprint (from GenerateRunViewFingerprint)
      * @param params - The original RunView parameters
      * @param results - The results to cache
      * @param maxUpdatedAt - The latest __mj_UpdatedAt from the results
-     * @param rowCount - Optional row count (defaults to results.length if not provided)
+     * @param aggregateResults - Optional aggregate results to cache alongside the row data
      */
     public async SetRunViewResult(
         fingerprint: string,
         params: RunViewParams,
         results: unknown[],
         maxUpdatedAt: string,
-        rowCount?: number
+        aggregateResults?: AggregateResult[]
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
-        const actualRowCount = rowCount ?? results.length;
-        const value = JSON.stringify({ results, maxUpdatedAt, rowCount: actualRowCount });
+        // Persist results, maxUpdatedAt, and aggregateResults (rowCount is derived from results.length on read)
+        const data: CachedRunViewData = { results, maxUpdatedAt };
+        if (aggregateResults && aggregateResults.length > 0) {
+            data.aggregateResults = aggregateResults;
+        }
+        const value = JSON.stringify(data);
         const sizeBytes = this.estimateSize(value);
 
         // Check if we need to evict entries
@@ -470,14 +545,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     ExtraFilter: params.ExtraFilter,
                     OrderBy: params.OrderBy,
                     ResultType: params.ResultType,
-                    MaxRows: params.MaxRows
+                    MaxRows: params.MaxRows,
+                    HasAggregates: (params.Aggregates?.length ?? 0) > 0
                 },
                 cachedAt: Date.now(),
                 lastAccessedAt: Date.now(),
                 accessCount: 1,
                 sizeBytes,
                 maxUpdatedAt,
-                rowCount: actualRowCount
+                rowCount: results.length  // Registry still tracks this for display/stats, derived from actual results
             });
         } catch (e) {
             LogError(`LocalCacheManager.SetRunViewResult failed: ${e}`);
@@ -487,10 +563,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     /**
      * Retrieves a cached RunView result.
      *
+     * Note: rowCount is always derived from results.length, never from persisted data.
+     *
      * @param fingerprint - The cache fingerprint
-     * @returns The cached results, maxUpdatedAt, and rowCount, or null if not found
+     * @returns The cached results, maxUpdatedAt, rowCount (derived), and aggregateResults, or null if not found
      */
-    public async GetRunViewResult(fingerprint: string): Promise<{ results: unknown[]; maxUpdatedAt: string; rowCount: number } | null> {
+    public async GetRunViewResult(fingerprint: string): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
@@ -499,13 +577,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             if (value) {
                 this.recordAccess(fingerprint);
                 this._stats.hits++;
-                const parsed = JSON.parse(value);
-                // Handle legacy entries that may not have rowCount
-                return {
-                    results: parsed.results,
+                const parsed = JSON.parse(value) as CachedRunViewData;
+                const results = parsed.results || [];
+                // Always derive rowCount from results.length - never trust persisted rowCount
+                const result: CachedRunViewResult = {
+                    results,
                     maxUpdatedAt: parsed.maxUpdatedAt,
-                    rowCount: parsed.rowCount ?? parsed.results?.length ?? 0
+                    rowCount: results.length
                 };
+                // Include aggregate results if they were cached
+                if (parsed.aggregateResults) {
+                    result.aggregateResults = parsed.aggregateResults;
+                }
+                return result;
             }
         } catch (e) {
             LogError(`LocalCacheManager.GetRunViewResult failed: ${e}`);
@@ -529,6 +613,313 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         } catch (e) {
             LogError(`LocalCacheManager.InvalidateRunViewResult failed: ${e}`);
         }
+    }
+
+    /**
+     * Applies a differential update to a cached RunView result.
+     * Merges updated/created rows and removes deleted records from the existing cache.
+     *
+     * This is the core method for differential caching - instead of replacing the entire cache,
+     * we efficiently merge only the changes (deltas) with the existing cached data.
+     *
+     * Note: rowCount is always derived from the merged results length, not from a parameter.
+     * Note: Aggregates cannot be differentially updated - if provided, they replace the cached aggregates;
+     *       if not provided, cached aggregates are cleared (they would be stale after a differential update).
+     *
+     * @param fingerprint - The cache fingerprint to update
+     * @param params - The original RunView parameters (for re-storing the cache)
+     * @param updatedRows - Rows that have been created or updated since the cache was stored
+     * @param deletedRecordIDs - Record IDs (in CompositeKey concatenated string format) that have been deleted
+     * @param primaryKeyFieldName - The name of the primary key field (or first PK field for composite keys)
+     * @param newMaxUpdatedAt - The new maxUpdatedAt timestamp after applying the delta
+     * @param _serverRowCount - DEPRECATED: This parameter is ignored. rowCount is always derived from merged results.length.
+     * @param aggregateResults - Optional fresh aggregate results (since aggregates can't be differentially computed)
+     * @returns The merged results after applying the differential update, or null if cache not found
+     */
+    public async ApplyDifferentialUpdate(
+        fingerprint: string,
+        params: RunViewParams,
+        updatedRows: unknown[],
+        deletedRecordIDs: string[],
+        primaryKeyFieldName: string,
+        newMaxUpdatedAt: string,
+        _serverRowCount?: number,
+        aggregateResults?: AggregateResult[]
+    ): Promise<CachedRunViewResult | null> {
+        if (!this._storageProvider || !this._config.enabled) return null;
+
+        try {
+            // Get existing cached data
+            const cached = await this.GetRunViewResult(fingerprint);
+            if (!cached) {
+                // No existing cache - can't apply differential, caller should do full fetch
+                return null;
+            }
+
+            // Build a map of existing records by primary key for O(1) lookups
+            const resultMap = new Map<string, unknown>();
+            for (const row of cached.results) {
+                const rowObj = row as Record<string, unknown>;
+                const pkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
+                if (pkValue) {
+                    resultMap.set(pkValue, row);
+                }
+            }
+
+            // Apply deletions - remove records that have been deleted
+            for (const deletedID of deletedRecordIDs) {
+                // deletedID is in CompositeKey concatenated format: "Field1|Value1||Field2|Value2"
+                // For single-field PKs, it's just "ID|abc123"
+                // We need to extract just the value(s) to match against our map
+                const pkValue = this.extractValueFromConcatenatedKey(deletedID, primaryKeyFieldName);
+                if (pkValue) {
+                    resultMap.delete(pkValue);
+                }
+            }
+
+            // Apply updates/inserts - add or replace records
+            for (const row of updatedRows) {
+                const rowObj = row as Record<string, unknown>;
+                const pkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
+                if (pkValue) {
+                    resultMap.set(pkValue, row);
+                }
+            }
+
+            // Convert map back to array
+            const mergedResults = Array.from(resultMap.values());
+
+            // Store the updated cache with optional aggregate results
+            // Note: If aggregateResults not provided, cached aggregates are cleared (they'd be stale)
+            await this.SetRunViewResult(
+                fingerprint,
+                params,
+                mergedResults,
+                newMaxUpdatedAt,
+                aggregateResults
+            );
+
+            // Return with rowCount derived from merged results and aggregates if provided
+            const result: CachedRunViewResult = {
+                results: mergedResults,
+                maxUpdatedAt: newMaxUpdatedAt,
+                rowCount: mergedResults.length
+            };
+            if (aggregateResults) {
+                result.aggregateResults = aggregateResults;
+            }
+            return result;
+        } catch (e) {
+            LogError(`LocalCacheManager.ApplyDifferentialUpdate failed: ${e}`);
+            return null;
+        }
+    }
+
+    /**
+     * Upserts a single entity in a cached RunView result.
+     * Used by BaseEngine for immediate cache sync when an entity is saved.
+     * If the entity exists (by primary key), it is replaced; otherwise it is added.
+     *
+     * @param fingerprint - The cache fingerprint to update
+     * @param entityData - The entity data as a plain object (use entity.GetAll())
+     * @param primaryKeyFieldName - Name of the primary key field
+     * @param newMaxUpdatedAt - New maxUpdatedAt timestamp (from entity's __mj_UpdatedAt)
+     * @returns true if cache was updated, false if cache not found or update failed
+     */
+    public async UpsertSingleEntity(
+        fingerprint: string,
+        entityData: Record<string, unknown>,
+        primaryKeyFieldName: string,
+        newMaxUpdatedAt: string
+    ): Promise<boolean> {
+        if (!this._storageProvider || !this._config.enabled) return false;
+
+        try {
+            // Get existing cached data
+            const cached = await this.GetRunViewResult(fingerprint);
+            if (!cached) {
+                // No existing cache - nothing to update
+                // The next RunView call will populate the cache
+                return false;
+            }
+
+            // Get the primary key value from the entity
+            const pkValue = this.extractPrimaryKeyString(entityData, primaryKeyFieldName);
+            if (!pkValue) {
+                LogError(`LocalCacheManager.UpsertSingleEntity: Could not extract primary key from entity data`);
+                return false;
+            }
+
+            // Build a map of existing records by primary key
+            const resultMap = new Map<string, unknown>();
+            for (const row of cached.results) {
+                const rowObj = row as Record<string, unknown>;
+                const rowPkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
+                if (rowPkValue) {
+                    resultMap.set(rowPkValue, row);
+                }
+            }
+
+            // Upsert the entity (add or replace)
+            resultMap.set(pkValue, entityData);
+
+            // Convert map back to array
+            const updatedResults = Array.from(resultMap.values());
+
+            // Store the updated cache - rowCount is derived from results.length
+            const data: CachedRunViewData = {
+                results: updatedResults,
+                maxUpdatedAt: newMaxUpdatedAt
+            };
+            const value = JSON.stringify(data);
+            const sizeBytes = this.estimateSize(value);
+
+            await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunViewCache);
+
+            // Update registry entry with derived rowCount
+            const existingEntry = this._registry.get(fingerprint);
+            if (existingEntry) {
+                existingEntry.maxUpdatedAt = newMaxUpdatedAt;
+                existingEntry.rowCount = updatedResults.length;
+                existingEntry.sizeBytes = sizeBytes;
+                existingEntry.lastAccessedAt = Date.now();
+                this.debouncedPersistRegistry();
+            }
+
+            return true;
+        } catch (e) {
+            LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
+            return false;
+        }
+    }
+
+    /**
+     * Removes a single entity from a cached RunView result.
+     * Used by BaseEngine for immediate cache sync when an entity is deleted.
+     *
+     * @param fingerprint - The cache fingerprint to update
+     * @param primaryKeyValue - The primary key value of the entity to remove
+     * @param primaryKeyFieldName - Name of the primary key field
+     * @param newMaxUpdatedAt - New maxUpdatedAt timestamp
+     * @returns true if cache was updated, false if cache not found or update failed
+     */
+    public async RemoveSingleEntity(
+        fingerprint: string,
+        primaryKeyValue: string,
+        primaryKeyFieldName: string,
+        newMaxUpdatedAt: string
+    ): Promise<boolean> {
+        if (!this._storageProvider || !this._config.enabled) return false;
+
+        try {
+            // Get existing cached data
+            const cached = await this.GetRunViewResult(fingerprint);
+            if (!cached) {
+                // No existing cache - nothing to update
+                return false;
+            }
+
+            // Build a map of existing records by primary key
+            const resultMap = new Map<string, unknown>();
+            for (const row of cached.results) {
+                const rowObj = row as Record<string, unknown>;
+                const rowPkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
+                if (rowPkValue) {
+                    resultMap.set(rowPkValue, row);
+                }
+            }
+
+            // Check if entity exists in cache
+            if (!resultMap.has(primaryKeyValue)) {
+                // Entity not in cache, nothing to remove
+                return true; // Not an error, just a no-op
+            }
+
+            // Remove the entity
+            resultMap.delete(primaryKeyValue);
+
+            // Convert map back to array
+            const updatedResults = Array.from(resultMap.values());
+
+            // Store the updated cache - rowCount is derived from results.length
+            const data: CachedRunViewData = {
+                results: updatedResults,
+                maxUpdatedAt: newMaxUpdatedAt
+            };
+            const value = JSON.stringify(data);
+            const sizeBytes = this.estimateSize(value);
+
+            await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunViewCache);
+
+            // Update registry entry with derived rowCount
+            const existingEntry = this._registry.get(fingerprint);
+            if (existingEntry) {
+                existingEntry.maxUpdatedAt = newMaxUpdatedAt;
+                existingEntry.rowCount = updatedResults.length;
+                existingEntry.sizeBytes = sizeBytes;
+                existingEntry.lastAccessedAt = Date.now();
+                this.debouncedPersistRegistry();
+            }
+
+            return true;
+        } catch (e) {
+            LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
+            return false;
+        }
+    }
+
+    /**
+     * Extracts the primary key value as a string from a row object.
+     * Handles both single-field and composite primary keys.
+     * @param row - The row object
+     * @param primaryKeyFieldName - The primary key field name (first field for composite keys)
+     * @returns The primary key value as a string, or null if not found
+     */
+    private extractPrimaryKeyString(row: Record<string, unknown>, primaryKeyFieldName: string): string | null {
+        const value = row[primaryKeyFieldName];
+        if (value === null || value === undefined) {
+            return null;
+        }
+        return String(value);
+    }
+
+    /**
+     * Extracts the primary key value from a CompositeKey concatenated string.
+     * Format: "Field1|Value1||Field2|Value2" for composite keys, or "ID|abc123" for single keys.
+     * @param concatenatedKey - The concatenated key string from RecordChange.RecordID
+     * @param primaryKeyFieldName - The primary key field name to extract
+     * @returns The value for the specified field, or the first value if field not found
+     */
+    private extractValueFromConcatenatedKey(concatenatedKey: string, primaryKeyFieldName: string): string | null {
+        if (!concatenatedKey) {
+            return null;
+        }
+
+        // Split by field delimiter (||)
+        const fieldPairs = concatenatedKey.split('||');
+
+        for (const pair of fieldPairs) {
+            // Split by value delimiter (|)
+            const parts = pair.split('|');
+            if (parts.length >= 2) {
+                const fieldName = parts[0];
+                const value = parts.slice(1).join('|'); // Rejoin in case value contained |
+
+                if (fieldName === primaryKeyFieldName) {
+                    return value;
+                }
+            }
+        }
+
+        // If field name not found, return the first value (fallback for simple keys)
+        if (fieldPairs.length > 0) {
+            const parts = fieldPairs[0].split('|');
+            if (parts.length >= 2) {
+                return parts.slice(1).join('|');
+            }
+        }
+
+        return null;
     }
 
     /**

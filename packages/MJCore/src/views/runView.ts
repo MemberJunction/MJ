@@ -4,6 +4,29 @@ import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
 
 /**
+ * Single aggregate expression to compute alongside the main view query.
+ * Aggregates run in parallel with the row data query and are NOT affected by pagination.
+ */
+export interface AggregateExpression {
+    /**
+     * SQL expression for the aggregate.
+     * Examples:
+     *   - "SUM(OrderTotal)"
+     *   - "AVG(Price)"
+     *   - "COUNT(*)"
+     *   - "MAX(CreatedAt)"
+     *   - "SUM(Quantity * Price * (1 - Discount/100))"
+     */
+    expression: string;
+
+    /**
+     * Optional alias for the result (used in error messages and debugging).
+     * If not provided, defaults to the expression itself.
+     */
+    alias?: string;
+}
+
+/**
  * Parameters for running either a stored or dynamic view.
  * A stored view is a view that is saved in the database and can be run either by ID or Name.
  * A dynamic view is one that is not stored in the database and you provide parameters to return data as
@@ -137,6 +160,25 @@ export class RunViewParams {
     CacheLocalTTL?: number;
 
     /**
+     * Optional aggregate expressions to calculate on the full result set.
+     * These run as a parallel query and are NOT affected by pagination (StartRow/MaxRows).
+     * The WHERE clause (including filters and RLS) IS applied to aggregates.
+     *
+     * Results are returned in AggregateResults in the same order as this array.
+     *
+     * @example
+     * ```typescript
+     * params.Aggregates = [
+     *   { expression: 'SUM(OrderTotal)', alias: 'TotalRevenue' },
+     *   { expression: 'COUNT(*)', alias: 'OrderCount' },
+     *   { expression: 'AVG(OrderTotal)', alias: 'AverageOrder' },
+     *   { expression: 'MAX(OrderDate)', alias: 'LatestOrder' }
+     * ];
+     * ```
+     */
+    Aggregates?: AggregateExpression[];
+
+    /**
      * Compares two RunViewParams objects for equality by comparing their property values.
      * This is useful for determining if params have actually changed vs just being a new object reference.
      * Note: ViewEntity comparison uses reference equality since comparing loaded entity objects deeply is expensive.
@@ -175,6 +217,9 @@ export class RunViewParams {
         // Compare Fields array
         if (!RunViewParams.arraysEqual(a.Fields, b.Fields)) return false;
 
+        // Compare Aggregates array
+        if (!RunViewParams.aggregatesEqual(a.Aggregates, b.Aggregates)) return false;
+
         return true;
     }
 
@@ -187,6 +232,20 @@ export class RunViewParams {
         if (a.length !== b.length) return false;
         for (let i = 0; i < a.length; i++) {
             if (a[i] !== b[i]) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Helper method to compare two AggregateExpression arrays for equality
+     */
+    private static aggregatesEqual(a: AggregateExpression[] | undefined, b: AggregateExpression[] | undefined): boolean {
+        if (a === b) return true; // Same reference or both undefined
+        if (!a || !b) return false; // One is undefined, the other isn't
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (a[i].expression !== b[i].expression) return false;
+            if (a[i].alias !== b[i].alias) return false;
         }
         return true;
     }

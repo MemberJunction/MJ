@@ -1,11 +1,16 @@
 {
   "name": "@memberjunction/ng-bootstrap",
-  "version": "2.133.0",
+  "version": "3.2.0",
   "description": "MemberJunction Angular Bootstrap - Encapsulates all Angular authentication and initialization logic",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/fesm2022/memberjunction-ng-bootstrap.mjs",
+  "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "directory": "dist",
+    "main": "./fesm2022/memberjunction-ng-bootstrap.mjs",
+    "types": "./index.d.ts"
+  },
   "scripts": {
-    "build": "ng-packagr -p ng-package.json",
+    "build": "ng-packagr -p ng-package.json && node scripts/fix-dist-package.js",
     "watch": "ng-packagr -p ng-package.json --watch",
     "clean": "rm -rf dist"
   },
@@ -21,17 +26,13 @@
     "@angular/common": "^18.0.0",
     "@angular/core": "^18.0.0",
     "@angular/router": "^18.0.0",
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/graphql-dataprovider": "2.133.0",
-    "@memberjunction/ng-auth-services": "2.133.0",
-    "@memberjunction/ng-shared": "2.133.0",
     "rxjs": "^7.8.1"
   },
   "dependencies": {
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/graphql-dataprovider": "2.133.0",
-    "@memberjunction/ng-auth-services": "2.133.0",
-    "@memberjunction/ng-shared": "2.133.0",
+    "@memberjunction/core": "3.2.0",
+    "@memberjunction/graphql-dataprovider": "3.2.0",
+    "@memberjunction/ng-auth-services": "3.2.0",
+    "@memberjunction/ng-shared": "3.2.0",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
@@ -43,5 +44,9 @@
   },
   "files": [
     "dist/**/*"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

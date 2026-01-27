@@ -18,7 +18,8 @@ import { AIActionEntity, ActionEntity,
          AIConfigurationEntity, AIConfigurationParamEntity, AIAgentStepEntity,
          AIAgentStepPathEntity, AIAgentRelationshipEntity, AIAgentPermissionEntity,
          AIAgentDataSourceEntity, AIAgentConfigurationEntity, AIAgentExampleEntity,
-         AICredentialBindingEntity } from "@memberjunction/core-entities";
+         AICredentialBindingEntity, AIModalityEntity, AIAgentModalityEntity,
+         AIModelModalityEntity } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -158,6 +159,34 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public get Actions(): AIActionEntity[] { return this.Base.Actions; }
     /** @deprecated Use the new Action system instead */
     public get EntityAIActions(): EntityAIActionEntity[] { return this.Base.EntityAIActions; }
+
+    // Modality getters - delegated from AIEngineBase
+    public get Modalities(): AIModalityEntity[] { return this.Base.Modalities; }
+    public get AgentModalities(): AIAgentModalityEntity[] { return this.Base.AgentModalities; }
+    public get ModelModalities(): AIModelModalityEntity[] { return this.Base.ModelModalities; }
+
+    // Modality helper methods - delegated from AIEngineBase
+    public GetModalityByName(name: string): AIModalityEntity | undefined {
+        return this.Base.GetModalityByName(name);
+    }
+    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+        return this.Base.GetAgentModalities(agentId, direction);
+    }
+    public GetModelModalitiesByDirection(modelId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+        return this.Base.GetModelModalities(modelId, direction);
+    }
+    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
+        return this.Base.AgentSupportsModality(agentId, modalityName, direction);
+    }
+    public ModelSupportsModality(modelId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
+        return this.Base.ModelSupportsModality(modelId, modalityName, direction);
+    }
+    public AgentSupportsAttachments(agentId: string): boolean {
+        return this.Base.AgentSupportsAttachments(agentId);
+    }
+    public GetAgentSupportedInputModalities(agentId: string): string[] {
+        return this.Base.GetAgentSupportedInputModalities(agentId);
+    }
 
     // Delegate AIEngineBase public methods
     public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
@@ -403,7 +432,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             this._embeddingsGenerated = true;
 
         } catch (error) {
-            console.error('AIEngine: Failed to regenerate embeddings:', error);
+            LogError('AIEngine: Failed to regenerate embeddings', undefined, error instanceof Error ? error : undefined);
             throw error;
         }
     }
@@ -453,7 +482,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             this._agentVectorService.LoadVectors(entries);
 
         } catch (error) {
-            console.error(`Failed to load agent embeddings: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`AIEngine: Failed to load agent embeddings: ${error instanceof Error ? error.message : String(error)}`);
             // Don't throw - allow AIEngine to continue loading even if embeddings fail
         }
     }
@@ -471,12 +500,12 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             if (actions && actions.length > 0) {
                 this._actions = actions;
             } else {
-                console.error(`Failed to load actions`);
+                LogError('AIEngine: No active actions found during load');
                 this._actions = [];
             }
 
         } catch (error) {
-            console.error(`Error loading actions: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`AIEngine: Error loading actions: ${error instanceof Error ? error.message : String(error)}`);
             this._actions = [];
         }
     }
@@ -522,7 +551,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             this._actionVectorService.LoadVectors(entries);
 
         } catch (error) {
-            console.error(`Failed to load action embeddings: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`AIEngine: Failed to load action embeddings: ${error instanceof Error ? error.message : String(error)}`);
             // Don't throw - allow AIEngine to continue loading even if embeddings fail
         }
     }
@@ -557,7 +586,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             this._noteVectorService = new SimpleVectorService();
             this._noteVectorService.LoadVectors(entries);
         } catch (error) {
-            console.error(`Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`AIEngine: Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -593,7 +622,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             this._exampleVectorService = new SimpleVectorService();
             this._exampleVectorService.LoadVectors(entries);
         } catch (error) {
-            console.error(`Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`AIEngine: Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -623,7 +652,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
                 this._agentVectorService.LoadVectors(entries);
             }
         } catch (error) {
-            console.error(`Failed to generate embedding for agent ${agent.Name}:`, error);
+            LogError(`AIEngine: Failed to generate embedding for agent ${agent.Name}: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -648,7 +677,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
                 this._actionVectorService.LoadVectors(entries);
             }
         } catch (error) {
-            console.error(`Failed to generate embedding for action ${action.Name}:`, error);
+            LogError(`AIEngine: Failed to generate embedding for action ${action.Name}: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -837,7 +866,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public async EmbedTextLocal(text: string): Promise<{result: EmbedTextResult, model: AIModelEntityExtended} | null> {
         const model = this.HighestPowerLocalEmbeddingModel;
         if (!model) {
-            console.warn('No local embedding model found. Cannot generate embedding.');
+            LogError('AIEngine: No local embedding model found. Cannot generate embedding.');
             return null;
         }
         const result = await this.EmbedText(model, text);
@@ -861,7 +890,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         );
 
         if (!embedding) {
-            console.warn(`Failed to create embedding instance for model ${model.Name}. Skipping embedding generation.`);
+            LogError(`AIEngine: Failed to create embedding instance for model ${model.Name}. Skipping embedding generation.`);
             return null;
         }
 
@@ -917,6 +946,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
     /**
      * Find notes similar to query text using semantic search.
+     * Falls back to returning notes from cache if vector service is unavailable.
      */
     public async FindSimilarAgentNotes(
         queryText: string,
@@ -927,7 +957,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         minSimilarity: number = 0.5
     ): Promise<NoteMatchResult[]> {
         if (!this._noteVectorService) {
-            return [];
+            // Vector service not available - fall back to returning notes from cache filtered by scope
+            LogError('FindSimilarAgentNotes: Note vector service not initialized. Falling back to cached notes without semantic ranking.');
+            return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK);
         }
 
         if (!queryText || queryText.trim().length === 0) {
@@ -936,12 +968,13 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
         const queryEmbedding = await this.EmbedTextLocal(queryText);
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
-            throw new Error('Failed to generate embedding for query text');
+            LogError('FindSimilarAgentNotes: Failed to generate embedding for query text. Falling back to cached notes.');
+            return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK);
         }
 
         const needsFiltering = agentId || userId || companyId;
         const filter = needsFiltering ? (metadata: NoteEmbeddingMetadata) => {
-            if (agentId && metadata.agentId !== agentId) return false;
+            if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
             if (userId && metadata.userId && metadata.userId !== userId) return false;
             if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
             return true;
@@ -962,7 +995,38 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
+     * Fallback method to get notes from cache when vector service is unavailable.
+     * Returns notes filtered by scope, sorted by creation date.
+     */
+    private fallbackGetNotesFromCache(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        topK: number = 5
+    ): NoteMatchResult[] {
+        const notes = this.AgentNotes.filter(n => {
+            if (n.Status !== 'Active') return false;
+            if (agentId && n.AgentID !== agentId && n.AgentID !== null) return false;
+            if (userId && n.UserID !== userId && n.UserID !== null) return false;
+            if (companyId && n.CompanyID !== companyId && n.CompanyID !== null) return false;
+            return true;
+        });
+
+        // Sort by creation date (most recent first) and take topK
+        const sorted = notes
+            .sort((a, b) => (b.__mj_CreatedAt?.getTime() || 0) - (a.__mj_CreatedAt?.getTime() || 0))
+            .slice(0, topK);
+
+        // Return with similarity of 0 to indicate no semantic ranking was applied
+        return sorted.map(note => ({
+            note,
+            similarity: 0
+        }));
+    }
+
+    /**
      * Find examples similar to query text using semantic search.
+     * Falls back to returning examples from cache if vector service is unavailable.
      */
     public async FindSimilarAgentExamples(
         queryText: string,
@@ -973,7 +1037,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         minSimilarity: number = 0.5
     ): Promise<ExampleMatchResult[]> {
         if (!this._exampleVectorService) {
-            return [];
+            // Vector service not available - fall back to returning examples from cache filtered by scope
+            LogError('FindSimilarAgentExamples: Example vector service not initialized. Falling back to cached examples without semantic ranking.');
+            return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK);
         }
 
         if (!queryText || queryText.trim().length === 0) {
@@ -982,12 +1048,13 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
         const queryEmbedding = await this.EmbedTextLocal(queryText);
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
-            throw new Error('Failed to generate embedding for query text');
+            LogError('FindSimilarAgentExamples: Failed to generate embedding for query text. Falling back to cached examples.');
+            return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK);
         }
 
         const needsFiltering = agentId || userId || companyId;
         const filter = needsFiltering ? (metadata: ExampleEmbeddingMetadata) => {
-            if (agentId && metadata.agentId !== agentId) return false;
+            if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
             if (userId && metadata.userId && metadata.userId !== userId) return false;
             if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
             return true;
@@ -1004,6 +1071,41 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         return results.map(r => ({
             example: r.metadata.exampleEntity,
             similarity: r.score
+        }));
+    }
+
+    /**
+     * Fallback method to get examples from cache when vector service is unavailable.
+     * Returns examples filtered by scope, sorted by success score then creation date.
+     */
+    private fallbackGetExamplesFromCache(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        topK: number = 3
+    ): ExampleMatchResult[] {
+        const examples = this.AgentExamples.filter(e => {
+            if (e.Status !== 'Active') return false;
+            if (agentId && e.AgentID !== agentId) return false;
+            if (userId && e.UserID !== userId && e.UserID !== null) return false;
+            if (companyId && e.CompanyID !== companyId && e.CompanyID !== null) return false;
+            return true;
+        });
+
+        // Sort by success score (highest first), then by creation date (most recent first)
+        const sorted = examples
+            .sort((a, b) => {
+                const scoreA = a.SuccessScore ?? 0;
+                const scoreB = b.SuccessScore ?? 0;
+                if (scoreB !== scoreA) return scoreB - scoreA;
+                return (b.__mj_CreatedAt?.getTime() || 0) - (a.__mj_CreatedAt?.getTime() || 0);
+            })
+            .slice(0, topK);
+
+        // Return with similarity of 0 to indicate no semantic ranking was applied
+        return sorted.map(example => ({
+            example,
+            similarity: 0
         }));
     }
 
@@ -1091,7 +1193,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             return results;
         }
         catch (err) {
-            console.error(err);
+            LogError('AIEngine: ExecuteEntityAIAction failed', undefined, err instanceof Error ? err : undefined);
             return {
                 success: false,
                 startTime: startTime,

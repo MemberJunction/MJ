@@ -208,21 +208,7 @@
     "sync": {
       "lastModified": "2026-01-09T16:31:23.310Z",
       "checksum": "3f2a1f4b884d6dc367f12c049b75518972e42d5be529fb7594f9f733ff754e91"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types",
-        "resolved": "838572BE-9464-4935-BC34-4806FD80A69C"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -1065,8 +1051,8 @@
       "ID": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:30.831Z",
-      "checksum": "f83c632130d23f248cc005eab0672d84ac9c0122990c9c64b2eac8eb3eee4226"
+      "lastModified": "2026-01-27T02:14:12.941Z",
+      "checksum": "2d879f338cf4fcf03176026177675fb9baed31a2b039ab464a8a253e2ea17523"
     }
   },
   {
@@ -1188,8 +1174,8 @@
       "ID": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:30.833Z",
-      "checksum": "1879abcca5ff7ef26e680c1db216b9a2e74686405a8415c3b96a37f22c10d225"
+      "lastModified": "2026-01-27T02:14:12.659Z",
+      "checksum": "c13c6b595b58d1a81eb7bc478ead3b10d0753369a804532b51ac803eeae7a57a"
     }
   },
   {

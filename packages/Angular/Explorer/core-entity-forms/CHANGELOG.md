@@ -1,5 +1,116 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 3.2.0
+
+### Minor Changes
+
+- 039983c: migration
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/ai-engine-base@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/actions-base@3.2.0
+  - @memberjunction/ng-base-application@3.2.0
+  - @memberjunction/ng-base-forms@3.2.0
+  - @memberjunction/ng-form-toolbar@3.2.0
+  - @memberjunction/ng-shared@3.2.0
+  - @memberjunction/ng-user-view-grid@3.2.0
+  - @memberjunction/ng-testing@3.2.0
+  - @memberjunction/ng-action-gallery@3.2.0
+  - @memberjunction/ng-ai-test-harness@3.2.0
+  - @memberjunction/ng-code-editor@3.2.0
+  - @memberjunction/ng-entity-viewer@3.2.0
+  - @memberjunction/ng-join-grid@3.2.0
+  - @memberjunction/ng-list-management@3.2.0
+  - @memberjunction/ng-notifications@3.2.0
+  - @memberjunction/ng-shared-generic@3.2.0
+  - @memberjunction/templates-base-types@3.2.0
+  - @memberjunction/ng-link-directives@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/ng-container-directives@3.2.0
+  - @memberjunction/ng-deep-diff@3.2.0
+  - @memberjunction/ng-entity-relationship-diagram@3.2.0
+  - @memberjunction/ng-tabstrip@3.2.0
+  - @memberjunction/ng-timeline@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [8c0b624]
+  - @memberjunction/graphql-dataprovider@3.1.1
+  - @memberjunction/ng-shared@3.1.1
+  - @memberjunction/ng-user-view-grid@3.1.1
+  - @memberjunction/ng-testing@3.1.1
+  - @memberjunction/ng-ai-test-harness@3.1.1
+  - @memberjunction/ng-notifications@3.1.1
+  - @memberjunction/ng-base-forms@3.1.1
+  - @memberjunction/ng-form-toolbar@3.1.1
+  - @memberjunction/ng-link-directives@3.1.1
+  - @memberjunction/ng-join-grid@3.1.1
+  - @memberjunction/ng-list-management@3.1.1
+  - @memberjunction/ng-action-gallery@3.1.1
+  - @memberjunction/ai-engine-base@3.1.1
+  - @memberjunction/ai@3.1.1
+  - @memberjunction/ai-core-plus@3.1.1
+  - @memberjunction/actions-base@3.1.1
+  - @memberjunction/ng-base-application@3.1.1
+  - @memberjunction/ng-code-editor@3.1.1
+  - @memberjunction/ng-container-directives@3.1.1
+  - @memberjunction/ng-deep-diff@3.1.1
+  - @memberjunction/ng-entity-relationship-diagram@3.1.1
+  - @memberjunction/ng-entity-viewer@3.1.1
+  - @memberjunction/ng-shared-generic@3.1.1
+  - @memberjunction/ng-tabstrip@3.1.1
+  - @memberjunction/ng-timeline@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/global@3.1.1
+  - @memberjunction/templates-base-types@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [528041e]
+  - @memberjunction/ng-list-management@3.0.0
+  - @memberjunction/ng-form-toolbar@3.0.0
+  - @memberjunction/ng-user-view-grid@3.0.0
+  - @memberjunction/ai-engine-base@3.0.0
+  - @memberjunction/ai@3.0.0
+  - @memberjunction/ai-core-plus@3.0.0
+  - @memberjunction/actions-base@3.0.0
+  - @memberjunction/ng-base-application@3.0.0
+  - @memberjunction/ng-base-forms@3.0.0
+  - @memberjunction/ng-link-directives@3.0.0
+  - @memberjunction/ng-shared@3.0.0
+  - @memberjunction/ng-testing@3.0.0
+  - @memberjunction/ng-action-gallery@3.0.0
+  - @memberjunction/ng-ai-test-harness@3.0.0
+  - @memberjunction/ng-code-editor@3.0.0
+  - @memberjunction/ng-container-directives@3.0.0
+  - @memberjunction/ng-deep-diff@3.0.0
+  - @memberjunction/ng-entity-relationship-diagram@3.0.0
+  - @memberjunction/ng-entity-viewer@3.0.0
+  - @memberjunction/ng-join-grid@3.0.0
+  - @memberjunction/ng-notifications@3.0.0
+  - @memberjunction/ng-shared-generic@3.0.0
+  - @memberjunction/ng-tabstrip@3.0.0
+  - @memberjunction/ng-timeline@3.0.0
+  - @memberjunction/graphql-dataprovider@3.0.0
+  - @memberjunction/core@3.0.0
+  - @memberjunction/core-entities@3.0.0
+  - @memberjunction/global@3.0.0
+  - @memberjunction/templates-base-types@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -983,7 +1094,6 @@
 - 7980171: entity name corrections
 
   ### Features
-
   - **Resizable & Draggable Dialogs**: Converted all AI Agent dialog
     types from DialogService to WindowService
     - Added corner resizing and drag-and-drop movement capabilities for
@@ -995,7 +1105,6 @@
     styling
 
   ### Bug Fixes
-
   - **Critical Entity Name Corrections**: Fixed entity references to use
     proper "MJ: " prefix for newer core entities
     - Fixed 'AI Agent Prompts' → 'MJ: AI Agent Prompts' (3 occurrences)
@@ -1004,14 +1113,12 @@
       MemberJunction framework and prevents runtime errors
 
   ### Documentation
-
   - Updated CLAUDE.md with comprehensive entity naming guidelines
   - Added complete list of all 23 core entities requiring "MJ: " prefix
   - Added warning section with code examples to prevent future entity
     naming issues
 
   ### Impact
-
   - **Enhanced User Experience**: All AI Agent dialogs now provide
     modern, resizable, and draggable interfaces
   - **Database Compatibility**: Ensures proper entity schema compliance
@@ -1163,7 +1270,6 @@
 
 - eb7677d: feat(ai-agents): Add ChatHandlingOption for flexible Chat step
   handling
-
   - Add ChatHandlingOption field to AIAgent table with values:
     Success, Failed, Retry
   - Implement Chat step remapping in
@@ -1371,7 +1477,6 @@
   delete result codes that define possible execution outcomes for Actions.
 
   Key Changes:
-
   - Created ActionResultCodeDialogComponent for adding/editing result codes with fields for code, description, and success status
   - Added interactive UI with hover effects, edit/delete buttons, and visual indicators for success/failure codes
   - Implemented proper transaction support using InternalSaveRecord pattern to save Action, Params, and Result Codes atomically
@@ -1614,7 +1719,6 @@
 
 - 95491fa: bug fixes
 - 6d2d478: feat: AI Agent UI improvements and server-side context fixes
-
   - Enhanced AI Agent dialogs with resizable and draggable functionality
     using Kendo UI Window component
   - Improved dialog positioning with consistent center placement and proper
@@ -1778,7 +1882,6 @@
   relationships.
 
   ### New Features
-
   - **Hierarchical Path Resolution**: CategoryName now supports paths like
     "/MJ/AI/Agents/" that are parsed by splitting on "/" and walking down the
     category hierarchy using ParentID relationships
@@ -1813,7 +1916,6 @@
 
 - 6a65fad: feat: Add AI Agent Run cost calculation with high-performance templated
   queries
-
   - Add AIAgentRunCostService with intelligent caching and single-query
     performance optimization
   - Implement CalculateAIAgentRunCost templated query using recursive CTE for
@@ -1924,7 +2026,6 @@
 ### Patch Changes
 
 - e75f0a4: Major AI Agent and AI Prompt Management Enhancements
-
   - **AI Agent Forms**: Complete redesign with comprehensive sub-agent creation, advanced settings management, and transaction-based persistence
   - **AI Prompt Forms**: Implemented atomic "Create New Prompt" feature with template linking and proper MemberJunction navigation
   - **User Permissions**: Added comprehensive user permission reflection across AI forms and dashboards
@@ -2288,7 +2389,6 @@
 ### Patch Changes
 
 - 67a2bec: feat(ai-agent-form): Add Model Selection Mode control and reorganize panels
-
   - Added Model Selection Mode dropdown in the Prompts section for better space utilization
   - Reordered panels to show Actions first, then Sub-Agents, then Prompts for better workflow
   - Fixed Kendo dropdown to properly bind primitive string values using valuePrimitive="true"
@@ -2479,7 +2579,6 @@
 ### Minor Changes
 
 - 031e724: Implement agent architecture separation of concerns
-
   - **NEW**: Add BaseAgent class for domain-specific prompt execution
   - **NEW**: Add ConductorAgent for autonomous orchestration decisions and action planning
   - **NEW**: Add AgentRunner class to coordinate BaseAgent + ConductorAgent interactions
@@ -2494,7 +2593,6 @@
   - **NEW**: Template rendering with data context
 
   This implements clean separation of concerns:
-
   - BaseAgent: Domain-specific execution only (~500 lines)
   - ConductorAgent: Orchestration decisions with structured responses
   - AgentRunner: Coordination layer providing unified user interface

@@ -11,7 +11,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Check Storage Directory Exists',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'Dropbox'
  *   }, {
  *     Name: 'DirectoryPath',
@@ -27,7 +27,7 @@ export class DirectoryExistsAction extends BaseFileStorageAction {
      * Check if a directory exists
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - DirectoryPath: Required - Path to the directory
      *
      * @returns Operation result with:

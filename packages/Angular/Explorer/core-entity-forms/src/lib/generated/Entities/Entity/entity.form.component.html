@@ -1344,6 +1344,28 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- AI Agent Notes Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIAgentNotes"
+        sectionName="AI Agent Notes"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('aIAgentNotes')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','PrimaryScopeEntityID')"
+                [NewRecordValues]="NewRecordValues('AI Agent Notes')"
+                [AllowLoad]="IsSectionExpanded('aIAgentNotes')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('aIAgentNotes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- MJ: Access Control Rules Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJAccessControlRules"
@@ -1361,6 +1383,28 @@
                 [AllowLoad]="IsSectionExpanded('mJAccessControlRules')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAccessControlRules', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Agent Examples Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentExamples"
+        sectionName="MJ: AI Agent Examples"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentExamples')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','PrimaryScopeEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1449,6 +1493,28 @@
                 [AllowLoad]="IsSectionExpanded('mJRecordLinks')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordLinks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Agent Runs Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentRuns"
+        sectionName="MJ: AI Agent Runs"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentRuns')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','PrimaryScopeEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

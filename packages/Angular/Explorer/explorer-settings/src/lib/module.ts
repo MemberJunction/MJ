@@ -1,15 +1,9 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 
-// Kendo UI Angular imports
-import { GridModule } from '@progress/kendo-angular-grid';
-import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { SortableModule } from '@progress/kendo-angular-sortable';
+import { WindowModule } from '@progress/kendo-angular-dialog';
 
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -40,6 +34,7 @@ import { UserDialogComponent } from './user-management/user-dialog/user-dialog.c
 import { PermissionDialogComponent } from './entity-permissions/permission-dialog/permission-dialog.component';
 import { ApplicationDialogComponent } from './application-management/application-dialog/application-dialog.component';
 import { UserAppConfigComponent } from './user-app-config/user-app-config.component';
+import { NotificationPreferencesComponent } from './notification-preferences/notification-preferences.component';
 
 @NgModule({
   declarations: [
@@ -56,31 +51,26 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     UserDialogComponent,
     PermissionDialogComponent,
     ApplicationDialogComponent,
-    UserAppConfigComponent
+    UserAppConfigComponent,
+    NotificationPreferencesComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    GridModule,
-    DialogsModule,
-    WindowModule,
-    ExcelExportModule,
+    DragDropModule,
     CompareRecordsModule,
     ContainerDirectivesModule,
-    ButtonsModule,
-    DropDownsModule,
     EntityPermissionsModule,
     MJTabStripModule,
     EntityFormDialogModule,
-    IndicatorsModule,
     UserViewGridModule,
     SimpleRecordListModule,
     JoinGridModule,
     CodeEditorModule,
     SharedSettingsModule,
-    SortableModule,
-    SharedGenericModule
+    SharedGenericModule,
+    WindowModule
   ],
   exports: [
     // Main dashboard components
@@ -96,7 +86,8 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     UserDialogComponent,
     PermissionDialogComponent,
     ApplicationDialogComponent,
-    UserAppConfigComponent
+    UserAppConfigComponent,
+    NotificationPreferencesComponent
   ]
 })
 export class ExplorerSettingsModule { }

@@ -32,13 +32,15 @@ import {
     DriverExecutionResult,
     TestRunResult,
     TestSuiteRunResult,
-    TestLogMessage
+    TestLogMessage,
+    ResolvedTestVariables
 } from '../types';
 import {
     gatherExecutionContext,
     getMachineName,
     getMachineIdentifier
 } from '../utils/execution-context';
+import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -66,6 +68,7 @@ import {
 export class TestEngine extends TestEngineBase {
     private _driverCache = new Map<string, BaseTestDriver>();
     private _oracleRegistry = new Map<string, IOracle>();
+    private _variableResolver = new VariableResolver();
 
     /**
      * Get singleton instance
@@ -185,12 +188,27 @@ export class TestEngine extends TestEngineBase {
             // Create TestSuiteRun entity
             const suiteRun = await this.createSuiteRun(suite, contextUser, options);
 
+            // Store resolved variables on suite run if provided
+            if (options.variables && Object.keys(options.variables).length > 0) {
+                suiteRun.ResolvedVariables = JSON.stringify({
+                    values: options.variables,
+                    sources: Object.keys(options.variables).reduce((acc, key) => {
+                        acc[key] = 'run';
+                        return acc;
+                    }, {} as Record<string, string>)
+                });
+                await suiteRun.Save();
+            }
+
+            // Get suite variables for passing to tests
+            const suiteVariablesJson = suite.Variables;
+
             // Execute tests
             const testResults: TestRunResult[] = [];
             let testSequence = 1; // Track suite execution order (1-based)
             for (const test of tests) {
                 try {
-                    const result = await this.RunTest(test.ID, options, contextUser, suiteRun.ID, testSequence);
+                    const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRun.ID, testSequence, suiteVariablesJson);
 
                     // Handle both single result and array of results (if RepeatCount > 1)
                     if (Array.isArray(result)) {
@@ -246,6 +264,38 @@ export class TestEngine extends TestEngineBase {
     }
 
     /**
+     * Run a test with suite variables context (used by RunSuite).
+     * @private
+     */
+    private async runTestWithSuiteVariables(
+        testId: string,
+        options: TestRunOptions,
+        contextUser: UserInfo,
+        suiteRunId: string,
+        suiteTestSequence: number,
+        suiteVariablesJson: string | null
+    ): Promise<TestRunResult | TestRunResult[]> {
+        const startTime = Date.now();
+
+        // Load test entity from cache
+        const test = await this.loadTest(testId);
+        if (!test) {
+            throw new Error(`Test not found: ${testId}`);
+        }
+
+        // Get tags from options
+        const tags = options.tags;
+
+        // Check RepeatCount and branch to repeated execution if needed
+        if (test.RepeatCount && test.RepeatCount > 1) {
+            return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags, suiteVariablesJson);
+        }
+
+        // Single execution
+        return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags, suiteVariablesJson);
+    }
+
+    /**
      * Register a custom oracle.
      *
      * @param oracle - Oracle implementation
@@ -272,6 +322,14 @@ export class TestEngine extends TestEngineBase {
      */
     public GetOracleTypes(): string[] {
         return Array.from(this._oracleRegistry.keys());
+    }
+
+    /**
+     * Get the variable resolver instance.
+     * Useful for CLI to parse and validate variables.
+     */
+    public get VariableResolver(): VariableResolver {
+        return this._variableResolver;
     }
 
     /**
@@ -593,7 +651,8 @@ export class TestEngine extends TestEngineBase {
         suiteRunId: string | null | undefined,
         suiteTestSequence: number | null | undefined,
         startTime: number,
-        tags?: string
+        tags?: string,
+        suiteVariablesJson?: string | null
     ): Promise<TestRunResult[]> {
         const results: TestRunResult[] = [];
 
@@ -609,7 +668,8 @@ export class TestEngine extends TestEngineBase {
                 options,
                 contextUser,
                 Date.now(), // Each iteration gets its own start time
-                tags
+                tags,
+                suiteVariablesJson
             );
 
             results.push(result);
@@ -635,12 +695,37 @@ export class TestEngine extends TestEngineBase {
         options: TestRunOptions,
         contextUser: UserInfo,
         startTime: number,
-        tags?: string
+        tags?: string,
+        suiteVariablesJson?: string | null
     ): Promise<TestRunResult> {
         // Get test type
         const testType = this.GetTestTypeByID(test.TypeID);
         if (!testType) {
             throw new Error(`Test type not found: ${test.TypeID}`);
+        }
+
+        // Resolve variables through the hierarchy
+        let resolvedVariables: ResolvedTestVariables | undefined;
+        try {
+            resolvedVariables = this._variableResolver.resolveVariables(
+                testType.VariablesSchema,  // TestType.VariablesSchema JSON
+                test.Variables,             // Test.Variables JSON
+                suiteVariablesJson || null, // TestSuite.Variables JSON (if running in suite)
+                options                      // Runtime options with variables
+            );
+
+            // Log resolved variables if any
+            if (resolvedVariables && Object.keys(resolvedVariables.values).length > 0) {
+                this.log(
+                    `Resolved variables: ${JSON.stringify(resolvedVariables.values)}`,
+                    options.verbose
+                );
+            }
+        } catch (error) {
+            if (error instanceof VariableResolutionError) {
+                throw new Error(`Variable resolution failed: ${error.message}`);
+            }
+            throw error;
         }
 
         // Progress: Initializing driver
@@ -704,7 +789,8 @@ export class TestEngine extends TestEngineBase {
             testRun,
             contextUser,
             options: enhancedOptions,
-            oracleRegistry: this._oracleRegistry
+            oracleRegistry: this._oracleRegistry,
+            resolvedVariables
         });
 
         // If timeout occurred and driver doesn't support cancellation, add warning to error message
@@ -734,6 +820,11 @@ export class TestEngine extends TestEngineBase {
             }
         });
 
+        // Store resolved variables on TestRun for reproducibility
+        if (resolvedVariables && Object.keys(resolvedVariables.values).length > 0) {
+            testRun.ResolvedVariables = JSON.stringify(resolvedVariables);
+        }
+
         // Update TestRun entity with results and logs
         await this.updateTestRun(testRun, driverResult, startTime, logMessages);
 
@@ -755,7 +846,8 @@ export class TestEngine extends TestEngineBase {
             totalCost: driverResult.totalCost || 0,
             startedAt: testRun.StartedAt!,
             completedAt: testRun.CompletedAt!,
-            errorMessage: driverResult.errorMessage
+            errorMessage: driverResult.errorMessage,
+            resolvedVariables
         };
 
         // Add sequence if this is a repeated test iteration

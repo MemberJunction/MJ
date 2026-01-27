@@ -20,10 +20,13 @@ export class AIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'contextualRelationships', sectionName: 'Contextual Relationships', isExpanded: false },
             { sectionKey: 'resourceUsageCost', sectionName: 'Resource Usage & Cost', isExpanded: false },
             { sectionKey: 'configurationOverrides', sectionName: 'Configuration & Overrides', isExpanded: false },
+            { sectionKey: 'testingValidation', sectionName: 'Testing & Validation', isExpanded: false },
+            { sectionKey: 'scopeMultiTenant', sectionName: 'Scope & Multi-Tenant', isExpanded: false },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'aIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },
+            { sectionKey: 'mJAIAgentRunMedias', sectionName: 'MJ: AI Agent Run Medias', isExpanded: false },
             { sectionKey: 'mJAIAgentRunSteps', sectionName: 'MJ: AI Agent Run Steps', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false }

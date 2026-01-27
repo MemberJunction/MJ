@@ -1,5 +1,80 @@
 # @memberjunction/ai-provider-bundle
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [cbd2714]
+  - @memberjunction/ai-gemini@3.2.0
+  - @memberjunction/ai-recommendations-rex@3.2.0
+  - @memberjunction/ai-vertex@3.2.0
+  - @memberjunction/ai-vectors-pinecone@3.2.0
+  - @memberjunction/ai-anthropic@3.2.0
+  - @memberjunction/ai-azure@3.2.0
+  - @memberjunction/ai-bedrock@3.2.0
+  - @memberjunction/ai-betty-bot@3.2.0
+  - @memberjunction/ai-blackforestlabs@3.2.0
+  - @memberjunction/ai-cerebras@3.2.0
+  - @memberjunction/ai-elevenlabs@3.2.0
+  - @memberjunction/ai-groq@3.2.0
+  - @memberjunction/ai-heygen@3.2.0
+  - @memberjunction/ai-lmstudio@3.2.0
+  - @memberjunction/ai-local-embeddings@3.2.0
+  - @memberjunction/ai-mistral@3.2.0
+  - @memberjunction/ai-ollama@3.2.0
+  - @memberjunction/ai-openai@3.2.0
+  - @memberjunction/ai-openrouter@3.2.0
+  - @memberjunction/ai-xai@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-anthropic@3.1.1
+- @memberjunction/ai-azure@3.1.1
+- @memberjunction/ai-bedrock@3.1.1
+- @memberjunction/ai-betty-bot@3.1.1
+- @memberjunction/ai-blackforestlabs@3.1.1
+- @memberjunction/ai-cerebras@3.1.1
+- @memberjunction/ai-elevenlabs@3.1.1
+- @memberjunction/ai-gemini@3.1.1
+- @memberjunction/ai-groq@3.1.1
+- @memberjunction/ai-heygen@3.1.1
+- @memberjunction/ai-lmstudio@3.1.1
+- @memberjunction/ai-local-embeddings@3.1.1
+- @memberjunction/ai-mistral@3.1.1
+- @memberjunction/ai-ollama@3.1.1
+- @memberjunction/ai-openai@3.1.1
+- @memberjunction/ai-openrouter@3.1.1
+- @memberjunction/ai-recommendations-rex@3.1.1
+- @memberjunction/ai-vectors-pinecone@3.1.1
+- @memberjunction/ai-vertex@3.1.1
+- @memberjunction/ai-xai@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-anthropic@3.0.0
+- @memberjunction/ai-azure@3.0.0
+- @memberjunction/ai-bedrock@3.0.0
+- @memberjunction/ai-betty-bot@3.0.0
+- @memberjunction/ai-cerebras@3.0.0
+- @memberjunction/ai-elevenlabs@3.0.0
+- @memberjunction/ai-gemini@3.0.0
+- @memberjunction/ai-groq@3.0.0
+- @memberjunction/ai-heygen@3.0.0
+- @memberjunction/ai-lmstudio@3.0.0
+- @memberjunction/ai-local-embeddings@3.0.0
+- @memberjunction/ai-mistral@3.0.0
+- @memberjunction/ai-ollama@3.0.0
+- @memberjunction/ai-openai@3.0.0
+- @memberjunction/ai-openrouter@3.0.0
+- @memberjunction/ai-recommendations-rex@3.0.0
+- @memberjunction/ai-vectors-pinecone@3.0.0
+- @memberjunction/ai-vertex@3.0.0
+- @memberjunction/ai-xai@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -664,7 +739,6 @@
   Improved model selection caching by checking all candidates for valid API keys instead of stopping at first match, ensuring retry logic has access to complete list of viable model/vendor combinations. Added `extractValidCandidates()` method to `AIModelSelectionInfo` class and `buildCandidatesFromSelectionInfo()` helper to properly reconstruct candidate lists from selection metadata during hierarchical template execution.
 
   Enhanced error-based retry and failover with intelligent handling for authentication and rate limit errors. Authentication errors now trigger vendor-level filtering (excluding all models from vendors with invalid API keys) and immediate failover to different vendors. Rate limit errors now retry the same model/vendor using configurable `MaxRetries` (default: 3) with backoff delay based on `RetryStrategy` (Fixed/Linear/Exponential) before failing over. Improved log messages with human-readable formatting showing model/vendor names, time in seconds, and clear status indicators. Fixed MJCLI sync commands to properly propagate exit codes for CI/CD integration.
-
   - @memberjunction/ai-anthropic@2.105.0
   - @memberjunction/ai-cerebras@2.105.0
   - @memberjunction/ai-groq@2.105.0

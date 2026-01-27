@@ -1,0 +1,129 @@
+<!-- WebURL Config Panel - Form content only, no dialog chrome -->
+<div class="config-panel">
+    <!-- Title -->
+    <div class="form-group">
+        <label for="partTitle">
+            <i class="fa-solid fa-heading"></i>
+            Part Title
+        </label>
+        <input
+            type="text"
+            id="partTitle"
+            [(ngModel)]="title"
+            (input)="onTitleChange()"
+            placeholder="Enter a title for this part"
+            class="form-input">
+    </div>
+
+    <!-- URL -->
+    <div class="form-group">
+        <label for="webUrl">
+            <i class="fa-solid fa-link"></i>
+            URL
+            <span class="required">*</span>
+        </label>
+        <div class="input-with-action">
+            <input
+                type="url"
+                id="webUrl"
+                [(ngModel)]="url"
+                (input)="onUrlChange()"
+                placeholder="https://example.com"
+                class="form-input"
+                [class.error]="urlError">
+            <button
+                class="input-action-btn"
+                *ngIf="showUrlPreview"
+                (click)="previewUrl()"
+                title="Preview in new tab">
+                <i class="fa-solid fa-external-link"></i>
+            </button>
+        </div>
+        <span class="form-error" *ngIf="urlError">{{ urlError }}</span>
+        <span class="form-hint" *ngIf="!urlError">
+            Enter the full URL including https://
+        </span>
+    </div>
+
+    <!-- Security Mode -->
+    <div class="form-group">
+        <label>
+            <i class="fa-solid fa-shield-halved"></i>
+            Security Mode
+        </label>
+        <div class="radio-group">
+            <label class="radio-option" [class.selected]="sandboxMode === 'standard'">
+                <input
+                    type="radio"
+                    name="sandboxMode"
+                    value="standard"
+                    [(ngModel)]="sandboxMode"
+                    (change)="onSandboxModeChange()">
+                <span class="radio-mark"></span>
+                <span class="radio-content">
+                    <span class="radio-label">Standard</span>
+                    <span class="radio-badge recommended">Recommended</span>
+                </span>
+            </label>
+            <label class="radio-option" [class.selected]="sandboxMode === 'strict'">
+                <input
+                    type="radio"
+                    name="sandboxMode"
+                    value="strict"
+                    [(ngModel)]="sandboxMode"
+                    (change)="onSandboxModeChange()">
+                <span class="radio-mark"></span>
+                <span class="radio-content">
+                    <span class="radio-label">Strict</span>
+                    <span class="radio-badge secure">Most Secure</span>
+                </span>
+            </label>
+            <label class="radio-option" [class.selected]="sandboxMode === 'permissive'">
+                <input
+                    type="radio"
+                    name="sandboxMode"
+                    value="permissive"
+                    [(ngModel)]="sandboxMode"
+                    (change)="onSandboxModeChange()">
+                <span class="radio-mark"></span>
+                <span class="radio-content">
+                    <span class="radio-label">Permissive</span>
+                    <span class="radio-badge warning">Least Secure</span>
+                </span>
+            </label>
+        </div>
+        <span class="form-hint">{{ getSandboxModeDescription() }}</span>
+    </div>
+
+    <!-- Options -->
+    <div class="form-group">
+        <label>
+            <i class="fa-solid fa-sliders"></i>
+            Options
+        </label>
+        <div class="checkbox-group">
+            <label class="checkbox-option">
+                <input
+                    type="checkbox"
+                    [(ngModel)]="allowFullscreen"
+                    (change)="onOptionChange()">
+                <span class="checkbox-mark"></span>
+                <span class="checkbox-content">
+                    <span class="checkbox-label">Allow Fullscreen</span>
+                    <span class="checkbox-desc">Enable fullscreen mode for the embedded content</span>
+                </span>
+            </label>
+            <label class="checkbox-option">
+                <input
+                    type="checkbox"
+                    [(ngModel)]="refreshOnResize"
+                    (change)="onOptionChange()">
+                <span class="checkbox-mark"></span>
+                <span class="checkbox-content">
+                    <span class="checkbox-label">Refresh on Resize</span>
+                    <span class="checkbox-desc">Reload the page when the part is resized</span>
+                </span>
+            </label>
+        </div>
+    </div>
+</div>

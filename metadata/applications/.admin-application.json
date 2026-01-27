@@ -3,7 +3,7 @@
     "Name": "Admin",
     "Description": "MemberJunction Administration",
     "Icon": "fa-solid fa-screwdriver-wrench",
-    "DefaultForNewUser": true,
+    "DefaultForNewUser": false,
     "Color": "#4caf50",
     "DefaultSequence": 999,
     "DefaultNavItems": [
@@ -55,6 +55,13 @@
         "ResourceType": "Dashboards",
         "RecordID": "@lookup:Dashboards.Name=SQL Logging?allowDefer",
         "isDefault": true
+      },
+      {
+        "Label": "API Keys",
+        "Icon": "fa-solid fa-key",
+        "ResourceType": "Custom",
+        "DriverClass": "APIKeysResource",
+        "isDefault": false
       }
     ]
   },
@@ -65,7 +72,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.083Z",
-    "checksum": "260dced1183d1d40ea148f55fdea044b3c72772a5a15e84533c2cad457c1b171"
+    "lastModified": "2026-01-27T02:14:33.506Z",
+    "checksum": "d1da5bfc0051749d62a7d316b2a85026a0e0c2b167da888f7d5542f1ac68ee73"
   }
 }

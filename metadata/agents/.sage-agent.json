@@ -9,7 +9,20 @@
       "ModelSelectionMode": "Agent",
       "ArtifactCreationMode": "System Only",
       "ExposeAsAction": true,
-      "IconClass": "fa-brands fa-superpowers"
+      "IconClass": "fa-brands fa-superpowers",
+      "InjectNotes": true,
+      "MaxNotesToInject": 10,
+      "NoteInjectionStrategy": "Relevant",
+      "InjectExamples": true,
+      "MaxExamplesToInject": 5,
+      "ExampleInjectionStrategy": "Semantic",
+      "RerankerConfiguration": {
+        "enabled": true,
+        "rerankerModelId": "@lookup:AI Models.Name=rerank-v3.5",
+        "retrievalMultiplier": 3,
+        "minRelevanceThreshold": 0.5,
+        "fallbackOnError": true
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Modalities": [
@@ -56,6 +69,21 @@
           "sync": {
             "lastModified": "2026-01-02T21:21:10.592Z",
             "checksum": "1ae24d0996d66621348eb3671cbab31cccbe0469a5a6701645beb6525802e68e"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Output",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "096E9762-63AB-45FD-B241-EE41D1BEFF55"
+          },
+          "sync": {
+            "lastModified": "2026-01-15T21:03:56.263Z",
+            "checksum": "4c22981a0de9f4423e36d69bdbe9d2dfb6188ae2aec2e5bdb6e842a99f2be30c"
           }
         }
       ],
@@ -328,6 +356,20 @@
             "lastModified": "2025-12-30T23:07:35.696Z",
             "checksum": "71ee48e090db98dc431ce2ada37253d00e848c7ec151950e0332db999945857f"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Generate Image",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D1885727-0754-40B7-8578-73F8197DEA51"
+          },
+          "sync": {
+            "lastModified": "2026-01-15T21:03:56.364Z",
+            "checksum": "79e6bc17002f1592f4f4b2e362be1f2e982048b8904ff97e9b663424c51fda38"
+          }
         }
       ],
       "MJ: AI Agent Configurations": [
@@ -375,8 +417,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-01-02T21:23:18.798Z",
-      "checksum": "087a4ef01d5d8c913e0457e80b8043c49947f9f3c5f553bb87080718766ef193"
+      "lastModified": "2026-01-27T02:14:25.133Z",
+      "checksum": "bccc9eb84698093c701e2ecd2587dee8dce949743bffaaa77789dfd9c0e73283"
     }
   }
 ]

@@ -1,5 +1,41 @@
 # @memberjunction/ai-engine-base
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/templates-base-types@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/templates-base-types@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.0.0
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+- @memberjunction/templates-base-types@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -1016,7 +1052,6 @@
 ### Minor Changes
 
 - 031e724: Implement agent architecture separation of concerns
-
   - **NEW**: Add BaseAgent class for domain-specific prompt execution
   - **NEW**: Add ConductorAgent for autonomous orchestration decisions and action planning
   - **NEW**: Add AgentRunner class to coordinate BaseAgent + ConductorAgent interactions
@@ -1031,7 +1066,6 @@
   - **NEW**: Template rendering with data context
 
   This implements clean separation of concerns:
-
   - BaseAgent: Domain-specific execution only (~500 lines)
   - ConductorAgent: Orchestration decisions with structured responses
   - AgentRunner: Coordination layer providing unified user interface

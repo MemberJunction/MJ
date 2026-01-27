@@ -82,6 +82,7 @@ export * from './directives/index.js';
 export * from './entitySubclasses/entityPermissions.server.js';
 export * from './types.js';
 export { TokenExpiredError, getSystemUser } from './auth/index.js';
+export * from './auth/APIKeyScopeAuth.js';
 
 export * from './generic/PushStatusResolver.js';
 export * from './generic/ResolverBase.js';
@@ -113,6 +114,7 @@ export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
 export * from './resolvers/CreateQueryResolver.js';
 export * from './resolvers/TelemetryResolver.js';
+export * from './resolvers/APIKeyResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
@@ -406,4 +408,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+  // Handle unhandled promise rejections to prevent server crashes
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Promise Rejection:', reason);
+    console.error('   Promise:', promise);
+    // Log the error but DO NOT crash the server
+    // This is critical for server stability when downstream dependencies fail
+  });
 };

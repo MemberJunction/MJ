@@ -1,5 +1,72 @@
 # @memberjunction/ai-cli
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [011c820]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-agents@3.2.0
+  - @memberjunction/core-actions@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/ai-prompts@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/core-entities-server@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/ai-anthropic@3.2.0
+  - @memberjunction/ai-betty-bot@3.2.0
+  - @memberjunction/ai-cerebras@3.2.0
+  - @memberjunction/ai-groq@3.2.0
+  - @memberjunction/ai-mistral@3.2.0
+  - @memberjunction/ai-openai@3.2.0
+  - @memberjunction/core@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@3.1.1
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/ai-prompts@3.1.1
+- @memberjunction/ai-anthropic@3.1.1
+- @memberjunction/ai-betty-bot@3.1.1
+- @memberjunction/ai-cerebras@3.1.1
+- @memberjunction/ai-groq@3.1.1
+- @memberjunction/ai-mistral@3.1.1
+- @memberjunction/ai-openai@3.1.1
+- @memberjunction/core-actions@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/core-entities-server@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-agents@3.0.0
+- @memberjunction/ai@3.0.0
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/ai-prompts@3.0.0
+- @memberjunction/ai-anthropic@3.0.0
+- @memberjunction/ai-betty-bot@3.0.0
+- @memberjunction/ai-cerebras@3.0.0
+- @memberjunction/ai-groq@3.0.0
+- @memberjunction/ai-mistral@3.0.0
+- @memberjunction/ai-openai@3.0.0
+- @memberjunction/core-actions@3.0.0
+- @memberjunction/actions@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/core-entities-server@3.0.0
+- @memberjunction/sqlserver-dataprovider@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -1410,7 +1477,6 @@
 ### Patch Changes
 
 - 4652675: feat: add comprehensive AI CLI package with agent and action execution
-
   - Add @memberjunction/ai-cli package with oclif framework
   - Implement agents:list and agents:run commands for AI agent execution
   - Implement actions:list and actions:run commands for action execution
@@ -1427,7 +1493,6 @@
   parameter validation and error handling.
 
   This changeset message follows conventional commit format with:
-
   - Type: feat (new feature)
   - Scope: Comprehensive description of the major addition
   - Details: Bullet points covering all the key functionality added

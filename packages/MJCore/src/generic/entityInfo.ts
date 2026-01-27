@@ -1356,13 +1356,12 @@ export class EntityInfo extends BaseInfo {
      * If no fields match, if there is a field called "Name", that is returned. If there is no field called "Name", null is returned.
      */
     get NameField(): EntityFieldInfo | null {
-        for (let j: number = 0; j < this.Fields.length; j++) {
-            const ef: EntityFieldInfo = this.Fields[j];
-            if (ef.IsNameField) 
-                return ef;
-        }
-        // at this point, we return the first field called "Name" if it exists, and the below line will return NULL if we can't find a field called "Name"
-        return this.Fields.find((f) => f.Name.toLowerCase() === 'name');
+      const f = this.Fields.find((f) => f.IsNameField);
+
+      if (!f) 
+        return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name');
+      else
+        return f;
     }
 
     /**
@@ -1376,7 +1375,7 @@ export class EntityInfo extends BaseInfo {
 
             for (let j: number = 0; j < this.Permissions.length; j++) {
                 const ep: EntityPermissionInfo = this.Permissions[j];
-                const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
+                const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => r.RoleID === ep.RoleID)
                 if (roleMatch) // user has this role
                     permissionList.push(ep)
             }
@@ -1410,7 +1409,7 @@ export class EntityInfo extends BaseInfo {
     public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
+            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => r.RoleID === ep.RoleID)
             if (roleMatch) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
@@ -1446,7 +1445,7 @@ export class EntityInfo extends BaseInfo {
         const rlsList: RowLevelSecurityFilterInfo[] = [];
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
+            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => r.RoleID === ep.RoleID)
             if (roleMatch) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
