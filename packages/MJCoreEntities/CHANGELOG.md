@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core-entities
 
+## 3.3.0
+
+### Patch Changes
+
+- ca551dd: no migration
+  - @memberjunction/ai@3.3.0
+  - @memberjunction/interactive-component-types@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Minor Changes

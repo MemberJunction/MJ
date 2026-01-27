@@ -1,5 +1,41 @@
 # @memberjunction/ai-mcp-server
 
+## 3.3.0
+
+### Minor Changes
+
+- 6ccd9d0: migration from metadata sync so marking this as minor
+- 3f17579: migration
+
+### Patch Changes
+
+- da33601: no migration
+- 823192a: no migration
+- d6aa42a: no migration
+- Updated dependencies [ad32a98]
+- Updated dependencies [4bbb600]
+- Updated dependencies [ca551dd]
+- Updated dependencies [6ccd9d0]
+- Updated dependencies [da33601]
+- Updated dependencies [3f17579]
+  - @memberjunction/server@3.3.0
+  - @memberjunction/ai-agents@3.3.0
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/credentials@3.3.0
+  - @memberjunction/encryption@3.3.0
+  - @memberjunction/api-keys@3.3.0
+  - @memberjunction/ai-core-plus@3.3.0
+  - @memberjunction/aiengine@3.3.0
+  - @memberjunction/ai-prompts@3.3.0
+  - @memberjunction/actions-base@3.3.0
+  - @memberjunction/actions@3.3.0
+  - @memberjunction/sqlserver-dataprovider@3.3.0
+  - @memberjunction/ai-provider-bundle@3.3.0
+  - @memberjunction/ai@3.3.0
+  - @memberjunction/config@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes
