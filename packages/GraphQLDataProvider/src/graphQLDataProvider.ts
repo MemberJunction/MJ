@@ -15,7 +15,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunQueryParams, BaseEntityResult,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
-         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression } from "@memberjunction/core";
+         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -2183,8 +2183,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _localStorageProvider: ILocalStorageProvider;
     get LocalStorageProvider(): ILocalStorageProvider {
-        if (!this._localStorageProvider)
-            this._localStorageProvider = new BrowserIndexedDBStorageProvider();
+        if (!this._localStorageProvider) {
+            // Use BrowserIndexedDBStorageProvider in browser environments where indexedDB is available,
+            // otherwise fall back to InMemoryLocalStorageProvider for Node.js/server environments
+            if (typeof indexedDB !== 'undefined') {
+                this._localStorageProvider = new BrowserIndexedDBStorageProvider();
+            } else {
+                this._localStorageProvider = new InMemoryLocalStorageProvider();
+            }
+        }
 
         return this._localStorageProvider;
     }

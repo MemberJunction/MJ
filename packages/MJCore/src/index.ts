@@ -38,6 +38,7 @@ export * from "./generic/baseEngineRegistry";
 export * from "./generic/localCacheManager";
 export * from "./generic/RegisterForStartup";
 export * from "./generic/telemetryManager";
+export * from "./generic/InMemoryLocalStorageProvider";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider;

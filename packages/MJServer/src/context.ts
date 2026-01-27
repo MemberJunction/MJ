@@ -13,7 +13,7 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
-import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
 import { Metadata } from '@memberjunction/core';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -93,9 +93,18 @@ export const getUserPayload = async (
       );
 
       if (validationResult.IsValid && validationResult.User) {
+        // Get the user from UserCache to ensure UserRoles is properly populated
+        // The validationResult.User from APIKeyEngine doesn't include UserRoles
+        const cachedUser = UserCache.Instance.Users.find(
+          u => u.ID === validationResult.User.ID
+        );
+
+        // Use cached user if available, otherwise fall back to the validation result
+        const userRecord = cachedUser || validationResult.User;
+
         return {
-          userRecord: validationResult.User,
-          email: validationResult.User.Email,
+          userRecord,
+          email: userRecord.Email,
           sessionId,
           apiKeyId: validationResult.APIKeyId,
           apiKeyHash: validationResult.APIKeyHash,
