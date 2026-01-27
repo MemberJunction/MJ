@@ -14,6 +14,7 @@ import { RunView, Metadata, UserInfo } from '@memberjunction/core';
 import {
     APIKeyEntity,
     APIApplicationEntity,
+    APIKeyApplicationEntity,
     UserEntity
 } from '@memberjunction/core-entities';
 import { ScopeEvaluator } from './ScopeEvaluator';
@@ -85,7 +86,7 @@ export class APIKeyEngine {
             scopeCacheTTLMs: config.scopeCacheTTLMs ?? 60000
         };
 
-        this._scopeEvaluator = new ScopeEvaluator(this._config.scopeCacheTTLMs);
+        this._scopeEvaluator = new ScopeEvaluator(this._config.scopeCacheTTLMs, this._config.defaultBehaviorNoScopes);
         this._usageLogger = new UsageLogger();
     }
 
@@ -222,8 +223,9 @@ export class APIKeyEngine {
      * 2. Hashes the key and looks it up in the database
      * 3. Checks key status (active vs revoked)
      * 4. Checks expiration
-     * 5. Retrieves and validates the associated user
-     * 6. Logs the usage (if logging is enabled)
+     * 5. Checks application binding (if ApplicationId/ApplicationName provided)
+     * 6. Retrieves and validates the associated user
+     * 7. Logs the usage (if logging is enabled)
      *
      * @param options - Validation options including the raw key and request context
      * @param contextUser - User context for database operations
@@ -233,6 +235,7 @@ export class APIKeyEngine {
      * ```typescript
      * const result = await engine.ValidateAPIKey({
      *     RawKey: request.headers['x-api-key'],
+     *     ApplicationName: 'MCPServer', // Check if key is valid for MCP
      *     Endpoint: '/graphql',
      *     Method: 'POST',
      *     Operation: 'GetUsersRecord',
@@ -243,6 +246,7 @@ export class APIKeyEngine {
      *
      * if (result.IsValid) {
      *     // Proceed with the user context
+     *     // Use result.APIKeyHash for subsequent Authorize() calls
      *     return result.User;
      * }
      * ```
@@ -269,7 +273,33 @@ export class APIKeyEngine {
 
         const apiKey = keyValidation.APIKey;
 
-        // 4. Get the user
+        // 4. Check application binding (if ApplicationId or ApplicationName provided)
+        if (options.ApplicationId || options.ApplicationName) {
+            let appId = options.ApplicationId;
+
+            // Look up app by name if only name provided
+            if (!appId && options.ApplicationName) {
+                const app = await this.GetApplicationByName(options.ApplicationName, contextUser);
+                if (!app) {
+                    return { IsValid: false, Error: `Unknown application: ${options.ApplicationName}` };
+                }
+                appId = app.ID;
+            }
+
+            // Check if key is bound to specific applications
+            const keyApps = await this._scopeEvaluator.GetKeyApplications(apiKey.ID, contextUser);
+
+            if (keyApps.length > 0) {
+                // Key has app restrictions - check if this app is allowed
+                const boundToThisApp = keyApps.some((ka: APIKeyApplicationEntity) => ka.ApplicationID === appId);
+                if (!boundToThisApp) {
+                    return { IsValid: false, Error: 'API key not authorized for this application' };
+                }
+            }
+            // If keyApps is empty, key works with all apps (global key)
+        }
+
+        // 5. Get the user
         const rv = new RunView();
         const userResult = await rv.RunView<UserEntity>({
             EntityName: 'Users',
@@ -286,7 +316,7 @@ export class APIKeyEngine {
             return { IsValid: false, Error: 'User account is inactive' };
         }
 
-        // 5. Update LastUsedAt
+        // 6. Update LastUsedAt
         try {
             apiKey.LastUsedAt = new Date();
             await apiKey.Save();
@@ -294,7 +324,7 @@ export class APIKeyEngine {
             // Non-fatal - continue even if LastUsedAt update fails
         }
 
-        // 6. Log usage if enabled and logging options provided
+        // 7. Log usage if enabled and logging options provided
         if (this._config.loggingEnabled && options.Endpoint) {
             try {
                 await this._usageLogger.LogSuccess(
@@ -316,13 +346,14 @@ export class APIKeyEngine {
             }
         }
 
-        // 7. Create UserInfo from the entity
+        // 8. Create UserInfo from the entity
         const user = new UserInfo(undefined, userRecord.GetAll());
 
         return {
             IsValid: true,
             User: user,
-            APIKeyId: apiKey.ID
+            APIKeyId: apiKey.ID,
+            APIKeyHash: keyHash
         };
     }
 
@@ -354,6 +385,7 @@ export class APIKeyEngine {
 
     /**
      * Validate and authorize an API key request against scope rules.
+     * This method ALWAYS logs the authorization decision for audit purposes.
      *
      * This implements the three-tier permission model:
      * 1. User Permissions - What the user can do (already checked by authentication)
@@ -365,15 +397,25 @@ export class APIKeyEngine {
      * @param scopePath - The scope being requested (e.g., 'view:run')
      * @param resource - The specific resource (e.g., entity name)
      * @param contextUser - User context for database operations
-     * @returns Authorization result
+     * @param requestContext - Optional request context for logging (endpoint, method, etc.)
+     * @returns Authorization result with optional log ID
      */
     public async Authorize(
         apiKeyHash: string,
         applicationName: string,
         scopePath: string,
         resource: string,
-        contextUser: UserInfo
-    ): Promise<AuthorizationResult> {
+        contextUser: UserInfo,
+        requestContext?: {
+            endpoint?: string;
+            method?: string;
+            operation?: string | null;
+            ipAddress?: string | null;
+            userAgent?: string | null;
+        }
+    ): Promise<AuthorizationResult & { LogId?: string }> {
+        const startTime = Date.now();
+
         // 1. Validate the API key
         const keyValidation = await this.ValidateKeyByHash(apiKeyHash, contextUser);
         if (!keyValidation.Valid || !keyValidation.APIKey) {
@@ -422,45 +464,14 @@ export class APIKeyEngine {
 
         const result = await this._scopeEvaluator.EvaluateAccess(request, contextUser);
 
-        return result;
-    }
-
-    /**
-     * Authorize and log the request.
-     * Combines authorization check with usage logging.
-     */
-    public async AuthorizeAndLog(
-        apiKeyHash: string,
-        applicationName: string,
-        scopePath: string,
-        resource: string,
-        endpoint: string,
-        method: string,
-        operation: string | null,
-        ipAddress: string | null,
-        userAgent: string | null,
-        contextUser: UserInfo
-    ): Promise<AuthorizationResult & { LogId?: string }> {
-        const startTime = Date.now();
-
-        // Get key and app info first
-        const keyValidation = await this.ValidateKeyByHash(apiKeyHash, contextUser);
-        const app = await this.GetApplicationByName(applicationName, contextUser);
-
-        // Authorize
-        const result = await this.Authorize(
-            apiKeyHash,
-            applicationName,
-            scopePath,
-            resource,
-            contextUser
-        );
-
         const responseTimeMs = Date.now() - startTime;
 
-        // Log if enabled
+        // 5. Always log the authorization decision
         let logId: string | undefined;
-        if (this._config.loggingEnabled && keyValidation.APIKey && app) {
+        try {
+            const endpoint = requestContext?.endpoint || `/${applicationName.toLowerCase()}`;
+            const method = requestContext?.method || 'POST';
+            const operation = requestContext?.operation || `${scopePath}:${resource}`;
             const statusCode = result.Allowed ? 200 : 403;
 
             if (result.Allowed) {
@@ -474,8 +485,8 @@ export class APIKeyEngine {
                     responseTimeMs,
                     resource,
                     result.EvaluatedRules,
-                    ipAddress,
-                    userAgent,
+                    requestContext?.ipAddress || null,
+                    requestContext?.userAgent || null,
                     contextUser
                 )) || undefined;
             } else {
@@ -490,14 +501,49 @@ export class APIKeyEngine {
                     resource,
                     result.EvaluatedRules,
                     result.Reason,
-                    ipAddress,
-                    userAgent,
+                    requestContext?.ipAddress || null,
+                    requestContext?.userAgent || null,
                     contextUser
                 )) || undefined;
             }
+        } catch {
+            // Non-fatal - continue even if logging fails
         }
 
         return { ...result, LogId: logId };
+    }
+
+    /**
+     * Authorize and log the request.
+     * @deprecated Use Authorize() instead - it now always logs.
+     * This method is kept for backward compatibility.
+     */
+    public async AuthorizeAndLog(
+        apiKeyHash: string,
+        applicationName: string,
+        scopePath: string,
+        resource: string,
+        endpoint: string,
+        method: string,
+        operation: string | null,
+        ipAddress: string | null,
+        userAgent: string | null,
+        contextUser: UserInfo
+    ): Promise<AuthorizationResult & { LogId?: string }> {
+        return this.Authorize(
+            apiKeyHash,
+            applicationName,
+            scopePath,
+            resource,
+            contextUser,
+            {
+                endpoint,
+                method,
+                operation,
+                ipAddress,
+                userAgent
+            }
+        );
     }
 
     /**

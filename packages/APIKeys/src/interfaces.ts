@@ -51,6 +51,18 @@ export interface CreateAPIKeyResult {
 export interface APIKeyValidationOptions {
     /** The raw API key to validate */
     RawKey: string;
+    /**
+     * Optional application ID to check binding.
+     * If provided, validation will check if the key is authorized for this specific application.
+     * Keys bound to specific apps will fail validation if used with a different app.
+     * Keys with no app bindings (global keys) will pass validation for any app.
+     */
+    ApplicationId?: string;
+    /**
+     * Optional application name (alternative to ApplicationId).
+     * Will be looked up to get the ApplicationId.
+     */
+    ApplicationName?: string;
     /** Optional endpoint for logging */
     Endpoint?: string;
     /** Optional HTTP method for logging */
@@ -77,6 +89,12 @@ export interface APIKeyValidationResult {
     User?: import('@memberjunction/core').UserInfo;
     /** The API key ID if valid */
     APIKeyId?: string;
+    /**
+     * The SHA-256 hash of the validated API key.
+     * Provided so callers can use it for subsequent Authorize() calls
+     * without re-hashing the raw key.
+     */
+    APIKeyHash?: string;
     /** Error message if invalid */
     Error?: string;
 }

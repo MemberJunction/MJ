@@ -45,9 +45,11 @@ export class ScopeEvaluator {
     private _keyAppCache: Map<string, APIKeyApplicationEntity[]> = new Map();
     private _cacheExpiryMs: number;
     private _lastCacheRefresh: number = 0;
+    private _defaultBehaviorNoScopes: 'allow' | 'deny';
 
-    constructor(cacheTTLMs: number = 60000) {
+    constructor(cacheTTLMs: number = 60000, defaultBehaviorNoScopes: 'allow' | 'deny' = 'allow') {
         this._cacheExpiryMs = cacheTTLMs;
+        this._defaultBehaviorNoScopes = defaultBehaviorNoScopes;
     }
 
     /**
@@ -137,7 +139,8 @@ export class ScopeEvaluator {
     }
 
     /**
-     * Evaluate key-level scope rules
+     * Evaluate key-level scope rules.
+     * If the key has no scope rules defined, applies the defaultBehaviorNoScopes setting.
      */
     private async evaluateKeyScopes(
         apiKeyId: string,
@@ -146,6 +149,20 @@ export class ScopeEvaluator {
         contextUser: UserInfo
     ): Promise<LevelEvaluationResult> {
         const rules = await this.loadKeyScopeRules(apiKeyId, scopePath, contextUser);
+
+        // If key has no scope rules for this scope, apply default behavior
+        if (rules.length === 0) {
+            if (this._defaultBehaviorNoScopes === 'allow') {
+                return {
+                    allowed: true,
+                    reason: 'Key has no scope restrictions (default: allow)',
+                    matchedRule: undefined,
+                    evaluatedRules: []
+                };
+            }
+            // Default deny behavior falls through to evaluateRules which will return denied
+        }
+
         return this.evaluateRules(rules, resource, 'key');
     }
 
@@ -256,6 +273,16 @@ export class ScopeEvaluator {
             IsDeny: rule.IsDeny,
             Priority: rule.Priority
         };
+    }
+
+    /**
+     * Get applications bound to a key (public accessor)
+     */
+    public async GetKeyApplications(
+        apiKeyId: string,
+        contextUser: UserInfo
+    ): Promise<APIKeyApplicationEntity[]> {
+        return this.loadKeyApplications(apiKeyId, contextUser);
     }
 
     /**

@@ -152,5 +152,96 @@
       "lastModified": "2026-01-26T20:03:54.117Z",
       "checksum": "6c3879750b69632f95502249bb519cb99b4a11ae87bc039acb73c571ad1ea335"
     }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=action:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "E5F6A7B8-5678-9ABC-DEF0-123456789012"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=prompt:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "F6A7B8C9-6789-ABCD-EF01-234567890123"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=action:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "A7B8C9D0-789A-BCDE-F012-345678901234"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=prompt:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "B8C9D0E1-89AB-CDEF-0123-456789012345"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=query:run",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "C9D0E1F2-9ABC-DEF0-1234-567890123456"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MCPServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=entity:read",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "D0E1F2A3-ABCD-EF01-2345-678901234567"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=A2AServer",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=action:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "E1F2A3B4-BCDE-F012-3456-789012345678"
+    }
   }
 ]

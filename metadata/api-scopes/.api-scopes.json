@@ -196,5 +196,61 @@
       "lastModified": "2026-01-26T21:38:57.135Z",
       "checksum": "49a70beb984372ec5d1aabe0e7b592423b77e96aa4ad88f1053d6d53e8e5d5a6"
     }
+  },
+  {
+    "fields": {
+      "Name": "action",
+      "FullPath": "action",
+      "ParentID": null,
+      "Category": "Actions",
+      "Description": "Parent scope for action operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "A1B2C3D4-1234-5678-9ABC-DEF012345678"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "action:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=action",
+      "Category": "Actions",
+      "Description": "Execute actions",
+      "ResourceType": "Action",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "B2C3D4E5-2345-6789-ABCD-EF0123456789"
+    }
+  },
+  {
+    "fields": {
+      "Name": "prompt",
+      "FullPath": "prompt",
+      "ParentID": null,
+      "Category": "Prompts",
+      "Description": "Parent scope for prompt operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "C3D4E5F6-3456-789A-BCDE-F01234567890"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "prompt:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=prompt",
+      "Category": "Prompts",
+      "Description": "Execute AI prompts",
+      "ResourceType": "Prompt",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "D4E5F6A7-4567-89AB-CDEF-012345678901"
+    }
   }
 ]

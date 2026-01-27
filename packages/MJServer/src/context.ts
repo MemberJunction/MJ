@@ -80,6 +80,7 @@ export const getUserPayload = async (
       const validationResult = await apiKeyEngine.ValidateAPIKey(
         {
           RawKey: userApiKey,
+          ApplicationName: 'MJAPI', // Check if key is bound to this application
           Endpoint: requestContext?.endpoint ?? '/api',
           Method: requestContext?.method ?? 'POST',
           Operation: requestContext?.operationName ?? null,
@@ -97,6 +98,7 @@ export const getUserPayload = async (
           email: validationResult.User.Email,
           sessionId,
           apiKeyId: validationResult.APIKeyId,
+          apiKeyHash: validationResult.APIKeyHash,
         };
       }
 

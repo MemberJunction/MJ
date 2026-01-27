@@ -67,6 +67,8 @@ interface MCPSessionContext {
     apiKey: string;
     /** The database ID of the API key record */
     apiKeyId: string;
+    /** The SHA-256 hash of the API key (used for authorization calls) */
+    apiKeyHash: string;
     /** The MemberJunction user associated with the API key */
     user: UserInfo;
 }
@@ -248,6 +250,7 @@ async function authenticateRequest(request: Request | http.IncomingMessage): Pro
         const validation = await apiKeyEngine.ValidateAPIKey(
             {
                 RawKey: apiKey,
+                ApplicationName: 'MCPServer', // Check if key is bound to this application
                 Endpoint: requestContext.endpoint,
                 Method: requestContext.method,
                 Operation: undefined, // MCP tool name not known at auth time
@@ -275,10 +278,68 @@ async function authenticateRequest(request: Request | http.IncomingMessage): Pro
         }
 
         console.log(`Authenticated via API key for user: ${cachedUser.Email}`);
-        return { apiKey, apiKeyId: validation.APIKeyId!, user: cachedUser };
+        return { apiKey, apiKeyId: validation.APIKeyId!, apiKeyHash: validation.APIKeyHash!, user: cachedUser };
     } catch (error) {
         console.error(`[Auth] Exception during validation:`, error);
         throw error;
+    }
+}
+
+/*******************************************************************************
+ * TOOL AUTHORIZATION
+ ******************************************************************************/
+
+/**
+ * Scope information for a tool call
+ */
+interface ToolScopeInfo {
+    /** The scope path (e.g., 'action:execute', 'entity:read') */
+    scopePath: string;
+    /** The specific resource being accessed (e.g., action name, entity name) */
+    resource: string;
+}
+
+/**
+ * Authorizes a tool call against the API key's scope permissions.
+ * Uses the two-level scope evaluation (application ceiling + key scopes).
+ *
+ * @param sessionContext - The authenticated session context
+ * @param scopeInfo - The scope information for the tool call
+ * @returns Object with allowed flag and error message if denied
+ */
+async function authorizeToolCall(
+    sessionContext: MCPSessionContext,
+    scopeInfo: ToolScopeInfo
+): Promise<{ allowed: boolean; error?: string }> {
+    const systemUser = UserCache.Instance.GetSystemUser();
+    if (!systemUser) {
+        return { allowed: false, error: 'System user not available for authorization' };
+    }
+
+    try {
+        const apiKeyEngine = GetAPIKeyEngine();
+        const result = await apiKeyEngine.Authorize(
+            sessionContext.apiKeyHash,
+            'MCPServer',
+            scopeInfo.scopePath,
+            scopeInfo.resource,
+            systemUser,
+            {
+                endpoint: '/mcp',
+                method: 'POST',
+                operation: scopeInfo.scopePath,
+            }
+        );
+
+        if (!result.Allowed) {
+            console.log(`[Auth] Tool authorization denied: ${result.Reason}`);
+            return { allowed: false, error: result.Reason };
+        }
+
+        return { allowed: true };
+    } catch (error) {
+        console.error('[Auth] Authorization error:', error);
+        return { allowed: false, error: error instanceof Error ? error.message : 'Authorization failed' };
     }
 }
 
@@ -416,6 +477,13 @@ interface ToolConfig {
     description: string;
     parameters: z.ZodObject<z.ZodRawShape>;
     execute: (props: Record<string, unknown>, sessionContext: MCPSessionContext) => Promise<string>;
+    /**
+     * Scope information for authorization. Can be:
+     * - Static object: { scopePath: 'action:execute', resource: 'MyAction' }
+     * - Function: (props) => ({ scopePath: 'entity:read', resource: props.entityName })
+     * If not provided, no authorization check is performed.
+     */
+    scopeInfo?: ToolScopeInfo | ((props: Record<string, unknown>) => ToolScopeInfo);
 }
 
 /**
@@ -431,7 +499,7 @@ async function registerAllTools(
     sessionContext: MCPSessionContext,
     systemUser: UserInfo
 ): Promise<void> {
-    // Helper to register a tool with filter check
+    // Helper to register a tool with filter check and authorization
     const addToolWithFilter = (config: ToolConfig): void => {
         registeredToolNames.push(config.name);
 
@@ -448,6 +516,25 @@ async function registerAllTools(
                 inputSchema: config.parameters.shape
             },
             async (params: Record<string, unknown>) => {
+                // Check authorization if scopeInfo is provided
+                if (config.scopeInfo) {
+                    const scopeInfo = typeof config.scopeInfo === 'function'
+                        ? config.scopeInfo(params)
+                        : config.scopeInfo;
+
+                    const authResult = await authorizeToolCall(sessionContext, scopeInfo);
+                    if (!authResult.allowed) {
+                        return {
+                            content: [{ type: "text" as const, text: JSON.stringify({
+                                error: 'Authorization denied',
+                                reason: authResult.error,
+                                scope: scopeInfo.scopePath,
+                                resource: scopeInfo.resource
+                            }) }]
+                        };
+                    }
+                }
+
                 const result = await config.execute(params, sessionContext);
                 return {
                     content: [{ type: "text" as const, text: result }]
@@ -915,6 +1002,10 @@ async function loadActionTools(
                     actionId: z.string().optional().describe("ID of the action to execute"),
                     params: z.record(z.unknown()).optional().describe("Parameters for the action as key-value pairs")
                 }),
+                scopeInfo: (props) => ({
+                    scopePath: 'action:execute',
+                    resource: (props.actionName as string) || (props.actionId as string) || '*'
+                }),
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     try {
@@ -1130,6 +1221,7 @@ function addActionExecuteTool(
         name: `Execute_${safeName}_Action`,
         description: `Execute the ${action.Name || 'Unknown'} action. ${action.Description || ''}`,
         parameters: z.object(paramSchema),
+        scopeInfo: { scopePath: 'action:execute', resource: action.Name || '*' },
         async execute(props) {
             const sessionUser = sessionContext.user;
             try {
@@ -1226,6 +1318,10 @@ async function loadAgentTools(
                     })).optional().describe("Conversation history for context"),
                     data: z.record(z.unknown()).optional().describe("Template data for the agent"),
                     waitForCompletion: z.boolean().optional().default(true).describe("Wait for agent to complete before returning")
+                }),
+                scopeInfo: (props) => ({
+                    scopePath: 'agent:execute',
+                    resource: (props.agentName as string) || (props.agentId as string) || '*'
                 }),
                 async execute(props) {
                     const sessionUser = sessionContext.user;
@@ -1724,6 +1820,10 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 parameters: z.record(z.unknown()).optional().describe("Parameters to pass to parameterized queries"),
                 maxRows: z.number().optional().describe("Maximum number of rows to return")
             }),
+            scopeInfo: (props) => ({
+                scopePath: 'query:run',
+                resource: (props.queryName as string) || (props.queryId as string) || '*'
+            }),
             async execute(props) {
                 const sessionUser = sessionContext.user;
 
@@ -1917,6 +2017,10 @@ async function loadPromptTools(
                     promptId: z.string().optional().describe("ID of the prompt to execute"),
                     data: z.record(z.unknown()).optional().describe("Data to pass to the prompt template"),
                     modelId: z.string().optional().describe("Optional model ID to use for execution")
+                }),
+                scopeInfo: (props) => ({
+                    scopePath: 'prompt:execute',
+                    resource: (props.promptName as string) || (props.promptId as string) || '*'
                 }),
                 async execute(props) {
                     const sessionUser = sessionContext.user;
@@ -2120,6 +2224,7 @@ function addAgentExecuteTool(
             data: z.record(z.unknown()).optional().describe("Template data for the agent"),
             waitForCompletion: z.boolean().optional().default(true).describe("Wait for agent to complete before returning")
         }),
+        scopeInfo: { scopePath: 'agent:execute', resource: agent.Name || '*' },
         async execute(props) {
             const sessionUser = sessionContext.user;
             try {
@@ -2233,6 +2338,7 @@ function addEntityRunViewTool(addToolWithFilter: AddToolFn, entity: EntityInfo):
         name: `Run_${entity.ClassName}_View`,
         description: `Returns data from the ${entity.Name} entity, optionally filtered by extraFilter and ordered by orderBy`,
         parameters: paramObject,
+        scopeInfo: { scopePath: 'view:run', resource: entity.Name },
         async execute(props, sessionContext) {
             const sessionUser = sessionContext.user;
             const rv = new RunView();
@@ -2261,6 +2367,7 @@ function addEntityCreateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): 
         name: `Create_${entity.ClassName}_Record`,
         description: `Creates a new record in the ${entity.Name} entity`,
         parameters: z.object(paramObject),
+        scopeInfo: { scopePath: 'entity:create', resource: entity.Name },
         async execute(props, sessionContext) {
             const sessionUser = sessionContext.user;
             const md = new Metadata();
@@ -2291,6 +2398,7 @@ function addEntityUpdateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): 
         name: `Update_${entity.ClassName}_Record`,
         description: `Updates the specified record in the ${entity.Name} entity`,
         parameters: z.object(paramObject),
+        scopeInfo: { scopePath: 'entity:update', resource: entity.Name },
         async execute(props, sessionContext) {
             const sessionUser = sessionContext.user;
             const md = new Metadata();
@@ -2335,6 +2443,7 @@ function addEntityDeleteTool(addToolWithFilter: AddToolFn, entity: EntityInfo): 
         name: `Delete_${entity.ClassName}_Record`,
         description: `Deletes the specified record from the ${entity.Name} entity`,
         parameters: z.object(pkeyParams),
+        scopeInfo: { scopePath: 'entity:delete', resource: entity.Name },
         async execute(props, sessionContext) {
             const sessionUser = sessionContext.user;
             const md = new Metadata();
@@ -2497,6 +2606,7 @@ function addEntityGetTool(addToolWithFilter: AddToolFn, entity: EntityInfo): voi
         name: `Get_${entity.ClassName}_Record`,
         description: `Retrieves the specified record from the ${entity.Name} entity`,
         parameters: z.object(pkeyParams),
+        scopeInfo: { scopePath: 'entity:read', resource: entity.Name },
         async execute(props, sessionContext) {
             const sessionUser = sessionContext.user;
             const md = new Metadata();
