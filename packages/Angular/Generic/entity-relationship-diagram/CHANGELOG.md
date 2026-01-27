@@ -1,5 +1,12 @@
 # @memberjunction/ng-entity-relationship-diagram
 
+## 3.3.0
+
+### Patch Changes
+
+- 2183cbb: No migration
+  - @memberjunction/core@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

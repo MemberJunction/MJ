@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-modules",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "MemberJunction: Consolidated Explorer Modules Bundle",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -30,15 +30,15 @@
     "@angular/router": "^18.0.0"
   },
   "dependencies": {
-    "@memberjunction/ng-core-entity-forms": "3.2.0",
-    "@memberjunction/ng-container-directives": "3.2.0",
-    "@memberjunction/ng-explorer-core": "3.2.0",
-    "@memberjunction/ng-explorer-settings": "3.2.0",
-    "@memberjunction/ng-kendo-modules": "3.2.0",
-    "@memberjunction/ng-link-directives": "3.2.0",
-    "@memberjunction/ng-shared": "3.2.0",
-    "@memberjunction/ng-user-view-grid": "3.2.0",
-    "@memberjunction/ng-workspace-initializer": "3.2.0",
+    "@memberjunction/ng-core-entity-forms": "3.3.0",
+    "@memberjunction/ng-container-directives": "3.3.0",
+    "@memberjunction/ng-explorer-core": "3.3.0",
+    "@memberjunction/ng-explorer-settings": "3.3.0",
+    "@memberjunction/ng-kendo-modules": "3.3.0",
+    "@memberjunction/ng-link-directives": "3.3.0",
+    "@memberjunction/ng-shared": "3.3.0",
+    "@memberjunction/ng-user-view-grid": "3.3.0",
+    "@memberjunction/ng-workspace-initializer": "3.3.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

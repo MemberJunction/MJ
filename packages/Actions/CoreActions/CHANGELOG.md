@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/core-actions
 
+## 3.3.0
+
+### Patch Changes
+
+- d844955: Reduce deprecation warnings by upgrading packages
+- Updated dependencies [4bbb600]
+- Updated dependencies [ca551dd]
+- Updated dependencies [d844955]
+  - @memberjunction/ai-agents@3.3.0
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/content-autotagging@3.3.0
+  - @memberjunction/ai-agent-manager@3.3.0
+  - @memberjunction/ai-engine-base@3.3.0
+  - @memberjunction/ai-core-plus@3.3.0
+  - @memberjunction/aiengine@3.3.0
+  - @memberjunction/ai-prompts@3.3.0
+  - @memberjunction/ai-vector-sync@3.3.0
+  - @memberjunction/actions-base@3.3.0
+  - @memberjunction/actions@3.3.0
+  - @memberjunction/communication-types@3.3.0
+  - @memberjunction/communication-engine@3.3.0
+  - @memberjunction/external-change-detection@3.3.0
+  - @memberjunction/core-entities-server@3.3.0
+  - @memberjunction/storage@3.3.0
+  - @memberjunction/sqlserver-dataprovider@3.3.0
+  - @memberjunction/ai@3.3.0
+  - @memberjunction/ai-betty-bot@3.3.0
+  - @memberjunction/code-execution@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/export-engine@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Minor Changes

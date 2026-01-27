@@ -1,5 +1,22 @@
 # @memberjunction/encryption
 
+## 3.3.0
+
+### Minor Changes
+
+- 3f17579: migration
+
+### Patch Changes
+
+- da33601: no migration
+- Updated dependencies [ca551dd]
+- Updated dependencies [da33601]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/credentials@3.3.0
+  - @memberjunction/actions-base@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

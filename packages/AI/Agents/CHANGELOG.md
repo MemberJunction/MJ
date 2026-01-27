@@ -1,5 +1,23 @@
 # @memberjunction/ai-agents
 
+## 3.3.0
+
+### Patch Changes
+
+- 4bbb600: Refactor agent note sorting to use cached note type priorities for improved performance
+- Updated dependencies [ca551dd]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/ai-engine-base@3.3.0
+  - @memberjunction/ai-core-plus@3.3.0
+  - @memberjunction/aiengine@3.3.0
+  - @memberjunction/ai-prompts@3.3.0
+  - @memberjunction/ai-reranker@3.3.0
+  - @memberjunction/actions-base@3.3.0
+  - @memberjunction/actions@3.3.0
+  - @memberjunction/ai@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

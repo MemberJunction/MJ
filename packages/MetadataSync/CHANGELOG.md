@@ -1,5 +1,18 @@
 # @memberjunction/metadata-sync
 
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [ca551dd]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/graphql-dataprovider@3.3.0
+  - @memberjunction/core-entities-server@3.3.0
+  - @memberjunction/sqlserver-dataprovider@3.3.0
+  - @memberjunction/config@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

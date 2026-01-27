@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [ca551dd]
+- Updated dependencies [da33601]
+- Updated dependencies [3f17579]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/encryption@3.3.0
+  - @memberjunction/aiengine@3.3.0
+  - @memberjunction/ai-vector-dupe@3.3.0
+  - @memberjunction/actions-base@3.3.0
+  - @memberjunction/actions@3.3.0
+  - @memberjunction/queue@3.3.0
+  - @memberjunction/ai-provider-bundle@3.3.0
+  - @memberjunction/ai@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

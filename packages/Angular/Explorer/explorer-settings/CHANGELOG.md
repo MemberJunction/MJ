@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 3.3.0
+
+### Patch Changes
+
+- 36714eb: No migration just UI refinement/bug fix
+- 2183cbb: No migration
+- 83d75a1: No migration only UI update
+- Updated dependencies [ca551dd]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/ng-base-forms@3.3.0
+  - @memberjunction/ng-base-application@3.3.0
+  - @memberjunction/ng-compare-records@3.3.0
+  - @memberjunction/ng-entity-form-dialog@3.3.0
+  - @memberjunction/ng-entity-permissions@3.3.0
+  - @memberjunction/ng-shared@3.3.0
+  - @memberjunction/ng-simple-record-list@3.3.0
+  - @memberjunction/ng-user-view-grid@3.3.0
+  - @memberjunction/ng-code-editor@3.3.0
+  - @memberjunction/ng-join-grid@3.3.0
+  - @memberjunction/ng-notifications@3.3.0
+  - @memberjunction/ng-shared-generic@3.3.0
+  - @memberjunction/ng-user-avatar@3.3.0
+  - @memberjunction/graphql-dataprovider@3.3.0
+  - @memberjunction/ng-container-directives@3.3.0
+  - @memberjunction/ng-tabstrip@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Minor Changes
