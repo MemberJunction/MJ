@@ -21,7 +21,7 @@ const EXTRACTION_CONFIG = {
     maxNotesPerConversation: 1000, // Max notes from a single conversation
     maxNotesPerMessage: 1000,      // Max notes from a single message
     minConfidenceThreshold: 80,    // Minimum confidence to extract a note
-    minContentLength: 20,          // Minimum note content length
+    minContentLength: 10,          // Minimum note content length (lowered from 20 to allow short names)
     cooldownHours: 24              // Don't re-extract from same conversation within 24h
 };
 
