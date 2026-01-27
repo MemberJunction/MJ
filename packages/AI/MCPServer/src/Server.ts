@@ -264,6 +264,35 @@ async function validateApiKey(
             return { valid: false, error: 'System user not found for API key validation' };
         }
 
+        // Check for system API key first
+        // Priority: mcpServerSettings.systemApiKey (MCP-specific) > apiKey (from MJ_API_KEY env var)
+        // This authenticates as the system user for system-level operations
+        const mcpSystemKey = _config.mcpServerSettings?.systemApiKey;
+        const sharedApiKey = _config.apiKey;
+        const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
+
+        // Debug: show which config value is being used
+        console.log(`[Auth] Config sources: mcpServerSettings.systemApiKey=${mcpSystemKey ? `"${mcpSystemKey.substring(0, 10)}..." (${mcpSystemKey.length} chars)` : 'undefined'}, _config.apiKey=${sharedApiKey ? `"${sharedApiKey.substring(0, 10)}..." (${sharedApiKey.length} chars)` : 'undefined'}`);
+
+        if (configuredSystemApiKey) {
+            if (apiKey === configuredSystemApiKey) {
+                console.log('[Auth] Authenticated via system API key');
+                return {
+                    valid: true,
+                    user: systemUser,
+                    // System API key doesn't have an ID/hash in the database
+                    apiKeyId: 'system',
+                    apiKeyHash: 'system',
+                };
+            } else {
+                // Log mismatch for debugging
+                console.log(`[Auth] System API key mismatch: configured="${configuredSystemApiKey.substring(0, 15)}..." (${configuredSystemApiKey.length} chars), provided="${apiKey.substring(0, 15)}..." (${apiKey.length} chars)`);
+            }
+        } else {
+            console.log('[Auth] No system API key configured (mcpServerSettings.systemApiKey or apiKey from MJ_API_KEY)');
+        }
+
+        // Fall back to user-level API key validation through the API Key Engine
         const requestContext = extractRequestContext(request);
         const apiKeyEngine = GetAPIKeyEngine();
 
@@ -375,7 +404,7 @@ async function authorizeToolCall(
     try {
         const apiKeyEngine = GetAPIKeyEngine();
         const result = await apiKeyEngine.Authorize(
-            sessionContext.apiKeyHash,
+            String(sessionContext.apiKeyHash),
             'MCPServer',
             scopeInfo.scopePath,
             scopeInfo.resource,
@@ -936,7 +965,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             // Buffer the body for logging, then pass to transport
             const chunks: Buffer[] = [];
             for await (const chunk of req) {
-                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
             }
             const bodyBuffer = Buffer.concat(chunks);
             const bodyString = bodyBuffer.toString('utf8');
@@ -2415,7 +2444,7 @@ function addAgentExecuteTool(
                         runId: result.agentRun?.ID,
                         errorMessage: result.agentRun?.ErrorMessage,
                         finalStep: result.agentRun?.FinalStep,
-                        payload: result.payload || result.agentRun?.FinalPayload, 
+                        payload: result.payload || result.agentRun?.FinalPayload,
                         message: result.agentRun?.Message,
                         responseForm: result.responseForm
                     });

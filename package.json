@@ -37,6 +37,7 @@
     "watch": "turbo watch --filter=\"@memberjunction*\"",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
     "start:api": "turbo start --filter=mj_api",
+    "start:mcp": "turbo start --filter=@memberjunction/ai-mcp-server",
     "start:explorer": "turbo start --filter=mj_explorer",
     "start:mcp-agent": "node agent-run-mcp-server/dist/index.js",
     "mj": "node packages/MJCLI/bin/run.js",

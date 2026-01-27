@@ -175,6 +175,11 @@ const configInfoSchema = z.object({
   mcpServerSettings: mcpServerInfoSchema.optional(),
 
   mjCoreSchema: z.string(),
+
+  // System API key from MJ_API_KEY environment variable
+  // Note: This may come from DEFAULT_SERVER_CONFIG, but initConfig() also reads
+  // directly from process.env to handle cases where dotenv runs after MJServer import
+  apiKey: z.string().optional(),
 });
 
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
@@ -221,6 +226,17 @@ export async function initConfig(): Promise<ConfigInfo> {
   const { DEFAULT_SERVER_CONFIG } = await import('@memberjunction/server');
 
   configInfo = loadConfig(DEFAULT_SERVER_CONFIG);
+
+  // Ensure apiKey is read directly from process.env (dotenv has definitely run by now)
+  // DEFAULT_SERVER_CONFIG.apiKey may have been evaluated before dotenv ran if @memberjunction/server
+  // was imported elsewhere first
+  const envApiKey = process.env.MJ_API_KEY;
+  console.log(`[Config] apiKey sources: configInfo.apiKey=${configInfo.apiKey ? `"${configInfo.apiKey.substring(0, 10)}..." (${configInfo.apiKey.length} chars)` : 'undefined'}, process.env.MJ_API_KEY=${envApiKey ? `"${envApiKey.substring(0, 10)}..." (${envApiKey.length} chars)` : 'undefined'}`);
+
+  if (!configInfo.apiKey && envApiKey) {
+    console.log('[Config] Using MJ_API_KEY from process.env (DEFAULT_SERVER_CONFIG was stale)');
+    configInfo.apiKey = envApiKey;
+  }
 
   // Populate the exported variables
   dbUsername = configInfo.dbUsername;
