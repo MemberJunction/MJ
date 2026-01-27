@@ -84,6 +84,12 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       badgeCount: 0
     },
     {
+      id: 'notifications',
+      label: 'Notifications',
+      icon: 'fa-solid fa-bell',
+      badgeCount: 0
+    },
+    {
       id: 'advanced',
       label: 'Advanced',
       icon: 'fa-solid fa-flask',
@@ -113,7 +119,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     },
     {
       id: 'notifications',
-      tabId: 'general',
+      tabId: 'notifications',
       sectionId: 'notifications',
       label: 'Notifications',
       keywords: ['notifications', 'alerts', 'email', 'push', 'messages', 'inbox'],

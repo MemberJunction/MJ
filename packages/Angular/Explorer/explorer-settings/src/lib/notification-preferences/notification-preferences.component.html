@@ -1,94 +1,117 @@
 <div class="notification-preferences-container">
-    <mj-loading *ngIf="loading" text="Loading notification preferences..."></mj-loading>
-
-    <div class="content" *ngIf="!loading">
-        <!-- Empty state -->
-        <div class="empty-state" *ngIf="viewModels.length === 0">
-            <i class="fa-solid fa-bell-slash"></i>
-            <p>No notification types configured yet.</p>
-        </div>
-
-        <!-- Notification type cards -->
-        <div class="notification-types-grid">
-            <div class="notification-type-card"
-                 *ngFor="let vm of viewModels"
-                 [class.changed]="vm.changed">
-
-                <div class="card-header" [style.border-left-color]="getTypeColor(vm.type)">
-                    <div class="icon-wrapper" [style.background-color]="getTypeColor(vm.type) + '20'">
-                        <i [class]="'fa-solid ' + getTypeIcon(vm.type)" [style.color]="getTypeColor(vm.type)"></i>
-                    </div>
-                    <div class="header-text">
-                        <h4>{{ vm.type.Name }}</h4>
-                        <p class="type-description">{{ vm.type.Description }}</p>
-                    </div>
+    @if (loading) {
+        <mj-loading text="Loading notification preferences..."></mj-loading>
+    } @else {
+        <div class="content">
+            @if (viewModels.length === 0) {
+                <!-- Empty state -->
+                <div class="empty-state">
+                    <i class="fa-solid fa-bell-slash"></i>
+                    <p>No notification types configured yet.</p>
                 </div>
+            } @else {
+                <!-- Notification type cards -->
+                <div class="notification-types-grid">
+                    @for (vm of viewModels; track vm.type.ID) {
+                        <article class="notification-type-card"
+                                 [class.changed]="vm.changed"
+                                 role="region"
+                                 [attr.aria-label]="'Notification settings for ' + vm.type.Name">
 
-                <div class="card-body">
-                    <!-- Delivery channel checkboxes -->
-                    <div class="preference-row">
-                        <label class="delivery-label">Delivery Channels</label>
+                            <div class="card-header" [style.border-left-color]="getTypeColor(vm.type)">
+                                <div class="icon-wrapper" [style.background-color]="getTypeColor(vm.type) + '20'">
+                                    <i [class]="'fa-solid ' + getTypeIcon(vm.type)" [style.color]="getTypeColor(vm.type)" [attr.aria-hidden]="true"></i>
+                                </div>
+                                <div class="header-text">
+                                    <h4>{{ vm.type.Name }}</h4>
+                                    <p class="type-description">{{ vm.type.Description }}</p>
+                                </div>
+                            </div>
 
-                        <div class="delivery-checkboxes">
-                            <label class="channel-checkbox">
-                                <input type="checkbox"
-                                       [(ngModel)]="vm.inAppEnabled"
-                                       (change)="onChannelChange(vm)"
-                                       [disabled]="!getAllowUserPreference(vm.type)">
-                                <i class="fa-solid fa-bell"></i>
-                                <span>In-App</span>
-                            </label>
+                            <div class="card-body">
+                                <!-- Delivery channel checkboxes -->
+                                <div class="preference-row">
+                                    <label class="delivery-label" [attr.id]="'delivery-label-' + vm.type.ID">Delivery Channels</label>
 
-                            <label class="channel-checkbox">
-                                <input type="checkbox"
-                                       [(ngModel)]="vm.emailEnabled"
-                                       (change)="onChannelChange(vm)"
-                                       [disabled]="!getAllowUserPreference(vm.type)">
-                                <i class="fa-solid fa-envelope"></i>
-                                <span>Email</span>
-                            </label>
+                                    <div class="delivery-checkboxes" role="group" [attr.aria-labelledby]="'delivery-label-' + vm.type.ID">
+                                        <label class="channel-checkbox">
+                                            <input type="checkbox"
+                                                   [(ngModel)]="vm.inAppEnabled"
+                                                   (change)="onChannelChange(vm)"
+                                                   [disabled]="!getAllowUserPreference(vm.type)"
+                                                   [attr.aria-label]="'Enable in-app notifications for ' + vm.type.Name">
+                                            <i class="fa-solid fa-bell" aria-hidden="true"></i>
+                                            <span>In-App</span>
+                                        </label>
 
-                            <label class="channel-checkbox">
-                                <input type="checkbox"
-                                       [(ngModel)]="vm.smsEnabled"
-                                       (change)="onChannelChange(vm)"
-                                       [disabled]="!getAllowUserPreference(vm.type)">
-                                <i class="fa-solid fa-mobile"></i>
-                                <span>SMS</span>
-                            </label>
-                        </div>
+                                        <label class="channel-checkbox">
+                                            <input type="checkbox"
+                                                   [(ngModel)]="vm.emailEnabled"
+                                                   (change)="onChannelChange(vm)"
+                                                   [disabled]="!getAllowUserPreference(vm.type)"
+                                                   [attr.aria-label]="'Enable email notifications for ' + vm.type.Name">
+                                            <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+                                            <span>Email</span>
+                                        </label>
 
-                        <div class="info-message" *ngIf="!getAllowUserPreference(vm.type)">
-                            <i class="fa-solid fa-info-circle"></i>
-                            This notification type's delivery channels cannot be customized.
-                        </div>
-                    </div>
+                                        <label class="channel-checkbox">
+                                            <input type="checkbox"
+                                                   [(ngModel)]="vm.smsEnabled"
+                                                   (change)="onChannelChange(vm)"
+                                                   [disabled]="!getAllowUserPreference(vm.type)"
+                                                   [attr.aria-label]="'Enable SMS notifications for ' + vm.type.Name">
+                                            <i class="fa-solid fa-mobile" aria-hidden="true"></i>
+                                            <span>SMS</span>
+                                        </label>
+                                    </div>
 
-                    <!-- Auto-expire info -->
-                    <div class="metadata-row" *ngIf="getTypeAutoExpireDays(vm.type)">
-                        <i class="fa-solid fa-clock"></i>
-                        <span class="metadata-text">
-                            Auto-marks as read after {{ getTypeAutoExpireDays(vm.type) }} day(s)
-                        </span>
-                    </div>
+                                    @if (!getAllowUserPreference(vm.type)) {
+                                        <div class="info-message" role="alert" aria-live="polite">
+                                            <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
+                                            <span>This notification type's delivery channels cannot be customized.</span>
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- Auto-expire info -->
+                                @if (getTypeAutoExpireDays(vm.type)) {
+                                    <div class="metadata-row">
+                                        <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                                        <span class="metadata-text">
+                                            Auto-marks as read after {{ getTypeAutoExpireDays(vm.type) }} day(s)
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        </article>
+                    }
                 </div>
-            </div>
-        </div>
+            }
 
-        <!-- Action buttons -->
-        <div class="actions" *ngIf="hasChanges">
-            <button class="btn btn-secondary"
-                    (click)="cancel()"
-                    [disabled]="saving">
-                Cancel
-            </button>
-            <button class="btn btn-primary"
-                    (click)="save()"
-                    [disabled]="saving">
-                <i class="fa-solid fa-spinner fa-spin" *ngIf="saving"></i>
-                <i class="fa-solid fa-save" *ngIf="!saving"></i>
-                {{ saving ? 'Saving...' : 'Save Preferences' }}
-            </button>
+            <!-- Action buttons -->
+            @if (hasChanges) {
+                <div class="actions" role="group" aria-label="Save or cancel changes">
+                    <button class="btn btn-secondary"
+                            type="button"
+                            (click)="cancel()"
+                            [disabled]="saving"
+                            [attr.aria-busy]="saving">
+                        Cancel
+                    </button>
+                    <button class="btn btn-primary"
+                            type="button"
+                            (click)="save()"
+                            [disabled]="saving"
+                            [attr.aria-busy]="saving">
+                        @if (saving) {
+                            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                        } @else {
+                            <i class="fa-solid fa-save" aria-hidden="true"></i>
+                        }
+                        <span>{{ saving ? 'Saving...' : 'Save Preferences' }}</span>
+                    </button>
+                </div>
+            }
         </div>
-    </div>
+    }
 </div>

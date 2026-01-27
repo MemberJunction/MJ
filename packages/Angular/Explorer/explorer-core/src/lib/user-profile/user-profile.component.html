@@ -1,5 +1,89 @@
-<ul *ngIf="User | async as user">
-    <li>{{ user.name }}</li>
-    <li>{{ user.email }}</li>
-    <li>{{ JSON.stringify(user) }}</li>
-</ul>
+<mj-loading *ngIf="Loading" text="Loading profile..."></mj-loading>
+
+<div class="user-profile-container" *ngIf="!Loading">
+  <!-- User Info Card -->
+  <div class="profile-card" *ngIf="User | async as user">
+    <div class="profile-header">
+      <div class="avatar-container">
+        <i class="fa-solid fa-user avatar-icon"></i>
+      </div>
+      <div class="profile-info">
+        <h3 class="user-name">{{ user.name }}</h3>
+        <p class="user-email">{{ user.email }}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Summary Card -->
+  <div class="notification-card">
+    <div class="card-header">
+      <div class="header-left">
+        <i class="fa-solid fa-bell header-icon"></i>
+        <h4>Notifications</h4>
+      </div>
+      <span class="unread-badge" *ngIf="UnreadNotificationCount > 0">
+        {{ UnreadNotificationCount }}
+      </span>
+    </div>
+
+    <div class="card-body">
+      <p class="card-description">
+        Manage your notification preferences for all channels
+      </p>
+
+      <div class="channel-toggles">
+        <!-- In-App Toggle -->
+        <button
+          class="channel-toggle"
+          [class.active]="IsChannelEnabled('InApp')"
+          [disabled]="Saving"
+          (click)="ToggleChannel('InApp')"
+          type="button"
+        >
+          <i [class]="GetChannelIcon('InApp')"></i>
+          <span class="channel-label">{{ GetChannelLabel('InApp') }}</span>
+          <span class="toggle-indicator">
+            <i class="fa-solid fa-check" *ngIf="IsChannelEnabled('InApp')"></i>
+          </span>
+        </button>
+
+        <!-- Email Toggle -->
+        <button
+          class="channel-toggle"
+          [class.active]="IsChannelEnabled('Email')"
+          [disabled]="Saving"
+          (click)="ToggleChannel('Email')"
+          type="button"
+        >
+          <i [class]="GetChannelIcon('Email')"></i>
+          <span class="channel-label">{{ GetChannelLabel('Email') }}</span>
+          <span class="toggle-indicator">
+            <i class="fa-solid fa-check" *ngIf="IsChannelEnabled('Email')"></i>
+          </span>
+        </button>
+
+        <!-- SMS Toggle -->
+        <button
+          class="channel-toggle"
+          [class.active]="IsChannelEnabled('SMS')"
+          [disabled]="Saving"
+          (click)="ToggleChannel('SMS')"
+          type="button"
+        >
+          <i [class]="GetChannelIcon('SMS')"></i>
+          <span class="channel-label">{{ GetChannelLabel('SMS') }}</span>
+          <span class="toggle-indicator">
+            <i class="fa-solid fa-check" *ngIf="IsChannelEnabled('SMS')"></i>
+          </span>
+        </button>
+      </div>
+
+      <div class="card-footer">
+        <a href="/settings" class="settings-link">
+          View all notification preferences
+          <i class="fa-solid fa-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

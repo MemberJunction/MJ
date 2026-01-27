@@ -294,15 +294,25 @@
       aria-modal="true"
       aria-labelledby="start-session-dialog-title"
     >
-      <div class="modal-dialog modal-large" (click)="$event.stopPropagation()">
+      <div class="modal-dialog modal-large" [class.fullscreen]="isStartDialogFullscreen" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <h3 class="modal-title" id="start-session-dialog-title">
             <i class="fa-solid fa-play" aria-hidden="true"></i>
             Start SQL Logging Session
           </h3>
-          <button class="modal-close" (click)="showStartSessionDialog = false" aria-label="Close dialog">
-            <i class="fa-solid fa-times" aria-hidden="true"></i>
-          </button>
+          <div class="modal-header-actions">
+            <button
+              class="modal-action-btn"
+              (click)="toggleStartDialogFullscreen()"
+              [attr.aria-label]="isStartDialogFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+              type="button"
+            >
+              <i class="fa-solid" [class.fa-compress]="isStartDialogFullscreen" [class.fa-expand]="!isStartDialogFullscreen" aria-hidden="true"></i>
+            </button>
+            <button class="modal-close" (click)="showStartSessionDialog = false" aria-label="Close dialog">
+              <i class="fa-solid fa-times" aria-hidden="true"></i>
+            </button>
+          </div>
         </div>
         <div class="modal-body">
           <div class="form-group">

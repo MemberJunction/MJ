@@ -2,6 +2,7 @@
   <div class="modal-backdrop" (click)="onCancel()" role="presentation">
     <div
       class="modal-dialog"
+      [class.fullscreen]="isFullscreen"
       (click)="$event.stopPropagation()"
       role="dialog"
       aria-modal="true"
@@ -9,24 +10,34 @@
       aria-describedby="application-dialog-description"
     >
       <!-- Modal Header -->
-      <div class="modal-header">
+      <div class="modal-header" [class.create-mode]="!isEditMode" [class.edit-mode]="isEditMode">
         <div class="modal-header-content">
           <h2 class="modal-title" id="application-dialog-title">
-            <i class="fa-solid fa-grid-2" aria-hidden="true"></i>
+            <i class="fa-solid" [class.fa-plus]="!isEditMode" [class.fa-layer-group]="isEditMode" aria-hidden="true"></i>
             {{ isEditMode ? 'Edit Application' : 'Create New Application' }}
           </h2>
           <p class="modal-subtitle" id="application-dialog-description">
             {{ isEditMode ? 'Update application information and settings' : 'Add a new application to the system' }}
           </p>
         </div>
-        <button
-          class="modal-close"
-          (click)="onCancel()"
-          aria-label="Close dialog"
-          type="button"
-        >
-          <i class="fa-solid fa-times" aria-hidden="true"></i>
-        </button>
+        <div class="modal-header-actions">
+          <button
+            class="modal-action-btn"
+            (click)="toggleFullscreen()"
+            [attr.aria-label]="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+            type="button"
+          >
+            <i class="fa-solid" [class.fa-compress]="isFullscreen" [class.fa-expand]="!isFullscreen" aria-hidden="true"></i>
+          </button>
+          <button
+            class="modal-close"
+            (click)="onCancel()"
+            aria-label="Close dialog"
+            type="button"
+          >
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
       </div>
 
       <!-- Modal Body -->
@@ -43,16 +54,24 @@
           }
 
           <!-- Basic Information Section -->
-          <fieldset class="form-section">
-            <legend class="section-header">
-              <span class="section-title">
-                <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
-                Application Information
-              </span>
+          <fieldset class="form-section collapsible-section">
+            <legend class="section-header clickable" (click)="toggleSection('basicInfo')">
+              <div class="section-title-row">
+                <span class="section-title">
+                  <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
+                  Application Information
+                </span>
+                <i class="fa-solid chevron-icon"
+                   [class.fa-chevron-up]="sectionExpanded.basicInfo"
+                   [class.fa-chevron-down]="!sectionExpanded.basicInfo"
+                   aria-hidden="true"></i>
+              </div>
               <span class="section-description">Define the application's basic properties</span>
             </legend>
 
-            <div class="form-grid">
+            @if (sectionExpanded.basicInfo) {
+              <div class="section-content">
+                <div class="form-grid">
               <div class="form-field">
                 <label class="field-label required" for="app-name">Application Name</label>
                 <input
@@ -92,31 +111,46 @@
                 </div>
               </div>
             </div>
+              </div>
+            }
           </fieldset>
 
           <!-- Entity Management Section -->
-          <fieldset class="form-section">
-            <legend class="section-header">
-              <span class="section-title">
-                <i class="fa-solid fa-database" aria-hidden="true"></i>
-                Application Entities
-              </span>
+          <fieldset class="form-section collapsible-section">
+            <legend class="section-header clickable" (click)="toggleSection('entities')">
+              <div class="section-title-row">
+                <span class="section-title">
+                  <i class="fa-solid fa-database" aria-hidden="true"></i>
+                  Application Entities
+                </span>
+                <i class="fa-solid chevron-icon"
+                   [class.fa-chevron-up]="sectionExpanded.entities"
+                   [class.fa-chevron-down]="!sectionExpanded.entities"
+                   aria-hidden="true"></i>
+              </div>
               <span class="section-description">Manage which entities are included in this application</span>
             </legend>
 
-            <div class="form-grid">
+            @if (sectionExpanded.entities) {
+              <div class="section-content">
+                <div class="form-grid">
               <!-- Assigned Entities -->
               @if (applicationEntities.length > 0) {
                 <div class="assigned-entities">
                   <h4 class="subsection-title">Assigned Entities ({{ applicationEntities.length }})</h4>
-                  <div class="entities-list" role="list">
+                  <div class="entities-list"
+                       role="list"
+                       cdkDropList
+                       (cdkDropListDropped)="onEntityDrop($event)">
                     @for (config of applicationEntities; track config.entity.ID; let i = $index) {
                       <div
                         class="entity-item"
                         [class.is-new]="config.isNew"
                         [class.has-changes]="config.hasChanges"
                         role="listitem"
+                        cdkDrag
                       >
+                        <i class="fa-solid fa-grip-vertical drag-handle" aria-hidden="true"></i>
                         <div class="entity-info">
                           <div class="entity-icon">
                             <i class="fa-solid fa-table" aria-hidden="true"></i>
@@ -152,26 +186,6 @@
                         </div>
 
                         <div class="entity-actions">
-                          <button
-                            type="button"
-                            class="btn-icon btn-neutral"
-                            (click)="moveEntityUp(i)"
-                            [disabled]="i === 0"
-                            title="Move up"
-                            [attr.aria-label]="'Move ' + config.entity.Name + ' up'"
-                          >
-                            <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
-                          </button>
-                          <button
-                            type="button"
-                            class="btn-icon btn-neutral"
-                            (click)="moveEntityDown(i)"
-                            [disabled]="i === applicationEntities.length - 1"
-                            title="Move down"
-                            [attr.aria-label]="'Move ' + config.entity.Name + ' down'"
-                          >
-                            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-                          </button>
                           <button
                             type="button"
                             class="btn-icon btn-danger"
@@ -251,21 +265,31 @@
                   <p>All entities have been assigned to this application</p>
                 </div>
               }
-            </div>
+                </div>
+              </div>
+            }
           </fieldset>
 
           <!-- System Information Section (Edit Mode Only) -->
           @if (isEditMode) {
-            <fieldset class="form-section">
-              <legend class="section-header">
-                <span class="section-title">
-                  <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
-                  System Information
-                </span>
+            <fieldset class="form-section collapsible-section">
+              <legend class="section-header clickable" (click)="toggleSection('systemInfo')">
+                <div class="section-title-row">
+                  <span class="section-title">
+                    <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
+                    System Information
+                  </span>
+                  <i class="fa-solid chevron-icon"
+                     [class.fa-chevron-up]="sectionExpanded.systemInfo"
+                     [class.fa-chevron-down]="!sectionExpanded.systemInfo"
+                     aria-hidden="true"></i>
+                </div>
                 <span class="section-description">Application metadata and audit information</span>
               </legend>
 
-              <div class="form-grid">
+              @if (sectionExpanded.systemInfo) {
+                <div class="section-content">
+                  <div class="form-grid">
                 <div class="info-grid">
                   <div class="info-item">
                     <span class="info-label">Created</span>
@@ -284,13 +308,15 @@
                     <span class="info-value">{{ applicationEntities.length }}</span>
                   </div>
                 </div>
-              </div>
+                  </div>
+                </div>
+              }
             </fieldset>
           }
         </form>
       </div>
 
-      <!-- Modal Footer - Primary action LEFT, Cancel RIGHT -->
+      <!-- Modal Footer - Primary and Cancel buttons on RIGHT -->
       <div class="modal-footer">
         <button
           type="submit"
