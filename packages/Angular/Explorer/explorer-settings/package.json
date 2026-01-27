@@ -52,6 +52,7 @@
     "@progress/kendo-angular-indicators": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
     "@progress/kendo-angular-sortable": "16.2.0",
+    "@angular/cdk": "18.0.2",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

@@ -896,7 +896,7 @@ export class RunAIAgentResolver extends ResolverBase {
     private mapDetailRoleToMessageRole(role: string): 'user' | 'assistant' | 'system' {
         const roleLower = (role || '').toLowerCase();
         if (roleLower === 'user') return 'user';
-        if (roleLower === 'assistant' || roleLower === 'agent') return 'assistant';
+        if (roleLower === 'assistant' || roleLower === 'agent' || roleLower === 'ai') return 'assistant';
         if (roleLower === 'system') return 'system';
         return 'user'; // Default to user
     }

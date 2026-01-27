@@ -177,6 +177,9 @@ export { APIKeysResourceComponent, LoadAPIKeysResource } from './APIKeys/api-key
 export { APIKeyCreateDialogComponent, LoadAPIKeyCreateDialog, APIKeyCreateResult } from './APIKeys/api-key-create-dialog.component';
 export { APIKeyEditPanelComponent, LoadAPIKeyEditPanel } from './APIKeys/api-key-edit-panel.component';
 export { APIKeyListComponent, LoadAPIKeyList, APIKeyFilter } from './APIKeys/api-key-list.component';
+export { APIApplicationsPanelComponent, LoadAPIApplicationsPanel } from './APIKeys/api-applications-panel.component';
+export { APIScopesPanelComponent, LoadAPIScopesPanel } from './APIKeys/api-scopes-panel.component';
+export { APIUsagePanelComponent, LoadAPIUsagePanel } from './APIKeys/api-usage-panel.component';
 
 // Module
 export * from './module';
@@ -253,6 +256,12 @@ LoadAPIKeysResource();
 import { LoadAPIKeyCreateDialog } from './APIKeys/api-key-create-dialog.component';
 import { LoadAPIKeyEditPanel } from './APIKeys/api-key-edit-panel.component';
 import { LoadAPIKeyList } from './APIKeys/api-key-list.component';
+import { LoadAPIApplicationsPanel } from './APIKeys/api-applications-panel.component';
+import { LoadAPIScopesPanel } from './APIKeys/api-scopes-panel.component';
+import { LoadAPIUsagePanel } from './APIKeys/api-usage-panel.component';
 LoadAPIKeyCreateDialog();
 LoadAPIKeyEditPanel();
 LoadAPIKeyList();
+LoadAPIApplicationsPanel();
+LoadAPIScopesPanel();
+LoadAPIUsagePanel();

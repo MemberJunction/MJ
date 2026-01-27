@@ -105,18 +105,6 @@
                           <!-- Preferences content will go here -->
                         </div>
                       </mj-settings-card>
-
-                      <mj-settings-card
-                        title="Notifications"
-                        icon="fa-solid fa-bell"
-                        [expanded]="isSectionExpanded('notifications')"
-                        (toggle)="toggleSection('notifications')"
-                      >
-                        <div class="card-content">
-                          <p>Configure how and when you receive notifications.</p>
-                          <!-- Notification settings will go here -->
-                        </div>
-                      </mj-settings-card>
                     </div>
                   </div>
                 }
@@ -146,6 +134,14 @@
                 @case ('permissions') {
                   <div class="permissions-settings">
                     <mj-entity-permissions></mj-entity-permissions>
+                  </div>
+                }
+
+                @case ('notifications') {
+                  <div class="notifications-settings">
+                    <h2 class="section-title">Notifications</h2>
+                    <p class="section-description">Configure how and when you receive notifications</p>
+                    <mj-notification-preferences></mj-notification-preferences>
                   </div>
                 }
 
@@ -326,17 +322,6 @@
                           <p>Customize your experience with display and behavior preferences.</p>
                         </div>
                       </mj-settings-card>
-
-                      <mj-settings-card
-                        title="Notifications"
-                        icon="fa-solid fa-bell"
-                        [expanded]="isSectionExpanded('notifications')"
-                        (toggle)="toggleSection('notifications')"
-                      >
-                        <div class="card-content">
-                          <p>Configure how and when you receive notifications.</p>
-                        </div>
-                      </mj-settings-card>
                     </div>
                   </div>
                 }
@@ -362,6 +347,13 @@
                 @case ('permissions') {
                   <div class="permissions-settings">
                     <mj-entity-permissions></mj-entity-permissions>
+                  </div>
+                }
+                @case ('notifications') {
+                  <div class="notifications-settings">
+                    <h2 class="section-title">Notifications</h2>
+                    <p class="section-description">Configure how and when you receive notifications</p>
+                    <mj-notification-preferences></mj-notification-preferences>
                   </div>
                 }
                 @case ('advanced') {

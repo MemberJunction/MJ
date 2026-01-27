@@ -22,6 +22,7 @@ interface ScopeCategory {
     color: string;
     scopes: ScopeItem[];
     expanded: boolean;
+    allSelected: boolean;
 }
 
 /** Usage log display item */
@@ -190,7 +191,8 @@ export class APIKeyEditPanelComponent implements OnChanges {
                         icon: config.icon,
                         color: config.color,
                         scopes,
-                        expanded: scopes.some(s => s.selected)
+                        expanded: scopes.some(s => s.selected),
+                        allSelected: scopes.length > 0 && scopes.every(s => s.selected)
                     };
                 });
             }
@@ -342,9 +344,15 @@ export class APIKeyEditPanelComponent implements OnChanges {
     }
 
     /**
-     * Check for scope changes
+     * Check for scope changes and update category allSelected states
      */
     public onScopeChange(): void {
+        // Update allSelected state for each category
+        for (const category of this.ScopeCategories) {
+            category.allSelected = category.scopes.length > 0 && category.scopes.every(s => s.selected);
+        }
+
+        // Track overall changes
         const allScopes = this.ScopeCategories.flatMap(cat => cat.scopes);
         this.HasScopeChanges = allScopes.some(s => s.selected !== s.originallySelected);
     }
@@ -354,6 +362,23 @@ export class APIKeyEditPanelComponent implements OnChanges {
      */
     public toggleCategory(category: ScopeCategory): void {
         category.expanded = !category.expanded;
+    }
+
+    /**
+     * Toggle all scopes in a category on/off
+     */
+    public toggleCategoryAll(category: ScopeCategory): void {
+        // Toggle to opposite of current allSelected state
+        const newState = !category.allSelected;
+        category.allSelected = newState;
+
+        // Apply to all scopes in category
+        for (const item of category.scopes) {
+            item.selected = newState;
+        }
+
+        // Update change tracking
+        this.onScopeChange();
     }
 
     /**
