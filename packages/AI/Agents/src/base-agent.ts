@@ -1235,7 +1235,8 @@ export class BaseAgent {
                 rerankerConfig,
                 // Pass observability context for run step tracking
                 observability: this._agentRun ? {
-                    agentRunID: this._agentRun.ID
+                    agentRunID: this._agentRun.ID,
+                    stepNumber: (this._agentRun.Steps?.length || 0) + 1
                 } : undefined
             })
             : [];

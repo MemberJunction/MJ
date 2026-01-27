@@ -450,7 +450,7 @@ export class RerankerService {
         );
 
         stepEntity.AgentRunID = options.agentRunID!;
-        stepEntity.StepNumber = options.stepNumber || 0;
+        stepEntity.StepNumber = options.stepNumber || 1;
         stepEntity.StepType = 'Decision'; // Reranking is a decision step for relevance scoring
         stepEntity.StepName = 'Rerank Notes';
         stepEntity.Status = 'Running';
