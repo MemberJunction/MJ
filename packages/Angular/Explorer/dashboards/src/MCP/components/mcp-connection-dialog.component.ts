@@ -4,11 +4,12 @@
  * Dialog for creating and editing MCP server connections.
  */
 
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
-import { MCPServerConnectionEntity } from '@memberjunction/core-entities';
+import { MCPServerConnectionEntity, CredentialTypeEntity } from '@memberjunction/core-entities';
 import { MCPConnectionData, MCPServerData } from '../mcp-dashboard.component';
+import { CredentialDialogComponent, CredentialDialogResult } from '@memberjunction/ng-credentials';
 
 /**
  * Dialog result interface
@@ -28,6 +29,8 @@ export interface ConnectionDialogResult {
 })
 export class MCPConnectionDialogComponent implements OnInit, OnChanges {
 
+    @ViewChild('credentialDialog') credentialDialog!: CredentialDialogComponent;
+
     @Input() connection: MCPConnectionData | null = null;
     @Input() servers: MCPServerData[] = [];
     @Input() visible = false;
@@ -35,9 +38,11 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
 
     public connectionForm: FormGroup;
     public credentials: Array<{ ID: string; Name: string }> = [];
+    public credentialTypes: CredentialTypeEntity[] = [];
     public IsSaving = false;
     public IsLoadingCredentials = false;
     public ErrorMessage: string | null = null;
+    public ShowCredentialDialog = false;
 
     public get IsEditMode(): boolean {
         return !!this.connection?.ID;
@@ -127,15 +132,26 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
         this.IsLoadingCredentials = true;
         try {
             const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Credentials',
-                Fields: ['ID', 'Name'],
-                OrderBy: 'Name',
-                ResultType: 'simple'
-            });
+            // Load credentials and credential types in parallel
+            const [credResult, typeResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: Credentials',
+                    Fields: ['ID', 'Name'],
+                    OrderBy: 'Name',
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: Credential Types',
+                    OrderBy: 'Category, Name',
+                    ResultType: 'entity_object'
+                }
+            ]);
 
-            if (result.Success) {
-                this.credentials = result.Results || [];
+            if (credResult.Success) {
+                this.credentials = credResult.Results as Array<{ ID: string; Name: string }> || [];
+            }
+            if (typeResult.Success) {
+                this.credentialTypes = typeResult.Results as CredentialTypeEntity[] || [];
             }
         } catch (error) {
             console.error('Failed to load credentials:', error);
@@ -143,6 +159,37 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
             this.IsLoadingCredentials = false;
             this.cdr.detectChanges();
         }
+    }
+
+    /**
+     * Opens the credential creation dialog
+     */
+    public openCredentialDialog(): void {
+        this.ShowCredentialDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Handles the credential dialog close event
+     */
+    public onCredentialDialogClose(result: CredentialDialogResult): void {
+        this.ShowCredentialDialog = false;
+
+        if (result.success && result.credential) {
+            // Add the new credential to the list and select it
+            this.credentials.push({
+                ID: result.credential.ID,
+                Name: result.credential.Name
+            });
+            // Sort credentials by name
+            this.credentials.sort((a, b) => a.Name.localeCompare(b.Name));
+            // Select the new credential
+            this.connectionForm.patchValue({
+                CredentialID: result.credential.ID
+            });
+        }
+
+        this.cdr.detectChanges();
     }
 
     public onServerChange(): void {

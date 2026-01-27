@@ -105,6 +105,20 @@
     font-size: 14px;
 }
 
+.credential-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.credential-row kendo-dropdownlist {
+    flex: 1;
+}
+
+.credential-row button {
+    white-space: nowrap;
+}
+
 .checkbox-group {
     margin-bottom: 12px;
 }

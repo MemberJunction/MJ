@@ -4,14 +4,17 @@
  * Provides a comprehensive admin interface for managing MCP servers,
  * connections, tools, and viewing execution logs.
  *
+ * Uses left sidebar navigation with query string deep linking via NavigationService.
+ *
  * @module MCP Dashboard
  */
 
-import { Component, OnDestroy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
+import { Component, OnDestroy, ChangeDetectorRef, AfterViewInit, OnInit } from '@angular/core';
+import { Router, NavigationEnd } from '@angular/router';
 import { Subject, BehaviorSubject } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
-import { BaseDashboard } from '@memberjunction/ng-shared';
+import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MCPServerEntity, MCPServerConnectionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -129,7 +132,7 @@ export type MCPDashboardTab = 'servers' | 'connections' | 'tools' | 'logs';
     templateUrl: './mcp-dashboard.component.html',
     styleUrls: ['./mcp-dashboard.component.css']
 })
-export class MCPDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
+export class MCPDashboardComponent extends BaseDashboard implements OnInit, AfterViewInit, OnDestroy {
 
     // ========================================
     // State
@@ -176,14 +179,135 @@ export class MCPDashboardComponent extends BaseDashboard implements AfterViewIni
     public EditingServer: MCPServerData | null = null;
     public EditingConnection: MCPConnectionData | null = null;
 
+    // Navigation state
+    private skipUrlUpdate = true;
+    private lastNavigatedUrl: string = '';
+
     // ========================================
     // Lifecycle
     // ========================================
 
     private destroy$ = new Subject<void>();
 
-    constructor(private cdr: ChangeDetectorRef) {
+    constructor(
+        private cdr: ChangeDetectorRef,
+        private router: Router,
+        private navigationService: NavigationService
+    ) {
         super();
+    }
+
+    override async ngOnInit(): Promise<void> {
+        await super.ngOnInit();
+
+        // Parse initial URL state
+        this.parseAndApplyUrlState();
+
+        // Apply configuration params if passed via NavigationService
+        this.applyConfigurationParams();
+
+        // Enable URL updates after initialization
+        this.skipUrlUpdate = false;
+
+        // Subscribe to router events to handle browser back/forward
+        this.subscribeToRouterEvents();
+    }
+
+    /**
+     * Parses the current URL query string and applies the tab state
+     */
+    private parseAndApplyUrlState(): void {
+        const urlState = this.parseUrlState();
+        if (urlState?.tab) {
+            this.ActiveTab = urlState.tab;
+        }
+        this.lastNavigatedUrl = this.router.url;
+    }
+
+    /**
+     * Parses URL query string to extract navigation state
+     */
+    private parseUrlState(): { tab?: MCPDashboardTab } | null {
+        const url = this.router.url;
+        const queryIndex = url.indexOf('?');
+        if (queryIndex === -1) return null;
+
+        const queryString = url.substring(queryIndex + 1);
+        const params = new URLSearchParams(queryString);
+        const tab = params.get('tab') as MCPDashboardTab | null;
+
+        if (tab && this.isValidTab(tab)) {
+            return { tab };
+        }
+        return null;
+    }
+
+    /**
+     * Validates that a tab value is a valid MCPDashboardTab
+     */
+    private isValidTab(tab: string): tab is MCPDashboardTab {
+        return ['servers', 'connections', 'tools', 'logs'].includes(tab);
+    }
+
+    /**
+     * Applies configuration params passed via NavigationService
+     */
+    private applyConfigurationParams(): void {
+        const config = this.Data?.Configuration;
+        if (config?.tab && this.isValidTab(config.tab as string)) {
+            this.ActiveTab = config.tab as MCPDashboardTab;
+        }
+    }
+
+    /**
+     * Subscribes to router NavigationEnd events to handle browser back/forward
+     */
+    private subscribeToRouterEvents(): void {
+        this.router.events
+            .pipe(
+                filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+                takeUntil(this.destroy$)
+            )
+            .subscribe(event => {
+                const currentUrl = event.urlAfterRedirects || event.url;
+                if (currentUrl !== this.lastNavigatedUrl) {
+                    this.onExternalNavigation(currentUrl);
+                }
+            });
+    }
+
+    /**
+     * Handles external navigation (browser back/forward)
+     */
+    private onExternalNavigation(url: string): void {
+        this.lastNavigatedUrl = url;
+        const queryIndex = url.indexOf('?');
+        if (queryIndex === -1) return;
+
+        const queryString = url.substring(queryIndex + 1);
+        const params = new URLSearchParams(queryString);
+        const tab = params.get('tab') as MCPDashboardTab | null;
+
+        if (tab && this.isValidTab(tab) && tab !== this.ActiveTab) {
+            this.skipUrlUpdate = true;
+            this.ActiveTab = tab;
+            this.cdr.detectChanges();
+            this.skipUrlUpdate = false;
+        }
+    }
+
+    /**
+     * Updates URL query string to reflect current state using NavigationService
+     */
+    private updateUrl(): void {
+        if (this.skipUrlUpdate) return;
+
+        const queryParams: Record<string, string | null> = {
+            tab: this.ActiveTab
+        };
+
+        this.navigationService.UpdateActiveTabQueryParams(queryParams);
+        this.lastNavigatedUrl = this.router.url;
     }
 
     // Required by BaseResourceComponent
@@ -409,8 +533,14 @@ export class MCPDashboardComponent extends BaseDashboard implements AfterViewIni
     // Tab Navigation
     // ========================================
 
+    /**
+     * Sets the active tab and updates URL for deep linking
+     */
     public setActiveTab(tab: MCPDashboardTab): void {
+        if (this.ActiveTab === tab) return;
+
         this.ActiveTab = tab;
+        this.updateUrl();
         this.cdr.detectChanges();
     }
 

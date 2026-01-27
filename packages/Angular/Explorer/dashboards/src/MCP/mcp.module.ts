@@ -17,15 +17,18 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 
 // MemberJunction Modules
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { CredentialsModule } from '@memberjunction/ng-credentials';
 
 // MCP Components
 import { MCPDashboardComponent, LoadMCPDashboard } from './mcp-dashboard.component';
+import { MCPResourceComponent, LoadMCPResource } from './mcp-resource.component';
 import { MCPServerDialogComponent, LoadMCPServerDialog } from './components/mcp-server-dialog.component';
 import { MCPConnectionDialogComponent, LoadMCPConnectionDialog } from './components/mcp-connection-dialog.component';
 
 @NgModule({
     declarations: [
         MCPDashboardComponent,
+        MCPResourceComponent,
         MCPServerDialogComponent,
         MCPConnectionDialogComponent
     ],
@@ -37,10 +40,12 @@ import { MCPConnectionDialogComponent, LoadMCPConnectionDialog } from './compone
         DialogModule,
         DropDownsModule,
         InputsModule,
-        SharedGenericModule
+        SharedGenericModule,
+        CredentialsModule
     ],
     exports: [
         MCPDashboardComponent,
+        MCPResourceComponent,
         MCPServerDialogComponent,
         MCPConnectionDialogComponent
     ]
@@ -52,6 +57,7 @@ export class MCPModule { }
  */
 export function LoadMCPModule(): void {
     LoadMCPDashboard();
+    LoadMCPResource();
     LoadMCPServerDialog();
     LoadMCPConnectionDialog();
 }

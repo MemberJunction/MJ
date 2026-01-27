@@ -86,16 +86,26 @@
                         Loading credentials...
                     </div>
                 } @else {
-                    <kendo-dropdownlist
-                        id="credential"
-                        formControlName="CredentialID"
-                        [data]="credentials"
-                        textField="Name"
-                        valueField="ID"
-                        [valuePrimitive]="true"
-                        [defaultItem]="{ Name: 'No credential (anonymous)', ID: '' }">
-                    </kendo-dropdownlist>
-                    <span class="hint">Select a stored credential for authentication</span>
+                    <div class="credential-row">
+                        <kendo-dropdownlist
+                            id="credential"
+                            formControlName="CredentialID"
+                            [data]="credentials"
+                            textField="Name"
+                            valueField="ID"
+                            [valuePrimitive]="true"
+                            [defaultItem]="{ Name: 'No credential (anonymous)', ID: '' }">
+                        </kendo-dropdownlist>
+                        <button kendoButton
+                                type="button"
+                                fillMode="outline"
+                                (click)="openCredentialDialog()"
+                                title="Create New Credential">
+                            <i class="fa-solid fa-plus"></i>
+                            New
+                        </button>
+                    </div>
+                    <span class="hint">Select an existing credential or create a new one</span>
                 }
             </div>
 
@@ -190,3 +200,12 @@
         <button kendoButton (click)="cancel()">Cancel</button>
     </kendo-dialog-actions>
 </kendo-dialog>
+
+<!-- Credential Creation Dialog -->
+@if (ShowCredentialDialog) {
+    <mj-credential-dialog
+        #credentialDialog
+        [Visible]="ShowCredentialDialog"
+        (close)="onCredentialDialogClose($event)">
+    </mj-credential-dialog>
+}
