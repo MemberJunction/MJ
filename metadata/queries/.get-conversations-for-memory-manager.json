@@ -1,0 +1,59 @@
+[
+  {
+    "fields": {
+      "Name": "GetConversationsForMemoryManager",
+      "CategoryID": "@lookup:Query Categories.Name=Agents",
+      "UserQuestion": "What conversations have new activity that need to be analyzed for memory extraction?",
+      "Description": "Returns all conversation data needed for memory extraction in a single query: conversations with new activity, their details with ratings, and linked agent runs for scope inheritance. Optimized to replace 4 separate sequential queries.",
+      "SQL": "@file:SQL/get-conversations-for-memory-manager.sql",
+      "TechnicalDescription": "Single-query optimization that replaces 4 separate RunView calls in Memory Manager (get conversations, get agent runs, get details, get ratings). Uses SQL Server FOR JSON PATH to aggregate conversation details with ratings as JSON arrays. Returns rating summary flags (HasPositiveRating, HasNegativeRating, IsUnrated) and most recent AgentRunID for scope inheritance. Reduces database round trips from 4 to 1.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true
+    },
+    "relatedEntities": {
+      "MJ: Query Parameters": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "Name": "since",
+            "Type": "string",
+            "Description": "ISO date string - only include conversations with new activity after this date",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5887511F-DE1D-4AF9-8AC6-6EFC4508C394"
+          },
+          "sync": {
+            "lastModified": "2026-01-27T00:51:14.143Z",
+            "checksum": "803cbc3b38b5244ccb733ce37f34f5f529f37d6ae36b485a1569012d66a403a9"
+          }
+        },
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "Name": "agentIds",
+            "Type": "string",
+            "Description": "Comma-separated list of quoted agent IDs that have memory enabled",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F3235A29-CD5F-4B42-9FCA-B296C62FE262"
+          },
+          "sync": {
+            "lastModified": "2026-01-27T00:51:14.163Z",
+            "checksum": "86b9faf1f895cdbf680acd1ed4e1c88f2381d2cb8d77a7875ab5270d17e5abc0"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "574FD9D5-AB9E-4FA5-A36C-C25E7D3F63FC"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T00:44:10.207Z",
+      "checksum": "3fbab3929c059c845f5980c767b384e45279f15a9fa277e4260a1480498c9859"
+    }
+  }
+]
