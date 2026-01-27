@@ -28,6 +28,8 @@ import { LoadHomeApplication } from './Home/home-application';
 import { LoadHomeDashboard } from './Home/home-dashboard.component';
 // API Keys
 import { LoadAPIKeysResource } from './APIKeys/api-keys-resource.component';
+// MCP
+import { LoadMCPModule } from './MCP';
 
 import {
   LoadActionsOverviewResource,
@@ -181,6 +183,9 @@ export { APIApplicationsPanelComponent, LoadAPIApplicationsPanel } from './APIKe
 export { APIScopesPanelComponent, LoadAPIScopesPanel } from './APIKeys/api-scopes-panel.component';
 export { APIUsagePanelComponent, LoadAPIUsagePanel } from './APIKeys/api-usage-panel.component';
 
+// MCP (Model Context Protocol)
+export * from './MCP';
+
 // Module
 export * from './module';
 
@@ -265,3 +270,6 @@ LoadAPIKeyList();
 LoadAPIApplicationsPanel();
 LoadAPIScopesPanel();
 LoadAPIUsagePanel();
+
+// MCP module loader
+LoadMCPModule();

@@ -240,13 +240,18 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
 
             const saved = await entity.Save();
             if (!saved) {
-                throw new Error('Failed to save connection');
+                // Use CompleteMessage for full error details, fall back to Message
+                const errorMessage = entity.LatestResult?.CompleteMessage || entity.LatestResult?.Message || 'Unknown error';
+                console.error('MCP Connection save failed:', errorMessage, entity.LatestResult);
+                throw new Error(errorMessage);
             }
 
             this.close.emit({ saved: true });
 
         } catch (error) {
-            this.ErrorMessage = `Failed to save: ${error instanceof Error ? error.message : String(error)}`;
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.ErrorMessage = `Failed to save: ${errorMsg}`;
+            console.error('MCP Connection save error:', errorMsg);
             this.cdr.detectChanges();
         } finally {
             this.IsSaving = false;
