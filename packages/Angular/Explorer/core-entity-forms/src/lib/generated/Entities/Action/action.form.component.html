@@ -368,6 +368,28 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- MJ: MCP Server Tools Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJMCPServerTools"
+        sectionName="MJ: MCP Server Tools"
+        icon="fa fa-server"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJMCPServerTools')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Tools','GeneratedActionID')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools')"
+                [AllowLoad]="IsSectionExpanded('mJMCPServerTools')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJMCPServerTools', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- Scheduled Actions Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="scheduledActions"

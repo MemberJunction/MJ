@@ -3,17 +3,69 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Entity Keys Section -->
+    <!-- Connection Permissions Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="entityKeys"
-        sectionName="Entity Keys"
-        icon="fa fa-key"
+        sectionKey="connectionPermissions"
+        sectionName="Connection Permissions"
+        icon="fa fa-lock"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EmployeeID"
+            FieldName="MCPServerConnectionID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CanExecute"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CanModify"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CanViewCredentials"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MCPServerConnection"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Access Assignment Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="accessAssignment"
+        sectionName="Access Assignment"
+        icon="fa fa-user"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UserID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -30,37 +82,17 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Employee Details Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="employeeDetails"
-        sectionName="Employee Details"
-        icon="fa fa-user"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="false"
-            FieldName="Employee"
+            [ShowLabel]="true"
+            FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Role Assignment Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="roleAssignment"
-        sectionName="Role Assignment"
-        icon="fa fa-id-badge"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="Role"
             Type="textbox"
             [EditMode]="EditMode"

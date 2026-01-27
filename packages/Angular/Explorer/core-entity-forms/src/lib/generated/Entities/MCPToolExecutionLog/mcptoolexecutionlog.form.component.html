@@ -3,17 +3,17 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Technical Information Section -->
+    <!-- Connection Context Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="technicalInformation"
-        sectionName="Technical Information"
-        icon="fa fa-cog"
+        sectionKey="connectionContext"
+        sectionName="Connection Context"
+        icon="fa fa-plug"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CompanyIntegrationRunID"
+            FieldName="MCPServerConnectionID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -23,7 +23,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CompanyIntegrationRunDetailID"
+            FieldName="MCPServerToolID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -33,7 +33,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CompanyIntegrationRun"
+            FieldName="MCPServerConnection"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -41,41 +41,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CompanyIntegrationRunDetail"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Error Classification Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="errorClassification"
-        sectionName="Error Classification"
-        icon="fa fa-tag"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Code"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Category"
+            FieldName="MCPServerTool"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -83,17 +49,17 @@
 
     </mj-collapsible-panel>
 
-    <!-- Error Content Section -->
+    <!-- Execution Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="errorContent"
-        sectionName="Error Content"
-        icon="fa fa-file-alt"
+        sectionKey="executionDetails"
+        sectionName="Execution Details"
+        icon="fa fa-tachometer-alt"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Message"
+            FieldName="ToolName"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -101,15 +67,101 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CreatedBy"
-            Type="textbox"
+            FieldName="StartedAt"
+            Type="datepicker"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Details"
+            FieldName="EndedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DurationMs"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Success"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OutputTruncated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- User Context Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="userContext"
+        sectionName="User Context"
+        icon="fa fa-user"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="User"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Payload & Errors Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="payloadErrors"
+        sectionName="Payload & Errors"
+        icon="fa fa-file-alt"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ErrorMessage"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="InputParameters"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OutputContent"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
