@@ -1,6 +1,6 @@
 import { BaseSingleton } from "@memberjunction/global";
-import { DatasetItemFilterType, DatasetResultType, ILocalStorageProvider } from "./interfaces";
-import { RunViewParams } from "../views/runView";
+import { AggregateResult, DatasetItemFilterType, DatasetResultType, ILocalStorageProvider } from "./interfaces";
+import { AggregateExpression, RunViewParams } from "../views/runView";
 import { LogError } from "./logging";
 
 // ============================================================================
@@ -72,6 +72,8 @@ export interface CachedRunViewData {
     results: unknown[];
     /** The maximum __mj_UpdatedAt timestamp from the results */
     maxUpdatedAt: string;
+    /** Cached aggregate results, if aggregates were requested */
+    aggregateResults?: AggregateResult[];
 }
 
 /**
@@ -85,6 +87,8 @@ export interface CachedRunViewResult {
     maxUpdatedAt: string;
     /** Row count - always derived from results.length */
     rowCount: number;
+    /** Cached aggregate results, if aggregates were requested */
+    aggregateResults?: AggregateResult[];
 }
 
 /**
@@ -422,8 +426,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Generates a human-readable cache fingerprint for a RunView request.
      * This fingerprint uniquely identifies the query based on its parameters and connection.
      *
-     * Format: EntityName|filter|orderBy|resultType|maxRows|startRow|connection
-     * Example: Users|Active=1|Name ASC|simple|100|0|localhost
+     * Format: EntityName|filter|orderBy|resultType|maxRows|startRow|aggHash|connection
+     * Example: Users|Active=1|Name ASC|simple|100|0|a1b2c3d4|localhost
      *
      * @param params - The RunView parameters
      * @param connectionPrefix - Prefix identifying the connection (e.g., server URL) to differentiate caches across connections
@@ -437,16 +441,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const maxRows = params.MaxRows ?? -1;
         const startRow = params.StartRow ?? 0;
         const connection = connectionPrefix || '';
+        const aggHash = this.generateAggregateHash(params.Aggregates);
 
         // Build human-readable fingerprint with pipe separators
-        // Format: Entity|Filter|OrderBy|ResultType|MaxRows|StartRow|Connection
+        // Format: Entity|Filter|OrderBy|ResultType|MaxRows|StartRow|AggHash|Connection
         const parts = [
             entity,
             filter || '_',           // Use underscore for empty filter
             orderBy || '_',          // Use underscore for empty orderBy
             resultType,
             maxRows.toString(),
-            startRow.toString()
+            startRow.toString(),
+            aggHash                  // Aggregate hash (or '_' for no aggregates)
         ];
 
         // Only include connection if provided
@@ -455,6 +461,43 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         return parts.join('|');
+    }
+
+    /**
+     * Generates a hash string representing the aggregate expressions.
+     * This ensures different aggregate configurations get different fingerprints.
+     * @param aggregates - The aggregate expressions array
+     * @returns A hash string, or '_' if no aggregates
+     */
+    private generateAggregateHash(aggregates: AggregateExpression[] | undefined): string {
+        if (!aggregates || aggregates.length === 0) {
+            return '_';
+        }
+
+        // Create a deterministic string from aggregates (sorted by expression for consistency)
+        const aggString = aggregates
+            .map(a => `${a.expression}:${a.alias || ''}`)
+            .sort()
+            .join(';');
+
+        return this.simpleHash(aggString);
+    }
+
+    /**
+     * Simple hash function for creating short fingerprints from strings.
+     * Not cryptographic, just for deduplication/fingerprinting purposes.
+     * Uses djb2 algorithm.
+     * @param str - The string to hash
+     * @returns A hex string hash
+     */
+    private simpleHash(str: string): string {
+        let hash = 5381;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) + hash) + char; // hash * 33 + char
+        }
+        // Convert to hex and ensure positive
+        return (hash >>> 0).toString(16);
     }
 
     /**
@@ -467,19 +510,22 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param params - The original RunView parameters
      * @param results - The results to cache
      * @param maxUpdatedAt - The latest __mj_UpdatedAt from the results
-     * @param _rowCount - DEPRECATED: This parameter is ignored. rowCount is always derived from results.length.
+     * @param aggregateResults - Optional aggregate results to cache alongside the row data
      */
     public async SetRunViewResult(
         fingerprint: string,
         params: RunViewParams,
         results: unknown[],
         maxUpdatedAt: string,
-        _rowCount?: number
+        aggregateResults?: AggregateResult[]
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
-        // Only persist results and maxUpdatedAt - rowCount is derived from results.length on read
+        // Persist results, maxUpdatedAt, and aggregateResults (rowCount is derived from results.length on read)
         const data: CachedRunViewData = { results, maxUpdatedAt };
+        if (aggregateResults && aggregateResults.length > 0) {
+            data.aggregateResults = aggregateResults;
+        }
         const value = JSON.stringify(data);
         const sizeBytes = this.estimateSize(value);
 
@@ -499,7 +545,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     ExtraFilter: params.ExtraFilter,
                     OrderBy: params.OrderBy,
                     ResultType: params.ResultType,
-                    MaxRows: params.MaxRows
+                    MaxRows: params.MaxRows,
+                    HasAggregates: (params.Aggregates?.length ?? 0) > 0
                 },
                 cachedAt: Date.now(),
                 lastAccessedAt: Date.now(),
@@ -519,7 +566,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Note: rowCount is always derived from results.length, never from persisted data.
      *
      * @param fingerprint - The cache fingerprint
-     * @returns The cached results, maxUpdatedAt, and rowCount (derived), or null if not found
+     * @returns The cached results, maxUpdatedAt, rowCount (derived), and aggregateResults, or null if not found
      */
     public async GetRunViewResult(fingerprint: string): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
@@ -533,11 +580,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const parsed = JSON.parse(value) as CachedRunViewData;
                 const results = parsed.results || [];
                 // Always derive rowCount from results.length - never trust persisted rowCount
-                return {
+                const result: CachedRunViewResult = {
                     results,
                     maxUpdatedAt: parsed.maxUpdatedAt,
                     rowCount: results.length
                 };
+                // Include aggregate results if they were cached
+                if (parsed.aggregateResults) {
+                    result.aggregateResults = parsed.aggregateResults;
+                }
+                return result;
             }
         } catch (e) {
             LogError(`LocalCacheManager.GetRunViewResult failed: ${e}`);
@@ -571,6 +623,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * we efficiently merge only the changes (deltas) with the existing cached data.
      *
      * Note: rowCount is always derived from the merged results length, not from a parameter.
+     * Note: Aggregates cannot be differentially updated - if provided, they replace the cached aggregates;
+     *       if not provided, cached aggregates are cleared (they would be stale after a differential update).
      *
      * @param fingerprint - The cache fingerprint to update
      * @param params - The original RunView parameters (for re-storing the cache)
@@ -579,6 +633,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param primaryKeyFieldName - The name of the primary key field (or first PK field for composite keys)
      * @param newMaxUpdatedAt - The new maxUpdatedAt timestamp after applying the delta
      * @param _serverRowCount - DEPRECATED: This parameter is ignored. rowCount is always derived from merged results.length.
+     * @param aggregateResults - Optional fresh aggregate results (since aggregates can't be differentially computed)
      * @returns The merged results after applying the differential update, or null if cache not found
      */
     public async ApplyDifferentialUpdate(
@@ -588,7 +643,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         deletedRecordIDs: string[],
         primaryKeyFieldName: string,
         newMaxUpdatedAt: string,
-        _serverRowCount?: number
+        _serverRowCount?: number,
+        aggregateResults?: AggregateResult[]
     ): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
@@ -633,20 +689,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Convert map back to array
             const mergedResults = Array.from(resultMap.values());
 
-            // Store the updated cache (rowCount is derived from mergedResults.length inside SetRunViewResult)
+            // Store the updated cache with optional aggregate results
+            // Note: If aggregateResults not provided, cached aggregates are cleared (they'd be stale)
             await this.SetRunViewResult(
                 fingerprint,
                 params,
                 mergedResults,
-                newMaxUpdatedAt
+                newMaxUpdatedAt,
+                aggregateResults
             );
 
-            // Return with rowCount derived from merged results
-            return {
+            // Return with rowCount derived from merged results and aggregates if provided
+            const result: CachedRunViewResult = {
                 results: mergedResults,
                 maxUpdatedAt: newMaxUpdatedAt,
                 rowCount: mergedResults.length
             };
+            if (aggregateResults) {
+                result.aggregateResults = aggregateResults;
+            }
+            return result;
         } catch (e) {
             LogError(`LocalCacheManager.ApplyDifferentialUpdate failed: ${e}`);
             return null;

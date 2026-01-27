@@ -390,4 +390,30 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
     public GetCategoryShares(categoryId: string): DashboardCategoryPermissionEntity[] {
         return this._dashboardCategoryPermissions.filter(p => p.DashboardCategoryID === categoryId);
     }
+
+    /**
+     * Checks if a user can access a category (view it in their category list).
+     * A user can access a category if they:
+     * 1. Own the category (category.UserID === userId)
+     * 2. Have direct permission on the category
+     * @param categoryId - The ID of the category
+     * @param userId - The ID of the user
+     * @returns true if the user can access the category
+     */
+    public CanUserAccessCategory(categoryId: string, userId: string): boolean {
+        const permissions = this.GetCategoryPermissions(categoryId, userId);
+        return permissions.PermissionSource !== 'none';
+    }
+
+    /**
+     * Gets all categories the user has access to (owned or shared).
+     * Only returns categories the user explicitly owns or has permissions on.
+     * @param userId - The ID of the user
+     * @returns Array of categories the user can access
+     */
+    public GetAccessibleCategories(userId: string): DashboardCategoryEntity[] {
+        return this._dashboardCategories.filter(category =>
+            this.CanUserAccessCategory(category.ID, userId)
+        );
+    }
 }

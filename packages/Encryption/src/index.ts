@@ -51,6 +51,11 @@
  * - Random IVs for each encryption operation
  * - Cached key material has configurable TTL
  *
+ * ## API Key Management
+ *
+ * API key functionality has been moved to the `@memberjunction/api-keys` package.
+ * Use that package for API key generation, validation, and scope-based authorization.
+ *
  * @module @memberjunction/encryption
  * @packageDocumentation
  */

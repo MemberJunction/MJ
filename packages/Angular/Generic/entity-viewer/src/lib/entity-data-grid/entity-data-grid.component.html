@@ -259,6 +259,24 @@
     </div>
   </div>
 
+  <!-- Aggregate Cards (displayed as summary cards above the grid) -->
+  <div *ngIf="ShowAggregatePanel" class="mj-aggregate-cards">
+    <ng-container *ngFor="let agg of CardAggregates">
+      <div class="aggregate-card">
+        <div class="aggregate-card-icon" *ngIf="agg.icon">
+          <i [class]="agg.icon"></i>
+        </div>
+        <div class="aggregate-card-content">
+          <span class="aggregate-card-label">{{ agg.label }}</span>
+          <span class="aggregate-card-value">{{ getAggregateValue(agg) }}</span>
+        </div>
+      </div>
+    </ng-container>
+    <div *ngIf="AggregatesLoading" class="aggregate-card-loading">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+    </div>
+  </div>
+
   <!-- Grid Content -->
   <div class="mj-grid-content">
     <!-- Loading Overlay -->
@@ -293,6 +311,7 @@
       [rowHeight]="RowHeight"
       [headerHeight]="ShowHeader ? undefined : 0"
       (gridReady)="onGridReady($event)"
+      (cellClicked)="onAgCellClicked($event)"
       (rowClicked)="onAgRowClicked($event)"
       (rowDoubleClicked)="onAgRowDoubleClicked($event)"
       (sortChanged)="onAgSortChanged($event)"
@@ -319,6 +338,7 @@
       [infiniteInitialRowCount]="1"
       [cacheOverflowSize]="2"
       (gridReady)="onGridReady($event)"
+      (cellClicked)="onAgCellClicked($event)"
       (rowClicked)="onAgRowClicked($event)"
       (rowDoubleClicked)="onAgRowDoubleClicked($event)"
       (sortChanged)="onAgSortChanged($event)"
@@ -326,6 +346,23 @@
       (columnResized)="onAgColumnResized($event)"
       (columnMoved)="onAgColumnMoved($event)">
     </ag-grid-angular>
+
+  </div>
+
+  <!-- Aggregate Summary Row (outside mj-grid-content so it's always visible) -->
+  <div *ngIf="ShowAggregateSummary" class="mj-aggregate-summary">
+    <div class="aggregate-summary-content">
+      <ng-container *ngFor="let agg of ColumnAggregates">
+        <div class="aggregate-summary-item">
+          <i *ngIf="agg.icon" [class]="agg.icon"></i>
+          <span class="agg-summary-label">{{ agg.label }}:</span>
+          <span class="agg-summary-value">{{ getAggregateValue(agg) }}</span>
+        </div>
+      </ng-container>
+    </div>
+    <div *ngIf="AggregatesLoading" class="aggregate-loading">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+    </div>
   </div>
 </div>
 

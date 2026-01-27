@@ -149,7 +149,8 @@
       (RefreshButtonClick)="onGridRefreshRequested()"
       (DeleteButtonClick)="onGridDeleteRequested($event)"
       (ExportButtonClick)="onGridExportRequested()"
-      (AddToListRequested)="onGridAddToListRequested($event)">
+      (AddToListRequested)="onGridAddToListRequested($event)"
+      (ForeignKeyClick)="onForeignKeyClick($event)">
     </mj-entity-data-grid>
 
     <!-- Cards View - always rendered, visibility controlled by hidden -->

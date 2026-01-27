@@ -128,8 +128,10 @@ metadata/demo-prompt.md
 .mj-ai/
 notes.txt
 packages/AI/Providers/LocalEmbeddings/.cache/**
-packages/MJAPI/.cache/** 
+packages/AI/MCPServer/.cache/**
+packages/MJAPI/.cache/**
 .cache/**
+**/.cache/**
 packages/test-output/**
 packages/MJServer/src/agents/skipRequest-new-chat.json
 .mjrc.yml.ignore

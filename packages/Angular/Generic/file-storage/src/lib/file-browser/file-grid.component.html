@@ -173,27 +173,27 @@
     <table class="file-table">
       <thead>
         <tr>
-          <th class="col-name" (click)="onSortChange([{ field: 'name', dir: sort[0]?.field === 'name' && sort[0]?.dir === 'asc' ? 'desc' : 'asc' }])">
+          <th class="col-name" (click)="onSortChange([{ field: 'name', dir: sort[0].field === 'name' && sort[0].dir === 'asc' ? 'desc' : 'asc' }])">
             <span>Name</span>
             <i class="fa-solid sort-icon"
-               [class.fa-caret-up]="sort[0]?.field === 'name' && sort[0]?.dir === 'asc'"
-               [class.fa-caret-down]="sort[0]?.field === 'name' && sort[0]?.dir === 'desc'"
-               [class.fa-sort]="sort[0]?.field !== 'name'"></i>
+               [class.fa-caret-up]="sort[0].field === 'name' && sort[0].dir === 'asc'"
+               [class.fa-caret-down]="sort[0].field === 'name' && sort[0].dir === 'desc'"
+               [class.fa-sort]="sort[0].field !== 'name'"></i>
           </th>
           <th class="col-type">Type</th>
-          <th class="col-size" (click)="onSortChange([{ field: 'size', dir: sort[0]?.field === 'size' && sort[0]?.dir === 'asc' ? 'desc' : 'asc' }])">
+          <th class="col-size" (click)="onSortChange([{ field: 'size', dir: sort[0].field === 'size' && sort[0].dir === 'asc' ? 'desc' : 'asc' }])">
             <span>Size</span>
             <i class="fa-solid sort-icon"
-               [class.fa-caret-up]="sort[0]?.field === 'size' && sort[0]?.dir === 'asc'"
-               [class.fa-caret-down]="sort[0]?.field === 'size' && sort[0]?.dir === 'desc'"
-               [class.fa-sort]="sort[0]?.field !== 'size'"></i>
+               [class.fa-caret-up]="sort[0].field === 'size' && sort[0].dir === 'asc'"
+               [class.fa-caret-down]="sort[0].field === 'size' && sort[0].dir === 'desc'"
+               [class.fa-sort]="sort[0].field !== 'size'"></i>
           </th>
-          <th class="col-modified" (click)="onSortChange([{ field: 'lastModified', dir: sort[0]?.field === 'lastModified' && sort[0]?.dir === 'asc' ? 'desc' : 'asc' }])">
+          <th class="col-modified" (click)="onSortChange([{ field: 'lastModified', dir: sort[0].field === 'lastModified' && sort[0].dir === 'asc' ? 'desc' : 'asc' }])">
             <span>Modified</span>
             <i class="fa-solid sort-icon"
-               [class.fa-caret-up]="sort[0]?.field === 'lastModified' && sort[0]?.dir === 'asc'"
-               [class.fa-caret-down]="sort[0]?.field === 'lastModified' && sort[0]?.dir === 'desc'"
-               [class.fa-sort]="sort[0]?.field !== 'lastModified'"></i>
+               [class.fa-caret-up]="sort[0].field === 'lastModified' && sort[0].dir === 'asc'"
+               [class.fa-caret-down]="sort[0].field === 'lastModified' && sort[0].dir === 'desc'"
+               [class.fa-sort]="sort[0].field !== 'lastModified'"></i>
           </th>
         </tr>
       </thead>
