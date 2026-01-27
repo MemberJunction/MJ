@@ -116,12 +116,24 @@ export class AnalysisOrchestrator {
         // Analyze data
         this.onProgress('Analyzing table data');
         const sampler = new DataSampler(driver, this.config.analysis);
+        let samplingErrors = 0;
         for (const schema of schemas) {
           for (const table of schema.tables) {
-            await sampler.analyzeTable(schema.name, table.name, table.columns);
+            try {
+              await sampler.analyzeTable(schema.name, table.name, table.columns);
+            } catch (error) {
+              samplingErrors++;
+              const errorMsg = `Warning: Failed to analyze data for ${schema.name}.${table.name}: ${(error as Error).message}`;
+              console.error(errorMsg);
+              this.onProgress(errorMsg, { schema: schema.name, table: table.name, error: (error as Error).message });
+              // Continue with next table - partial data better than no data
+            }
           }
         }
-        this.onProgress('Data analysis complete');
+        this.onProgress('Data analysis complete', {
+          tablesAnalyzed: schemas.reduce((sum, s) => sum + s.tables.length, 0) - samplingErrors,
+          errors: samplingErrors
+        });
 
         // Relationship Discovery Phase (if enabled)
         if (this.config.analysis.relationshipDiscovery?.enabled) {
