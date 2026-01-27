@@ -1,21 +1,86 @@
 import { BaseAgent } from './base-agent';
-import { UserInfo, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { RegisterClass } from '@memberjunction/global';
+import { UserInfo, Metadata, RunView, RunQuery, LogError, LogStatus } from '@memberjunction/core';
 import {
     ConversationDetailEntity,
     AIAgentRunEntity,
     AIAgentNoteEntity,
-    AIAgentExampleEntity
+    AIAgentExampleEntity,
+    ConversationDetailRatingEntity
 } from '@memberjunction/core-entities';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 /**
+ * Configuration for extraction limits to ensure sparsity
+ */
+const EXTRACTION_CONFIG = {
+    maxNotesPerRun: 10,           // Max new notes per agent run
+    maxNotesPerConversation: 2,   // Max notes from a single conversation (most should be zero)
+    minConfidenceThreshold: 80,   // Minimum confidence to extract a note
+    minContentLength: 20,         // Minimum note content length
+    cooldownHours: 24             // Don't re-extract from same conversation within 24h
+};
+
+/**
+ * Message with rating data for extraction
+ */
+interface MessageWithRating {
+    id: string;
+    role: string;
+    message: string;
+    createdAt: Date;
+    rating: number | null;
+    ratingComment: string | null;
+}
+
+/**
+ * Conversation thread with rating data per message
+ */
+interface ConversationWithRatings {
+    conversationId: string;
+    userId: string | null;        // User who owns the conversation
+    agentRunId: string | null;    // Linked agent run (for scope inheritance)
+    messages: MessageWithRating[];
+    hasPositiveRating: boolean;  // Any message rated 8-10
+    hasNegativeRating: boolean;  // Any message rated 1-3
+    isUnrated: boolean;          // No ratings at all
+}
+
+/**
+ * Generic conversation thread for prompt data
+ */
+interface ConversationThread {
+    conversationId: string;
+    messages: {
+        id: string;
+        role: string;
+        message: string;
+        createdAt: Date;
+        rating: number | null;
+        ratingComment: string | null;
+    }[];
+}
+
+/**
+ * Result row from GetConversationsForMemoryManager query
+ */
+interface MemoryManagerQueryResult {
+    ConversationID: string;
+    UserID: string | null;
+    AgentRunID: string | null;
+    MessagesJSON: string | null;
+    HasPositiveRating: number;
+    HasNegativeRating: number;
+    IsUnrated: number;
+}
+
+/**
  * Extracted note from conversation/agent run analysis
  */
 interface ExtractedNote {
     type: 'Preference' | 'Constraint' | 'Context' | 'Example' | 'Issue';
-    noteTypeId: string;
     agentId?: string;
     userId?: string;
     companyId?: string;
@@ -25,6 +90,13 @@ interface ExtractedNote {
     sourceConversationDetailId?: string;
     sourceAgentRunId?: string;
     mergeWithExistingId?: string; // If should update existing note
+    /**
+     * Scope level hint from LLM analysis.
+     * - 'global': Applies to all users (e.g., "Always greet politely")
+     * - 'organization': Applies to all contacts in an org (e.g., "This org uses metric units")
+     * - 'contact': Specific to one contact (e.g., "John prefers email")
+     */
+    scopeLevel?: 'global' | 'organization' | 'contact';
 }
 
 /**
@@ -42,6 +114,13 @@ interface ExtractedExample {
     sourceConversationId?: string;
     sourceConversationDetailId?: string;
     sourceAgentRunId?: string;
+    /**
+     * Scope level hint from LLM analysis.
+     * - 'global': Applies to all users
+     * - 'organization': Applies to all contacts in an org
+     * - 'contact': Specific to one contact
+     */
+    scopeLevel?: 'global' | 'organization' | 'contact';
 }
 
 /**
@@ -49,7 +128,11 @@ interface ExtractedExample {
  * This agent runs on a schedule (every 15 minutes) and analyzes high-quality conversations
  * and agent runs to extract learnings and example interactions.
  */
+@RegisterClass(BaseAgent, 'MemoryManagerAgent')
 export class MemoryManagerAgent extends BaseAgent {
+    /** Verbose logging flag from params.verbose */
+    private _verbose: boolean = false;
+
     /**
      * Get the last run timestamp for this agent to determine what to process.
      * For first run, returns null to process all history (limited by MaxRows).
@@ -58,14 +141,16 @@ export class MemoryManagerAgent extends BaseAgent {
         const rv = new RunView();
         const result = await rv.RunView<AIAgentRunEntity>({
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `AgentID='${agentId}' AND Status='Success'`,
+            ExtraFilter: `AgentID='${agentId}' AND Status='Completed'`,
             OrderBy: 'StartedAt DESC',
             MaxRows: 1,
             ResultType: 'entity_object'
         }, contextUser);
 
         if (result.Success && result.Results && result.Results.length > 0) {
-            return result.Results[0].StartedAt;
+            // Ensure we return a proper Date object
+            const startedAt = result.Results[0].StartedAt;
+            return startedAt instanceof Date ? startedAt : new Date(startedAt);
         }
 
         // First run - return null to process all history (with MaxRows limit)
@@ -77,60 +162,112 @@ export class MemoryManagerAgent extends BaseAgent {
      * Only extract notes/examples for agents that actually use these features.
      */
     private async LoadAgentsUsingMemory(contextUser: UserInfo): Promise<AIAgentEntityExtended[]> {
-        const filteredAgents = AIEngine.Instance.Agents.filter(a => a.Status === 'Active' && (a.InjectNotes || a.InjectExamples));
+        const allAgents = AIEngine.Instance.Agents;
+        const filteredAgents = allAgents.filter(a => a.Status === 'Active' && (a.InjectNotes || a.InjectExamples));
+
+        // Debug logging only in verbose mode
+        if (this._verbose) {
+            LogStatus(`Memory Manager: AIEngine has ${allAgents.length} total agents cached`);
+            if (filteredAgents.length > 0) {
+                const agentNames = filteredAgents.map(a => `${a.Name} (InjectNotes=${a.InjectNotes}, InjectExamples=${a.InjectExamples})`).join(', ');
+                LogStatus(`Memory Manager: Agents with memory enabled: ${agentNames}`);
+            }
+            const sage = allAgents.find(a => a.Name === 'Sage');
+            if (sage) {
+                LogStatus(`Memory Manager: Sage agent - ID=${sage.ID}, InjectNotes=${sage.InjectNotes}, InjectExamples=${sage.InjectExamples}, Status=${sage.Status}`);
+            }
+        }
+
+        // Warning: Always log if Sage is missing
+        const sage = allAgents.find(a => a.Name === 'Sage');
+        if (!sage) {
+            LogStatus(`Memory Manager: WARNING - Sage agent not found in AIEngine cache!`);
+        }
 
         return filteredAgents;
     }
 
     /**
-     * Load conversation details with high ratings since last run.
-     * Uses efficient subquery to avoid multiple database round-trips.
-     * Filters to only completed conversation details with user->AI pairs.
-     * Only loads details for agents that have memory injection enabled.
+     * Load conversations with new activity since last run, including rating data.
+     * Uses a single optimized RunQuery that replaces 4 separate database queries.
+     * Returns conversations with their details, ratings, and agent run IDs for scope inheritance.
      */
-    private async LoadHighQualityConversationDetails(
+    private async LoadConversationsWithNewActivity(
         since: Date | null,
         agentsUsingMemory: AIAgentEntityExtended[],
         contextUser: UserInfo
-    ): Promise<ConversationDetailEntity[]> {
+    ): Promise<ConversationWithRatings[]> {
         if (agentsUsingMemory.length === 0) {
             LogStatus('Memory Manager: No agents have memory injection enabled - skipping');
             return [];
         }
 
-        const rv = new RunView();
+        const agentIds = agentsUsingMemory.map(a => `'${a.ID}'`).join(',');
 
-        // Build filter with subquery for high ratings
-        const sinceFilter = since ? `AND cd.__mj_CreatedAt >= '${since.toISOString()}'` : '';
-
-        // Filter to only agents that use memory
-        const agentIdFilter = agentsUsingMemory.map(a => `'${a.ID}'`).join(',');
-
-        const filter = `
-            Status = 'Complete'
-            AND Role = 'AI'
-            ${sinceFilter}
-            AND EXISTS (
-                SELECT 1 FROM ConversationDetailRating cdr
-                WHERE cdr.ConversationDetailID = cd.ID
-                AND cdr.Rating >= 8
-            )
-            AND EXISTS (
-                SELECT 1 FROM AIAgentRun ar
-                WHERE ar.ConversationID = cd.ConversationID
-                AND ar.AgentID IN (${agentIdFilter})
-            )
-        `.trim().replace(/\s+/g, ' ');
-
-        const result = await rv.RunView<ConversationDetailEntity>({
-            EntityName: 'Conversation Details',
-            ExtraFilter: filter,
-            OrderBy: '__mj_CreatedAt DESC',
-            MaxRows: 100, // Limit to most recent 100 high-quality messages
-            ResultType: 'entity_object'
+        // Use RunQuery to fetch all data in a single optimized query
+        const rq = new RunQuery();
+        const result = await rq.RunQuery({
+            QueryName: 'GetConversationsForMemoryManager',
+            CategoryPath: '/MJ/AI/Agents/',
+            Parameters: {
+                since: since?.toISOString() || null,
+                agentIds: agentIds
+            },
+            MaxRows: 50 // Limit to 50 conversations per run
         }, contextUser);
 
-        return result.Success ? (result.Results || []) : [];
+        if (!result.Success || !result.Results || result.Results.length === 0) {
+            LogStatus('Memory Manager: No conversations with new activity found');
+            return [];
+        }
+
+        // Parse the query results into ConversationWithRatings objects
+        const conversations: ConversationWithRatings[] = [];
+
+        for (const row of result.Results as MemoryManagerQueryResult[]) {
+            // Parse the MessagesJSON from the query result
+            let messages: MessageWithRating[] = [];
+            if (row.MessagesJSON) {
+                try {
+                    const parsedMessages = JSON.parse(row.MessagesJSON) as Array<{
+                        id: string;
+                        role: string;
+                        message: string;
+                        createdAt: string;
+                        rating: number | null;
+                        ratingComment: string | null;
+                    }>;
+                    messages = parsedMessages.map(m => ({
+                        id: m.id,
+                        role: m.role,
+                        message: m.message,
+                        createdAt: new Date(m.createdAt),
+                        rating: m.rating,
+                        ratingComment: m.ratingComment
+                    }));
+                } catch (e) {
+                    LogError(`Memory Manager: Failed to parse MessagesJSON for conversation ${row.ConversationID}:`, e);
+                    continue;
+                }
+            }
+
+            conversations.push({
+                conversationId: row.ConversationID,
+                userId: row.UserID,
+                agentRunId: row.AgentRunID,
+                messages: messages,
+                hasPositiveRating: row.HasPositiveRating === 1,
+                hasNegativeRating: row.HasNegativeRating === 1,
+                isUnrated: row.IsUnrated === 1
+            });
+        }
+
+        const totalMessages = conversations.reduce((sum, c) => sum + c.messages.length, 0);
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Loaded ${conversations.length} conversations with ${totalMessages} total messages (positive: ${conversations.filter(c => c.hasPositiveRating).length}, negative: ${conversations.filter(c => c.hasNegativeRating).length}, unrated: ${conversations.filter(c => c.isUnrated).length})`);
+        }
+
+        return conversations;
     }
 
     /**
@@ -146,14 +283,14 @@ export class MemoryManagerAgent extends BaseAgent {
         const filter = `
             ID IN (
                 SELECT DISTINCT ar.ID
-                FROM AIAgentRun ar
-                INNER JOIN Conversation c ON ar.ConversationID = c.ID
-                INNER JOIN ConversationDetail cd ON cd.ConversationID = c.ID
-                INNER JOIN ConversationDetailArtifact cda ON cda.ConversationDetailID = cd.ID
-                INNER JOIN ArtifactVersion av ON av.ID = cda.ArtifactVersionID
+                FROM __mj.AIAgentRun ar
+                INNER JOIN __mj.Conversation c ON ar.ConversationID = c.ID
+                INNER JOIN __mj.ConversationDetail cd ON cd.ConversationID = c.ID
+                INNER JOIN __mj.ConversationDetailArtifact cda ON cda.ConversationDetailID = cd.ID
+                INNER JOIN __mj.ArtifactVersion av ON av.ID = cda.ArtifactVersionID
                 WHERE EXISTS (
                     SELECT 1
-                    FROM ArtifactUse au
+                    FROM __mj.ArtifactUse au
                     WHERE au.ArtifactVersionID = av.ID
                     ${sinceFilter}
                     GROUP BY au.ArtifactVersionID
@@ -177,36 +314,36 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Extract notes from conversation details using AI analysis.
-     * Works at ConversationDetail level with user<->AI message pairs.
+     * Extract notes from conversations with rating data using AI analysis.
+     * This is the primary method that handles rated, unrated, positive, and negative feedback.
+     * Uses LLM-based deduplication and applies sparsity controls.
      */
-    private async ExtractNotes(
-        conversationDetails: ConversationDetailEntity[],
+    private async ExtractNotesFromConversations(
+        conversations: ConversationWithRatings[],
         contextUser: UserInfo
     ): Promise<ExtractedNote[]> {
-        if (conversationDetails.length === 0) {
+        if (conversations.length === 0) {
             return [];
         }
 
         const allNotes = AIEngine.Instance.AgentNotes;
         const existingNotes = allNotes.filter(n => n.Status === 'Active');
 
-        // Group conversation details by conversation ID for context
-        const detailsByConversation = new Map<string, ConversationDetailEntity[]>();
-        for (const detail of conversationDetails) {
-            const existing = detailsByConversation.get(detail.ConversationID) || [];
-            existing.push(detail);
-            detailsByConversation.set(detail.ConversationID, existing);
-        }
-
-        // Prepare conversation detail threads (user->AI pairs)
-        const conversationThreads = Array.from(detailsByConversation.entries()).map(([convId, details]) => ({
-            conversationId: convId,
-            messages: details.map(d => ({
-                id: d.ID,
-                role: d.Role,
-                message: d.Message,
-                createdAt: d.__mj_CreatedAt
+        // Prepare conversation threads with rating data and user context
+        const conversationThreads = conversations.map(conv => ({
+            conversationId: conv.conversationId,
+            userId: conv.userId,           // User who owns the conversation - for scoping
+            agentRunId: conv.agentRunId,   // Linked agent run - for scope inheritance
+            hasPositiveRating: conv.hasPositiveRating,
+            hasNegativeRating: conv.hasNegativeRating,
+            isUnrated: conv.isUnrated,
+            messages: conv.messages.map(msg => ({
+                id: msg.id,
+                role: msg.role,
+                message: msg.message,
+                createdAt: msg.createdAt,
+                rating: msg.rating,
+                ratingComment: msg.ratingComment
             }))
         }));
 
@@ -222,6 +359,20 @@ export class MemoryManagerAgent extends BaseAgent {
             }))
         };
 
+        return this.executeNoteExtraction(promptData, existingNotes, contextUser);
+    }
+
+    /**
+     * Common extraction logic for note extraction.
+     * Applies sparsity controls and deduplication.
+     */
+    private async executeNoteExtraction(
+        promptData: { conversationThreads: ConversationThread[]; existingNotes: unknown[] },
+        existingNotes: AIAgentNoteEntity[],
+        contextUser: UserInfo
+    ): Promise<ExtractedNote[]> {
+        const conversationThreads = promptData.conversationThreads;
+
         // Find extraction prompt
         const prompt = AIEngine.Instance.Prompts.find(p =>
             p.Name === 'Memory Manager - Extract Notes' && p.Category === 'MJ: System'
@@ -229,7 +380,19 @@ export class MemoryManagerAgent extends BaseAgent {
 
         if (!prompt) {
             LogError('Memory Manager note extraction prompt not found');
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Available prompts in MJ: System category: ${AIEngine.Instance.Prompts.filter(p => p.Category === 'MJ: System').map(p => p.Name).join(', ')}`);
+            }
             return [];
+        }
+
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Found extraction prompt "${prompt.Name}" (ID: ${prompt.ID})`);
+            LogStatus(`Memory Manager: Sending ${conversationThreads.length} conversation threads with ${conversationThreads.reduce((sum, t) => sum + t.messages.length, 0)} total messages for note extraction`);
+            if (conversationThreads.length > 0) {
+                const firstThread = conversationThreads[0];
+                LogStatus(`Memory Manager: Sample thread (conv ${firstThread.conversationId}): ${firstThread.messages.map(m => `[${m.role}] ${m.message?.substring(0, 80)}...`).join(' | ')}`)
+            }
         }
 
         // Execute AI extraction
@@ -241,13 +404,179 @@ export class MemoryManagerAgent extends BaseAgent {
 
         const result = await runner.ExecutePrompt<{ notes: ExtractedNote[] }>(params);
 
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Extraction prompt result - success: ${result.success}, hasResult: ${!!result.result}`);
+            if (result.errorMessage) {
+                LogStatus(`Memory Manager: Extraction error: ${result.errorMessage}`);
+            }
+            if (result.result) {
+                LogStatus(`Memory Manager: Raw extraction result: ${JSON.stringify(result.result)}`);
+            }
+        }
+
         if (!result.success || !result.result) {
             LogError('Failed to extract notes:', result.errorMessage);
             return [];
         }
 
-        // Filter by confidence threshold
-        return (result.result.notes || []).filter(n => n.confidence >= 70);
+        // Parse result if it's a string (AI sometimes returns JSON as string)
+        let parsedResult: { notes: ExtractedNote[] };
+        if (typeof result.result === 'string') {
+            try {
+                parsedResult = JSON.parse(result.result);
+                if (this._verbose) {
+                    LogStatus(`Memory Manager: Parsed string result into object with ${parsedResult.notes?.length || 0} notes`);
+                }
+            } catch (e) {
+                LogError('Failed to parse extraction result as JSON:', e);
+                return [];
+            }
+        } else {
+            parsedResult = result.result;
+        }
+
+        // Filter by confidence threshold (use EXTRACTION_CONFIG)
+        const candidateNotes = (parsedResult.notes || []).filter(n =>
+            n.confidence >= EXTRACTION_CONFIG.minConfidenceThreshold &&
+            n.content && n.content.length >= EXTRACTION_CONFIG.minContentLength
+        );
+
+        if (candidateNotes.length === 0) {
+            if (this._verbose) {
+                LogStatus('Memory Manager: No candidates passed confidence/length thresholds');
+            }
+            return [];
+        }
+
+        if (this._verbose) {
+            LogStatus(`Memory Manager: ${candidateNotes.length} candidates passed confidence threshold (>=${EXTRACTION_CONFIG.minConfidenceThreshold})`);
+        }
+
+        // Apply sparsity: limit notes per conversation
+        const notesByConversation = new Map<string, ExtractedNote[]>();
+        for (const note of candidateNotes) {
+            const convId = note.sourceConversationId || 'unknown';
+            const existing = notesByConversation.get(convId) || [];
+            if (existing.length < EXTRACTION_CONFIG.maxNotesPerConversation) {
+                existing.push(note);
+                notesByConversation.set(convId, existing);
+            } else if (this._verbose) {
+                LogStatus(`Memory Manager: Skipping note (max ${EXTRACTION_CONFIG.maxNotesPerConversation} per conversation reached for ${convId})`);
+            }
+        }
+
+        const sparseCandidates = Array.from(notesByConversation.values()).flat();
+        if (this._verbose) {
+            LogStatus(`Memory Manager: ${sparseCandidates.length} candidates after sparsity filter`);
+        }
+
+        // Apply deduplication
+        const approvedNotes: ExtractedNote[] = [];
+
+        // Find deduplication prompt
+        const dedupePrompt = AIEngine.Instance.Prompts.find(p =>
+            p.Name === 'Memory Manager - Deduplicate Note' && p.Category === 'MJ: System'
+        );
+
+        for (const candidate of sparseCandidates) {
+            // Check global max notes per run
+            if (approvedNotes.length >= EXTRACTION_CONFIG.maxNotesPerRun) {
+                if (this._verbose) {
+                    LogStatus(`Memory Manager: Stopping - max notes per run (${EXTRACTION_CONFIG.maxNotesPerRun}) reached`);
+                }
+                break;
+            }
+
+            // Step 1: Check for exact content match FIRST (case-insensitive, trimmed)
+            const normalizedContent = candidate.content.toLowerCase().trim();
+            const exactMatch = existingNotes.find(n =>
+                n.Note && n.Note.toLowerCase().trim() === normalizedContent
+            );
+            if (exactMatch) {
+                if (this._verbose) {
+                    LogStatus(`Memory Manager: Skipping exact duplicate: "${candidate.content.substring(0, 50)}..."`);
+                }
+                continue;
+            }
+
+            // Step 2: Find similar existing notes using semantic search with tighter threshold
+            const similarNotes = await AIEngine.Instance.FindSimilarAgentNotes(
+                candidate.content,
+                candidate.agentId,
+                candidate.userId,
+                candidate.companyId,
+                10, // Top 10 similar (increased from 5)
+                0.85 // 85% similarity threshold (increased from 70%)
+            );
+
+            // Step 3: If deduplication prompt exists and similar notes found, ask LLM
+            if (dedupePrompt && similarNotes.length > 0) {
+                const dedupeParams = new AIPromptParams();
+                dedupeParams.prompt = dedupePrompt;
+                dedupeParams.data = {
+                    candidateNote: candidate,
+                    similarNotes: similarNotes.map(s => ({
+                        type: s.note.Type,
+                        content: s.note.Note,
+                        agentId: s.note.AgentID,
+                        userId: s.note.UserID,
+                        companyId: s.note.CompanyID,
+                        similarity: s.similarity
+                    }))
+                };
+                dedupeParams.contextUser = contextUser;
+
+                const dedupeResult = await runner.ExecutePrompt<{ shouldAdd: boolean; reason: string }>(dedupeParams);
+
+                if (dedupeResult.success && dedupeResult.result && dedupeResult.result.shouldAdd) {
+                    approvedNotes.push(candidate);
+                    if (this._verbose) {
+                        LogStatus(`Memory Manager: Approved note - ${dedupeResult.result.reason}`);
+                    }
+                } else if (this._verbose) {
+                    LogStatus(`Memory Manager: Skipped duplicate note - ${dedupeResult.result?.reason || 'too similar to existing notes'}`);
+                }
+            } else {
+                // No similar notes found or no deduplication prompt, add the note
+                approvedNotes.push(candidate);
+                if (this._verbose) {
+                    LogStatus(`Memory Manager: Approved note (no similar notes found): "${candidate.content.substring(0, 50)}..."`);
+                }
+            }
+        }
+
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Final approved notes: ${approvedNotes.length}`);
+        }
+
+        // Enrich notes with userId and agentRunId from conversation context
+        // Build a map of conversationId -> context for quick lookup
+        const conversationContext = new Map<string, { userId: string | null; agentRunId: string | null }>();
+        for (const thread of conversationThreads) {
+            conversationContext.set(thread.conversationId, {
+                userId: (thread as { userId?: string | null }).userId || null,
+                agentRunId: (thread as { agentRunId?: string | null }).agentRunId || null
+            });
+        }
+
+        // Enrich each note with conversation context
+        for (const note of approvedNotes) {
+            if (note.sourceConversationId) {
+                const ctx = conversationContext.get(note.sourceConversationId);
+                if (ctx) {
+                    // Set userId from conversation if not already set
+                    if (!note.userId && ctx.userId) {
+                        note.userId = ctx.userId;
+                    }
+                    // Set sourceAgentRunId from conversation if not already set
+                    if (!note.sourceAgentRunId && ctx.agentRunId) {
+                        note.sourceAgentRunId = ctx.agentRunId;
+                    }
+                }
+            }
+        }
+
+        return approvedNotes;
     }
 
     /**
@@ -295,7 +624,20 @@ export class MemoryManagerAgent extends BaseAgent {
             return [];
         }
 
-        const candidateExamples = (extractResult.result.examples || [])
+        // Parse result if it's a string (AI sometimes returns JSON as string)
+        let parsedResult: { examples: ExtractedExample[] };
+        if (typeof extractResult.result === 'string') {
+            try {
+                parsedResult = JSON.parse(extractResult.result);
+            } catch (e) {
+                LogError('Failed to parse example extraction result as JSON:', e);
+                return [];
+            }
+        } else {
+            parsedResult = extractResult.result;
+        }
+
+        const candidateExamples = (parsedResult.examples || [])
             .filter(e => e.successScore >= 70 && e.confidence >= 70);
 
         if (candidateExamples.length === 0) {
@@ -340,8 +682,10 @@ export class MemoryManagerAgent extends BaseAgent {
 
                 if (dedupeResult.success && dedupeResult.result && dedupeResult.result.shouldAdd) {
                     approvedExamples.push(candidate);
-                    LogStatus(`Memory Manager: Approved example - ${dedupeResult.result.reason}`);
-                } else {
+                    if (this._verbose) {
+                        LogStatus(`Memory Manager: Approved example - ${dedupeResult.result.reason}`);
+                    }
+                } else if (this._verbose) {
                     LogStatus(`Memory Manager: Skipped duplicate example - ${dedupeResult.result?.reason || 'too similar'}`);
                 }
             } else {
@@ -354,14 +698,50 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Create note records from extracted data
+     * Check if a string is a valid UUID format.
+     */
+    private isValidUUID(str: string): boolean {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(str);
+    }
+
+    /**
+     * Create note records from extracted data.
+     * Inherits scope from source agent run and applies scopeLevel to determine scope specificity.
      */
     private async CreateNoteRecords(extractedNotes: ExtractedNote[], contextUser: UserInfo): Promise<number> {
         let created = 0;
         const md = new Metadata();
+        const rv = new RunView();
+
+        // Cache source agent runs to avoid repeated lookups
+        const runCache = new Map<string, AIAgentRunEntity | null>();
+
+        // Get the "AI" note type ID for AI-generated notes
+        const aiNoteTypeId = AIEngine.Instance.AgenteNoteTypeIDByName('AI');
+        if (!aiNoteTypeId) {
+            LogError('Memory Manager: Could not find "AI" note type - cannot create notes');
+            return 0;
+        }
 
         for (const extracted of extractedNotes) {
             try {
+
+                // Load source agent run for scope inheritance (if available)
+                let sourceRun: AIAgentRunEntity | null = null;
+                if (extracted.sourceAgentRunId) {
+                    if (!runCache.has(extracted.sourceAgentRunId)) {
+                        const runResult = await rv.RunView<AIAgentRunEntity>({
+                            EntityName: 'MJ: AI Agent Runs',
+                            ExtraFilter: `ID='${extracted.sourceAgentRunId}'`,
+                            MaxRows: 1,
+                            ResultType: 'entity_object'
+                        }, contextUser);
+                        runCache.set(extracted.sourceAgentRunId, runResult.Success && runResult.Results?.length > 0 ? runResult.Results[0] : null);
+                    }
+                    sourceRun = runCache.get(extracted.sourceAgentRunId) || null;
+                }
+
                 // Check if we should merge with existing
                 if (extracted.mergeWithExistingId) {
                     const existingNote = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
@@ -369,30 +749,64 @@ export class MemoryManagerAgent extends BaseAgent {
                         // Update existing note
                         existingNote.Note = extracted.content;
                         existingNote.Type = extracted.type;
+                        existingNote.AgentNoteTypeID = aiNoteTypeId;
                         await existingNote.Save();
                         created++;
                     }
                 } else {
                     // Create new note
                     const note = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
-                    note.AgentID = extracted.agentId || null;
-                    note.UserID = extracted.userId || null;
-                    note.CompanyID = extracted.companyId || null;
-                    note.AgentNoteTypeID = extracted.noteTypeId;
-                    note.Type = extracted.type;
+                    // Only use valid UUIDs, filter out placeholders like "user-uuid-here"
+                    const isValidUUID = (id: string | undefined | null): boolean => {
+                        if (!id) return false;
+                        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+                    };
+
+                    // Determine AgentID - prefer extracted, then inherit from source run
+                    let agentId: string | null = isValidUUID(extracted.agentId) ? extracted.agentId! : null;
+                    if (!agentId && sourceRun?.AgentID) {
+                        agentId = sourceRun.AgentID;
+                    }
+                    note.AgentID = agentId;
+                    note.UserID = isValidUUID(extracted.userId) ? extracted.userId! : null;
+                    note.CompanyID = isValidUUID(extracted.companyId) ? extracted.companyId! : null;
+                    note.AgentNoteTypeID = aiNoteTypeId;  // "AI" type for AI-generated notes
+                    note.Type = extracted.type;  // Category: Preference, Constraint, Context, Issue, Example
                     note.Note = extracted.content;
                     note.IsAutoGenerated = true;
                     note.Status = 'Active'; // Auto-approve high-confidence notes
+                    note.AccessCount = 1; // Required field
                     note.SourceConversationID = extracted.sourceConversationId || null;
-                    note.SourceConversationDetailID = extracted.sourceConversationDetailId || null;
+                    // Only use if it's a valid UUID (LLM now sees message IDs in the prompt)
+                    note.SourceConversationDetailID = isValidUUID(extracted.sourceConversationDetailId) ? extracted.sourceConversationDetailId! : null;
                     note.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
 
-                    if (await note.Save()) {
+                    // Apply scope: Lean towards USER-specific memories by default
+                    const scopeLevel = extracted.scopeLevel || 'contact';
+
+                    if (scopeLevel === 'global') {
+                        note.PrimaryScopeEntityID = null;
+                        note.PrimaryScopeRecordID = null;
+                        note.SecondaryScopes = null;
+                    } else if (scopeLevel === 'organization' && sourceRun?.PrimaryScopeEntityID) {
+                        note.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
+                        note.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
+                        note.SecondaryScopes = null;
+                    } else if (sourceRun) {
+                        note.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
+                        note.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
+                        note.SecondaryScopes = sourceRun.SecondaryScopes;
+                    }
+
+                    const saveResult = await note.Save();
+                    if (saveResult) {
                         created++;
+                    } else {
+                        LogError(`Memory Manager: Failed to save note - Validation errors: ${JSON.stringify(note.LatestResult)}`);
                     }
                 }
             } catch (error) {
-                LogError('Failed to create note:', error);
+                LogError('Memory Manager: Exception creating note:', error);
             }
         }
 
@@ -400,16 +814,44 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Create example records from extracted data
+     * Create example records from extracted data.
+     * Inherits scope from source agent run and applies scopeLevel to determine scope specificity.
      */
     private async CreateExampleRecords(extractedExamples: ExtractedExample[], contextUser: UserInfo): Promise<number> {
         let created = 0;
         const md = new Metadata();
+        const rv = new RunView();
+
+        // Cache source agent runs to avoid repeated lookups
+        const runCache = new Map<string, AIAgentRunEntity | null>();
 
         for (const extracted of extractedExamples) {
             try {
+                // Load source agent run for scope inheritance (if available)
+                let sourceRun: AIAgentRunEntity | null = null;
+                if (extracted.sourceAgentRunId) {
+                    if (!runCache.has(extracted.sourceAgentRunId)) {
+                        const runResult = await rv.RunView<AIAgentRunEntity>({
+                            EntityName: 'MJ: AI Agent Runs',
+                            ExtraFilter: `ID='${extracted.sourceAgentRunId}'`,
+                            MaxRows: 1,
+                            ResultType: 'entity_object'
+                        }, contextUser);
+                        runCache.set(extracted.sourceAgentRunId, runResult.Success && runResult.Results?.length > 0 ? runResult.Results[0] : null);
+                    }
+                    sourceRun = runCache.get(extracted.sourceAgentRunId) || null;
+                }
+
                 const example = await md.GetEntityObject<AIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
-                example.AgentID = extracted.agentId;
+
+                // AgentID must come from source run - LLM doesn't know real agent IDs
+                if (!sourceRun?.AgentID) {
+                    if (this._verbose) {
+                        LogStatus(`Memory Manager: Skipping example - no source run to inherit AgentID from`);
+                    }
+                    continue;
+                }
+                example.AgentID = sourceRun.AgentID;
                 example.UserID = extracted.userId || null;
                 example.CompanyID = extracted.companyId || null;
                 example.Type = extracted.type;
@@ -419,8 +861,31 @@ export class MemoryManagerAgent extends BaseAgent {
                 example.SuccessScore = extracted.successScore;
                 example.Status = 'Active'; // Auto-approve high-confidence examples
                 example.SourceConversationID = extracted.sourceConversationId || null;
-                example.SourceConversationDetailID = extracted.sourceConversationDetailId || null;
+                // Only use if it's a valid UUID
+                example.SourceConversationDetailID = this.isValidUUID(extracted.sourceConversationDetailId) ? extracted.sourceConversationDetailId! : null;
                 example.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
+
+                // Apply scope from source agent run based on scopeLevel hint
+                if (sourceRun && sourceRun.PrimaryScopeEntityID) {
+                    const scopeLevel = extracted.scopeLevel || 'contact'; // Default to most specific
+
+                    if (scopeLevel === 'global') {
+                        // Global example - no scope fields set
+                        example.PrimaryScopeEntityID = null;
+                        example.PrimaryScopeRecordID = null;
+                        example.SecondaryScopes = null;
+                    } else if (scopeLevel === 'organization') {
+                        // Org-level example - primary scope only, no secondary
+                        example.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
+                        example.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
+                        example.SecondaryScopes = null;
+                    } else {
+                        // Fully-scoped example (contact level) - inherit full scope
+                        example.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
+                        example.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
+                        example.SecondaryScopes = sourceRun.SecondaryScopes;
+                    }
+                }
 
                 if (await example.Save()) {
                     created++;
@@ -441,15 +906,21 @@ export class MemoryManagerAgent extends BaseAgent {
         config: AgentConfiguration
     ): Promise<{finalStep: BaseAgentNextStep<P>, stepCount: number}> {
         try {
+            // Use verbose flag from agent execution params
+            this._verbose = params.verbose ?? false;
+
             LogStatus('Memory Manager: Starting analysis cycle');
 
             const lastRunTime = await this.GetLastRunTime(params.agent.ID, params.contextUser!);
-            const sinceMessage = lastRunTime ? `since ${lastRunTime.toISOString()}` : 'all history';
-            LogStatus(`Memory Manager: Processing ${sinceMessage}`);
 
             // Load agents that have memory injection enabled
             const agentsUsingMemory = await this.LoadAgentsUsingMemory(params.contextUser!);
-            LogStatus(`Memory Manager: Found ${agentsUsingMemory.length} agents with memory injection enabled`);
+
+            if (this._verbose) {
+                const sinceMessage = lastRunTime ? `since ${lastRunTime.toISOString()}` : 'all history';
+                LogStatus(`Memory Manager: Processing ${sinceMessage}`);
+                LogStatus(`Memory Manager: Found ${agentsUsingMemory.length} agents with memory injection enabled`);
+            }
 
             if (agentsUsingMemory.length === 0) {
                 const finalStep: BaseAgentNextStep<P> = {
@@ -460,31 +931,91 @@ export class MemoryManagerAgent extends BaseAgent {
                 return { finalStep, stepCount: 1 };
             }
 
-            // Load high-quality conversation details (only for agents using memory)
-            const conversationDetails = await this.LoadHighQualityConversationDetails(lastRunTime, agentsUsingMemory, params.contextUser!);
-            LogStatus(`Memory Manager: Found ${conversationDetails.length} high-quality conversation details`);
+            // Load conversations with new activity (includes rating data)
+            const conversations = await this.LoadConversationsWithNewActivity(lastRunTime, agentsUsingMemory, params.contextUser!);
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Found ${conversations.length} conversations with new activity`);
+            }
 
             // Load high-value agent runs
             const agentRuns = await this.LoadHighValueAgentRuns(lastRunTime, params.contextUser!);
-            LogStatus(`Memory Manager: Found ${agentRuns.length} high-value agent runs`);
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Found ${agentRuns.length} high-value agent runs`);
+            }
 
-            if (conversationDetails.length === 0 && agentRuns.length === 0) {
-                LogStatus('Memory Manager: No data to process');
+            if (conversations.length === 0 && agentRuns.length === 0) {
+                if (this._verbose) {
+                    LogStatus('Memory Manager: No data to process');
+                }
                 const finalStep: BaseAgentNextStep<P> = {
                     terminate: true,
                     step: 'Success',
-                    message: 'No high-quality conversation details or agent runs to process'
+                    message: 'No conversations with new activity or agent runs to process'
                 };
                 return { finalStep, stepCount: 1 };
             }
 
-            // Extract notes
-            const extractedNotes = await this.ExtractNotes(conversationDetails, params.contextUser!);
-            LogStatus(`Memory Manager: Extracted ${extractedNotes.length} potential notes`);
+            // Extract notes from conversations (with rating context)
+            const extractedNotes = await this.ExtractNotesFromConversations(conversations, params.contextUser!);
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Extracted ${extractedNotes.length} potential notes`);
+            }
 
-            // Extract examples
+            // Extract examples from conversation details (legacy method for now)
+            // Convert conversations back to flat details for example extraction
+            const conversationDetails = conversations.flatMap(conv =>
+                conv.messages.map(msg => ({
+                    ID: msg.id,
+                    ConversationID: conv.conversationId,
+                    Role: msg.role,
+                    Message: msg.message,
+                    Status: 'Complete',
+                    __mj_CreatedAt: msg.createdAt
+                } as unknown as ConversationDetailEntity))
+            );
             const extractedExamples = await this.ExtractExamples(conversationDetails, params.contextUser!);
-            LogStatus(`Memory Manager: Extracted ${extractedExamples.length} potential examples`);
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Extracted ${extractedExamples.length} potential examples`);
+            }
+
+            // Enrich examples with userId and agentRunId from conversation context
+            // Build a map from conversationId to context (same as notes enrichment)
+            const conversationContextForExamples = new Map<string, { userId: string | null; agentRunId: string | null }>();
+            for (const conv of conversations) {
+                conversationContextForExamples.set(conv.conversationId, {
+                    userId: conv.userId || null,
+                    agentRunId: conv.agentRunId || null
+                });
+            }
+
+            for (const example of extractedExamples) {
+                if (example.sourceConversationId) {
+                    const ctx = conversationContextForExamples.get(example.sourceConversationId);
+                    if (ctx) {
+                        // Enrich userId if not set
+                        if (!example.userId && ctx.userId) {
+                            example.userId = ctx.userId;
+                            if (this._verbose) {
+                                LogStatus(`Memory Manager: Enriched example with userId from conversation: ${ctx.userId}`);
+                            }
+                        }
+                        // Enrich agentRunId if not set
+                        if (!example.sourceAgentRunId && ctx.agentRunId) {
+                            example.sourceAgentRunId = ctx.agentRunId;
+                            if (this._verbose) {
+                                LogStatus(`Memory Manager: Enriched example with agentRunId from conversation: ${ctx.agentRunId}`);
+                            }
+                        }
+                    }
+                }
+                // Clear invalid agentId (LLM sometimes returns placeholder values like "agent-12345")
+                if (example.agentId && !this.isValidUUID(example.agentId)) {
+                    if (this._verbose) {
+                        LogStatus(`Memory Manager: Clearing invalid agentId "${example.agentId}" from example`);
+                    }
+                    example.agentId = '';
+                }
+            }
 
             // Create records
             const notesCreated = await this.CreateNoteRecords(extractedNotes, params.contextUser!);
@@ -492,16 +1023,18 @@ export class MemoryManagerAgent extends BaseAgent {
 
             LogStatus(`Memory Manager: Created ${notesCreated} notes and ${examplesCreated} examples`);
 
+            const totalMessages = conversations.reduce((sum, c) => sum + c.messages.length, 0);
             const finalStep: BaseAgentNextStep<P> = {
                 terminate: true,
                 step: 'Success',
-                message: `Processed ${conversationDetails.length} conversation details and ${agentRuns.length} agent runs. Created ${notesCreated} notes and ${examplesCreated} examples.`,
+                message: `Processed ${conversations.length} conversations (${totalMessages} messages) and ${agentRuns.length} agent runs. Created ${notesCreated} notes and ${examplesCreated} examples.`,
                 newPayload: {
                     notesCreated,
                     examplesCreated,
-                    conversationDetailsProcessed: conversationDetails.length,
+                    conversationsProcessed: conversations.length,
+                    messagesProcessed: totalMessages,
                     agentRunsProcessed: agentRuns.length
-                } as any
+                } as unknown as P
             };
 
             return { finalStep, stepCount: 1 };

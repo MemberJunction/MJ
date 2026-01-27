@@ -1375,7 +1375,7 @@ export class EntityInfo extends BaseInfo {
 
             for (let j: number = 0; j < this.Permissions.length; j++) {
                 const ep: EntityPermissionInfo = this.Permissions[j];
-                const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
+                const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => r.RoleID === ep.RoleID)
                 if (roleMatch) // user has this role
                     permissionList.push(ep)
             }
@@ -1409,7 +1409,7 @@ export class EntityInfo extends BaseInfo {
     public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
+            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => r.RoleID === ep.RoleID)
             if (roleMatch) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
@@ -1445,7 +1445,7 @@ export class EntityInfo extends BaseInfo {
         const rlsList: RowLevelSecurityFilterInfo[] = [];
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
+            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => r.RoleID === ep.RoleID)
             if (roleMatch) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {

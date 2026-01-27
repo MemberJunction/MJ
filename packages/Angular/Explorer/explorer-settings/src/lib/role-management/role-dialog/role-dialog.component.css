@@ -1,375 +1,709 @@
-/* Modern Dialog Styling - Matching Dashboard Design */
-:host ::ng-deep .k-window {
-  border: none;
-  border-radius: 12px;
-  box-shadow: 0 19px 38px rgba(0, 0, 0, 0.30), 0 15px 12px rgba(0, 0, 0, 0.22);
-  background: #ffffff;
-  overflow: hidden;
+/* ============================================
+   Material Design 3 - Role Dialog Component
+   ============================================ */
+
+/* MD3 Design Tokens */
+:host {
+  /* Primary Colors (MJ Blue) */
+  --md-primary: #0076B6;
+  --md-on-primary: #FFFFFF;
+  --md-primary-container: #C2E7FF;
+  --md-on-primary-container: #001E2F;
+
+  /* Secondary Colors (Orange) */
+  --md-secondary: #F5A623;
+  --md-on-secondary: #FFFFFF;
+  --md-secondary-container: #FFE5B4;
+  --md-on-secondary-container: #7A4D0C;
+
+  /* Tertiary Colors (Green) */
+  --md-tertiary: #4CAF50;
+  --md-on-tertiary: #FFFFFF;
+  --md-tertiary-container: #C8E6C9;
+  --md-on-tertiary-container: #1B5E20;
+
+  /* Error Colors */
+  --md-error: #D32F2F;
+  --md-on-error: #FFFFFF;
+  --md-error-container: #FFEBEE;
+  --md-on-error-container: #5F1313;
+
+  /* Surface Colors */
+  --md-surface: #FAFAFA;
+  --md-on-surface: #1C1B1F;
+  --md-surface-variant: #E7E0EC;
+  --md-on-surface-variant: #49454F;
+  --md-surface-container-lowest: #FFFFFF;
+  --md-surface-container-low: #F5F5F5;
+  --md-surface-container: #EEEEEE;
+  --md-surface-container-high: #E0E0E0;
+
+  /* Outline Colors */
+  --md-outline: #79747E;
+  --md-outline-variant: #CAC4D0;
+
+  /* MD3 Elevation System */
+  --md-elevation-0: none;
+  --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --md-elevation-2: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.08);
+  --md-elevation-3: 0 4px 8px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.1);
+  --md-elevation-4: 0 6px 12px rgba(0, 0, 0, 0.14), 0 12px 24px rgba(0, 0, 0, 0.12);
+  --md-elevation-5: 0 8px 16px rgba(0, 0, 0, 0.12), 0 16px 32px rgba(0, 0, 0, 0.1);
+
+  /* MD3 Corner Radii */
+  --md-corner-none: 0px;
+  --md-corner-extra-small: 4px;
+  --md-corner-small: 8px;
+  --md-corner-medium: 12px;
+  --md-corner-large: 16px;
+  --md-corner-extra-large: 28px;
+  --md-corner-full: 9999px;
+
+  /* Typography Scale */
+  --md-display-large: 57px;
+  --md-display-medium: 45px;
+  --md-display-small: 36px;
+  --md-headline-large: 32px;
+  --md-headline-medium: 28px;
+  --md-headline-small: 24px;
+  --md-title-large: 22px;
+  --md-title-medium: 16px;
+  --md-title-small: 14px;
+  --md-body-large: 16px;
+  --md-body-medium: 14px;
+  --md-body-small: 12px;
+  --md-label-large: 14px;
+  --md-label-medium: 12px;
+  --md-label-small: 11px;
 }
 
-:host ::ng-deep .k-window-titlebar {
-  background: linear-gradient(135deg, #4caf50 0%, #43a047 100%);
-  border: none;
-  padding: 24px 32px;
-  min-height: 70px;
-}
+/* ============================================
+   Modal Backdrop & Container
+   ============================================ */
 
-:host ::ng-deep .k-window-titlebar .k-window-title {
-  display: none; /* Hide default title */
-}
-
-:host ::ng-deep .k-window-titlebar .k-window-actions {
-  position: absolute;
-  top: 24px;
-  right: 24px;
-}
-
-:host ::ng-deep .k-window-titlebar .k-window-actions .k-button {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-  border-radius: 6px;
-  width: 32px;
-  height: 32px;
-  min-width: auto;
-}
-
-:host ::ng-deep .k-window-titlebar .k-window-actions .k-button:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-:host ::ng-deep .k-window-content {
-  padding: 0;
-  background: #ffffff;
-}
-
-/* Custom Title Bar */
-.dialog-header {
-  position: relative;
-  color: #ffffff;
-}
-
-.dialog-header .dialog-title {
-  font-size: 18px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin: 0;
-}
-
-.dialog-header .dialog-title i {
-  width: 24px;
-  height: 24px;
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  font-size: 14px;
+  z-index: 1050;
+  padding: 1rem;
+  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.dialog-header .dialog-subtitle {
-  margin: 4px 0 0 0;
-  font-size: 12px;
-  opacity: 0.85;
-  font-weight: 400;
-}
-
-/* Modal Content Areas */
-.dialog-content {
-  padding: 0;
-  background: #ffffff;
-}
-
-.dialog-content .content-section {
-  padding: 32px;
-}
-
-.dialog-content .content-section:not(:last-child) {
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.dialog-footer {
-  padding: 24px 32px;
-  background: #fafafa;
-  border-top: 1px solid #e0e0e0;
-  display: flex;
-  justify-content: flex-end;
-  gap: 16px;
-}
-
-/* Form Sections */
-.form-section .section-header {
-  margin-bottom: 24px;
-}
-
-.form-section .section-header .section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #212121;
-  margin: 0 0 4px 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.form-section .section-header .section-title i {
-  color: #4caf50;
-  font-size: 14px;
-}
-
-.form-section .section-header .section-description {
-  font-size: 12px;
-  color: #666666;
-  margin: 0;
-}
-
-.form-grid {
-  display: grid;
-  gap: 24px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-@media (max-width: 640px) {
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 16px;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
-/* Modern Form Fields */
-.form-field {
-  margin-bottom: 24px;
-}
-
-.form-field:last-child {
-  margin-bottom: 0;
-}
-
-.form-field .field-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: #212121;
-  margin-bottom: 8px;
-}
-
-.form-field .field-label.required::after {
-  content: ' *';
-  color: #f44336;
-}
-
-.form-field .field-input,
-.form-field .field-select,
-.form-field .field-textarea {
+.modal-dialog {
+  background: var(--md-surface-container-lowest);
+  border-radius: var(--md-corner-extra-large);
+  box-shadow: var(--md-elevation-5);
   width: 100%;
-  padding: 0 16px;
-  border: 1px solid #bdbdbd;
-  border-radius: 6px;
-  font-size: 14px;
-  background: #ffffff;
-  transition: all 0.15s ease;
+  max-width: 850px;
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.form-field .field-input:focus,
-.form-field .field-select:focus,
-.form-field .field-textarea:focus {
-  outline: none;
-  border-color: #4caf50;
-  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
-.form-field .field-input.error,
-.form-field .field-select.error,
-.form-field .field-textarea.error {
-  border-color: #f44336;
-}
+/* ============================================
+   Modal Header (MJ Blue)
+   ============================================ */
 
-.form-field .field-input.error:focus,
-.form-field .field-select.error:focus,
-.form-field .field-textarea.error:focus {
-  border-color: #f44336;
-  box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.1);
-}
-
-.form-field .field-input::placeholder,
-.form-field .field-select::placeholder,
-.form-field .field-textarea::placeholder {
-  color: #9e9e9e;
-}
-
-.form-field .field-input,
-.form-field .field-select {
-  height: 36px;
-}
-
-.form-field .field-textarea {
-  min-height: 100px;
-  padding: 16px;
-  resize: vertical;
-  line-height: 1.4;
-}
-
-.form-field .field-select {
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23666' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-  background-position: right 16px center;
-  background-repeat: no-repeat;
-  background-size: 16px;
-  padding-right: calc(16px + 24px);
-  appearance: none;
-  cursor: pointer;
-}
-
-.form-field .field-error {
-  margin-top: 8px;
-  font-size: 11px;
-  color: #f44336;
+.modal-header {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  padding: 24px 32px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: var(--md-corner-extra-large) var(--md-corner-extra-large) 0 0;
+  flex-shrink: 0;
 }
 
-.form-field .field-error i {
-  font-size: 10px;
+.dialog-header {
+  flex: 1;
+  min-width: 0;
 }
 
-.form-field .field-hint {
-  margin-top: 8px;
-  font-size: 11px;
-  color: #666666;
+.dialog-title {
+  margin: 0;
+  font-size: var(--md-headline-small);
+  font-weight: 600;
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--md-on-primary);
+}
+
+.dialog-title i {
+  font-size: 1.25rem;
+  opacity: 0.95;
+}
+
+.dialog-subtitle {
+  margin: 0.5rem 0 0 0;
+  font-size: var(--md-body-medium);
+  opacity: 0.9;
+  font-weight: 400;
   line-height: 1.4;
 }
 
-/* Alert Messages */
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--md-on-primary);
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--md-corner-full);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.modal-close:active {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(0.95);
+}
+
+.modal-close i {
+  font-size: 1.25rem;
+}
+
+/* ============================================
+   Modal Body
+   ============================================ */
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+  background: var(--md-surface-container-lowest);
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: var(--md-surface-container-low);
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: var(--md-outline-variant);
+  border-radius: var(--md-corner-full);
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--md-outline);
+}
+
+/* ============================================
+   Form Structure
+   ============================================ */
+
+.content-section {
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+
+.content-section:last-child {
+  border-bottom: none;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.section-header {
+  margin-bottom: 1rem;
+}
+
+.section-title {
+  margin: 0 0 0.5rem 0;
+  font-size: var(--md-title-large);
+  font-weight: 600;
+  color: var(--md-on-surface);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.section-title i {
+  font-size: 1.25rem;
+  color: var(--md-primary);
+}
+
+.section-description {
+  margin: 0;
+  font-size: var(--md-body-medium);
+  color: var(--md-on-surface-variant);
+  line-height: 1.5;
+}
+
+/* ============================================
+   Form Grid Layout
+   ============================================ */
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ============================================
+   Form Fields (MD3 Input Pattern)
+   ============================================ */
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-label {
+  font-size: var(--md-label-large);
+  font-weight: 500;
+  color: var(--md-on-surface);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.field-label.required::after {
+  content: '*';
+  color: var(--md-error);
+  margin-left: 0.25rem;
+}
+
+.field-input,
+.field-textarea {
+  border: 2px solid var(--md-outline-variant);
+  border-radius: var(--md-corner-small);
+  padding: 0.875rem 1rem;
+  font-size: var(--md-body-large);
+  font-family: inherit;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-lowest);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.field-input:hover:not(:disabled),
+.field-textarea:hover:not(:disabled) {
+  border-color: var(--md-outline);
+}
+
+.field-input:focus,
+.field-textarea:focus {
+  outline: none;
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
+}
+
+.field-input:disabled,
+.field-textarea:disabled {
+  background: var(--md-surface-container);
+  color: var(--md-on-surface-variant);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.field-input.error,
+.field-textarea.error {
+  border-color: var(--md-error);
+}
+
+.field-input.error:focus,
+.field-textarea.error:focus {
+  box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.2);
+}
+
+.field-textarea {
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.5;
+}
+
+.field-hint {
+  font-size: var(--md-body-small);
+  color: var(--md-on-surface-variant);
+  line-height: 1.4;
+  margin-top: 0.25rem;
+}
+
+.field-error {
+  font-size: var(--md-body-small);
+  color: var(--md-error);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.field-error i {
+  font-size: 0.875rem;
+}
+
+/* ============================================
+   Alert Messages (MD3 Containers)
+   ============================================ */
+
 .alert {
-  padding: 16px 24px;
-  border-radius: 8px;
-  margin-bottom: 24px;
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--md-corner-small);
+  border: 1px solid;
+  font-size: var(--md-body-medium);
+  line-height: 1.5;
 }
 
 .alert i {
-  font-size: 16px;
+  font-size: 1.25rem;
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 0.125rem;
 }
 
-.alert.alert-error {
-  background: rgba(244, 67, 54, 0.1);
-  border: 1px solid rgba(244, 67, 54, 0.2);
-  color: #c62828;
+.alert > div {
+  flex: 1;
+  min-width: 0;
 }
 
-.alert.alert-error i {
-  color: #f44336;
+.alert strong {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
 }
 
-.alert.alert-warning {
-  background: rgba(255, 193, 7, 0.1);
-  border: 1px solid rgba(255, 193, 7, 0.2);
-  color: #b7800d;
+.alert p {
+  margin: 0;
 }
 
-.alert.alert-warning i {
-  color: #ffc107;
+/* Error Alert (Red) */
+.alert-error {
+  background: var(--md-error-container);
+  border-color: var(--md-error);
+  color: var(--md-on-error-container);
 }
 
-.alert.alert-info {
-  background: rgba(0, 188, 212, 0.1);
-  border: 1px solid rgba(0, 188, 212, 0.2);
-  color: #00838f;
+.alert-error i {
+  color: var(--md-error);
 }
 
-.alert.alert-info i {
-  color: #00bcd4;
+/* Warning Alert (Orange) */
+.alert-warning {
+  background: var(--md-secondary-container);
+  border-color: var(--md-secondary);
+  color: var(--md-on-secondary-container);
 }
 
-/* Button Styles */
-.dialog-footer .btn {
-  padding: 8px 24px;
-  border-radius: 6px;
-  font-size: 14px;
+.alert-warning i {
+  color: var(--md-secondary);
+}
+
+/* Info Alert (Blue) */
+.alert-info {
+  background: var(--md-primary-container);
+  border-color: var(--md-primary);
+  color: var(--md-on-primary-container);
+}
+
+.alert-info i {
+  color: var(--md-primary);
+}
+
+/* ============================================
+   Modal Footer (Buttons)
+   ============================================ */
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem 2rem;
+  background: var(--md-surface-container-lowest);
+  border-top: 1px solid var(--md-outline-variant);
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Buttons (MD3 Patterns)
+   ============================================ */
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  font-size: var(--md-label-large);
   font-weight: 500;
-  border: 1px solid transparent;
+  border-radius: var(--md-corner-full);
+  border: none;
   cursor: pointer;
-  transition: all 0.15s ease;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 36px;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 44px;
+  font-family: inherit;
+  text-transform: none;
+  letter-spacing: 0.01em;
 }
 
-.dialog-footer .btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
 }
 
-.dialog-footer .btn:disabled i.fa-spinner {
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn i {
+  font-size: 1rem;
+}
+
+.btn i.fa-spinner {
   animation: spin 1s linear infinite;
 }
 
-.dialog-footer .btn.btn-secondary {
-  background: #ffffff;
-  color: #666666;
-  border-color: #bdbdbd;
-}
-
-.dialog-footer .btn.btn-secondary:hover:not(:disabled) {
-  background: #f8f9fa;
-  border-color: #757575;
-  color: #212121;
-}
-
-.dialog-footer .btn.btn-primary {
-  background: #4caf50;
-  color: #ffffff;
-}
-
-.dialog-footer .btn.btn-primary:hover:not(:disabled) {
-  background: #43a047;
-  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
-  transform: translateY(-1px);
-}
-
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* Responsive Design */
+/* Primary Button (MJ Blue - Dark Button) */
+.btn-primary {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  box-shadow: var(--md-elevation-1);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #3395C8; /* Lightens on hover (MD3 rule: dark buttons lighten) */
+  box-shadow: var(--md-elevation-2);
+}
+
+.btn-primary:disabled {
+  background: var(--md-surface-container);
+  color: var(--md-on-surface-variant);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Secondary Button (Light Button) */
+.btn-secondary {
+  background: var(--md-surface-container-lowest);
+  color: var(--md-primary);
+  border: 1px solid var(--md-outline);
+  box-shadow: none;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--md-primary); /* Fills with primary on hover (MD3 rule: light buttons darken/fill) */
+  color: var(--md-on-primary);
+  border-color: var(--md-primary);
+  box-shadow: var(--md-elevation-1);
+}
+
+.btn-secondary:disabled {
+  background: var(--md-surface-container);
+  color: var(--md-on-surface-variant);
+  border-color: var(--md-outline-variant);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ============================================
+   Responsive Design
+   ============================================ */
+
 @media (max-width: 768px) {
-  :host ::ng-deep .k-window {
-    margin: 16px;
-    max-width: none;
-    width: calc(100vw - 24px) !important;
-    height: calc(100vh - 24px) !important;
+  .modal-backdrop {
+    padding: 0;
   }
-  
-  :host ::ng-deep .k-window-titlebar {
-    padding: 16px 24px;
-    min-height: 60px;
+
+  .modal-dialog {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    animation: slideInMobile 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  
-  .dialog-content .content-section {
-    padding: 24px 16px;
+
+  @keyframes slideInMobile {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
-  
-  .dialog-footer {
-    padding: 16px 24px;
-    flex-direction: column-reverse;
+
+  .modal-header {
+    padding: 20px 16px;
+    border-radius: 0;
   }
-  
-  .dialog-footer .btn {
+
+  .dialog-title {
+    font-size: 20px;
+  }
+
+  .dialog-subtitle {
+    font-size: 13px;
+  }
+
+  .content-section {
+    padding: 1.25rem 1rem;
+  }
+
+  .section-title {
+    font-size: 18px;
+  }
+
+  .modal-footer {
+    padding: 1rem;
+    flex-direction: column;
+  }
+
+  .btn {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-header {
+    padding: 16px 12px;
+  }
+
+  .dialog-title {
+    font-size: 18px;
+    gap: 0.5rem;
+  }
+
+  .dialog-title i {
+    font-size: 1rem;
+  }
+
+  .dialog-subtitle {
+    font-size: 12px;
+    margin-top: 0.25rem;
+  }
+
+  .content-section {
+    padding: 1rem 0.75rem;
+  }
+
+  .section-title {
+    font-size: 16px;
+    gap: 0.5rem;
+  }
+
+  .field-input,
+  .field-textarea {
+    padding: 0.75rem;
+    font-size: 14px;
+  }
+
+  .modal-footer {
+    padding: 0.75rem;
+  }
+
+  .btn {
+    padding: 0.625rem 1.25rem;
+    font-size: 13px;
+  }
+}
+
+/* ============================================
+   Accessibility
+   ============================================ */
+
+/* Focus Visible Styles */
+*:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .modal-dialog {
+    border: 2px solid var(--md-outline);
+  }
+
+  .btn {
+    border: 2px solid currentColor;
+  }
+
+  .field-input,
+  .field-textarea {
+    border-width: 3px;
+  }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+
+@media print {
+  .modal-backdrop {
+    display: none;
   }
 }

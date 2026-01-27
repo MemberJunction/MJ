@@ -3,22 +3,49 @@ import { Metadata } from '@memberjunction/core';
 import { UserNotificationTypeEntity, UserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
+/**
+ * View model for managing notification preferences in the UI.
+ * Combines notification type definition with user's current preferences and change tracking.
+ */
 interface NotificationPreferenceViewModel {
+  /** The notification type definition (read-only) */
   type: UserNotificationTypeEntity;
+  /** User's existing preference record, or null if not yet set */
   preference: UserNotificationPreferenceEntity | null;
+  /** Current state: In-app notifications enabled */
   inAppEnabled: boolean;
+  /** Current state: Email notifications enabled */
   emailEnabled: boolean;
+  /** Current state: SMS notifications enabled */
   smsEnabled: boolean;
+  /** Whether this preference has been modified by the user */
   changed: boolean;
+  /** Original value for rollback: In-app enabled state */
   originalInAppEnabled: boolean;
+  /** Original value for rollback: Email enabled state */
   originalEmailEnabled: boolean;
+  /** Original value for rollback: SMS enabled state */
   originalSmsEnabled: boolean;
 }
 
+/**
+ * Component for managing user notification preferences.
+ *
+ * Displays notification types with configurable delivery channels (in-app, email, SMS).
+ * Users can customize which channels they want to receive notifications through,
+ * unless the notification type restricts user customization.
+ *
+ * Uses Material Design 3 (MD3) styling principles for consistent, accessible UI.
+ *
+ * Data flow:
+ * - Loads notification types from UserInfoEngine (global cache)
+ * - Loads user preferences from UserInfoEngine (per-user cache)
+ * - Saves preferences using transaction groups for batch updates
+ */
 @Component({
   selector: 'mj-notification-preferences',
   templateUrl: './notification-preferences.component.html',
-  styleUrls: ['./notification-preferences.component.scss'],
+  styleUrls: ['./notification-preferences.component.css'],
 })
 export class NotificationPreferencesComponent implements OnInit {
   loading = true;
@@ -28,11 +55,20 @@ export class NotificationPreferencesComponent implements OnInit {
 
   constructor(private sharedService: SharedService) {}
 
-  async ngOnInit() {
+  /**
+   * Angular lifecycle hook - initializes the component by loading notification preferences.
+   */
+  async ngOnInit(): Promise<void> {
     await this.loadData();
   }
 
-  private async loadData() {
+  /**
+   * Loads notification types and user preferences from UserInfoEngine.
+   * Builds view models by merging type defaults with user preferences.
+   * Sorts types by Priority (ascending), then Name (alphabetical).
+   * @private
+   */
+  private async loadData(): Promise<void> {
     try {
       this.loading = true;
 
@@ -83,12 +119,25 @@ export class NotificationPreferencesComponent implements OnInit {
     }
   }
 
-  onChannelChange(vm: NotificationPreferenceViewModel) {
+  /**
+   * Called when a user toggles any delivery channel checkbox.
+   * Updates the view model's changed flag by comparing current state to original values.
+   * Sets the global hasChanges flag to show/hide the save/cancel buttons.
+   * @param vm The view model for the notification type being modified
+   */
+  onChannelChange(vm: NotificationPreferenceViewModel): void {
     vm.changed = vm.inAppEnabled !== vm.originalInAppEnabled || vm.emailEnabled !== vm.originalEmailEnabled || vm.smsEnabled !== vm.originalSmsEnabled;
     this.hasChanges = this.viewModels.some((v) => v.changed);
   }
 
-  async save() {
+  /**
+   * Saves all changed notification preferences using a transaction group for batch updates.
+   * Creates new preference records for types that don't have existing preferences.
+   * Updates the Enabled field based on whether any channel is enabled.
+   * Shows success/error notification on completion.
+   * @returns Promise that resolves when save is complete
+   */
+  async save(): Promise<void> {
     try {
       this.saving = true;
       const md = new Metadata();
@@ -148,7 +197,11 @@ export class NotificationPreferencesComponent implements OnInit {
     }
   }
 
-  cancel() {
+  /**
+   * Cancels all unsaved changes and reverts to original values.
+   * Resets the changed flag on all view models and hides the action buttons.
+   */
+  cancel(): void {
     // Revert changes
     this.viewModels.forEach((vm) => {
       vm.inAppEnabled = vm.originalInAppEnabled;
@@ -159,18 +212,42 @@ export class NotificationPreferencesComponent implements OnInit {
     this.hasChanges = false;
   }
 
+  /**
+   * Gets the Font Awesome icon class for a notification type.
+   * Used for MD3 dynamic icon styling in the card header.
+   * @param type The notification type entity
+   * @returns Font Awesome icon class (e.g., 'fa-bell'), defaults to 'fa-bell' if not specified
+   */
   getTypeIcon(type: UserNotificationTypeEntity): string {
     return type.Icon || 'fa-bell';
   }
 
+  /**
+   * Gets the color hex code for a notification type.
+   * Used for MD3 dynamic color styling (icon background, border accent).
+   * @param type The notification type entity
+   * @returns Hex color code (e.g., '#0076B6'), defaults to '#999' if not specified
+   */
   getTypeColor(type: UserNotificationTypeEntity): string {
     return type.Color || '#999';
   }
 
+  /**
+   * Gets the auto-expire duration in days for a notification type.
+   * Displayed in the metadata row to inform users about automatic read marking.
+   * @param type The notification type entity
+   * @returns Number of days until auto-expire, or null if not configured
+   */
   getTypeAutoExpireDays(type: UserNotificationTypeEntity): number | null {
     return type.AutoExpireDays || null;
   }
 
+  /**
+   * Checks if users are allowed to customize preferences for this notification type.
+   * When false, the delivery channel checkboxes are disabled and an info message is shown.
+   * @param type The notification type entity
+   * @returns True if user customization is allowed (default), false otherwise
+   */
   getAllowUserPreference(type: UserNotificationTypeEntity): boolean {
     return type.AllowUserPreference !== false;
   }

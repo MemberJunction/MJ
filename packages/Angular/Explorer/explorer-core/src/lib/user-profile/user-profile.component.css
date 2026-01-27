@@ -1,0 +1,420 @@
+/* =============================================================================
+   User Profile Component - Material Design 3
+   Following MD3 Design System Guidelines
+   ============================================================================= */
+
+/* MD3 Color Tokens */
+:host {
+  /* Primary - Deep Blue */
+  --md-primary: #0076B6;
+  --md-on-primary: #FFFFFF;
+  --md-primary-container: #AAE7FD;
+  --md-on-primary-container: #001F2A;
+
+  /* Secondary - Light Orange */
+  --md-secondary: #F5A623;
+  --md-on-secondary: #FFFFFF;
+  --md-secondary-container: #FFECD6;
+  --md-on-secondary-container: #2D1600;
+
+  /* Tertiary - Light Green */
+  --md-tertiary: #4CAF50;
+  --md-on-tertiary: #FFFFFF;
+  --md-tertiary-container: #C8E6C9;
+  --md-on-tertiary-container: #002204;
+
+  /* Surface Colors */
+  --md-surface: #FAFCFF;
+  --md-surface-container-lowest: #FFFFFF;
+  --md-surface-container-low: #F3F5F9;
+  --md-surface-container: #EDF0F4;
+  --md-surface-container-high: #E7EAEE;
+  --md-surface-container-highest: #E1E3E8;
+  --md-on-surface: #191C20;
+  --md-on-surface-variant: #43474E;
+  --md-outline: #74777F;
+  --md-outline-variant: #C4C6D0;
+
+  /* Elevation (Box Shadows) */
+  --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --md-elevation-2: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.08);
+  --md-elevation-3: 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.08);
+
+  /* Corner Radii */
+  --md-corner-extra-small: 4px;
+  --md-corner-small: 8px;
+  --md-corner-medium: 12px;
+  --md-corner-large: 16px;
+  --md-corner-full: 9999px;
+
+  /* Host element configuration */
+  display: block;
+  width: 100%;
+  padding: 1.5rem;
+}
+
+/* -----------------------------------------------------------------------------
+   Container & Layout
+   ----------------------------------------------------------------------------- */
+.user-profile-container {
+  max-width: 900px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+/* -----------------------------------------------------------------------------
+   Profile Card
+   ----------------------------------------------------------------------------- */
+.profile-card {
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-corner-medium);
+  padding: 1.5rem;
+  box-shadow: var(--md-elevation-1);
+  transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.profile-card:hover {
+  box-shadow: var(--md-elevation-2);
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.avatar-container {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--md-primary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 3px solid var(--md-outline-variant);
+  transition: border-color 0.2s;
+}
+
+.profile-card:hover .avatar-container {
+  border-color: var(--md-primary);
+}
+
+.avatar-icon {
+  font-size: 2.5rem;
+  color: var(--md-primary);
+}
+
+.profile-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name {
+  margin: 0 0 0.375rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+
+.user-email {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--md-on-surface-variant);
+}
+
+/* -----------------------------------------------------------------------------
+   Notification Card
+   ----------------------------------------------------------------------------- */
+.notification-card {
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-corner-medium);
+  box-shadow: var(--md-elevation-1);
+  transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.notification-card:hover {
+  box-shadow: var(--md-elevation-2);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem;
+  border-bottom: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-low);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-icon {
+  font-size: 1.5rem;
+  color: var(--md-primary);
+}
+
+.card-header h4 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+
+.unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 0.5rem;
+  background: var(--md-tertiary);
+  color: var(--md-on-tertiary);
+  border-radius: var(--md-corner-full);
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: var(--md-elevation-1);
+}
+
+.card-body {
+  padding: 1.25rem;
+}
+
+.card-description {
+  margin: 0 0 1.25rem 0;
+  font-size: 0.9375rem;
+  color: var(--md-on-surface-variant);
+  line-height: 1.5;
+}
+
+/* -----------------------------------------------------------------------------
+   Channel Toggles
+   ----------------------------------------------------------------------------- */
+.channel-toggles {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.channel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1rem 1.25rem;
+  background: var(--md-surface);
+  border: 2px solid var(--md-outline-variant);
+  border-radius: var(--md-corner-small);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+  min-height: 56px;
+}
+
+.channel-toggle i:first-child {
+  font-size: 1.25rem;
+  color: var(--md-on-surface-variant);
+  transition: color 0.2s;
+}
+
+.channel-label {
+  flex: 1;
+  text-align: left;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+
+.toggle-indicator {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--md-outline);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.toggle-indicator i {
+  font-size: 0.875rem;
+  color: transparent;
+}
+
+.channel-toggle:hover:not(:disabled) {
+  border-color: var(--md-primary);
+  background: var(--md-primary-container);
+}
+
+.channel-toggle:hover:not(:disabled) i:first-child {
+  color: var(--md-primary);
+}
+
+.channel-toggle.active {
+  border-color: var(--md-primary);
+  background: var(--md-primary-container);
+}
+
+.channel-toggle.active i:first-child {
+  color: var(--md-primary);
+}
+
+.channel-toggle.active .toggle-indicator {
+  background: var(--md-primary);
+  border-color: var(--md-primary);
+}
+
+.channel-toggle.active .toggle-indicator i {
+  color: var(--md-on-primary);
+}
+
+.channel-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.channel-toggle:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+   Card Footer
+   ----------------------------------------------------------------------------- */
+.card-footer {
+  padding-top: 1rem;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.settings-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--md-primary);
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0.5rem;
+  margin: -0.5rem;
+  border-radius: var(--md-corner-small);
+}
+
+.settings-link:hover {
+  background: var(--md-primary-container);
+  color: var(--md-primary);
+}
+
+.settings-link i {
+  font-size: 0.875rem;
+  transition: transform 0.2s;
+}
+
+.settings-link:hover i {
+  transform: translateX(4px);
+}
+
+/* -----------------------------------------------------------------------------
+   Accessibility: Focus Indicators
+   ----------------------------------------------------------------------------- */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+   Accessibility: Reduced Motion
+   ----------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Responsive Design - Mobile First
+   ----------------------------------------------------------------------------- */
+@media (max-width: 639px) {
+  :host {
+    padding: 1rem;
+  }
+
+  .user-profile-container {
+    gap: 1rem;
+  }
+
+  .profile-card {
+    padding: 1rem;
+  }
+
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .avatar-container {
+    width: 100px;
+    height: 100px;
+  }
+
+  .avatar-icon {
+    font-size: 3rem;
+  }
+
+  .user-name {
+    font-size: 1.25rem;
+  }
+
+  .card-header {
+    padding: 1rem;
+  }
+
+  .card-body {
+    padding: 1rem;
+  }
+
+  .channel-toggles {
+    gap: 0.625rem;
+  }
+
+  .channel-toggle {
+    padding: 0.875rem 1rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .channel-toggles {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  :host {
+    padding: 2rem;
+  }
+
+  .user-profile-container {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .user-profile-container {
+    gap: 2rem;
+  }
+}

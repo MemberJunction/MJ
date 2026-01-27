@@ -12,8 +12,8 @@ import {
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { BaseEntity, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { UserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle } from '@memberjunction/core-entities';
+import { BaseEntity, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
+import { UserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
 import {
   ColDef,
   GridReadyEvent,
@@ -29,6 +29,7 @@ import {
   ColumnResizedEvent,
   ColumnMovedEvent,
   SelectionChangedEvent,
+  CellClickedEvent,
   ICellRendererParams,
   IDatasource,
   IGetRowsParams,
@@ -50,13 +51,13 @@ import {
   GridRowData,
   ColumnRuntimeState,
   GridRunViewParams,
-  ViewGridStateConfig,
-  ViewColumnConfig,
-  ViewSortConfig,
+  ViewGridColumnSetting,
+  ViewGridSortSetting,
   GridStateChangedEvent,
   EntityActionConfig,
   GridVisualConfig,
-  DEFAULT_VISUAL_CONFIG
+  DEFAULT_VISUAL_CONFIG,
+  ForeignKeyClickEvent
 } from './models/grid-types';
 import {
   BeforeRowSelectEventArgs,
@@ -118,7 +119,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
  * - Inline cell and row editing
  * - Column reordering, resizing, and visibility toggle
  * - State persistence to User Settings
- * - Compatible with ViewGridStateConfig from User Views
+ * - Compatible with ViewGridState from User Views
  *
  * @example
  * ```html
@@ -324,13 +325,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     return this._columns;
   }
 
-  private _gridState: ViewGridStateConfig | null = null;
+  private _gridState: ViewGridState | null = null;
   /**
    * Grid state from a User View - controls columns, widths, order, sort
    * When provided, this takes precedence over auto-generated columns
    */
   @Input()
-  set GridState(value: ViewGridStateConfig | null) {
+  set GridState(value: ViewGridState | null) {
     if (!!value) {
       const previousValue = this._gridState;
       this._gridState = value;
@@ -339,7 +340,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
     }
   }
-  get GridState(): ViewGridStateConfig | null {
+  get GridState(): ViewGridState | null {
     return this._gridState;
   }
 
@@ -519,6 +520,23 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
   get RowHeight(): number {
     return this._rowHeight;
+  }
+
+  /**
+   * Enable text wrapping in grid cells
+   * When true, long text will wrap to multiple lines and rows will auto-size
+   * Note: This disables fixed row height and may impact performance with large datasets
+   */
+  private _wrapText: boolean = false;
+  @Input()
+  set WrapText(value: boolean) {
+    if (this._wrapText !== value) {
+      this._wrapText = value;
+      this.updateDefaultColDefForWrapping();
+    }
+  }
+  get WrapText(): boolean {
+    return this._wrapText;
   }
 
   private _virtualScroll: boolean = true;
@@ -887,8 +905,122 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   // ========================================
+  // Aggregate Inputs
+  // ========================================
+
+  /**
+   * Aggregate configuration for the grid.
+   * When provided, aggregate expressions are calculated alongside data and displayed:
+   * - Column-bound aggregates appear in a pinned bottom row
+   * - Card-bound aggregates are exposed via AggregateValues for use with AggregatePanelComponent
+   */
+  @Input()
+  set AggregatesConfig(value: ViewGridAggregatesConfig | null) {
+    this._aggregatesConfig = value;
+  }
+  get AggregatesConfig(): ViewGridAggregatesConfig | null {
+    return this._aggregatesConfig;
+  }
+
+  /**
+   * Returns the aggregate values map, keyed by expression or id.
+   * Use this to pass values to AggregatePanelComponent.
+   */
+  public get AggregateValuesMap(): Map<string, AggregateValue> {
+    return this._aggregateValues;
+  }
+
+  /**
+   * Returns the raw aggregate results from the last RunView call.
+   */
+  public get AggregateResultsList(): AggregateResult[] {
+    return this._aggregateResults;
+  }
+
+  /**
+   * Whether aggregates are currently loading.
+   */
+  public get AggregatesLoading(): boolean {
+    return this._aggregatesLoading;
+  }
+
+  /**
+   * Returns the effective aggregates config, preferring _aggregatesConfig but falling back to _gridState.aggregates.
+   * This ensures aggregates work regardless of whether they came from explicit config or from view's GridState.
+   */
+  private get EffectiveAggregatesConfig(): ViewGridAggregatesConfig | null | undefined {
+    return this._aggregatesConfig || this._gridState?.aggregates;
+  }
+
+  /**
+   * Returns enabled aggregates configured for card display.
+   */
+  public get CardAggregates(): ViewGridAggregate[] {
+    const config = this.EffectiveAggregatesConfig;
+    if (!config?.expressions) return [];
+    return config.expressions
+      .filter(a => a.enabled !== false && a.displayType === 'card')
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  /**
+   * Returns enabled aggregates configured for column footer display.
+   */
+  public get ColumnAggregates(): ViewGridAggregate[] {
+    const config = this.EffectiveAggregatesConfig;
+    if (!config?.expressions) return [];
+    return config.expressions
+      .filter(a => a.enabled !== false && a.displayType === 'column')
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  /**
+   * Whether to show aggregate summary row (has column-type aggregates with values).
+   */
+  public get ShowAggregateSummary(): boolean {
+    const hasColumnAggs = this.ColumnAggregates.length > 0;
+    const hasValues = this._aggregateValues.size > 0;
+    return hasColumnAggs && hasValues;
+  }
+
+  /**
+   * Whether to show aggregate panel (has card-type aggregates with values).
+   */
+  public get ShowAggregatePanel(): boolean {
+    return this.CardAggregates.length > 0 && this._aggregateValues.size > 0;
+  }
+
+  /**
+   * Get formatted aggregate value for display
+   */
+  public getAggregateValue(agg: ViewGridAggregate): string {
+    const key = agg.id || agg.expression;
+    const value = this._aggregateValues.get(key);
+    if (value == null) return '—';
+
+    // Format based on value type
+    if (typeof value === 'number') {
+      return value.toLocaleString('en-US', {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 0
+      });
+    }
+    if (value instanceof Date) {
+      return value.toLocaleDateString();
+    }
+    return String(value);
+  }
+
+  // ========================================
   // Event Outputs
   // ========================================
+
+  // Aggregate Results
+  /**
+   * Emitted when aggregate results are loaded.
+   * Contains the array of AggregateResult objects and a values map for easy lookup.
+   */
+  @Output() AggregatesLoaded = new EventEmitter<{ results: AggregateResult[]; values: Map<string, AggregateValue>; executionTime?: number }>();
 
   // Row Selection
   @Output() BeforeRowSelect = new EventEmitter<BeforeRowSelectEventArgs>();
@@ -902,6 +1034,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   @Output() AfterRowClick = new EventEmitter<AfterRowClickEventArgs>();
   @Output() BeforeRowDoubleClick = new EventEmitter<BeforeRowDoubleClickEventArgs>();
   @Output() AfterRowDoubleClick = new EventEmitter<AfterRowDoubleClickEventArgs>();
+
+  // Foreign Key Link Click
+  /**
+   * Emitted when a foreign key link is clicked in the grid.
+   * Parent components should handle this to navigate to the related record.
+   */
+  @Output() ForeignKeyClick = new EventEmitter<ForeignKeyClickEvent>();
 
   // Editing
   @Output() BeforeCellEdit = new EventEmitter<BeforeCellEditEventArgs>();
@@ -1084,6 +1223,31 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     minWidth: 80
   };
 
+  /**
+   * Update defaultColDef when text wrapping setting changes
+   * Enables/disables auto row height and cell text wrapping
+   */
+  private updateDefaultColDefForWrapping(): void {
+    if (this._wrapText) {
+      this.defaultColDef = {
+        ...this.defaultColDef,
+        wrapText: true,
+        autoHeight: true,
+        cellClass: 'cell-wrap-text'
+      };
+    } else {
+      // Remove wrapping properties
+      const { wrapText, autoHeight, cellClass, ...rest } = this.defaultColDef;
+      this.defaultColDef = rest;
+    }
+
+    // Refresh the grid to apply changes
+    if (this.gridApi) {
+      this.gridApi.setGridOption('defaultColDef', this.defaultColDef);
+      this.gridApi.refreshCells({ force: true });
+    }
+  }
+
   /** Get row ID function for AG Grid */
   public getRowId = (params: GetRowIdParams<Record<string, unknown>>) =>
     params.data['__pk'] as string;
@@ -1112,6 +1276,12 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private _editingRowKey: string | null = null;
   private _editingField: string | null = null;
   private _pendingChanges: PendingChange[] = [];
+
+  // Aggregate state
+  private _aggregatesConfig: ViewGridAggregatesConfig | null = null;
+  private _aggregateResults: AggregateResult[] = [];
+  private _aggregateValues: Map<string, AggregateValue> = new Map();
+  private _aggregatesLoading: boolean = false;
 
   // ========================================
   // Public Read-Only Properties
@@ -1160,19 +1330,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private refreshSubject = new Subject<void>();
   private statesSaveSubject = new Subject<void>();
-  private statePersistSubject = new Subject<ViewGridStateConfig>();
-  private userDefaultsPersistSubject = new Subject<ViewGridStateConfig>();
+  private statePersistSubject = new Subject<ViewGridState>();
+  private userDefaultsPersistSubject = new Subject<ViewGridState>();
 
   // Persist state tracking
-  private pendingStateToSave: ViewGridStateConfig | null = null;
+  private pendingStateToSave: ViewGridState | null = null;
   private isSavingState: boolean = false;
 
   /**
    * Pending state waiting to be persisted (for flushing on destroy).
    * Tracks state for both saved views and user defaults separately.
    */
-  private _pendingViewStateToPersist: ViewGridStateConfig | null = null;
-  private _pendingUserDefaultsToPersist: ViewGridStateConfig | null = null;
+  private _pendingViewStateToPersist: ViewGridState | null = null;
+  private _pendingUserDefaultsToPersist: ViewGridState | null = null;
 
   /**
    * Flag to suppress state persistence during view transitions.
@@ -1305,6 +1475,15 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // carry over column/sort settings from a previous view when switching views
     this._gridState = null;
     this._sortState = [];
+
+    // Reset aggregates when switching views - don't carry over from previous view
+    this._aggregatesConfig = null;
+    this._aggregateResults = [];
+    this._aggregateValues.clear();
+
+    // Reset allowLoad to true when params change - this ensures the new view gets to load
+    // (The parent may have set allowLoad=false for the previous view, which shouldn't prevent loading the new view)
+    this._allowLoad = true;
 
     try {
       // If using a stored view, load the view entity first
@@ -1451,7 +1630,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         if (!this._gridState && gridState.columnSettings?.length) {
           this._gridState = {
             columnSettings: gridState.columnSettings,
-            sortSettings: gridState.sortSettings || []
+            sortSettings: gridState.sortSettings || [],
+            aggregates: gridState.aggregates
           };
         }
 
@@ -1463,6 +1643,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
             index
           }));
         }
+
+        // Apply aggregates from user defaults if present and not already set
+        if (gridState.aggregates && !this._aggregatesConfig) {
+          this._aggregatesConfig = gridState.aggregates;
+        }
       }
     } catch (error) {
       console.error('[entity-data-grid] Failed to load user default grid state:', error);
@@ -1473,7 +1658,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Persists the current grid state as user defaults for a dynamic view.
    * Uses UserInfoEngine to store settings with key format: "default-view-setting/{entityName}"
    */
-  private async persistUserDefaultGridState(state: ViewGridStateConfig): Promise<void> {
+  private async persistUserDefaultGridState(state: ViewGridState): Promise<void> {
     if (!this._entityInfo) {
       this._pendingUserDefaultsToPersist = null;
       return;
@@ -1483,7 +1668,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       const settingKey = `default-view-setting/${this._entityInfo.Name}`;
       const gridStateJson: ViewGridState = {
         columnSettings: state.columnSettings,
-        sortSettings: state.sortSettings
+        sortSettings: state.sortSettings,
+        aggregates: state.aggregates
       };
 
       await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridStateJson));
@@ -1515,8 +1701,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         if (gridState.columnSettings?.length) {
           this._gridState = {
             columnSettings: gridState.columnSettings,
-            sortSettings: gridState.sortSettings || []
+            sortSettings: gridState.sortSettings || [],
+            aggregates: gridState.aggregates
           };
+        }
+        // Apply aggregates from view's GridState if present
+        if (gridState.aggregates && !this._aggregatesConfig) {
+          this._aggregatesConfig = gridState.aggregates;
         }
       } catch (e) {
         console.warn('Failed to parse view GridState:', e);
@@ -1561,6 +1752,83 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         }));
         this.applySortStateToGrid();
       }
+
+      // Apply aggregates from GridState if present and fetch their values
+      if (this._gridState.aggregates) {
+        this._aggregatesConfig = this._gridState.aggregates;
+        // Fetch aggregate values when gridState aggregates change
+        this.refreshAggregates();
+      }
+    }
+  }
+
+  /**
+   * Fetch aggregate values without reloading data.
+   * Used when gridState changes and includes new aggregate config.
+   * This runs a RunView with MaxRows=0 to get only aggregate results.
+   */
+  public async refreshAggregates(): Promise<void> {
+    const effectiveAggConfig = this.EffectiveAggregatesConfig;
+    if (!effectiveAggConfig?.expressions?.length) {
+      this._aggregateResults = [];
+      this._aggregateValues.clear();
+      this._aggregatesLoading = false;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // Need entity info to run the query
+    if (!this._entityInfo) {
+      return;
+    }
+
+    this._aggregatesLoading = true;
+    this.cdr.detectChanges();
+
+    try {
+      // Build aggregate expressions
+      const aggregateExpressions: AggregateExpression[] = effectiveAggConfig.expressions
+        .filter(agg => agg.enabled !== false && agg.expression)
+        .map(agg => ({
+          expression: agg.expression,
+          alias: agg.id || agg.label || agg.expression
+        }));
+
+      if (aggregateExpressions.length === 0) {
+        this._aggregateResults = [];
+        this._aggregateValues.clear();
+        this._aggregatesLoading = false;
+        this.cdr.detectChanges();
+        return;
+      }
+
+      const rv = new RunView();
+
+      // Build the ExtraFilter from params or view entity
+      let extraFilter: string | undefined;
+      if (this._params?.ExtraFilter) {
+        extraFilter = this._params.ExtraFilter;
+      } else if (this._viewEntity?.WhereClause) {
+        extraFilter = this._viewEntity.WhereClause;
+      }
+
+      const result = await rv.RunView({
+        EntityName: this._entityInfo.Name,
+        MaxRows: 0, // Only get aggregates, no row data
+        ExtraFilter: extraFilter,
+        Aggregates: aggregateExpressions
+      });
+
+      if (result.Success) {
+        this.processAggregateResults(result.AggregateResults, result.AggregateExecutionTime);
+      } else {
+        this._aggregatesLoading = false;
+        this.cdr.detectChanges();
+      }
+    } catch (error) {
+      console.error('[EntityDataGrid] Error fetching aggregates:', error);
+      this._aggregatesLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -1596,70 +1864,124 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     this.buildAgColumnDefs();
   }
 
+  /**
+   * Determines if a field should be shown by default when no saved view exists.
+   * This logic is aligned with UserViewEntity.SetDefaultsFromEntity() to ensure
+   * consistent column visibility between initial load and saved views.
+   */
   private shouldShowField(field: EntityFieldInfo): boolean {
+    // Always exclude system fields
     if (field.Name.startsWith('__mj_')) return false;
+
+    // Always exclude UUID primary keys (they're not useful to display)
     if (field.IsPrimaryKey && field.SQLFullType?.toLowerCase() === 'uniqueidentifier') {
       return false;
     }
-    if (field.DefaultInView === true) return true;
-    if (field.Length > 500) return false;
-    return true;
+
+    // Only show fields explicitly marked as DefaultInView
+    // This aligns with UserViewEntity.SetDefaultsFromEntity() behavior
+    // ensuring users see the same columns before and after saving a view
+    return field.DefaultInView === true;
   }
 
+  /**
+   * Estimate an appropriate column width based on field metadata.
+   * Takes into account: metadata DefaultColumnWidth, header text length, data type, and field patterns.
+   */
   private estimateColumnWidth(field: EntityFieldInfo): number {
+    // Priority 1: Use metadata-defined width if set
+    if (field.DefaultColumnWidth && field.DefaultColumnWidth > 0) {
+      return field.DefaultColumnWidth;
+    }
+
+    // Calculate minimum width needed for header text
+    const headerText = field.DisplayName || field.Name;
+    const headerWidth = this.calculateHeaderWidth(headerText);
+
+    // Calculate estimated data width based on field type
+    const dataWidth = this.calculateDataWidth(field);
+
+    // Use the larger of header or data width, with bounds
+    const estimatedWidth = Math.max(headerWidth, dataWidth);
+
+    // Apply min/max bounds: minimum 80px, maximum 350px
+    return Math.max(Math.min(estimatedWidth, 350), 80);
+  }
+
+  /**
+   * Calculate minimum width needed to display header text without truncation.
+   */
+  private calculateHeaderWidth(text: string): number {
+    // Average char width ~7.5px for typical grid font
+    const charWidth = 7.5;
+    // Padding for sort icon and cell padding
+    const sortIconPadding = 24;
+    const cellPadding = 16;
+    return Math.ceil(text.length * charWidth + sortIconPadding + cellPadding);
+  }
+
+  /**
+   * Calculate estimated data width based on field type and patterns.
+   */
+  private calculateDataWidth(field: EntityFieldInfo): number {
     const fieldNameLower = field.Name.toLowerCase();
-    const displayNameLower = (field.DisplayName || field.Name).toLowerCase();
+    const tsType = field.TSType;
 
     // Fixed-width types
-    if (field.TSType === 'boolean') return 80;
-    if (field.TSType === 'Date') return 120;
+    if (tsType === 'boolean') return 90;
+    if (tsType === 'Date') return 130;
 
     // Numeric fields - compact
-    if (field.TSType === 'number') {
+    if (tsType === 'number') {
       if (fieldNameLower.includes('year') || fieldNameLower.includes('age')) return 80;
-      if (fieldNameLower.includes('amount') || fieldNameLower.includes('price') || fieldNameLower.includes('total')) return 120;
+      if (fieldNameLower.includes('amount') || fieldNameLower.includes('price') ||
+          fieldNameLower.includes('cost') || fieldNameLower.includes('total')) return 130;
       return 100;
     }
 
-    // ID fields - compact
-    if (fieldNameLower.endsWith('id') && field.Length <= 50) return 80;
+    // ID fields (typically UUIDs shown truncated or as links)
+    if (fieldNameLower.endsWith('id') && field.Length <= 50) return 100;
 
     // Email - needs more space
     if (fieldNameLower.includes('email')) return 220;
 
     // Phone numbers
-    if (fieldNameLower.includes('phone') || fieldNameLower.includes('mobile') || fieldNameLower.includes('fax')) return 130;
+    if (fieldNameLower.includes('phone') || fieldNameLower.includes('mobile') || fieldNameLower.includes('fax')) return 140;
+
+    // Description fields - give them adequate room (increased from 150)
+    if (fieldNameLower.includes('description')) return 250;
 
     // Name fields - medium width
     if (fieldNameLower.includes('name') || fieldNameLower.includes('title')) {
-      if (fieldNameLower === 'firstname' || fieldNameLower === 'lastname' || fieldNameLower === 'first name' || fieldNameLower === 'last name') return 120;
-      return 160;
+      if (fieldNameLower === 'firstname' || fieldNameLower === 'lastname' ||
+          fieldNameLower === 'first name' || fieldNameLower === 'last name') return 130;
+      return 180;
     }
 
     // Location fields
-    if (fieldNameLower.includes('city')) return 120;
-    if (fieldNameLower.includes('state') || fieldNameLower.includes('country')) return 100;
-    if (fieldNameLower.includes('zip') || fieldNameLower.includes('postal')) return 90;
-    if (fieldNameLower.includes('address')) return 200;
+    if (fieldNameLower.includes('city')) return 130;
+    if (fieldNameLower.includes('state') || fieldNameLower.includes('country')) return 110;
+    if (fieldNameLower.includes('zip') || fieldNameLower.includes('postal')) return 100;
+    if (fieldNameLower.includes('address')) return 220;
 
     // Date-like strings
-    if (fieldNameLower.includes('date') || fieldNameLower.includes('time')) return 120;
+    if (fieldNameLower.includes('date') || fieldNameLower.includes('time')) return 130;
 
-    // Status/Type fields - usually short values
-    if (fieldNameLower.includes('status') || fieldNameLower.includes('type') || fieldNameLower.includes('category')) return 110;
+    // Status/Type/Category fields
+    if (fieldNameLower.includes('status') || fieldNameLower.includes('type') ||
+        fieldNameLower.includes('category') || fieldNameLower.includes('mode')) return 130;
 
     // Code/abbreviation fields
-    if (fieldNameLower.includes('code') || fieldNameLower.includes('abbr')) return 100;
+    if (fieldNameLower.includes('code') || fieldNameLower.includes('abbr')) return 110;
 
-    // Long text fields - limit width, they'll truncate
-    if (field.Length > 500) return 150;
-    if (field.Length > 200) return 180;
+    // Long text fields - give them more room (nvarchar(max) has Length < 0)
+    if (field.Length < 0) return 250;  // nvarchar(max)
+    if (field.Length > 500) return 220;
+    if (field.Length > 200) return 200;
 
-    // Default: estimate based on field length but with tighter bounds
-    const estimatedChars = Math.min(field.Length, 50);
-    const charWidth = 7;
-    const padding = 24;
-    return Math.min(Math.max(estimatedChars * charWidth / 2 + padding, 80), 200);
+    // Default: estimate based on field length with reasonable bounds
+    const estimatedChars = Math.min(field.Length || 50, 40);
+    return Math.max(estimatedChars * 6 + 24, 100);
   }
 
   private mapFieldTypeToGridType(fieldType: string): 'string' | 'number' | 'boolean' | 'date' | 'datetime' {
@@ -1731,7 +2053,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
   }
 
-  private buildAgColumnDefsFromGridState(columnSettings: ViewColumnConfig[]): ColDef[] {
+  private buildAgColumnDefsFromGridState(columnSettings: ViewGridColumnSetting[]): ColDef[] {
     if (!this._entityInfo) return [];
 
     const sortedColumns = [...columnSettings].sort((a, b) =>
@@ -1796,7 +2118,16 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private generateAgColumnDefs(entity: EntityInfo): ColDef[] {
     const cols: ColDef[] = [];
-    const visibleFields = entity.Fields.filter(f => this.shouldShowField(f));
+    let visibleFields = entity.Fields.filter(f => this.shouldShowField(f));
+
+    // Fallback: if no DefaultInView fields are defined, show first 10 non-system fields
+    // sorted by importance to give users a reasonable starting point
+    if (visibleFields.length === 0) {
+      visibleFields = this.getDefaultFieldsFallback(entity);
+    }
+
+    // Sort fields by importance for better default ordering
+    visibleFields = this.sortFieldsByImportance(visibleFields);
 
     for (const field of visibleFields) {
       const colDef: ColDef = {
@@ -1804,7 +2135,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         headerName: field.DisplayNameOrName,
         width: this.estimateColumnWidth(field),
         sortable: this._allowSorting,
-        resizable: this._allowColumnResize
+        resizable: this._allowColumnResize,
+        headerTooltip: this.buildHeaderTooltip(field)
       };
 
       this.applyFieldFormatter(colDef, field);
@@ -1812,6 +2144,94 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
 
     return cols;
+  }
+
+  /**
+   * When no DefaultInView fields are set, fall back to showing the first 10
+   * non-system, non-PK fields to give users something reasonable to start with.
+   */
+  private getDefaultFieldsFallback(entity: EntityInfo): EntityFieldInfo[] {
+    return entity.Fields
+      .filter(f =>
+        !f.Name.startsWith('__mj_') &&
+        !(f.IsPrimaryKey && f.SQLFullType?.toLowerCase() === 'uniqueidentifier') &&
+        (f.Length <= 500 || f.Length < 0)  // Exclude very long text unless nvarchar(max)
+      )
+      .slice(0, 10);
+  }
+
+  /**
+   * Sort fields by importance for better default column ordering.
+   * Name fields first, then status/type, then other fields, with system fields last.
+   */
+  private sortFieldsByImportance(fields: EntityFieldInfo[]): EntityFieldInfo[] {
+    return [...fields].sort((a, b) => {
+      const priorityA = this.getFieldPriority(a);
+      const priorityB = this.getFieldPriority(b);
+      return priorityA - priorityB;
+    });
+  }
+
+  private getFieldPriority(field: EntityFieldInfo): number {
+    const nameLower = field.Name.toLowerCase();
+
+    // Name fields first
+    if (field.IsNameField) return 0;
+    if (nameLower === 'name' || nameLower === 'title') return 1;
+
+    // Status and type fields are important
+    if (nameLower === 'status') return 2;
+    if (nameLower === 'type' || nameLower === 'category') return 3;
+
+    // Other name-like fields
+    if (nameLower.endsWith('name') && !nameLower.endsWith('typename')) return 4;
+
+    // Description fields
+    if (nameLower.includes('description')) return 5;
+
+    // Date fields
+    if (field.TSType === 'Date') return 50;
+
+    // Foreign keys (usually IDs pointing to other entities)
+    if (field.RelatedEntityID) return 60;
+
+    // Numbers
+    if (field.TSType === 'number') return 70;
+
+    // Booleans toward the end
+    if (field.TSType === 'boolean') return 80;
+
+    // Long text fields at the end
+    if ((field.Length > 500 || field.Length < 0)) return 90;
+
+    // System fields last (though they should be filtered out already)
+    if (field.Name.startsWith('__mj_')) return 100;
+
+    // Default priority
+    return 40;
+  }
+
+  /**
+   * Build a tooltip for the column header showing field details.
+   */
+  private buildHeaderTooltip(field: EntityFieldInfo): string {
+    const parts: string[] = [];
+
+    // Show internal field name if different from display name
+    if (field.DisplayName && field.DisplayName !== field.Name) {
+      parts.push(`Field: ${field.Name}`);
+    }
+
+    // Show description if available
+    if (field.Description) {
+      parts.push(field.Description);
+    }
+
+    // Show type info
+    const typeInfo = field.Type + (field.Length && field.Length > 0 ? `(${field.Length})` : '');
+    parts.push(`Type: ${typeInfo}`);
+
+    return parts.join('\n');
   }
 
   private applyFieldFormatter(colDef: ColDef, field: EntityFieldInfo, customFormat?: ColumnFormat): void {
@@ -1841,6 +2261,26 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
                                        fieldNameLower.includes('mobile') ||
                                        fieldNameLower.includes('fax')));
 
+    // Check if this is a foreign key field (has a related entity)
+    // Also check if this is a virtual display field that corresponds to an FK field
+    let isForeignKey = !!field.RelatedEntityID;
+    let fkField: EntityFieldInfo | undefined = field;
+    let relatedEntityName = isForeignKey ? field.RelatedEntity : undefined;
+
+    // If this field doesn't have RelatedEntityID but is virtual, check for a corresponding FK field
+    // Pattern: for a field named "Category", look for "CategoryID" with RelatedEntityID
+    if (!isForeignKey && field.IsVirtual && this._entityInfo) {
+      const potentialFkFieldName = field.Name + 'ID';
+      const correspondingFkField = this._entityInfo.Fields.find(
+        f => f.Name.toLowerCase() === potentialFkFieldName.toLowerCase() && f.RelatedEntityID
+      );
+      if (correspondingFkField) {
+        isForeignKey = true;
+        fkField = correspondingFkField;
+        relatedEntityName = correspondingFkField.RelatedEntity;
+      }
+    }
+
     // Apply alignment - use custom format alignment if provided, otherwise default to right for numbers
     const customAlign = customFormat?.align;
     if (customAlign) {
@@ -1865,6 +2305,47 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     colDef.cellRenderer = (params: ICellRendererParams) => {
       if (params.value === null || params.value === undefined) {
         return '<span class="cell-empty">—</span>';
+      }
+
+      // Handle foreign key fields - render as clickable links
+      // Only apply FK rendering if no custom format is specified
+      if (isForeignKey && !customFormat && fkField?.RelatedEntityID) {
+        // For virtual display fields, we show the display value but link to the FK value
+        // For direct FK fields, the value IS the FK value
+        const isVirtualDisplay = field.IsVirtual && fkField !== field;
+        const displayValue = String(params.value);
+
+        // Get the actual FK value - for virtual fields, look it up from row data
+        let fkValue: string;
+        if (isVirtualDisplay && params.data) {
+          // Get the FK value from the corresponding FK field in the row data
+          fkValue = String(params.data[fkField.Name] ?? '');
+        } else {
+          fkValue = displayValue;
+        }
+
+        // Skip if we don't have a valid FK value
+        if (!fkValue) {
+          return `<span>${HighlightUtil.escapeHtml(displayValue)}</span>`;
+        }
+
+        const escapedDisplayValue = HighlightUtil.escapeHtml(displayValue);
+        const escapedFieldName = HighlightUtil.escapeHtml(fkField.Name);
+        const escapedRelatedEntityId = HighlightUtil.escapeHtml(fkField.RelatedEntityID);
+        const escapedRelatedEntityName = relatedEntityName ? HighlightUtil.escapeHtml(relatedEntityName) : '';
+
+        // Build data attributes for the click handler
+        const dataAttrs = `data-related-entity-id="${escapedRelatedEntityId}" data-record-id="${fkValue}" data-field-name="${escapedFieldName}"${relatedEntityName ? ` data-related-entity-name="${escapedRelatedEntityName}"` : ''}`;
+
+        // Apply highlighting if filter text is set
+        const displayText = this._filterText
+          ? HighlightUtil.highlight(displayValue, this._filterText, true)
+          : escapedDisplayValue;
+
+        // NOTE: Do NOT add onclick="event.stopPropagation()" here - it prevents AG Grid's cellClicked from firing
+        const linkHtml = `<a href="javascript:void(0)" class="cell-link cell-fk-link" ${dataAttrs}>${displayText}</a>`;
+
+        return linkHtml;
       }
 
       let displayValue = '';
@@ -2272,16 +2753,31 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
 
     this.loading = true;
+    this._aggregatesLoading = true;
     this.errorMessage = '';
     this.cdr.detectChanges();
 
     const startTime = performance.now();
 
     try {
+      // Build aggregate expressions from config if present
+      // Use EffectiveAggregatesConfig to check both _aggregatesConfig and _gridState.aggregates
+      const effectiveAggConfig = this.EffectiveAggregatesConfig;
+      let aggregateExpressions: AggregateExpression[] | undefined;
+      if (effectiveAggConfig?.expressions?.length) {
+        aggregateExpressions = effectiveAggConfig.expressions
+          .filter(agg => agg.enabled !== false && agg.expression)
+          .map(agg => ({
+            expression: agg.expression,
+            alias: agg.id || agg.label || agg.expression
+          }));
+      }
+
       const rv = new RunView();
       const result = await rv.RunView<BaseEntity>({
         ...runViewParams,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
+        Aggregates: aggregateExpressions
       });
 
       const loadTimeMs = performance.now() - startTime;
@@ -2290,6 +2786,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this._allData = result.Results || [];
         this.totalRowCount = result.TotalRowCount || this._allData.length;
         this.processData();
+
+        // Process aggregate results
+        this.processAggregateResults(result.AggregateResults, result.AggregateExecutionTime);
 
         // Reapply sort state to grid after data load to maintain visual indicators
         // Use Promise.resolve() to defer until after Angular's change detection cycle
@@ -2546,6 +3045,46 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  /**
+   * Process aggregate results from RunView and emit the AggregatesLoaded event.
+   * Builds the value map for easy lookup by expression or id.
+   */
+  private processAggregateResults(results: AggregateResult[] | undefined, executionTime?: number): void {
+    this._aggregatesLoading = false;
+
+    if (!results || results.length === 0) {
+      this._aggregateResults = [];
+      this._aggregateValues.clear();
+      return;
+    }
+
+    this._aggregateResults = results;
+    this._aggregateValues.clear();
+
+    // Build the values map, keyed by alias (which is set to id or expression)
+    for (const result of results) {
+      if (!result.error) {
+        this._aggregateValues.set(result.alias, result.value);
+      }
+    }
+
+    // Also map by expression for easy lookup
+    for (const result of results) {
+      if (!result.error && result.expression !== result.alias) {
+        this._aggregateValues.set(result.expression, result.value);
+      }
+    }
+
+    // Emit the aggregates loaded event
+    this.AggregatesLoaded.emit({
+      results: this._aggregateResults,
+      values: this._aggregateValues,
+      executionTime
+    });
+
+    this.cdr.detectChanges();
+  }
+
   private getRowKey(entity: BaseEntity): string {
     // Use composite key if available
     if (entity.PrimaryKey) {
@@ -2690,6 +3229,45 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Auto-navigate on double-click (if enabled)
     if (this._autoNavigate && this._navigateOnDoubleClick && this._editMode === 'none') {
       this.emitNavigationRequest(rowData.entity, pkString);
+    }
+  }
+
+  /**
+   * Handles cell click events to detect FK link clicks.
+   * When a user clicks on a foreign key link, emits ForeignKeyClick event
+   * for the parent component to handle navigation.
+   */
+  onAgCellClicked(event: CellClickedEvent): void {
+    // Check if the click was on an FK link
+    const target = event.event?.target as HTMLElement;
+    if (!target) {
+      return;
+    }
+
+    // Look for the FK link element (may be the target or a parent)
+    const fkLink = target.closest('.cell-fk-link') as HTMLElement;
+    if (!fkLink) {
+      return;
+    }
+
+    // Prevent the row click handler from firing
+    event.event?.stopPropagation();
+
+    // Extract FK data from data attributes
+    const relatedEntityId = fkLink.dataset['relatedEntityId'];
+    const recordId = fkLink.dataset['recordId'];
+    const fieldName = fkLink.dataset['fieldName'];
+    const relatedEntityName = fkLink.dataset['relatedEntityName'];
+
+    if (relatedEntityId && recordId && fieldName) {
+      this.ForeignKeyClick.emit({
+        relatedEntityId,
+        recordId,
+        fieldName,
+        relatedEntityName
+      });
+    } else {
+      //console.log('[FK Debug] Missing required data attributes, not emitting');
     }
   }
 
@@ -2910,7 +3488,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Persists the grid state to the UserView entity.
    * Only saves if the user has edit permission on the view.
    */
-  private async persistGridStateToView(state: ViewGridStateConfig): Promise<void> {
+  private async persistGridStateToView(state: ViewGridState): Promise<void> {
     if (!this._viewEntity || this.isSavingState) {
       return;
     }
@@ -2928,7 +3506,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Build the grid state JSON matching ViewGridState format
       const gridStateJson: ViewGridState = {
         columnSettings: state.columnSettings,
-        sortSettings: state.sortSettings
+        sortSettings: state.sortSettings,
+        aggregates: state.aggregates
       };
 
       // Update the view entity's GridState
@@ -2961,7 +3540,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     }
   }
 
-  private buildCurrentGridState(): ViewGridStateConfig {
+  private buildCurrentGridState(): ViewGridState {
     if (!this.gridApi || !this._entityInfo || !this._entityInfo.Fields) {
       return { columnSettings: [], sortSettings: [] };
     }
@@ -2988,7 +3567,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
     }
 
-    const columnSettings: ViewColumnConfig[] = [];
+    const columnSettings: ViewGridColumnSetting[] = [];
     // Collect sorted columns with their sortIndex for proper ordering
     const sortedColumns: Array<{ field: string; dir: 'asc' | 'desc'; sortIndex: number }> = [];
 
@@ -3000,7 +3579,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
       if (field) {
         const keyLower = field.Name.toLowerCase();
-        const colConfig: ViewColumnConfig = {
+        const colConfig: ViewGridColumnSetting = {
           ID: field.ID,
           Name: field.Name,
           DisplayName: field.DisplayNameOrName,
@@ -3035,12 +3614,17 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
     // Sort by sortIndex to maintain correct multi-sort priority order
     sortedColumns.sort((a, b) => a.sortIndex - b.sortIndex);
-    const sortSettings: ViewSortConfig[] = sortedColumns.map(s => ({
+    const sortSettings: ViewGridSortSetting[] = sortedColumns.map(s => ({
       field: s.field,
       dir: s.dir
     }));
 
-    return { columnSettings, sortSettings };
+    // Include current aggregates config in the state
+    return {
+      columnSettings,
+      sortSettings,
+      aggregates: this._aggregatesConfig || this._gridState?.aggregates
+    };
   }
 
   private applySortStateToGrid(): void {

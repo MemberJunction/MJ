@@ -1,0 +1,589 @@
+/* =============================================================================
+   Notification Preferences Component - Material Design 3
+   Following MD3 Design System Guidelines
+   ============================================================================= */
+
+/* MD3 Color Tokens */
+:host {
+  /* Primary - Deep Blue */
+  --md-primary: #0076B6;
+  --md-on-primary: #FFFFFF;
+  --md-primary-container: #AAE7FD;
+  --md-on-primary-container: #001F2A;
+
+  /* Secondary - Light Orange */
+  --md-secondary: #F5A623;
+  --md-on-secondary: #FFFFFF;
+  --md-secondary-container: #FFECD6;
+  --md-on-secondary-container: #2D1600;
+
+  /* Tertiary - Light Green */
+  --md-tertiary: #4CAF50;
+  --md-on-tertiary: #FFFFFF;
+  --md-tertiary-container: #C8E6C9;
+  --md-on-tertiary-container: #002204;
+
+  /* Error - Red */
+  --md-error: #D32F2F;
+  --md-on-error: #FFFFFF;
+  --md-error-container: #FFCDD2;
+  --md-on-error-container: #410002;
+
+  /* Warning - Amber */
+  --md-warning: #FFC107;
+  --md-on-warning: #2D1600;
+  --md-warning-container: #FFF3CD;
+  --md-on-warning-container: #856404;
+
+  /* Surface Colors */
+  --md-surface: #FAFCFF;
+  --md-surface-container-lowest: #FFFFFF;
+  --md-surface-container-low: #F3F5F9;
+  --md-surface-container: #EDF0F4;
+  --md-surface-container-high: #E7EAEE;
+  --md-surface-container-highest: #E1E3E8;
+  --md-on-surface: #191C20;
+  --md-on-surface-variant: #43474E;
+  --md-outline: #74777F;
+  --md-outline-variant: #C4C6D0;
+
+  /* Elevation (Box Shadows) */
+  --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --md-elevation-2: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.08);
+  --md-elevation-3: 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.08);
+  --md-elevation-4: 0 6px 12px rgba(0, 0, 0, 0.1), 0 12px 24px rgba(0, 0, 0, 0.08);
+  --md-elevation-5: 0 8px 16px rgba(0, 0, 0, 0.12), 0 16px 32px rgba(0, 0, 0, 0.1);
+
+  /* Corner Radii */
+  --md-corner-extra-small: 4px;
+  --md-corner-small: 8px;
+  --md-corner-medium: 12px;
+  --md-corner-large: 16px;
+  --md-corner-extra-large: 28px;
+  --md-corner-full: 9999px;
+
+  /* Host element configuration */
+  display: block;
+  width: 100%;
+}
+
+/* -----------------------------------------------------------------------------
+   Container & Layout
+   ----------------------------------------------------------------------------- */
+.notification-preferences-container {
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: var(--md-surface);
+}
+
+/* -----------------------------------------------------------------------------
+   Loading State
+   ----------------------------------------------------------------------------- */
+.content {
+  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* -----------------------------------------------------------------------------
+   Empty State
+   ----------------------------------------------------------------------------- */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+}
+
+.empty-state i {
+  font-size: 4rem;
+  color: var(--md-outline-variant);
+  margin-bottom: 1.5rem;
+  display: block;
+}
+
+.empty-state p {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--md-on-surface-variant);
+  margin: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Notification Types Grid
+   ----------------------------------------------------------------------------- */
+.notification-types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+/* -----------------------------------------------------------------------------
+   Notification Type Card
+   ----------------------------------------------------------------------------- */
+.notification-type-card {
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-corner-medium);
+  border-left: 4px solid var(--md-outline-variant);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--md-elevation-1);
+}
+
+.notification-type-card:hover {
+  box-shadow: var(--md-elevation-2);
+  border-color: var(--md-primary);
+}
+
+.notification-type-card.changed {
+  border-left-color: var(--md-primary) !important;
+  border-color: var(--md-primary);
+  box-shadow: var(--md-elevation-3);
+  background: var(--md-primary-container);
+}
+
+/* -----------------------------------------------------------------------------
+   Card Header
+   ----------------------------------------------------------------------------- */
+.card-header {
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-bottom: 1px solid var(--md-outline-variant);
+  align-items: flex-start;
+}
+
+.icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--md-corner-small);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.notification-type-card:hover .icon-wrapper {
+  transform: scale(1.05);
+}
+
+.icon-wrapper i {
+  font-size: 1.5rem;
+}
+
+.header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.header-text h4 {
+  margin: 0 0 0.375rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+
+.type-description {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--md-on-surface-variant);
+  line-height: 1.4;
+}
+
+/* -----------------------------------------------------------------------------
+   Card Body
+   ----------------------------------------------------------------------------- */
+.card-body {
+  padding: 1.25rem;
+}
+
+.preference-row {
+  margin-bottom: 1rem;
+}
+
+.preference-row:last-child {
+  margin-bottom: 0;
+}
+
+.delivery-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--md-on-surface);
+  letter-spacing: 0.01em;
+}
+
+/* -----------------------------------------------------------------------------
+   Delivery Channel Checkboxes
+   ----------------------------------------------------------------------------- */
+.delivery-checkboxes {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.channel-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--md-outline-variant);
+  border-radius: var(--md-corner-small);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  background: var(--md-surface);
+  min-height: 44px;
+}
+
+.channel-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--md-primary);
+  margin: 0;
+}
+
+.channel-checkbox input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.channel-checkbox i {
+  color: var(--md-on-surface-variant);
+  font-size: 1rem;
+  transition: color 0.2s;
+}
+
+.channel-checkbox span {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--md-on-surface);
+}
+
+.channel-checkbox:hover:not(:has(input:disabled)) {
+  border-color: var(--md-primary);
+  background: var(--md-primary-container);
+}
+
+.channel-checkbox:hover:not(:has(input:disabled)) i {
+  color: var(--md-primary);
+}
+
+.channel-checkbox:has(input:checked) {
+  border-color: var(--md-primary);
+  background: var(--md-primary-container);
+}
+
+.channel-checkbox:has(input:checked) i {
+  color: var(--md-primary);
+}
+
+.channel-checkbox:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--md-surface-container-low);
+}
+
+.channel-checkbox:focus-within {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+   Info Message
+   ----------------------------------------------------------------------------- */
+.info-message {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: var(--md-warning-container);
+  border-left: 3px solid var(--md-warning);
+  border-radius: var(--md-corner-small);
+  font-size: 0.8125rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  line-height: 1.4;
+  color: var(--md-on-warning-container);
+}
+
+.info-message i {
+  color: var(--md-on-warning-container);
+  font-size: 1rem;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Metadata Row
+   ----------------------------------------------------------------------------- */
+.metadata-row {
+  display: flex;
+  gap: 0.625rem;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: var(--md-on-surface-variant);
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.metadata-row i {
+  color: var(--md-on-surface-variant);
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.metadata-text {
+  line-height: 1.4;
+}
+
+/* -----------------------------------------------------------------------------
+   Action Buttons Section
+   ----------------------------------------------------------------------------- */
+.actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  background: var(--md-surface-container-low);
+  border-radius: var(--md-corner-medium);
+  border: 1px solid var(--md-outline-variant);
+  margin-top: 1.5rem;
+}
+
+/* -----------------------------------------------------------------------------
+   Button System - MD3 Patterns
+   ----------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--md-corner-full);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  min-height: 44px;
+}
+
+.btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.btn i {
+  font-size: 1rem;
+}
+
+.btn-secondary {
+  background: var(--md-surface);
+  color: var(--md-primary);
+  border: 1px solid var(--md-outline);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  border-color: var(--md-primary);
+}
+
+.btn-secondary:active:not(:disabled) {
+  background: #005A8C;
+  border-color: #005A8C;
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  box-shadow: var(--md-elevation-1);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #3395C8;
+  box-shadow: var(--md-elevation-2);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: #4BA5D4;
+  transform: scale(0.98);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  border: none;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+
+.btn-ghost:active:not(:disabled) {
+  background: #005A8C;
+  transform: scale(0.98);
+}
+
+.btn-danger {
+  background: var(--md-error);
+  color: var(--md-on-error);
+  box-shadow: var(--md-elevation-1);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #E57373;
+  box-shadow: var(--md-elevation-2);
+}
+
+.btn-danger:active:not(:disabled) {
+  background: #EF9A9A;
+  transform: scale(0.98);
+}
+
+.btn-sm {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  min-height: 36px;
+}
+
+/* -----------------------------------------------------------------------------
+   Badge System - MD3 Patterns
+   ----------------------------------------------------------------------------- */
+.badge-system {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: var(--md-corner-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--md-secondary-container);
+  color: #7A4D0C;
+  border: 1px solid var(--md-secondary);
+}
+
+.badge-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: var(--md-corner-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--md-tertiary-container);
+  color: #1B5E20;
+  border: 1px solid var(--md-tertiary);
+}
+
+/* -----------------------------------------------------------------------------
+   Accessibility: Focus Indicators
+   ----------------------------------------------------------------------------- */
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+   Accessibility: Reduced Motion
+   ----------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Animations
+   ----------------------------------------------------------------------------- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Responsive Design - Mobile First
+   ----------------------------------------------------------------------------- */
+@media (max-width: 639px) {
+  .notification-preferences-container {
+    padding: 1rem;
+  }
+
+  .notification-types-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .card-header {
+    padding: 1rem;
+  }
+
+  .card-body {
+    padding: 1rem;
+  }
+
+  .delivery-checkboxes {
+    flex-direction: column;
+  }
+
+  .channel-checkbox {
+    width: 100%;
+  }
+
+  .actions {
+    flex-direction: column;
+    padding: 1rem;
+  }
+
+  .actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 767px) {
+  .notification-types-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 768px) {
+  .notification-preferences-container {
+    padding: 2rem;
+  }
+
+  .notification-types-grid {
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .notification-types-grid {
+    grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+    gap: 1.5rem;
+  }
+}

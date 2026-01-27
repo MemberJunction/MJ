@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "GetConversationsForMemoryManager",
+      "CategoryID": "@lookup:Query Categories.Name=Agents",
+      "UserQuestion": "What conversations have new activity that need to be analyzed for memory extraction?",
+      "Description": "Returns all conversation data needed for memory extraction in a single query: conversations with new activity, their details with ratings, and linked agent runs for scope inheritance. Optimized to replace 4 separate sequential queries.",
+      "SQL": "@file:SQL/get-conversations-for-memory-manager.sql",
+      "TechnicalDescription": "Single-query optimization that replaces 4 separate RunView calls in Memory Manager (get conversations, get agent runs, get details, get ratings). Uses SQL Server FOR JSON PATH to aggregate conversation details with ratings as JSON arrays. Returns rating summary flags (HasPositiveRating, HasNegativeRating, IsUnrated) and most recent AgentRunID for scope inheritance. Reduces database round trips from 4 to 1.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "574FD9D5-AB9E-4FA5-A36C-C25E7D3F63FC"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T02:14:30.100Z",
+      "checksum": "3fbab3929c059c845f5980c767b384e45279f15a9fa277e4260a1480498c9859"
+    }
+  }
+]

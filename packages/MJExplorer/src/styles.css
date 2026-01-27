@@ -5,6 +5,7 @@
  * This file should only contain MJExplorer-specific customizations and overrides.
  *
  * Core styles (Golden Layout, Kendo theme, MJ components) are in the package.
+ * MD3 design tokens are now in @memberjunction/ng-explorer-app styles/_md3-theme.scss
  */
 
 /* Application-specific layout adjustments */

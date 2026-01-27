@@ -516,7 +516,53 @@ The server supports multiple authentication providers:
 
 ### API Key Authentication
 
-The server also supports API key authentication via the `x-mj-api-key` header.
+The server supports two types of API key authentication:
+
+#### User API Keys (`X-API-Key` header)
+
+Per-user API keys that authenticate as a specific user. These follow the `mj_sk_*` format and are created via the EncryptionEngine:
+
+```typescript
+import { EncryptionEngine } from '@memberjunction/encryption';
+
+// Create a new API key for a user
+const result = await EncryptionEngine.Instance.CreateAPIKey({
+    userId: 'user-guid-here',
+    label: 'My Integration',
+    description: 'API key for external integration',
+    expiresAt: new Date('2025-12-31') // Optional
+}, contextUser);
+
+if (result.success) {
+    console.log('API Key:', result.rawKey); // Save this - cannot be recovered!
+}
+```
+
+Usage:
+```bash
+curl -H "X-API-Key: mj_sk_abc123..." https://api.example.com/graphql
+```
+
+Features:
+- Authenticates as the specific user who owns the key
+- Supports expiration dates
+- Can be revoked individually
+- Usage is logged for audit purposes
+- `apiKeyId` is included in the request context
+
+#### System API Key (`x-mj-api-key` header)
+
+A single shared API key for system-level operations, configured via the `MJ_API_KEY` environment variable:
+
+```bash
+curl -H "x-mj-api-key: your-system-key" https://api.example.com/graphql
+```
+
+Features:
+- Authenticates as the system user
+- Used for server-to-server communication
+- Has elevated privileges for system operations
+- `isSystemUser: true` is set in the request context
 
 ### Access Control
 

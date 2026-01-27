@@ -465,12 +465,26 @@ The REST API is enabled by default and provides comprehensive endpoints for enti
 - `GET /api/actions/:entityName` - List available actions for an entity
 
 #### Authentication Headers
-All REST API requests require authentication:
+
+All REST API requests require authentication using one of these methods:
+
 ```http
+# OAuth/JWT Authentication (browser-based apps, SSO)
 Authorization: Bearer <jwt-token>
 X-Session-ID: <session-id>
-X-MJ-API-Key: <api-key>
+
+# User API Key Authentication (programmatic access, integrations)
+X-API-Key: mj_sk_<64-hex-chars>
+
+# System API Key Authentication (server-to-server, system operations)
+x-mj-api-key: <system-api-key>
 ```
+
+| Header | Purpose | Authenticates As |
+|--------|---------|------------------|
+| `Authorization: Bearer` | OAuth/JWT tokens | User from identity provider |
+| `X-API-Key` | User API keys (`mj_sk_*`) | Specific user who owns the key |
+| `x-mj-api-key` | System API key | System user (elevated privileges) |
 
 ## Architecture
 
@@ -608,9 +622,26 @@ The API includes built-in GraphQL documentation accessible through the GraphQL p
 ### Authentication
 
 The API supports multiple authentication methods:
-1. **JWT Tokens**: Bearer tokens in Authorization header
-2. **Session IDs**: Via X-Session-ID header
-3. **API Keys**: Via X-MJ-API-Key header
+
+1. **JWT Tokens** (`Authorization: Bearer <token>`)
+   - OAuth/JWT tokens from identity providers (Azure AD, Auth0)
+   - Used for browser-based applications and SSO
+
+2. **User API Keys** (`X-API-Key: mj_sk_*`)
+   - Per-user cryptographically secure API keys
+   - Created via `EncryptionEngine.Instance.CreateAPIKey()`
+   - Authenticates as the specific user who owns the key
+   - Supports expiration and individual revocation
+   - Usage is logged for audit purposes
+
+3. **System API Key** (`x-mj-api-key: <key>`)
+   - Single shared key for system-level operations
+   - Configured via `MJ_API_KEY` environment variable
+   - Authenticates as the system user with elevated privileges
+   - Used for server-to-server communication
+
+4. **Session IDs** (`X-Session-ID: <id>`)
+   - Used alongside JWT tokens for session tracking
 
 ### Error Handling
 

@@ -51,6 +51,48 @@ Determine appropriate scope:
 - **Company-specific** (`companyId`): Example relevant to org's domain/process
 - **General** (agent only): Broadly applicable example
 
+### Multi-Tenant Scope Level (for SaaS deployments)
+
+When the agent is used in a multi-tenant SaaS context, determine the appropriate scope level using the `scopeLevel` field:
+
+- **"global"**: Applies to ALL users and organizations (e.g., "How to format dates", "Standard greeting patterns")
+- **"organization"**: Applies to all contacts within an organization (e.g., "This org's product catalog structure", "Company-specific terminology")
+- **"contact"**: Specific to one individual contact (e.g., "John's preferred response format", "Sarah's typical questions")
+
+**Hints for determining scope level:**
+- Keywords like "always", "all customers", "everyone" → `global`
+- Keywords like "company", "organization", "all users here", "our policy" → `organization`
+- Specific person names, individual preferences, personal context → `contact`
+
+If the conversation doesn't have clear multi-tenant context, omit the `scopeLevel` field (defaults to most specific).
+
+### Durable vs Ephemeral Detection
+
+Use these phrase patterns to determine appropriate scope level:
+
+**Ephemeral Indicators (→ contact scope or skip entirely):**
+- "this time", "just for now", "today only", "for this call"
+- "temporarily", "one-time", "exception", "just once"
+
+**Durable Indicators (→ organization or global scope):**
+- "always", "never", "company policy", "all customers"
+- "standard practice", "we typically", "our preference"
+- "every time", "by default", "as a rule"
+
+### DO NOT Capture (Extraction Guardrails)
+
+**Never extract examples containing:**
+- **PII**: Social Security numbers, payment info, passwords, health records
+- **Sensitive data**: Confidential business details, legal case specifics
+- **Temporary interactions**: One-off requests not representative of typical usage
+- **Incomplete exchanges**: Partial conversations without clear resolution
+
+**Format Constraints:**
+- exampleInput: Maximum 500 characters
+- exampleOutput: Maximum 1000 characters
+- successScore < 70 → do not extract
+- confidence < 70 → do not extract
+
 ### Success Score Calculation
 
 Base score on:
@@ -67,20 +109,21 @@ Return **only high-quality examples (successScore ≥70, confidence ≥70)** in 
   "examples": [
     {
       "type": "Example",
-      "agentId": "agent-uuid-required",
-      "userId": null,
-      "companyId": null,
       "exampleInput": "Show me Q1 sales data for our top products",
       "exampleOutput": "Here's Q1 data (April-June): Widget Pro: $450K (+15%), Gadget Plus: $320K",
       "successScore": 85,
       "confidence": 90,
-      "sourceConversationId": "conv-uuid",
-      "sourceConversationDetailId": "detail-uuid",
-      "sourceAgentRunId": null
+      "scopeLevel": "organization",
+      "sourceConversationId": "<use actual conversation ID from input>",
+      "sourceConversationDetailId": "<use actual message ID from input>"
     }
   ]
 }
 ```
+
+**Important**:
+- Do NOT include `agentId`, `userId`, or `companyId` - these are automatically inherited from the source conversation.
+- Use the ACTUAL IDs from the conversation data - do NOT invent placeholder UUIDs.
 
 ## Quality Standards
 

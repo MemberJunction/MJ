@@ -1,255 +1,263 @@
-<kendo-window
-  *ngIf="visible"
-  [width]="900"
-  [height]="700"
-  [resizable]="false"
-  [draggable]="true"
-  [keepContent]="true"
-  (close)="onCancel()"
-  kendoWindowContainer>
-  
-  <kendo-window-titlebar>
-    <div class="dialog-header">
-      <h2 class="dialog-title">
-        <i class="fa-solid fa-key"></i>
-        Edit Entity Permissions
-      </h2>
-      <p class="dialog-subtitle">
-        Configure role-based permissions for {{ data?.entity?.Name }}
-      </p>
+<!-- MD3 Modal Dialog -->
+<div class="modal-backdrop" *ngIf="visible" (click)="onCancel()">
+  <div class="modal-dialog" (click)="$event.stopPropagation()">
+
+    <!-- Modal Header -->
+    <div class="modal-header">
+      <div class="dialog-header">
+        <h2 class="dialog-title">
+          <i class="fa-solid fa-key"></i>
+          Edit Entity Permissions
+        </h2>
+        <p class="dialog-subtitle">
+          Configure role-based permissions for {{ data?.entity?.Name }}
+        </p>
+      </div>
+      <button type="button" class="modal-close" (click)="onCancel()" aria-label="Close dialog">
+        <i class="fa-solid fa-times"></i>
+      </button>
     </div>
-  </kendo-window-titlebar>
 
-  <div class="dialog-content">
-    <form [formGroup]="permissionForm" (ngSubmit)="onSubmit()">
-      
-      @if (error) {
-        <div class="content-section">
-          <div class="alert alert-error">
-            <i class="fa-solid fa-exclamation-triangle"></i>
-            <div>{{ error }}</div>
-          </div>
-        </div>
-      }
+    <!-- Modal Body -->
+    <div class="modal-body">
+      <form [formGroup]="permissionForm" (ngSubmit)="onSubmit()">
 
-      <!-- Entity Information Section -->
-      <div class="content-section">
-        <div class="form-section">
-          <div class="section-header">
-            <h3 class="section-title">
-              <i class="fa-solid fa-database"></i>
-              Entity Information
-            </h3>
-            <p class="section-description">{{ data?.entity?.Description || 'Entity permissions configuration' }}</p>
-          </div>
-          
-          <div class="entity-info-card">
-            <div class="entity-meta">
-              <div class="meta-item">
-                <i class="fa-solid fa-table"></i>
-                <span class="meta-label">Entity:</span>
-                <span class="meta-value">{{ data?.entity?.Name }}</span>
-              </div>
-              <div class="meta-item">
-                <i class="fa-solid fa-key"></i>
-                <span class="meta-label">Total Permissions:</span>
-                <span class="meta-value">{{ rolePermissions.length }}</span>
-              </div>
-              <div class="meta-item">
-                <i class="fa-solid fa-clock"></i>
-                <span class="meta-label">Last Updated:</span>
-                <span class="meta-value">{{ data?.entity?.__mj_UpdatedAt | date:'medium' }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Permissions Configuration Section -->
-      <div class="content-section">
-        <div class="form-section">
-          <div class="section-header">
-            <h3 class="section-title">
-              <i class="fa-solid fa-users-cog"></i>
-              Role Permissions
-            </h3>
-            <p class="section-description">Configure CRUD permissions for each role</p>
-          </div>
-          
-          <div class="permissions-table-container">
-            <table class="permissions-table">
-              <thead>
-                <tr>
-                  <th class="role-column">Role</th>
-                  <th class="permission-column">
-                    <i class="fa-solid fa-plus"></i>
-                    Create
-                  </th>
-                  <th class="permission-column">
-                    <i class="fa-solid fa-eye"></i>
-                    Read
-                  </th>
-                  <th class="permission-column">
-                    <i class="fa-solid fa-edit"></i>
-                    Update
-                  </th>
-                  <th class="permission-column">
-                    <i class="fa-solid fa-trash"></i>
-                    Delete
-                  </th>
-                  <th class="actions-column">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (rolePermission of rolePermissions; track rolePermission.roleId) {
-                  <tr class="permission-row" [class.has-changes]="hasEntityChanges(rolePermission)" [class.is-new]="rolePermission.isNew">
-                    <td class="role-name">
-                      <div class="role-info">
-                        <i class="fa-solid fa-shield-halved"></i>
-                        <span>{{ rolePermission.roleName }}</span>
-                        @if (rolePermission.isNew) {
-                          <span class="new-badge">New</span>
-                        }
-                        @if (hasEntityChanges(rolePermission) && !rolePermission.isNew) {
-                          <span class="changed-badge">Modified</span>
-                        }
-                      </div>
-                    </td>
-                    <td class="permission-cell">
-                      <div class="permission-toggle">
-                        <input 
-                          type="checkbox" 
-                          [id]="'create-' + rolePermission.roleId"
-                          [(ngModel)]="rolePermission.entityPermission.CanCreate"
-                          [ngModelOptions]="{standalone: true}"
-                          class="permission-checkbox"
-                        />
-                        <label [for]="'create-' + rolePermission.roleId" class="permission-label">
-                          <div class="checkbox-indicator"></div>
-                        </label>
-                      </div>
-                    </td>
-                    <td class="permission-cell">
-                      <div class="permission-toggle">
-                        <input 
-                          type="checkbox" 
-                          [id]="'read-' + rolePermission.roleId"
-                          [(ngModel)]="rolePermission.entityPermission.CanRead"
-                          [ngModelOptions]="{standalone: true}"
-                          class="permission-checkbox"
-                        />
-                        <label [for]="'read-' + rolePermission.roleId" class="permission-label">
-                          <div class="checkbox-indicator"></div>
-                        </label>
-                      </div>
-                    </td>
-                    <td class="permission-cell">
-                      <div class="permission-toggle">
-                        <input 
-                          type="checkbox" 
-                          [id]="'update-' + rolePermission.roleId"
-                          [(ngModel)]="rolePermission.entityPermission.CanUpdate"
-                          [ngModelOptions]="{standalone: true}"
-                          class="permission-checkbox"
-                        />
-                        <label [for]="'update-' + rolePermission.roleId" class="permission-label">
-                          <div class="checkbox-indicator"></div>
-                        </label>
-                      </div>
-                    </td>
-                    <td class="permission-cell">
-                      <div class="permission-toggle">
-                        <input 
-                          type="checkbox" 
-                          [id]="'delete-' + rolePermission.roleId"
-                          [(ngModel)]="rolePermission.entityPermission.CanDelete"
-                          [ngModelOptions]="{standalone: true}"
-                          class="permission-checkbox"
-                        />
-                        <label [for]="'delete-' + rolePermission.roleId" class="permission-label">
-                          <div class="checkbox-indicator"></div>
-                        </label>
-                      </div>
-                    </td>
-                    <td class="actions-cell">
-                      <button 
-                        type="button" 
-                        class="btn-icon btn-danger"
-                        (click)="removeRolePermission(rolePermission)"
-                        title="Remove permissions for this role"
-                      >
-                        <i class="fa-solid fa-times"></i>
-                      </button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-            
-            @if (rolePermissions.length === 0) {
-              <div class="empty-permissions">
-                <i class="fa-solid fa-shield-halved"></i>
-                <p>No role permissions configured</p>
-                <p class="empty-subtext">Add permissions for specific roles to control access to this entity</p>
-              </div>
-            }
-          </div>
-          
-          <!-- Add Role Permissions -->
-          <div class="add-role-section">
-            <div class="add-role-header">
-              <h4>Add Role Permissions</h4>
-              <p>Select roles to configure permissions for this entity</p>
-            </div>
-            <div class="available-roles">
-              @for (role of availableRoles; track role.ID) {
-                <button 
-                  type="button" 
-                  class="role-chip"
-                  (click)="addRolePermission(role)"
-                  title="Add permissions for {{ role.Name }}"
-                >
-                  <i class="fa-solid fa-plus"></i>
-                  {{ role.Name }}
-                </button>
-              }
-              @if (availableRoles.length === 0) {
-                <p class="no-available-roles">All roles have been configured</p>
-              }
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="dialog-footer">
-        <div class="footer-info">
-          @if (hasChanges) {
-            <span class="changes-indicator">
+        @if (error) {
+          <div class="content-section">
+            <div class="alert alert-error">
               <i class="fa-solid fa-exclamation-triangle"></i>
-              You have unsaved changes
-            </span>
-          }
+              <div>{{ error }}</div>
+            </div>
+          </div>
+        }
+
+        <!-- Entity Information Section -->
+        <div class="content-section">
+          <div class="form-section">
+            <div class="section-header">
+              <h3 class="section-title">
+                <i class="fa-solid fa-database"></i>
+                Entity Information
+              </h3>
+              <p class="section-description">{{ data?.entity?.Description || 'Entity permissions configuration' }}</p>
+            </div>
+
+            <div class="entity-info-card">
+              <div class="entity-meta">
+                <div class="meta-item">
+                  <i class="fa-solid fa-table"></i>
+                  <span class="meta-label">Entity:</span>
+                  <span class="meta-value">{{ data?.entity?.Name }}</span>
+                </div>
+                <div class="meta-item">
+                  <i class="fa-solid fa-shield-halved"></i>
+                  <span class="meta-label">Schema Name:</span>
+                  <span class="meta-value">{{ data?.entity?.SchemaName || 'N/A' }}</span>
+                </div>
+                <div class="meta-item">
+                  <i class="fa-solid fa-key"></i>
+                  <span class="meta-label">Total Permissions:</span>
+                  <span class="meta-value">{{ rolePermissions.length }}</span>
+                </div>
+                <div class="meta-item">
+                  <i class="fa-solid fa-clock"></i>
+                  <span class="meta-label">Last Updated:</span>
+                  <span class="meta-value">{{ data?.entity?.__mj_UpdatedAt | date:'medium' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="footer-actions">
-          <button type="button" class="btn btn-secondary" (click)="onCancel()">
-            <i class="fa-solid fa-times"></i>
-            Cancel
-          </button>
-          <button 
-            type="submit" 
-            class="btn btn-primary" 
-            [disabled]="!hasChanges || isLoading"
-          >
-            @if (isLoading) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
-              Saving...
-            } @else {
-              <i class="fa-solid fa-save"></i>
-              Save Permissions
+
+        <!-- Permissions Configuration Section -->
+        <div class="content-section">
+          <div class="form-section">
+            <div class="section-header">
+              <h3 class="section-title">
+                <i class="fa-solid fa-users-cog"></i>
+                Role Permissions
+              </h3>
+              <p class="section-description">Configure CRUD permissions for each role</p>
+            </div>
+
+            <div class="permissions-table-container">
+              <table class="permissions-table">
+                <thead>
+                  <tr>
+                    <th class="role-column">Role</th>
+                    <th class="permission-column">
+                      <i class="fa-solid fa-plus"></i>
+                      Create
+                    </th>
+                    <th class="permission-column">
+                      <i class="fa-solid fa-eye"></i>
+                      Read
+                    </th>
+                    <th class="permission-column">
+                      <i class="fa-solid fa-edit"></i>
+                      Update
+                    </th>
+                    <th class="permission-column">
+                      <i class="fa-solid fa-trash"></i>
+                      Delete
+                    </th>
+                    <th class="actions-column">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (rolePermission of rolePermissions; track rolePermission.roleId) {
+                    <tr class="permission-row" [class.has-changes]="hasEntityChanges(rolePermission)" [class.is-new]="rolePermission.isNew">
+                      <td class="role-name">
+                        <div class="role-info">
+                          <i class="fa-solid fa-shield-halved"></i>
+                          <span>{{ rolePermission.roleName }}</span>
+                          @if (rolePermission.isNew) {
+                            <span class="new-badge">New</span>
+                          }
+                          @if (hasEntityChanges(rolePermission) && !rolePermission.isNew) {
+                            <span class="changed-badge">Modified</span>
+                          }
+                        </div>
+                      </td>
+                      <td class="permission-cell">
+                        <div class="permission-toggle">
+                          <input
+                            type="checkbox"
+                            [id]="'create-' + rolePermission.roleId"
+                            [(ngModel)]="rolePermission.entityPermission.CanCreate"
+                            [ngModelOptions]="{standalone: true}"
+                            class="permission-checkbox"
+                          />
+                          <label [for]="'create-' + rolePermission.roleId" class="permission-label">
+                            <div class="checkbox-indicator"></div>
+                          </label>
+                        </div>
+                      </td>
+                      <td class="permission-cell">
+                        <div class="permission-toggle">
+                          <input
+                            type="checkbox"
+                            [id]="'read-' + rolePermission.roleId"
+                            [(ngModel)]="rolePermission.entityPermission.CanRead"
+                            [ngModelOptions]="{standalone: true}"
+                            class="permission-checkbox"
+                          />
+                          <label [for]="'read-' + rolePermission.roleId" class="permission-label">
+                            <div class="checkbox-indicator"></div>
+                          </label>
+                        </div>
+                      </td>
+                      <td class="permission-cell">
+                        <div class="permission-toggle">
+                          <input
+                            type="checkbox"
+                            [id]="'update-' + rolePermission.roleId"
+                            [(ngModel)]="rolePermission.entityPermission.CanUpdate"
+                            [ngModelOptions]="{standalone: true}"
+                            class="permission-checkbox"
+                          />
+                          <label [for]="'update-' + rolePermission.roleId" class="permission-label">
+                            <div class="checkbox-indicator"></div>
+                          </label>
+                        </div>
+                      </td>
+                      <td class="permission-cell">
+                        <div class="permission-toggle">
+                          <input
+                            type="checkbox"
+                            [id]="'delete-' + rolePermission.roleId"
+                            [(ngModel)]="rolePermission.entityPermission.CanDelete"
+                            [ngModelOptions]="{standalone: true}"
+                            class="permission-checkbox"
+                          />
+                          <label [for]="'delete-' + rolePermission.roleId" class="permission-label">
+                            <div class="checkbox-indicator"></div>
+                          </label>
+                        </div>
+                      </td>
+                      <td class="actions-cell">
+                        <button
+                          type="button"
+                          class="btn-icon btn-danger"
+                          (click)="removeRolePermission(rolePermission)"
+                          title="Remove permissions for this role"
+                          attr.aria-label="Remove permissions for {{ rolePermission.roleName }}"
+                        >
+                          <i class="fa-solid fa-times"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+
+              @if (rolePermissions.length === 0) {
+                <div class="empty-permissions">
+                  <i class="fa-solid fa-shield-halved"></i>
+                  <p>No role permissions configured</p>
+                  <p class="empty-subtext">Add permissions for specific roles to control access to this entity</p>
+                </div>
+              }
+            </div>
+
+            <!-- Add Role Permissions -->
+            <div class="add-role-section">
+              <div class="add-role-header">
+                <h4>Add Role Permissions</h4>
+                <p>Select roles to configure permissions for this entity</p>
+              </div>
+              <div class="available-roles">
+                @for (role of availableRoles; track role.ID) {
+                  <button
+                    type="button"
+                    class="role-chip"
+                    (click)="addRolePermission(role)"
+                    title="Add permissions for {{ role.Name }}"
+                    attr.aria-label="Add permissions for {{ role.Name }}"
+                  >
+                    <i class="fa-solid fa-plus"></i>
+                    {{ role.Name }}
+                  </button>
+                }
+                @if (availableRoles.length === 0) {
+                  <p class="no-available-roles">All roles have been configured</p>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer">
+          <div class="footer-info">
+            @if (hasChanges) {
+              <span class="changes-indicator">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                You have unsaved changes
+              </span>
             }
-          </button>
+          </div>
+          <div class="footer-actions">
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="!hasChanges || isLoading"
+            >
+              @if (isLoading) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Saving...
+              } @else {
+                <i class="fa-solid fa-save"></i>
+                Save Permissions
+              }
+            </button>
+            <button type="button" class="btn btn-secondary" (click)="onCancel()">
+              <i class="fa-solid fa-times"></i>
+              Cancel
+            </button>
+          </div>
         </div>
-      </div>
-    </form>
+      </form>
+    </div>
   </div>
-</kendo-window>
+</div>
