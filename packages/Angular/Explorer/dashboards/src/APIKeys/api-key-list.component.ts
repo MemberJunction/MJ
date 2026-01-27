@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
 import { RunView } from '@memberjunction/core';
 import { APIKeyEntity, APIKeyScopeEntity, APIScopeEntity } from '@memberjunction/core-entities';
+import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 
 /** Filter options for the list */
 export type APIKeyFilter = 'all' | 'active' | 'revoked' | 'expiring' | 'expired' | 'never-used';
@@ -71,18 +72,14 @@ export class APIKeyListComponent implements OnInit, OnChanges {
     public KeyScopeMap = new Map<string, KeyScopeInfo>();
     private AllScopes: APIScopeEntity[] = [];
 
-    // Category config for scope display
-    private readonly categoryConfig: Record<string, { icon: string; color: string }> = {
-        'Entities': { icon: 'fa-solid fa-database', color: '#6366f1' },
-        'Agents': { icon: 'fa-solid fa-robot', color: '#10b981' },
-        'Admin': { icon: 'fa-solid fa-shield-halved', color: '#f59e0b' },
-        'Actions': { icon: 'fa-solid fa-bolt', color: '#8b5cf6' },
-        'Queries': { icon: 'fa-solid fa-magnifying-glass', color: '#3b82f6' },
-        'Views': { icon: 'fa-solid fa-eye', color: '#06b6d4' },
-        'Reports': { icon: 'fa-solid fa-chart-bar', color: '#ef4444' },
-        'Communication': { icon: 'fa-solid fa-envelope', color: '#ec4899' },
-        'Other': { icon: 'fa-solid fa-ellipsis', color: '#6b7280' }
+    // Default UI config for categories without explicit configuration
+    private readonly defaultUIConfig = {
+        icon: 'fa-solid fa-ellipsis',
+        color: '#6b7280'
     };
+
+    // Dynamic category UI config built from root scopes
+    private categoryUIConfigs = new Map<string, { icon: string; color: string }>();
 
     async ngOnInit(): Promise<void> {
         await this.loadKeys();
@@ -101,16 +98,13 @@ export class APIKeyListComponent implements OnInit, OnChanges {
         this.IsLoading = true;
         try {
             const rv = new RunView();
+            const base = APIKeysEngineBase.Instance;
 
-            // Load keys, scopes, and key-scope assignments in parallel
-            const [keysResult, scopesResult, keyScopesResult] = await rv.RunViews([
+            // Load keys and key-scope assignments (scopes from cache)
+            const [keysResult, keyScopesResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: API Keys',
                     OrderBy: '__mj_CreatedAt DESC',
-                    ResultType: 'entity_object'
-                },
-                {
-                    EntityName: 'MJ: API Scopes',
                     ResultType: 'entity_object'
                 },
                 {
@@ -121,7 +115,19 @@ export class APIKeyListComponent implements OnInit, OnChanges {
 
             if (keysResult.Success) {
                 this.AllKeys = keysResult.Results as APIKeyEntity[];
-                this.AllScopes = (scopesResult.Success ? scopesResult.Results : []) as APIScopeEntity[];
+                this.AllScopes = base.Scopes;
+
+                // Build category UI config from root scopes
+                this.categoryUIConfigs.clear();
+                for (const scope of this.AllScopes) {
+                    if (!scope.ParentID) {
+                        const uiConfig = parseAPIScopeUIConfig(scope);
+                        this.categoryUIConfigs.set(scope.Category, {
+                            icon: uiConfig.icon || this.defaultUIConfig.icon,
+                            color: uiConfig.color || this.defaultUIConfig.color
+                        });
+                    }
+                }
 
                 // Build scope lookup map
                 const scopeMap = new Map<string, APIScopeEntity>();
@@ -151,7 +157,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
                     for (const [keyId, data] of keyToScopes.entries()) {
                         const categories: CategoryScopeCount[] = Array.from(data.categories.entries())
                             .map(([category, count]) => {
-                                const config = this.categoryConfig[category] || this.categoryConfig['Other'];
+                                const config = this.categoryUIConfigs.get(category) || this.defaultUIConfig;
                                 return {
                                     category,
                                     count,

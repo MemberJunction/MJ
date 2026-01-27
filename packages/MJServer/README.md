@@ -564,6 +564,65 @@ Features:
 - Has elevated privileges for system operations
 - `isSystemUser: true` is set in the request context
 
+### Scope-Based Authorization
+
+API keys are subject to scope-based authorization, which controls what operations each key can perform. This is implemented in `ResolverBase.CheckAPIKeyScopeAuthorization()`.
+
+#### How It Works
+
+1. **Application Ceiling**: Each API application (GraphQL API, MCP Server, A2A Server) defines maximum allowed scopes
+2. **API Key Scopes**: Each API key has assigned scopes from the `MJ: API Scopes` entity
+3. **Two-Level Evaluation**: Authorization succeeds only if both application ceiling AND API key scopes permit the operation
+
+#### Available Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `full_access` | Bypass all scope checks ("god mode") |
+| `entity:read` | Read entity records |
+| `entity:create` | Create new records |
+| `entity:update` | Update existing records |
+| `entity:delete` | Delete records |
+| `view:run` | Execute RunView queries |
+| `agent:execute` | Execute AI agents |
+| `agent:monitor` | Check agent run status |
+| `action:execute` | Execute MJ Actions |
+| `prompt:execute` | Execute AI prompts |
+| `query:run` | Execute queries |
+| `metadata:entities:read` | Read entity metadata |
+| `metadata:agents:read` | Read agent metadata |
+| `communication:send` | Send emails/messages |
+
+#### Default Behavior
+
+**Important**: API keys with **no scopes assigned** will have **no permissions** and all requests will be denied (except for OAuth/JWT authenticated users which bypass scope checks).
+
+#### Adding Scope Checks to Custom Resolvers
+
+Custom resolvers should extend `ResolverBase` and call `CheckAPIKeyScopeAuthorization()`:
+
+```typescript
+import { ResolverBase } from '@memberjunction/server';
+
+@Resolver()
+export class MyResolver extends ResolverBase {
+    @Mutation(() => MyResult)
+    async myOperation(
+        @Ctx() ctx: AppContext
+    ): Promise<MyResult> {
+        // Check scope authorization for API keys
+        await this.CheckAPIKeyScopeAuthorization('my:scope', 'resource-name', ctx.userPayload);
+
+        // Proceed with operation...
+    }
+}
+```
+
+The method:
+- Returns immediately for OAuth/JWT users (no scope restrictions)
+- Validates API key scopes against application ceiling and key scopes
+- Throws `AuthorizationError` with detailed message on failure
+
 ### Access Control
 
 For REST API access control, see the comprehensive documentation in [REST_API.md](./REST_API.md).

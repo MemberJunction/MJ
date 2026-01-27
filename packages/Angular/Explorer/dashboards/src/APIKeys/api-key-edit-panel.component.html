@@ -213,6 +213,15 @@
                     </button>
                 </div>
 
+                <!-- No Scopes Warning -->
+                <div class="no-scopes-warning" *ngIf="!IsLoadingScopes && getAssignedScopeCount() === 0 && APIKey.Status === 'Active'">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <div>
+                        <strong>Warning: No permissions assigned</strong>
+                        <p>This API key has no assigned scopes and cannot perform any operations. All API requests using this key will be rejected until scopes are assigned.</p>
+                    </div>
+                </div>
+
                 <mj-loading *ngIf="IsLoadingScopes" text="Loading permissions..."></mj-loading>
 
                 <div class="scope-categories" *ngIf="!IsLoadingScopes">

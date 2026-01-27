@@ -4,6 +4,7 @@ import { AppContext } from '../types.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
 import { z } from 'zod';
 import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 @ObjectType()
 export class EntityDependencyResult {
@@ -162,13 +163,16 @@ export class RecordMergeResult {
 }
 
 @Resolver(RecordMergeResult)
-export class RecordMergeResolver {
+export class RecordMergeResolver extends ResolverBase {
   @Mutation(() => RecordMergeResult)
   async MergeRecords(
     @Arg('request', () => RecordMergeRequest) request: RecordMergeRequest,
     @Ctx() { dataSource, userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
+    // Check API key scope authorization for entity merge operation
+    await this.CheckAPIKeyScopeAuthorization('entity:merge', request.EntityName, userPayload);
+
     try {
       const md = GetReadWriteProvider(providers);
       const options = {};

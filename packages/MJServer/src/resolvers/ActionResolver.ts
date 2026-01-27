@@ -8,6 +8,7 @@ import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
 import { AppContext, ProviderInfo } from "../types.js";
 import { CopyScalarsAndArrays } from "@memberjunction/global";
 import { GetReadOnlyProvider } from "../util.js";
+import { ResolverBase } from "../generic/ResolverBase.js";
 
 /**
  * Input type for action parameters
@@ -171,7 +172,7 @@ export class ActionResultOutput {
  * Handles running actions and entity actions through GraphQL
  */
 @Resolver()
-export class ActionResolver {
+export class ActionResolver extends ResolverBase {
   /**
    * Mutation for running an action
    * @param input The input parameters for running the action
@@ -184,6 +185,9 @@ export class ActionResolver {
     @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
     try {
+      // Check API key scope authorization for action execution
+      await this.CheckAPIKeyScopeAuthorization('action:execute', input.ActionID, ctx.userPayload);
+
       // Get the user from context
       const user = ctx.userPayload.userRecord;
       if (!user) {
@@ -326,6 +330,9 @@ export class ActionResolver {
     @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
     try {
+      // Check API key scope authorization for entity action execution
+      await this.CheckAPIKeyScopeAuthorization('action:execute', input.EntityActionID, ctx.userPayload);
+
       const user = ctx.userPayload.userRecord;
       if (!user) {
         throw new Error("User is not authenticated");
