@@ -146,6 +146,28 @@
          RELATED ENTITY PANELS - AFTER
          ======================================== -->
 
+    <!-- MJ: API Key Applications Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAPIKeyApplications"
+        sectionName="MJ: API Key Applications"
+        icon="fa fa-key"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAPIKeyApplications')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Applications','APIKeyID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Applications')"
+                [AllowLoad]="IsSectionExpanded('mJAPIKeyApplications')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJAPIKeyApplications', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- MJ: API Key Scopes Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJAPIKeyScopes"

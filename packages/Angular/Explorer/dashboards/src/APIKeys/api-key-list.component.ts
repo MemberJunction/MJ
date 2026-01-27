@@ -1,9 +1,24 @@
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
 import { RunView } from '@memberjunction/core';
-import { APIKeyEntity } from '@memberjunction/core-entities';
+import { APIKeyEntity, APIKeyScopeEntity, APIScopeEntity } from '@memberjunction/core-entities';
 
 /** Filter options for the list */
 export type APIKeyFilter = 'all' | 'active' | 'revoked' | 'expiring' | 'expired' | 'never-used';
+
+/** Category scope display */
+interface CategoryScopeCount {
+    category: string;
+    count: number;
+    color: string;
+    icon: string;
+}
+
+/** Scope info for display */
+interface KeyScopeInfo {
+    count: number;
+    preview: string[];
+    categories: CategoryScopeCount[];
+}
 
 /** Tree shaking prevention function */
 export function LoadAPIKeyList(): void {
@@ -52,6 +67,23 @@ export class APIKeyListComponent implements OnInit, OnChanges {
         neverUsed: 0
     };
 
+    // Scope counts per key
+    public KeyScopeMap = new Map<string, KeyScopeInfo>();
+    private AllScopes: APIScopeEntity[] = [];
+
+    // Category config for scope display
+    private readonly categoryConfig: Record<string, { icon: string; color: string }> = {
+        'Entities': { icon: 'fa-solid fa-database', color: '#6366f1' },
+        'Agents': { icon: 'fa-solid fa-robot', color: '#10b981' },
+        'Admin': { icon: 'fa-solid fa-shield-halved', color: '#f59e0b' },
+        'Actions': { icon: 'fa-solid fa-bolt', color: '#8b5cf6' },
+        'Queries': { icon: 'fa-solid fa-magnifying-glass', color: '#3b82f6' },
+        'Views': { icon: 'fa-solid fa-eye', color: '#06b6d4' },
+        'Reports': { icon: 'fa-solid fa-chart-bar', color: '#ef4444' },
+        'Communication': { icon: 'fa-solid fa-envelope', color: '#ec4899' },
+        'Other': { icon: 'fa-solid fa-ellipsis', color: '#6b7280' }
+    };
+
     async ngOnInit(): Promise<void> {
         await this.loadKeys();
     }
@@ -69,14 +101,74 @@ export class APIKeyListComponent implements OnInit, OnChanges {
         this.IsLoading = true;
         try {
             const rv = new RunView();
-            const result = await rv.RunView<APIKeyEntity>({
-                EntityName: 'MJ: API Keys',
-                OrderBy: '__mj_CreatedAt DESC',
-                ResultType: 'entity_object'
-            });
 
-            if (result.Success) {
-                this.AllKeys = result.Results;
+            // Load keys, scopes, and key-scope assignments in parallel
+            const [keysResult, scopesResult, keyScopesResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: API Keys',
+                    OrderBy: '__mj_CreatedAt DESC',
+                    ResultType: 'entity_object'
+                },
+                {
+                    EntityName: 'MJ: API Scopes',
+                    ResultType: 'entity_object'
+                },
+                {
+                    EntityName: 'MJ: API Key Scopes',
+                    ResultType: 'entity_object'
+                }
+            ]);
+
+            if (keysResult.Success) {
+                this.AllKeys = keysResult.Results as APIKeyEntity[];
+                this.AllScopes = (scopesResult.Success ? scopesResult.Results : []) as APIScopeEntity[];
+
+                // Build scope lookup map
+                const scopeMap = new Map<string, APIScopeEntity>();
+                for (const scope of this.AllScopes) {
+                    scopeMap.set(scope.ID, scope);
+                }
+
+                // Build key scope counts with category breakdown
+                this.KeyScopeMap.clear();
+                if (keyScopesResult.Success) {
+                    const keyScopes = keyScopesResult.Results as APIKeyScopeEntity[];
+                    const keyToScopes = new Map<string, { names: string[]; categories: Map<string, number> }>();
+
+                    for (const ks of keyScopes) {
+                        if (!keyToScopes.has(ks.APIKeyID)) {
+                            keyToScopes.set(ks.APIKeyID, { names: [], categories: new Map() });
+                        }
+                        const scope = scopeMap.get(ks.ScopeID);
+                        if (scope) {
+                            const keyData = keyToScopes.get(ks.APIKeyID)!;
+                            keyData.names.push(scope.FullPath || scope.Name);
+                            const category = scope.Category || 'Other';
+                            keyData.categories.set(category, (keyData.categories.get(category) || 0) + 1);
+                        }
+                    }
+
+                    for (const [keyId, data] of keyToScopes.entries()) {
+                        const categories: CategoryScopeCount[] = Array.from(data.categories.entries())
+                            .map(([category, count]) => {
+                                const config = this.categoryConfig[category] || this.categoryConfig['Other'];
+                                return {
+                                    category,
+                                    count,
+                                    color: config.color,
+                                    icon: config.icon
+                                };
+                            })
+                            .sort((a, b) => b.count - a.count);
+
+                        this.KeyScopeMap.set(keyId, {
+                            count: data.names.length,
+                            preview: data.names.slice(0, 3),
+                            categories
+                        });
+                    }
+                }
+
                 this.calculateStats();
                 this.applyFilters();
             }
@@ -85,6 +177,13 @@ export class APIKeyListComponent implements OnInit, OnChanges {
         } finally {
             this.IsLoading = false;
         }
+    }
+
+    /**
+     * Get scope info for a key
+     */
+    public getScopeInfo(key: APIKeyEntity): KeyScopeInfo {
+        return this.KeyScopeMap.get(key.ID) || { count: 0, preview: [], categories: [] };
     }
 
     /**

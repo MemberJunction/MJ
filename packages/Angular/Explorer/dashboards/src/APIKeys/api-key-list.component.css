@@ -190,8 +190,8 @@
 
 .grid-header {
     display: grid;
-    grid-template-columns: 2fr 1fr 100px 110px 120px 120px;
-    gap: 16px;
+    grid-template-columns: 2fr 1fr 90px 160px 100px 110px 100px;
+    gap: 12px;
     padding: 14px 24px;
     background: #f3f4f6;
     border-bottom: 1px solid #e5e7eb;
@@ -224,8 +224,8 @@
 /* Grid Rows */
 .grid-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 100px 110px 120px 120px;
-    gap: 16px;
+    grid-template-columns: 2fr 1fr 90px 160px 100px 110px 100px;
+    gap: 12px;
     padding: 16px 24px;
     border-bottom: 1px solid #f3f4f6;
     cursor: pointer;
@@ -318,6 +318,80 @@
 .status-badge.revoked {
     background: #f3f4f6;
     color: #6b7280;
+}
+
+/* Scopes Column */
+.col-scopes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.scopes-display {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.scope-badges {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.scope-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: default;
+    transition: transform 0.15s ease;
+}
+
+.scope-badge:hover {
+    transform: scale(1.05);
+}
+
+.scope-badge i {
+    font-size: 10px;
+}
+
+.badge-count {
+    font-weight: 700;
+}
+
+.scope-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 6px;
+    background: #f3f4f6;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.scopes-total {
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.no-scopes {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #d1d5db;
+}
+
+.no-scopes i {
+    font-size: 11px;
 }
 
 /* Expires Column */
@@ -467,14 +541,25 @@
 }
 
 /* Responsive */
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
     .grid-header,
     .grid-row {
-        grid-template-columns: 2fr 1fr 100px 100px;
+        grid-template-columns: 2fr 1fr 90px 120px 100px;
     }
 
     .col-used,
     .col-created {
+        display: none;
+    }
+}
+
+@media (max-width: 1024px) {
+    .grid-header,
+    .grid-row {
+        grid-template-columns: 2fr 90px 110px 100px;
+    }
+
+    .col-owner {
         display: none;
     }
 }
@@ -496,11 +581,11 @@
 
     .grid-header,
     .grid-row {
-        grid-template-columns: 2fr 100px;
+        grid-template-columns: 2fr 90px 100px;
     }
 
-    .col-owner,
-    .col-expires {
+    .col-expires,
+    .col-scopes {
         display: none;
     }
 

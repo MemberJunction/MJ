@@ -51,6 +51,11 @@
  * - Random IVs for each encryption operation
  * - Cached key material has configurable TTL
  *
+ * ## API Key Management
+ *
+ * API key functionality has been moved to the `@memberjunction/api-keys` package.
+ * Use that package for API key generation, validation, and scope-based authorization.
+ *
  * @module @memberjunction/encryption
  * @packageDocumentation
  */
@@ -63,13 +68,7 @@ export {
     RotateKeyParams,
     RotateKeyResult,
     EnableFieldEncryptionParams,
-    EnableFieldEncryptionResult,
-    // API Key interfaces
-    CreateAPIKeyParams,
-    CreateAPIKeyResult,
-    APIKeyValidationResult,
-    ValidateAPIKeyOptions,
-    GeneratedAPIKey
+    EnableFieldEncryptionResult
 } from './interfaces';
 
 // Base class for key source providers
@@ -89,14 +88,3 @@ export { AzureKeyVaultKeySource } from './providers/AzureKeyVaultKeySource';
 // Actions for key management and data migration
 export { RotateEncryptionKeyAction } from './actions/RotateEncryptionKeyAction';
 export { EnableFieldEncryptionAction } from './actions/EnableFieldEncryptionAction';
-
-// API Key utilities (legacy functions - prefer EncryptionEngine methods)
-// These are maintained for backwards compatibility but the OOP methods on
-// EncryptionEngine (GenerateAPIKey, HashAPIKey, CreateAPIKey, ValidateAPIKey, etc.)
-// are the preferred approach.
-export {
-    generateAPIKey,
-    hashAPIKey,
-    isValidAPIKeyFormat,
-    validateAPIKey
-} from './apiKeyUtils';

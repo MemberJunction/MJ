@@ -82,6 +82,9 @@
                 Status
                 <i [class]="getSortIcon('Status')"></i>
             </div>
+            <div class="col-scopes">
+                Scopes
+            </div>
             <div class="col-expires sortable" (click)="toggleSort('ExpiresAt')">
                 Expires
                 <i [class]="getSortIcon('ExpiresAt')"></i>
@@ -115,6 +118,31 @@
                 <span class="status-badge" [class.active]="key.Status === 'Active'"
                       [class.revoked]="key.Status === 'Revoked'">
                     {{key.Status}}
+                </span>
+            </div>
+            <div class="col-scopes">
+                <div class="scopes-display" *ngIf="getScopeInfo(key).count > 0">
+                    <div class="scope-badges">
+                        <ng-container *ngFor="let cat of getScopeInfo(key).categories; let i = index">
+                            <span class="scope-badge" *ngIf="i < 3"
+                                  [style.backgroundColor]="cat.color + '15'"
+                                  [style.color]="cat.color"
+                                  [title]="cat.category + ': ' + cat.count + ' scope(s)'">
+                                <i [class]="cat.icon"></i>
+                                <span class="badge-count">{{cat.count}}</span>
+                            </span>
+                        </ng-container>
+                        <span class="scope-more" *ngIf="getScopeInfo(key).categories.length > 3">
+                            +{{getScopeInfo(key).categories.length - 3}}
+                        </span>
+                    </div>
+                    <span class="scopes-total">
+                        {{getScopeInfo(key).count}} total
+                    </span>
+                </div>
+                <span class="no-scopes" *ngIf="getScopeInfo(key).count === 0">
+                    <i class="fa-solid fa-shield-xmark"></i>
+                    None
                 </span>
             </div>
             <div class="col-expires">

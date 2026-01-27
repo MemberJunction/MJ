@@ -77,6 +77,7 @@ import {
   RunQueryWithCacheCheckParams,
   RunQueriesWithCacheCheckResponse,
   RunQueryWithCacheCheckResult,
+  InMemoryLocalStorageProvider,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from './queryParameterProcessor';
 
@@ -5568,7 +5569,7 @@ export class SQLServerDataProvider
   }
 
   get LocalStorageProvider(): ILocalStorageProvider {
-    if (!this._localStorageProvider) this._localStorageProvider = new NodeLocalStorageProvider();
+    if (!this._localStorageProvider) this._localStorageProvider = new InMemoryLocalStorageProvider();
 
     return this._localStorageProvider;
   }
@@ -5638,56 +5639,5 @@ export class SQLServerDataProvider
   /**************************************************************************/
   protected get Metadata(): IMetadataProvider {
     return this;
-  }
-}
-
-/**
- * In-memory storage provider for Node.js server-side usage.
- * Uses a Map of Maps structure for category isolation:
- * Map<category, Map<key, value>>
- *
- * This implementation is purely in-memory and doesn't persist to disk.
- * Data is retained for the lifetime of the server process.
- */
-class NodeLocalStorageProvider implements ILocalStorageProvider {
-  private static readonly DEFAULT_CATEGORY = 'default';
-  private _storage: Map<string, Map<string, string>> = new Map();
-
-  /**
-   * Gets or creates a category map
-   */
-  private getCategoryMap(category: string): Map<string, string> {
-    const cat = category || NodeLocalStorageProvider.DEFAULT_CATEGORY;
-    let categoryMap = this._storage.get(cat);
-    if (!categoryMap) {
-      categoryMap = new Map();
-      this._storage.set(cat, categoryMap);
-    }
-    return categoryMap;
-  }
-
-  public async GetItem(key: string, category?: string): Promise<string | null> {
-    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    return categoryMap.get(key) ?? null;
-  }
-
-  public async SetItem(key: string, value: string, category?: string): Promise<void> {
-    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    categoryMap.set(key, value);
-  }
-
-  public async Remove(key: string, category?: string): Promise<void> {
-    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    categoryMap.delete(key);
-  }
-
-  public async ClearCategory(category: string): Promise<void> {
-    const cat = category || NodeLocalStorageProvider.DEFAULT_CATEGORY;
-    this._storage.delete(cat);
-  }
-
-  public async GetCategoryKeys(category: string): Promise<string[]> {
-    const categoryMap = this._storage.get(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    return categoryMap ? Array.from(categoryMap.keys()) : [];
   }
 }
