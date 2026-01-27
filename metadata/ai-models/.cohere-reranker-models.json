@@ -1,0 +1,70 @@
+[
+  {
+    "fields": {
+      "Name": "rerank-v3.5",
+      "Description": "Cohere Rerank v3.5 - Latest semantic reranking model with state-of-the-art performance for English content. Optimized for RAG retrieval quality improvement.",
+      "AIModelTypeID": "@lookup:AI Model Types.Name=Reranker",
+      "PowerRank": 100,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "1AF4B81D-B7A2-41E4-8514-E72A619E63DE"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "DriverClass": "CohereLLM",
+            "APIName": "rerank-v3.5",
+            "Status": "Active",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E0BEEDA5-7189-4E6A-9B60-BA65FA41B85F"
+          },
+          "sync": {
+            "lastModified": "2026-01-27T03:03:50.705Z",
+            "checksum": "773c45b28b0f459e7079ec74df3231b080167f736b39bce4d18a4431abcfd527"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "rerank-multilingual-v3.0",
+      "Description": "Cohere Rerank Multilingual v3.0 - Semantic reranking model supporting 100+ languages for global RAG deployments.",
+      "AIModelTypeID": "@lookup:AI Model Types.Name=Reranker",
+      "PowerRank": 80,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "2E8F662B-3842-41E1-87BF-3C14541BF93B"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "DriverClass": "CohereLLM",
+            "APIName": "rerank-multilingual-v3.0",
+            "Status": "Active",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A7F3B2C1-8D4E-4F5A-9C6B-1E2F3A4B5C6D"
+          },
+          "sync": {
+            "lastModified": "2026-01-27T03:03:50.717Z",
+            "checksum": "b104dccc58816aa8e951b3ac5ebb88c2665d7a1baf70e67c5c965eaa885cb3b3"
+          }
+        }
+      ]
+    }
+  }
+]

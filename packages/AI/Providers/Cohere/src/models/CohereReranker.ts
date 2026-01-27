@@ -11,7 +11,7 @@ import { CohereClient } from 'cohere-ai';
  * - rerank-multilingual-v3.0: Supports 100+ languages
  *
  * API Key:
- * Set via environment variable: AI_VENDOR_API_KEY__COHERERERANKER
+ * Set via environment variable: AI_VENDOR_API_KEY__COHERELLM
  *
  * Usage:
  * ```typescript
@@ -32,7 +32,7 @@ import { CohereClient } from 'cohere-ai';
  * });
  * ```
  */
-@RegisterClass(BaseReranker, 'CohereReranker')
+@RegisterClass(BaseReranker, 'CohereLLM')
 export class CohereReranker extends BaseReranker {
     private _client: CohereClient;
 

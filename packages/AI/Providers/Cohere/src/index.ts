@@ -9,7 +9,7 @@
  * - rerank-multilingual-v3.0: Supports 100+ languages
  *
  * API Key:
- * Set via environment variable: AI_VENDOR_API_KEY__COHERERERANKER
+ * Set via environment variable: AI_VENDOR_API_KEY__COHERELLM
  *
  * Usage:
  * ```typescript
@@ -21,7 +21,7 @@
  * // Create instance via ClassFactory
  * const reranker = ClassFactory.CreateInstance<BaseReranker>(
  *     BaseReranker,
- *     'CohereReranker',
+ *     'CohereLLM',
  *     apiKey,
  *     'rerank-v3.5'
  * );
