@@ -1,0 +1,127 @@
+<mj-record-form-container [record]="record" [formComponent]="this">
+
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Identifiers Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="identifiers"
+        sectionName="Identifiers"
+        icon="fa fa-key"
+        [form]="this"
+        [formContext]="formContext">
+
+    </mj-collapsible-panel>
+
+    <!-- Role Information Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="roleInformation"
+        sectionName="Role Information"
+        icon="fa fa-id-badge"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Level"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Role Configuration Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="roleConfiguration"
+        sectionName="Role Configuration"
+        icon="fa fa-sliders-h"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsSystem"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
+
+    <!-- Organization Contacts Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="organizationContacts"
+        sectionName="Organization Contacts"
+        icon="fa fa-address-book"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('organizationContacts')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Organization Contacts','RoleID')"
+                [NewRecordValues]="NewRecordValues('Organization Contacts')"
+                [AllowLoad]="IsSectionExpanded('organizationContacts')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('organizationContacts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
+        

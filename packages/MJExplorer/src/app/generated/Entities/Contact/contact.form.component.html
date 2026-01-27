@@ -3,31 +3,13 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Identity Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
+        sectionKey="identity"
+        sectionName="Identity"
+        icon="fa fa-id-card"
         [form]="this"
         [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="AccountID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Salutation"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -47,125 +29,57 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="FullName"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="Title"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Department"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Contact Settings Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="contactSettings"
+        sectionName="Contact Settings"
+        icon="fa fa-envelope"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Email"
-            Type="textbox"
+            Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
+            LinkType="Email"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Phone"
-            Type="textbox"
+            FieldName="ProfileImageURL"
+            Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
+            LinkType="URL"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Mobile"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ReportsToID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="MailingStreet"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="MailingCity"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="MailingState"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="MailingPostalCode"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="MailingCountry"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="BirthDate"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="PreferredContactMethod"
+            FieldName="Status"
             Type="dropdownlist"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -188,213 +102,91 @@
          RELATED ENTITY PANELS - AFTER
          ======================================== -->
 
-    <!-- Account Insights Section -->
+    <!-- API Keys Section -->
     <mj-collapsible-panel slot="after-panels"
-        sectionKey="accountInsights"
-        sectionName="Account Insights"
-        icon="fa fa-table"
+        sectionKey="aPIKeys"
+        sectionName="API Keys"
+        icon="fa fa-key"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('accountInsights')">
+        [badgeCount]="GetSectionRowCount('aPIKeys')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Account Insights','CreatedByContactID')"
-                [NewRecordValues]="NewRecordValues('Account Insights')"
-                [AllowLoad]="IsSectionExpanded('accountInsights')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('accountInsights', $event.totalRowCount)"
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('API Keys','CreatedByID')"
+                [NewRecordValues]="NewRecordValues('API Keys')"
+                [AllowLoad]="IsSectionExpanded('aPIKeys')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('aPIKeys', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
-    <!-- Activities Section -->
+    <!-- Organization Contacts Section -->
     <mj-collapsible-panel slot="after-panels"
-        sectionKey="activities"
-        sectionName="Activities"
-        icon="fa fa-table"
+        sectionKey="organizationContacts"
+        sectionName="Organization Contacts"
+        icon="fa fa-address-book"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('activities')">
+        [badgeCount]="GetSectionRowCount('organizationContacts')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Activities','ContactID')"
-                [NewRecordValues]="NewRecordValues('Activities')"
-                [AllowLoad]="IsSectionExpanded('activities')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('activities', $event.totalRowCount)"
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Organization Contacts','ContactID')"
+                [NewRecordValues]="NewRecordValues('Organization Contacts')"
+                [AllowLoad]="IsSectionExpanded('organizationContacts')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('organizationContacts', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
-    <!-- Contact Relationships Section -->
+    <!-- Channel Messages Section -->
     <mj-collapsible-panel slot="after-panels"
-        sectionKey="contactRelationships"
-        sectionName="Contact Relationships"
-        icon="fa fa-table"
+        sectionKey="channelMessages"
+        sectionName="Channel Messages"
+        icon="fa fa-comment"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('contactRelationships')">
+        [badgeCount]="GetSectionRowCount('channelMessages')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Contact Relationships','PrimaryContactID')"
-                [NewRecordValues]="NewRecordValues('Contact Relationships')"
-                [AllowLoad]="IsSectionExpanded('contactRelationships')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('contactRelationships', $event.totalRowCount)"
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Channel Messages','ContactID')"
+                [NewRecordValues]="NewRecordValues('Channel Messages')"
+                [AllowLoad]="IsSectionExpanded('channelMessages')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('channelMessages', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
-    <!-- Contacts Section -->
+    <!-- Channel Messages Section -->
     <mj-collapsible-panel slot="after-panels"
-        sectionKey="contacts"
-        sectionName="Contacts"
-        icon="fa fa-table"
+        sectionKey="channelMessages"
+        sectionName="Channel Messages"
+        icon="fa fa-comment"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('contacts')">
+        [badgeCount]="GetSectionRowCount('channelMessages')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Contacts','ReportsToID')"
-                [NewRecordValues]="NewRecordValues('Contacts')"
-                [AllowLoad]="IsSectionExpanded('contacts')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('contacts', $event.totalRowCount)"
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Channel Messages','ApprovedByContactID')"
+                [NewRecordValues]="NewRecordValues('Channel Messages')"
+                [AllowLoad]="IsSectionExpanded('channelMessages')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('channelMessages', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- Deals Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="deals"
-        sectionName="Deals"
-        icon="fa fa-table"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('deals')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Deals','ContactID')"
-                [NewRecordValues]="NewRecordValues('Deals')"
-                [AllowLoad]="IsSectionExpanded('deals')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('deals', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- Event Review Tasks Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="eventReviewTasks"
-        sectionName="Event Review Tasks"
-        icon="fa fa-table"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('eventReviewTasks')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Event Review Tasks','AssignedToContactID')"
-                [NewRecordValues]="NewRecordValues('Event Review Tasks')"
-                [AllowLoad]="IsSectionExpanded('eventReviewTasks')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('eventReviewTasks', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- Speakers Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="speakers"
-        sectionName="Speakers"
-        icon="fa fa-table"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('speakers')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Speakers','ContactID')"
-                [NewRecordValues]="NewRecordValues('Speakers')"
-                [AllowLoad]="IsSectionExpanded('speakers')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('speakers', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- Submission Reviews Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="submissionReviews"
-        sectionName="Submission Reviews"
-        icon="fa fa-table"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('submissionReviews')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Submission Reviews','ReviewerContactID')"
-                [NewRecordValues]="NewRecordValues('Submission Reviews')"
-                [AllowLoad]="IsSectionExpanded('submissionReviews')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('submissionReviews', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- Contact Relationships Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="contactRelationships"
-        sectionName="Contact Relationships"
-        icon="fa fa-table"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('contactRelationships')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Contact Relationships','RelatedContactID')"
-                [NewRecordValues]="NewRecordValues('Contact Relationships')"
-                [AllowLoad]="IsSectionExpanded('contactRelationships')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('contactRelationships', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- Deals Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="deals"
-        sectionName="Deals"
-        icon="fa fa-table"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('deals')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Deals','OwnerID')"
-                [NewRecordValues]="NewRecordValues('Deals')"
-                [AllowLoad]="IsSectionExpanded('deals')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('deals', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

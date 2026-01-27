@@ -1,0 +1,27 @@
+import { Component } from '@angular/core';
+import { ScopeEntity } from 'mj_generatedentities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
+
+@RegisterClass(BaseFormComponent, 'Scopes') // Tell MemberJunction about this class
+@Component({
+    selector: 'gen-scope-form',
+    templateUrl: './scope.form.component.html'
+})
+export class ScopeFormComponent extends BaseFormComponent {
+    public record!: ScopeEntity;
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'scopeDetails', sectionName: 'Scope Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'aPIKeyScopes', sectionName: 'API Key Scopes', isExpanded: false }
+        ]);
+    }
+}
+
+export function LoadScopeFormComponent() {
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
+}

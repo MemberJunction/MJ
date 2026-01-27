@@ -21,7 +21,8 @@ export class CommunicationProviderFormComponent extends BaseFormComponent {
             { sectionKey: 'advancedCapabilities', sectionName: 'Advanced Capabilities', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'communicationLogs', sectionName: 'Communication Logs', isExpanded: false },
-            { sectionKey: 'messageTypes', sectionName: 'Message Types', isExpanded: false }
+            { sectionKey: 'messageTypes', sectionName: 'Message Types', isExpanded: false },
+            { sectionKey: 'channelTypes', sectionName: 'Channel Types', isExpanded: false }
         ]);
     }
 }

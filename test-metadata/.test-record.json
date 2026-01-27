@@ -1,0 +1,8 @@
+{
+  "fields": {
+    "UserID": "@lookup(Users, )",
+    "ID": "value",
+    "Message": "value",
+    "ResourceTypeID": "value"
+  }
+}

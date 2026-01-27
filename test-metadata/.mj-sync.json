@@ -1,0 +1,8 @@
+{
+  "entity": "User Notifications",
+  "primaryKey": "ID",
+  "sync": {
+    "push": true,
+    "pull": true
+  }
+}

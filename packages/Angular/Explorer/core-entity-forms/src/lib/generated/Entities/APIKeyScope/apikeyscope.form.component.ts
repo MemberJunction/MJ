@@ -15,7 +15,6 @@ export class APIKeyScopeFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'keyScopeMapping', sectionName: 'Key Scope Mapping', isExpanded: true },
-            { sectionKey: 'accessRules', sectionName: 'Access Rules', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

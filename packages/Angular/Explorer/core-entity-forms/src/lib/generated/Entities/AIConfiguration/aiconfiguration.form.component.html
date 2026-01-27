@@ -182,6 +182,28 @@
          RELATED ENTITY PANELS - AFTER
          ======================================== -->
 
+    <!-- Izzy AI Configurations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="izzyAIConfigurations"
+        sectionName="Izzy AI Configurations"
+        icon="fa fa-table"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('izzyAIConfigurations')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Izzy AI Configurations','AIConfigurationID')"
+                [NewRecordValues]="NewRecordValues('Izzy AI Configurations')"
+                [AllowLoad]="IsSectionExpanded('izzyAIConfigurations')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('izzyAIConfigurations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- MJ: AI Agent Configurations Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJAIAgentConfigurations"

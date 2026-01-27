@@ -19,6 +19,7 @@ export class AIConfigurationFormComponent extends BaseFormComponent {
             { sectionKey: 'configurationSettings', sectionName: 'Configuration Settings', isExpanded: true },
             { sectionKey: 'inheritanceSettings', sectionName: 'Inheritance Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'izzyAIConfigurations', sectionName: 'Izzy AI Configurations', isExpanded: false },
             { sectionKey: 'mJAIAgentConfigurations', sectionName: 'MJ: AI Agent Configurations', isExpanded: false },
             { sectionKey: 'mJAIAgentPrompts', sectionName: 'MJ: AI Agent Prompts', isExpanded: false },
             { sectionKey: 'mJAIConfigurationParams', sectionName: 'MJ: AI Configuration Params', isExpanded: false },

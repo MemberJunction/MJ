@@ -324,6 +324,94 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- Channel Actions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="channelActions"
+        sectionName="Channel Actions"
+        icon="fa fa-bolt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('channelActions')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Channel Actions','ActionID')"
+                [NewRecordValues]="NewRecordValues('Channel Actions')"
+                [AllowLoad]="IsSectionExpanded('channelActions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('channelActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Channel Type Actions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="channelTypeActions"
+        sectionName="Channel Type Actions"
+        icon="fa fa-cogs"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('channelTypeActions')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Channel Type Actions','ActionID')"
+                [NewRecordValues]="NewRecordValues('Channel Type Actions')"
+                [AllowLoad]="IsSectionExpanded('channelTypeActions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('channelTypeActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Izzy Actions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="izzyActions"
+        sectionName="Izzy Actions"
+        icon="fa fa-bolt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('izzyActions')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Izzy Actions','ActionID')"
+                [NewRecordValues]="NewRecordValues('Izzy Actions')"
+                [AllowLoad]="IsSectionExpanded('izzyActions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('izzyActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Organization Actions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="organizationActions"
+        sectionName="Organization Actions"
+        icon="fa fa-cogs"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('organizationActions')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Organization Actions','ActionID')"
+                [NewRecordValues]="NewRecordValues('Organization Actions')"
+                [AllowLoad]="IsSectionExpanded('organizationActions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('organizationActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- Result Codes Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="resultCodes"
