@@ -158,6 +158,8 @@ import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 // MCP Dashboard Module
 import { MCPModule } from './MCP';
+// Actions Module (test harness, dialogs)
+import { ActionsModule } from '@memberjunction/ng-actions';
 
 
 
@@ -315,7 +317,8 @@ import { MCPModule } from './MCP';
     DashboardViewerModule,
     MCPModule,
     CredentialsModule,
-    SharedPipesModule
+    SharedPipesModule,
+    ActionsModule
   ],
   providers: [
     AIInstrumentationService,

@@ -662,10 +662,10 @@
         (close)="onTestHarnessVisibilityChanged(false)"
         title="Run Action - {{ record.Name || 'Untitled' }}">
         <mj-action-test-harness
-            [action]="record"
-            [actionParams]="actionParams"
-            [isVisible]="showTestHarness"
-            (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+            [Action]="record"
+            [ActionParams]="actionParams"
+            [IsVisible]="showTestHarness"
+            (VisibilityChange)="onTestHarnessVisibilityChanged($event)">
         </mj-action-test-harness>
     </kendo-window>
 }

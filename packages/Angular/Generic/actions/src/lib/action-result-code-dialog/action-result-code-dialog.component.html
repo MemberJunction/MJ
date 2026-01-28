@@ -1,0 +1,75 @@
+@if (IsOpen) {
+    <div class="dialog-backdrop" (click)="OnBackdropClick($event)">
+        <div class="dialog-container">
+            <div class="dialog-header">
+                <span class="dialog-title">
+                    <i class="fa-solid fa-clipboard-check"></i>
+                    {{ IsNew ? 'Add' : 'Edit' }} Result Code
+                </span>
+                <button class="dialog-close-btn" (click)="OnCancel()" title="Close">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <div class="dialog-content">
+                <div class="form-group">
+                    <label class="form-label required">Result Code</label>
+                    <input
+                        type="text"
+                        [(ngModel)]="Code"
+                        [disabled]="!EditMode"
+                        placeholder="Enter result code (e.g., SUCCESS, ERROR_TIMEOUT)"
+                        class="form-input">
+                    <div class="form-hint">A unique code that identifies this result type</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea
+                        [(ngModel)]="Description"
+                        [disabled]="!EditMode"
+                        rows="3"
+                        placeholder="Describe what this result code means"
+                        class="form-textarea"></textarea>
+                    <div class="form-hint">Explain when this result code is returned</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Success Status</label>
+                    <div class="checkbox-wrapper">
+                        <label class="checkbox-label">
+                            @if (EditMode) {
+                                <input
+                                    type="checkbox"
+                                    [(ngModel)]="IsSuccess"
+                                    class="checkbox-input">
+                                <span class="checkbox-custom"></span>
+                            }
+                            <span class="checkbox-text">
+                                @if (IsSuccess) {
+                                    <i class="fa-solid fa-check-circle success-icon"></i>
+                                    This result indicates successful execution
+                                } @else {
+                                    <i class="fa-solid fa-times-circle error-icon"></i>
+                                    This result indicates failed or partial execution
+                                }
+                            </span>
+                        </label>
+                    </div>
+                    <div class="form-hint">Determines if this code represents a successful outcome</div>
+                </div>
+            </div>
+
+            <div class="dialog-footer">
+                <button class="btn btn-outline" (click)="OnCancel()">
+                    Cancel
+                </button>
+                @if (EditMode) {
+                    <button class="btn btn-primary" (click)="OnSave()" [disabled]="!CanSave">
+                        {{ IsNew ? 'Add' : 'Save' }}
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}

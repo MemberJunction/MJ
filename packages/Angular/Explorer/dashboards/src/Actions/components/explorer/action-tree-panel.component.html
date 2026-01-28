@@ -1,0 +1,164 @@
+@if (!IsCollapsed) {
+  <div class="tree-panel" [style.width.px]="TreeWidth">
+    <div class="tree-header">
+      <div class="header-content">
+        <h3><i class="fa-solid fa-folder-tree"></i> Categories</h3>
+        <div class="header-actions">
+          <button kendoButton
+            [fillMode]="'flat'"
+            [size]="'small'"
+            title="Expand All"
+            (click)="expandAll()">
+            <i class="fa-solid fa-angles-down"></i>
+          </button>
+          <button kendoButton
+            [fillMode]="'flat'"
+            [size]="'small'"
+            title="Collapse All"
+            (click)="collapseAll()">
+            <i class="fa-solid fa-angles-up"></i>
+          </button>
+          <button kendoButton
+            [fillMode]="'flat'"
+            [size]="'small'"
+            title="Collapse Panel"
+            (click)="toggleCollapse()">
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="tree-search">
+        <kendo-textbox
+          [placeholder]="'Filter categories...'"
+          [value]="SearchTerm"
+          (valueChange)="onSearchChange($event)"
+          [size]="'small'">
+          <ng-template kendoTextBoxPrefixTemplate>
+            <i class="fa-solid fa-search"></i>
+          </ng-template>
+          @if (SearchTerm) {
+            <ng-template kendoTextBoxSuffixTemplate>
+              <button kendoButton
+                [fillMode]="'flat'"
+                [size]="'small'"
+                (click)="onSearchChange('')">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </ng-template>
+          }
+        </kendo-textbox>
+      </div>
+    </div>
+
+    <div class="tree-content">
+      <!-- All Categories -->
+      <div class="tree-item root-item"
+        [class.selected]="isSelected('all')"
+        (click)="selectCategory('all')">
+        <span class="item-icon">
+          <i class="fa-solid fa-layer-group"></i>
+        </span>
+        <span class="item-name">All Actions</span>
+        <span class="item-count">{{ getTotalActionCount() }}</span>
+      </div>
+
+      <!-- Uncategorized -->
+      @if (getUncategorizedCount() > 0) {
+        <div class="tree-item uncategorized-item"
+          [class.selected]="isSelected('uncategorized')"
+          (click)="selectCategory('uncategorized')">
+          <span class="item-icon">
+            <i class="fa-solid fa-inbox"></i>
+          </span>
+          <span class="item-name">Uncategorized</span>
+          <span class="item-count">{{ getUncategorizedCount() }}</span>
+        </div>
+      }
+
+      <!-- Category Tree -->
+      <div class="tree-categories">
+        <ng-container *ngTemplateOutlet="categoryTreeTemplate; context: { nodes: FilteredTree }"></ng-container>
+      </div>
+
+      <ng-template #categoryTreeTemplate let-nodes="nodes">
+        @for (node of nodes; track node.category.ID) {
+          <div class="tree-node" [style.--level]="node.level">
+            <div class="tree-item"
+              [class.selected]="isSelected(node.category.ID)"
+              [class.has-children]="node.children.length > 0"
+              (click)="selectCategory(node.category.ID)">
+
+              @if (node.children.length > 0) {
+                <button class="expand-btn"
+                  (click)="toggleExpanded(node.category.ID, $event)"
+                  [title]="isExpanded(node.category.ID) ? 'Collapse' : 'Expand'">
+                  <i [class]="isExpanded(node.category.ID) ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+                </button>
+              } @else {
+                <span class="expand-placeholder"></span>
+              }
+
+              <span class="item-icon">
+                <i [class]="isExpanded(node.category.ID) ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder'"></i>
+              </span>
+              <span class="item-name" [title]="node.category.Name">{{ node.category.Name }}</span>
+              <span class="item-count" [title]="node.totalActionCount + ' total actions'">{{ node.totalActionCount }}</span>
+
+              <div class="item-actions">
+                <button kendoButton
+                  [fillMode]="'flat'"
+                  [size]="'small'"
+                  title="Add Subcategory"
+                  (click)="onNewCategory(node.category.ID, $event)">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              </div>
+            </div>
+
+            @if (node.children.length > 0 && isExpanded(node.category.ID)) {
+              <div class="tree-children">
+                <ng-container *ngTemplateOutlet="categoryTreeTemplate; context: { nodes: node.children }"></ng-container>
+              </div>
+            }
+          </div>
+        }
+      </ng-template>
+    </div>
+
+    <div class="tree-footer">
+      <button kendoButton
+        [fillMode]="'outline'"
+        [themeColor]="'primary'"
+        [size]="'small'"
+        class="new-category-btn"
+        (click)="onNewCategory(null, $event)">
+        <i class="fa-solid fa-plus"></i>
+        New Category
+      </button>
+    </div>
+
+    <!-- Resize Handle -->
+    <div class="resize-handle"
+      (mousedown)="onResizeStart($event)"
+      title="Drag to resize">
+    </div>
+  </div>
+} @else {
+  <!-- Collapsed State -->
+  <div class="tree-panel-collapsed">
+    <button kendoButton
+      [fillMode]="'flat'"
+      title="Expand Category Panel"
+      (click)="toggleCollapse()">
+      <i class="fa-solid fa-chevron-right"></i>
+    </button>
+    <button kendoButton
+      [fillMode]="'flat'"
+      title="All Actions"
+      [class.selected]="isSelected('all')"
+      (click)="selectCategory('all')">
+      <i class="fa-solid fa-layer-group"></i>
+    </button>
+  </div>
+}

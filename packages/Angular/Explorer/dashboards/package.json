@@ -41,6 +41,7 @@
     "@memberjunction/graphql-dataprovider": "3.3.0",
     "@memberjunction/interactive-component-types": "3.3.0",
     "@memberjunction/ng-action-gallery": "3.3.0",
+    "@memberjunction/ng-actions": "3.3.0",
     "@memberjunction/ng-ai-test-harness": "3.3.0",
     "@memberjunction/ng-base-application": "3.3.0",
     "@memberjunction/ng-code-editor": "3.3.0",

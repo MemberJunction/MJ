@@ -1,0 +1,145 @@
+<div class="action-explorer">
+  <!-- Tree Panel (Left Sidebar) -->
+  <mj-action-tree-panel
+    [Categories]="Categories"
+    [Actions]="Actions"
+    (CategorySelected)="onCategorySelect($event)"
+    (NewCategoryClick)="onNewCategory($event)"
+    (EditCategoryClick)="onEditCategory($event)">
+  </mj-action-tree-panel>
+
+  <!-- Main Content Area -->
+  <div class="explorer-main">
+    <!-- Toolbar -->
+    <mj-action-toolbar
+      [TotalCount]="Actions.length"
+      [FilteredCount]="FilteredActions.length"
+      (NewActionClick)="onNewAction()"
+      (RefreshClick)="onRefresh()">
+    </mj-action-toolbar>
+
+    <!-- Breadcrumb -->
+    <mj-action-breadcrumb
+      [SelectedCategoryId]="SelectedCategoryId"
+      [Categories]="Categories"
+      (CategorySelect)="onCategorySelect($event)">
+    </mj-action-breadcrumb>
+
+    <!-- Content Area -->
+    <div class="explorer-content">
+      @if (IsLoading) {
+        <div class="loading-container">
+          <mj-loading text="Loading actions..." size="medium"></mj-loading>
+        </div>
+      } @else if (FilteredActions.length === 0) {
+        <div class="empty-state">
+          @if (StateService.hasActiveFilters() || SelectedCategoryId !== 'all') {
+            <i class="fa-solid fa-filter-circle-xmark"></i>
+            <h3>No actions match your filters</h3>
+            <p>Try adjusting your search or filter criteria</p>
+            <button kendoButton
+              [fillMode]="'outline'"
+              (click)="StateService.clearFilters(); StateService.setSelectedCategoryId('all')">
+              <i class="fa-solid fa-times"></i>
+              Clear All Filters
+            </button>
+          } @else {
+            <i class="fa-solid fa-bolt"></i>
+            <h3>No actions yet</h3>
+            <p>Create your first action to get started</p>
+            <button kendoButton
+              [fillMode]="'solid'"
+              [themeColor]="'primary'"
+              (click)="onNewAction()">
+              <i class="fa-solid fa-plus"></i>
+              Create Action
+            </button>
+          }
+        </div>
+      } @else {
+        <!-- Card View -->
+        @if (ViewMode === 'card') {
+          <div class="card-grid">
+            @for (action of FilteredActions; track action.ID) {
+              <mj-action-card
+                [Action]="action"
+                [Categories]="CategoriesMap"
+                (ActionClick)="onActionClick($event)"
+                (EditClick)="onActionEdit($event)"
+                (RunClick)="onActionRun($event)"
+                (CategoryClick)="onCategoryClick($event)">
+              </mj-action-card>
+            }
+          </div>
+        }
+
+        <!-- List View -->
+        @if (ViewMode === 'list') {
+          <div class="list-view">
+            <div class="list-header">
+              <div class="header-icon"></div>
+              <div class="header-name">Name</div>
+              <div class="header-category">Category</div>
+              <div class="header-status">Status</div>
+              <div class="header-type">Type</div>
+              <div class="header-params">Params</div>
+              <div class="header-updated">Updated</div>
+              <div class="header-actions"></div>
+            </div>
+            @for (action of FilteredActions; track action.ID) {
+              <mj-action-list-item
+                [Action]="action"
+                [Categories]="CategoriesMap"
+                [IsCompact]="false"
+                (ActionClick)="onActionClick($event)"
+                (EditClick)="onActionEdit($event)"
+                (RunClick)="onActionRun($event)"
+                (CategoryClick)="onCategoryClick($event)">
+              </mj-action-list-item>
+            }
+          </div>
+        }
+
+        <!-- Compact View -->
+        @if (ViewMode === 'compact') {
+          <div class="compact-view">
+            @for (action of FilteredActions; track action.ID) {
+              <mj-action-list-item
+                [Action]="action"
+                [Categories]="CategoriesMap"
+                [IsCompact]="true"
+                (ActionClick)="onActionClick($event)"
+                (EditClick)="onActionEdit($event)"
+                (RunClick)="onActionRun($event)"
+                (CategoryClick)="onCategoryClick($event)">
+              </mj-action-list-item>
+            }
+          </div>
+        }
+      }
+    </div>
+  </div>
+
+  <!-- Slide-in Panels -->
+  <mj-new-category-panel
+    [Categories]="Categories"
+    [PreselectedParentId]="NewCategoryParentId"
+    (CategoryCreated)="onCategoryCreated($event)"
+    (Close)="NewCategoryParentId = null">
+  </mj-new-category-panel>
+
+  <mj-new-action-panel
+    [Categories]="Categories"
+    (ActionCreated)="onActionCreated()">
+  </mj-new-action-panel>
+
+  <!-- Action Run Dialog -->
+  @if (SelectedActionForRun) {
+    <mj-action-test-harness-dialog
+      [Action]="SelectedActionForRun"
+      [ActionParams]="SelectedActionParams"
+      [IsOpen]="IsRunDialogOpen"
+      (Close)="OnRunDialogClose()">
+    </mj-action-test-harness-dialog>
+  }
+</div>

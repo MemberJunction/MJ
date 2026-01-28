@@ -1,0 +1,139 @@
+.dialog-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.dialog-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    max-width: 700px;
+    width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.dialog-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.dialog-title i {
+    color: #6f42c1;
+}
+
+.dialog-close-btn {
+    background: transparent;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: #6c757d;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dialog-close-btn:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.dialog-content {
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(90vh - 130px);
+}
+
+.dialog-content mj-action-test-harness {
+    display: block;
+}
+
+.loading-state {
+    padding: 40px;
+    text-align: center;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 1em;
+}
+
+.loading-state i {
+    font-size: 1.2em;
+}
+
+.dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 20px;
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+}
+
+/* Button styles */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 0.95em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.btn-outline {
+    background: white;
+    color: #495057;
+    border-color: #ced4da;
+}
+
+.btn-outline:hover {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .dialog-backdrop {
+        padding: 10px;
+    }
+
+    .dialog-container {
+        max-height: 95vh;
+    }
+
+    .dialog-content {
+        max-height: calc(95vh - 130px);
+    }
+}
