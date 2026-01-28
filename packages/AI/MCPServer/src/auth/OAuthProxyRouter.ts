@@ -29,6 +29,7 @@ import { renderConsentPage, renderConsentDeniedPage } from './ConsentPage.js';
 import { renderLoginPage, renderErrorPage } from './LoginPage.js';
 import type { APIScopeInfo } from './types.js';
 import type {
+  AuthorizationState,
   ClientRegistrationRequest,
   OAuthProxyConfig,
   TokenRequest,
@@ -273,7 +274,7 @@ function handleAuthorizeEndpoint(
     return;
   }
 
-  // Generate PKCE for the upstream provider (Azure AD requires PKCE)
+  // Generate PKCE for the upstream provider
   const upstreamCodeVerifier = generateCodeVerifier();
   const upstreamCodeChallenge = generateCodeChallenge(upstreamCodeVerifier);
 
@@ -374,7 +375,19 @@ async function handleCallbackEndpoint(
       console.log(`OAuth Proxy: User validated: ${validatedUser?.email}`);
     }
 
-    // Generate our own authorization code for the MCP client
+    // If consent screen is enabled, redirect to consent page for scope selection
+    if (config.enableConsentScreen && validatedUser) {
+      await redirectToConsentScreen(
+        res,
+        config,
+        stateManager,
+        authState,
+        validatedUser
+      );
+      return;
+    }
+
+    // No consent screen - create authorization code directly
     const ourCode = stateManager.createAuthorizationCode({
       clientId: authState.clientId,
       redirectUri: authState.redirectUri,
@@ -398,6 +411,60 @@ async function handleCallbackEndpoint(
     console.error('OAuth Proxy: Token exchange error:', error);
     sendAuthorizationError(res, authState.redirectUri, 'server_error', 'Failed to exchange authorization code', authState.originalState);
   }
+}
+
+/**
+ * Redirects the user to the consent screen for scope selection.
+ * Per FR-030a: No scopes pre-selected, user must explicitly select.
+ * Per FR-031a: If client requested specific scopes, only show those.
+ */
+async function redirectToConsentScreen(
+  res: Response,
+  config: OAuthProxyConfig,
+  stateManager: AuthorizationStateManager,
+  authState: AuthorizationState,
+  validatedUser: NonNullable<StoredAuthorizationCode['validatedUser']>
+): Promise<void> {
+  // Load available scopes from database
+  let availableScopes = await loadActiveScopes();
+
+  // If client requested specific scopes, filter to only show those (FR-031a)
+  // Unknown scopes are silently ignored (FR-031b)
+  if (authState.scope) {
+    const requestedScopeNames = authState.scope.split(' ').filter(Boolean);
+    if (requestedScopeNames.length > 0) {
+      const filteredScopes = availableScopes.filter((s) =>
+        requestedScopeNames.includes(s.Name)
+      );
+      // Only use filtered list if at least one valid scope was requested
+      // If all requested scopes are unknown, show all scopes (FR-031b)
+      if (filteredScopes.length > 0) {
+        availableScopes = filteredScopes;
+      }
+    }
+  }
+
+  // Create consent request with all required data
+  const requestId = stateManager.createConsentRequest({
+    user: {
+      email: validatedUser.email,
+      mjUserId: validatedUser.mjUserId,
+    },
+    upstreamProvider: validatedUser.upstreamProvider,
+    upstreamSub: validatedUser.upstreamSub,
+    availableScopes,
+    redirectUri: authState.redirectUri,
+    state: authState.originalState,
+    codeChallenge: authState.codeChallenge,
+    codeChallengeMethod: authState.codeChallengeMethod,
+    clientId: authState.clientId,
+    requestedScope: authState.scope,
+  });
+
+  console.log(`OAuth Proxy: Redirecting user ${validatedUser.email} to consent screen (${availableScopes.length} scopes available)`);
+
+  // Redirect to consent page
+  res.redirect(`${config.baseUrl}/oauth/consent?request_id=${requestId}`);
 }
 
 /**
@@ -658,11 +725,10 @@ async function exchangeUpstreamCode(
   params.set('redirect_uri', `${config.baseUrl}/oauth/callback`);
   params.set('client_id', config.upstream.clientId);
 
-  if (config.upstream.clientSecret) {
-    params.set('client_secret', config.upstream.clientSecret);
-  }
+  // OAuth proxy uses PKCE for security - never send client_secret
+  // (public clients like MCP clients and SPAs rely on PKCE, not secrets)
 
-  // Include PKCE verifier if provided (required by Azure AD)
+  // Include PKCE verifier (required for public client flows)
   if (codeVerifier) {
     params.set('code_verifier', codeVerifier);
   }
@@ -671,6 +737,8 @@ async function exchangeUpstreamCode(
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'Origin': config.baseUrl,
     },
     body: params.toString(),
   });
@@ -678,15 +746,19 @@ async function exchangeUpstreamCode(
   if (!response.ok) {
     const errorBody = await response.text();
     console.error(`OAuth Proxy: Upstream token error: ${response.status}`);
+    console.error(`OAuth Proxy: Token endpoint: ${config.upstream.tokenEndpoint}`);
     console.error(`OAuth Proxy: Error details: ${errorBody}`);
     console.error(`OAuth Proxy: Request redirect_uri: ${config.baseUrl}/oauth/callback`);
     console.error(`OAuth Proxy: Request client_id: ${config.upstream.clientId}`);
+    console.error(`OAuth Proxy: Authorization code sent (last 8 chars): ...${code.slice(-8)}`);
+    console.error(`OAuth Proxy: PKCE code_verifier present: ${!!codeVerifier}`);
+    console.error(`OAuth Proxy: PKCE code_verifier (first 8 chars): ${codeVerifier?.substring(0, 8) ?? 'N/A'}...`);
 
-    // Parse and log the specific Azure AD error
+    // Parse and log the specific OAuth error
     try {
       const errorJson = JSON.parse(errorBody);
       if (errorJson.error_description) {
-        console.error(`OAuth Proxy: Azure AD error: ${errorJson.error} - ${errorJson.error_description}`);
+        console.error(`OAuth Proxy: Provider error: ${errorJson.error} - ${errorJson.error_description}`);
       }
     } catch {
       // Not JSON, already logged the raw body
@@ -709,15 +781,14 @@ async function refreshUpstreamToken(
   params.set('grant_type', 'refresh_token');
   params.set('refresh_token', refreshToken);
   params.set('client_id', config.upstream.clientId);
-
-  if (config.upstream.clientSecret) {
-    params.set('client_secret', config.upstream.clientSecret);
-  }
+  // OAuth proxy uses PKCE - never send client_secret for public client flows
 
   const response = await fetch(config.upstream.tokenEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'Origin': config.baseUrl,
     },
     body: params.toString(),
   });

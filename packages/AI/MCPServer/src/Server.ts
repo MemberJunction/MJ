@@ -895,8 +895,13 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
                         // Detect Azure AD v2.0 endpoints from issuer
                         // Azure AD issuer: https://login.microsoftonline.com/{tenant}/v2.0
-                        // Cast to access the issuer property
-                        const provider = upstreamProvider as { issuer: string; audience: string; name: string };
+                        // Cast to access provider properties (IAuthProvider interface)
+                        const provider = upstreamProvider as {
+                            issuer: string;
+                            audience: string;
+                            name: string;
+                            clientId?: string;
+                        };
                         const issuer = provider.issuer;
                         const isAzureAD = issuer?.includes('microsoftonline.com') || issuer?.includes('sts.windows.net');
 
@@ -911,8 +916,10 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                         } else {
                             // Generic OIDC - assume standard paths (Auth0, Okta, etc.)
                             // Most providers use /.well-known/openid-configuration but we need direct endpoints
-                            authorizationEndpoint = `${issuer}/authorize`;
-                            tokenEndpoint = `${issuer}/oauth/token`;
+                            // Strip trailing slash from issuer to avoid double slashes in URL
+                            const issuerBase = issuer.replace(/\/+$/, '');
+                            authorizationEndpoint = `${issuerBase}/authorize`;
+                            tokenEndpoint = `${issuerBase}/oauth/token`;
                         }
 
                         // Build scopes for upstream - use standard OIDC scopes only
@@ -926,23 +933,37 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                             upstreamScopes.push('offline_access');
                         }
 
-                        // For OAuth proxy, we need client credentials from environment or config
-                        // The audience is typically the clientId for Azure AD
-                        // We also need a client secret for the token exchange
-                        const upstreamClientId = process.env.WEB_CLIENT_ID || provider.audience || '';
+                        // For OAuth proxy, we need client ID from environment or config
+                        // Priority: provider.clientId → WEB_CLIENT_ID env var → audience (Azure AD uses audience as clientId)
+                        // NOTE: Provider-specific clientId takes priority because WEB_CLIENT_ID may be for a different provider
+                        // Client secret is OPTIONAL - the proxy uses PKCE for upstream token exchange
+                        // (same technique as MJExplorer SPA), so no secret is required
+                        const upstreamClientId = provider.clientId || process.env.WEB_CLIENT_ID || provider.audience || '';
                         const upstreamClientSecret = process.env.WEB_CLIENT_SECRET || undefined;
 
-                        if (!upstreamClientSecret) {
-                            console.warn('[OAuth Proxy] WEB_CLIENT_SECRET not set - token exchange may fail');
-                            console.warn('[OAuth Proxy] Set WEB_CLIENT_SECRET in .env for the MCP Server app registration');
+                        // Log warning if no valid client_id found
+                        if (!upstreamClientId) {
+                            console.error('[OAuth Proxy] ERROR: No upstream client_id configured!');
+                            console.error('[OAuth Proxy] Set WEB_CLIENT_ID env var or add clientId to your auth provider config');
+                        } else {
+                            console.log(`[OAuth Proxy] Upstream client_id: ${upstreamClientId}`);
+                        }
+
+                        // Note: clientSecret is optional - proxy uses PKCE for upstream auth
+                        if (upstreamClientSecret) {
+                            console.log('[OAuth Proxy] Using client secret for upstream authentication');
+                        } else {
+                            console.log('[OAuth Proxy] Using PKCE-only for upstream authentication (no client secret)');
                         }
 
                         // Build JWT config from proxy settings
+                        // Falls back to MCP_JWT_SECRET env var if not configured in mj.config.cjs
                         const proxySettings = _config.mcpServerSettings?.auth?.proxy;
-                        const jwtConfig = proxySettings?.jwtSigningSecret ? {
-                            signingSecret: proxySettings.jwtSigningSecret,
-                            expiresIn: proxySettings.jwtExpiresIn ?? '1h',
-                            issuer: proxySettings.jwtIssuer ?? 'urn:mj:mcp-server',
+                        const jwtSigningSecret = proxySettings?.jwtSigningSecret ?? process.env.MCP_JWT_SECRET;
+                        const jwtConfig = jwtSigningSecret ? {
+                            signingSecret: jwtSigningSecret,
+                            expiresIn: proxySettings?.jwtExpiresIn ?? '1h',
+                            issuer: proxySettings?.jwtIssuer ?? 'urn:mj:mcp-server',
                         } : undefined;
 
                         const proxyConfig: OAuthProxyConfig = {
@@ -958,6 +979,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                             enableDynamicRegistration: true,
                             stateTtlMs: proxySettings?.stateTtlMs,
                             jwt: jwtConfig,
+                            enableConsentScreen: proxySettings?.enableConsentScreen ?? false,
                         };
 
                         // Create and mount OAuth proxy router

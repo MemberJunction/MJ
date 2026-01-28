@@ -3,7 +3,9 @@
 **Input**: Design documents from `/specs/601-mcp-oauth/`
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/oauth-proxy-api.yaml
 
-**Tests**: Manual testing with MCP clients specified. Automated tests may be added but are not explicitly requested.
+**Implementation Status**: Core implementation is **substantially complete** per plan.md. Remaining work focuses on integration testing, documentation, seed data, and polish.
+
+**Tests**: Manual integration testing with Claude Code is the primary validation method.
 
 **Organization**: Tasks are grouped by user story priority (P1 first) to enable MVP and incremental delivery.
 
@@ -395,154 +397,213 @@ All paths are relative to `packages/AI/MCPServer/`:
 
 ---
 
-## Phase 12: Polish and Cross-Cutting Concerns
+## Phase 12: Remaining Work (Per plan.md)
 
-**Purpose**: Documentation, cleanup, and final integration
+**Purpose**: Complete remaining items identified in plan.md - integration testing, documentation, seed data, and polish
 
-### Documentation
+**Status from plan.md**: Implementation is substantially complete. This phase covers the remaining work.
 
-- [x] T124 [P] Update `packages/AI/MCPServer/README.md` with OAuth configuration section
-- [x] T125 [P] Add OAuth examples to README showing all auth modes
-- [x] T126 [P] Document environment requirements (HTTPS for production, JWT secret generation)
+### Integration Testing with Claude Code (P1) 🎯
 
-### Code Quality
+- [x] T124 Run `npm run build` in `packages/AI/MCPServer` to verify TypeScript compilation
+- [ ] T125 [US5] Configure local MCP Server with OAuth enabled for Claude Code testing
+- [ ] T126 [US5] Test `claude mcp add` command with MCP Server URL - verify dynamic registration
+- [ ] T127 [US5] Complete full OAuth flow: registration → browser login → consent → token → tool call
+- [ ] T128 [US1] Verify authenticated user context is correct in tool execution
+- [ ] T129 [US7] Verify scopes are present in JWT and accessible to tools
+- [ ] T130 Validate all quickstart.md scenarios work end-to-end with OAuth proxy
 
-- [x] T127 Export all public types from `packages/AI/MCPServer/src/auth/index.ts`
-- [x] T128 Add JSDoc comments to all public functions in auth module
-- [x] T129 Verify no `any` types used in auth module (Constitution compliance)
-- [x] T130 Verify all functions under 40 lines (Constitution compliance)
+### Documentation Updates (P2)
 
-### Integration Validation
+- [x] T131 [P] Update `packages/AI/MCPServer/README.md` with OAuth configuration section
+- [ ] T132 [P] Add complete configuration examples for all 5 providers (Auth0, MSAL, Okta, Cognito, Google) to README
+- [ ] T133 [P] Document JWT signing secret generation in README
+- [ ] T134 [P] Add troubleshooting section for common OAuth issues in specs/601-mcp-oauth/quickstart.md
+- [ ] T135 [P] Document API key scope assignment workflow in quickstart.md
 
-- [x] T131 Run `npm run build` in `packages/AI/MCPServer` to verify TypeScript compilation
-- [ ] T132 Validate quickstart.md scenarios work end-to-end with OAuth proxy (manual testing)
-- [ ] T133 Test with Claude Code using `claude mcp add` command (manual testing)
+### Seed Data for Default Scopes (P2)
+
+- [ ] T136 Create SQL migration V202601281500__v3.5.x__Default_API_Scopes.sql with default scopes
+- [ ] T137 Insert default scopes: entity:read, entity:write, action:execute, agent:execute, query:run, view:run
+- [ ] T138 Add scope descriptions and categories for consent screen display
+- [ ] T139 Verify scopes appear in /oauth/scopes endpoint after migration
+
+### Error Page Styling (P3)
+
+- [ ] T140 [P] Improve error page visual design in packages/AI/MCPServer/src/auth/styles.ts
+- [ ] T141 [P] Add specific error guidance for: user not provisioned in MemberJunction
+- [ ] T142 [P] Add specific error guidance for: identity provider unavailable
+- [ ] T143 [P] Add specific error guidance for: authorization state expired
+- [ ] T144 Review error pages on mobile browser viewport
 
 ---
 
 ## Dependencies and Execution Order
 
-### Phase Dependencies
+### Current State
 
-- **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup - BLOCKS all user stories
-- **US1 (Phase 3)**: Depends on Foundational - Basic OAuth validation
-- **US5 (Phase 4)**: Depends on Foundational - OAuth Proxy core
-- **JWT Issuance (Phase 5)**: Depends on US5 - Connects proxy to token issuance
-- **US7 (Phase 6)**: Depends on Phase 5 - Scopes in JWTs
-- **US6 (Phase 7)**: Depends on US5 - UI for OAuth proxy
-- **US3 (Phase 8)**: Depends on Phase 5 - Refresh tokens
-- **US2 (Phase 9)**: Can run after Foundational (config validation)
-- **US4 (Phase 10)**: Depends on US1 + US7 (dual auth with scopes)
-- **Edge Cases (Phase 11)**: Depends on core OAuth flow complete
-- **Polish (Phase 12)**: Depends on all user story phases
+All implementation phases (1-11) are **COMPLETE**. Phase 12 contains the remaining work.
 
-### User Story Dependencies
+### Phase 12 Dependencies
 
-| Story | Priority | Dependencies | Can Run In Parallel With |
-|-------|----------|--------------|-------------------------|
-| US1 (Browser Login) | P1 | Foundational | US5 |
-| US5 (Dynamic Registration) | P1 | Foundational | US1 |
-| US7 (Scope-Based Access) | P2 | US5, JWT Issuance | US6 |
-| US6 (Web Login UI) | P2 | US5 | US7 |
-| US3 (Token Refresh) | P2 | JWT Issuance | US6, US7 |
-| US2 (Admin Config) | P2 | Foundational | US3, US6, US7 |
-| US4 (Dual Auth) | P3 | US1, US7 | - |
+Since implementation is complete, Phase 12 tasks have minimal dependencies:
 
-### Parallel Opportunities
+- **Integration Testing (T125-T130)**: Requires working OAuth configuration
+  - T125 must complete before T126-T130
+  - T126 → T127 → T128-T130 (sequential for full flow test)
+- **Documentation (T132-T135)**: No dependencies, can run in parallel
+- **Seed Data (T136-T139)**: T136 must complete before T137-T139
+- **Error Page Styling (T140-T144)**: No dependencies, can run in parallel
 
-**Phase 4 (US5)**:
-```bash
-Task T033: client_id generation (parallel with T034)
-Task T038: OIDC Discovery (parallel with T037)
+### Remaining Tasks Execution Order
+
 ```
-
-**Phase 6 (US7)**:
-```bash
-Task T068: /oauth/scopes endpoint (parallel with T067)
-```
-
-**Phase 7 (US6)**:
-```bash
-Task T083: Provider selection UI (parallel with T081)
-Task T087: CSS styles (parallel with T084)
+                    ┌─────────────────────────────────────────┐
+                    │  Phase 12: Remaining Work               │
+                    │  (All can start after code review)      │
+                    └─────────────────────────────────────────┘
+                                       │
+         ┌─────────────────────────────┼─────────────────────────────┐
+         │                             │                             │
+         ▼                             ▼                             ▼
+┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
+│ Integration     │         │ Documentation   │         │ Seed Data       │
+│ Testing (P1)    │         │ (P2)            │         │ (P2)            │
+│ T125 → T126 →   │         │ T132, T133,     │         │ T136 → T137 →   │
+│ T127 → T128-130 │         │ T134, T135 [P]  │         │ T138 → T139     │
+└─────────────────┘         └─────────────────┘         └─────────────────┘
+                                       │
+                                       ▼
+                            ┌─────────────────┐
+                            │ Error Pages     │
+                            │ (P3)            │
+                            │ T140-T144 [P]   │
+                            └─────────────────┘
 ```
 
 ---
 
 ## Implementation Strategy
 
-### MVP First (US1 + US5 + JWT Issuance)
+### Current Status
 
-1. Complete Phase 1: Setup (3 tasks) ✅
-2. Complete Phase 2: Foundational (7 tasks) ✅
-3. Complete Phase 3: US1 - Basic OAuth (19 tasks) ✅
-4. Complete Phase 4: US5 - OAuth Proxy (23 tasks)
-5. Complete Phase 5: JWT Issuance (13 tasks)
-6. **STOP and VALIDATE**: Test with Claude Code
-7. Deploy/demo - Claude Code users can authenticate via OAuth
+**Implementation COMPLETE** (Phases 1-11):
+- All 7 user stories implemented
+- All TypeScript code written
+- Build compiles successfully
 
-**MVP Total**: 65 tasks (42 already complete from existing implementation)
-**New tasks for MVP**: 36 tasks (T030-T064, T131-T133)
+**Remaining Work** (Phase 12):
+- Integration testing with Claude Code (P1) - 6 tasks
+- Documentation updates (P2) - 4 tasks
+- Seed data for default scopes (P2) - 4 tasks
+- Error page styling (P3) - 5 tasks
 
-### Incremental Delivery
+### Recommended Execution
 
-1. **MVP**: OAuth proxy with Claude Code → Deploy
-2. **+US7**: Scope-based access control → Deploy
-3. **+US6**: Polished login UI → Deploy
-4. **+US3**: Token refresh → Deploy
-5. **+US2**: Config validation enhancements → Deploy
-6. **+US4**: Dual auth with scope parity → Deploy
-7. **+Polish**: Edge cases and documentation → Final Deploy
+1. **Priority 1**: Run integration tests (T125-T130)
+   - This validates all user stories work end-to-end
+   - Blocking for release confidence
+
+2. **Priority 2 (Parallel)**:
+   - Documentation updates (T132-T135)
+   - Seed data migration (T136-T139)
+
+3. **Priority 3**: Error page styling (T140-T144)
+   - Can be done incrementally
+   - Lower urgency for initial release
+
+### Quick Start for Remaining Work
+
+```bash
+# 1. Verify build works
+cd packages/AI/MCPServer && npm run build
+
+# 2. Configure OAuth for testing (see quickstart.md)
+# 3. Start MCP Server
+npm run start:mcp
+
+# 4. Test with Claude Code
+claude mcp add http://localhost:3100 --name "MJ MCP Server"
+```
 
 ---
 
 ## Summary
 
-| Phase | Tasks | New Tasks | Status |
-|-------|-------|-----------|--------|
-| Phase 1: Setup | T001-T003 (3) | 0 | ✅ Complete |
-| Phase 2: Foundational | T004-T010 (7) | 0 | ✅ Complete |
-| Phase 3: US1 (P1) | T011-T029 (19) | 0 | ✅ Complete |
-| Phase 4: US5 (P1) | T030-T052 (23) | 23 | ✅ Complete |
-| Phase 5: JWT Issuance | T053-T064 (12) | 12 | ✅ Complete |
-| Phase 6: US7 (P2) | T065-T079 (15) | 15 | ✅ Complete |
-| Phase 7: US6 (P2) | T080-T088 (9) | 9 | ✅ Complete |
-| Phase 8: US3 (P2) | T089-T096 (8) | 5 | ✅ Complete |
-| Phase 9: US2 (P2) | T097-T103 (7) | 3 | ✅ Complete |
-| Phase 10: US4 (P3) | T104-T112 (9) | 3 | ✅ Complete |
-| Phase 11: Edge Cases | T113-T123 (11) | 4 | ✅ Complete |
-| Phase 12: Polish | T124-T133 (10) | 3 | 🔄 Manual Testing |
-| **Total** | **133** | **77** | |
+| Phase | Tasks | Status |
+|-------|-------|--------|
+| Phase 1: Setup | T001-T003 (3) | ✅ Complete |
+| Phase 2: Foundational | T004-T010 (7) | ✅ Complete |
+| Phase 3: US1 (P1) | T011-T029 (19) | ✅ Complete |
+| Phase 4: US5 (P1) | T030-T052 (23) | ✅ Complete |
+| Phase 5: JWT Issuance | T053-T064 (12) | ✅ Complete |
+| Phase 6: US7 (P2) | T065-T079 (15) | ✅ Complete |
+| Phase 7: US6 (P2) | T080-T088 (9) | ✅ Complete |
+| Phase 8: US3 (P2) | T089-T096 (8) | ✅ Complete |
+| Phase 9: US2 (P2) | T097-T103 (7) | ✅ Complete |
+| Phase 10: US4 (P3) | T104-T112 (9) | ✅ Complete |
+| Phase 11: Edge Cases | T113-T123 (11) | ✅ Complete |
+| Phase 12: Remaining Work | T124-T144 (21) | 🔄 In Progress |
+| **Total** | **144** | |
 
-### Tasks per User Story
+### Remaining Work Summary (from plan.md)
+
+| Category | Priority | Tasks | Description |
+|----------|----------|-------|-------------|
+| Integration Testing | P1 | T125-T130 (6) | Claude Code end-to-end OAuth flow validation |
+| Documentation | P2 | T132-T135 (4) | README and quickstart.md updates |
+| Seed Data | P2 | T136-T139 (4) | Default API scopes migration |
+| Error Page Styling | P3 | T140-T144 (5) | Improve error UX |
+| **Remaining Total** | | **19** | |
+
+### Tasks per User Story (Implementation Complete)
 
 - **US1 (Browser Login)**: 19 tasks ✅ Complete
-- **US5 (Dynamic Registration)**: 23 tasks (NEW)
-- **US7 (Scope-Based Access)**: 15 tasks (NEW)
-- **US6 (Web Login UI)**: 9 tasks (NEW)
-- **US3 (Token Refresh)**: 8 tasks (3 complete, 5 new)
-- **US2 (Admin Config)**: 7 tasks (4 complete, 3 new)
-- **US4 (Dual Auth)**: 9 tasks (6 complete, 3 new)
-- **Shared/Cross-cutting**: 43 tasks
-
-### MVP Scope
-
-- **Existing complete**: 29 tasks (Phases 1-3)
-- **New for OAuth Proxy MVP**: 36 tasks (Phases 4-5 + validation)
-- **Total MVP**: 65 tasks
+- **US5 (Dynamic Registration)**: 23 tasks ✅ Complete
+- **US7 (Scope-Based Access)**: 15 tasks ✅ Complete
+- **US6 (Web Login UI)**: 9 tasks ✅ Complete
+- **US3 (Token Refresh)**: 8 tasks ✅ Complete
+- **US2 (Admin Config)**: 7 tasks ✅ Complete
+- **US4 (Dual Auth)**: 9 tasks ✅ Complete
+- **Shared/Cross-cutting**: 33 tasks ✅ Complete
 
 ### Independent Test Criteria Summary
 
-| User Story | Independent Test |
-|------------|------------------|
-| US1 | OAuth login, Bearer token, tool call success |
-| US5 | `claude mcp add`, dynamic registration, OAuth flow complete |
-| US7 | Consent screen, scope selection, JWT contains granted scopes |
-| US6 | Login page renders, provider selection, error pages display |
-| US3 | Refresh token exchange returns new access token |
-| US2 | Config validation, startup messages, fallback behavior |
-| US4 | Both auth methods work, API key takes precedence |
+| User Story | Independent Test | Verified |
+|------------|------------------|----------|
+| US1 | OAuth login, Bearer token, tool call success | 🔄 Pending |
+| US5 | `claude mcp add`, dynamic registration, OAuth flow complete | 🔄 Pending |
+| US7 | Consent screen, scope selection, JWT contains granted scopes | 🔄 Pending |
+| US6 | Login page renders, provider selection, error pages display | 🔄 Pending |
+| US3 | Refresh token exchange returns new access token | 🔄 Pending |
+| US2 | Config validation, startup messages, fallback behavior | 🔄 Pending |
+| US4 | Both auth methods work, API key takes precedence | 🔄 Pending |
+
+---
+
+## Parallel Execution (Phase 12)
+
+Since implementation is complete, remaining tasks can be parallelized:
+
+```bash
+# Launch all documentation tasks in parallel:
+Task: "Add configuration examples for all 5 providers" (T132)
+Task: "Document JWT signing secret generation" (T133)
+Task: "Add troubleshooting section" (T134)
+Task: "Document API key scope assignment" (T135)
+
+# Launch all error page tasks in parallel:
+Task: "Improve error page visual design" (T140)
+Task: "Add error guidance for user not provisioned" (T141)
+Task: "Add error guidance for provider unavailable" (T142)
+Task: "Add error guidance for state expired" (T143)
+
+# Launch seed data creation:
+Task: "Create SQL migration for default scopes" (T136)
+
+# Integration testing should run sequentially after setup:
+Task: "Configure local MCP Server" (T125) → "Test claude mcp add" (T126) → "Complete full OAuth flow" (T127)
+```
 
 ---
 
@@ -550,8 +611,9 @@ Task T087: CSS styles (parallel with T084)
 
 - [P] tasks = different files, no dependencies within phase
 - [Story] label maps task to specific user story for traceability
-- Tasks marked ✅ are already implemented from previous work
-- OAuth proxy (US5) is the key new capability enabling Claude Code support
+- Implementation is **substantially complete** per plan.md
+- Remaining work focuses on verification, documentation, and polish
+- OAuth proxy (US5) enables Claude Code support without manual IdP registration
 - Proxy-signed JWTs provide consistent format across all upstream providers
 - Scopes are system-wide (apply to both OAuth and API keys)
 - Provider type stored as string (not hardcoded enum) for loose coupling

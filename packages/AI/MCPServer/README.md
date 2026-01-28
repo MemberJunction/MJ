@@ -658,9 +658,10 @@ With the OAuth Proxy:
 1. MCP clients dynamically register with the MCP Server
 2. The MCP Server handles all identity provider interaction
 3. Users authenticate via a simple web-based login flow
-4. No manual client registration required in your IdP
+4. Users select scopes via a consent screen (optional)
+5. No manual client registration required in your IdP
 
-#### Enabling the OAuth Proxy
+#### Full OAuth Proxy Configuration
 
 ```javascript
 module.exports = {
@@ -668,45 +669,117 @@ module.exports = {
     port: 3100,
     enableMCPServer: true,
     auth: {
-      mode: 'both',  // or 'oauth'
+      mode: 'both',  // 'apiKey' | 'oauth' | 'both' | 'none'
       proxy: {
         enabled: true,
-        // upstreamProvider: 'azure',  // Optional: specify provider by name
-        // clientTtlMs: 24 * 60 * 60 * 1000,  // 24 hours (default)
-        // stateTtlMs: 10 * 60 * 1000,  // 10 minutes (default)
+
+        // Upstream provider (optional - defaults to first configured provider)
+        upstreamProvider: 'azure',  // Match 'name' field in authProviders
+
+        // Consent Screen - prompts users to select scopes during auth
+        // Scopes are loaded from __mj.APIScope table in the database
+        // When false, all available scopes are granted automatically
+        enableConsentScreen: true,
+
+        // JWT Signing - proxy issues its own JWTs (not upstream provider tokens)
+        // Configure a secret for consistent validation across server restarts
+        jwtSigningSecret: process.env.MCP_JWT_SECRET,  // Required for production
+        jwtExpiresIn: '1h',  // Token expiration (default: 1h)
+
+        // TTL settings
+        clientTtlMs: 24 * 60 * 60 * 1000,  // 24 hours (default)
+        stateTtlMs: 10 * 60 * 1000,  // 10 minutes (default)
       },
     },
   },
 }
 ```
 
-#### Azure AD Configuration Requirements
+#### Consent Screen
 
-When using the OAuth Proxy with Azure AD (MSAL), you need additional App Registration configuration beyond what MJExplorer requires:
+When `enableConsentScreen: true`, users are presented with a scope selection screen after authenticating with the upstream provider. This provides:
 
-##### 1. Add a Web Redirect URI
+- **Transparency**: Users see exactly what permissions they're granting
+- **Security**: Principle of least privilege - users select only needed scopes
+- **Flexibility**: Different sessions can have different scope levels
 
-In your Azure AD App Registration, under **Authentication** > **Platform configurations**:
+The consent screen shows:
+- A "Grant All" checkbox for convenience
+- Collapsible category groups (from `APIScope.Category`)
+- Individual scope checkboxes with descriptions
 
-1. Click **Add a platform** and select **Web** (not "Single-page application")
-2. Add the redirect URI: `http://localhost:3100/oauth/callback` (or your production URL)
+**Default behavior**: No scopes are pre-selected. Users must explicitly select scopes or click "Grant All".
 
-**Why Web instead of SPA?** The OAuth Proxy acts as a *confidential client* - it receives authorization codes on the server side and exchanges them for tokens using a client secret. SPA configurations use the implicit flow or PKCE without client secrets, which doesn't work for server-side token exchange.
+#### JWT Signing Configuration
 
-##### 2. Create a Client Secret
+The OAuth Proxy issues its own JWTs rather than passing through upstream provider tokens. This provides:
 
-In your Azure AD App Registration, under **Certificates & secrets**:
+- **Consistent format**: Same JWT structure regardless of upstream provider
+- **MemberJunction context**: JWTs include `mjUserId`, `email`, and granted `scopes`
+- **Scope enforcement**: Tools receive the JWT and can evaluate scopes
 
-1. Click **New client secret**
-2. Add a description and choose an expiration
-3. Copy the secret **value** (not the Secret ID)
-4. Add it to your `.env` file:
+**Important**: Configure `jwtSigningSecret` in production for token persistence across server restarts.
 
-```bash
-WEB_CLIENT_SECRET=your-client-secret-value-here
+```javascript
+// Environment variable (recommended)
+jwtSigningSecret: process.env.MCP_JWT_SECRET,
+
+// Or generate a secure secret:
+// node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-**Why is a client secret required?** The OAuth Proxy is a confidential client that authenticates to Azure AD's token endpoint. When exchanging an authorization code for tokens, Azure AD requires the client to prove its identity using the client secret. Without it, the token exchange will fail.
+#### Provider-Specific Redirect URI Setup
+
+When using the OAuth Proxy, you must add a redirect URI to your identity provider. The redirect URI is:
+
+- **Development**: `http://localhost:3100/oauth/callback`
+- **Production**: `https://your-mcp-server.com/oauth/callback`
+
+##### Azure AD / Entra ID
+
+1. Go to **Azure Portal** → **App Registrations** → Your App → **Authentication**
+2. Under **Single-page application** platform (same as MJExplorer), add:
+   - `http://localhost:3100/oauth/callback` (development)
+   - `https://your-mcp-server.com/oauth/callback` (production)
+3. Ensure **Access tokens** and **ID tokens** are checked
+4. No client secret needed - the proxy uses PKCE
+
+##### Auth0
+
+1. Go to **Auth0 Dashboard** → **Applications** → Your App → **Settings**
+2. Under **Allowed Callback URLs**, add:
+   - `http://localhost:3100/oauth/callback` (development)
+   - `https://your-mcp-server.com/oauth/callback` (production)
+3. Under **Allowed Web Origins**, add your MCP server URL
+4. Save changes
+
+##### Okta
+
+1. Go to **Okta Admin Console** → **Applications** → Your App → **General**
+2. Under **Login redirect URIs**, add:
+   - `http://localhost:3100/oauth/callback` (development)
+   - `https://your-mcp-server.com/oauth/callback` (production)
+3. Ensure **Authorization Code** grant type is enabled
+4. Save changes
+
+##### AWS Cognito
+
+1. Go to **AWS Console** → **Cognito** → **User Pools** → Your Pool → **App Integration**
+2. Under **App client settings**, find your app client
+3. Add to **Callback URL(s)**:
+   - `http://localhost:3100/oauth/callback` (development)
+   - `https://your-mcp-server.com/oauth/callback` (production)
+4. Enable **Authorization code grant** under OAuth 2.0
+5. Save changes
+
+##### Google Identity Platform
+
+1. Go to **Google Cloud Console** → **APIs & Services** → **Credentials**
+2. Edit your OAuth 2.0 Client ID
+3. Under **Authorized redirect URIs**, add:
+   - `http://localhost:3100/oauth/callback` (development)
+   - `https://your-mcp-server.com/oauth/callback` (production)
+4. Save changes
 
 #### OAuth Proxy Endpoints
 
@@ -719,6 +792,26 @@ When the OAuth Proxy is enabled, these additional endpoints are available:
 | `GET /oauth/authorize` | Authorization endpoint (redirects to upstream IdP) |
 | `POST /oauth/token` | Token endpoint (exchanges codes for tokens) |
 | `GET /oauth/callback` | Callback from upstream IdP after user authenticates |
+| `GET /oauth/consent` | Consent screen for scope selection (if enabled) |
+| `POST /oauth/consent` | Submit scope selection |
+| `GET /oauth/scopes` | List available scopes |
+
+#### OAuth Proxy Authentication Flow
+
+```
+1. MCP Client connects to MCP Server
+2. Server returns 401 with WWW-Authenticate header
+3. Client fetches /.well-known/oauth-authorization-server
+4. Client dynamically registers via POST /oauth/register
+5. Client redirects user to GET /oauth/authorize
+6. User authenticates with upstream provider (Azure AD, etc.)
+7. Provider redirects to GET /oauth/callback
+8. [If consent enabled] User selects scopes on consent screen
+9. Server creates authorization code
+10. Client exchanges code for tokens via POST /oauth/token
+11. Server issues proxy JWT with selected scopes
+12. Client uses JWT for subsequent MCP tool calls
+```
 
 #### Troubleshooting OAuth Proxy
 
@@ -726,28 +819,34 @@ When the OAuth Proxy is enabled, these additional endpoints are available:
 
 This error means the redirect URI isn't configured correctly in Azure AD.
 
-**Fix:** Add `http://localhost:3100/oauth/callback` (or your production URL) as a **Web** platform redirect URI in your App Registration. Make sure you're adding it under "Web" not "Single-page application".
+**Fix:** Add `http://localhost:3100/oauth/callback` (or your production URL) as a redirect URI in your existing **Single-page application** platform configuration. This is the same platform MJExplorer uses - just add the additional redirect URI.
 
-**Error: "AADSTS7000218: The request body must contain... 'client_secret'"**
+**Error: "AADSTS9002325: Proof Key for Code Exchange is required for cross-origin authorization code redemption"**
 
-This error means the client secret is missing or not being sent.
+This error means PKCE is required but not being used properly.
 
-**Fix:**
-1. Create a client secret in Azure AD (Certificates & secrets)
-2. Add `WEB_CLIENT_SECRET=<your-secret>` to your `.env` file
-3. Restart the MCP Server
-
-**Error: "AADSTS700025: Client is public so neither 'client_assertion' nor 'client_secret' should be presented"**
-
-This error means you've configured a secret but your app is registered as a public client.
-
-**Fix:** In Azure AD App Registration > Authentication, ensure "Allow public client flows" is set to **No**. The OAuth Proxy requires a confidential client configuration.
+**Fix:** This should not occur with the OAuth Proxy as it automatically generates PKCE code_verifier and code_challenge for upstream flows. If you see this error, ensure you're using the latest version of the MCP Server.
 
 **Error: "OAuth Proxy: No upstream provider configured"**
 
 This error means no auth providers are available for the OAuth Proxy to use.
 
 **Fix:** Ensure you have at least one auth provider configured (either via `authProviders` in config or via environment variables like `AUTH_TYPE`, `WEB_CLIENT_ID`, `TENANT_ID`).
+
+**Error: "OAuth Proxy: Failed to exchange authorization code"**
+
+This error typically means the upstream provider rejected the token exchange.
+
+**Fix:**
+1. Verify the redirect URI matches exactly (including trailing slashes)
+2. Check that your OAuth app registration allows the authorization_code grant type
+3. Ensure the app is configured for public client flows (PKCE) in Azure AD
+
+**Error: "Session Expired" on consent screen**
+
+The authorization state expired before the user completed the flow.
+
+**Fix:** Increase `stateTtlMs` in the proxy configuration, or have users complete the flow more quickly.
 
 ---
 

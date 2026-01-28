@@ -1,49 +1,60 @@
-# Implementation Plan: MCP Server OAuth with Multi-Provider Support and Scope-Based Authorization
+# Implementation Plan: MCP Server OAuth Authentication with OAuth Proxy
 
-**Branch**: `601-mcp-oauth` | **Date**: 2026-01-28 | **Spec**: [spec.md](spec.md)
+**Branch**: `601-mcp-oauth` | **Date**: 2026-01-28 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/601-mcp-oauth/spec.md`
 
 ## Summary
 
-Extend the existing MCP Server OAuth implementation to support all configured auth providers (Auth0, Okta, Cognito, Google) beyond the current MSAL/Azure AD focus. Additionally, implement scope-based authorization where users select scopes during OAuth consent, and tools evaluate these scopes from the JWT to control access and behavior.
+Add OAuth 2.1 authentication support to the MCP Server as a toggleable alternative to API key authentication. The implementation includes an OAuth Proxy Authorization Server that enables MCP clients (like Claude Code) to authenticate via browser login using the organization's existing identity provider (Auth0, MSAL/Azure AD, Okta, Cognito, or Google) without requiring manual app registration. The proxy implements RFC 7591 Dynamic Client Registration and issues its own JWTs with MemberJunction-specific scopes stored in the database.
 
-**Key Technical Approach:**
-1. Leverage existing `@memberjunction/server` auth providers via OIDC Discovery
-2. Extend the OAuth proxy to issue proxy-signed JWTs with consistent format and granted scopes
-3. Extend existing `__mj.APIScope` entity for MCP-relevant scopes
-4. Add consent screen to OAuth flow for scope selection
-5. Pass full JWT to tools for scope evaluation
+**Note**: This implementation is **substantially complete** in the current codebase. This plan documents the existing architecture and any remaining work.
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.x, Node.js 18+
-**Primary Dependencies**: `@memberjunction/server` (auth providers), `@modelcontextprotocol/sdk`, `express`, `jsonwebtoken`, `jwks-rsa`
-**Storage**: SQL Server (MemberJunction database) for `APIScope`, `APIKeyScope` entities; In-memory for OAuth proxy state
-**Testing**: Manual integration testing with Claude Code, unit tests for token validation
-**Target Platform**: Node.js server (Linux/Windows), HTTPS required for production
-**Project Type**: Monorepo package (`packages/AI/MCPServer`)
-**Performance Goals**: <100ms token validation overhead, <5s client registration, <90s full OAuth flow
-**Constraints**: Must maintain backward compatibility with API key auth; No new database tables (extend existing APIScope)
-**Scale/Scope**: Single upstream provider per deployment; In-memory state acceptable for MVP
+**Language/Version**: TypeScript 5.x, Node.js 18+ (20+ recommended)
+**Primary Dependencies**:
+- `@memberjunction/server` (auth providers: BaseAuthProvider, AuthProviderFactory)
+- `@modelcontextprotocol/sdk` (MCP protocol implementation)
+- `express` (HTTP server and routing)
+- `jsonwebtoken` (JWT signing/verification for proxy tokens)
+- `jwks-rsa` (JWKS client for upstream token validation)
+
+**Storage**:
+- SQL Server (MemberJunction database) for `APIScope`, `APIKeyScope`, `APIApplication` entities
+- In-memory for OAuth proxy state (authorization codes, registered clients)
+
+**Testing**: Manual integration testing with Claude Code and other MCP clients
+
+**Target Platform**: Node.js server (same as MCP Server)
+
+**Performance Goals**:
+- <100ms token validation overhead
+- <5s dynamic client registration
+- <90s full OAuth flow (registration + login + token)
+
+**Constraints**:
+- PKCE (S256) required for all OAuth flows
+- No client_secret for upstream providers (PKCE-only, same as MJExplorer SPA)
+- In-memory state (server restart clears registered clients - they re-register)
+
+**Scale/Scope**: Single upstream identity provider per MCP Server deployment
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+*GATE: Verified against MemberJunction Constitution v1.1.0*
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| I. Metadata-Driven Development | PASS | Using existing `APIScope` entity; no manual entity class edits |
-| II. Type Safety (NON-NEGOTIABLE) | PASS | All code uses explicit TypeScript types; no `any` |
-| III. Actions as Boundaries | PASS | OAuth is system boundary; internal code uses direct imports |
-| IV. Functional Decomposition | PASS | Auth modules already decomposed; will maintain <40 line functions |
+| I. Metadata-Driven Development | PASS | Scopes stored in `APIScope` entity, managed via MJ admin UI |
+| II. Type Safety (NON-NEGOTIABLE) | PASS | All code uses explicit TypeScript types, no `any` usage |
+| III. Actions as Boundaries | PASS | OAuth is internal infrastructure, uses `@memberjunction/server` directly |
+| IV. Functional Decomposition | PASS | Auth module split into focused files (<300 lines each) |
 | V. Angular NgModules | N/A | No Angular components in this feature |
-| VI. Entity Access Pattern | PASS | Will use `Metadata.GetEntityObject<T>()` and `RunView<T>()` |
-| VII. Query Optimization | PASS | Scope lookups use simple queries with proper typing |
-| VIII. Batch Operations | PASS | Scopes loaded in batch during authorization |
-| IX. Naming Conventions | PASS | PascalCase for public, camelCase for private |
-| X. CodeGen Workflow | PASS | Will run CodeGen after any schema changes |
-
-**Constitution Compliance**: All gates PASS. No violations to justify.
+| VI. Entity Access Pattern | PASS | Uses `Metadata.GetEntityObject<T>()` and `RunView<T>()` with contextUser |
+| VII. Query Optimization | PASS | Uses `ResultType: 'simple'` for scope lookups with caching |
+| VIII. Batch Operations | PASS | Loads all scopes in single query, cached for 5 minutes |
+| IX. Naming Conventions | PASS | PascalCase for public members, camelCase for private |
+| X. CodeGen Workflow | PASS | Database migrations use CodeGen for views/SPs |
 
 ## Project Structure
 
@@ -52,86 +63,117 @@ Extend the existing MCP Server OAuth implementation to support all configured au
 ```text
 specs/601-mcp-oauth/
 ├── plan.md              # This file
-├── spec.md              # Feature specification
-├── research.md          # Phase 0 output - provider differences, JWT signing
-├── data-model.md        # Phase 1 output - APIScope extensions
-├── quickstart.md        # Phase 1 output - testing guide
-├── contracts/           # Phase 1 output - OAuth endpoint contracts
-│   └── oauth-proxy-api.yaml
+├── research.md          # Phase 0: OAuth specification research
+├── data-model.md        # Phase 1: Entity and scope definitions
+├── quickstart.md        # Phase 1: Configuration guide
+├── contracts/           # Phase 1: OAuth endpoint specifications
+│   └── oauth-api.yaml   # OpenAPI 3.0 specification
 └── tasks.md             # Phase 2 output (created by /speckit.tasks)
 ```
 
-### Source Code (existing structure)
+### Source Code (existing implementation)
 
 ```text
 packages/AI/MCPServer/
 ├── src/
-│   ├── Server.ts                    # Main server - extend auth integration
-│   ├── config.ts                    # Config loader - add JWT signing secret
-│   ├── auth/
-│   │   ├── AuthGate.ts             # Auth middleware - pass JWT to tools
-│   │   ├── TokenValidator.ts       # Token validation - already multi-provider
-│   │   ├── OAuthProxyRouter.ts     # Proxy endpoints - add consent, scopes
-│   │   ├── OAuthConfig.ts          # Config helpers - extend
-│   │   ├── LoginPage.ts            # Login UI - add consent screen
-│   │   ├── ConsentPage.ts          # NEW: Scope consent UI
-│   │   ├── JWTIssuer.ts            # NEW: Proxy JWT signing
-│   │   └── ScopeService.ts         # NEW: Scope loading from DB
-│   └── index.ts
-└── package.json
+│   ├── Server.ts              # Main server with OAuth integration
+│   ├── config.ts              # Configuration loading and validation
+│   └── auth/                  # OAuth authentication module
+│       ├── index.ts           # Module exports
+│       ├── types.ts           # TypeScript interfaces
+│       ├── OAuthConfig.ts     # OAuth configuration types
+│       ├── OAuthProxyTypes.ts # OAuth proxy types
+│       ├── AuthGate.ts        # Request authentication middleware
+│       ├── TokenValidator.ts  # JWT validation logic
+│       ├── JWTIssuer.ts       # Proxy JWT signing (HS256)
+│       ├── ScopeService.ts    # Database scope loading
+│       ├── ScopeEvaluator.ts  # Scope-based authorization
+│       ├── ClientRegistry.ts  # RFC 7591 dynamic client registration
+│       ├── AuthorizationStateManager.ts  # OAuth state tracking
+│       ├── AuthorizationServerMetadataBuilder.ts  # RFC 8414 metadata
+│       ├── ProtectedResourceMetadata.ts  # RFC 9728 metadata
+│       ├── OAuthProxyRouter.ts    # OAuth proxy endpoints
+│       ├── WWWAuthenticate.ts     # RFC 9728 headers
+│       ├── ConsentPage.ts         # Scope consent UI
+│       ├── LoginPage.ts           # Web login UI
+│       └── styles.ts              # Shared CSS styles
 
 packages/MJServer/src/auth/
-├── providers/
-│   ├── Auth0Provider.ts            # Existing - verify OIDC Discovery
-│   ├── MSALProvider.ts             # Existing - works
-│   ├── OktaProvider.ts             # Existing - verify OIDC Discovery
-│   ├── CognitoProvider.ts          # Existing - verify OIDC Discovery
-│   └── GoogleProvider.ts           # Existing - verify OIDC Discovery
-├── BaseAuthProvider.ts             # Existing - JWKS handling
-└── AuthProviderFactory.ts          # Existing - provider lookup
+├── BaseAuthProvider.ts        # Abstract base for auth providers
+├── AuthProviderFactory.ts     # Provider registry and factory
+└── providers/
+    ├── Auth0Provider.ts       # Auth0 implementation
+    ├── MSALProvider.ts        # Azure AD implementation
+    ├── OktaProvider.ts        # Okta implementation
+    ├── CognitoProvider.ts     # AWS Cognito implementation
+    └── GoogleProvider.ts      # Google implementation
+
+migrations/v3/
+├── V202601211825__v3.2.x__APIKeys.sql           # APIKey, APIScope tables
+├── V202601261008__v3.3.x__API_Key_Scopes_Authorization.sql  # Hierarchical scopes
+└── V202601271500__v3.4.x__APIScope_UIConfig.sql # UI presentation metadata
 ```
 
-**Structure Decision**: Extend existing `packages/AI/MCPServer/src/auth/` module with new files for consent UI, JWT issuance, and scope service. No new packages required.
+**Structure Decision**: Monorepo structure using existing packages. OAuth implementation in `packages/AI/MCPServer/src/auth/`, auth providers reused from `packages/MJServer/src/auth/`.
 
 ## Complexity Tracking
 
-> No Constitution violations. All complexity within existing patterns.
+> No constitution violations requiring justification. Implementation follows all principles.
 
-| Area | Approach | Rationale |
-|------|----------|-----------|
-| Multi-provider | Use OIDC Discovery | Standard across all providers; no provider-specific code |
-| Proxy JWTs | HS256 with configured secret | Simple, stateless; secret in mj.config.cjs |
-| Scope storage | Extend existing APIScope entity | Reuse existing infrastructure; no new tables |
-| Consent UI | Server-rendered HTML | Consistent with existing LoginPage.ts pattern |
+| Area | Complexity Level | Justification |
+|------|-----------------|---------------|
+| OAuth Proxy | Medium | Required for RFC 7591 dynamic registration (Azure AD doesn't support it natively) |
+| In-memory state | Low | Acceptable for MVP; clients re-register on restart |
+| Scope hierarchy | Medium | Enables fine-grained permissions with inheritance |
 
-## Phase 0 Deliverables
+## Implementation Status
 
-- [ ] `research.md` - Provider OIDC Discovery patterns, JWT signing approaches, consent flow best practices
+### Completed Components
 
-## Phase 1 Deliverables
+| Component | File | Status |
+|-----------|------|--------|
+| Auth modes (apiKey, oauth, both, none) | AuthGate.ts | Complete |
+| Token validation | TokenValidator.ts | Complete |
+| JWT issuing (HS256) | JWTIssuer.ts | Complete |
+| Dynamic client registration | ClientRegistry.ts | Complete |
+| OAuth proxy endpoints | OAuthProxyRouter.ts | Complete |
+| Protected resource metadata | ProtectedResourceMetadata.ts | Complete |
+| Authorization server metadata | AuthorizationServerMetadataBuilder.ts | Complete |
+| State management | AuthorizationStateManager.ts | Complete |
+| Scope loading from DB | ScopeService.ts | Complete |
+| Scope evaluation | ScopeEvaluator.ts | Complete |
+| Login page UI | LoginPage.ts | Complete |
+| Consent page UI | ConsentPage.ts | Complete |
+| Database migrations | migrations/v3/*.sql | Complete |
+| Provider implementations | MJServer/src/auth/providers/ | Complete |
 
-- [ ] `data-model.md` - APIScope entity field additions (if any), JWT claims structure
-- [ ] `contracts/oauth-proxy-api.yaml` - OpenAPI spec for OAuth proxy endpoints
-- [ ] `quickstart.md` - Testing guide for Claude Code integration
+### Remaining Work
 
-## Implementation Phases (Preview)
+| Item | Priority | Notes |
+|------|----------|-------|
+| Integration testing with Claude Code | P1 | Verify full flow works |
+| Documentation updates | P2 | README, configuration examples |
+| Seed data for default scopes | P2 | Pre-populate common scopes |
+| Error page styling | P3 | Improve error UX |
 
-### Phase 1: Multi-Provider Support
-- Verify all 5 providers work with OIDC Discovery
-- Test token validation with each provider type
-- Update configuration documentation
+## Key Design Decisions
 
-### Phase 2: Proxy JWT Issuance
-- Implement JWTIssuer with HS256 signing
-- Configure signing secret in mj.config.cjs
-- Issue consistent JWTs regardless of upstream provider
+### 1. OAuth Proxy Pattern
+**Decision**: Implement OAuth proxy rather than direct upstream token passthrough
+**Rationale**: Azure AD doesn't support RFC 7591 Dynamic Client Registration. The proxy enables MCP clients to authenticate without manual app registration.
 
-### Phase 3: Scope-Based Authorization
-- Create ScopeService to load APIScope from database
-- Add consent screen to OAuth flow
-- Include granted scopes in proxy-issued JWTs
-- Pass JWT to tools for scope evaluation
+### 2. PKCE-Only for Upstream
+**Decision**: Use PKCE without client_secret for upstream provider authentication
+**Rationale**: Allows reuse of MJExplorer's existing OAuth app registration (public/SPA client). Users only add `/oauth/callback` redirect URI.
 
-### Phase 4: API Key Scope Integration
-- Extend APIKeyScope junction table usage
-- Ensure tools evaluate scopes consistently for both OAuth and API keys
+### 3. HS256 for Proxy JWTs
+**Decision**: Sign proxy-issued tokens with HS256 (symmetric)
+**Rationale**: Simpler than asymmetric keys, configurable secret in mj.config.cjs, sufficient for MCP Server's trust model.
+
+### 4. Database-Stored Scopes
+**Decision**: Store scopes in `APIScope` entity with hierarchy
+**Rationale**: Enables dynamic scope management via MJ admin UI, applies to both OAuth and API keys (system-wide).
+
+### 5. In-Memory State Storage
+**Decision**: Store registered clients and authorization state in memory
+**Rationale**: Acceptable for MVP. Clients re-register on server restart. Simplifies deployment without external state store.

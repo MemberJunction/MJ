@@ -2,7 +2,7 @@
 
 **Feature Branch**: `601-mcp-oauth`
 **Created**: 2026-01-27
-**Updated**: 2026-01-27
+**Updated**: 2026-01-28
 **Status**: Draft
 **Input**: User description: "Add support for OAuth to packages/AI/MCPServer. OAuth should use the same config values used by the front end (MJExplorer) and should be toggleable in the config file. The idea is that an installation could choose to enable OAuth instead of (or in addition to) API key auth, then when they use the MCP server with a client, it will open a browser prompting them to log in (same as if they were to visit their MJExplorer). Once authenticated, the MCP client can call tools normally (until the auth expires)."
 
@@ -34,6 +34,12 @@
 - Q: Why not just use the upstream provider directly? → A: Testing revealed Azure AD v2.0 doesn't support RFC 8707 resource parameter (uses scope instead), and doesn't support dynamic client registration. This means MCP clients cannot initiate OAuth flows without manual Azure AD app configuration.
 - Q: Should the proxy support a web UI? → A: Yes, the MCP Server should serve a simple login web UI to provide a good user experience during the browser-based authentication flow.
 - Q: Should the MCP server have hardcoded knowledge of auth provider types? → A: No. MCP server should remain loosely coupled from provider-specific knowledge. Provider type is stored as a string (from config), not a hardcoded enum. All provider-specific logic (discovery URL patterns, claim mappings, etc.) belongs in `@memberjunction/server` auth package, not MCP server code.
+- Q: How should scopes be encoded in the proxy-issued JWT? → A: Standard OAuth `scope` claim with space-delimited FullPath values (e.g., `"scope": "entity:read entity:create agent:execute"`). Follows RFC 9068 for OAuth compliance.
+- Q: How should scopes be presented on the consent screen? → A: Two-tier UI with "Grant All" checkbox at top, plus collapsible category groups below for granular selection. Categories come from APIScope.Category field.
+- Q: What should be the default selection state on consent screen? → A: No scopes pre-selected. User must explicitly select scopes (or use "Grant All"). Enforces least privilege by default.
+- Q: Can MCP clients request specific scopes in the authorization request? → A: Yes. If client requests specific scopes, only those are shown on consent screen. If no scopes requested, all active scopes are shown. Supports OAuth 2.0 scope parameter.
+- Q: What happens if client requests unknown scopes? → A: Silently ignore unknown scopes; show only valid matching scopes on consent screen. Provides resilience for clients requesting standard OAuth scopes or scopes from different MJ deployments.
+- Q: Should the OAuth Proxy require a client_secret for upstream provider authentication? → A: No. The proxy uses PKCE-only for upstream authentication (same as MJExplorer SPA), requiring no client secret. Users can reuse the exact same OAuth app registration as MJExplorer, only adding the /oauth/callback redirect URI.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -220,6 +226,9 @@ A developer authenticates via OAuth and is presented with a consent screen showi
 - What happens when an API key has no scopes assigned?
   - The API key works for authentication but tools may deny operations. Administrators should assign appropriate scopes when creating keys.
 
+- What happens when a client requests only unknown/invalid scopes?
+  - Unknown scopes are silently filtered out. If all requested scopes are unknown, the consent screen shows all active scopes (same as if no scopes were requested).
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -272,6 +281,8 @@ A developer authenticates via OAuth and is presented with a consent screen showi
 
 - **FR-023**: System MUST issue proxy-signed JWTs to MCP clients with a consistent format (containing user email, MJ user ID, expiration) regardless of upstream provider. The proxy validates upstream tokens internally but does not expose them to clients.
 
+- **FR-023a**: System MUST use PKCE (RFC 7636) for upstream provider token exchange, eliminating the need for a client_secret. This enables reuse of MJExplorer's existing OAuth app registration (which is configured as a public/SPA client). The proxy generates its own PKCE code_verifier and code_challenge for each upstream authorization flow.
+
 - **FR-024**: System MUST update Protected Resource Metadata to point to the OAuth proxy authorization server when OAuth proxy mode is enabled.
 
 - **FR-025**: System MUST use a configured JWT signing secret from mj.config.cjs for proxy-issued tokens, ensuring tokens remain valid across server restarts.
@@ -280,15 +291,21 @@ A developer authenticates via OAuth and is presented with a consent screen showi
 
 - **FR-026**: System MUST store API Scopes in the MJ database as an entity, with fields for scope name, description, and active status.
 
-- **FR-027**: System MUST include granted scopes in proxy-issued JWTs, allowing tools to inspect and evaluate scopes at runtime.
+- **FR-027**: System MUST include granted scopes in proxy-issued JWTs using the standard OAuth `scope` claim with space-delimited APIScope.FullPath values (e.g., `"scope": "entity:read agent:execute"`), allowing tools to inspect and evaluate scopes at runtime per RFC 9068.
 
 - **FR-028**: System MUST apply scope-based authorization to both OAuth tokens and API keys (scopes are system-wide, not OAuth-specific).
 
 - **FR-029**: Tools MUST receive the full JWT to evaluate scopes and determine allowed behavior, including selectively limiting data access based on granted scopes.
 
-- **FR-030**: System MUST display a consent screen during OAuth authorization where users select which scopes to grant from their available scopes (principle of least privilege).
+- **FR-030**: System MUST display a consent screen during OAuth authorization with a two-tier UI: a "Grant All" checkbox at top for convenience, plus collapsible category groups (from APIScope.Category) below for granular scope selection (principle of least privilege).
+
+- **FR-030a**: System MUST default to no scopes selected on initial consent screen load. User must explicitly select individual scopes or use "Grant All" to proceed. This enforces least privilege by default.
 
 - **FR-031**: System MUST make all active scopes available to all authenticated users on the consent screen. Tools enforce actual data-level permissions based on MJ user context.
+
+- **FR-031a**: System MUST support the OAuth 2.0 `scope` parameter in authorization requests. If client requests specific scopes, only those scopes are displayed on the consent screen. If no scopes are requested, all active scopes are shown.
+
+- **FR-031b**: System MUST silently ignore unknown scopes in client authorization requests. Only scopes matching active APIScope.FullPath values are shown on consent screen. Unknown scopes are not treated as errors.
 
 - **FR-032**: System MUST support assigning scopes to API keys when creating or editing them. API key scopes are stored with the key and evaluated by tools the same way as OAuth token scopes.
 
@@ -298,7 +315,7 @@ A developer authenticates via OAuth and is presented with a consent screen showi
 
 - **User**: The MemberJunction user associated with the OAuth subject claim. The system maps OAuth identity to an existing User record to establish permissions and context.
 
-- **OAuth Configuration**: Settings stored in mj.config.cjs that define the OAuth provider type, client ID, authority URL, tenant ID, JWT signing secret, and whether OAuth is enabled.
+- **OAuth Configuration**: Settings stored in mj.config.cjs that define the OAuth provider type, client ID, authority URL, tenant ID, JWT signing secret, and whether OAuth is enabled. Note: No client_secret is required for the upstream provider - the proxy uses PKCE (same as MJExplorer SPA).
 
 - **MCP Session**: Represents an authenticated connection between an MCP client and the server. Contains either API key context or OAuth token claims, along with the resolved MemberJunction user.
 
@@ -354,7 +371,7 @@ A developer authenticates via OAuth and is presented with a consent screen showi
 
 ### OAuth Proxy Assumptions
 
-- The OAuth proxy reuses MJExplorer's existing OAuth client credentials (client_id, client_secret, authority/domain) when communicating with the upstream identity provider. No separate app registration is required for the MCP Server.
+- The OAuth proxy reuses MJExplorer's existing OAuth app registration (client_id, authority/domain) when communicating with the upstream identity provider. The proxy uses PKCE for upstream token exchange (same technique as MJExplorer SPA), requiring no client_secret. Users only need to add the `/oauth/callback` redirect URI to their existing OAuth app - no separate app registration is required.
 - The OAuth proxy discovers upstream provider endpoints via standard OIDC Discovery (/.well-known/openid-configuration), which all supported providers expose.
 - MCP clients support PKCE (S256) as required by OAuth 2.1 - this is standard for modern OAuth clients.
 - In-memory storage for registered clients and authorization state is acceptable for MVP (server restart clears state; clients re-register).

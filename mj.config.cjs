@@ -129,9 +129,21 @@ module.exports = {
       // This allows MCP clients like Claude Code to authenticate without manual app registration
       proxy: {
         enabled: true, // Enable OAuth proxy for dynamic client registration
-        // upstreamProvider: 'azure', // Optional: specify provider by name (defaults to first)
+        upstreamProvider: 'auth0', // Optional: specify provider by name (defaults to first)
         // clientTtlMs: 24 * 60 * 60 * 1000, // 24 hours (default)
         // stateTtlMs: 10 * 60 * 1000, // 10 minutes (default)
+
+        // Consent Screen - prompts users to select which scopes to grant
+        // Scopes are loaded from __mj.APIScope table in the database
+        // When false, all available scopes are granted automatically
+        enableConsentScreen: true,
+
+        // JWT Signing - the proxy issues its own JWTs (not upstream provider tokens)
+        // Configure a secret for consistent token validation across server restarts
+        // If not set, tokens won't be signed and consent screen won't work!
+        // REQUIRED for consent screen to function
+        jwtSigningSecret: process.env.MCP_JWT_SECRET,
+        jwtExpiresIn: '1h', // Token expiration (default: 1h)
       },
     },
 

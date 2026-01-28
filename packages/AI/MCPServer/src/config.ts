@@ -158,6 +158,13 @@ const oauthProxySettingsSchema = z.object({
    * @default 'urn:mj:mcp-server'
    */
   jwtIssuer: z.string().default('urn:mj:mcp-server'),
+  /**
+   * Enable the consent screen for users to select scopes.
+   * When enabled, users will see a UI to approve/deny scope requests
+   * after authenticating with the upstream provider.
+   * @default false
+   */
+  enableConsentScreen: z.boolean().default(false),
 });
 
 /**

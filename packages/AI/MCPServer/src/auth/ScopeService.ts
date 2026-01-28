@@ -8,6 +8,7 @@
  */
 
 import { RunView } from '@memberjunction/core';
+import { getSystemUser } from '@memberjunction/server';
 import type { APIScopeInfo } from './types.js';
 
 /**
@@ -45,6 +46,9 @@ export async function loadActiveScopes(): Promise<APIScopeInfo[]> {
   }
 
   try {
+    // Get system user for server-side operations
+    const systemUser = await getSystemUser();
+
     const rv = new RunView();
     const result = await rv.RunView<{
       ID: string;
@@ -52,12 +56,15 @@ export async function loadActiveScopes(): Promise<APIScopeInfo[]> {
       Category: string;
       Description: string;
       IsActive: boolean;
-    }>({
-      EntityName: 'API Scopes',
-      ExtraFilter: 'IsActive = 1',
-      OrderBy: 'Category, Name',
-      ResultType: 'simple',
-    });
+    }>(
+      {
+        EntityName: 'MJ: API Scopes',
+        ExtraFilter: 'IsActive = 1',
+        OrderBy: 'Category, Name',
+        ResultType: 'simple',
+      },
+      systemUser
+    );
 
     if (!result.Success) {
       console.error('[ScopeService] Failed to load scopes:', result.ErrorMessage);
