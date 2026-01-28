@@ -12,6 +12,7 @@ export { ExecuteMCPToolAction, LoadExecuteMCPToolAction } from './execute-mcp-to
 export { SyncMCPToolsAction, LoadSyncMCPToolsAction } from './sync-mcp-tools.action.js';
 export { TestMCPConnectionAction, LoadTestMCPConnectionAction } from './test-mcp-connection.action.js';
 export { ListMCPToolsAction, LoadListMCPToolsAction } from './list-mcp-tools.action.js';
+export { MCPToolAction, LoadMCPToolAction } from './mcp-tool.action.js';
 
 /**
  * Loads all MCP actions to prevent tree-shaking.
@@ -24,6 +25,7 @@ export function LoadAllMCPActions(): void {
     LoadSyncMCPToolsAction();
     LoadTestMCPConnectionAction();
     LoadListMCPToolsAction();
+    LoadMCPToolAction();
 }
 
 // Re-export loader functions
@@ -31,3 +33,4 @@ import { LoadExecuteMCPToolAction } from './execute-mcp-tool.action.js';
 import { LoadSyncMCPToolsAction } from './sync-mcp-tools.action.js';
 import { LoadTestMCPConnectionAction } from './test-mcp-connection.action.js';
 import { LoadListMCPToolsAction } from './list-mcp-tools.action.js';
+import { LoadMCPToolAction } from './mcp-tool.action.js';
