@@ -21,6 +21,7 @@ export interface QueryGenConfig {
   questionsPerGroup: number;
   minGroupSize: number;        // Minimum entities per group
   maxGroupSize: number;        // Maximum entities per group
+  requireConnectivity: boolean; // Require entities in groups to be connected via relationships
 
   // AI Configuration
   modelOverride?: string;    // Override model for all prompts (e.g., "GPT-OSS-120B")
@@ -74,6 +75,7 @@ const DEFAULT_CONFIG: QueryGenConfig = {
   questionsPerGroup: 2,
   minGroupSize: 2,              // Multi-entity groups have at least 2 entities
   maxGroupSize: 3,              // Keep groups small for focused questions
+  requireConnectivity: true,    // Require entities to be connected (disable for sparse relationship graphs)
   embeddingModel: 'text-embedding-3-small',
   maxRefinementIterations: 3,
   maxFixingIterations: 5,
