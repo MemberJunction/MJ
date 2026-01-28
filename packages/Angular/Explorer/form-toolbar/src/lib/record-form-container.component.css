@@ -10,7 +10,6 @@
 
 a {
   font-size: 14px;
-  font-weight: bolder;
 }
 
 .record-form {
@@ -92,25 +91,26 @@ button {
 }
 
 .form-panels-container {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   padding: 20px;
   background-color: #F5F6FA;
+  max-width: 900px;
+  margin: 0 auto;
+  transition: max-width 0.3s ease;
 }
 
-/* Responsive horizontal stacking for ALL panels (field sections and related entities) */
-@media (min-width: 1200px) {
+/* On very wide screens, allow slightly wider forms for better use of space */
+@media (min-width: 1600px) {
   .form-panels-container {
-    grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
+    max-width: 1000px;
   }
 }
 
-/* Even more aggressive stacking on ultra-wide screens */
-@media (min-width: 1800px) {
-  .form-panels-container {
-    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-  }
+/* Full-width mode - removes max-width constraint */
+.form-panels-container.full-width {
+  max-width: none;
 }
 
 /* Related entity grid container - treated as regular panels now */
