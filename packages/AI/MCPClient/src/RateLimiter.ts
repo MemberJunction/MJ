@@ -7,6 +7,7 @@
  * @module @memberjunction/ai-mcp-client/RateLimiter
  */
 
+import { LogStatus } from '@memberjunction/core';
 import type { RateLimitConfig, RateLimitState, QueuedRequest } from './types.js';
 
 /**
@@ -81,13 +82,18 @@ export class RateLimiter {
         // Clean up old timestamps
         this.cleanupOldTimestamps();
 
+        const { perMinute, perHour } = this.config;
+        LogStatus(`[RateLimiter] acquire() - config: perMinute=${perMinute}, perHour=${perHour}, minuteRequests=${this.state.minuteRequests.length}, hourRequests=${this.state.hourRequests.length}`);
+
         // Check if we can proceed immediately
         if (this.canProceed()) {
+            LogStatus(`[RateLimiter] acquire() - proceeding immediately`);
             this.recordRequest();
             return;
         }
 
         // Queue the request
+        LogStatus(`[RateLimiter] acquire() - rate limit exceeded, queuing request`);
         return this.enqueueRequest(maxWaitMs);
     }
 
@@ -101,13 +107,13 @@ export class RateLimiter {
 
         const { perMinute, perHour } = this.config;
 
-        // Check minute limit
-        if (perMinute !== undefined && this.state.minuteRequests.length >= perMinute) {
+        // Check minute limit (0 or undefined means no limit)
+        if (perMinute !== undefined && perMinute > 0 && this.state.minuteRequests.length >= perMinute) {
             return false;
         }
 
-        // Check hour limit
-        if (perHour !== undefined && this.state.hourRequests.length >= perHour) {
+        // Check hour limit (0 or undefined means no limit)
+        if (perHour !== undefined && perHour > 0 && this.state.hourRequests.length >= perHour) {
             return false;
         }
 
@@ -152,8 +158,8 @@ export class RateLimiter {
         const now = Date.now();
         let waitMs = 0;
 
-        // Check minute limit
-        if (this.config.perMinute !== undefined &&
+        // Check minute limit (0 or undefined means no limit)
+        if (this.config.perMinute !== undefined && this.config.perMinute > 0 &&
             this.state.minuteRequests.length >= this.config.perMinute) {
             const oldestMinute = this.state.minuteRequests[0];
             if (oldestMinute !== undefined) {
@@ -162,8 +168,8 @@ export class RateLimiter {
             }
         }
 
-        // Check hour limit
-        if (this.config.perHour !== undefined &&
+        // Check hour limit (0 or undefined means no limit)
+        if (this.config.perHour !== undefined && this.config.perHour > 0 &&
             this.state.hourRequests.length >= this.config.perHour) {
             const oldestHour = this.state.hourRequests[0];
             if (oldestHour !== undefined) {

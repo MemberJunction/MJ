@@ -502,6 +502,43 @@
     font-size: 12px;
 }
 
+.data-table .server-name {
+    color: var(--mj-text-secondary-color, #666);
+    font-size: 13px;
+}
+
+/* Sortable Column Headers */
+.data-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+.data-table th.sortable:hover {
+    background: #f0f0f0;
+}
+
+.data-table th.sortable .sort-icon {
+    margin-left: 6px;
+    font-size: 10px;
+    color: #ccc;
+    transition: color 0.15s ease;
+}
+
+.data-table th.sortable:hover .sort-icon {
+    color: #999;
+}
+
+.data-table th.sorted-asc .sort-icon,
+.data-table th.sorted-desc .sort-icon {
+    color: var(--mj-primary-color, #2196f3);
+}
+
+/* Status badge icons */
+.status-badge i {
+    font-size: 12px;
+}
+
 /* Empty State */
 .empty-state {
     display: flex;
@@ -984,4 +1021,154 @@
     .search-box {
         width: 100%;
     }
+}
+
+/* ========================================
+   Clickable Log Rows
+   ======================================== */
+.clickable-row {
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.clickable-row:hover {
+    background: rgba(33, 150, 243, 0.05) !important;
+}
+
+.clickable-row .action-cell {
+    color: #ccc;
+    transition: color 0.15s ease;
+}
+
+.clickable-row:hover .action-cell {
+    color: var(--mj-primary-color, #2196f3);
+}
+
+.action-cell {
+    width: 40px;
+    text-align: center;
+}
+
+/* ========================================
+   Expandable Card Styles
+   ======================================== */
+.card-header.clickable {
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.card-header.clickable:hover {
+    background: #f0f0f0;
+}
+
+.expand-arrow {
+    font-size: 12px;
+    color: #999;
+    transition: transform 0.2s ease;
+    margin-right: 4px;
+}
+
+.expand-arrow.rotated {
+    transform: rotate(90deg);
+}
+
+.data-card.expanded {
+    border-color: var(--mj-primary-color, #2196f3);
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15);
+}
+
+/* ========================================
+   Expanded Tools Section (Server/Connection Cards)
+   ======================================== */
+.expanded-tools-section {
+    border-top: 1px solid #e0e0e0;
+    background: linear-gradient(180deg, #fafafa, #f5f5f5);
+}
+
+.tools-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-primary-color, #2196f3);
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.tools-section-header i {
+    font-size: 14px;
+}
+
+.no-tools-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    color: var(--mj-text-secondary-color, #666);
+    font-size: 13px;
+}
+
+.no-tools-message i {
+    color: #999;
+}
+
+/* Tools Mini List */
+.tools-mini-list {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.tool-mini-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: white;
+    border: 1px solid #e8e8e8;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+
+.tool-mini-card:hover {
+    border-color: var(--mj-primary-color, #2196f3);
+    background: rgba(33, 150, 243, 0.02);
+}
+
+.tool-mini-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.tool-mini-name {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--mj-text-color, #333);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tool-mini-params {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--mj-text-secondary-color, #666);
+}
+
+.tool-mini-params i {
+    font-size: 10px;
+}
+
+.tool-mini-card button {
+    flex-shrink: 0;
+    margin-left: 8px;
 }

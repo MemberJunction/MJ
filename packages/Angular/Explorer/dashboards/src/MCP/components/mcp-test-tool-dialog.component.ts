@@ -1,15 +1,18 @@
 /**
- * @fileoverview MCP Test Tool Dialog Component
+ * @fileoverview MCP Test Tool Slide-Out Panel Component
  *
  * Provides a beautiful UX for testing MCP tools with:
  * - Server/Connection/Tool selection
  * - Dynamic parameter input UI based on JSON Schema
  * - Tool execution with results display
  * - User settings caching via UserInfoEngine
+ * - Resizable slide-out panel with width persistence
  */
 
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
 import { Subject } from 'rxjs';
+import { debounceTime, takeUntil } from 'rxjs/operators';
+import { trigger, transition, style, animate } from '@angular/animations';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
@@ -119,7 +122,18 @@ const ExecuteMCPToolMutation = gql`
 @Component({
     selector: 'mj-mcp-test-tool-dialog',
     templateUrl: './mcp-test-tool-dialog.component.html',
-    styleUrls: ['./mcp-test-tool-dialog.component.css']
+    styleUrls: ['./mcp-test-tool-dialog.component.css'],
+    animations: [
+        trigger('slideIn', [
+            transition(':enter', [
+                style({ transform: 'translateX(100%)', opacity: 0 }),
+                animate('250ms ease-out', style({ transform: 'translateX(0)', opacity: 1 }))
+            ]),
+            transition(':leave', [
+                animate('200ms ease-in', style({ transform: 'translateX(100%)', opacity: 0 }))
+            ])
+        ])
+    ]
 })
 export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
 
@@ -163,6 +177,14 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     FilteredConnections: TestToolConnectionData[] = [];
     FilteredTools: TestToolData[] = [];
 
+    /** Display lists for dropdowns (filtered by search) */
+    DisplayServers: TestToolServerData[] = [];
+    DisplayConnections: TestToolConnectionData[] = [];
+    DisplayTools: TestToolData[] = [];
+
+    /** No connections warning */
+    NoConnectionsWarning: string | null = null;
+
     /** Selected tool details */
     SelectedTool: TestToolData | null = null;
     ParameterConfigs: ParameterConfig[] = [];
@@ -176,12 +198,56 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     /** User settings key prefix */
     private readonly SETTINGS_PREFIX = 'mcp-tool-test/';
 
+    // ========================================
+    // Panel Width / Resize State
+    // ========================================
+
+    /** Panel width settings key */
+    private readonly PANEL_WIDTH_SETTING_KEY = 'mcp-test-tool-panel/width';
+
+    /** Panel width constraints */
+    private readonly MIN_PANEL_WIDTH = 320;
+    private readonly MAX_PANEL_WIDTH = 900;
+    private readonly DEFAULT_PANEL_WIDTH = 700;
+    private readonly MOBILE_BREAKPOINT = 768;
+
+    /** Current panel width in pixels */
+    PanelWidth: number = this.DEFAULT_PANEL_WIDTH;
+
+    /** Whether user is currently resizing */
+    IsResizing = false;
+
+    /** Whether panel should be full-width (mobile mode) */
+    get IsMobileMode(): boolean {
+        return typeof window !== 'undefined' && window.innerWidth <= this.MOBILE_BREAKPOINT;
+    }
+
+    /** Subject for debounced width persistence */
+    private widthPersistSubject = new Subject<number>();
+
     private destroy$ = new Subject<void>();
     private gqlProvider = GraphQLDataProvider.Instance;
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(
+        private cdr: ChangeDetectorRef,
+        private elementRef: ElementRef
+    ) {
+        // Debounce width persistence to avoid excessive writes
+        this.widthPersistSubject.pipe(
+            debounceTime(500),
+            takeUntil(this.destroy$)
+        ).subscribe(width => {
+            this.persistPanelWidth(width);
+        });
+    }
 
     ngOnInit(): void {
+        // Load saved panel width
+        this.loadSavedPanelWidth();
+
+        // Initialize display arrays
+        this.DisplayServers = [...this.Servers];
+
         // Apply pre-selected values
         if (this.SelectedServerID) {
             this.ServerID = this.SelectedServerID;
@@ -206,6 +272,8 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     // ========================================
 
     onServerChange(): void {
+        this.NoConnectionsWarning = null;
+
         // Filter connections by selected server
         if (this.ServerID) {
             this.FilteredConnections = this.Connections.filter(
@@ -215,13 +283,35 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
             this.FilteredTools = this.Tools.filter(
                 t => t.MCPServerID === this.ServerID && t.Status === 'Active'
             );
+
+            // Check if server requires authentication
+            const server = this.Servers.find(s => s.ID === this.ServerID);
+            const serverRequiresAuth = server?.Status === 'Active'; // All servers currently need connections
+
+            // Auto-select connection logic
+            if (this.FilteredConnections.length === 0) {
+                this.ConnectionID = null;
+                if (serverRequiresAuth) {
+                    this.NoConnectionsWarning = 'No active connections available for this server. Please create a connection first.';
+                }
+            } else if (this.FilteredConnections.length === 1) {
+                // Auto-select the only connection
+                this.ConnectionID = this.FilteredConnections[0].ID;
+            } else {
+                // Select the first connection by default
+                this.ConnectionID = this.FilteredConnections[0].ID;
+            }
         } else {
             this.FilteredConnections = [];
             this.FilteredTools = [];
+            this.ConnectionID = null;
         }
 
-        // Reset downstream selections
-        this.ConnectionID = null;
+        // Update display arrays for filtering
+        this.DisplayConnections = [...this.FilteredConnections];
+        this.DisplayTools = [...this.FilteredTools];
+
+        // Reset tool selection
         this.ToolID = null;
         this.cdr.detectChanges();
     }
@@ -233,6 +323,44 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
 
     onToolChange(): void {
         this.cdr.detectChanges();
+    }
+
+    // ========================================
+    // Dropdown Filter Handlers
+    // ========================================
+
+    /**
+     * Handle server dropdown filter change
+     */
+    onServerFilterChange(filter: string): void {
+        const filterLower = (filter || '').toLowerCase();
+        this.DisplayServers = this.Servers.filter(s =>
+            s.Name.toLowerCase().includes(filterLower) ||
+            (s.Description?.toLowerCase().includes(filterLower) ?? false)
+        );
+    }
+
+    /**
+     * Handle connection dropdown filter change
+     */
+    onConnectionFilterChange(filter: string): void {
+        const filterLower = (filter || '').toLowerCase();
+        this.DisplayConnections = this.FilteredConnections.filter(c =>
+            c.Name.toLowerCase().includes(filterLower) ||
+            (c.Description?.toLowerCase().includes(filterLower) ?? false)
+        );
+    }
+
+    /**
+     * Handle tool dropdown filter change
+     */
+    onToolFilterChange(filter: string): void {
+        const filterLower = (filter || '').toLowerCase();
+        this.DisplayTools = this.FilteredTools.filter(t =>
+            t.ToolName.toLowerCase().includes(filterLower) ||
+            (t.ToolTitle?.toLowerCase().includes(filterLower) ?? false) ||
+            (t.ToolDescription?.toLowerCase().includes(filterLower) ?? false)
+        );
     }
 
     /**
@@ -599,6 +727,107 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
      */
     closeDialog(): void {
         this.Close.emit();
+    }
+
+    // ========================================
+    // Panel Resize Handlers
+    // ========================================
+
+    /**
+     * Start resize operation
+     */
+    onResizeStart(event: MouseEvent): void {
+        if (this.IsMobileMode) return; // No resize on mobile
+
+        event.preventDefault();
+        this.IsResizing = true;
+        document.body.style.cursor = 'ew-resize';
+        document.body.style.userSelect = 'none';
+    }
+
+    /**
+     * Handle mouse move during resize
+     */
+    @HostListener('document:mousemove', ['$event'])
+    onMouseMove(event: MouseEvent): void {
+        if (!this.IsResizing) return;
+
+        // Calculate width from right edge of viewport to cursor
+        const newWidth = window.innerWidth - event.clientX;
+
+        // Clamp to bounds
+        this.PanelWidth = Math.min(
+            Math.max(newWidth, this.MIN_PANEL_WIDTH),
+            Math.min(this.MAX_PANEL_WIDTH, window.innerWidth - 50) // Leave 50px margin
+        );
+
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * End resize operation
+     */
+    @HostListener('document:mouseup')
+    onMouseUp(): void {
+        if (this.IsResizing) {
+            this.IsResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            // Persist panel width (debounced)
+            this.widthPersistSubject.next(this.PanelWidth);
+        }
+    }
+
+    /**
+     * Handle window resize for mobile mode
+     */
+    @HostListener('window:resize')
+    onWindowResize(): void {
+        // In mobile mode, always use full width
+        if (this.IsMobileMode) {
+            this.PanelWidth = window.innerWidth;
+        } else {
+            // Ensure panel doesn't exceed viewport
+            if (this.PanelWidth > window.innerWidth - 50) {
+                this.PanelWidth = Math.max(this.MIN_PANEL_WIDTH, window.innerWidth - 50);
+            }
+        }
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Load saved panel width from user settings
+     */
+    private loadSavedPanelWidth(): void {
+        // In mobile mode, always use full width
+        if (this.IsMobileMode) {
+            this.PanelWidth = window.innerWidth;
+            return;
+        }
+
+        try {
+            const savedWidth = UserInfoEngine.Instance.GetSetting(this.PANEL_WIDTH_SETTING_KEY);
+            if (savedWidth) {
+                const width = parseInt(savedWidth, 10);
+                if (!isNaN(width) && width >= this.MIN_PANEL_WIDTH && width <= this.MAX_PANEL_WIDTH) {
+                    this.PanelWidth = width;
+                }
+            }
+        } catch (error) {
+            console.warn('[MCPTestToolPanel] Failed to load saved panel width:', error);
+        }
+    }
+
+    /**
+     * Persist panel width to user settings
+     */
+    private async persistPanelWidth(width: number): Promise<void> {
+        try {
+            await UserInfoEngine.Instance.SetSetting(this.PANEL_WIDTH_SETTING_KEY, String(width));
+        } catch (error) {
+            console.warn('[MCPTestToolPanel] Failed to persist panel width:', error);
+        }
     }
 
     /**

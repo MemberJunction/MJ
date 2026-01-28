@@ -193,16 +193,17 @@
                                 </div>
                             } @else {
                                 @for (server of filteredServers; track server.ID) {
-                                    <div class="data-card">
-                                        <div class="card-header">
+                                    <div class="data-card" [class.expanded]="isServerExpanded(server)">
+                                        <div class="card-header clickable" (click)="toggleServerExpand(server)">
                                             <div class="card-title">
+                                                <i class="fa-solid fa-chevron-right expand-arrow" [class.rotated]="isServerExpanded(server)"></i>
                                                 <i [class]="getTransportIcon(server.TransportType)"></i>
                                                 <span class="name">{{ server.Name }}</span>
                                                 <span class="status-badge" [ngClass]="getStatusClass(server.Status)">
                                                     {{ server.Status }}
                                                 </span>
                                             </div>
-                                            <div class="card-actions">
+                                            <div class="card-actions" (click)="$event.stopPropagation()">
                                                 <button kendoButton fillMode="flat" (click)="editServer(server)" title="Edit">
                                                     <i class="fa-solid fa-pen"></i>
                                                 </button>
@@ -250,6 +251,42 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        <!-- Expanded Tools Section -->
+                                        @if (isServerExpanded(server)) {
+                                            <div class="expanded-tools-section">
+                                                <div class="tools-section-header">
+                                                    <i class="fa-solid fa-wrench"></i>
+                                                    <span>Available Tools ({{ getToolsForServer(server.ID).length }})</span>
+                                                </div>
+                                                @if (getToolsForServer(server.ID).length === 0) {
+                                                    <div class="no-tools-message">
+                                                        <i class="fa-solid fa-info-circle"></i>
+                                                        No tools discovered yet. Sync a connection to discover tools.
+                                                    </div>
+                                                } @else {
+                                                    <div class="tools-mini-list">
+                                                        @for (tool of getToolsForServer(server.ID); track tool.ID) {
+                                                            <div class="tool-mini-card">
+                                                                <div class="tool-mini-info">
+                                                                    <span class="tool-mini-name">{{ tool.ToolTitle || tool.ToolName }}</span>
+                                                                    <span class="tool-mini-params">
+                                                                        <i class="fa-solid fa-sliders"></i>
+                                                                        {{ getParamCount(tool) }} params
+                                                                    </span>
+                                                                </div>
+                                                                <button kendoButton
+                                                                        fillMode="flat"
+                                                                        size="small"
+                                                                        (click)="runToolFromCard(tool); $event.stopPropagation()"
+                                                                        title="Test this tool">
+                                                                    <i class="fa-solid fa-play"></i>
+                                                                </button>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
                                     </div>
                                 }
                             }
@@ -269,16 +306,17 @@
                                 </div>
                             } @else {
                                 @for (conn of filteredConnections; track conn.ID) {
-                                    <div class="data-card">
-                                        <div class="card-header">
+                                    <div class="data-card" [class.expanded]="isConnectionExpanded(conn)">
+                                        <div class="card-header clickable" (click)="toggleConnectionExpand(conn)">
                                             <div class="card-title">
+                                                <i class="fa-solid fa-chevron-right expand-arrow" [class.rotated]="isConnectionExpanded(conn)"></i>
                                                 <i class="fa-solid fa-link"></i>
                                                 <span class="name">{{ conn.Name }}</span>
                                                 <span class="status-badge" [ngClass]="getStatusClass(conn.Status)">
                                                     {{ conn.Status }}
                                                 </span>
                                             </div>
-                                            <div class="card-actions">
+                                            <div class="card-actions" (click)="$event.stopPropagation()">
                                                 <button kendoButton
                                                         fillMode="flat"
                                                         (click)="syncConnectionTools(conn)"
@@ -351,6 +389,42 @@
                                                 }
                                             </div>
                                         </div>
+                                        <!-- Expanded Tools Section -->
+                                        @if (isConnectionExpanded(conn)) {
+                                            <div class="expanded-tools-section">
+                                                <div class="tools-section-header">
+                                                    <i class="fa-solid fa-wrench"></i>
+                                                    <span>Available Tools ({{ getToolsForConnection(conn.ID).length }})</span>
+                                                </div>
+                                                @if (getToolsForConnection(conn.ID).length === 0) {
+                                                    <div class="no-tools-message">
+                                                        <i class="fa-solid fa-info-circle"></i>
+                                                        No tools discovered yet. Click the sync button to discover tools.
+                                                    </div>
+                                                } @else {
+                                                    <div class="tools-mini-list">
+                                                        @for (tool of getToolsForConnection(conn.ID); track tool.ID) {
+                                                            <div class="tool-mini-card">
+                                                                <div class="tool-mini-info">
+                                                                    <span class="tool-mini-name">{{ tool.ToolTitle || tool.ToolName }}</span>
+                                                                    <span class="tool-mini-params">
+                                                                        <i class="fa-solid fa-sliders"></i>
+                                                                        {{ getParamCount(tool) }} params
+                                                                    </span>
+                                                                </div>
+                                                                <button kendoButton
+                                                                        fillMode="flat"
+                                                                        size="small"
+                                                                        (click)="runToolFromCard(tool, conn); $event.stopPropagation()"
+                                                                        title="Test this tool with this connection">
+                                                                    <i class="fa-solid fa-play"></i>
+                                                                </button>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
                                     </div>
                                 }
                             }
@@ -553,39 +627,72 @@
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th>Status</th>
-                                            <th>Tool</th>
-                                            <th>Connection</th>
-                                            <th>Started</th>
-                                            <th>Duration</th>
-                                            <th>Error</th>
+                                            <th class="sortable" [ngClass]="getLogSortClass('status')" (click)="onLogSortColumn('status')">
+                                                Status
+                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'status' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'status' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'status'"></i>
+                                            </th>
+                                            <th class="sortable" [ngClass]="getLogSortClass('server')" (click)="onLogSortColumn('server')">
+                                                Server
+                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'server' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'server' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'server'"></i>
+                                            </th>
+                                            <th class="sortable" [ngClass]="getLogSortClass('tool')" (click)="onLogSortColumn('tool')">
+                                                Tool
+                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'tool' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'tool' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'tool'"></i>
+                                            </th>
+                                            <th class="sortable" [ngClass]="getLogSortClass('connection')" (click)="onLogSortColumn('connection')">
+                                                Connection
+                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'connection' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'connection' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'connection'"></i>
+                                            </th>
+                                            <th class="sortable" [ngClass]="getLogSortClass('started')" (click)="onLogSortColumn('started')">
+                                                Started
+                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'started' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'started' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'started'"></i>
+                                            </th>
+                                            <th class="sortable" [ngClass]="getLogSortClass('duration')" (click)="onLogSortColumn('duration')">
+                                                Duration
+                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'duration' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'duration' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'duration'"></i>
+                                            </th>
+                                            <th class="sortable" [ngClass]="getLogSortClass('error')" (click)="onLogSortColumn('error')">
+                                                Error
+                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'error' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'error' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'error'"></i>
+                                            </th>
+                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @for (log of filteredLogs; track log.ID) {
-                                            <tr [class.error-row]="log.Status === 'Error'">
+                                            <tr [class.error-row]="log.Status === 'Error'"
+                                                class="clickable-row"
+                                                (click)="onLogClick(log)"
+                                                title="Click for details">
                                                 <td>
                                                     <span class="status-badge" [ngClass]="getStatusClass(log.Status)">
                                                         @switch (log.Status) {
                                                             @case ('Success') {
-                                                                <i class="fa-solid fa-check"></i>
+                                                                <i class="fa-solid fa-check-circle"></i>
                                                             }
                                                             @case ('Error') {
-                                                                <i class="fa-solid fa-times"></i>
+                                                                <i class="fa-solid fa-times-circle"></i>
                                                             }
                                                             @case ('Running') {
                                                                 <i class="fa-solid fa-spinner fa-spin"></i>
                                                             }
+                                                            @default {
+                                                                <i class="fa-solid fa-question-circle"></i>
+                                                            }
                                                         }
-                                                        {{ log.Status }}
+                                                        {{ log.Status || 'Unknown' }}
                                                     </span>
                                                 </td>
+                                                <td class="server-name">{{ log.ServerName }}</td>
                                                 <td class="tool-name">{{ log.ToolName }}</td>
                                                 <td>{{ log.ConnectionName }}</td>
                                                 <td>{{ formatDate(log.StartedAt) }}</td>
                                                 <td>{{ formatDuration(log.DurationMs) }}</td>
                                                 <td class="error-message" [title]="log.ErrorMessage || ''">
                                                     {{ log.ErrorMessage || '-' }}
+                                                </td>
+                                                <td class="action-cell">
+                                                    <i class="fa-solid fa-chevron-right"></i>
                                                 </td>
                                             </tr>
                                         }
@@ -631,4 +738,14 @@
         [SelectedToolID]="TestToolID"
         (Close)="onTestToolDialogClose()">
     </mj-mcp-test-tool-dialog>
+}
+
+<!-- Log Detail Panel -->
+@if (ShowLogDetailPanel && SelectedLog) {
+    <mj-mcp-log-detail-panel
+        [Visible]="ShowLogDetailPanel"
+        [Log]="SelectedLog"
+        (Close)="onLogDetailClose()"
+        (RunAgain)="onRunAgainFromLog($event)">
+    </mj-mcp-log-detail-panel>
 }

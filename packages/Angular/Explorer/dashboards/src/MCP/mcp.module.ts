@@ -18,6 +18,7 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 // MemberJunction Modules
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
 // MCP Components
 import { MCPDashboardComponent, LoadMCPDashboard } from './mcp-dashboard.component';
@@ -25,6 +26,7 @@ import { MCPResourceComponent, LoadMCPResource } from './mcp-resource.component'
 import { MCPServerDialogComponent, LoadMCPServerDialog } from './components/mcp-server-dialog.component';
 import { MCPConnectionDialogComponent, LoadMCPConnectionDialog } from './components/mcp-connection-dialog.component';
 import { MCPTestToolDialogComponent, LoadMCPTestToolDialog } from './components/mcp-test-tool-dialog.component';
+import { MCPLogDetailPanelComponent, LoadMCPLogDetailPanel } from './components/mcp-log-detail-panel.component';
 
 // MCP Services
 import { LoadMCPToolsService } from './services/mcp-tools.service';
@@ -35,7 +37,8 @@ import { LoadMCPToolsService } from './services/mcp-tools.service';
         MCPResourceComponent,
         MCPServerDialogComponent,
         MCPConnectionDialogComponent,
-        MCPTestToolDialogComponent
+        MCPTestToolDialogComponent,
+        MCPLogDetailPanelComponent
     ],
     imports: [
         CommonModule,
@@ -46,14 +49,16 @@ import { LoadMCPToolsService } from './services/mcp-tools.service';
         DropDownsModule,
         InputsModule,
         SharedGenericModule,
-        CredentialsModule
+        CredentialsModule,
+        CodeEditorModule
     ],
     exports: [
         MCPDashboardComponent,
         MCPResourceComponent,
         MCPServerDialogComponent,
         MCPConnectionDialogComponent,
-        MCPTestToolDialogComponent
+        MCPTestToolDialogComponent,
+        MCPLogDetailPanelComponent
     ]
 })
 export class MCPModule { }
@@ -67,5 +72,6 @@ export function LoadMCPModule(): void {
     LoadMCPServerDialog();
     LoadMCPConnectionDialog();
     LoadMCPTestToolDialog();
+    LoadMCPLogDetailPanel();
     LoadMCPToolsService();
 }

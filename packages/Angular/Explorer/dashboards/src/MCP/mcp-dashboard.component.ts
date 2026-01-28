@@ -15,7 +15,7 @@ import { Subject, BehaviorSubject, Subscription } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, MCPServerEntity, MCPServerConnectionEntity } from '@memberjunction/core-entities';
+import { ResourceData, MCPServerEntity, MCPServerConnectionEntity, MCPToolExecutionLogEntity, MCPEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
 
@@ -106,6 +106,9 @@ export interface MCPExecutionLogData {
     UserID: string;
     UserName?: string;
     ErrorMessage: string | null;
+    InputArgs?: string | null;
+    Result?: string | null;
+    ServerName?: string;
 }
 
 /**
@@ -205,6 +208,18 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public TestToolServerID: string | null = null;
     public TestToolConnectionID: string | null = null;
     public TestToolID: string | null = null;
+
+    // Log detail panel state
+    public ShowLogDetailPanel = false;
+    public SelectedLog: MCPExecutionLogData | null = null;
+
+    // Expandable server/connection cards
+    public ExpandedServerID: string | null = null;
+    public ExpandedConnectionID: string | null = null;
+
+    // Logs sorting state
+    public LogsSortColumn: 'status' | 'server' | 'tool' | 'connection' | 'started' | 'duration' | 'error' = 'started';
+    public LogsSortAscending = false; // Default to descending (most recent first)
 
     // Tools tab state
     public ToolsViewMode: ToolsViewMode = 'card';
@@ -382,7 +397,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     // ========================================
 
     /**
-     * Loads all dashboard data in parallel
+     * Loads all dashboard data using MCPEngine for cached entities
+     * and RunView for execution logs (historical data loaded on-demand)
      */
     public async loadAllData(): Promise<void> {
         this.IsLoading = true;
@@ -390,23 +406,11 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
 
         try {
+            // Initialize MCPEngine and load execution logs in parallel
             const rv = new RunView();
-
-            // Load all data in parallel
-            const [serversResult, connectionsResult, toolsResult, logsResult] = await Promise.all([
-                rv.RunView<MCPServerData>({
-                    EntityName: 'MJ: MCP Servers',
-                    ResultType: 'simple'
-                }),
-                rv.RunView<MCPConnectionData>({
-                    EntityName: 'MJ: MCP Server Connections',
-                    ResultType: 'simple'
-                }),
-                rv.RunView<MCPToolData>({
-                    EntityName: 'MJ: MCP Server Tools',
-                    ResultType: 'simple'
-                }),
-                rv.RunView<MCPExecutionLogData>({
+            const [, logsResult] = await Promise.all([
+                MCPEngine.Instance.Config(false),
+                rv.RunView<MCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
                     ExtraFilter: `StartedAt >= DATEADD(day, -7, GETUTCDATE())`,
                     OrderBy: 'StartedAt DESC',
@@ -415,17 +419,49 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 })
             ]);
 
-            if (serversResult.Success) {
-                this.servers = serversResult.Results || [];
-            }
-            if (connectionsResult.Success) {
-                this.connections = connectionsResult.Results || [];
-            }
-            if (toolsResult.Success) {
-                this.tools = toolsResult.Results || [];
-            }
+            // Get cached data from MCPEngine and convert to interface types
+            this.servers = MCPEngine.Instance.Servers.map(s => ({
+                ID: s.ID,
+                Name: s.Name,
+                Description: s.Description,
+                TransportType: s.TransportType,
+                ServerURL: s.ServerURL,
+                Command: s.Command,
+                DefaultAuthType: s.DefaultAuthType,
+                Status: s.Status,
+                RateLimitPerMinute: s.RateLimitPerMinute,
+                RateLimitPerHour: s.RateLimitPerHour,
+                LastSyncAt: s.LastSyncAt
+            }));
+
+            this.connections = MCPEngine.Instance.Connections.map(c => ({
+                ID: c.ID,
+                MCPServerID: c.MCPServerID,
+                Name: c.Name,
+                Description: c.Description,
+                Status: c.Status,
+                CompanyID: c.CompanyID,
+                AutoSyncTools: c.AutoSyncTools,
+                LogToolCalls: c.LogToolCalls,
+                LastConnectedAt: c.LastConnectedAt,
+                LastErrorMessage: c.LastErrorMessage
+            }));
+
+            this.tools = MCPEngine.Instance.Tools.map(t => ({
+                ID: t.ID,
+                MCPServerID: t.MCPServerID,
+                ToolName: t.ToolName,
+                ToolTitle: t.ToolTitle,
+                ToolDescription: t.ToolDescription,
+                InputSchema: t.InputSchema,
+                Status: t.Status,
+                DiscoveredAt: t.DiscoveredAt,
+                LastSeenAt: t.LastSeenAt
+            }));
+
             if (logsResult.Success) {
-                this.executionLogs = logsResult.Results || [];
+                // Map database column names to UI interface property names
+                this.executionLogs = (logsResult.Results || []).map(log => this.mapLogFromDatabase(log));
             }
 
             // Enrich data with counts and names
@@ -472,8 +508,56 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     private enrichLogData(): void {
         for (const log of this.executionLogs) {
             const conn = this.connections.find(c => c.ID === log.ConnectionID);
-            log.ConnectionName = conn?.Name ?? 'Unknown';
+            log.ConnectionName = conn?.Name ?? log.ConnectionName ?? 'Unknown';
+            // Add server name via connection
+            if (conn) {
+                const server = this.servers.find(s => s.ID === conn.MCPServerID);
+                log.ServerName = server?.Name ?? 'Unknown';
+            } else {
+                log.ServerName = log.ServerName ?? 'Unknown';
+            }
         }
+        // Sort logs by StartedAt descending (most recent first)
+        this.executionLogs.sort((a, b) => {
+            const dateA = new Date(a.StartedAt).getTime();
+            const dateB = new Date(b.StartedAt).getTime();
+            return dateB - dateA;
+        });
+    }
+
+    /**
+     * Maps database log entity to UI interface format
+     * Handles column name differences between DB schema and UI interface
+     */
+    private mapLogFromDatabase(dbLog: MCPToolExecutionLogEntity): MCPExecutionLogData {
+        // Determine status from Success boolean
+        let status: string;
+        if (dbLog.Success === true) {
+            status = 'Success';
+        } else if (dbLog.Success === false) {
+            status = 'Error';
+        } else {
+            // null means still running
+            status = 'Running';
+        }
+
+        return {
+            ID: dbLog.ID,
+            ConnectionID: dbLog.MCPServerConnectionID,
+            ToolID: dbLog.MCPServerToolID,
+            ToolName: dbLog.ToolName || 'Unknown',
+            Status: status,
+            StartedAt: dbLog.StartedAt,
+            CompletedAt: dbLog.EndedAt,
+            DurationMs: dbLog.DurationMs,
+            UserID: dbLog.UserID,
+            UserName: dbLog.User,
+            ErrorMessage: dbLog.ErrorMessage,
+            InputArgs: dbLog.InputParameters,
+            Result: dbLog.OutputContent,
+            ConnectionName: dbLog.MCPServerConnection,
+            ServerName: undefined // Will be enriched later
+        };
     }
 
     private calculateStats(): void {
@@ -545,10 +629,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.filteredLogs = this.executionLogs.filter(l => {
             const matchesSearch = !search ||
                 l.ToolName.toLowerCase().includes(search) ||
-                (l.ConnectionName?.toLowerCase().includes(search) ?? false);
+                (l.ConnectionName?.toLowerCase().includes(search) ?? false) ||
+                (l.ServerName?.toLowerCase().includes(search) ?? false);
             const matchesStatus = filters.logStatus === 'all' || l.Status === filters.logStatus;
             return matchesSearch && matchesStatus;
         });
+
+        // Apply current sort
+        this.sortFilteredLogs();
     }
 
     public onSearchChange(term: string): void {
@@ -982,6 +1070,231 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         if (ms === null) return '-';
         if (ms < 1000) return `${ms}ms`;
         return `${(ms / 1000).toFixed(2)}s`;
+    }
+
+    // ========================================
+    // Logs Sorting
+    // ========================================
+
+    /**
+     * Handles click on a sortable column header
+     */
+    public onLogSortColumn(column: typeof this.LogsSortColumn): void {
+        if (this.LogsSortColumn === column) {
+            // Toggle sort direction
+            this.LogsSortAscending = !this.LogsSortAscending;
+        } else {
+            // New column, default to descending for dates/duration, ascending for text
+            this.LogsSortColumn = column;
+            this.LogsSortAscending = column !== 'started' && column !== 'duration';
+        }
+        this.sortFilteredLogs();
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Sorts the filtered logs based on current sort settings
+     */
+    private sortFilteredLogs(): void {
+        const direction = this.LogsSortAscending ? 1 : -1;
+
+        this.filteredLogs.sort((a, b) => {
+            let valA: string | number | Date | null;
+            let valB: string | number | Date | null;
+
+            switch (this.LogsSortColumn) {
+                case 'status':
+                    valA = a.Status || '';
+                    valB = b.Status || '';
+                    break;
+                case 'server':
+                    valA = a.ServerName || '';
+                    valB = b.ServerName || '';
+                    break;
+                case 'tool':
+                    valA = a.ToolName || '';
+                    valB = b.ToolName || '';
+                    break;
+                case 'connection':
+                    valA = a.ConnectionName || '';
+                    valB = b.ConnectionName || '';
+                    break;
+                case 'started':
+                    valA = a.StartedAt ? new Date(a.StartedAt).getTime() : 0;
+                    valB = b.StartedAt ? new Date(b.StartedAt).getTime() : 0;
+                    break;
+                case 'duration':
+                    valA = a.DurationMs ?? -1;
+                    valB = b.DurationMs ?? -1;
+                    break;
+                case 'error':
+                    valA = a.ErrorMessage || '';
+                    valB = b.ErrorMessage || '';
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (typeof valA === 'string' && typeof valB === 'string') {
+                return valA.localeCompare(valB) * direction;
+            }
+            if (valA < valB) return -1 * direction;
+            if (valA > valB) return 1 * direction;
+            return 0;
+        });
+    }
+
+    /**
+     * Gets the sort indicator class for a column header
+     */
+    public getLogSortClass(column: typeof this.LogsSortColumn): string {
+        if (this.LogsSortColumn !== column) return '';
+        return this.LogsSortAscending ? 'sorted-asc' : 'sorted-desc';
+    }
+
+    // ========================================
+    // Log Detail Panel
+    // ========================================
+
+    /**
+     * Handles click on a log row to show detail panel
+     */
+    public async onLogClick(log: MCPExecutionLogData): Promise<void> {
+        // Load full log details if needed (InputArgs, Result)
+        if (!log.InputArgs && !log.Result) {
+            try {
+                const rv = new RunView();
+                const result = await rv.RunView<MCPToolExecutionLogEntity>({
+                    EntityName: 'MJ: MCP Tool Execution Logs',
+                    ExtraFilter: `ID='${log.ID}'`,
+                    ResultType: 'simple'
+                });
+                if (result.Success && result.Results.length > 0) {
+                    const fullLog = this.mapLogFromDatabase(result.Results[0]);
+                    // Merge full log data (preserving already enriched fields)
+                    log.InputArgs = fullLog.InputArgs;
+                    log.Result = fullLog.Result;
+                    log.ErrorMessage = fullLog.ErrorMessage || log.ErrorMessage;
+                }
+            } catch (error) {
+                console.warn('[MCPDashboard] Failed to load full log details:', error);
+            }
+        }
+
+        // Enrich with server name
+        const connection = this.connections.find(c => c.ID === log.ConnectionID);
+        if (connection) {
+            log.ServerName = connection.ServerName;
+        }
+
+        this.SelectedLog = log;
+        this.ShowLogDetailPanel = true;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Closes the log detail panel
+     */
+    public onLogDetailClose(): void {
+        this.ShowLogDetailPanel = false;
+        this.SelectedLog = null;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Handles run again from log detail panel
+     */
+    public onRunAgainFromLog(event: { toolId: string; connectionId: string }): void {
+        this.ShowLogDetailPanel = false;
+        this.SelectedLog = null;
+
+        // Open test tool dialog with pre-selected tool and connection
+        const tool = this.tools.find(t => t.ID === event.toolId);
+        const connection = this.connections.find(c => c.ID === event.connectionId);
+
+        if (tool) {
+            this.TestToolServerID = tool.MCPServerID;
+            this.TestToolID = tool.ID;
+        }
+        if (connection) {
+            this.TestToolConnectionID = connection.ID;
+        }
+
+        this.ShowTestToolDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    // ========================================
+    // Expandable Server/Connection Cards
+    // ========================================
+
+    /**
+     * Toggles server card expansion
+     */
+    public toggleServerExpand(server: MCPServerData): void {
+        if (this.ExpandedServerID === server.ID) {
+            this.ExpandedServerID = null;
+        } else {
+            this.ExpandedServerID = server.ID;
+            // Collapse any expanded connection
+            this.ExpandedConnectionID = null;
+        }
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Toggles connection card expansion
+     */
+    public toggleConnectionExpand(conn: MCPConnectionData): void {
+        if (this.ExpandedConnectionID === conn.ID) {
+            this.ExpandedConnectionID = null;
+        } else {
+            this.ExpandedConnectionID = conn.ID;
+            // Collapse any expanded server
+            this.ExpandedServerID = null;
+        }
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Checks if a server card is expanded
+     */
+    public isServerExpanded(server: MCPServerData): boolean {
+        return this.ExpandedServerID === server.ID;
+    }
+
+    /**
+     * Checks if a connection card is expanded
+     */
+    public isConnectionExpanded(conn: MCPConnectionData): boolean {
+        return this.ExpandedConnectionID === conn.ID;
+    }
+
+    /**
+     * Gets tools for a specific server
+     */
+    public getToolsForServer(serverId: string): MCPToolData[] {
+        return this.tools.filter(t => t.MCPServerID === serverId);
+    }
+
+    /**
+     * Gets tools for a specific connection (via its server)
+     */
+    public getToolsForConnection(connectionId: string): MCPToolData[] {
+        const connection = this.connections.find(c => c.ID === connectionId);
+        if (!connection) return [];
+        return this.tools.filter(t => t.MCPServerID === connection.MCPServerID);
+    }
+
+    /**
+     * Opens test tool dialog with a specific tool from expanded card
+     */
+    public runToolFromCard(tool: MCPToolData, connection?: MCPConnectionData): void {
+        this.TestToolServerID = tool.MCPServerID;
+        this.TestToolID = tool.ID;
+        this.TestToolConnectionID = connection?.ID ?? null;
+        this.ShowTestToolDialog = true;
+        this.cdr.detectChanges();
     }
 }
 
