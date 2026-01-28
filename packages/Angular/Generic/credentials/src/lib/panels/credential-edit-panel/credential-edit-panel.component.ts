@@ -15,6 +15,16 @@ interface FieldSchemaProperty {
     isSecret: boolean;
     required: boolean;
     order: number;
+    // JSON Schema constraint properties
+    enum?: string[];       // List of allowed values
+    const?: unknown;           // Fixed immutable value
+    default?: unknown;         // Pre-filled value
+    format?: string;       // Format validation (uri, email, date, etc.)
+    pattern?: string;      // Regex pattern
+    minLength?: number;    // Minimum string length
+    maxLength?: number;    // Maximum string length
+    minimum?: number;      // Minimum numeric value
+    maximum?: number;      // Maximum numeric value
 }
 
 interface CredentialValues {
@@ -185,23 +195,63 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
             const properties = schema.properties || {};
             const required = schema.required || [];
 
-            this.schemaFields = Object.entries(properties).map(([name, prop]) => ({
-                name,
-                type: (prop.type as string) || 'string',
-                title: (prop.title as string) || name,
-                description: (prop.description as string) || '',
-                isSecret: prop.isSecret === true,
-                required: required.includes(name),
-                order: typeof prop.order === 'number' ? prop.order : 999
-            }));
+            this.schemaFields = Object.entries(properties).map(([name, prop]) => {
+                const field: FieldSchemaProperty = {
+                    name,
+                    type: (prop.type as string) || 'string',
+                    title: (prop.title as string) || name,
+                    description: (prop.description as string) || '',
+                    isSecret: prop.isSecret === true,
+                    required: required.includes(name),
+                    order: typeof prop.order === 'number' ? prop.order : 999
+                };
+
+                // Extract JSON Schema constraint properties
+                if ('enum' in prop && Array.isArray(prop.enum)) {
+                    field.enum = prop.enum as string[];
+                }
+                if ('const' in prop) {
+                    field.const = prop.const;
+                }
+                if ('default' in prop) {
+                    field.default = prop.default;
+                }
+                if ('format' in prop) {
+                    field.format = prop.format as string;
+                }
+                if ('pattern' in prop) {
+                    field.pattern = prop.pattern as string;
+                }
+                if ('minLength' in prop) {
+                    field.minLength = prop.minLength as number;
+                }
+                if ('maxLength' in prop) {
+                    field.maxLength = prop.maxLength as number;
+                }
+                if ('minimum' in prop) {
+                    field.minimum = prop.minimum as number;
+                }
+                if ('maximum' in prop) {
+                    field.maximum = prop.maximum as number;
+                }
+
+                return field;
+            });
 
             // Sort by order
             this.schemaFields.sort((a, b) => a.order - b.order);
 
-            // Initialize any missing values
+            // Initialize any missing values with defaults or const values
             for (const field of this.schemaFields) {
                 if (!(field.name in this.credentialValues)) {
-                    this.credentialValues[field.name] = '';
+                    // Priority: const > default > empty
+                    if (field.const !== undefined) {
+                        this.credentialValues[field.name] = String(field.const);
+                    } else if (field.default !== undefined) {
+                        this.credentialValues[field.name] = String(field.default);
+                    } else {
+                        this.credentialValues[field.name] = '';
+                    }
                 }
             }
         } catch (e) {
@@ -227,6 +277,16 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
     public async save(): Promise<void> {
         if (!this.canSave) {
             MJNotificationService.Instance.CreateSimpleNotification('Please fill in all required fields', 'warning', 3000);
+            return;
+        }
+
+        // Validate all fields against schema constraints
+        const validationErrors = this.validateAllFields();
+        if (validationErrors.length > 0) {
+            const errorMessage = validationErrors.length === 1
+                ? validationErrors[0]
+                : `Validation errors:\n${validationErrors.map(e => `• ${e}`).join('\n')}`;
+            MJNotificationService.Instance.CreateSimpleNotification(errorMessage, 'error', 5000);
             return;
         }
 
@@ -393,5 +453,119 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
     public onExpiresAtChange(value: string): void {
         this.expiresAt = value ? new Date(value) : null;
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Validates a field value against format constraints.
+     */
+    private validateFormat(fieldTitle: string, value: string, format: string): string | null {
+        if (!value || !format) return null;
+
+        switch (format) {
+            case 'uri':
+            case 'url':
+                try {
+                    new URL(value);
+                    return null;
+                } catch {
+                    return `${fieldTitle} must be a valid URL`;
+                }
+
+            case 'email':
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                return emailRegex.test(value) ? null : `${fieldTitle} must be a valid email`;
+
+            case 'date':
+                return isNaN(Date.parse(value)) ? `${fieldTitle} must be a valid date` : null;
+
+            case 'date-time':
+                return isNaN(Date.parse(value)) ? `${fieldTitle} must be a valid date-time` : null;
+
+            case 'uuid':
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                return uuidRegex.test(value) ? null : `${fieldTitle} must be a valid UUID`;
+
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Validates all credential fields against their schema constraints.
+     * Returns array of error messages (empty if all valid).
+     */
+    private validateAllFields(): string[] {
+        const errors: string[] = [];
+
+        for (const field of this.schemaFields) {
+            const value = this.credentialValues[field.name];
+            const stringValue = String(value || '');
+
+            // Skip validation for const fields (they're auto-populated and read-only)
+            if (field.const !== undefined) {
+                continue;
+            }
+
+            // Required field validation (already handled by canSave, but included for completeness)
+            if (field.required && !stringValue) {
+                errors.push(`${field.title} is required`);
+                continue;
+            }
+
+            // Skip further validation if field is empty and not required
+            if (!stringValue) {
+                continue;
+            }
+
+            // Enum validation
+            if (field.enum && field.enum.length > 0) {
+                if (!field.enum.includes(stringValue)) {
+                    errors.push(`${field.title} must be one of: ${field.enum.join(', ')}`);
+                }
+            }
+
+            // Format validation
+            if (field.format) {
+                const formatError = this.validateFormat(field.title, stringValue, field.format);
+                if (formatError) {
+                    errors.push(formatError);
+                }
+            }
+
+            // Pattern validation
+            if (field.pattern) {
+                try {
+                    const regex = new RegExp(field.pattern);
+                    if (!regex.test(stringValue)) {
+                        errors.push(`${field.title} does not match required pattern`);
+                    }
+                } catch (e) {
+                    console.error(`Invalid regex pattern for ${field.name}:`, e);
+                }
+            }
+
+            // Length validation
+            if (field.minLength !== undefined && stringValue.length < field.minLength) {
+                errors.push(`${field.title} must be at least ${field.minLength} characters`);
+            }
+            if (field.maxLength !== undefined && stringValue.length > field.maxLength) {
+                errors.push(`${field.title} must be no more than ${field.maxLength} characters`);
+            }
+
+            // Numeric range validation (if type is number)
+            if (field.type === 'number') {
+                const numValue = Number(value);
+                if (!isNaN(numValue)) {
+                    if (field.minimum !== undefined && numValue < field.minimum) {
+                        errors.push(`${field.title} must be at least ${field.minimum}`);
+                    }
+                    if (field.maximum !== undefined && numValue > field.maximum) {
+                        errors.push(`${field.title} must be no more than ${field.maximum}`);
+                    }
+                }
+            }
+        }
+
+        return errors;
     }
 }
