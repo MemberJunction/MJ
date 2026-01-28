@@ -378,8 +378,11 @@ interface ToolScopeInfo {
 }
 
 /**
- * Authorizes a tool call against the API key's scope permissions.
- * Uses the two-level scope evaluation (application ceiling + key scopes).
+ * Authorizes a tool call based on the session's authentication method.
+ *
+ * For API key auth: Uses the two-level scope evaluation (application ceiling + key scopes).
+ * For OAuth auth: Allows the call since the authenticated user is authorized by their OAuth token.
+ * For no auth: Allows the call (authentication is disabled).
  *
  * @param sessionContext - The authenticated session context
  * @param scopeInfo - The scope information for the tool call
@@ -389,15 +392,54 @@ async function authorizeToolCall(
     sessionContext: MCPSessionContext,
     scopeInfo: ToolScopeInfo
 ): Promise<{ allowed: boolean; error?: string }> {
+    // Handle different authentication methods
+    switch (sessionContext.authMethod) {
+        case 'oauth':
+            // OAuth authentication implies authorization - the user is authenticated
+            // and their access is controlled by the OAuth provider's token issuance.
+            // The user is already validated and resolved to a MemberJunction user.
+            console.log(`[Auth] OAuth user ${sessionContext.oauth?.email} authorized for ${scopeInfo.scopePath}`);
+            return { allowed: true };
+
+        case 'none':
+            // No authentication configured - allow all tool calls
+            return { allowed: true };
+
+        case 'apiKey':
+            // API key authentication uses the API Key Engine for scope-based authorization
+            return authorizeApiKeyToolCall(sessionContext, scopeInfo);
+
+        default:
+            // Unknown auth method - deny by default
+            return { allowed: false, error: `Unknown authentication method: ${sessionContext.authMethod}` };
+    }
+}
+
+/**
+ * Authorizes an API key-authenticated tool call against the key's scope permissions.
+ * Uses the two-level scope evaluation (application ceiling + key scopes).
+ *
+ * @param sessionContext - The authenticated session context (must have apiKeyHash)
+ * @param scopeInfo - The scope information for the tool call
+ * @returns Object with allowed flag and error message if denied
+ */
+async function authorizeApiKeyToolCall(
+    sessionContext: MCPSessionContext,
+    scopeInfo: ToolScopeInfo
+): Promise<{ allowed: boolean; error?: string }> {
     const systemUser = UserCache.Instance.GetSystemUser();
     if (!systemUser) {
         return { allowed: false, error: 'System user not available for authorization' };
     }
 
+    if (!sessionContext.apiKeyHash) {
+        return { allowed: false, error: 'API key hash not available for authorization' };
+    }
+
     try {
         const apiKeyEngine = GetAPIKeyEngine();
         const result = await apiKeyEngine.Authorize(
-            String(sessionContext.apiKeyHash),
+            sessionContext.apiKeyHash,
             'MCPServer',
             scopeInfo.scopePath,
             scopeInfo.resource,
