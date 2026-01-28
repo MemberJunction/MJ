@@ -8,7 +8,13 @@
 
 ## Executive Summary
 
-This plan creates a **white-label theming system** for MJExplorer that allows external consumers (BC CDP, Izzy, etc.) to fully customize the look and feel without modifying MJExplorer source code. It also standardizes styling across all dashboards and adds dark/light theme support.
+**Primary Goal**: Achieve **visual consistency** across all MJExplorer pages and dashboards. Currently, different parts of the application use different styling approaches (MD3 variables, Kendo variables, hardcoded colors), resulting in an inconsistent user experience.
+
+**Secondary Goals**:
+- Enable dark/light theme switching with user preference persistence
+- Allow external consumers (BC CDP, Izzy, etc.) to customize branding without modifying MJExplorer source code
+
+The solution is a unified CSS design token system (`--mj-*`) that all components reference, ensuring every page looks and feels the same.
 
 ---
 
