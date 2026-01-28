@@ -635,7 +635,7 @@ export class EntityFieldInfo extends BaseInfo {
         }
 
         // Parse and cache the configuration
-        const parsed = SafeJSONParse<RelatedEntityJoinFieldConfig>(this.RelatedEntityJoinFields, null);
+        const parsed = SafeJSONParse<RelatedEntityJoinFieldConfig>(this.RelatedEntityJoinFields, false);
         if (parsed === null) {
             // Parsing failed - mark as failed so we don't try again
             this._relatedEntityJoinFieldsFailedParsing = true;

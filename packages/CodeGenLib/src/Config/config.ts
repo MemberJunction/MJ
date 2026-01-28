@@ -149,14 +149,6 @@ const advancedGenerationFeatureOptionSchema = z.object({
   value: z.unknown(),
 });
 
-/**
- * Configuration for CodeGen-specific settings
- */
-export type CodeGenConfig = z.infer<typeof codeGenConfigSchema>;
-const codeGenConfigSchema = z.object({
-  /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
-  additionalSchemaInfo: z.string().optional(),
-});
 
 /**
  * Configuration for an AI-powered advanced generation feature
@@ -427,7 +419,8 @@ const configInfoSchema = z.object({
     { workingDirectory: '../MJServer', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, when: 'after' },
   ]),
-  codeGen: codeGenConfigSchema.optional(),
+  /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
+  additionalSchemaInfo: z.string().optional(),
   logging: logInfoSchema,
   newEntityDefaults: newEntityDefaultsSchema,
   newSchemaDefaults: newSchemaDefaultsSchema,

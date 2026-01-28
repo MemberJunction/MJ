@@ -497,9 +497,16 @@ export class SQLCodeGenBase {
                   description.toLowerCase().includes('spdelete')))
             );
             
+            // Check if entity has RelatedEntityJoinFields configured (requires view regeneration for metadata-only changes)
+            const hasRelatedEntityJoinFields = description.toLowerCase().includes('base view') &&
+                entity.Fields.some(f => f.RelatedEntityJoinFieldsConfig !== null);
+
             // Determine if we should log based on entity state and force regeneration settings
             if (isNewOrModified) {
                 // Always log new or modified entities
+                shouldLog = true;
+            } else if (hasRelatedEntityJoinFields) {
+                // Always regenerate base views for entities with RelatedEntityJoinFields configuration
                 shouldLog = true;
             } else if (isCascadeDependencyRegeneration) {
                 // Always log cascade dependency regenerations
@@ -519,7 +526,6 @@ export class SQLCodeGenBase {
         
         if (shouldLog) {
             SQLLogging.appendToSQLLogFile(sql, description);
-            // Also write to temp batch file for actual execution (matches CodeGen log order)
             TempBatchFile.appendToTempBatchFile(sql, entity.SchemaName);
         }
 

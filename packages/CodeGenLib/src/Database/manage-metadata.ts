@@ -73,8 +73,8 @@ export class ManageMetadataBase {
     */
    private static getSoftPKFKConfig(): any {
       // Return cached config if path hasn't changed
-      const configPath = configInfo.codeGen?.additionalSchemaInfo
-         ? path.join(currentWorkingDirectory, configInfo.codeGen.additionalSchemaInfo)
+      const configPath = configInfo.additionalSchemaInfo
+         ? path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo)
          : '';
 
       if (this._softPKFKConfigCache !== null && this._softPKFKConfigPath === configPath) {
@@ -685,13 +685,13 @@ export class ManageMetadataBase {
     * All UPDATE statements are logged to migration files via LogSQLAndExecute() for CI/CD traceability.
     */
    protected async applySoftPKFKConfig(pool: sql.ConnectionPool): Promise<boolean> {
-      // Check if additionalSchemaInfo is configured in mj.config.cjs under codeGen
-      if (!configInfo.codeGen?.additionalSchemaInfo) {
+      // Check if additionalSchemaInfo is configured in mj.config.cjs
+      if (!configInfo.additionalSchemaInfo) {
          // No additional schema info configured - this is fine, it's optional
          return true;
       }
 
-      const configPath = path.join(currentWorkingDirectory, configInfo.codeGen.additionalSchemaInfo);
+      const configPath = path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo);
 
       if (!fs.existsSync(configPath)) {
          logStatus(`         ⚠️  additionalSchemaInfo configured but file not found: ${configPath}`);
@@ -699,7 +699,7 @@ export class ManageMetadataBase {
       }
 
       try {
-         logStatus(`         Found ${configInfo.codeGen.additionalSchemaInfo}, applying soft PK/FK configuration...`);
+         logStatus(`         Found ${configInfo.additionalSchemaInfo}, applying soft PK/FK configuration...`);
          const config = ManageMetadataBase.getSoftPKFKConfig();
 
          let totalPKs = 0;
@@ -1836,12 +1836,12 @@ NumberedRows AS (
     * Checks if a table has a soft primary key defined in the additionalSchemaInfo JSON file (configured in mj.config.cjs)
     */
    protected hasSoftPrimaryKeyInConfig(schemaName: string, tableName: string): boolean {
-      // Check if additionalSchemaInfo is configured under codeGen
-      if (!configInfo.codeGen?.additionalSchemaInfo) {
+      // Check if additionalSchemaInfo is configured
+      if (!configInfo.additionalSchemaInfo) {
          return false;
       }
 
-      const configPath = path.join(currentWorkingDirectory, configInfo.codeGen.additionalSchemaInfo);
+      const configPath = path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo);
       if (!fs.existsSync(configPath)) {
          logStatus(`         [Soft PK Check] Config file not found at: ${configPath}`);
          return false;

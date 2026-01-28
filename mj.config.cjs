@@ -22,24 +22,23 @@ module.exports = {
    * ====================
    */
 
-  codeGen: {
-    // Include __mj schema for MJ framework development
-    // Default excludes __mj since end-users shouldn't modify core entities
-    excludeSchemas: ['sys', 'staging'],
+  // Include __mj schema for MJ framework development
+  // Default excludes __mj since end-users shouldn't modify core entities
+  excludeSchemas: ['sys', 'staging'],
 
-    // Custom SQL scripts specific to this monorepo
-    customSQLScripts: [
-      {
-        scriptFile: './SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-        when: 'before-all',
-      },
-    ],
+  // Custom SQL scripts specific to this monorepo
+  customSQLScripts: [
+    {
+      scriptFile: './SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
+      when: 'before-all',
+    },
+  ],
 
-    // Soft PK/FK configuration for tables without database constraints
-    additionalSchemaInfo: './config/database-metadata-config.json',
+  // Soft PK/FK configuration for tables without database constraints
+  additionalSchemaInfo: './config/database-metadata-config.json',
 
-    // Output directories specific to monorepo structure
-    output: [
+  // Output directories specific to monorepo structure
+  output: [
       { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },
       {
         type: 'Angular',
@@ -105,7 +104,6 @@ module.exports = {
         when: 'after',
       },
     ],
-  },
 
   /**
    * ====================
