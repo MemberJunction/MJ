@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { CredentialEntity, CredentialTypeEntity, CredentialCategoryEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -151,10 +151,18 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         // Parse the type schema
         this.onTypeChange();
 
-        // Parse stored values
+        // Parse stored values and filter out "undefined" strings
         try {
             if (credential.Values) {
-                this.credentialValues = JSON.parse(credential.Values) as CredentialValues;
+                const parsedValues = JSON.parse(credential.Values) as CredentialValues;
+
+                // Filter out "undefined" string values that may have been stored
+                this.credentialValues = {};
+                for (const [key, value] of Object.entries(parsedValues)) {
+                    if (value !== 'undefined' && value !== undefined && value !== null) {
+                        this.credentialValues[key] = value;
+                    }
+                }
             }
         } catch (e) {
             console.error('Error parsing credential values:', e);
@@ -311,7 +319,10 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
             entity.IsActive = this.isActive;
             entity.IsDefault = this.isDefault;
             entity.ExpiresAt = this.expiresAt;
-            entity.Values = JSON.stringify(this.credentialValues);
+
+            // Clean credential values before saving (remove "undefined" strings and empty non-required fields)
+            const cleanedValues = this.cleanCredentialValues();
+            entity.Values = JSON.stringify(cleanedValues);
 
             const success = await entity.Save();
 
@@ -397,8 +408,15 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
     }
 
-    public onBackdropClick(event: MouseEvent): void {
-        if ((event.target as HTMLElement).classList.contains('panel-backdrop')) {
+    public onBackdropClick(): void {
+        // Backdrop click disabled - panel only closeable via Cancel button or ESC key
+        // This prevents accidental closes when clicking outside the panel
+    }
+
+    @HostListener('document:keydown.escape', ['$event'])
+    public onEscapeKey(event: Event): void {
+        if (this.isOpen && !this.isSaving) {
+            event.preventDefault();
             this.closePanel();
         }
     }
@@ -567,5 +585,39 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         }
 
         return errors;
+    }
+
+    /**
+     * Cleans credential values before saving by removing:
+     * - "undefined" string values
+     * - Empty strings for non-required fields
+     * - null and undefined values
+     */
+    private cleanCredentialValues(): CredentialValues {
+        const cleaned: CredentialValues = {};
+
+        for (const field of this.schemaFields) {
+            const value = this.credentialValues[field.name];
+
+            // Skip "undefined" strings
+            if (value === 'undefined') {
+                continue;
+            }
+
+            // Skip null and undefined
+            if (value === null || value === undefined) {
+                continue;
+            }
+
+            // Skip empty strings for non-required fields (but keep empty strings for required fields)
+            if (value === '' && !field.required) {
+                continue;
+            }
+
+            // Keep all other values
+            cleaned[field.name] = value;
+        }
+
+        return cleaned;
     }
 }
