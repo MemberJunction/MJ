@@ -15,9 +15,25 @@ import { Subject, BehaviorSubject, Subscription } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, MCPServerEntity, MCPServerConnectionEntity, MCPToolExecutionLogEntity, MCPEngine } from '@memberjunction/core-entities';
+import { ResourceData, MCPServerEntity, MCPServerConnectionEntity, MCPToolExecutionLogEntity, MCPEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
+
+/**
+ * User preferences for the MCP Dashboard
+ */
+interface MCPDashboardUserPreferences {
+    toolsViewMode: ToolsViewMode;
+    toolsSortBy: ToolsSortBy;
+    toolsSortAscending: boolean;
+    logsSortColumn: 'status' | 'server' | 'tool' | 'connection' | 'started' | 'duration' | 'error';
+    logsSortAscending: boolean;
+    searchTerm: string;
+    serverStatus: string;
+    connectionStatus: string;
+    toolStatus: string;
+    logStatus: string;
+}
 
 /**
  * Interface for MCP Server data
@@ -162,6 +178,11 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     // State
     // ========================================
 
+    // Settings persistence
+    private readonly USER_SETTINGS_KEY = 'MCP.Dashboard.UserPreferences';
+    private settingsPersistSubject = new Subject<void>();
+    private settingsLoaded = false;
+
     private metadata = new Metadata();
 
     public servers: MCPServerData[] = [];
@@ -249,10 +270,21 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         private mcpToolsService: MCPToolsService
     ) {
         super();
+
+        // Set up debounced settings persistence
+        this.settingsPersistSubject.pipe(
+            debounceTime(500),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.persistUserPreferences();
+        });
     }
 
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
+
+        // Load saved user preferences first
+        this.loadUserPreferences();
 
         // Parse initial URL state
         this.parseAndApplyUrlState();
@@ -328,6 +360,97 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                     this.onExternalNavigation(currentUrl);
                 }
             });
+    }
+
+    // ========================================
+    // User Settings Persistence
+    // ========================================
+
+    /**
+     * Load saved user preferences from the UserInfoEngine
+     */
+    private loadUserPreferences(): void {
+        try {
+            const savedPrefs = UserInfoEngine.Instance.GetSetting(this.USER_SETTINGS_KEY);
+            if (savedPrefs) {
+                const prefs = JSON.parse(savedPrefs) as MCPDashboardUserPreferences;
+                this.applyUserPreferencesFromStorage(prefs);
+            }
+        } catch (error) {
+            console.warn('[MCPDashboard] Failed to load user preferences:', error);
+        } finally {
+            this.settingsLoaded = true;
+        }
+    }
+
+    /**
+     * Apply loaded preferences to component state
+     */
+    private applyUserPreferencesFromStorage(prefs: MCPDashboardUserPreferences): void {
+        if (prefs.toolsViewMode) {
+            this.ToolsViewMode = prefs.toolsViewMode;
+        }
+        if (prefs.toolsSortBy) {
+            this.ToolsSortBy = prefs.toolsSortBy;
+        }
+        if (prefs.toolsSortAscending !== undefined) {
+            this.ToolsSortAscending = prefs.toolsSortAscending;
+        }
+        if (prefs.logsSortColumn) {
+            this.LogsSortColumn = prefs.logsSortColumn;
+        }
+        if (prefs.logsSortAscending !== undefined) {
+            this.LogsSortAscending = prefs.logsSortAscending;
+        }
+        // Apply filter preferences
+        const currentFilters = this.filters$.value;
+        this.filters$.next({
+            ...currentFilters,
+            searchTerm: prefs.searchTerm || '',
+            serverStatus: prefs.serverStatus || 'all',
+            connectionStatus: prefs.connectionStatus || 'all',
+            toolStatus: prefs.toolStatus || 'all',
+            logStatus: prefs.logStatus || 'all'
+        });
+    }
+
+    /**
+     * Get current preferences as an object for saving
+     */
+    private getCurrentPreferences(): MCPDashboardUserPreferences {
+        const currentFilters = this.filters$.value;
+        return {
+            toolsViewMode: this.ToolsViewMode,
+            toolsSortBy: this.ToolsSortBy,
+            toolsSortAscending: this.ToolsSortAscending,
+            logsSortColumn: this.LogsSortColumn,
+            logsSortAscending: this.LogsSortAscending,
+            searchTerm: currentFilters.searchTerm,
+            serverStatus: currentFilters.serverStatus,
+            connectionStatus: currentFilters.connectionStatus,
+            toolStatus: currentFilters.toolStatus,
+            logStatus: currentFilters.logStatus
+        };
+    }
+
+    /**
+     * Persist user preferences to storage (debounced)
+     */
+    private saveUserPreferencesDebounced(): void {
+        if (!this.settingsLoaded) return; // Don't save during initial load
+        this.settingsPersistSubject.next();
+    }
+
+    /**
+     * Actually persist user preferences to the UserInfoEngine
+     */
+    private async persistUserPreferences(): Promise<void> {
+        try {
+            const prefs = this.getCurrentPreferences();
+            await UserInfoEngine.Instance.SetSetting(this.USER_SETTINGS_KEY, JSON.stringify(prefs));
+        } catch (error) {
+            console.warn('[MCPDashboard] Failed to persist user preferences:', error);
+        }
     }
 
     /**
@@ -642,6 +765,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public onSearchChange(term: string): void {
         const current = this.filters$.value;
         this.filters$.next({ ...current, searchTerm: term });
+        this.saveUserPreferencesDebounced();
     }
 
     public onStatusFilterChange(filterType: string, value: string): void {
@@ -660,6 +784,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 this.filters$.next({ ...current, logStatus: value });
                 break;
         }
+        this.saveUserPreferencesDebounced();
     }
 
     // ========================================
@@ -794,6 +919,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public setToolsViewMode(mode: ToolsViewMode): void {
         this.ToolsViewMode = mode;
         this.cdr.detectChanges();
+        this.saveUserPreferencesDebounced();
     }
 
     /**
@@ -809,6 +935,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
         this.buildServerGroups();
         this.cdr.detectChanges();
+        this.saveUserPreferencesDebounced();
     }
 
     /**
@@ -1090,6 +1217,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
         this.sortFilteredLogs();
         this.cdr.detectChanges();
+        this.saveUserPreferencesDebounced();
     }
 
     /**

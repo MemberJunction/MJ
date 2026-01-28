@@ -1,11 +1,10 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata } from '@memberjunction/core';
-import { UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { FormState, FormSectionState, DEFAULT_FORM_STATE, DEFAULT_SECTION_STATE } from './form-state.interface';
 
 const SETTING_KEY_PREFIX = 'Form.State.';
-const SAVE_DEBOUNCE_MS = 1000;
 
 /**
  * Service for managing form state persistence per entity.
@@ -18,9 +17,6 @@ const SAVE_DEBOUNCE_MS = 1000;
 export class FormStateService {
     /** Cache of BehaviorSubjects per entity name */
     private stateCache = new Map<string, BehaviorSubject<FormState>>();
-
-    /** Debounce timeouts per entity name */
-    private saveTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
     /** Track which entities have been loaded from DB */
     private loadedEntities = new Set<string>();
@@ -129,33 +125,37 @@ export class FormStateService {
     }
 
     /**
-     * Get section width mode.
+     * Get form width mode.
      * @param entityName The entity name
-     * @param sectionKey The section key
-     * @returns Width mode ('normal' or 'full-width')
+     * @returns Width mode ('centered' or 'full-width')
      */
-    getSectionWidthMode(entityName: string, sectionKey: string): 'normal' | 'full-width' {
-        return this.getSectionState(entityName, sectionKey).widthMode;
+    getWidthMode(entityName: string): 'centered' | 'full-width' {
+        return this.getCurrentState(entityName).widthMode;
     }
 
     /**
-     * Set section width mode.
+     * Set form width mode.
      * @param entityName The entity name
-     * @param sectionKey The section key
      * @param widthMode The width mode
      */
-    setSectionWidthMode(entityName: string, sectionKey: string, widthMode: 'normal' | 'full-width'): void {
-        this.updateSectionState(entityName, sectionKey, { widthMode });
+    setWidthMode(entityName: string, widthMode: 'centered' | 'full-width'): void {
+        const subject = this.getOrCreateSubject(entityName);
+        const currentState = subject.value;
+        const newState: FormState = {
+            ...currentState,
+            widthMode
+        };
+        subject.next(newState);
+        this.queueSave(entityName);
     }
 
     /**
-     * Toggle section width mode between normal and full-width.
+     * Toggle form width mode between centered and full-width.
      * @param entityName The entity name
-     * @param sectionKey The section key
      */
-    toggleSectionWidthMode(entityName: string, sectionKey: string): void {
-        const current = this.getSectionWidthMode(entityName, sectionKey);
-        this.setSectionWidthMode(entityName, sectionKey, current === 'normal' ? 'full-width' : 'normal');
+    toggleWidthMode(entityName: string): void {
+        const current = this.getWidthMode(entityName);
+        this.setWidthMode(entityName, current === 'centered' ? 'full-width' : 'centered');
     }
 
     /**
@@ -180,7 +180,7 @@ export class FormStateService {
             showEmptyFields: show
         };
         subject.next(newState);
-        this.debouncedSave(entityName);
+        this.queueSave(entityName);
     }
 
     /**
@@ -202,7 +202,7 @@ export class FormStateService {
         }
 
         subject.next({ ...currentState, sections: newSections });
-        this.debouncedSave(entityName);
+        this.queueSave(entityName);
     }
 
     /**
@@ -224,24 +224,7 @@ export class FormStateService {
         }
 
         subject.next({ ...currentState, sections: newSections });
-        this.debouncedSave(entityName);
-    }
-
-    /**
-     * Reset all panel widths to normal for an entity.
-     * @param entityName The entity name
-     */
-    resetAllPanelWidths(entityName: string): void {
-        const subject = this.getOrCreateSubject(entityName);
-        const currentState = subject.value;
-        const newSections: Record<string, FormSectionState> = {};
-
-        for (const [key, section] of Object.entries(currentState.sections)) {
-            newSections[key] = { ...section, widthMode: 'normal' };
-        }
-
-        subject.next({ ...currentState, sections: newSections });
-        this.debouncedSave(entityName);
+        this.queueSave(entityName);
     }
 
     /**
@@ -251,7 +234,54 @@ export class FormStateService {
     resetToDefaults(entityName: string): void {
         const subject = this.getOrCreateSubject(entityName);
         subject.next({ ...DEFAULT_FORM_STATE });
-        this.debouncedSave(entityName);
+        this.queueSave(entityName);
+    }
+
+    /**
+     * Get the custom section order for an entity.
+     * @param entityName The entity name
+     * @returns Array of section keys in user's preferred order, or undefined if using default order
+     */
+    getSectionOrder(entityName: string): string[] | undefined {
+        return this.getCurrentState(entityName).sectionOrder;
+    }
+
+    /**
+     * Set the custom section order for an entity.
+     * @param entityName The entity name
+     * @param sectionOrder Array of section keys in the desired order
+     */
+    setSectionOrder(entityName: string, sectionOrder: string[]): void {
+        const subject = this.getOrCreateSubject(entityName);
+        const currentState = subject.value;
+        const newState: FormState = {
+            ...currentState,
+            sectionOrder
+        };
+        subject.next(newState);
+        this.queueSave(entityName);
+    }
+
+    /**
+     * Reset the section order to default (removes custom ordering).
+     * @param entityName The entity name
+     */
+    resetSectionOrder(entityName: string): void {
+        const subject = this.getOrCreateSubject(entityName);
+        const currentState = subject.value;
+        const { sectionOrder: _, ...stateWithoutOrder } = currentState;
+        subject.next(stateWithoutOrder as FormState);
+        this.queueSave(entityName);
+    }
+
+    /**
+     * Check if a custom section order exists for an entity.
+     * @param entityName The entity name
+     * @returns True if custom order exists
+     */
+    hasCustomSectionOrder(entityName: string): boolean {
+        const order = this.getSectionOrder(entityName);
+        return order !== undefined && order.length > 0;
     }
 
     /**
@@ -302,7 +332,7 @@ export class FormStateService {
         };
 
         subject.next(newState);
-        this.debouncedSave(entityName);
+        this.queueSave(entityName);
     }
 
     /**
@@ -345,51 +375,16 @@ export class FormStateService {
     }
 
     /**
-     * Debounced save to avoid too many writes.
+     * Queue a debounced save using UserInfoEngine's centralized debounce.
      */
-    private debouncedSave(entityName: string): void {
-        const existingTimeout = this.saveTimeouts.get(entityName);
-        if (existingTimeout) {
-            clearTimeout(existingTimeout);
+    private queueSave(entityName: string): void {
+        const userId = this.metadata.CurrentUser?.ID;
+        if (!userId) {
+            return;
         }
 
-        const timeout = setTimeout(() => {
-            this.saveState(entityName);
-            this.saveTimeouts.delete(entityName);
-        }, SAVE_DEBOUNCE_MS);
-
-        this.saveTimeouts.set(entityName, timeout);
-    }
-
-    /**
-     * Save state to User Settings using UserInfoEngine for cached lookup.
-     */
-    private async saveState(entityName: string): Promise<void> {
-        try {
-            const userId = this.metadata.CurrentUser?.ID;
-            if (!userId) {
-                return;
-            }
-
-            const settingKey = this.getSettingKey(entityName);
-            const state = this.getCurrentState(entityName);
-            const md = new Metadata();
-            const engine = UserInfoEngine.Instance;
-
-            // Find existing setting from cached user settings
-            let setting = engine.UserSettings.find(s => s.Setting === settingKey);
-
-            if (!setting) {
-                // Create new setting if not found
-                setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
-                setting.UserID = userId;
-                setting.Setting = settingKey;
-            }
-
-            setting.Value = JSON.stringify(state);
-            await setting.Save();
-        } catch (error) {
-            console.warn(`Failed to save form state for ${entityName}:`, error);
-        }
+        const settingKey = this.getSettingKey(entityName);
+        const state = this.getCurrentState(entityName);
+        UserInfoEngine.Instance.SetSettingDebounced(settingKey, JSON.stringify(state));
     }
 }

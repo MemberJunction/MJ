@@ -1,0 +1,134 @@
+<div class="action-card" [class.expanded]="IsExpanded" (click)="onCardClick()">
+  <div class="card-main">
+    <!-- Icon -->
+    <div class="action-icon" [class.ai-generated]="Action.Type === 'Generated'">
+      <i [class]="getActionIcon()"></i>
+    </div>
+
+    <!-- Content -->
+    <div class="action-content">
+      <div class="action-header">
+        <h3 class="action-name" [title]="Action.Name">{{ Action.Name }}</h3>
+        <div class="action-badges">
+          <kendo-chip
+            [themeColor]="getStatusColor()"
+            [size]="'small'">
+            {{ Action.Status }}
+          </kendo-chip>
+          @if (Action.Type === 'Generated') {
+            <kendo-chip themeColor="info" [size]="'small'">
+              <i class="fa-solid fa-robot"></i> AI
+            </kendo-chip>
+          }
+        </div>
+      </div>
+
+      <p class="action-description" [title]="Action.Description || 'No description'">
+        {{ Action.Description || 'No description available' }}
+      </p>
+
+      <div class="action-meta">
+        <button class="meta-item category" (click)="onCategoryClick($event)" [title]="'View category: ' + getCategoryName()">
+          <i class="fa-solid fa-folder"></i>
+          <span>{{ getCategoryName() }}</span>
+        </button>
+
+        @if (Action.__mj_UpdatedAt) {
+          <span class="meta-item">
+            <i class="fa-solid fa-clock"></i>
+            <span>{{ formatDate(Action.__mj_UpdatedAt) }}</span>
+          </span>
+        }
+
+        @if (Action.Type === 'Generated' && Action.CodeApprovalStatus) {
+          <span class="meta-item" [attr.data-status]="Action.CodeApprovalStatus">
+            <i [class]="getApprovalStatusIcon()"></i>
+            <span>{{ Action.CodeApprovalStatus }}</span>
+          </span>
+        }
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="action-buttons">
+      <button kendoButton
+        [fillMode]="'flat'"
+        [size]="'small'"
+        title="View Stats"
+        (click)="toggleExpanded($event)">
+        <i [class]="IsExpanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chart-line'"></i>
+      </button>
+      <button kendoButton
+        [fillMode]="'flat'"
+        [size]="'small'"
+        [themeColor]="'primary'"
+        title="Run Action"
+        [disabled]="Action.Status !== 'Active'"
+        (click)="onRunClick($event)">
+        <i class="fa-solid fa-play"></i>
+      </button>
+      <button kendoButton
+        [fillMode]="'flat'"
+        [size]="'small'"
+        title="Edit Action"
+        (click)="onEditClick($event)">
+        <i class="fa-solid fa-pen"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Expanded Stats Section -->
+  @if (IsExpanded) {
+    <div class="card-expanded">
+      @if (ExecutionStats.isLoading) {
+        <div class="stats-loading">
+          <mj-loading [showText]="false" size="small"></mj-loading>
+          <span>Loading execution stats...</span>
+        </div>
+      } @else {
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value">{{ ExecutionStats.totalExecutions }}</div>
+            <div class="stat-label">Total Runs</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" [class.success]="ExecutionStats.successRate >= 90" [class.warning]="ExecutionStats.successRate >= 50 && ExecutionStats.successRate < 90" [class.error]="ExecutionStats.successRate < 50">
+              {{ ExecutionStats.successRate }}%
+            </div>
+            <div class="stat-label">Success Rate</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">{{ formatDate(ExecutionStats.lastExecuted) }}</div>
+            <div class="stat-label">Last Run</div>
+          </div>
+          <div class="stat-item params">
+            <div class="stat-value">{{ Action.Params.length || 0 }}</div>
+            <div class="stat-label">Parameters</div>
+          </div>
+        </div>
+
+        @if (Action.Params && Action.Params.length > 0) {
+          <div class="params-preview">
+            <div class="params-header">
+              <i class="fa-solid fa-sliders"></i>
+              Parameters
+            </div>
+            <div class="params-list">
+              @for (param of Action.Params.slice(0, 4); track param.Name) {
+                <span class="param-tag" [class.required]="param.IsRequired">
+                  {{ param.Name }}
+                  @if (param.IsRequired) {
+                    <span class="required-marker">*</span>
+                  }
+                </span>
+              }
+              @if (Action.Params.length > 4) {
+                <span class="param-more">+{{ Action.Params.length - 4 }} more</span>
+              }
+            </div>
+          </div>
+        }
+      }
+    </div>
+  }
+</div>

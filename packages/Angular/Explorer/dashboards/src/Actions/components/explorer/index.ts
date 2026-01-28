@@ -1,0 +1,14 @@
+// Action Explorer Components
+export * from './action-explorer.component';
+export * from './action-tree-panel.component';
+export * from './action-toolbar.component';
+export * from './action-breadcrumb.component';
+export * from './action-card.component';
+export * from './action-list-item.component';
+export * from './new-category-panel.component';
+export * from './new-action-panel.component';
+
+// Tree-shaking prevention
+export function LoadActionExplorerComponents() {
+  // Force inclusion of all explorer components
+}

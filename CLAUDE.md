@@ -62,6 +62,21 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 
 ---
 
+## 📚 Development Guides
+
+The `/guides/` folder contains comprehensive best practices guides for specific development tasks. **Always consult these guides when working on related features:**
+
+- **[Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md)**: Comprehensive patterns for building MJ dashboards including:
+  - Architecture and naming conventions
+  - State management with getter/setters
+  - Engine class patterns (no Angular services for data)
+  - User preferences and local caching
+  - Layout patterns, permission checking, and more
+
+When building dashboards, creating new Angular applications, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
+
+---
+
 **VERY IMPORTANT** We want you to be a high performance agent. Therefore whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization
 
 ## IMPORTANT

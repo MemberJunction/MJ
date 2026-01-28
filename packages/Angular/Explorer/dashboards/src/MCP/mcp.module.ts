@@ -20,6 +20,9 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
+// Shared Pipes Module
+import { SharedPipesModule } from '../shared/shared-pipes.module';
+
 // MCP Components
 import { MCPDashboardComponent, LoadMCPDashboard } from './mcp-dashboard.component';
 import { MCPResourceComponent, LoadMCPResource } from './mcp-resource.component';
@@ -50,7 +53,8 @@ import { LoadMCPToolsService } from './services/mcp-tools.service';
         InputsModule,
         SharedGenericModule,
         CredentialsModule,
-        CodeEditorModule
+        CodeEditorModule,
+        SharedPipesModule
     ],
     exports: [
         MCPDashboardComponent,

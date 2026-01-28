@@ -36,6 +36,7 @@
     "@memberjunction/global": "3.3.0",
     "@memberjunction/graphql-dataprovider": "3.3.0",
     "@memberjunction/ng-action-gallery": "3.3.0",
+    "@memberjunction/ng-actions": "3.3.0",
     "@memberjunction/ng-ai-test-harness": "3.3.0",
     "@memberjunction/ng-base-application": "3.3.0",
     "@memberjunction/ng-base-forms": "3.3.0",

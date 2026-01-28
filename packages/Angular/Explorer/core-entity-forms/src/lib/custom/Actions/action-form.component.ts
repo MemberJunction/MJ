@@ -7,8 +7,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { ActionFormComponent } from '../../generated/Entities/Action/action.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
-import { ActionParamDialogComponent } from './action-param-dialog.component';
-import { ActionResultCodeDialogComponent } from './action-result-code-dialog.component';
+import { ActionParamDialogComponent, ActionResultCodeDialogComponent } from '@memberjunction/ng-actions';
 
 @RegisterClass(BaseFormComponent, 'Actions')
 @Component({
