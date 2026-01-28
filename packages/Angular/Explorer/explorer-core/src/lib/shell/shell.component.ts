@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
-import { Subscription, combineLatest } from 'rxjs';
-import { filter } from 'rxjs/operators';
+import { Subscription, combineLatest, Subject } from 'rxjs';
+import { filter, takeUntil } from 'rxjs/operators';
 import {
   ApplicationManager,
   WorkspaceStateManager,
@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
-import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService } from '@memberjunction/ng-shared';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
@@ -24,6 +24,8 @@ import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
+import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
+import { UserEntity } from '@memberjunction/core-entities';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -80,6 +82,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   userImageURL = '';
   userIconClass: string | null = null;
   userName = '';
+  userEmail = '';
+  private userEntity: UserEntity | null = null;
+
+  // User menu plugin system
+  private userMenu: BaseUserMenu | null = null;
+  public userMenuElements: UserMenuElement[] = [];
+  private destroy$ = new Subject<void>();
 
   // Search state
   isSearchOpen = false;
@@ -122,7 +131,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private userAvatarService: UserAvatarService,
     private settingsDialogService: SettingsDialogService,
     private viewContainerRef: ViewContainerRef,
-    private titleService: TitleService
+    private titleService: TitleService,
+    public developerModeService: DeveloperModeService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -355,8 +365,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Check for deep link parameters on initialization
     this.handleDeepLink();
 
-    // Load user avatar
+    // Load user avatar and initialize user menu
     await this.loadUserAvatar(user);
+    await this.initializeUserMenu();
 
     // Listen for avatar updates from settings page
     this.subscriptions.push(
@@ -1426,6 +1437,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.stopLoadingAnimation();
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.layoutManager.Destroy();
+
+    // Clean up user menu
+    this.userMenu?.Destroy();
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   /**
@@ -1617,11 +1633,137 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
+   * Initialize the user menu plugin system
+   */
+  private async initializeUserMenu(): Promise<void> {
+    // Get the highest priority user menu implementation via ClassFactory
+    this.userMenu = MJGlobal.Instance.ClassFactory.CreateInstance<BaseUserMenu>(BaseUserMenu);
+
+    if (!this.userMenu) {
+      console.error('No user menu implementation found');
+      return;
+    }
+
+    // Initialize developer mode service
+    if (this.userEntity) {
+      await this.developerModeService.Initialize(this.userEntity);
+    }
+
+    // Build context for the menu
+    const context: UserMenuContext = {
+      user: new Metadata().CurrentUser,
+      userEntity: this.userEntity!,
+      shell: this as unknown as Record<string, unknown>,
+      viewContainerRef: this.viewContainerRef,
+      isDeveloper: this.developerModeService.IsDeveloper,
+      developerModeEnabled: this.developerModeService.IsEnabled,
+      currentApplication: this.activeApp as unknown as ApplicationInfoRef | null,
+      workspaceManager: this.workspaceManager,
+      authService: this.authBase,
+      openSettings: () => this.openSettingsDialog()
+    };
+
+    // Initialize menu
+    await this.userMenu.Initialize(context);
+
+    // Get initial menu elements
+    this.refreshMenuElements();
+
+    // Subscribe to developer mode changes to refresh menu
+    this.developerModeService.IsEnabled$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      // Update context and refresh menu
+      if (this.userMenu) {
+        this.userMenu.UpdateContext({
+          developerModeEnabled: this.developerModeService.IsEnabled
+        });
+      }
+      this.refreshMenuElements();
+      this.cdr.detectChanges();
+    });
+  }
+
+  /**
+   * Refresh the user menu elements from the menu instance
+   */
+  private refreshMenuElements(): void {
+    if (this.userMenu) {
+      this.userMenuElements = this.userMenu.GetMenuElements();
+    }
+  }
+
+  /**
+   * Handle user menu item click
+   */
+  async onUserMenuItemClick(itemId: string): Promise<void> {
+    if (!this.userMenu) return;
+
+    const result = await this.userMenu.HandleItemClick(itemId);
+
+    // Handle special signals from menu handlers
+    if (result.message === 'toggle-dev-mode') {
+      await this.developerModeService.Toggle();
+      // Menu will refresh via the subscription above
+      return;
+    }
+
+    if (result.message === 'reset-layout') {
+      await this.onResetLayout();
+      return;
+    }
+
+    if (result.closeMenu) {
+      this.userMenuVisible = false;
+    }
+
+    // Refresh menu elements (some items may have changed state)
+    this.refreshMenuElements();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Get user menu options for template
+   */
+  getUserMenuOptions() {
+    return this.userMenu?.GetOptions();
+  }
+
+  /**
+   * Get user display info for template
+   */
+  getUserDisplayInfo() {
+    return this.userMenu?.GetUserDisplayInfo();
+  }
+
+  /**
+   * Check if an element is a divider (for template)
+   */
+  isMenuDivider(element: UserMenuElement): boolean {
+    return isUserMenuDivider(element);
+  }
+
+  /**
+   * Cast element to UserMenuItem (for template type safety)
+   * Call this only after checking !isMenuDivider(element)
+   */
+  asMenuItem(element: UserMenuElement): UserMenuItem {
+    return element as UserMenuItem;
+  }
+
+  /**
+   * Open the settings dialog
+   */
+  private openSettingsDialog(): void {
+    this.settingsDialogService.open(this.viewContainerRef);
+  }
+
+  /**
    * Open Settings in a full-screen modal dialog
    */
   onSettings(): void {
     this.userMenuVisible = false;
-    this.settingsDialogService.open(this.viewContainerRef);
+    this.openSettingsDialog();
   }
 
   /**
@@ -1705,14 +1847,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Load user avatar from database, auto-sync from auth provider if needed
    */
-  private async loadUserAvatar(currentUserInfo: { ID: string; FirstLast?: string; Name?: string }): Promise<void> {
+  private async loadUserAvatar(currentUserInfo: { ID: string; FirstLast?: string; Name?: string; Email?: string }): Promise<void> {
     try {
       const md = new Metadata();
       this.userName = currentUserInfo.FirstLast || currentUserInfo.Name || 'User';
+      this.userEmail = currentUserInfo.Email || '';
 
       // Load the full UserEntity to access avatar fields
-      const currentUserEntity = await md.GetEntityObject<any>('Users');
+      const currentUserEntity = await md.GetEntityObject<UserEntity>('Users');
       await currentUserEntity.Load(currentUserInfo.ID);
+
+      // Store reference for user menu
+      this.userEntity = currentUserEntity;
 
       // Auto-sync avatar from auth provider if user has no avatar settings in DB
       if (!currentUserEntity.UserImageURL && !currentUserEntity.UserImageIconClass) {
