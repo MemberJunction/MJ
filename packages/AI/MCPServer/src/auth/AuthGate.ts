@@ -179,7 +179,6 @@ function handleNoneMode(config: AuthGateConfig): AuthResult {
     };
   }
 
-  console.log('[AuthGate] mode=none - using system user');
   return {
     authenticated: true,
     method: 'none',
@@ -246,7 +245,6 @@ async function handleBothMode(
     }
     // API key validation failed - try OAuth if available
     if (credentials.bearerToken) {
-      console.log('[AuthGate] API key invalid, trying OAuth token');
       return validateOAuthCredentials(credentials.bearerToken);
     }
     return result; // Return API key error
@@ -281,7 +279,6 @@ async function validateApiKeyCredentials(
     const validation = await config.validateApiKey(apiKey, request);
 
     if (!validation.valid || !validation.user) {
-      console.log('[AuthGate] API key validation failed:', validation.error);
       return {
         authenticated: false,
         method: 'apiKey',
@@ -292,8 +289,6 @@ async function validateApiKeyCredentials(
         },
       };
     }
-
-    console.log(`[AuthGate] Authenticated via API key: ${validation.user.Email}`);
     return {
       authenticated: true,
       method: 'apiKey',
@@ -347,7 +342,6 @@ async function validateOAuthCredentials(token: string): Promise<AuthResult> {
       };
     }
 
-    console.log(`[AuthGate] OAuth token validation failed: ${errorCode} - ${errorMessage}`);
     return {
       authenticated: false,
       method: 'oauth',
@@ -364,7 +358,6 @@ async function validateOAuthCredentials(token: string): Promise<AuthResult> {
 
   if (userResult.error) {
     const is403 = userResult.error.code === 'user_not_found' || userResult.error.code === 'user_inactive';
-    console.log(`[AuthGate] OAuth user resolution failed: ${userResult.error.message}`);
     return {
       authenticated: false,
       method: 'oauth',

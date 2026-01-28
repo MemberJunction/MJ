@@ -137,7 +137,6 @@ function getAzureAdV1JwksClient(tenantId: string): jwksClient.JwksClient {
   if (!client) {
     // Azure AD v1 JWKS endpoint
     const jwksUri = `https://login.microsoftonline.com/${tenantId}/discovery/keys`;
-    console.log(`[TokenValidator] Creating JWKS client for Azure AD v1 tenant ${tenantId}`);
     client = jwksClient({
       jwksUri,
       cache: true,
@@ -156,15 +155,13 @@ function getAzureAdV1JwksClient(tenantId: string): jwksClient.JwksClient {
 function getAzureAdV1SigningKeys(tenantId: string): (header: JwtHeader, cb: SigningKeyCallback) => void {
   const client = getAzureAdV1JwksClient(tenantId);
   return (header: JwtHeader, cb: SigningKeyCallback) => {
-    console.log(`[TokenValidator] Looking up key with kid: ${header.kid}, alg: ${header.alg}`);
     client.getSigningKey(header.kid)
       .then((key) => {
         const signingKey = 'publicKey' in key ? key.publicKey : key.rsaPublicKey;
-        console.log(`[TokenValidator] Found signing key for kid ${header.kid}`);
         cb(null, signingKey);
       })
       .catch((err) => {
-        console.error(`[TokenValidator] Error getting Azure AD v1 signing key for kid ${header.kid}:`, err);
+        console.error(`[TokenValidator] Error getting signing key for kid ${header.kid}:`, err);
         cb(err);
       });
   };
@@ -252,13 +249,11 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
   for (const variant of issuerVariants) {
     provider = factory.getByIssuer(variant);
     if (provider) {
-      console.log(`[TokenValidator] Matched issuer ${issuer} to provider via variant ${variant}`);
       break;
     }
   }
 
   if (!provider) {
-    console.log(`[TokenValidator] Tried issuer variants: ${issuerVariants.join(', ')}`);
     return createError('unknown_issuer', `Unknown token issuer: ${issuer}`);
   }
 
@@ -273,10 +268,6 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
   // For Azure AD: this is WEB_CLIENT_ID from environment
   const expectedAudience = provider.audience;
 
-  // Debug: log token claims vs expected audience
-  console.log(`[TokenValidator] Token audience (aud): ${payload.aud}`);
-  console.log(`[TokenValidator] Expected audience: ${expectedAudience}`);
-
   // 4. Verify signature using JWKS and validate audience
   // For Azure AD v1 tokens: use v1 JWKS endpoint directly
   // For other tokens: use MJServer's provider lookup
@@ -284,7 +275,6 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
   try {
     if (isV1Token && v1TenantId) {
       // Azure AD v1 token - use v1 JWKS endpoint directly
-      console.log(`[TokenValidator] Using Azure AD v1 JWKS for tenant ${v1TenantId}`);
       verifiedPayload = await verifyTokenSignatureWithKeys(
         token,
         getAzureAdV1SigningKeys(v1TenantId),

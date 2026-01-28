@@ -452,7 +452,6 @@ async function handleAuthorizationCodeGrant(
   if (upstreamTokens.id_token) {
     // Use ID token for MCP authentication - it has the correct audience
     tokenForMcpAuth = upstreamTokens.id_token;
-    console.log(`OAuth Proxy: Using ID token for MCP authentication (correct audience)`);
   }
 
   // Return the upstream tokens to the MCP client
@@ -497,7 +496,6 @@ async function handleRefreshTokenGrant(
     let tokenForMcpAuth = upstreamTokens.access_token;
     if (upstreamTokens.id_token) {
       tokenForMcpAuth = upstreamTokens.id_token;
-      console.log(`OAuth Proxy: Using refreshed ID token for MCP authentication`);
     }
 
     const response: TokenResponse = {

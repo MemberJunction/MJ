@@ -91,8 +91,6 @@ export function buildProtectedResourceMetadata(
 
     // Use standard OIDC scopes - the proxy will handle Azure AD scopes internally
     scopes = ['openid', 'profile', 'email'];
-
-    console.log(`Protected Resource Metadata: Using OAuth proxy at ${options.oauthProxyBaseUrl}`);
   } else {
     // Direct mode: Point to upstream providers
     authorizationServers = options.authorizationServers;

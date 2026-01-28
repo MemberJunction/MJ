@@ -643,6 +643,114 @@ Configure providers in the `authProviders` array (shared with MJExplorer).
 
 ---
 
+### OAuth Proxy (Dynamic Client Registration)
+
+The OAuth Proxy enables MCP clients like Claude Code to authenticate via your identity provider (e.g., Azure AD) **without requiring manual app registration for each client**. It implements [RFC 7591 Dynamic Client Registration](https://datatracker.ietf.org/doc/html/rfc7591), allowing the MCP Server to act as an OAuth Authorization Server that proxies authentication to your upstream provider.
+
+#### Why Use the OAuth Proxy?
+
+Without the OAuth Proxy, each MCP client would need to:
+1. Be manually registered in your identity provider (Azure AD, Auth0, etc.)
+2. Have its own client ID configured
+3. Handle provider-specific authentication flows
+
+With the OAuth Proxy:
+1. MCP clients dynamically register with the MCP Server
+2. The MCP Server handles all identity provider interaction
+3. Users authenticate via a simple web-based login flow
+4. No manual client registration required in your IdP
+
+#### Enabling the OAuth Proxy
+
+```javascript
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    auth: {
+      mode: 'both',  // or 'oauth'
+      proxy: {
+        enabled: true,
+        // upstreamProvider: 'azure',  // Optional: specify provider by name
+        // clientTtlMs: 24 * 60 * 60 * 1000,  // 24 hours (default)
+        // stateTtlMs: 10 * 60 * 1000,  // 10 minutes (default)
+      },
+    },
+  },
+}
+```
+
+#### Azure AD Configuration Requirements
+
+When using the OAuth Proxy with Azure AD (MSAL), you need additional App Registration configuration beyond what MJExplorer requires:
+
+##### 1. Add a Web Redirect URI
+
+In your Azure AD App Registration, under **Authentication** > **Platform configurations**:
+
+1. Click **Add a platform** and select **Web** (not "Single-page application")
+2. Add the redirect URI: `http://localhost:3100/oauth/callback` (or your production URL)
+
+**Why Web instead of SPA?** The OAuth Proxy acts as a *confidential client* - it receives authorization codes on the server side and exchanges them for tokens using a client secret. SPA configurations use the implicit flow or PKCE without client secrets, which doesn't work for server-side token exchange.
+
+##### 2. Create a Client Secret
+
+In your Azure AD App Registration, under **Certificates & secrets**:
+
+1. Click **New client secret**
+2. Add a description and choose an expiration
+3. Copy the secret **value** (not the Secret ID)
+4. Add it to your `.env` file:
+
+```bash
+WEB_CLIENT_SECRET=your-client-secret-value-here
+```
+
+**Why is a client secret required?** The OAuth Proxy is a confidential client that authenticates to Azure AD's token endpoint. When exchanging an authorization code for tokens, Azure AD requires the client to prove its identity using the client secret. Without it, the token exchange will fail.
+
+#### OAuth Proxy Endpoints
+
+When the OAuth Proxy is enabled, these additional endpoints are available:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /.well-known/oauth-authorization-server` | Authorization server metadata (RFC 8414) |
+| `POST /oauth/register` | Dynamic client registration (RFC 7591) |
+| `GET /oauth/authorize` | Authorization endpoint (redirects to upstream IdP) |
+| `POST /oauth/token` | Token endpoint (exchanges codes for tokens) |
+| `GET /oauth/callback` | Callback from upstream IdP after user authenticates |
+
+#### Troubleshooting OAuth Proxy
+
+**Error: "AADSTS50011: The reply URL specified in the request does not match..."**
+
+This error means the redirect URI isn't configured correctly in Azure AD.
+
+**Fix:** Add `http://localhost:3100/oauth/callback` (or your production URL) as a **Web** platform redirect URI in your App Registration. Make sure you're adding it under "Web" not "Single-page application".
+
+**Error: "AADSTS7000218: The request body must contain... 'client_secret'"**
+
+This error means the client secret is missing or not being sent.
+
+**Fix:**
+1. Create a client secret in Azure AD (Certificates & secrets)
+2. Add `WEB_CLIENT_SECRET=<your-secret>` to your `.env` file
+3. Restart the MCP Server
+
+**Error: "AADSTS700025: Client is public so neither 'client_assertion' nor 'client_secret' should be presented"**
+
+This error means you've configured a secret but your app is registered as a public client.
+
+**Fix:** In Azure AD App Registration > Authentication, ensure "Allow public client flows" is set to **No**. The OAuth Proxy requires a confidential client configuration.
+
+**Error: "OAuth Proxy: No upstream provider configured"**
+
+This error means no auth providers are available for the OAuth Proxy to use.
+
+**Fix:** Ensure you have at least one auth provider configured (either via `authProviders` in config or via environment variables like `AUTH_TYPE`, `WEB_CLIENT_ID`, `TENANT_ID`).
+
+---
+
 ### API Key Authentication
 
 The MCP Server also supports API key authentication, which is the default mode.

@@ -275,25 +275,14 @@ async function validateApiKey(
         const sharedApiKey = _config.apiKey;
         const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
 
-        // Debug: show which config value is being used
-        console.log(`[Auth] Config sources: mcpServerSettings.systemApiKey=${mcpSystemKey ? `"${mcpSystemKey.substring(0, 10)}..." (${mcpSystemKey.length} chars)` : 'undefined'}, _config.apiKey=${sharedApiKey ? `"${sharedApiKey.substring(0, 10)}..." (${sharedApiKey.length} chars)` : 'undefined'}`);
-
-        if (configuredSystemApiKey) {
-            if (apiKey === configuredSystemApiKey) {
-                console.log('[Auth] Authenticated via system API key');
-                return {
-                    valid: true,
-                    user: systemUser,
-                    // System API key doesn't have an ID/hash in the database
-                    apiKeyId: 'system',
-                    apiKeyHash: 'system',
-                };
-            } else {
-                // Log mismatch for debugging
-                console.log(`[Auth] System API key mismatch: configured="${configuredSystemApiKey.substring(0, 15)}..." (${configuredSystemApiKey.length} chars), provided="${apiKey.substring(0, 15)}..." (${apiKey.length} chars)`);
-            }
-        } else {
-            console.log('[Auth] No system API key configured (mcpServerSettings.systemApiKey or apiKey from MJ_API_KEY)');
+        if (configuredSystemApiKey && apiKey === configuredSystemApiKey) {
+            return {
+                valid: true,
+                user: systemUser,
+                // System API key doesn't have an ID/hash in the database
+                apiKeyId: 'system',
+                apiKeyHash: 'system',
+            };
         }
 
         // Fall back to user-level API key validation through the API Key Engine
@@ -958,8 +947,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                     });
 
                     res.json(metadata);
-                    const serverCount = oauthProxyEnabled ? 1 : authorizationServers.length;
-                    console.log(`[OAuth] Protected Resource Metadata served (proxy=${oauthProxyEnabled}, servers=${serverCount})`);
                 } catch (error) {
                     console.error('[OAuth] Error building Protected Resource Metadata:', error);
                     res.status(500).json({
@@ -973,12 +960,9 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
         // SSE endpoint for establishing MCP connections
         app.get('/mcp/sse', async (req: Request, res: Response) => {
-            console.log('[SSE] New connection request');
-
             // Authenticate the request with full result for proper error handling
             const authResult = await authenticateRequestWithResult(req);
             if (!authResult.authenticated) {
-                console.log(`[SSE] Authentication failed: ${authResult.error?.message}`);
                 sendAuthErrorResponse(res, authResult);
                 return;
             }
@@ -986,8 +970,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             const sessionContext = toSessionContext(authResult);
 
             try {
-                console.log(`[SSE] Authenticated user: ${sessionContext.user.Email}`);
-
                 // Create a new MCP server for this connection
                 const mcpServer = new McpServer({
                     name: "MemberJunction",
@@ -996,7 +978,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
                 // Register all tools with user-scoped context
                 await registerAllTools(mcpServer, sessionContext, systemUser);
-                console.log(`[SSE] Tools registered for user: ${sessionContext.user.Email}`);
 
                 // Create SSE transport for this connection
                 const transport = new SSEServerTransport('/mcp/messages', res);
@@ -1004,45 +985,38 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 // Store transport for message routing
                 const sessionId = transport.sessionId;
                 transports.set(sessionId, transport);
-                console.log(`[SSE] Transport created with session ID: ${sessionId}`);
+                console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId}`);
 
                 // Set up keepalive ping to prevent connection timeout (every 15 seconds)
                 const keepaliveInterval = setInterval(() => {
                     if (!res.writableEnded) {
                         // SSE comment line (starts with colon) - keeps connection alive
                         res.write(':ping\n\n');
-                        console.log(`[SSE] Keepalive ping sent for session: ${sessionId}`);
                     }
                 }, 15000);
 
                 // Clean up on connection close
                 res.on('close', () => {
-                    console.log(`[SSE] Session ended: ${sessionId}`);
                     clearInterval(keepaliveInterval);
                     transports.delete(sessionId);
                 });
 
                 res.on('error', (err: NodeJS.ErrnoException) => {
                     // ECONNRESET is normal when client disconnects - don't log as error
-                    if (err.code === 'ECONNRESET') {
-                        console.log(`[SSE] Client disconnected for session: ${sessionId}`);
-                    } else {
-                        console.error(`[SSE] Connection error for session: ${sessionId}`, err);
+                    if (err.code !== 'ECONNRESET') {
+                        console.error(`[SSE] Connection error for session ${sessionId}:`, err);
                     }
                 });
 
                 req.on('error', (err: NodeJS.ErrnoException) => {
                     // ECONNRESET is normal when client disconnects - don't log as error
-                    if (err.code === 'ECONNRESET') {
-                        // Already logged above, skip duplicate
-                    } else {
-                        console.error(`[SSE] Request error for session: ${sessionId}`, err);
+                    if (err.code !== 'ECONNRESET') {
+                        console.error(`[SSE] Request error for session ${sessionId}:`, err);
                     }
                 });
 
                 // Connect the server to the transport
                 await mcpServer.connect(transport);
-                console.log(`[SSE] MCP server connected for session: ${sessionId}`);
 
             } catch (error) {
                 console.error('[SSE] Connection error:', error);
@@ -1061,10 +1035,8 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         // The sessionId acts as a session token - clients must first authenticate via SSE.
         app.post('/mcp/messages', async (req: Request, res: Response) => {
             const sessionId = req.query.sessionId as string;
-            console.log(`[Messages] Received POST for session: ${sessionId}`);
 
             if (!sessionId) {
-                console.log('[Messages] Error: Missing sessionId');
                 // Protocol error - client didn't follow MCP protocol
                 res.status(400).json({
                     error: 'invalid_request',
@@ -1075,7 +1047,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
             const transport = transports.get(sessionId);
             if (!transport) {
-                console.log(`[Messages] Error: Session not found: ${sessionId}`);
                 // Session expired or invalid - client needs to re-authenticate
                 // When OAuth is enabled, include WWW-Authenticate header to guide client
                 if (isOAuthEnabled()) {
@@ -1091,25 +1062,12 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 return;
             }
 
-            // Buffer the body for logging, then pass to transport
+            // Buffer the body then pass to transport
             const chunks: Buffer[] = [];
             for await (const chunk of req) {
                 chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
             }
             const bodyBuffer = Buffer.concat(chunks);
-            const bodyString = bodyBuffer.toString('utf8');
-
-            // Log the request
-            try {
-                const parsed = JSON.parse(bodyString);
-                console.log(`[Messages] Request: method=${parsed.method || 'N/A'}, id=${parsed.id || 'N/A'}`);
-                if (parsed.params) {
-                    const paramsStr = JSON.stringify(parsed.params);
-                    console.log(`[Messages] Params: ${paramsStr.substring(0, 500)}${paramsStr.length > 500 ? '...' : ''}`);
-                }
-            } catch {
-                console.log(`[Messages] Raw body: ${bodyString.substring(0, 500)}`);
-            }
 
             // Create a new readable stream from the buffered body for the transport
             const { Readable } = await import('stream');
@@ -1130,7 +1088,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
             try {
                 await transport.handlePostMessage(mockReq as unknown as Request, res);
-                console.log(`[Messages] Response sent for session: ${sessionId}`);
             } catch (error) {
                 console.error('[Messages] Error handling message:', error);
                 if (!res.headersSent) {
@@ -1156,29 +1113,17 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         // Streamable HTTP endpoint - handles both GET (SSE stream) and POST (messages)
         // This is the newer, recommended MCP transport
         app.all('/mcp', async (req: Request, res: Response) => {
-            const requestTimestamp = new Date().toISOString();
-            const requestId = Math.random().toString(36).substring(7);
-            console.log(`[StreamableHTTP][${requestId}][${requestTimestamp}] ${req.method} request received`);
-            // Log request body for debugging MCP protocol
-            if (req.body) {
-                const bodyPreview = JSON.stringify(req.body).substring(0, 500);
-                console.log(`[StreamableHTTP][${requestId}] Request body: ${bodyPreview}`);
-            }
-
             // Get or validate session ID from header
             const sessionId = req.headers['mcp-session-id'] as string | undefined;
-            console.log(`[StreamableHTTP][${requestId}] Session ID from header: ${sessionId || 'none'}`);
 
             // For existing sessions, route to the existing transport
             if (sessionId && streamableTransports.has(sessionId)) {
                 const transport = streamableTransports.get(sessionId)!;
-                console.log(`[StreamableHTTP] Routing to existing session: ${sessionId}`);
                 try {
                     // Pass parsed body to handleRequest - required for SDK to properly parse the message
                     await transport.handleRequest(req, res, req.body);
-                    console.log(`[StreamableHTTP] Existing session request completed, status: ${res.statusCode}`);
                 } catch (error) {
-                    console.error(`[StreamableHTTP] Error handling request on existing session:`, error);
+                    console.error(`[StreamableHTTP] Error on session ${sessionId}:`, error);
                     if (!res.headersSent) {
                         res.status(500).json({ error: 'Internal server error' });
                     }
@@ -1186,16 +1131,10 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 return;
             }
 
-            // If session ID was provided but doesn't exist, log this (stale session from previous server run?)
-            if (sessionId) {
-                console.log(`[StreamableHTTP] Unknown session ID: ${sessionId} (may be stale from previous server run)`);
-            }
-
             // For new sessions (no session ID or unknown session ID with initialization request)
             // We need to authenticate and create a new transport
             const authResult = await authenticateRequestWithResult(req);
             if (!authResult.authenticated) {
-                console.log(`[StreamableHTTP] Authentication failed: ${authResult.error?.message}`);
                 sendAuthErrorResponse(res, authResult);
                 return;
             }
@@ -1203,8 +1142,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             const sessionContext = toSessionContext(authResult);
 
             try {
-                console.log(`[StreamableHTTP] Authenticated user: ${sessionContext.user.Email}`);
-
                 // Create a new MCP server for this session
                 const mcpServer = new McpServer({
                     name: "MemberJunction",
@@ -1213,55 +1150,32 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
                 // Register all tools with user-scoped context
                 await registerAllTools(mcpServer, sessionContext, systemUser);
-                console.log(`[StreamableHTTP] Tools registered for user: ${sessionContext.user.Email}`);
 
                 // Create Streamable HTTP transport with session ID generation
-                console.log(`[StreamableHTTP] Creating transport...`);
                 const transport = new StreamableHTTPServerTransport({
-                    sessionIdGenerator: () => {
-                        const id = randomUUID();
-                        console.log(`[StreamableHTTP] Generated session ID: ${id}`);
-                        return id;
-                    }
+                    sessionIdGenerator: () => randomUUID()
                 });
-                console.log(`[StreamableHTTP] Transport created`);
 
                 // Connect the server to the transport
-                console.log(`[StreamableHTTP] Connecting MCP server to transport...`);
                 await mcpServer.connect(transport);
-                console.log(`[StreamableHTTP] MCP server connected to transport`);
 
                 // Store for future requests (after first request establishes session)
                 transport.onclose = () => {
                     const sid = transport.sessionId;
                     if (sid) {
-                        console.log(`[StreamableHTTP] Session closed: ${sid}`);
                         streamableTransports.delete(sid);
                     }
                 };
 
                 // Handle the current request
                 // Pass the parsed body to help the SDK recognize the initialize request
-                console.log(`[StreamableHTTP] Handling request with parsed body...`);
-                try {
-                    await transport.handleRequest(req, res, req.body);
-                    console.log(`[StreamableHTTP] Request handled, sessionId: ${transport.sessionId}`);
-                    console.log(`[StreamableHTTP] Response status: ${res.statusCode}, headersSent: ${res.headersSent}`);
-                    // Log the response headers to verify mcp-session-id is being set
-                    const sessionIdHeader = res.getHeader('mcp-session-id');
-                    console.log(`[StreamableHTTP] Response mcp-session-id header: ${sessionIdHeader || 'NOT SET'}`);
-                } catch (handleError) {
-                    console.error(`[StreamableHTTP] Error in handleRequest:`, handleError);
-                    throw handleError;
-                }
+                await transport.handleRequest(req, res, req.body);
 
                 // Store the transport after successful request handling
                 const newSessionId = transport.sessionId;
                 if (newSessionId) {
                     streamableTransports.set(newSessionId, transport);
-                    console.log(`[StreamableHTTP] New session created: ${newSessionId}`);
-                } else {
-                    console.log(`[StreamableHTTP] No session ID assigned after request`);
+                    console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
                 }
 
             } catch (error) {
