@@ -149,7 +149,6 @@ const advancedGenerationFeatureOptionSchema = z.object({
   value: z.unknown(),
 });
 
-
 /**
  * Configuration for an AI-powered advanced generation feature
  */
