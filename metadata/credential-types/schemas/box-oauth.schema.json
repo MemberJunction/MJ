@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "clientId": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "Box application client ID from the Box Developer Console",
+      "isSecret": false,
+      "order": 0
+    },
+    "clientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "Box application client secret from the Box Developer Console",
+      "isSecret": true,
+      "order": 1
+    },
+    "refreshToken": {
+      "type": "string",
+      "title": "Refresh Token",
+      "description": "OAuth2 refresh token for long-term access (recommended). Box issues new refresh tokens on each token refresh.",
+      "isSecret": true,
+      "order": 2
+    },
+    "accessToken": {
+      "type": "string",
+      "title": "Access Token",
+      "description": "OAuth2 access token for temporary direct access (short-lived, not recommended for production)",
+      "isSecret": true,
+      "order": 3
+    },
+    "enterpriseId": {
+      "type": "string",
+      "title": "Enterprise ID",
+      "description": "Box enterprise ID for client credentials grant authentication (required for service account access)",
+      "isSecret": false,
+      "order": 4
+    },
+    "boxSubjectType": {
+      "type": "string",
+      "title": "Subject Type",
+      "description": "Type of subject to authenticate as (enterprise or user). Used with client credentials grant.",
+      "enum": ["enterprise", "user"],
+      "isSecret": false,
+      "order": 5
+    },
+    "boxSubjectId": {
+      "type": "string",
+      "title": "Subject ID",
+      "description": "Enterprise ID or User ID to authenticate as. Used with client credentials grant for 'act as' functionality.",
+      "isSecret": false,
+      "order": 6
+    },
+    "rootFolderId": {
+      "type": "string",
+      "title": "Root Folder ID",
+      "description": "Optional Box folder ID to restrict access to a specific folder. Defaults to '0' (root).",
+      "isSecret": false,
+      "order": 7,
+      "default": "0"
+    }
+  },
+  "required": ["clientId", "clientSecret"]
+}
