@@ -16,26 +16,34 @@
       "isSecret": true,
       "order": 1
     },
+    "tokenUrl": {
+      "type": "string",
+      "title": "Token URL",
+      "description": "OAuth2 token endpoint URL for Box.com",
+      "const": "https://api.box.com/oauth2/token",
+      "isSecret": false,
+      "order": 2
+    },
     "refreshToken": {
       "type": "string",
       "title": "Refresh Token",
       "description": "OAuth2 refresh token for long-term access (recommended). Box issues new refresh tokens on each token refresh.",
       "isSecret": true,
-      "order": 2
+      "order": 3
     },
     "accessToken": {
       "type": "string",
       "title": "Access Token",
       "description": "OAuth2 access token for temporary direct access (short-lived, not recommended for production)",
       "isSecret": true,
-      "order": 3
+      "order": 4
     },
     "enterpriseId": {
       "type": "string",
       "title": "Enterprise ID",
       "description": "Box enterprise ID for client credentials grant authentication (required for service account access)",
       "isSecret": false,
-      "order": 4
+      "order": 5
     },
     "boxSubjectType": {
       "type": "string",
@@ -43,23 +51,23 @@
       "description": "Type of subject to authenticate as (enterprise or user). Used with client credentials grant.",
       "enum": ["enterprise", "user"],
       "isSecret": false,
-      "order": 5
+      "order": 6
     },
     "boxSubjectId": {
       "type": "string",
       "title": "Subject ID",
       "description": "Enterprise ID or User ID to authenticate as. Used with client credentials grant for 'act as' functionality.",
       "isSecret": false,
-      "order": 6
+      "order": 7
     },
     "rootFolderId": {
       "type": "string",
       "title": "Root Folder ID",
       "description": "Optional Box folder ID to restrict access to a specific folder. Defaults to '0' (root).",
       "isSecret": false,
-      "order": 7,
+      "order": 8,
       "default": "0"
     }
   },
-  "required": ["clientId", "clientSecret"]
+  "required": ["clientId", "clientSecret", "tokenUrl"]
 }
