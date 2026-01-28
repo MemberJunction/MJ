@@ -1231,7 +1231,7 @@ ${whereClause}GO${permissions}
             // This generates the JOIN clause; the actual field aliases are added separately in generateBaseViewFields()
             if (ef.RelatedEntityID && ef._RelatedEntityJoinFieldMappings && ef._RelatedEntityJoinFieldMappings.length > 0 && ef._RelatedEntityTableAlias) {
                 sOutput += sOutput == '' ? '' : '\n';
-                sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER'} JOIN\n    ${'[' + ef.RelatedEntitySchemaName + '].'}[${ef._RelatedEntityNameFieldIsVirtual ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable}] AS ${ef._RelatedEntityTableAlias}\n  ON\n    [${classNameFirstChar}].[${ef.Name}] = ${ef._RelatedEntityTableAlias}.[${ef.RelatedEntityFieldName}]`;
+                sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER' } JOIN\n    ${'[' + ef.RelatedEntitySchemaName + '].'}[${ef._RelatedEntityNameFieldIsVirtual ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable}] AS ${ef._RelatedEntityTableAlias}\n  ON\n    [${classNameFirstChar}].[${ef.Name}] = ${ef._RelatedEntityTableAlias}.[${ef.RelatedEntityFieldName}]`;
             }
         }
         return sOutput;
