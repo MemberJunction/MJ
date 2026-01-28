@@ -497,9 +497,16 @@ export class SQLCodeGenBase {
                   description.toLowerCase().includes('spdelete')))
             );
             
+            // Check if entity has RelatedEntityJoinFields configured (requires view regeneration for metadata-only changes)
+            const hasRelatedEntityJoinFields = description.toLowerCase().includes('base view') &&
+                entity.Fields.some(f => f.RelatedEntityJoinFieldsConfig !== null);
+
             // Determine if we should log based on entity state and force regeneration settings
             if (isNewOrModified) {
                 // Always log new or modified entities
+                shouldLog = true;
+            } else if (hasRelatedEntityJoinFields) {
+                // Always regenerate base views for entities with RelatedEntityJoinFields configuration
                 shouldLog = true;
             } else if (isCascadeDependencyRegeneration) {
                 // Always log cascade dependency regenerations
@@ -519,7 +526,6 @@ export class SQLCodeGenBase {
         
         if (shouldLog) {
             SQLLogging.appendToSQLLogFile(sql, description);
-            // Also write to temp batch file for actual execution (matches CodeGen log order)
             TempBatchFile.appendToTempBatchFile(sql, entity.SchemaName);
         }
 
@@ -1218,7 +1224,12 @@ ${whereClause}GO${permissions}
         const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
         for (let i: number = 0; i < entityFields.length; i++) {
             const ef: EntityFieldInfo = entityFields[i];
-            if (ef.RelatedEntityID && ef.IncludeRelatedEntityNameFieldInBaseView && ef._RelatedEntityTableAlias) {
+            // Generate SQL JOIN for related entities that have configured join fields
+            // _RelatedEntityJoinFieldMappings is populated during field analysis if:
+            // - IncludeRelatedEntityNameFieldInBaseView is true (legacy), OR
+            // - RelatedEntityJoinFieldsConfig specifies fields to join
+            // This generates the JOIN clause; the actual field aliases are added separately in generateBaseViewFields()
+            if (ef.RelatedEntityID && ef._RelatedEntityJoinFieldMappings && ef._RelatedEntityJoinFieldMappings.length > 0 && ef._RelatedEntityTableAlias) {
                 sOutput += sOutput == '' ? '' : '\n';
                 sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER' } JOIN\n    ${'[' + ef.RelatedEntitySchemaName + '].'}[${ef._RelatedEntityNameFieldIsVirtual ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable}] AS ${ef._RelatedEntityTableAlias}\n  ON\n    [${classNameFirstChar}].[${ef.Name}] = ${ef._RelatedEntityTableAlias}.[${ef.RelatedEntityFieldName}]`;
             }
@@ -1230,50 +1241,122 @@ ${whereClause}GO${permissions}
         let sOutput: string = '';
         let fieldCount: number = 0;
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
+        const md = new Metadata();
+        const allGeneratedAliases: string[] = [];
 
-        // next get the fields that are related entities and have the IncludeRelatedEntityNameFieldInBaseView flag set to true
-        const qualifyingFields = entityFields.filter(f => f.RelatedEntityID && f.IncludeRelatedEntityNameFieldInBaseView);
+        // Get fields that are related entities with join field configuration.
+        //
+        // BACKWARD COMPATIBILITY LOGIC:
+        // This handles two cases:
+        // 1. Legacy behavior: IncludeRelatedEntityNameFieldInBaseView=true, no RelatedEntityJoinFieldsConfig
+        //    → Automatically defaults to { mode: 'extend' } and joins the related entity's NameField (as before)
+        // 2. New behavior: RelatedEntityJoinFieldsConfig specified
+        //    → Can 'extend' the NameField with additional fields, 'override' it completely, or 'disable' joins
+        //
+        // Result: _RelatedEntityJoinFieldMappings is populated with all fields to be joined from the related entity.
+        //         If both old and new configs are set, they work together (new fields extend or replace the NameField).
+        const qualifyingFields = entityFields.filter(f => f.RelatedEntityID && (f.IncludeRelatedEntityNameFieldInBaseView || f.RelatedEntityJoinFieldsConfig));
         for (const ef of qualifyingFields) {
-            const {nameField, nameFieldIsVirtual} = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
-            if (nameField !== '') {
-                // only add to the output, if we found a name field for the related entity.
+            const config = ef.RelatedEntityJoinFieldsConfig || { mode: 'extend' };
+            if (config.mode === 'disable') {
+                continue;
+            }
+
+            ef._RelatedEntityJoinFieldMappings = [];
+            let anyFieldIsVirtual = false;
+
+            // 1. Handle NameField (if not overridden)
+            // In 'extend' mode: include the NameField (backward compatible with IncludeRelatedEntityNameFieldInBaseView)
+            // In 'override' mode: skip the NameField, only use explicitly configured fields
+            if (config.mode !== 'override' && ef.IncludeRelatedEntityNameFieldInBaseView) {
+                const { nameField, nameFieldIsVirtual } = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
+                if (nameField !== '') {
+                    // only add to the output, if we found a name field for the related entity.
+                    ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
+
+                    // This next section generates a field name for the new virtual field and makes sure it doesn't collide with a field in the base table
+                    const candidateName = this.stripID(ef.Name);
+
+                    // Skip if candidateName is empty (e.g., field named exactly "ID")
+                    // This happens in table-per-type inheritance where child.ID is FK to parent.ID
+                    // stripID("ID") returns "" which would generate invalid SQL: AS []
+                    if (candidateName.trim().length === 0) {
+                        logStatus(`  Skipping related entity name field for ${ef.Name} in entity - stripID returned empty string (likely inheritance pattern)`);
+                    }
+                    else {
+                        // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating)
+                        // because if it is, we need to change it to something else
+                        const bFound = entityFields.find(f => f.IsVirtual === false && f.Name.trim().toLowerCase() === candidateName.trim().toLowerCase()) !== undefined ||
+                            allGeneratedAliases.some(a => a.toLowerCase() === candidateName.trim().toLowerCase());
+                        const safeAlias = bFound ? candidateName + '_Virtual' : candidateName;
+
+                        ef._RelatedEntityNameFieldMap = safeAlias;
+                        ef._RelatedEntityJoinFieldMappings.push({
+                            sourceField: nameField,
+                            alias: safeAlias,
+                            isVirtual: nameFieldIsVirtual
+                        });
+                        allGeneratedAliases.push(safeAlias);
+                        if (nameFieldIsVirtual) anyFieldIsVirtual = true;
+
+                        // check to see if the database already knows about the RelatedEntityNameFieldMap or not
+                        if (ef.RelatedEntityNameFieldMap === null ||
+                            ef.RelatedEntityNameFieldMap === undefined ||
+                            ef.RelatedEntityNameFieldMap.trim().length === 0) {
+                            // the database doesn't yet know about this RelatedEntityNameFieldMap, so we need to update it
+                            // first update the actul field in the metadata object so it can be used from this point forward
+                            // and it also reflects what the DB will hold
+                            ef.RelatedEntityNameFieldMap = ef._RelatedEntityNameFieldMap;
+                            // then update the database itself
+                            await manageMD.updateEntityFieldRelatedEntityNameFieldMap(pool, ef.ID, ef.RelatedEntityNameFieldMap);
+                        }
+                    }
+                }
+            }
+
+            // 2. Handle configured additional fields
+            if (config.fields && config.fields.length > 0) {
+                const currentEntity = md.Entities.find(e => e.ID === ef.EntityID);
+                for (const fieldConfig of config.fields) {
+                    const fieldName = fieldConfig.field;
+                    const alias = fieldConfig.alias || this.generateDefaultAlias(ef.Name, fieldName);
+
+                    // Validate field exists on related entity
+                    if (!this.validateFieldExists(ef.RelatedEntity, fieldName)) {
+                        logError(`RelatedEntityJoinFields: Field '${fieldName}' not found on entity '${ef.RelatedEntity}' (FK: ${ef.Name})`);
+                        continue;
+                    }
+
+                    // Check for alias collisions
+                    if (currentEntity && this.hasAliasCollision(currentEntity, alias, allGeneratedAliases)) {
+                        logError(`RelatedEntityJoinFields: Alias '${alias}' for field '${fieldName}' would collide with an existing field or alias in entity '${currentEntity.Name}'`);
+                        continue;
+                    }
+
+                    // Get field metadata from related entity to check if virtual
+                    const relatedEntity = md.Entities.find(e => e.Name === ef.RelatedEntity);
+                    const relatedField = relatedEntity?.Fields.find(f => f.Name.toLowerCase() === fieldName.toLowerCase());
+                    const isVirtual = relatedField?.IsVirtual || false;
+
+                    ef._RelatedEntityJoinFieldMappings.push({
+                        sourceField: fieldName,
+                        alias: alias,
+                        isVirtual: isVirtual
+                    });
+                    allGeneratedAliases.push(alias);
+                    if (isVirtual) anyFieldIsVirtual = true;
+                }
+            }
+
+            // 3. Generate SQL for the mappings
+            if (ef._RelatedEntityJoinFieldMappings.length > 0) {
                 ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
-                ef._RelatedEntityNameFieldIsVirtual = nameFieldIsVirtual;
+                ef._RelatedEntityNameFieldIsVirtual = anyFieldIsVirtual;
 
-                // This next section generates a field name for the new virtual field and makes sure it doesn't collide with a field in the base table
-                const candidateName = this.stripID(ef.Name);
-
-                // Skip if candidateName is empty (e.g., field named exactly "ID")
-                // This happens in table-per-type inheritance where child.ID is FK to parent.ID
-                // stripID("ID") returns "" which would generate invalid SQL: AS []
-                if (candidateName.trim().length === 0) {
-                    logStatus(`  Skipping related entity name field for ${ef.Name} in entity - stripID returned empty string (likely inheritance pattern)`);
-                    continue; // Skip this field entirely - no valid alias can be generated
+                for (const mapping of ef._RelatedEntityJoinFieldMappings) {
+                    sOutput += `${fieldCount === 0 ? '' : ','}\n    ${ef._RelatedEntityTableAlias}.[${mapping.sourceField}] AS [${mapping.alias}]`;
+                    fieldCount++;
                 }
-
-                // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating)
-                // because if it is, we need to change it to something else
-                const bFound = entityFields.find(f => f.IsVirtual === false && f.Name.trim().toLowerCase() === candidateName.trim().toLowerCase()) !== undefined;
-                if (bFound)
-                    ef._RelatedEntityNameFieldMap = candidateName + '_Virtual';
-                else
-                    ef._RelatedEntityNameFieldMap = candidateName;
-
-                // now we have a safe field name alias for the new virtual field in the _RelatedEntityNameFieldMap property, so use it...
-                sOutput += `${fieldCount === 0 ? '' : ','}\n    ${ef._RelatedEntityTableAlias}.[${nameField}] AS [${ef._RelatedEntityNameFieldMap}]`;
-
-                // check to see if the database already knows about the RelatedEntityNameFieldMap or not
-                if (ef.RelatedEntityNameFieldMap === null ||
-                    ef.RelatedEntityNameFieldMap === undefined ||
-                    ef.RelatedEntityNameFieldMap.trim().length === 0) {
-                    // the database doesn't yet know about this RelatedEntityNameFieldMap, so we need to update it
-                    // first update the actul field in the metadata object so it can be used from this point forward
-                    // and it also reflects what the DB will hold
-                    ef.RelatedEntityNameFieldMap = ef._RelatedEntityNameFieldMap;
-                    // then update the database itself
-                    await manageMD.updateEntityFieldRelatedEntityNameFieldMap(pool, ef.ID, ef.RelatedEntityNameFieldMap);
-                }
-                fieldCount++;
             }
         }
         return sOutput;
@@ -1298,6 +1381,35 @@ ${whereClause}GO${permissions}
             return name.substring(0, name.length - 2);
         else
             return name;
+    }
+
+    protected generateDefaultAlias(fkFieldName: string, relatedFieldName: string): string {
+        const baseName = this.stripID(fkFieldName);
+        if (baseName.toLowerCase() === relatedFieldName.toLowerCase()) {
+            return baseName;
+        }
+        return baseName + relatedFieldName;
+    }
+
+    protected validateFieldExists(entityName: string, fieldName: string): boolean {
+        const md = new Metadata();
+        const entity = md.Entities.find(e => e.Name === entityName);
+        if (!entity) return false;
+        return entity.Fields.some(f => f.Name.toLowerCase() === fieldName.toLowerCase());
+    }
+
+    protected hasAliasCollision(entity: EntityInfo, alias: string, generatedAliases: string[]): boolean {
+        // Check against existing fields in the entity (non-virtual fields first)
+        if (entity.Fields.some(f => !f.IsVirtual && f.Name.toLowerCase() === alias.toLowerCase())) return true;
+
+        // Check against other generated aliases in this view
+        if (generatedAliases.some(a => a.toLowerCase() === alias.toLowerCase())) return true;
+
+        // Check against system fields
+        const systemFields = ['__mj_CreatedAt', '__mj_UpdatedAt', EntityInfo.DeletedAtFieldName];
+        if (systemFields.some(sf => sf?.toLowerCase() === alias.toLowerCase())) return true;
+
+        return false;
     }
 
 
