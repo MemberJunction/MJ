@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { CredentialTypeEditPanelComponent } from './credential-type-edit-panel.component';
+import { CredentialTypeEditPanelComponent } from '@memberjunction/ng-credentials';
 
 export function LoadCredentialsTypesResource() {
     // Prevents tree-shaking

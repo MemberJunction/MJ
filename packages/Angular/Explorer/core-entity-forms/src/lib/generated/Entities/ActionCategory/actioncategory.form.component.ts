@@ -19,7 +19,8 @@ export class ActionCategoryFormComponent extends BaseFormComponent {
             { sectionKey: 'hierarchyInformation', sectionName: 'Hierarchy Information', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'actionCategories', sectionName: 'Action Categories', isExpanded: false },
-            { sectionKey: 'actions', sectionName: 'Actions', isExpanded: false }
+            { sectionKey: 'actions', sectionName: 'Actions', isExpanded: false },
+            { sectionKey: 'mJMCPServerTools', sectionName: 'MJ: MCP Server Tools', isExpanded: false }
         ]);
     }
 }

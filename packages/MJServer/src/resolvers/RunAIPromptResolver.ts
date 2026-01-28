@@ -305,6 +305,9 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('rerunFromPromptRunID', { nullable: true }) rerunFromPromptRunID?: string,
         @Arg('systemPromptOverride', { nullable: true }) systemPromptOverride?: string
     ): Promise<AIPromptRunResult> {
+        // Check API key scope authorization for prompt execution
+        await this.CheckAPIKeyScopeAuthorization('prompt:execute', promptId, userPayload);
+
         const p = GetReadWriteProvider(providers);
         return this.executeAIPrompt(
             p,
@@ -589,8 +592,11 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('modelPower', { nullable: true }) modelPower?: string,
         @Arg('responseFormat', { nullable: true }) responseFormat?: string
     ): Promise<SimplePromptResult> {
+        // Check API key scope authorization for simple prompt execution
+        await this.CheckAPIKeyScopeAuthorization('prompt:execute', '*', userPayload);
+
         const startTime = Date.now();
-        
+
         try {
             LogStatus(`=== EXECUTING SIMPLE PROMPT ===`);
             
@@ -699,6 +705,9 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('modelSize') modelSize: string,
         @Ctx() { userPayload }: { userPayload: UserPayload }
     ): Promise<EmbedTextResult> {
+        // Check API key scope authorization for embedding generation
+        await this.CheckAPIKeyScopeAuthorization('embedding:generate', '*', userPayload);
+
         try {
             LogStatus(`=== GENERATING EMBEDDINGS for ${textToEmbed.length} text(s) ===`);
             
