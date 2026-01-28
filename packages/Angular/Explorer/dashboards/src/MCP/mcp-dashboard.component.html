@@ -129,6 +129,36 @@
                             <option value="Active">Active</option>
                             <option value="Deprecated">Deprecated</option>
                         </select>
+                        <!-- View Mode Toggle -->
+                        <div class="view-toggle">
+                            <button kendoButton
+                                    fillMode="flat"
+                                    [class.active]="ToolsViewMode === 'card'"
+                                    (click)="setToolsViewMode('card')"
+                                    title="Card View">
+                                <i class="fa-solid fa-grip"></i>
+                            </button>
+                            <button kendoButton
+                                    fillMode="flat"
+                                    [class.active]="ToolsViewMode === 'list'"
+                                    (click)="setToolsViewMode('list')"
+                                    title="List View">
+                                <i class="fa-solid fa-list"></i>
+                            </button>
+                        </div>
+                        <!-- Sort Dropdown -->
+                        <select class="status-filter"
+                                [(ngModel)]="ToolsSortBy"
+                                (ngModelChange)="setToolsSort($event)">
+                            <option value="server">Sort by Server</option>
+                            <option value="name">Sort by Name</option>
+                            <option value="discovered">Sort by Discovered</option>
+                            <option value="lastSeen">Sort by Last Seen</option>
+                        </select>
+                        <button kendoButton themeColor="primary" (click)="openTestToolDialog()">
+                            <i class="fa-solid fa-play"></i>
+                            Test Tool
+                        </button>
                     }
                     @case ('logs') {
                         <select class="status-filter"
@@ -329,47 +359,185 @@
 
                     <!-- Tools Tab -->
                     @case ('tools') {
-                        <div class="data-table">
-                            @if (filteredTools.length === 0) {
-                                <div class="empty-state">
-                                    <i class="fa-solid fa-wrench"></i>
-                                    <p>No tools discovered yet</p>
-                                    <span class="hint">Tools are discovered when connections sync with MCP servers</span>
-                                </div>
-                            } @else {
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Tool Name</th>
-                                            <th>Title</th>
-                                            <th>Server</th>
-                                            <th>Status</th>
-                                            <th>Discovered</th>
-                                            <th>Last Seen</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @for (tool of filteredTools; track tool.ID) {
-                                            <tr (click)="viewToolDetails(tool)">
-                                                <td class="tool-name">
-                                                    <i class="fa-solid fa-wrench"></i>
-                                                    {{ tool.ToolName }}
-                                                </td>
-                                                <td>{{ tool.ToolTitle || '-' }}</td>
-                                                <td>{{ tool.ServerName }}</td>
-                                                <td>
-                                                    <span class="status-badge" [ngClass]="getStatusClass(tool.Status)">
-                                                        {{ tool.Status }}
-                                                    </span>
-                                                </td>
-                                                <td>{{ formatDate(tool.DiscoveredAt) }}</td>
-                                                <td>{{ formatDate(tool.LastSeenAt) }}</td>
-                                            </tr>
+                        @if (ServerGroups.length === 0) {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-wrench"></i>
+                                <p>No tools discovered yet</p>
+                                <span class="hint">Tools are discovered when connections sync with MCP servers</span>
+                            </div>
+                        } @else {
+                            <div class="tools-container">
+                                <!-- Server Groups -->
+                                @for (group of ServerGroups; track group.server.ID) {
+                                    <div class="server-group" [class.collapsed]="!group.expanded">
+                                        <!-- Server Group Header -->
+                                        <div class="server-group-header" (click)="toggleServerGroup(group)">
+                                            <div class="server-info">
+                                                <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="group.expanded"></i>
+                                                <i [class]="getTransportIcon(group.server.TransportType)"></i>
+                                                <span class="server-name">{{ group.server.Name }}</span>
+                                                <span class="tool-count">{{ group.tools.length }} tools</span>
+                                                <span class="status-badge small" [ngClass]="getStatusClass(group.server.Status)">
+                                                    {{ group.server.Status }}
+                                                </span>
+                                            </div>
+                                            <div class="server-actions" (click)="$event.stopPropagation()">
+                                                <button kendoButton fillMode="flat" (click)="openTestToolDialog(undefined, undefined)" title="Test a tool">
+                                                    <i class="fa-solid fa-play"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Tools Content -->
+                                        @if (group.expanded) {
+                                            <!-- Card View -->
+                                            @if (ToolsViewMode === 'card') {
+                                                <div class="tools-grid">
+                                                    @for (tool of group.tools; track tool.ID) {
+                                                        <div class="tool-card" [class.expanded]="isToolExpanded(tool)">
+                                                            <div class="tool-card-header" (click)="toggleToolExpand(tool)">
+                                                                <div class="tool-title">
+                                                                    <i class="fa-solid fa-wrench"></i>
+                                                                    <span class="name">{{ tool.ToolTitle || tool.ToolName }}</span>
+                                                                </div>
+                                                                <div class="tool-meta">
+                                                                    <span class="param-badge" title="Parameters">
+                                                                        <i class="fa-solid fa-sliders"></i>
+                                                                        {{ getParamCount(tool) }}
+                                                                    </span>
+                                                                    <span class="status-badge small" [ngClass]="getStatusClass(tool.Status)">
+                                                                        {{ tool.Status }}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            @if (tool.ToolDescription) {
+                                                                <p class="tool-description">{{ tool.ToolDescription }}</p>
+                                                            }
+                                                            <div class="tool-card-actions">
+                                                                <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test this tool">
+                                                                    <i class="fa-solid fa-play"></i>
+                                                                    Test
+                                                                </button>
+                                                                <button kendoButton fillMode="flat" size="small" (click)="toggleToolExpand(tool)" title="View details">
+                                                                    <i class="fa-solid" [class.fa-chevron-down]="!isToolExpanded(tool)" [class.fa-chevron-up]="isToolExpanded(tool)"></i>
+                                                                    {{ isToolExpanded(tool) ? 'Less' : 'More' }}
+                                                                </button>
+                                                            </div>
+                                                            <!-- Expanded Details -->
+                                                            @if (isToolExpanded(tool)) {
+                                                                <div class="tool-details">
+                                                                    <div class="detail-row">
+                                                                        <span class="detail-label">Tool Name:</span>
+                                                                        <span class="detail-value mono">{{ tool.ToolName }}</span>
+                                                                    </div>
+                                                                    <div class="detail-row">
+                                                                        <span class="detail-label">Parameters:</span>
+                                                                        <span class="detail-value">
+                                                                            {{ getParamCount(tool) }} total, {{ getRequiredParamCount(tool) }} required
+                                                                        </span>
+                                                                    </div>
+                                                                    <div class="detail-row">
+                                                                        <span class="detail-label">Discovered:</span>
+                                                                        <span class="detail-value">{{ formatDate(tool.DiscoveredAt) }}</span>
+                                                                    </div>
+                                                                    <div class="detail-row">
+                                                                        <span class="detail-label">Last Seen:</span>
+                                                                        <span class="detail-value">{{ formatDate(tool.LastSeenAt) }}</span>
+                                                                    </div>
+                                                                    @if (tool.InputSchema) {
+                                                                        <div class="detail-row full">
+                                                                            <span class="detail-label">Input Schema:</span>
+                                                                            <pre class="schema-preview">{{ getFormattedInputSchema(tool) }}</pre>
+                                                                        </div>
+                                                                    }
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            } @else {
+                                                <!-- List View -->
+                                                <div class="tools-list">
+                                                    <table>
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Tool</th>
+                                                                <th>Description</th>
+                                                                <th>Params</th>
+                                                                <th>Status</th>
+                                                                <th>Last Seen</th>
+                                                                <th>Actions</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @for (tool of group.tools; track tool.ID) {
+                                                                <tr [class.expanded]="isToolExpanded(tool)">
+                                                                    <td class="tool-name-cell">
+                                                                        <i class="fa-solid fa-wrench"></i>
+                                                                        <div class="tool-name-info">
+                                                                            <span class="tool-title">{{ tool.ToolTitle || tool.ToolName }}</span>
+                                                                            @if (tool.ToolTitle) {
+                                                                                <span class="tool-code">{{ tool.ToolName }}</span>
+                                                                            }
+                                                                        </div>
+                                                                    </td>
+                                                                    <td class="description-cell">
+                                                                        {{ tool.ToolDescription || '-' }}
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="param-count">{{ getParamCount(tool) }}</span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="status-badge small" [ngClass]="getStatusClass(tool.Status)">
+                                                                            {{ tool.Status }}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td>{{ formatDate(tool.LastSeenAt) }}</td>
+                                                                    <td class="actions-cell">
+                                                                        <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test">
+                                                                            <i class="fa-solid fa-play"></i>
+                                                                        </button>
+                                                                        <button kendoButton fillMode="flat" size="small" (click)="toggleToolExpand(tool)" title="Details">
+                                                                            <i class="fa-solid" [class.fa-chevron-down]="!isToolExpanded(tool)" [class.fa-chevron-up]="isToolExpanded(tool)"></i>
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                                @if (isToolExpanded(tool)) {
+                                                                    <tr class="detail-row-expanded">
+                                                                        <td colspan="6">
+                                                                            <div class="inline-details">
+                                                                                <div class="detail-section">
+                                                                                    <span class="detail-label">Tool Name:</span>
+                                                                                    <span class="detail-value mono">{{ tool.ToolName }}</span>
+                                                                                </div>
+                                                                                <div class="detail-section">
+                                                                                    <span class="detail-label">Discovered:</span>
+                                                                                    <span class="detail-value">{{ formatDate(tool.DiscoveredAt) }}</span>
+                                                                                </div>
+                                                                                <div class="detail-section">
+                                                                                    <span class="detail-label">Required Params:</span>
+                                                                                    <span class="detail-value">{{ getRequiredParamCount(tool) }}</span>
+                                                                                </div>
+                                                                                @if (tool.InputSchema) {
+                                                                                    <div class="detail-section full">
+                                                                                        <span class="detail-label">Input Schema:</span>
+                                                                                        <pre class="schema-preview">{{ getFormattedInputSchema(tool) }}</pre>
+                                                                                    </div>
+                                                                                }
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            }
                                         }
-                                    </tbody>
-                                </table>
-                            }
-                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
                     }
 
                     <!-- Logs Tab -->
@@ -449,4 +617,18 @@
         [visible]="ShowConnectionDialog"
         (close)="onConnectionDialogClose($event)">
     </mj-mcp-connection-dialog>
+}
+
+<!-- Test Tool Dialog -->
+@if (ShowTestToolDialog) {
+    <mj-mcp-test-tool-dialog
+        [Visible]="ShowTestToolDialog"
+        [Servers]="servers"
+        [Connections]="connections"
+        [Tools]="tools"
+        [SelectedServerID]="TestToolServerID"
+        [SelectedConnectionID]="TestToolConnectionID"
+        [SelectedToolID]="TestToolID"
+        (Close)="onTestToolDialogClose()">
+    </mj-mcp-test-tool-dialog>
 }

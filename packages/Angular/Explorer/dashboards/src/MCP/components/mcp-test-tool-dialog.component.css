@@ -1,0 +1,512 @@
+/* MCP Test Tool Dialog Styles */
+
+/* ========================================
+   Step Indicator
+   ======================================== */
+.step-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 24px;
+    background: #fafafa;
+    border-bottom: 1px solid #e0e0e0;
+    margin: -16px -16px 16px -16px;
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+}
+
+.step.active,
+.step.completed {
+    opacity: 1;
+}
+
+.step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #e0e0e0;
+    color: #666;
+    font-weight: 600;
+    font-size: 13px;
+    transition: all 0.2s ease;
+}
+
+.step.active .step-number {
+    background: var(--mj-primary-color, #2196f3);
+    color: white;
+}
+
+.step.completed .step-number {
+    background: #4caf50;
+    color: white;
+}
+
+.step-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--mj-text-color, #333);
+}
+
+.step-connector {
+    width: 60px;
+    height: 2px;
+    background: #e0e0e0;
+    margin: 0 12px;
+    transition: background 0.2s ease;
+}
+
+.step-connector.completed {
+    background: #4caf50;
+}
+
+/* ========================================
+   Dialog Content
+   ======================================== */
+.dialog-content {
+    padding: 8px 0;
+    min-height: 300px;
+}
+
+/* ========================================
+   Selection Form (Step 1)
+   ======================================== */
+.selection-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--mj-text-color, #333);
+}
+
+.form-label i {
+    color: var(--mj-primary-color, #2196f3);
+    font-size: 14px;
+}
+
+.required {
+    color: #f44336;
+    font-weight: 600;
+}
+
+.field-hint {
+    font-size: 12px;
+    color: var(--mj-text-secondary-color, #666);
+    font-style: italic;
+}
+
+/* Dropdown Item Styling */
+.dropdown-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 0;
+}
+
+.dropdown-item.tool-item {
+    max-width: 100%;
+}
+
+.item-name {
+    font-weight: 500;
+    color: var(--mj-text-color, #333);
+}
+
+.item-description {
+    font-size: 12px;
+    color: var(--mj-text-secondary-color, #666);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 400px;
+}
+
+.item-status {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.item-status.status-active {
+    color: #4caf50;
+}
+
+.item-status.status-inactive {
+    color: #9e9e9e;
+}
+
+/* ========================================
+   Tool Header (Step 2)
+   ======================================== */
+.tool-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.08), rgba(33, 150, 243, 0.02));
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(33, 150, 243, 0.15);
+}
+
+.tool-info {
+    flex: 1;
+}
+
+.tool-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--mj-text-color, #333);
+}
+
+.tool-name i {
+    color: var(--mj-primary-color, #2196f3);
+}
+
+.tool-description {
+    margin: 0;
+    font-size: 13px;
+    color: var(--mj-text-secondary-color, #666);
+    line-height: 1.5;
+}
+
+.tool-context {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-end;
+}
+
+.context-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--mj-text-secondary-color, #666);
+}
+
+.context-item i {
+    font-size: 11px;
+    color: #999;
+}
+
+/* ========================================
+   Parameters Form (Step 2)
+   ======================================== */
+.no-params {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--mj-text-secondary-color, #666);
+}
+
+.no-params i {
+    font-size: 48px;
+    color: #4caf50;
+    margin-bottom: 16px;
+}
+
+.no-params p {
+    margin: 0;
+    font-size: 15px;
+}
+
+.params-title {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-secondary-color, #666);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.parameters-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.param-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    background: #fafafa;
+    border-radius: 6px;
+    border: 1px solid #e8e8e8;
+}
+
+.param-group.required {
+    border-left: 3px solid var(--mj-primary-color, #2196f3);
+}
+
+.param-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-color, #333);
+}
+
+.param-description {
+    margin: 0;
+    font-size: 12px;
+    color: var(--mj-text-secondary-color, #666);
+    line-height: 1.4;
+}
+
+.checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.checkbox-wrapper label {
+    font-size: 14px;
+    color: var(--mj-text-color, #333);
+    cursor: pointer;
+}
+
+.json-input,
+.text-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    resize: vertical;
+}
+
+.json-input:focus,
+.text-input:focus {
+    outline: none;
+    border-color: var(--mj-primary-color, #2196f3);
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+/* ========================================
+   Results (Step 3)
+   ======================================== */
+.results-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.result-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.result-header.success {
+    background: rgba(76, 175, 80, 0.1);
+    color: #388e3c;
+}
+
+.result-header.success i {
+    font-size: 24px;
+    color: #4caf50;
+}
+
+.result-header.error {
+    background: rgba(244, 67, 54, 0.1);
+    color: #c62828;
+}
+
+.result-header.error i {
+    font-size: 24px;
+    color: #f44336;
+}
+
+.result-status {
+    flex: 1;
+    font-size: 16px;
+}
+
+.duration {
+    font-size: 13px;
+    font-weight: normal;
+    color: var(--mj-text-secondary-color, #666);
+    background: rgba(0, 0, 0, 0.05);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.error-panel {
+    background: #fff5f5;
+    border: 1px solid rgba(244, 67, 54, 0.2);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.error-panel h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #c62828;
+}
+
+.error-message {
+    margin: 0;
+    padding: 12px;
+    background: white;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #c62828;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.result-panel {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.result-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #fafafa;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.result-panel-header h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 14px;
+    color: var(--mj-text-color, #333);
+}
+
+.result-content {
+    margin: 0;
+    padding: 16px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow: auto;
+    max-height: 300px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.result-content.json {
+    color: #388e3c;
+}
+
+.execution-info {
+    padding: 16px;
+    background: #fafafa;
+    border-radius: 8px;
+    border: 1px solid #e8e8e8;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+.info-row:not(:last-child) {
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.info-label {
+    color: var(--mj-text-secondary-color, #666);
+}
+
+.info-value {
+    font-weight: 500;
+    color: var(--mj-text-color, #333);
+}
+
+/* ========================================
+   Dialog Actions
+   ======================================== */
+::ng-deep .k-dialog-actions {
+    padding: 16px 20px !important;
+    border-top: 1px solid #e0e0e0;
+}
+
+::ng-deep .k-dialog-actions button {
+    min-width: 100px;
+}
+
+::ng-deep .k-dialog-actions button i {
+    margin-right: 6px;
+}
+
+/* ========================================
+   Responsive
+   ======================================== */
+@media (max-width: 600px) {
+    .step-indicator {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .step-connector {
+        display: none;
+    }
+
+    .tool-header {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .tool-context {
+        align-items: flex-start;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+}

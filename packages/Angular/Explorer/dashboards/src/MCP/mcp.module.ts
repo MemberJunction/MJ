@@ -24,6 +24,7 @@ import { MCPDashboardComponent, LoadMCPDashboard } from './mcp-dashboard.compone
 import { MCPResourceComponent, LoadMCPResource } from './mcp-resource.component';
 import { MCPServerDialogComponent, LoadMCPServerDialog } from './components/mcp-server-dialog.component';
 import { MCPConnectionDialogComponent, LoadMCPConnectionDialog } from './components/mcp-connection-dialog.component';
+import { MCPTestToolDialogComponent, LoadMCPTestToolDialog } from './components/mcp-test-tool-dialog.component';
 
 // MCP Services
 import { LoadMCPToolsService } from './services/mcp-tools.service';
@@ -33,7 +34,8 @@ import { LoadMCPToolsService } from './services/mcp-tools.service';
         MCPDashboardComponent,
         MCPResourceComponent,
         MCPServerDialogComponent,
-        MCPConnectionDialogComponent
+        MCPConnectionDialogComponent,
+        MCPTestToolDialogComponent
     ],
     imports: [
         CommonModule,
@@ -50,7 +52,8 @@ import { LoadMCPToolsService } from './services/mcp-tools.service';
         MCPDashboardComponent,
         MCPResourceComponent,
         MCPServerDialogComponent,
-        MCPConnectionDialogComponent
+        MCPConnectionDialogComponent,
+        MCPTestToolDialogComponent
     ]
 })
 export class MCPModule { }
@@ -63,5 +66,6 @@ export function LoadMCPModule(): void {
     LoadMCPResource();
     LoadMCPServerDialog();
     LoadMCPConnectionDialog();
+    LoadMCPTestToolDialog();
     LoadMCPToolsService();
 }

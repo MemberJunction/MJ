@@ -387,27 +387,38 @@ export class MCPClientManager {
         const startTime = Date.now();
         const { contextUser } = options;
 
+        LogStatus(`[MCPClient] callTool started for ${toolName} on connection ${connectionId}`);
+
         // Get active connection
         const connection = this.connections.get(connectionId);
         if (!connection) {
+            LogError(`[MCPClient] Not connected: ${connectionId}`);
             throw new Error(`Not connected: ${connectionId}`);
         }
+        LogStatus(`[MCPClient] [${toolName}] Got connection (${Date.now() - startTime}ms)`);
 
         // Check permissions
         if (!options.skipPermissionCheck) {
+            LogStatus(`[MCPClient] [${toolName}] Checking permissions...`);
             const hasPermission = await this.checkPermission(connectionId, contextUser, 'execute');
             if (!hasPermission) {
+                LogError(`[MCPClient] [${toolName}] Permission denied`);
                 throw new Error(`Permission denied for connection: ${connectionId}`);
             }
+            LogStatus(`[MCPClient] [${toolName}] Permission check passed (${Date.now() - startTime}ms)`);
         }
 
         // Get logging config
         const loggingConfig = this.getLoggingConfig(connection.connectionConfig);
+        LogStatus(`[MCPClient] [${toolName}] Got logging config (${Date.now() - startTime}ms)`);
 
         // Get tool ID for logging
+        LogStatus(`[MCPClient] [${toolName}] Getting tool ID...`);
         const toolId = await this.getToolId(connection.serverConfig.ID, toolName, contextUser);
+        LogStatus(`[MCPClient] [${toolName}] Got tool ID: ${toolId} (${Date.now() - startTime}ms)`);
 
         // Start logging
+        LogStatus(`[MCPClient] [${toolName}] Starting execution log...`);
         const logId = await this.logger.startLog(
             connectionId,
             toolId,
@@ -416,6 +427,7 @@ export class MCPClientManager {
             loggingConfig,
             contextUser
         );
+        LogStatus(`[MCPClient] [${toolName}] Execution log started: ${logId} (${Date.now() - startTime}ms)`);
 
         // Emit tool called event
         this.emitEvent({
@@ -429,9 +441,12 @@ export class MCPClientManager {
             // Acquire rate limit slot
             const rateLimiter = this.rateLimiters.get(connectionId);
             if (rateLimiter) {
+                LogStatus(`[MCPClient] [${toolName}] Acquiring rate limit slot...`);
                 try {
                     await rateLimiter.acquire();
+                    LogStatus(`[MCPClient] [${toolName}] Rate limit slot acquired (${Date.now() - startTime}ms)`);
                 } catch (rateLimitError) {
+                    LogError(`[MCPClient] [${toolName}] Rate limit exceeded: ${rateLimitError}`);
                     this.emitEvent({
                         type: 'rateLimitExceeded',
                         connectionId,
@@ -447,13 +462,18 @@ export class MCPClientManager {
 
             // Call the tool
             const client = connection.client as Client;
+            const timeout = toolOptions.timeout ?? connection.serverConfig.RequestTimeoutMs ?? MCPClientManager.DEFAULT_REQUEST_TIMEOUT;
+            LogStatus(`[MCPClient] [${toolName}] Calling MCP tool with timeout ${timeout}ms...`);
+            LogStatus(`[MCPClient] [${toolName}] Arguments: ${JSON.stringify(toolOptions.arguments).substring(0, 200)}`);
+
             const mcpResult = await client.callTool({
                 name: toolName,
                 arguments: toolOptions.arguments
             }, undefined, {
-                timeout: toolOptions.timeout ?? connection.serverConfig.RequestTimeoutMs ?? MCPClientManager.DEFAULT_REQUEST_TIMEOUT,
+                timeout,
                 signal: toolOptions.signal,
                 onprogress: toolOptions.onProgress ? (progress) => {
+                    LogStatus(`[MCPClient] [${toolName}] Progress: ${progress.progress}/${progress.total}`);
                     toolOptions.onProgress?.({
                         progress: progress.progress,
                         total: progress.total
@@ -461,11 +481,17 @@ export class MCPClientManager {
                 } : undefined
             }) as CallToolResult;
 
+            LogStatus(`[MCPClient] [${toolName}] MCP tool call returned (${Date.now() - startTime}ms)`);
+            LogStatus(`[MCPClient] [${toolName}] Result isError: ${mcpResult.isError}, content length: ${mcpResult.content?.length || 0}`);
+
             // Map result
             const result = this.mapToolCallResult(mcpResult, Date.now() - startTime);
+            LogStatus(`[MCPClient] [${toolName}] Result mapped (${Date.now() - startTime}ms)`);
 
             // Complete logging
+            LogStatus(`[MCPClient] [${toolName}] Completing execution log...`);
             await this.logger.completeLog(logId, result, loggingConfig, contextUser);
+            LogStatus(`[MCPClient] [${toolName}] Execution log completed (${Date.now() - startTime}ms)`);
 
             // Emit completion event
             this.emitEvent({
@@ -475,10 +501,15 @@ export class MCPClientManager {
                 data: { toolName, success: result.success, durationMs: result.durationMs }
             });
 
+            LogStatus(`[MCPClient] [${toolName}] callTool completed successfully (${Date.now() - startTime}ms)`);
             return result;
 
         } catch (error) {
             const durationMs = Date.now() - startTime;
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            const stack = error instanceof Error ? error.stack : '';
+            LogError(`[MCPClient] [${toolName}] Error after ${durationMs}ms: ${errorMsg}`);
+            LogError(`[MCPClient] [${toolName}] Stack: ${stack}`);
 
             // Fail logging
             await this.logger.failLog(logId, error instanceof Error ? error : String(error), durationMs, contextUser);
@@ -488,13 +519,13 @@ export class MCPClientManager {
                 type: 'toolCallCompleted',
                 connectionId,
                 timestamp: new Date(),
-                data: { toolName, success: false, durationMs, error: error instanceof Error ? error.message : String(error) }
+                data: { toolName, success: false, durationMs, error: errorMsg }
             });
 
             return {
                 success: false,
                 content: [],
-                error: error instanceof Error ? error.message : String(error),
+                error: errorMsg,
                 durationMs,
                 isToolError: false
             };

@@ -65,10 +65,30 @@ export interface MCPToolData {
     ToolName: string;
     ToolTitle: string | null;
     ToolDescription: string | null;
+    InputSchema: string;
     Status: string;
     DiscoveredAt: Date;
     LastSeenAt: Date;
 }
+
+/**
+ * Interface for server group (tools grouped by server)
+ */
+export interface MCPServerGroup {
+    server: MCPServerData;
+    tools: MCPToolData[];
+    expanded: boolean;
+}
+
+/**
+ * Tools view mode
+ */
+export type ToolsViewMode = 'card' | 'list';
+
+/**
+ * Tools sort options
+ */
+export type ToolsSortBy = 'name' | 'server' | 'discovered' | 'lastSeen';
 
 /**
  * Interface for MCP Execution Log data
@@ -177,8 +197,21 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     // Dialog state
     public ShowServerDialog = false;
     public ShowConnectionDialog = false;
+    public ShowTestToolDialog = false;
     public EditingServer: MCPServerData | null = null;
     public EditingConnection: MCPConnectionData | null = null;
+
+    // Test tool dialog pre-selection
+    public TestToolServerID: string | null = null;
+    public TestToolConnectionID: string | null = null;
+    public TestToolID: string | null = null;
+
+    // Tools tab state
+    public ToolsViewMode: ToolsViewMode = 'card';
+    public ToolsSortBy: ToolsSortBy = 'server';
+    public ToolsSortAscending = true;
+    public ServerGroups: MCPServerGroup[] = [];
+    public ExpandedToolId: string | null = null;
 
     // Navigation state
     private skipUrlUpdate = true;
@@ -505,6 +538,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             return matchesSearch && matchesStatus;
         });
 
+        // Build server groups for the tools tab
+        this.buildServerGroups();
+
         // Filter logs
         this.filteredLogs = this.executionLogs.filter(l => {
             const matchesSearch = !search ||
@@ -645,9 +681,202 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     // Tool Operations
     // ========================================
 
-    public viewToolDetails(tool: MCPToolData): void {
-        // Could open a dialog or navigate to tool details
-        console.log('View tool details:', tool);
+    /**
+     * Toggle tool card expansion for details view
+     */
+    public toggleToolExpand(tool: MCPToolData): void {
+        if (this.ExpandedToolId === tool.ID) {
+            this.ExpandedToolId = null;
+        } else {
+            this.ExpandedToolId = tool.ID;
+        }
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Check if a tool card is expanded
+     */
+    public isToolExpanded(tool: MCPToolData): boolean {
+        return this.ExpandedToolId === tool.ID;
+    }
+
+    /**
+     * Set tools view mode (card or list)
+     */
+    public setToolsViewMode(mode: ToolsViewMode): void {
+        this.ToolsViewMode = mode;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Set tools sort option
+     */
+    public setToolsSort(sortBy: ToolsSortBy): void {
+        if (this.ToolsSortBy === sortBy) {
+            // Toggle ascending/descending
+            this.ToolsSortAscending = !this.ToolsSortAscending;
+        } else {
+            this.ToolsSortBy = sortBy;
+            this.ToolsSortAscending = true;
+        }
+        this.buildServerGroups();
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Toggle server group expansion
+     */
+    public toggleServerGroup(group: MCPServerGroup): void {
+        group.expanded = !group.expanded;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Build server groups from tools data
+     */
+    private buildServerGroups(): void {
+        // Group tools by server
+        const serverMap = new Map<string, MCPToolData[]>();
+
+        for (const tool of this.filteredTools) {
+            const serverId = tool.MCPServerID;
+            if (!serverMap.has(serverId)) {
+                serverMap.set(serverId, []);
+            }
+            serverMap.get(serverId)!.push(tool);
+        }
+
+        // Build server groups
+        this.ServerGroups = [];
+        for (const server of this.servers) {
+            const tools = serverMap.get(server.ID) || [];
+            if (tools.length > 0) {
+                // Sort tools within group
+                this.sortTools(tools);
+
+                this.ServerGroups.push({
+                    server,
+                    tools,
+                    expanded: true // Start expanded
+                });
+            }
+        }
+
+        // Sort server groups by tool count or name
+        this.ServerGroups.sort((a, b) => {
+            if (this.ToolsSortBy === 'server') {
+                const nameCompare = a.server.Name.localeCompare(b.server.Name);
+                return this.ToolsSortAscending ? nameCompare : -nameCompare;
+            }
+            // Sort by tool count (descending by default)
+            const countCompare = b.tools.length - a.tools.length;
+            return this.ToolsSortAscending ? -countCompare : countCompare;
+        });
+    }
+
+    /**
+     * Sort tools array in place
+     */
+    private sortTools(tools: MCPToolData[]): void {
+        tools.sort((a, b) => {
+            let compare = 0;
+            switch (this.ToolsSortBy) {
+                case 'name':
+                    compare = (a.ToolTitle || a.ToolName).localeCompare(b.ToolTitle || b.ToolName);
+                    break;
+                case 'discovered':
+                    compare = new Date(a.DiscoveredAt).getTime() - new Date(b.DiscoveredAt).getTime();
+                    break;
+                case 'lastSeen':
+                    compare = new Date(a.LastSeenAt).getTime() - new Date(b.LastSeenAt).getTime();
+                    break;
+                default:
+                    compare = (a.ToolTitle || a.ToolName).localeCompare(b.ToolTitle || b.ToolName);
+            }
+            return this.ToolsSortAscending ? compare : -compare;
+        });
+    }
+
+    /**
+     * Get total tool count across all groups
+     */
+    public get TotalToolCount(): number {
+        return this.ServerGroups.reduce((sum, group) => sum + group.tools.length, 0);
+    }
+
+    /**
+     * Open Test Tool dialog
+     */
+    public openTestToolDialog(tool?: MCPToolData, connection?: MCPConnectionData): void {
+        if (tool) {
+            this.TestToolServerID = tool.MCPServerID;
+            this.TestToolID = tool.ID;
+        } else {
+            this.TestToolServerID = null;
+            this.TestToolID = null;
+        }
+
+        if (connection) {
+            this.TestToolConnectionID = connection.ID;
+            if (!this.TestToolServerID) {
+                this.TestToolServerID = connection.MCPServerID;
+            }
+        } else {
+            this.TestToolConnectionID = null;
+        }
+
+        this.ShowTestToolDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Close Test Tool dialog
+     */
+    public onTestToolDialogClose(): void {
+        this.ShowTestToolDialog = false;
+        this.TestToolServerID = null;
+        this.TestToolConnectionID = null;
+        this.TestToolID = null;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Parse and return input schema as formatted JSON
+     */
+    public getFormattedInputSchema(tool: MCPToolData): string {
+        if (!tool.InputSchema) return 'No input schema';
+        try {
+            const schema = JSON.parse(tool.InputSchema);
+            return JSON.stringify(schema, null, 2);
+        } catch {
+            return tool.InputSchema;
+        }
+    }
+
+    /**
+     * Get parameter count from input schema
+     */
+    public getParamCount(tool: MCPToolData): number {
+        if (!tool.InputSchema) return 0;
+        try {
+            const schema = JSON.parse(tool.InputSchema);
+            return Object.keys(schema.properties || {}).length;
+        } catch {
+            return 0;
+        }
+    }
+
+    /**
+     * Get required parameter count from input schema
+     */
+    public getRequiredParamCount(tool: MCPToolData): number {
+        if (!tool.InputSchema) return 0;
+        try {
+            const schema = JSON.parse(tool.InputSchema);
+            return (schema.required || []).length;
+        } catch {
+            return 0;
+        }
     }
 
     // ========================================
