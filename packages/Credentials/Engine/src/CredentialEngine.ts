@@ -30,7 +30,7 @@ import {
 
 // Hardcoded ID for the "Credential Access" AuditLogType
 // This matches the ID in /metadata/audit-log-types/.credential-audit-types.json
-const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = 'E8D4D100-E785-42D3-997F-ECFF3B0BCFC0';
+const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = '9375C9F9-1A58-44D6-9B09-8C6AF0714383';
 
 /**
  * CredentialEngine provides secure credential management with:
