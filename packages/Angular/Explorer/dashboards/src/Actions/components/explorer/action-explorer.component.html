@@ -1,4 +1,11 @@
 <div class="action-explorer">
+  <!-- Full-page Loading Overlay -->
+  @if (IsLoading) {
+    <div class="loading-overlay">
+      <mj-loading text="Loading actions..." size="medium"></mj-loading>
+    </div>
+  }
+
   <!-- Tree Panel (Left Sidebar) -->
   <mj-action-tree-panel
     [Categories]="Categories"
@@ -27,11 +34,7 @@
 
     <!-- Content Area -->
     <div class="explorer-content">
-      @if (IsLoading) {
-        <div class="loading-container">
-          <mj-loading text="Loading actions..." size="medium"></mj-loading>
-        </div>
-      } @else if (FilteredActions.length === 0) {
+      @if (FilteredActions.length === 0 && !IsLoading) {
         <div class="empty-state">
           @if (StateService.hasActiveFilters() || SelectedCategoryId !== 'all') {
             <i class="fa-solid fa-filter-circle-xmark"></i>

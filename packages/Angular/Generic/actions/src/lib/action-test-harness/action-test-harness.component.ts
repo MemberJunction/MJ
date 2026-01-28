@@ -1,7 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, ElementRef, ViewChild } from '@angular/core';
-import { ActionEntity, ActionParamEntity } from '@memberjunction/core-entities';
+import { ActionEntity, ActionParamEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+
+// Setting key prefix for action run input caching
+const ACTION_INPUT_CACHE_PREFIX = '__ACTION_DASHBOARD__action-run-inputs/';
 
 export interface ActionParamValue {
     Param: ActionParamEntity;
@@ -99,6 +102,58 @@ export class ActionTestHarnessComponent implements OnInit {
                 Param: param,
                 Value: this.getDefaultValue(param)
             }));
+
+        // Load cached values for this action
+        this.loadCachedInputs();
+    }
+
+    /**
+     * Load cached input values from UserInfoEngine
+     */
+    private loadCachedInputs(): void {
+        if (!this._action?.ID) return;
+
+        try {
+            const cacheKey = `${ACTION_INPUT_CACHE_PREFIX}${this._action.ID}`;
+            const cachedJson = UserInfoEngine.Instance.GetSetting(cacheKey);
+
+            if (cachedJson) {
+                const cachedValues = JSON.parse(cachedJson) as Record<string, unknown>;
+
+                // Apply cached values to matching parameters
+                for (const paramValue of this.ParamValues) {
+                    const paramName = paramValue.Param.Name;
+                    if (paramName in cachedValues) {
+                        paramValue.Value = cachedValues[paramName];
+                    }
+                }
+            }
+        } catch (error) {
+            // Silently ignore cache load errors - just use defaults
+            console.warn('Action Test Harness: Failed to load cached inputs', error);
+        }
+    }
+
+    /**
+     * Save current input values to cache using debounced setting
+     */
+    private saveCachedInputs(): void {
+        if (!this._action?.ID) return;
+
+        try {
+            const cacheKey = `${ACTION_INPUT_CACHE_PREFIX}${this._action.ID}`;
+            const values: Record<string, unknown> = {};
+
+            for (const paramValue of this.ParamValues) {
+                values[paramValue.Param.Name] = paramValue.Value;
+            }
+
+            // Use debounced setting to avoid excessive saves during rapid typing
+            UserInfoEngine.Instance.SetSettingDebounced(cacheKey, JSON.stringify(values));
+        } catch (error) {
+            // Silently ignore cache save errors
+            console.warn('Action Test Harness: Failed to save cached inputs', error);
+        }
     }
 
     private getDefaultValue(param: ActionParamEntity): unknown {
@@ -179,6 +234,9 @@ export class ActionTestHarnessComponent implements OnInit {
         } else {
             paramValue.Value = target.value;
         }
+
+        // Cache the inputs for this action (debounced)
+        this.saveCachedInputs();
     }
 
     public GetParamDisplayValue(paramValue: ActionParamValue): string {
