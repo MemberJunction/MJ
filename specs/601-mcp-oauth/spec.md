@@ -18,8 +18,22 @@
 ### Session 2026-01-27 (OAuth Proxy Extension)
 
 - Q: Why is an OAuth proxy needed? → A: Azure AD (and some other providers) don't support RFC 7591 Dynamic Client Registration. MCP clients like Claude Code require dynamic registration to authenticate without manual app registration in each identity provider.
+
+### Session 2026-01-28
+
+- Q: How should the OAuth proxy's upstream client be configured? → A: Reuse MJExplorer's existing OAuth client credentials. The proxy and MJExplorer are the same "application" from the IdP's perspective.
+- Q: How should OAuth identity map to MemberJunction users? → A: Match by email claim to User.Email, consistent with MJExplorer's authentication approach.
+- Q: How should the proxy discover upstream OAuth endpoints? → A: Use standard OIDC Discovery (/.well-known/openid-configuration) - all supported providers expose this endpoint.
+- Q: What token format should the proxy issue to MCP clients? → A: Issue proxy-signed JWTs with consistent format across all providers, containing user email and MJ context. This abstracts upstream provider token differences.
+- Q: How should the JWT signing key be managed? → A: Configure secret in mj.config.cjs for persistence across restarts and intentional key rotation.
+- Q: Where should OAuth scopes be defined? → A: Stored in MJ database as an entity, manageable via MJ admin UI. Enables dynamic scope management and future role-to-scope mapping.
+- Q: What granularity should scopes have? → A: Entity/action-level (e.g., "action:execute", "entity:read"). Scopes are system-wide (apply to both OAuth and API keys), not MCP-specific. Tools receive full JWT to evaluate scopes themselves.
+- Q: How should users select scopes during auth? → A: Consent screen where user selects from their available scopes. Provides transparency, security (least privilege), and flexibility.
+- Q: How are scopes associated with users? → A: All active scopes are available to all authenticated users. Simplifies administration; tools enforce actual data-level permissions based on MJ user context.
+- Q: How are scopes assigned to API keys? → A: Scopes are assigned when creating/editing an API key (stored with the key). Tools evaluate API key scopes the same way as OAuth token scopes.
 - Q: Why not just use the upstream provider directly? → A: Testing revealed Azure AD v2.0 doesn't support RFC 8707 resource parameter (uses scope instead), and doesn't support dynamic client registration. This means MCP clients cannot initiate OAuth flows without manual Azure AD app configuration.
 - Q: Should the proxy support a web UI? → A: Yes, the MCP Server should serve a simple login web UI to provide a good user experience during the browser-based authentication flow.
+- Q: Should the MCP server have hardcoded knowledge of auth provider types? → A: No. MCP server should remain loosely coupled from provider-specific knowledge. Provider type is stored as a string (from config), not a hardcoded enum. All provider-specific logic (discovery URL patterns, claim mappings, etc.) belongs in `@memberjunction/server` auth package, not MCP server code.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -145,6 +159,26 @@ When a user is redirected to the MCP Server's OAuth proxy for authentication, th
 
 ---
 
+### User Story 7 - Scope-Based Access Control (Priority: P2)
+
+A developer authenticates via OAuth and is presented with a consent screen showing available scopes (e.g., "action:execute", "entity:read", "entity:write"). The developer selects only the scopes needed for their current task. When calling MCP tools, each tool receives the JWT with granted scopes and can allow/deny operations or selectively limit data access based on those scopes.
+
+**Why this priority**: Scope-based authorization provides fine-grained access control, enabling the principle of least privilege. Tools can limit their behavior based on granted scopes, improving security.
+
+**Independent Test**: Can be tested by authenticating with limited scopes, then verifying tools behave appropriately (e.g., a tool requiring "entity:write" scope fails gracefully when only "entity:read" was granted).
+
+**Acceptance Scenarios**:
+
+1. **Given** a user authenticating via OAuth, **When** the consent screen appears, **Then** all active scopes are displayed with descriptions, and the user can select which to grant.
+
+2. **Given** a user who granted only "entity:read" scope, **When** they call a tool that requires "entity:write", **Then** the tool either denies the operation or limits its behavior to read-only.
+
+3. **Given** an API key with assigned scopes, **When** a request is made with that key, **Then** tools receive the scopes and evaluate them the same way as OAuth token scopes.
+
+4. **Given** a tool that can operate with different scope levels, **When** called with limited scopes, **Then** the tool adapts its behavior (e.g., filtering data, disabling write operations) based on granted scopes.
+
+---
+
 ### Edge Cases
 
 - What happens when a user's OAuth account exists but they have no corresponding MemberJunction user record?
@@ -177,6 +211,15 @@ When a user is redirected to the MCP Server's OAuth proxy for authentication, th
 - What happens when multiple dynamically registered clients have the same redirect URI?
   - This is allowed per RFC 7591. Each client gets unique client_id/secret, and authorization state is tracked per-client.
 
+- What happens when a user grants no scopes on the consent screen?
+  - The authentication completes but the JWT contains an empty scopes array. Tools may deny operations or provide minimal functionality.
+
+- What happens when a tool requires a scope the token doesn't have?
+  - The tool decides how to handle this: it may return a 403 Forbidden, return limited data, or disable certain functionality. Tools are responsible for scope enforcement.
+
+- What happens when an API key has no scopes assigned?
+  - The API key works for authentication but tools may deny operations. Administrators should assign appropriate scopes when creating keys.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -189,7 +232,7 @@ When a user is redirected to the MCP Server's OAuth proxy for authentication, th
 
 - **FR-004**: System MUST validate that access tokens were issued for the MCP Server as the intended audience (resource indicator validation per RFC 8707).
 
-- **FR-005**: System MUST map OAuth token claims (subject, email) to MemberJunction user records to establish the user context for tool execution.
+- **FR-005**: System MUST map OAuth token email claim to MemberJunction User.Email to establish the user context for tool execution (consistent with MJExplorer authentication).
 
 - **FR-006**: System MUST support configuration of OAuth provider settings (client ID, authority/issuer, tenant ID) via the existing mj.config.cjs configuration file.
 
@@ -227,15 +270,35 @@ When a user is redirected to the MCP Server's OAuth proxy for authentication, th
 
 - **FR-022**: System MUST serve a simple web login UI at the authorization endpoint to provide a user-friendly authentication experience.
 
-- **FR-023**: System MUST proxy the upstream provider's tokens or issue derived tokens that the MCP Server can validate for subsequent tool calls.
+- **FR-023**: System MUST issue proxy-signed JWTs to MCP clients with a consistent format (containing user email, MJ user ID, expiration) regardless of upstream provider. The proxy validates upstream tokens internally but does not expose them to clients.
 
 - **FR-024**: System MUST update Protected Resource Metadata to point to the OAuth proxy authorization server when OAuth proxy mode is enabled.
+
+- **FR-025**: System MUST use a configured JWT signing secret from mj.config.cjs for proxy-issued tokens, ensuring tokens remain valid across server restarts.
+
+### Scope-Based Authorization Requirements
+
+- **FR-026**: System MUST store API Scopes in the MJ database as an entity, with fields for scope name, description, and active status.
+
+- **FR-027**: System MUST include granted scopes in proxy-issued JWTs, allowing tools to inspect and evaluate scopes at runtime.
+
+- **FR-028**: System MUST apply scope-based authorization to both OAuth tokens and API keys (scopes are system-wide, not OAuth-specific).
+
+- **FR-029**: Tools MUST receive the full JWT to evaluate scopes and determine allowed behavior, including selectively limiting data access based on granted scopes.
+
+- **FR-030**: System MUST display a consent screen during OAuth authorization where users select which scopes to grant from their available scopes (principle of least privilege).
+
+- **FR-031**: System MUST make all active scopes available to all authenticated users on the consent screen. Tools enforce actual data-level permissions based on MJ user context.
+
+- **FR-032**: System MUST support assigning scopes to API keys when creating or editing them. API key scopes are stored with the key and evaluated by tools the same way as OAuth token scopes.
+
+- **FR-033**: System MUST remain loosely coupled from auth provider implementations. Provider-specific knowledge (discovery URL construction, claim extraction, token validation) MUST be delegated to `@memberjunction/server` auth package. MCP server stores provider type as a string identifier (from config), not a hardcoded enum.
 
 ### Key Entities
 
 - **User**: The MemberJunction user associated with the OAuth subject claim. The system maps OAuth identity to an existing User record to establish permissions and context.
 
-- **OAuth Configuration**: Settings stored in mj.config.cjs that define the OAuth provider type, client ID, authority URL, tenant ID, and whether OAuth is enabled.
+- **OAuth Configuration**: Settings stored in mj.config.cjs that define the OAuth provider type, client ID, authority URL, tenant ID, JWT signing secret, and whether OAuth is enabled.
 
 - **MCP Session**: Represents an authenticated connection between an MCP client and the server. Contains either API key context or OAuth token claims, along with the resolved MemberJunction user.
 
@@ -244,6 +307,10 @@ When a user is redirected to the MCP Server's OAuth proxy for authentication, th
 - **Authorization State**: Temporary state tracking an in-progress authorization flow. Maps the MCP client's state/PKCE to the upstream provider flow. Contains redirect URI, code challenge, scopes, and expiration.
 
 - **Authorization Code**: A short-lived code issued to MCP clients after successful upstream authentication. Maps to the upstream tokens and PKCE verifier for exchange at the token endpoint.
+
+- **API Scope** (`__mj.APIScope`): A permission scope stored in the MJ database. Contains scope name (e.g., "action:execute", "entity:read"), description, and active status. Applies to both OAuth tokens and API keys. Managed via MJ admin UI. Tools receive the full JWT and evaluate scopes to determine allowed behavior.
+
+- **API Key Scope** (`__mj.APIKeyScope`): Junction table linking API keys to their assigned scopes. When an API key is used, its associated scopes are included in the request context for tool evaluation.
 
 ## Success Criteria *(mandatory)*
 
@@ -287,7 +354,8 @@ When a user is redirected to the MCP Server's OAuth proxy for authentication, th
 
 ### OAuth Proxy Assumptions
 
-- The upstream identity provider (Azure AD, Auth0, etc.) has a client registration (app registration) configured for the MCP Server itself to use when proxying requests.
+- The OAuth proxy reuses MJExplorer's existing OAuth client credentials (client_id, client_secret, authority/domain) when communicating with the upstream identity provider. No separate app registration is required for the MCP Server.
+- The OAuth proxy discovers upstream provider endpoints via standard OIDC Discovery (/.well-known/openid-configuration), which all supported providers expose.
 - MCP clients support PKCE (S256) as required by OAuth 2.1 - this is standard for modern OAuth clients.
 - In-memory storage for registered clients and authorization state is acceptable for MVP (server restart clears state; clients re-register).
 - The OAuth proxy does not need to persist or audit dynamically registered clients beyond logging.
@@ -297,7 +365,7 @@ When a user is redirected to the MCP Server's OAuth proxy for authentication, th
 
 - Automatic user provisioning from OAuth claims (users must exist in MemberJunction).
 - New OAuth providers beyond those already implemented in MJServer (Auth0, MSAL, Okta, Cognito, Google).
-- OAuth scopes beyond basic user identification (fine-grained permission scopes are a future enhancement).
+- OAuth scopes tied to upstream identity provider scopes (proxy issues its own scopes stored in MJ database).
 - Client credentials grant flow (machine-to-machine auth) - use API keys for this use case.
 - Persistent storage of dynamically registered clients (in-memory with TTL is sufficient for MVP).
 - Token introspection endpoint (RFC 7662) - not required by MCP specification.

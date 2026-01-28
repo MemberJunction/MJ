@@ -1,46 +1,49 @@
-# Implementation Plan: MCP Server OAuth Authentication
+# Implementation Plan: MCP Server OAuth with Multi-Provider Support and Scope-Based Authorization
 
-**Branch**: `601-mcp-oauth` | **Date**: 2026-01-27 | **Spec**: [spec.md](./spec.md)
+**Branch**: `601-mcp-oauth` | **Date**: 2026-01-28 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `/specs/601-mcp-oauth/spec.md`
 
 ## Summary
 
-Add optional OAuth 2.1 authorization as a resource server to the existing MCP Server package, controlled entirely via configuration. The MCP Server will:
-1. Expose Protected Resource Metadata at `/.well-known/oauth-protected-resource` (RFC 9728)
-2. Return `WWW-Authenticate: Bearer` headers on 401 responses
-3. Validate Bearer tokens using MJServer's existing auth provider infrastructure
-4. Support four authentication modes: `apiKey` (default), `oauth`, `both`, `none`
+Extend the existing MCP Server OAuth implementation to support all configured auth providers (Auth0, Okta, Cognito, Google) beyond the current MSAL/Azure AD focus. Additionally, implement scope-based authorization where users select scopes during OAuth consent, and tools evaluate these scopes from the JWT to control access and behavior.
+
+**Key Technical Approach:**
+1. Leverage existing `@memberjunction/server` auth providers via OIDC Discovery
+2. Extend the OAuth proxy to issue proxy-signed JWTs with consistent format and granted scopes
+3. Extend existing `__mj.APIScope` entity for MCP-relevant scopes
+4. Add consent screen to OAuth flow for scope selection
+5. Pass full JWT to tools for scope evaluation
 
 ## Technical Context
 
 **Language/Version**: TypeScript 5.x, Node.js 18+
-**Primary Dependencies**: `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk`
-**Storage**: N/A (token validation only, no new persistent state)
-**Testing**: Manual testing with MCP clients, unit tests for token validation
-**Target Platform**: Node.js server (Linux/macOS/Windows)
-**Project Type**: Monorepo package extension (packages/AI/MCPServer)
-**Performance Goals**: <100ms token validation overhead (SC-003)
-**Constraints**: Backward compatibility with existing API key clients (SC-007)
-**Scale/Scope**: Single MCP Server instance, reusing existing auth infrastructure
+**Primary Dependencies**: `@memberjunction/server` (auth providers), `@modelcontextprotocol/sdk`, `express`, `jsonwebtoken`, `jwks-rsa`
+**Storage**: SQL Server (MemberJunction database) for `APIScope`, `APIKeyScope` entities; In-memory for OAuth proxy state
+**Testing**: Manual integration testing with Claude Code, unit tests for token validation
+**Target Platform**: Node.js server (Linux/Windows), HTTPS required for production
+**Project Type**: Monorepo package (`packages/AI/MCPServer`)
+**Performance Goals**: <100ms token validation overhead, <5s client registration, <90s full OAuth flow
+**Constraints**: Must maintain backward compatibility with API key auth; No new database tables (extend existing APIScope)
+**Scale/Scope**: Single upstream provider per deployment; In-memory state acceptable for MVP
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-| Principle | Compliance | Notes |
-|-----------|------------|-------|
-| I. Metadata-Driven Development | ✅ PASS | No new entities needed; user mapping uses existing User entity |
-| II. Type Safety (NON-NEGOTIABLE) | ✅ PASS | Will use proper types from `@memberjunction/core` and `@memberjunction/server` |
-| III. Actions as Boundaries | ✅ PASS | Internal code uses direct imports to MJServer auth classes |
-| IV. Functional Decomposition | ✅ PASS | Auth middleware will be decomposed into focused functions (<40 lines each) |
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| I. Metadata-Driven Development | PASS | Using existing `APIScope` entity; no manual entity class edits |
+| II. Type Safety (NON-NEGOTIABLE) | PASS | All code uses explicit TypeScript types; no `any` |
+| III. Actions as Boundaries | PASS | OAuth is system boundary; internal code uses direct imports |
+| IV. Functional Decomposition | PASS | Auth modules already decomposed; will maintain <40 line functions |
 | V. Angular NgModules | N/A | No Angular components in this feature |
-| VI. Entity Access Pattern | ✅ PASS | User lookup uses existing `verifyUserRecord()` from MJServer |
-| VII. Query Optimization | N/A | No RunView queries in auth flow |
-| VIII. Batch Operations | N/A | No batch queries needed |
-| IX. Naming Conventions | ✅ PASS | Will follow PascalCase for public, camelCase for private |
-| X. CodeGen Workflow | ✅ PASS | No database schema changes required |
+| VI. Entity Access Pattern | PASS | Will use `Metadata.GetEntityObject<T>()` and `RunView<T>()` |
+| VII. Query Optimization | PASS | Scope lookups use simple queries with proper typing |
+| VIII. Batch Operations | PASS | Scopes loaded in batch during authorization |
+| IX. Naming Conventions | PASS | PascalCase for public, camelCase for private |
+| X. CodeGen Workflow | PASS | Will run CodeGen after any schema changes |
 
-**Gate Status**: ✅ PASS - No violations
+**Constitution Compliance**: All gates PASS. No violations to justify.
 
 ## Project Structure
 
@@ -49,249 +52,86 @@ Add optional OAuth 2.1 authorization as a resource server to the existing MCP Se
 ```text
 specs/601-mcp-oauth/
 ├── plan.md              # This file
-├── research.md          # Phase 0 output - OAuth/MCP research findings
-├── data-model.md        # Phase 1 output - Configuration schema
-├── quickstart.md        # Phase 1 output - Developer guide
-├── contracts/           # Phase 1 output - API contracts
-│   └── protected-resource-metadata.json
-└── tasks.md             # Phase 2 output (/speckit.tasks command)
+├── spec.md              # Feature specification
+├── research.md          # Phase 0 output - provider differences, JWT signing
+├── data-model.md        # Phase 1 output - APIScope extensions
+├── quickstart.md        # Phase 1 output - testing guide
+├── contracts/           # Phase 1 output - OAuth endpoint contracts
+│   └── oauth-proxy-api.yaml
+└── tasks.md             # Phase 2 output (created by /speckit.tasks)
 ```
 
-### Source Code (repository root)
+### Source Code (existing structure)
 
 ```text
 packages/AI/MCPServer/
 ├── src/
-│   ├── index.ts                    # CLI entry point (unchanged)
-│   ├── Server.ts                   # Main server - add OAuth middleware mount
-│   ├── config.ts                   # Add OAuth config schema
-│   └── auth/                       # NEW: OAuth auth module
-│       ├── index.ts                # Public exports
-│       ├── types.ts                # Auth types and interfaces
-│       ├── OAuthConfig.ts          # OAuth configuration handler
-│       ├── AuthGate.ts             # Unified auth middleware (API key OR Bearer)
-│       ├── TokenValidator.ts       # Bearer token validation using MJServer
-│       ├── ProtectedResourceMetadata.ts  # RFC 9728 metadata endpoint
-│       └── WWWAuthenticate.ts      # WWW-Authenticate header generation
-└── tests/                          # Future: unit tests
-    └── auth/
-        ├── AuthGate.test.ts
-        └── TokenValidator.test.ts
+│   ├── Server.ts                    # Main server - extend auth integration
+│   ├── config.ts                    # Config loader - add JWT signing secret
+│   ├── auth/
+│   │   ├── AuthGate.ts             # Auth middleware - pass JWT to tools
+│   │   ├── TokenValidator.ts       # Token validation - already multi-provider
+│   │   ├── OAuthProxyRouter.ts     # Proxy endpoints - add consent, scopes
+│   │   ├── OAuthConfig.ts          # Config helpers - extend
+│   │   ├── LoginPage.ts            # Login UI - add consent screen
+│   │   ├── ConsentPage.ts          # NEW: Scope consent UI
+│   │   ├── JWTIssuer.ts            # NEW: Proxy JWT signing
+│   │   └── ScopeService.ts         # NEW: Scope loading from DB
+│   └── index.ts
+└── package.json
+
+packages/MJServer/src/auth/
+├── providers/
+│   ├── Auth0Provider.ts            # Existing - verify OIDC Discovery
+│   ├── MSALProvider.ts             # Existing - works
+│   ├── OktaProvider.ts             # Existing - verify OIDC Discovery
+│   ├── CognitoProvider.ts          # Existing - verify OIDC Discovery
+│   └── GoogleProvider.ts           # Existing - verify OIDC Discovery
+├── BaseAuthProvider.ts             # Existing - JWKS handling
+└── AuthProviderFactory.ts          # Existing - provider lookup
 ```
 
-**Structure Decision**: Extend existing MCP Server package with isolated `/auth` module. No new packages required - reuses MJServer auth infrastructure via package dependency.
+**Structure Decision**: Extend existing `packages/AI/MCPServer/src/auth/` module with new files for consent UI, JWT issuance, and scope service. No new packages required.
 
 ## Complexity Tracking
 
-> No violations requiring justification.
+> No Constitution violations. All complexity within existing patterns.
 
----
+| Area | Approach | Rationale |
+|------|----------|-----------|
+| Multi-provider | Use OIDC Discovery | Standard across all providers; no provider-specific code |
+| Proxy JWTs | HS256 with configured secret | Simple, stateless; secret in mj.config.cjs |
+| Scope storage | Extend existing APIScope entity | Reuse existing infrastructure; no new tables |
+| Consent UI | Server-rendered HTML | Consistent with existing LoginPage.ts pattern |
 
-## Phase 0: Research Findings
+## Phase 0 Deliverables
 
-### Research Summary
+- [ ] `research.md` - Provider OIDC Discovery patterns, JWT signing approaches, consent flow best practices
 
-| Topic | Decision | Rationale |
-|-------|----------|-----------|
-| Token validation approach | Reuse MJServer `AuthProviderFactory` and `getSigningKeys()` | Already supports Auth0, MSAL, Okta, Cognito, Google with JWKS caching, retry logic, and connection pooling |
-| Protected Resource Metadata | Return static JSON at `/.well-known/oauth-protected-resource` | RFC 9728 compliant, MCP specification required |
-| WWW-Authenticate format | Include `resource_metadata` URL | RFC 9728 Section 5.1, MCP specification required |
-| Auth mode configuration | Add `authMode` enum to mcpServerSettings | Simple config-driven approach, no code changes to switch modes |
-| User context resolution | Use existing `verifyUserRecord()` | Maps OAuth `email` claim to MJ User entity |
-| Token claims extraction | Use existing `extractUserInfoFromPayload()` | Provider-specific claim extraction already implemented |
+## Phase 1 Deliverables
 
-### Key Findings
+- [ ] `data-model.md` - APIScope entity field additions (if any), JWT claims structure
+- [ ] `contracts/oauth-proxy-api.yaml` - OpenAPI spec for OAuth proxy endpoints
+- [ ] `quickstart.md` - Testing guide for Claude Code integration
 
-1. **MJServer Auth Infrastructure is Fully Reusable**
-   - `AuthProviderFactory.getInstance().getByIssuer()` - finds provider by token issuer
-   - `getSigningKeys(issuer)` - returns JWKS signing key getter with retry logic
-   - `extractUserInfoFromPayload(payload)` - extracts user info from JWT claims
-   - `verifyUserRecord(email, firstName, lastName)` - maps to MJ User entity
+## Implementation Phases (Preview)
 
-2. **MCP Authorization Specification Requirements**
-   - MUST implement RFC 9728 Protected Resource Metadata
-   - MUST include `resource_metadata` parameter in WWW-Authenticate header
-   - MUST validate audience claim matches MCP Server resource identifier
-   - Tokens MUST be issued by configured authorization server
+### Phase 1: Multi-Provider Support
+- Verify all 5 providers work with OIDC Discovery
+- Test token validation with each provider type
+- Update configuration documentation
 
-3. **Configuration Approach**
-   - Add `auth` section to `mcpServerSettings` in mj.config.cjs
-   - Reuse existing `authProviders` configuration from MJServer
-   - New settings: `authMode`, `resourceIdentifier`
+### Phase 2: Proxy JWT Issuance
+- Implement JWTIssuer with HS256 signing
+- Configure signing secret in mj.config.cjs
+- Issue consistent JWTs regardless of upstream provider
 
----
+### Phase 3: Scope-Based Authorization
+- Create ScopeService to load APIScope from database
+- Add consent screen to OAuth flow
+- Include granted scopes in proxy-issued JWTs
+- Pass JWT to tools for scope evaluation
 
-## Phase 1: Design Artifacts
-
-### Configuration Schema
-
-Add to `mcpServerSettings` in mj.config.cjs:
-
-```typescript
-interface MCPServerAuthSettings {
-  /** Authentication mode: 'apiKey' | 'oauth' | 'both' | 'none' */
-  mode: 'apiKey' | 'oauth' | 'both' | 'none';
-
-  /**
-   * Resource identifier for OAuth audience validation.
-   * Should match the MCP Server's public URL.
-   * Example: "https://mcp.example.com"
-   */
-  resourceIdentifier?: string;
-
-  /**
-   * Whether to auto-generate resourceIdentifier from server URL.
-   * If true and resourceIdentifier not set, uses http://localhost:{port}
-   */
-  autoResourceIdentifier?: boolean;
-}
-
-// Extended mcpServerSettings
-interface MCPServerSettings {
-  // ... existing fields
-  auth?: MCPServerAuthSettings;
-}
-```
-
-### Authentication Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           REQUEST ARRIVES                                │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        AuthGate Middleware                               │
-│   1. Check auth mode from config                                         │
-│   2. If mode='none', skip auth                                          │
-│   3. Extract credentials (API key headers + Bearer token)                │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │
-              ┌──────────────────────┼──────────────────────┐
-              │                      │                      │
-              ▼                      ▼                      ▼
-┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐
-│  API Key Present?    │ │  Bearer Token?       │ │  Neither Present?    │
-│  (mode: apiKey/both) │ │  (mode: oauth/both)  │ │                      │
-└──────────┬───────────┘ └──────────┬───────────┘ └──────────┬───────────┘
-           │                        │                        │
-           ▼                        ▼                        ▼
-┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐
-│ Validate via         │ │ Validate via         │ │ Return 401           │
-│ GetAPIKeyEngine()    │ │ MJServer providers   │ │ + WWW-Authenticate   │
-│ (existing flow)      │ │ (new TokenValidator) │ │                      │
-└──────────┬───────────┘ └──────────┬───────────┘ └──────────────────────┘
-           │                        │
-           ▼                        ▼
-┌──────────────────────┐ ┌──────────────────────┐
-│ Get User from        │ │ Extract claims via   │
-│ API key owner        │ │ extractUserInfo()    │
-│                      │ │ + verifyUserRecord() │
-└──────────┬───────────┘ └──────────┬───────────┘
-           │                        │
-           └──────────┬─────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    Create MCPSessionContext                              │
-│                    Continue to MCP handlers                              │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Protected Resource Metadata Response
-
-Endpoint: `GET /.well-known/oauth-protected-resource`
-
-```json
-{
-  "resource": "https://mcp.example.com",
-  "authorization_servers": ["https://login.microsoftonline.com/{tenant}/v2.0"],
-  "scopes_supported": ["openid", "profile", "email"],
-  "bearer_methods_supported": ["header"],
-  "resource_name": "MemberJunction MCP Server",
-  "resource_documentation": "https://docs.memberjunction.org/mcp"
-}
-```
-
-### WWW-Authenticate Header Format
-
-401 Response (missing/invalid token):
-```http
-HTTP/1.1 401 Unauthorized
-WWW-Authenticate: Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"
-```
-
-403 Response (valid token, insufficient permissions):
-```http
-HTTP/1.1 403 Forbidden
-WWW-Authenticate: Bearer error="insufficient_scope",
-                         resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource",
-                         error_description="User not found in MemberJunction"
-```
-
-### Module Dependencies
-
-```
-packages/AI/MCPServer
-├── @memberjunction/server          # Auth providers, token validation
-│   ├── AuthProviderFactory         # Get provider by issuer
-│   ├── getSigningKeys              # JWKS key retrieval
-│   ├── extractUserInfoFromPayload  # Claim extraction
-│   └── verifyUserRecord            # User entity lookup
-├── @memberjunction/api-keys        # API key validation (existing)
-├── jsonwebtoken                    # JWT decode/verify
-└── express                         # HTTP middleware
-```
-
-### Error Handling
-
-| Scenario | HTTP Status | Response |
-|----------|-------------|----------|
-| No credentials and auth required | 401 | WWW-Authenticate with metadata URL |
-| Invalid API key | 401 | Existing error response |
-| Invalid/expired Bearer token | 401 | WWW-Authenticate with metadata URL |
-| Valid token, user not in MJ | 403 | `error="insufficient_scope"`, user must be provisioned |
-| OAuth provider unavailable | 503 | Retry-After header, log connectivity issue |
-| OAuth config incomplete | N/A | Server logs warning, falls back to apiKey mode |
-
----
-
-## Implementation Checklist
-
-### Phase 1: Configuration & Types
-- [ ] Add `MCPServerAuthSettings` type to config.ts
-- [ ] Add Zod schema for auth settings validation
-- [ ] Create `auth/types.ts` with OAuth-specific types
-- [ ] Create `auth/OAuthConfig.ts` for config handling
-
-### Phase 2: Token Validation
-- [ ] Create `auth/TokenValidator.ts` using MJServer providers
-- [ ] Implement audience validation for resource identifier
-- [ ] Implement user mapping via verifyUserRecord()
-- [ ] Add proper error handling (401/403/503)
-
-### Phase 3: Auth Gate Middleware
-- [ ] Create `auth/AuthGate.ts` unified middleware
-- [ ] Support all four auth modes
-- [ ] Handle API key + Bearer token precedence
-- [ ] Integrate with existing MCPSessionContext
-
-### Phase 4: MCP Protocol Compliance
-- [ ] Create `auth/ProtectedResourceMetadata.ts` endpoint
-- [ ] Create `auth/WWWAuthenticate.ts` header generator
-- [ ] Add `/.well-known/oauth-protected-resource` route
-- [ ] Ensure headers on all 401 responses
-
-### Phase 5: Server Integration
-- [ ] Modify Server.ts to mount OAuth routes conditionally
-- [ ] Replace direct auth calls with AuthGate middleware
-- [ ] Preserve backward compatibility for existing clients
-- [ ] Add startup logging for auth mode
-
-### Phase 6: Testing & Documentation
-- [ ] Test API key mode (default behavior unchanged)
-- [ ] Test OAuth mode with external IdP
-- [ ] Test both mode with mixed credentials
-- [ ] Test none mode for local development
-- [ ] Update README with OAuth configuration guide
+### Phase 4: API Key Scope Integration
+- Extend APIKeyScope junction table usage
+- Ensure tools evaluate scopes consistently for both OAuth and API keys

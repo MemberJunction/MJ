@@ -46,12 +46,29 @@ module.exports = {
     enableMCPServer: true,
     auth: {
       mode: 'both',  // or 'oauth', 'apiKey', 'none'
-      resourceIdentifier: 'https://mcp.yourcompany.com'
+      resourceIdentifier: 'https://mcp.yourcompany.com',
+      // Proxy JWT signing (required for OAuth mode)
+      jwtSigningSecret: process.env.MCP_JWT_SECRET,  // 32+ bytes, base64 encoded
+      jwtExpiresIn: '1h',  // optional, default '1h'
     },
     // ... tool configurations
   },
   authProviders: [/* ... */]
 };
+```
+
+### Step 2b: Generate JWT Signing Secret
+
+Generate a secure signing secret for proxy-issued JWTs:
+
+```bash
+# Generate a 32-byte random secret, base64 encoded
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Add to your environment:
+```bash
+export MCP_JWT_SECRET="your-generated-secret-here"
 ```
 
 ### Step 3: Configure Your OAuth Provider
@@ -77,6 +94,98 @@ Register the MCP Server as an authorized resource/API in your identity provider:
 1. Go to Okta Admin Console > Security > API
 2. Add a new Authorization Server or use default
 3. Add the MCP Server as a trusted resource
+
+#### Cognito
+
+1. Go to AWS Console > Cognito > User Pools
+2. Select your user pool
+3. Under "App integration", configure an app client
+4. Set callback URL to include `{mcp-server}/oauth/callback`
+
+#### Google
+
+1. Go to Google Cloud Console > APIs & Services > Credentials
+2. Create or select OAuth 2.0 Client ID
+3. Add authorized redirect URI: `{mcp-server}/oauth/callback`
+
+## Multi-Provider Configuration
+
+The OAuth proxy supports all 5 MJServer auth providers. Each provider uses OIDC Discovery to automatically find authorization and token endpoints.
+
+### Example: Multiple Providers
+
+```javascript
+// mj.config.cjs
+module.exports = {
+  authProviders: [
+    {
+      name: 'corporate',
+      type: 'msal',
+      clientId: 'azure-client-id',
+      clientSecret: process.env.AZURE_CLIENT_SECRET,
+      tenantId: 'your-tenant-id',
+      issuer: 'https://login.microsoftonline.com/your-tenant-id/v2.0',
+      audience: 'api://mcp-server',
+      jwksUri: 'https://login.microsoftonline.com/your-tenant-id/discovery/v2.0/keys'
+    },
+    {
+      name: 'external',
+      type: 'auth0',
+      clientId: 'auth0-client-id',
+      clientSecret: process.env.AUTH0_CLIENT_SECRET,
+      domain: 'your-tenant.auth0.com',
+      issuer: 'https://your-tenant.auth0.com/',
+      audience: 'https://mcp.yourcompany.com',
+      jwksUri: 'https://your-tenant.auth0.com/.well-known/jwks.json'
+    }
+  ],
+  mcpServerSettings: {
+    auth: {
+      mode: 'oauth',
+      resourceIdentifier: 'https://mcp.yourcompany.com',
+      jwtSigningSecret: process.env.MCP_JWT_SECRET
+    }
+  }
+};
+```
+
+When multiple providers are configured, the proxy will:
+1. List all providers on the login page
+2. Let users select their identity provider
+3. Redirect to the selected provider for authentication
+
+## Scope-Based Authorization
+
+Scopes control what operations authenticated users can perform. Scopes are defined in the `__mj.APIScope` database table and apply to both OAuth tokens and API keys.
+
+### Default Scopes
+
+| Scope | Category | Description |
+|-------|----------|-------------|
+| `entity:read` | Entities | Read entity records |
+| `entity:write` | Entities | Create and update records |
+| `action:execute` | Actions | Execute MJ actions |
+| `agent:execute` | Agents | Run AI agents |
+| `query:run` | Queries | Execute saved queries |
+| `view:run` | Views | Run views |
+
+### Consent Flow
+
+When OAuth is enabled with scopes:
+
+1. User authenticates with upstream provider
+2. Proxy displays consent screen listing available scopes
+3. User selects which scopes to grant
+4. Proxy issues JWT containing only granted scopes
+5. Tools evaluate scopes from JWT to allow/deny operations
+
+### Configuring API Key Scopes
+
+API keys also support scope-based authorization via the `__mj.APIKeyScope` junction table:
+
+1. Create API key in MemberJunction admin
+2. Edit the key to assign scopes
+3. Only assigned scopes will be available when using that API key
 
 ## Authentication Modes
 
@@ -115,6 +224,42 @@ Expected response:
 }
 ```
 
+### Test OAuth Authorization Server Metadata
+
+```bash
+curl http://localhost:3100/.well-known/oauth-authorization-server
+```
+
+Expected response:
+```json
+{
+  "issuer": "urn:mj:mcp-server",
+  "authorization_endpoint": "http://localhost:3100/oauth/authorize",
+  "token_endpoint": "http://localhost:3100/oauth/token",
+  "registration_endpoint": "http://localhost:3100/oauth/register",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code", "refresh_token"],
+  "code_challenge_methods_supported": ["S256"]
+}
+```
+
+### Test Available Scopes
+
+```bash
+curl http://localhost:3100/oauth/scopes
+```
+
+Expected response:
+```json
+{
+  "scopes": [
+    {"id": "...", "name": "entity:read", "description": "Read entity records", "category": "Entities"},
+    {"id": "...", "name": "entity:write", "description": "Create and update records", "category": "Entities"},
+    {"id": "...", "name": "action:execute", "description": "Execute MJ actions", "category": "Actions"}
+  ]
+}
+```
+
 ### Test with OAuth Token
 
 First, obtain a token from your OAuth provider using the authorization code flow. Then:
@@ -124,6 +269,23 @@ curl -X POST http://localhost:3100/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIs..." \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+### Verify JWT Claims
+
+Decode the proxy-issued JWT to verify scopes (using jwt.io or similar):
+
+```json
+{
+  "iss": "urn:mj:mcp-server",
+  "sub": "user@example.com",
+  "aud": "http://localhost:3100",
+  "email": "user@example.com",
+  "mjUserId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "scopes": ["entity:read", "entity:write", "action:execute"],
+  "upstreamProvider": "auth0",
+  "upstreamSub": "auth0|123456"
+}
 ```
 
 ### Test Unauthorized Response
@@ -199,6 +361,34 @@ MCP Server: OAuth config incomplete, falling back to API key only
 ```
 
 Verify your `authProviders` configuration.
+
+### "Missing JWT signing secret"
+
+OAuth mode requires a signing secret for proxy-issued JWTs:
+1. Generate a secret: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
+2. Set environment variable: `export MCP_JWT_SECRET="your-secret"`
+3. Or add to config: `auth.jwtSigningSecret: process.env.MCP_JWT_SECRET`
+
+### "OIDC Discovery failed"
+
+The proxy uses OIDC Discovery to find provider endpoints. Verify:
+1. Provider's `issuer` URL is correct
+2. `{issuer}/.well-known/openid-configuration` is accessible
+3. No firewall blocking outbound HTTPS requests
+
+### "Scope not granted"
+
+If tools reject requests with "insufficient scope":
+1. Check JWT's `scopes` claim contains required scope
+2. Verify user granted the scope during consent
+3. For API keys, verify scope is assigned in `__mj.APIKeyScope`
+
+### Consent screen not appearing
+
+The consent screen appears after upstream authentication:
+1. Verify upstream auth completed successfully
+2. Check for errors in OAuth callback URL
+3. Ensure `__mj.APIScope` table has active scopes
 
 ## Security Considerations
 

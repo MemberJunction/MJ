@@ -115,6 +115,14 @@ export interface AuthResult {
   /** MemberJunction user (if authenticated) */
   user?: UserInfo;
 
+  /**
+   * Granted scopes for this authentication.
+   * Populated from either:
+   * - OAuth JWT 'scopes' claim (when method='oauth')
+   * - APIKeyScope entity (when method='apiKey')
+   */
+  scopes?: string[];
+
   /** API key context (if method='apiKey') */
   apiKeyContext?: {
     apiKey: string;
@@ -128,6 +136,8 @@ export interface AuthResult {
     subject: string;
     email: string;
     expiresAt: Date;
+    /** Granted scopes from the JWT token */
+    scopes?: string[];
   };
 
   /** Error details (if not authenticated) */
@@ -176,6 +186,17 @@ export interface MCPSessionContext {
   authMethod: 'apiKey' | 'oauth' | 'none';
 
   /**
+   * Granted scopes for this session.
+   * Unified field - populated from either:
+   * - OAuth JWT 'scopes' claim (when authMethod='oauth')
+   * - APIKeyScope entity (when authMethod='apiKey')
+   * - Empty array (when authMethod='none')
+   *
+   * Tools should use this field to check permissions regardless of auth method.
+   */
+  scopes?: string[];
+
+  /**
    * OAuth-specific context.
    * Present only when authMethod='oauth'.
    */
@@ -188,6 +209,8 @@ export interface MCPSessionContext {
     email: string;
     /** When the token expires */
     tokenExpiresAt: Date;
+    /** Granted scopes from the JWT token (also available at session.scopes) */
+    scopes?: string[];
   };
 }
 
@@ -216,4 +239,139 @@ export interface ProtectedResourceMetadata {
 
   /** JWK Set document URL (if resource validates tokens directly) */
   jwks_uri?: string;
+}
+
+/**
+ * Claims structure for proxy-signed JWTs.
+ * These tokens are issued by the MCP Server OAuth proxy after successful
+ * upstream authentication, providing a consistent format across all providers.
+ */
+export interface ProxyJWTClaims {
+  /** Issuer - always "urn:mj:mcp-server" for proxy tokens */
+  iss: string;
+
+  /** Subject - user's email address */
+  sub: string;
+
+  /** Audience - must match resourceIdentifier */
+  aud: string;
+
+  /** Issued at timestamp (seconds since epoch) */
+  iat: number;
+
+  /** Expiration timestamp (seconds since epoch) */
+  exp: number;
+
+  /** User's email (same as sub) */
+  email: string;
+
+  /** MemberJunction User ID (GUID) */
+  mjUserId: string;
+
+  /** Granted scopes (selected during consent, or all available if no consent screen) */
+  scopes: string[];
+
+  /** Upstream provider name for audit trail (from config, not hardcoded enum) */
+  upstreamProvider: string;
+
+  /** Upstream subject claim for audit trail */
+  upstreamSub: string;
+}
+
+/**
+ * Options for signing a proxy JWT.
+ */
+export interface SignProxyJWTOptions {
+  /** User's email address (becomes sub claim) */
+  email: string;
+  /** MemberJunction User ID */
+  mjUserId: string;
+  /** Granted scopes */
+  scopes: string[];
+  /** Name of upstream provider that authenticated the user */
+  upstreamProvider: string;
+  /** Subject claim from upstream token */
+  upstreamSub: string;
+}
+
+/**
+ * Scope information loaded from __mj.APIScope entity.
+ * Used for consent screen display and scope validation.
+ */
+export interface APIScopeInfo {
+  /** Unique identifier */
+  ID: string;
+
+  /** Scope name (e.g., "entity:read") */
+  Name: string;
+
+  /** Category for grouping (e.g., "Entities", "Actions") */
+  Category: string;
+
+  /** Human-readable description for consent screen */
+  Description: string;
+
+  /** Whether this scope is active */
+  IsActive: boolean;
+}
+
+/**
+ * Consent flow state (stored in-memory during OAuth flow).
+ * Tracks the state of a consent request while the user selects scopes.
+ */
+export interface ConsentRequest {
+  /** Unique request identifier */
+  requestId: string;
+
+  /** Timestamp when consent was requested */
+  requestedAt: Date;
+
+  /** User information from upstream token */
+  user: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    mjUserId: string;
+  };
+
+  /** Upstream provider name that authenticated the user (from config) */
+  upstreamProvider: string;
+
+  /** Upstream subject claim */
+  upstreamSub: string;
+
+  /** Available scopes user can select from */
+  availableScopes: APIScopeInfo[];
+
+  /** Client redirect URI to return to after consent */
+  redirectUri: string;
+
+  /** Original OAuth state parameter */
+  state?: string;
+
+  /** Code challenge for PKCE */
+  codeChallenge?: string;
+
+  /** Code challenge method */
+  codeChallengeMethod?: string;
+
+  /** Client ID that initiated the request */
+  clientId: string;
+
+  /** Requested scope string from client */
+  requestedScope?: string;
+}
+
+/**
+ * User's consent response.
+ */
+export interface ConsentResponse {
+  /** Request ID this response is for */
+  requestId: string;
+
+  /** Scopes the user granted */
+  grantedScopes: string[];
+
+  /** Timestamp of consent */
+  consentedAt: Date;
 }

@@ -419,3 +419,153 @@ Note: MCP Server already imports from `@memberjunction/server` for `DEFAULT_SERV
 ### 4. Custom Auth Server
 
 **Rejected**: Per spec, MCP Server is a resource server only. External IdP is preferred.
+
+---
+
+## 11. Multi-Provider OIDC Discovery (Added 2026-01-28)
+
+### Generic Discovery Pattern
+
+All OIDC-compliant providers expose a standard discovery endpoint. The MCP server does NOT need provider-specific knowledge - it uses the generic pattern:
+
+```
+{issuer}/.well-known/openid-configuration
+```
+
+The `issuer` URL comes from the provider configuration in `mj.config.cjs`. Provider-specific URL construction (how issuer is formed from domain, tenantId, region, etc.) is handled by the `@memberjunction/server` auth package, NOT by MCP server code.
+
+### Implementation
+
+The OAuth proxy uses a single generic function for all providers:
+
+```typescript
+async function discoverOIDCEndpoints(issuerUrl: string): Promise<{
+  authorization_endpoint: string;
+  token_endpoint: string;
+  jwks_uri: string;
+}> {
+  // Generic - works for any OIDC-compliant provider
+  const discoveryUrl = `${issuerUrl.replace(/\/$/, '')}/.well-known/openid-configuration`;
+  const response = await fetch(discoveryUrl);
+  return await response.json();
+}
+```
+
+### Loose Coupling Principle
+
+The MCP server treats auth providers as opaque:
+- Provider type is stored as a `string` (from config), not a hardcoded enum
+- All provider-specific logic (claim extraction, JWKS handling) is delegated to `@memberjunction/server`
+- Adding new providers to MJServer automatically makes them available to MCP server
+
+---
+
+## 12. Proxy-Signed JWT Approach (Added 2026-01-28)
+
+### Decision
+
+The OAuth proxy will issue its own JWTs rather than passing through upstream tokens.
+
+### Rationale
+
+1. **Consistent format**: Same JWT structure regardless of upstream provider
+2. **Custom claims**: Include MJ-specific claims (user ID, granted scopes)
+3. **Stateless validation**: MCP Server can validate proxy tokens without contacting upstream
+4. **Scope control**: Scopes in JWT are what user granted, not upstream provider scopes
+
+### JWT Structure
+
+```json
+{
+  "iss": "urn:mj:mcp-server",
+  "sub": "user-email@example.com",
+  "aud": "urn:mj:mcp-server",
+  "iat": 1706472000,
+  "exp": 1706475600,
+  "email": "user-email@example.com",
+  "mjUserId": "uuid-of-mj-user",
+  "scopes": ["entity:read", "action:execute"],
+  "upstreamProvider": "auth0",
+  "upstreamSub": "auth0|123456"
+}
+```
+
+### Signing Configuration
+
+```javascript
+// mj.config.cjs
+mcpServerSettings: {
+  auth: {
+    jwtSigningSecret: process.env.MCP_JWT_SECRET,  // 32+ bytes, base64
+    jwtExpiresIn: '1h',
+    jwtIssuer: 'urn:mj:mcp-server'
+  }
+}
+```
+
+---
+
+## 13. Scope-Based Authorization (Added 2026-01-28)
+
+### Scope Entity
+
+Reuse existing `__mj.APIScope` entity:
+
+| Field | Purpose |
+|-------|---------|
+| Name | Scope identifier (e.g., "entity:read") |
+| Category | Grouping (e.g., "Entities", "Actions") |
+| Description | Human-readable for consent screen |
+| IsActive | Filter inactive scopes |
+
+### Consent Flow
+
+1. User authenticates with upstream provider
+2. Proxy receives upstream tokens, extracts identity
+3. Proxy displays consent screen with available scopes
+4. User selects scopes to grant
+5. Proxy issues JWT with selected scopes
+
+### Tool Scope Evaluation
+
+Tools receive full JWT and check scopes:
+
+```typescript
+function checkScope(jwt: DecodedJWT, required: string): boolean {
+  return jwt.scopes?.includes(required) ?? false;
+}
+```
+
+### Default Scopes (MVP)
+
+| Name | Category | Description |
+|------|----------|-------------|
+| entity:read | Entities | Read entity records |
+| entity:write | Entities | Create and update records |
+| action:execute | Actions | Execute MJ actions |
+| agent:execute | Agents | Run AI agents |
+| query:run | Queries | Execute saved queries |
+| view:run | Views | Run views |
+
+---
+
+## 14. API Key Scope Integration (Added 2026-01-28)
+
+### Existing Infrastructure
+
+API keys already support scopes via `__mj.APIKeyScope` junction table.
+
+### Unified Authorization
+
+Both OAuth tokens and API keys evaluated identically:
+
+```typescript
+interface AuthContext {
+  type: 'oauth' | 'apikey';
+  userId: string;
+  email: string;
+  scopes: string[];
+}
+```
+
+Tools use the same scope check regardless of auth method.

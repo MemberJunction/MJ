@@ -62,7 +62,7 @@ import {
     buildProtectedResourceMetadata,
     extractAuthorizationServers,
 } from './auth/ProtectedResourceMetadata.js';
-import { hasAuthProviders } from './auth/TokenValidator.js';
+import { hasAuthProviders, setProxyTokenConfig } from './auth/TokenValidator.js';
 import { send401Response } from './auth/WWWAuthenticate.js';
 // OAuth Proxy imports
 import { createOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
@@ -937,6 +937,14 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                             console.warn('[OAuth Proxy] Set WEB_CLIENT_SECRET in .env for the MCP Server app registration');
                         }
 
+                        // Build JWT config from proxy settings
+                        const proxySettings = _config.mcpServerSettings?.auth?.proxy;
+                        const jwtConfig = proxySettings?.jwtSigningSecret ? {
+                            signingSecret: proxySettings.jwtSigningSecret,
+                            expiresIn: proxySettings.jwtExpiresIn ?? '1h',
+                            issuer: proxySettings.jwtIssuer ?? 'urn:mj:mcp-server',
+                        } : undefined;
+
                         const proxyConfig: OAuthProxyConfig = {
                             baseUrl: oauthProxyBaseUrl,
                             upstream: {
@@ -945,9 +953,11 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                                 clientId: upstreamClientId,
                                 clientSecret: upstreamClientSecret,
                                 scopes: upstreamScopes,
+                                providerName: provider.name,
                             },
                             enableDynamicRegistration: true,
-                            stateTtlMs: _config.mcpServerSettings?.auth?.proxy?.stateTtlMs,
+                            stateTtlMs: proxySettings?.stateTtlMs,
+                            jwt: jwtConfig,
                         };
 
                         // Create and mount OAuth proxy router
@@ -958,6 +968,17 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                         console.log(`[OAuth Proxy] Authorization endpoint: ${authorizationEndpoint}`);
                         console.log(`[OAuth Proxy] Token endpoint: ${tokenEndpoint}`);
                         console.log(`[OAuth Proxy] Base URL: ${oauthProxyBaseUrl}`);
+                        if (jwtConfig) {
+                            console.log(`[OAuth Proxy] JWT signing enabled (issuer: ${jwtConfig.issuer})`);
+                            // Configure TokenValidator to accept proxy-signed JWTs
+                            setProxyTokenConfig({
+                                signingSecret: jwtConfig.signingSecret,
+                                issuer: jwtConfig.issuer,
+                                audience: oauthProxyBaseUrl,
+                            });
+                        } else {
+                            console.log('[OAuth Proxy] JWT signing disabled - passing through upstream tokens');
+                        }
                     }
                 }
             } catch (error) {

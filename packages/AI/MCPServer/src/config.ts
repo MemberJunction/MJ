@@ -141,6 +141,23 @@ const oauthProxySettingsSchema = z.object({
   clientTtlMs: z.number().default(24 * 60 * 60 * 1000),
   /** TTL for authorization state in milliseconds (default: 10 minutes) */
   stateTtlMs: z.number().default(10 * 60 * 1000),
+  /**
+   * Secret key for signing proxy-issued JWTs (HS256).
+   * Must be at least 32 bytes (256 bits). Can be base64 encoded.
+   * Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   * If not set, the proxy will pass through upstream tokens instead of issuing its own.
+   */
+  jwtSigningSecret: z.string().optional(),
+  /**
+   * JWT expiration time for proxy-issued tokens.
+   * @default '1h' (1 hour)
+   */
+  jwtExpiresIn: z.string().default('1h'),
+  /**
+   * Issuer claim for proxy-signed JWTs.
+   * @default 'urn:mj:mcp-server'
+   */
+  jwtIssuer: z.string().default('urn:mj:mcp-server'),
 });
 
 /**
@@ -301,6 +318,51 @@ export async function initConfig(): Promise<ConfigInfo> {
   return configInfo;
 }
 
+/** Minimum required length for JWT signing secret (32 bytes = 256 bits) */
+const MIN_JWT_SECRET_LENGTH = 32;
+
+/**
+ * Validates the JWT signing secret for the OAuth proxy.
+ *
+ * @param secret - The JWT signing secret (may be base64 encoded)
+ * @returns Object with validation result and decoded secret
+ */
+function validateJwtSigningSecret(secret: string | undefined): {
+  valid: boolean;
+  error?: string;
+  decodedSecret?: string;
+} {
+  if (!secret) {
+    return { valid: false, error: 'JWT signing secret is not configured' };
+  }
+
+  // Try to decode base64 first to get actual byte length
+  let secretBytes: Buffer;
+  try {
+    // Check if it looks like base64 (only alphanumeric, +, /, =)
+    if (/^[A-Za-z0-9+/=]+$/.test(secret) && secret.length % 4 === 0) {
+      secretBytes = Buffer.from(secret, 'base64');
+      // If base64 decode gives reasonable output, use it
+      if (secretBytes.length >= MIN_JWT_SECRET_LENGTH) {
+        return { valid: true, decodedSecret: secret };
+      }
+    }
+    // Otherwise treat as raw string
+    secretBytes = Buffer.from(secret, 'utf-8');
+  } catch {
+    secretBytes = Buffer.from(secret, 'utf-8');
+  }
+
+  if (secretBytes.length < MIN_JWT_SECRET_LENGTH) {
+    return {
+      valid: false,
+      error: `JWT signing secret is too short (${secretBytes.length} bytes). Minimum required: ${MIN_JWT_SECRET_LENGTH} bytes (256 bits). Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`,
+    };
+  }
+
+  return { valid: true, decodedSecret: secret };
+}
+
 /**
  * Resolves OAuth authentication settings with defaults.
  *
@@ -329,12 +391,37 @@ function resolveAuthSettings(
     tokenAudience: authConfig.tokenAudience,
     scopes: authConfig.scopes,
     autoResourceIdentifier: authConfig.autoResourceIdentifier ?? defaults.autoResourceIdentifier,
+    proxy: authConfig.proxy,
   };
 
   // Auto-generate resourceIdentifier if needed
   if (!resolved.resourceIdentifier && resolved.autoResourceIdentifier) {
     const serverPort = port ?? 3100;
     resolved.resourceIdentifier = `http://localhost:${serverPort}`;
+  }
+
+  // Validate JWT signing secret if OAuth proxy is enabled with JWT signing
+  if (resolved.proxy?.enabled && resolved.proxy?.jwtSigningSecret) {
+    const secretValidation = validateJwtSigningSecret(resolved.proxy.jwtSigningSecret);
+    if (!secretValidation.valid) {
+      console.error(`[Config] OAuth Proxy Error: ${secretValidation.error}`);
+      console.error(`[Config] OAuth Proxy will be DISABLED due to invalid JWT signing secret`);
+      console.warn(`[Config] Falling back to API key authentication only`);
+
+      // Disable the proxy but keep the rest of auth settings
+      resolved.proxy = {
+        ...resolved.proxy,
+        enabled: false,
+      };
+
+      // If mode was 'oauth', fall back to 'apiKey'
+      if (resolved.mode === 'oauth') {
+        console.warn(`[Config] Auth mode changed from 'oauth' to 'apiKey' because OAuth proxy is disabled`);
+        resolved.mode = 'apiKey';
+      }
+    } else {
+      console.log(`[Config] JWT signing secret validated (${MIN_JWT_SECRET_LENGTH}+ bytes)`);
+    }
   }
 
   return resolved;

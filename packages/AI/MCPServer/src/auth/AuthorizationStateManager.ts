@@ -15,6 +15,7 @@ import type {
   StoredAuthorizationCode,
   TokenResponse,
 } from './OAuthProxyTypes.js';
+import type { ConsentRequest } from './types.js';
 
 /**
  * Configuration options for the AuthorizationStateManager.
@@ -82,6 +83,7 @@ const DEFAULT_OPTIONS: Required<AuthorizationStateManagerOptions> = {
 export class AuthorizationStateManager {
   private states: Map<string, AuthorizationState> = new Map();
   private codes: Map<string, StoredAuthorizationCode> = new Map();
+  private consentRequests: Map<string, ConsentRequest> = new Map();
   private options: Required<AuthorizationStateManagerOptions>;
   private cleanupTimer: NodeJS.Timeout | null = null;
 
@@ -220,6 +222,76 @@ export class AuthorizationStateManager {
   }
 
   /**
+   * Creates and stores a consent request.
+   *
+   * @param params - The consent request parameters (excluding requestId and requestedAt)
+   * @returns The generated request ID
+   */
+  createConsentRequest(
+    params: Omit<ConsentRequest, 'requestId' | 'requestedAt'>
+  ): string {
+    const requestId = this.generateStateString();
+    const now = new Date();
+
+    const consentRequest: ConsentRequest = {
+      ...params,
+      requestId,
+      requestedAt: now,
+    };
+
+    this.consentRequests.set(requestId, consentRequest);
+
+    console.log(`OAuth Proxy: Created consent request ${requestId.substring(0, 8)}... for user ${params.user.email}`);
+
+    return requestId;
+  }
+
+  /**
+   * Retrieves a consent request without removing it.
+   * Useful for displaying the consent form.
+   *
+   * @param requestId - The consent request ID
+   * @returns The consent request, or undefined if not found/expired
+   */
+  getConsentRequest(requestId: string): ConsentRequest | undefined {
+    const request = this.consentRequests.get(requestId);
+    if (!request) {
+      return undefined;
+    }
+
+    // Check if expired (use same TTL as states)
+    const expirationTime = request.requestedAt.getTime() + this.options.stateTtlMs;
+    if (Date.now() > expirationTime) {
+      this.consentRequests.delete(requestId);
+      return undefined;
+    }
+
+    return request;
+  }
+
+  /**
+   * Consumes a consent request (retrieves and removes).
+   * Used after the user submits their consent decision.
+   *
+   * @param requestId - The consent request ID
+   * @returns The consent request, or undefined if not found/expired
+   */
+  consumeConsentRequest(requestId: string): ConsentRequest | undefined {
+    const request = this.getConsentRequest(requestId);
+    if (request) {
+      this.consentRequests.delete(requestId);
+    }
+    return request;
+  }
+
+  /**
+   * Gets the number of active consent requests.
+   */
+  get consentRequestCount(): number {
+    return this.consentRequests.size;
+  }
+
+  /**
    * Gets the number of active states.
    */
   get stateCount(): number {
@@ -244,6 +316,7 @@ export class AuthorizationStateManager {
     }
     this.states.clear();
     this.codes.clear();
+    this.consentRequests.clear();
     console.log('OAuth Proxy: Authorization state manager shut down');
   }
 
@@ -290,6 +363,7 @@ export class AuthorizationStateManager {
     const now = Date.now();
     let statesRemoved = 0;
     let codesRemoved = 0;
+    let consentRequestsRemoved = 0;
 
     // Cleanup expired states
     for (const [key, state] of this.states.entries()) {
@@ -307,9 +381,18 @@ export class AuthorizationStateManager {
       }
     }
 
-    if (statesRemoved > 0 || codesRemoved > 0) {
+    // Cleanup expired consent requests (use same TTL as states)
+    for (const [key, request] of this.consentRequests.entries()) {
+      const expirationTime = request.requestedAt.getTime() + this.options.stateTtlMs;
+      if (now > expirationTime) {
+        this.consentRequests.delete(key);
+        consentRequestsRemoved++;
+      }
+    }
+
+    if (statesRemoved > 0 || codesRemoved > 0 || consentRequestsRemoved > 0) {
       console.log(
-        `OAuth Proxy: Cleaned up ${statesRemoved} expired state(s), ${codesRemoved} expired code(s)`
+        `OAuth Proxy: Cleaned up ${statesRemoved} state(s), ${codesRemoved} code(s), ${consentRequestsRemoved} consent request(s)`
       );
     }
   }

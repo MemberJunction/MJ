@@ -220,11 +220,32 @@ export interface OAuthProxyConfig {
     clientSecret?: string;
     /** Scopes to request from upstream */
     scopes: string[];
+    /** Provider name (for audit logging) */
+    providerName?: string;
   };
   /** Whether to enable dynamic client registration */
   enableDynamicRegistration: boolean;
   /** TTL for authorization states in milliseconds (default: 10 minutes) */
   stateTtlMs?: number;
+  /**
+   * JWT signing configuration for proxy-issued tokens.
+   * If not provided, upstream tokens are passed through instead.
+   */
+  jwt?: {
+    /** HS256 signing secret */
+    signingSecret: string;
+    /** Token expiration (e.g., '1h') */
+    expiresIn: string;
+    /** Issuer claim */
+    issuer: string;
+  };
+  /**
+   * Enable the consent screen for users to select scopes.
+   * When enabled, users will see a UI to approve/deny scope requests.
+   * When disabled, all available scopes are granted automatically.
+   * @default false
+   */
+  enableConsentScreen?: boolean;
 }
 
 /**
@@ -249,4 +270,18 @@ export interface StoredAuthorizationCode {
   createdAt: number;
   /** Timestamp when code expires */
   expiresAt: number;
+  /**
+   * Validated user information (populated if JWT signing is enabled).
+   * Used to issue proxy-signed JWTs at the token endpoint.
+   */
+  validatedUser?: {
+    /** MemberJunction User ID */
+    mjUserId: string;
+    /** User email */
+    email: string;
+    /** Upstream provider name */
+    upstreamProvider: string;
+    /** Subject claim from upstream token */
+    upstreamSub: string;
+  };
 }

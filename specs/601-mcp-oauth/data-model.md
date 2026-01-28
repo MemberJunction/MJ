@@ -393,6 +393,271 @@ interface AuthProviderConfig {
 
 ---
 
+## Proxy-Signed JWT Structure (Added 2026-01-28)
+
+### JWT Claims
+
+The OAuth proxy issues its own JWTs after successful upstream authentication and consent:
+
+```typescript
+/**
+ * Claims structure for proxy-signed JWTs
+ */
+interface ProxyJWTClaims {
+  /** Issuer - always "urn:mj:mcp-server" */
+  iss: 'urn:mj:mcp-server';
+
+  /** Subject - user's email address */
+  sub: string;
+
+  /** Audience - must match resourceIdentifier */
+  aud: string;
+
+  /** Issued at timestamp */
+  iat: number;
+
+  /** Expiration timestamp */
+  exp: number;
+
+  /** User's email (same as sub) */
+  email: string;
+
+  /** MemberJunction User ID (GUID) */
+  mjUserId: string;
+
+  /** Granted scopes (selected during consent) */
+  scopes: string[];
+
+  /** Upstream provider name for audit trail (from config, not hardcoded enum) */
+  upstreamProvider: string;
+
+  /** Upstream subject claim for audit trail */
+  upstreamSub: string;
+}
+```
+
+### JWT Signing Configuration
+
+```typescript
+/**
+ * Extended auth settings for proxy JWT issuance
+ */
+interface MCPServerAuthSettings {
+  mode: 'apiKey' | 'oauth' | 'both' | 'none';
+  resourceIdentifier?: string;
+  autoResourceIdentifier?: boolean;
+
+  // NEW: Proxy JWT settings
+  /** HS256 signing secret (32+ bytes, base64 encoded) */
+  jwtSigningSecret?: string;
+
+  /** JWT expiration time (default: '1h') */
+  jwtExpiresIn?: string;
+
+  /** JWT issuer claim (default: 'urn:mj:mcp-server') */
+  jwtIssuer?: string;
+}
+```
+
+---
+
+## Scope-Related Types (Added 2026-01-28)
+
+### APIScopeInfo
+
+Runtime representation of a scope from the database:
+
+```typescript
+/**
+ * Scope information loaded from __mj.APIScope entity
+ */
+interface APIScopeInfo {
+  /** Unique identifier */
+  ID: string;
+
+  /** Scope name (e.g., "entity:read") */
+  Name: string;
+
+  /** Category for grouping (e.g., "Entities", "Actions") */
+  Category: string;
+
+  /** Human-readable description for consent screen */
+  Description: string;
+
+  /** Whether this scope is active */
+  IsActive: boolean;
+}
+```
+
+### ConsentRequest
+
+State tracked during the consent flow:
+
+```typescript
+/**
+ * Consent flow state (stored in-memory during OAuth flow)
+ */
+interface ConsentRequest {
+  /** Unique request identifier */
+  requestId: string;
+
+  /** Timestamp when consent was requested */
+  requestedAt: Date;
+
+  /** User information from upstream token */
+  user: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    mjUserId: string;
+  };
+
+  /** Upstream provider name that authenticated the user (from config) */
+  upstreamProvider: string;
+
+  /** Upstream subject claim */
+  upstreamSub: string;
+
+  /** Available scopes user can select from */
+  availableScopes: APIScopeInfo[];
+
+  /** Client redirect URI to return to after consent */
+  redirectUri: string;
+
+  /** Original OAuth state parameter */
+  state: string;
+
+  /** Code verifier for PKCE */
+  codeVerifier?: string;
+}
+```
+
+### ConsentResponse
+
+Result of user consent selection:
+
+```typescript
+/**
+ * User's consent response
+ */
+interface ConsentResponse {
+  /** Request ID this response is for */
+  requestId: string;
+
+  /** Scopes the user granted */
+  grantedScopes: string[];
+
+  /** Timestamp of consent */
+  consentedAt: Date;
+}
+```
+
+---
+
+## Extended Session Context (Added 2026-01-28)
+
+### MCPSessionContext (Updated)
+
+```typescript
+/**
+ * Session context for MCP requests - extended for scope-based authorization
+ */
+interface MCPSessionContext {
+  // Existing fields
+  apiKey?: string;
+  apiKeyId?: string;
+  apiKeyHash?: string;
+  user: UserInfo;
+  authMethod: 'apiKey' | 'oauth' | 'none';
+  oauth?: {
+    issuer: string;
+    subject: string;
+    email: string;
+    tokenExpiresAt: Date;
+  };
+
+  // NEW: Scope-based authorization
+  /** Granted scopes for this session */
+  scopes: string[];
+
+  /** Full decoded JWT (for tools that need direct access) */
+  jwt?: ProxyJWTClaims;
+}
+```
+
+### AuthContext (Unified)
+
+```typescript
+/**
+ * Unified authorization context for both OAuth and API keys
+ */
+interface AuthContext {
+  /** Authentication method */
+  type: 'oauth' | 'apikey' | 'none';
+
+  /** MemberJunction User ID */
+  userId: string;
+
+  /** User's email address */
+  email: string;
+
+  /** Granted scopes (from JWT or APIKeyScope) */
+  scopes: string[];
+
+  /** Full user info */
+  user: UserInfo;
+
+  /** For OAuth: full JWT claims */
+  jwt?: ProxyJWTClaims;
+
+  /** For API key: key details */
+  apiKeyContext?: {
+    apiKeyId: string;
+    apiKeyHash: string;
+  };
+}
+```
+
+---
+
+## Scope Evaluation Helpers
+
+### ScopeEvaluator
+
+```typescript
+/**
+ * Helper for tools to evaluate scopes
+ */
+interface ScopeEvaluator {
+  /**
+   * Check if a specific scope is granted
+   */
+  hasScope(scope: string): boolean;
+
+  /**
+   * Check if any of the specified scopes is granted
+   */
+  hasAnyScope(scopes: string[]): boolean;
+
+  /**
+   * Check if all specified scopes are granted
+   */
+  hasAllScopes(scopes: string[]): boolean;
+
+  /**
+   * Get all granted scopes
+   */
+  getScopes(): string[];
+
+  /**
+   * Get scopes matching a pattern (e.g., "entity:*")
+   */
+  getScopesMatching(pattern: string): string[];
+}
+```
+
+---
+
 ## State Diagram
 
 ```
@@ -444,4 +709,57 @@ interface AuthProviderConfig {
     │  - Mount AuthGate middleware                                  │
     │  - Log active auth mode                                       │
     └──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## OAuth Consent Flow State Diagram (Added 2026-01-28)
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         OAUTH CONSENT FLOW                                │
+└──────────────────────────────────────────────────────────────────────────┘
+
+    Client (Claude Code)                    MCP OAuth Proxy                    Upstream IdP
+           │                                      │                                  │
+           │  1. GET /oauth/authorize             │                                  │
+           │─────────────────────────────────────>│                                  │
+           │                                      │                                  │
+           │                                      │  2. Redirect to upstream         │
+           │                                      │─────────────────────────────────>│
+           │                                      │                                  │
+           │                                      │                                  │ User
+           │                                      │                                  │ authenticates
+           │                                      │                                  │
+           │                                      │  3. Callback with code           │
+           │                                      │<─────────────────────────────────│
+           │                                      │                                  │
+           │                                      │  4. Exchange code for tokens     │
+           │                                      │─────────────────────────────────>│
+           │                                      │                                  │
+           │                                      │  5. Return tokens                │
+           │                                      │<─────────────────────────────────│
+           │                                      │                                  │
+           │                                      │  6. Validate user, lookup MJ ID  │
+           │                                      │  7. Load available scopes        │
+           │                                      │  8. Store ConsentRequest         │
+           │                                      │                                  │
+           │  9. Render consent screen            │                                  │
+           │<─────────────────────────────────────│                                  │
+           │                                      │                                  │
+           │  10. User selects scopes, submits    │                                  │
+           │─────────────────────────────────────>│                                  │
+           │                                      │                                  │
+           │                                      │  11. Issue proxy JWT with scopes │
+           │                                      │  12. Generate auth code          │
+           │                                      │                                  │
+           │  13. Redirect with code              │                                  │
+           │<─────────────────────────────────────│                                  │
+           │                                      │                                  │
+           │  14. POST /oauth/token (code)        │                                  │
+           │─────────────────────────────────────>│                                  │
+           │                                      │                                  │
+           │  15. Return proxy JWT                │                                  │
+           │<─────────────────────────────────────│                                  │
+           │                                      │                                  │
 ```

@@ -18,7 +18,102 @@ import jwt from 'jsonwebtoken';
 import type { JwtPayload, JwtHeader, SigningKeyCallback } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import type { UserInfo } from '@memberjunction/core';
-import type { OAuthValidationResult, OAuthErrorCode } from './types.js';
+import type { OAuthValidationResult, OAuthErrorCode, ProxyJWTClaims } from './types.js';
+
+/**
+ * Configuration for proxy token validation.
+ * Set via setProxyTokenConfig() when OAuth proxy JWT signing is enabled.
+ */
+interface ProxyTokenConfig {
+  signingSecret: string;
+  issuer: string;
+  audience: string;
+}
+
+let proxyTokenConfig: ProxyTokenConfig | undefined;
+
+/**
+ * Configures the proxy token validation settings.
+ * Called by Server.ts when OAuth proxy with JWT signing is enabled.
+ *
+ * @param config - Proxy token configuration
+ */
+export function setProxyTokenConfig(config: ProxyTokenConfig): void {
+  proxyTokenConfig = config;
+  console.log(`[TokenValidator] Proxy token validation configured (issuer: ${config.issuer})`);
+}
+
+/**
+ * Clears the proxy token configuration (for testing).
+ */
+export function clearProxyTokenConfig(): void {
+  proxyTokenConfig = undefined;
+}
+
+/**
+ * Checks if a token appears to be a proxy-issued JWT.
+ * Does NOT validate the token - just checks the issuer claim.
+ *
+ * @param token - The JWT to check
+ * @returns true if this appears to be a proxy-issued token
+ */
+export function isProxyToken(token: string): boolean {
+  if (!proxyTokenConfig) {
+    return false;
+  }
+  try {
+    const decoded = jwt.decode(token) as { iss?: string } | null;
+    return decoded?.iss === proxyTokenConfig.issuer;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validates a proxy-issued JWT token.
+ *
+ * @param token - The proxy JWT to validate
+ * @returns Validation result with payload and user info if valid
+ */
+export async function validateProxyToken(token: string): Promise<OAuthValidationResult> {
+  if (!proxyTokenConfig) {
+    return createError('invalid_token', 'Proxy token validation not configured');
+  }
+
+  try {
+    const payload = jwt.verify(token, proxyTokenConfig.signingSecret, {
+      algorithms: ['HS256'],
+      issuer: proxyTokenConfig.issuer,
+      audience: proxyTokenConfig.audience,
+    }) as ProxyJWTClaims;
+
+    // Extract user info from proxy claims
+    const userInfo = {
+      email: payload.email,
+      firstName: undefined,
+      lastName: undefined,
+      fullName: undefined,
+      preferredUsername: payload.email,
+    };
+
+    return {
+      valid: true,
+      payload: payload as unknown as JwtPayload,
+      userInfo,
+    };
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      return createError('expired_token', 'Token has expired');
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      if (error.message.includes('audience')) {
+        return createError('invalid_audience', 'Token not issued for this resource');
+      }
+      return createError('invalid_token', error.message);
+    }
+    return createError('invalid_token', error instanceof Error ? error.message : 'Token validation failed');
+  }
+}
 
 // Cache for Azure AD v1 JWKS clients (by tenant ID)
 const azureAdV1JwksClients: Map<string, jwksClient.JwksClient> = new Map();
@@ -196,22 +291,32 @@ function isTokenExpired(token: string): { expired: boolean; exp?: number } {
 /**
  * Validates an OAuth Bearer token and extracts user information.
  *
+ * Supports both:
+ * - Proxy-signed JWTs (HS256, issuer "urn:mj:mcp-server")
+ * - Upstream provider tokens (RS256/ES256, various issuers)
+ *
  * Audience validation uses the same approach as MJExplorer - the expected
  * audience is derived from the auth provider's configuration, which is
  * auto-populated from environment variables (WEB_CLIENT_ID for Azure AD).
  *
  * Validation steps:
- * 1. Fast expiration check (before JWKS call)
- * 2. Decode token to get issuer
- * 3. Verify issuer matches a configured provider
- * 4. Verify signature using JWKS
- * 5. Validate audience against provider's configured audience
- * 6. Extract user info from claims
+ * 1. Check if this is a proxy-issued token (fast path)
+ * 2. Fast expiration check (before JWKS call)
+ * 3. Decode token to get issuer
+ * 4. Verify issuer matches a configured provider
+ * 5. Verify signature using JWKS
+ * 6. Validate audience against provider's configured audience
+ * 7. Extract user info from claims
  *
  * @param token - The Bearer token (without "Bearer " prefix)
  * @returns Validation result with payload and user info if valid
  */
 export async function validateBearerToken(token: string): Promise<OAuthValidationResult> {
+  // Check if this is a proxy-issued token (fast path)
+  if (isProxyToken(token)) {
+    return validateProxyToken(token);
+  }
+
   await ensureMJServerImported();
 
   // 1. Fast expiration check

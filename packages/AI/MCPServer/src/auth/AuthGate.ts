@@ -15,7 +15,7 @@
 
 import type { Request, Response } from 'express';
 import type * as http from 'http';
-import type { UserInfo } from '@memberjunction/core';
+import { RunView, type UserInfo } from '@memberjunction/core';
 import type { MCPSessionContext, AuthMode, AuthResult } from './types.js';
 import { getAuthMode, isOAuthEnabled } from './OAuthConfig.js';
 import { validateBearerToken, resolveOAuthUser } from './TokenValidator.js';
@@ -268,6 +268,38 @@ async function handleBothMode(
 }
 
 /**
+ * Loads scopes for an API key from the APIKeyScope entity.
+ *
+ * @param apiKeyId - The ID of the API key
+ * @returns Array of scope names
+ */
+async function loadApiKeyScopes(apiKeyId: string): Promise<string[]> {
+  // System API key has all scopes
+  if (apiKeyId === 'system') {
+    return ['*']; // Wildcard means all scopes
+  }
+
+  try {
+    const rv = new RunView();
+    const result = await rv.RunView<{ Scope: string }>({
+      EntityName: 'MJ: API Key Scopes',
+      ExtraFilter: `APIKeyID = '${apiKeyId}'`,
+      ResultType: 'simple',
+    });
+
+    if (!result.Success) {
+      console.warn(`[AuthGate] Failed to load scopes for API key ${apiKeyId}: ${result.ErrorMessage}`);
+      return [];
+    }
+
+    return result.Results.map((r) => r.Scope).filter(Boolean);
+  } catch (error) {
+    console.warn(`[AuthGate] Error loading scopes for API key ${apiKeyId}:`, error);
+    return [];
+  }
+}
+
+/**
  * Validates API key credentials.
  */
 async function validateApiKeyCredentials(
@@ -289,10 +321,15 @@ async function validateApiKeyCredentials(
         },
       };
     }
+
+    // Load scopes for this API key
+    const scopes = await loadApiKeyScopes(validation.apiKeyId!);
+
     return {
       authenticated: true,
       method: 'apiKey',
       user: validation.user,
+      scopes,
       apiKeyContext: {
         apiKey,
         apiKeyId: validation.apiKeyId!,
@@ -370,17 +407,23 @@ async function validateOAuthCredentials(token: string): Promise<AuthResult> {
   }
 
   const payload = validation.payload!;
-  console.log(`[AuthGate] Authenticated via OAuth: ${validation.userInfo.email} (issuer: ${payload.iss})`);
+
+  // Extract scopes from payload if available (proxy-issued tokens have 'scopes' claim)
+  const scopes = (payload as { scopes?: string[] }).scopes;
+
+  console.log(`[AuthGate] Authenticated via OAuth: ${validation.userInfo.email} (issuer: ${payload.iss}${scopes ? `, scopes: ${scopes.length}` : ''})`);
 
   return {
     authenticated: true,
     method: 'oauth',
     user: userResult.user!,
+    scopes, // Unified scopes field
     oauthContext: {
       issuer: payload.iss!,
       subject: payload.sub!,
       email: validation.userInfo.email!,
       expiresAt: new Date((payload.exp || 0) * 1000),
+      scopes,
     },
   };
 }
@@ -404,12 +447,14 @@ export function toSessionContext(result: AuthResult): MCPSessionContext {
         subject: result.oauthContext.subject,
         email: result.oauthContext.email,
         tokenExpiresAt: result.oauthContext.expiresAt,
+        scopes: result.oauthContext.scopes,
       }
     : undefined;
 
   return {
     user: result.user,
     authMethod: result.method,
+    scopes: result.scopes, // Unified scopes from either auth method
     apiKey: result.apiKeyContext?.apiKey,
     apiKeyId: result.apiKeyContext?.apiKeyId,
     apiKeyHash: result.apiKeyContext?.apiKeyHash,

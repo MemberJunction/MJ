@@ -27,3 +27,15 @@ export * from './ProtectedResourceMetadata.js';
 // Core authentication
 export * from './TokenValidator.js';
 export * from './AuthGate.js';
+
+// OAuth Proxy - JWT Issuance
+export * from './JWTIssuer.js';
+
+// Scope-based authorization
+export * from './ScopeService.js';
+export * from './ScopeEvaluator.js';
+
+// OAuth Proxy UI
+export * from './ConsentPage.js';
+export * from './LoginPage.js';
+export * from './styles.js';
