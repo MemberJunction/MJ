@@ -23,7 +23,8 @@
     "packages/React/*",
     "packages/Scheduling/*",
     "packages/TestingFramework/*",
-    "packages/Credentials/*"
+    "packages/Credentials/*",
+    "packages/APIKeys/*"
   ],
   "scripts": {
     "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",

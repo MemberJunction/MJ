@@ -8,6 +8,7 @@ import { GraphQLJSONObject } from 'graphql-type-json';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 import { z } from 'zod';
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 @InputType()
 export class CommunicationProviderMessageType {
@@ -166,7 +167,7 @@ export class RunEntityCommunicationResultType {
 }
 
 @Resolver(RunEntityCommunicationResultType)
-export class ReportResolver {
+export class ReportResolver extends ResolverBase {
   @Query(() => RunEntityCommunicationResultType)
   async RunEntityCommunicationByViewID(
     @Arg('entityID', () => String) entityID: string,
@@ -178,6 +179,9 @@ export class ReportResolver {
     @Arg('includeProcessedMessages', () => Boolean) includeProcessedMessages: boolean,
     @Ctx() { userPayload }: AppContext
   ): Promise<RunEntityCommunicationResultType> {
+    // Check API key scope authorization for communication send
+    await this.CheckAPIKeyScopeAuthorization('communication:send', entityID, userPayload);
+
     try {
       await EntityCommunicationsEngine.Instance.Config(false, userPayload.userRecord);
       const newMessage = new Message(message as unknown as Message);

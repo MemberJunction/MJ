@@ -8,6 +8,7 @@ import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { z } from 'zod';
 import mssql from 'mssql';
 import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 @ObjectType()
 export class RunReportResultType {
@@ -46,9 +47,12 @@ export class CreateReportResultType {
 }
 
 @Resolver(RunReportResultType)
-export class ReportResolverExtended {
+export class ReportResolverExtended extends ResolverBase {
   @Query(() => RunReportResultType)
   async GetReportData(@Arg('ReportID', () => String) ReportID: string, @Ctx() context: AppContext): Promise<RunReportResultType> {
+    // Check API key scope authorization for report run
+    await this.CheckAPIKeyScopeAuthorization('report:run', ReportID, context.userPayload);
+
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const rp = new RunReport(provider as unknown as IRunReportProvider);
 
@@ -71,6 +75,9 @@ export class ReportResolverExtended {
     @Arg('ConversationDetailID', () => String) ConversationDetailID: string,
     @Ctx() { dataSource, userPayload, providers }: AppContext
   ): Promise<CreateReportResultType> {
+    // Check API key scope authorization for report creation (uses entity:create for Reports entity)
+    await this.CheckAPIKeyScopeAuthorization('entity:create', 'Reports', userPayload);
+
     try {
       const md = GetReadWriteProvider(providers);
 

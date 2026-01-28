@@ -23,6 +23,7 @@ export * from './engines/EncryptionEngineBase';
 export * from './engines/UserInfoEngine';
 export * from './engines/UserViewEngine';
 export * from './engines/FileStorageEngine';
+export * from './engines/MCPEngine';
 
 export * from './artifact-extraction/artifact-extract-rules';
 export * from './artifact-extraction/artifact-extractor';

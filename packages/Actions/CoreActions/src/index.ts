@@ -109,6 +109,9 @@ export * from './custom/visualization/shared/svg-utils';
 export * from './custom/visualization/shared/svg-theming';
 export * from './custom/visualization/shared/mermaid-types';
 
+// MCP Actions
+export * from './custom/mcp';
+
 // Import Load functions to prevent tree shaking of @RegisterClass decorators
 import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
 import { LoadSlackWebhookAction } from './custom/communication/slack-webhook.action';
@@ -199,6 +202,7 @@ import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-
 import { LoadGetRecordsAction } from './custom/crud';
 import { LoadCodeExecutionAction } from './custom/code-execution/execute-code.action';
 import { LoadListActions } from './custom/lists';
+import { LoadAllMCPActions } from './custom/mcp';
 
 export function LoadAllCoreActions() {
     LoadGeneratedActions()
@@ -293,6 +297,9 @@ export function LoadAllCoreActions() {
 
     // List Management Actions
     LoadListActions();
+
+    // MCP Actions
+    LoadAllMCPActions();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out

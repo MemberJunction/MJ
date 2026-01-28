@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, EventEmitter, Output, ChangeDetectorRef, HostListener } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/core';
 import { APIApplicationEntity, APIApplicationScopeEntity, APIScopeEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 
 const PANEL_WIDTH_SETTING_KEY = 'APIKeys.ApplicationsPanelWidth';
 const DEFAULT_PANEL_WIDTH = 570;
@@ -95,16 +96,10 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
     public SuccessMessage = '';
     public ErrorMessage = '';
 
-    // Category configuration
-    private readonly categoryConfig: Record<string, { icon: string; color: string }> = {
-        'Entities': { icon: 'fa-solid fa-database', color: '#6366f1' },
-        'Agents': { icon: 'fa-solid fa-robot', color: '#10b981' },
-        'Admin': { icon: 'fa-solid fa-shield-halved', color: '#f59e0b' },
-        'Actions': { icon: 'fa-solid fa-bolt', color: '#8b5cf6' },
-        'Queries': { icon: 'fa-solid fa-magnifying-glass', color: '#3b82f6' },
-        'Reports': { icon: 'fa-solid fa-chart-bar', color: '#ef4444' },
-        'Communication': { icon: 'fa-solid fa-envelope', color: '#ec4899' },
-        'Other': { icon: 'fa-solid fa-ellipsis', color: '#6b7280' }
+    // Default UI config for categories without explicit configuration
+    private readonly defaultUIConfig = {
+        icon: 'fa-solid fa-ellipsis',
+        color: '#6b7280'
     };
 
     constructor(cdr: ChangeDetectorRef) {
@@ -113,7 +108,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
 
     async ngOnInit(): Promise<void> {
         await this.loadPanelWidth();
-        await this.loadData();
+        this.loadData();
     }
 
     ngOnDestroy(): void {
@@ -214,45 +209,29 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
 
     /**
      * Load all applications and scopes
+     * Uses cached data from APIKeysEngineBase for better performance
      */
-    public async loadData(): Promise<void> {
+    public loadData(): void {
         this.IsLoading = true;
         try {
-            const rv = new RunView();
-            const [appsResult, scopesResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: API Applications',
-                    OrderBy: 'Name',
-                    ResultType: 'entity_object'
-                },
-                {
-                    EntityName: 'MJ: API Scopes',
-                    OrderBy: 'FullPath',
-                    ResultType: 'entity_object'
-                }
-            ]);
+            const base = APIKeysEngineBase.Instance;
 
-            if (appsResult.Success) {
-                const apps = appsResult.Results as APIApplicationEntity[];
-                this.AllScopes = (scopesResult.Success ? scopesResult.Results : []) as APIScopeEntity[];
+            // Get cached applications and scopes
+            const apps = base.Applications;
+            this.AllScopes = base.Scopes;
 
-                // Load scope assignments for each application
-                const appPromises = apps.map(async (app) => {
-                    const scopeResult = await rv.RunView<APIApplicationScopeEntity>({
-                        EntityName: 'MJ: API Application Scopes',
-                        ExtraFilter: `ApplicationID='${app.ID}'`,
-                        ResultType: 'entity_object'
-                    });
+            // Build application list with scope assignments from cache
+            this.Applications = apps
+                .sort((a, b) => a.Name.localeCompare(b.Name))
+                .map(app => {
+                    const scopes = base.GetApplicationScopesByApplicationId(app.ID);
                     return {
                         application: app,
-                        scopeCount: scopeResult.Success ? scopeResult.Results.length : 0,
+                        scopeCount: scopes.length,
                         expanded: false,
-                        scopes: scopeResult.Success ? scopeResult.Results : []
+                        scopes
                     };
                 });
-
-                this.Applications = await Promise.all(appPromises);
-            }
         } catch (error) {
             console.error('Error loading applications:', error);
             this.ErrorMessage = 'Failed to load applications';
@@ -294,7 +273,9 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
             if (result) {
                 this.SuccessMessage = 'Application created successfully';
                 this.closePanel();
-                await this.loadData();
+                // Refresh the cache before reloading display
+                await APIKeysEngineBase.Instance.Config(true);
+                this.loadData();
                 this.ApplicationUpdated.emit();
                 setTimeout(() => this.SuccessMessage = '', 3000);
             } else {
@@ -325,7 +306,8 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Build scope categories with proper display names
+     * Build scope categories with proper display names.
+     * Uses UIConfig from root scopes for category icons/colors.
      */
     private buildScopeCategories(appItem: ApplicationWithScopes): void {
         const assignedScopeIds = new Map(
@@ -336,6 +318,19 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
         const scopeMap = new Map<string, APIScopeEntity>();
         for (const scope of this.AllScopes) {
             scopeMap.set(scope.ID, scope);
+        }
+
+        // Build a map of category -> root scope UIConfig
+        // Root scopes (ParentID is null) define the UI appearance for their category
+        const categoryUIConfigs = new Map<string, { icon: string; color: string }>();
+        for (const scope of this.AllScopes) {
+            if (!scope.ParentID) {
+                const uiConfig = parseAPIScopeUIConfig(scope);
+                categoryUIConfigs.set(scope.Category, {
+                    icon: uiConfig.icon || this.defaultUIConfig.icon,
+                    color: uiConfig.color || this.defaultUIConfig.color
+                });
+            }
         }
 
         // Compute display name for each scope
@@ -394,7 +389,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
 
         // Build category objects - all collapsed by default
         this.ScopeCategories = Array.from(categoryMap.entries()).map(([name, scopes]) => {
-            const config = this.categoryConfig[name] || this.categoryConfig['Other'];
+            const config = categoryUIConfigs.get(name) || this.defaultUIConfig;
             const selectedCount = scopes.filter(s => s.selected).length;
             return {
                 name,
@@ -461,7 +456,9 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
 
             this.SuccessMessage = 'Scope assignments saved successfully';
             this.closePanel();
-            await this.loadData();
+            // Refresh the cache before reloading display
+            await APIKeysEngineBase.Instance.Config(true);
+            this.loadData();
             this.ApplicationUpdated.emit();
             setTimeout(() => this.SuccessMessage = '', 3000);
         } catch (error) {
@@ -522,7 +519,9 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
 
             this.SuccessMessage = 'Application saved successfully';
             this.closePanel();
-            await this.loadData();
+            // Refresh the cache before reloading display
+            await APIKeysEngineBase.Instance.Config(true);
+            this.loadData();
             this.ApplicationUpdated.emit();
             setTimeout(() => this.SuccessMessage = '', 3000);
         } catch (error) {

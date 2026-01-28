@@ -1,0 +1,123 @@
+.server-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.error-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: #ffebee;
+    border: 1px solid #f44336;
+    border-radius: 6px;
+    color: #c62828;
+    font-size: 14px;
+}
+
+.form-section {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.form-section h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-color, #333);
+}
+
+.form-section h3 i {
+    color: var(--mj-primary-color, #2196f3);
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--mj-text-color, #333);
+}
+
+.form-group label .required {
+    color: #f44336;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+}
+
+.form-group .hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #999;
+}
+
+.form-group .error-text {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #f44336;
+}
+
+.form-row {
+    display: flex;
+    gap: 16px;
+}
+
+.form-group.half {
+    flex: 1;
+}
+
+.transport-option,
+.auth-option {
+    display: flex;
+    flex-direction: column;
+    padding: 4px 0;
+}
+
+.transport-label,
+.auth-label {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.transport-desc,
+.auth-desc {
+    font-size: 12px;
+    color: #666;
+}
+
+/* Kendo overrides */
+:host ::ng-deep .k-dialog-actions {
+    padding: 16px;
+    border-top: 1px solid #e0e0e0;
+}
+
+:host ::ng-deep .k-dialog-content {
+    padding: 20px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+:host ::ng-deep .k-textbox,
+:host ::ng-deep .k-textarea,
+:host ::ng-deep .k-numerictextbox,
+:host ::ng-deep .k-dropdownlist {
+    width: 100%;
+}

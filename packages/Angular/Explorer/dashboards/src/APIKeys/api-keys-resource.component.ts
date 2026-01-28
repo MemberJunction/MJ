@@ -3,6 +3,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
 import { APIKeyEntity, APIScopeEntity, APIKeyUsageLogEntity, APIApplicationEntity, ResourceData } from '@memberjunction/core-entities';
+import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 import { Subject } from 'rxjs';
 import { APIKeyFilter, APIKeyListComponent } from './api-key-list.component';
 import { APIKeyCreateResult } from './api-key-create-dialog.component';
@@ -92,28 +93,14 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public ShowEditPanel = false;
     public SelectedKeyId: string | null = null;
 
-    // Scope category colors
-    private readonly categoryColors: Record<string, string> = {
-        'Entities': '#6366f1',
-        'Agents': '#10b981',
-        'Admin': '#f59e0b',
-        'Actions': '#8b5cf6',
-        'Queries': '#3b82f6',
-        'Reports': '#ef4444',
-        'Communication': '#ec4899',
-        'Other': '#6b7280'
+    // Default UI config for categories without explicit configuration
+    private readonly defaultUIConfig = {
+        icon: 'fa-solid fa-ellipsis',
+        color: '#6b7280'
     };
 
-    private readonly categoryIcons: Record<string, string> = {
-        'Entities': 'fa-solid fa-database',
-        'Agents': 'fa-solid fa-robot',
-        'Admin': 'fa-solid fa-shield-halved',
-        'Actions': 'fa-solid fa-bolt',
-        'Queries': 'fa-solid fa-magnifying-glass',
-        'Reports': 'fa-solid fa-chart-bar',
-        'Communication': 'fa-solid fa-envelope',
-        'Other': 'fa-solid fa-ellipsis'
-    };
+    // Dynamic category UI configs built from root scopes
+    private categoryUIConfigs = new Map<string, { icon: string; color: string }>();
 
     // User permissions
     public UserCanCreateKeys = false;
@@ -166,25 +153,13 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     }
 
     /**
-     * Load application and scope counts for tab badges
+     * Load application and scope counts for tab badges.
+     * Uses cached data from APIKeysEngineBase.
      */
-    private async loadCounts(): Promise<void> {
-        const rv = new RunView();
-        const [appsResult, scopesResult] = await rv.RunViews([
-            {
-                EntityName: 'MJ: API Applications',
-                ResultType: 'simple',
-                Fields: ['ID']
-            },
-            {
-                EntityName: 'MJ: API Scopes',
-                ResultType: 'simple',
-                Fields: ['ID']
-            }
-        ]);
-
-        this.ApplicationCount = appsResult.Success ? appsResult.Results.length : 0;
-        this.ScopeCount = scopesResult.Success ? scopesResult.Results.length : 0;
+    private loadCounts(): void {
+        const base = APIKeysEngineBase.Instance;
+        this.ApplicationCount = base.Applications.length;
+        this.ScopeCount = base.Scopes.length;
     }
 
     /**
@@ -203,32 +178,42 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     }
 
     /**
-     * Load scope statistics by category
+     * Load scope statistics by category.
+     * Uses cached data from APIKeysEngineBase.
      */
-    private async loadScopeStats(): Promise<void> {
-        const rv = new RunView();
-        const result = await rv.RunView<APIScopeEntity>({
-            EntityName: 'MJ: API Scopes',
-            OrderBy: 'Category, Name',
-            ResultType: 'entity_object'
-        });
+    private loadScopeStats(): void {
+        const base = APIKeysEngineBase.Instance;
+        const scopes = base.Scopes;
 
-        if (result.Success) {
-            const categoryMap = new Map<string, number>();
-            for (const scope of result.Results) {
-                const category = scope.Category || 'Other';
-                categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
+        // Build category UI configs from root scopes
+        this.categoryUIConfigs.clear();
+        for (const scope of scopes) {
+            if (!scope.ParentID) {
+                const uiConfig = parseAPIScopeUIConfig(scope);
+                this.categoryUIConfigs.set(scope.Category, {
+                    icon: uiConfig.icon || this.defaultUIConfig.icon,
+                    color: uiConfig.color || this.defaultUIConfig.color
+                });
             }
+        }
 
-            const total = result.Results.length;
-            this.ScopeStats = Array.from(categoryMap.entries()).map(([category, count]) => ({
+        const categoryMap = new Map<string, number>();
+        for (const scope of scopes) {
+            const category = scope.Category || 'Other';
+            categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
+        }
+
+        const total = scopes.length;
+        this.ScopeStats = Array.from(categoryMap.entries()).map(([category, count]) => {
+            const config = this.categoryUIConfigs.get(category) || this.defaultUIConfig;
+            return {
                 category,
                 count,
                 percentage: total > 0 ? Math.round((count / total) * 100) : 0,
-                color: this.categoryColors[category] || this.categoryColors['Other'],
-                iconClass: this.categoryIcons[category] || this.categoryIcons['Other']
-            }));
-        }
+                color: config.color,
+                iconClass: config.icon
+            };
+        });
     }
 
     /**

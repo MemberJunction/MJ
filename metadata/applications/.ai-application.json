@@ -41,6 +41,13 @@
         "ResourceType": "Custom",
         "DriverClass": "AIConfigResource",
         "isDefault": false
+      },
+      {
+        "Label": "MCP",
+        "Icon": "fa-solid fa-plug-circle-bolt",
+        "ResourceType": "Custom",
+        "DriverClass": "MCPResource",
+        "isDefault": false
       }
     ]
   },
@@ -51,7 +58,7 @@
     "ID": "7ACD423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2026-01-10T15:28:55.543Z",
-    "checksum": "5769c14877ecd208c0f889b82e7af9e4db3d26839605b55c5c3662d19280b33d"
+    "lastModified": "2026-01-27T21:11:10.214Z",
+    "checksum": "e7aaa3e7b91d09cbf19fa5555979e5ae29bf1cc4659a3c52cfd671d77f07b32b"
   }
 }

@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "MCP",
+      "Description": "Model Context Protocol (MCP) actions for managing external tool servers and connections",
+      "ParentID": "@lookup:Action Categories.Name=System&ParentID=null",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B2B6A76B-AE11-42D6-9090-D7C5ECFD550C"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T20:45:24.857Z",
+      "checksum": "c797822e0f32303eec90cb30297a4c8e667f808da6c93107ff43d609112a0122"
+    }
+  }
+]

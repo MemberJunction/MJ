@@ -29,8 +29,11 @@ export class RunTemplateResolver extends ResolverBase {
         @Ctx() { userPayload, providers }: AppContext,
         @Arg('contextData', { nullable: true }) contextData?: string
     ): Promise<TemplateRunResult> {
+        // Check API key scope authorization for template execution
+        await this.CheckAPIKeyScopeAuthorization('template:execute', templateId, userPayload);
+
         const startTime = Date.now();
-        
+
         try {
             LogStatus(`=== RUNNING TEMPLATE FOR ID: ${templateId} ===`);
 
