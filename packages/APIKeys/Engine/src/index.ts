@@ -7,11 +7,19 @@
  * - Application-level scope ceilings
  * - Usage logging and audit trails
  *
+ * **Architecture:**
+ * - `APIKeysEngineBase` (from @memberjunction/api-keys-base) - Metadata caching, usable anywhere
+ * - `APIKeyEngine` (this package) - Server-side operations, wraps Base engine
+ *
  * **Note**: This package requires Node.js and the crypto module. It is intended
- * for server-side use only.
+ * for server-side use only. For client-side access to cached metadata, use
+ * the @memberjunction/api-keys-base package directly.
  *
  * @module @memberjunction/api-keys
  */
+
+// Re-export base engine for convenience
+export { APIKeysEngineBase, LoadAPIKeysEngineBase } from '@memberjunction/api-keys-base';
 
 // Main engine and singleton
 export {
@@ -55,3 +63,13 @@ export {
     UsageLogEntry,
     APIKeyEngineConfig
 } from './interfaces';
+
+/**
+ * Tree-shaking prevention function.
+ * Call this to ensure the APIKeyEngine and related classes are included in the bundle.
+ */
+export function LoadAPIKeyEngine(): void {
+    // This function exists to prevent tree shaking from removing the class.
+    // The import of LoadAPIKeysEngineBase in APIKeyEngine constructor ensures
+    // the base engine is also loaded.
+}

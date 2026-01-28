@@ -19,8 +19,9 @@ import {
 } from '@memberjunction/core';
 import { AuditLogEntity, ErrorLogEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { PubSubEngine } from 'type-graphql';
+import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
+import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import sql from 'mssql';
 import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 
@@ -504,7 +505,7 @@ export class ResolverBase {
     if (!userPayload) {
       throw new Error(`userPayload is null`);
     }
-    
+
     // first check permissions, the logged in user must have read permissions on the entity to run the view
     if (entityInfo) {
       const userInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim()); // get the user record from MD so we have ROLES attached, don't use the one from payload directly
@@ -516,9 +517,82 @@ export class ResolverBase {
       if (!userPermissions.CanRead) {
         throw new Error(`User ${userPayload.email} does not have read permissions on ${entityInfo.Name}`);
       }
-    } 
+    }
     else {
       throw new Error(`Entity not found in metadata`);
+    }
+  }
+
+  /**
+   * Checks API key scope authorization. Only performs check if request
+   * was authenticated via API key (apiKeyHash present in userPayload).
+   * For OAuth/JWT auth, this is a no-op.
+   *
+   * @param scopePath - The scope path (e.g., 'entity:read', 'agent:execute')
+   * @param resource - The resource name (e.g., entity name, agent name)
+   * @param userPayload - The user payload from context
+   * @throws AuthorizationError if API key lacks required scope
+   */
+  protected async CheckAPIKeyScopeAuthorization(
+    scopePath: string,
+    resource: string,
+    userPayload: UserPayload
+  ): Promise<void> {
+    // Skip scope check for OAuth/JWT auth (no API key)
+    if (!userPayload.apiKeyHash) {
+      return;
+    }
+
+    // Get system user for authorization call
+    // NOTE: We use system user here because Authorize() needs to run internal
+    // database queries (loading scope rules, logging decisions). The system user
+    // ensures these queries work regardless of what permissions the API key's
+    // user has. The API key's associated user (in userPayload.userRecord) is
+    // used later when the actual operation executes - their permissions are
+    // the ultimate ceiling that scopes can only narrow, never expand.
+    const systemUser = UserCache.Instance.Users.find(u => u.Type === 'System');
+    if (!systemUser) {
+      throw new Error('System user not found');
+    }
+
+    const apiKeyEngine = GetAPIKeyEngine();
+
+    // Check for full_access scope first (god power - bypasses all other checks)
+    const fullAccessResult = await apiKeyEngine.Authorize(
+      userPayload.apiKeyHash,
+      'MJAPI',
+      'full_access',
+      '*',
+      systemUser,
+      { endpoint: '/graphql', method: 'POST' }
+    );
+
+    if (fullAccessResult.Allowed) {
+      // full_access granted - skip specific scope check
+      return;
+    }
+
+    // Check specific scope
+    const result = await apiKeyEngine.Authorize(
+      userPayload.apiKeyHash,
+      'MJAPI',
+      scopePath,
+      resource,
+      systemUser,
+      {
+        endpoint: '/graphql',
+        method: 'POST'
+      }
+    );
+
+    if (!result.Allowed) {
+      // Provide specific, actionable error message
+      throw new AuthorizationError(
+        `Access denied. This API key requires the '${scopePath}' scope ` +
+        `for resource '${resource}' to perform this operation. ` +
+        `Please update the API key's scopes or use an API key with appropriate permissions. ` +
+        `Denial reason: ${result.Reason}`
+      );
     }
   }
 
@@ -549,6 +623,9 @@ export class ResolverBase {
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
+
+      // Check API key scope authorization for view operations
+      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
 
       const md = provider
       const user = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
@@ -908,6 +985,9 @@ export class ResolverBase {
   }
 
   protected async CreateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    // Check API key scope authorization for entity create operations
+    await this.CheckAPIKeyScopeAuthorization('entity:create', entityName, userPayload);
+
     if (await this.BeforeCreate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
@@ -940,6 +1020,9 @@ export class ResolverBase {
   protected async AfterCreate(provider: DatabaseProviderBase, input: any) {}
 
   protected async UpdateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    // Check API key scope authorization for entity update operations
+    await this.CheckAPIKeyScopeAuthorization('entity:update', entityName, userPayload);
+
     if (await this.BeforeUpdate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
       const userInfo = this.GetUserFromPayload(userPayload);
@@ -1202,6 +1285,9 @@ export class ResolverBase {
     userPayload: UserPayload,
     pubSub: PubSubEngine
   ) {
+    // Check API key scope authorization for entity delete operations
+    await this.CheckAPIKeyScopeAuthorization('entity:delete', entityName, userPayload);
+
     if (await this.BeforeDelete(provider, key)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));

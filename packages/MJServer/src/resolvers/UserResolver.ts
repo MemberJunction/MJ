@@ -6,6 +6,9 @@ import { GetReadOnlyProvider } from '../util.js';
 export class UserResolver extends MJUserResolverBase {
   @Query(() => MJUser_)
   async CurrentUser(@Ctx() context: AppContext) {
+    // Check API key scope authorization for user read (self)
+    await this.CheckAPIKeyScopeAuthorization('user:read', '*', context.userPayload);
+
     // If userRecord is already available (e.g., from API key auth or system auth),
     // use it directly instead of looking up by email again
     if (context.userPayload.userRecord) {
@@ -49,23 +52,32 @@ export class UserResolver extends MJUserResolverBase {
 
   @Query(() => MJUser_)
   async UserByID(@Arg('ID', () => Int) ID: number, @Ctx() { providers, userPayload }: AppContext) {
-    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
+    // Check API key scope authorization for user read
+    await this.CheckAPIKeyScopeAuthorization('user:read', ID.toString(), userPayload);
+
+    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})
     const retVal = super.safeFirstArrayElement(await this.findBy(provider, 'Users', { ID }, userPayload.userRecord));
     return this.MapFieldNamesToCodeNames('Users', retVal);
   }
 
   @Query(() => MJUser_)
   async UserByEmployeeID(@Arg('EmployeeID', () => Int) EmployeeID: number, @Ctx() { providers, userPayload }: AppContext) {
-    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
+    // Check API key scope authorization for user read
+    await this.CheckAPIKeyScopeAuthorization('user:read', EmployeeID.toString(), userPayload);
+
+    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})
     const retVal = super.safeFirstArrayElement(await this.findBy(provider, 'Users', { EmployeeID }, userPayload.userRecord));
     return this.MapFieldNamesToCodeNames('Users', retVal);
   }
 
   @Query(() => MJUser_)
   async UserByEmail(@Arg('Email', () => String) Email: string, @Ctx() { providers, userPayload }: AppContext) {
+    // Check API key scope authorization for user read
+    await this.CheckAPIKeyScopeAuthorization('user:read', Email, userPayload);
+
     // const searchEmail = userEmailMap[Email] ?? Email;
     const searchEmail = Email;
-    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
+    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})
     const returnVal = super.safeFirstArrayElement(await this.findBy(provider, 'Users', { Email: searchEmail }, userPayload.userRecord));
     return this.MapFieldNamesToCodeNames('Users', returnVal);
   }

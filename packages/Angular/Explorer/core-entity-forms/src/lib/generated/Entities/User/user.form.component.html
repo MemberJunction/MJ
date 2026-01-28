@@ -1219,6 +1219,28 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- MJ: MCP Tool Execution Logs Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJMCPToolExecutionLogs"
+        sectionName="MJ: MCP Tool Execution Logs"
+        icon="fa fa-history"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJMCPToolExecutionLogs')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Tool Execution Logs','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Tool Execution Logs')"
+                [AllowLoad]="IsSectionExpanded('mJMCPToolExecutionLogs')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJMCPToolExecutionLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- MJ: Public Links Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJPublicLinks"
@@ -1632,6 +1654,28 @@
                 [AllowLoad]="IsSectionExpanded('mJDashboardPermissions')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboardPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: MCP Server Connection Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJMCPServerConnectionPermissions"
+        sectionName="MJ: MCP Server Connection Permissions"
+        icon="fa fa-server"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJMCPServerConnectionPermissions')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Connection Permissions','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJMCPServerConnectionPermissions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnectionPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -2375,13 +2375,13 @@ export const AIResultCacheSchema = z.object({
         * * Default Value: newsequentialid()`),
     AIPromptID: z.string().describe(`
         * * Field Name: AIPromptID
-        * * Display Name: AIPrompt ID
+        * * Display Name: AI Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: Reference to the AI prompt this result corresponds to.`),
     AIModelID: z.string().describe(`
         * * Field Name: AIModelID
-        * * Display Name: AIModel ID
+        * * Display Name: AI Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         * * Description: Reference to the AI model that generated this result.`),
@@ -2426,19 +2426,19 @@ export const AIResultCacheSchema = z.object({
         * * Default Value: getutcdate()`),
     VendorID: z.string().nullable().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor ID
+        * * Display Name: Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
         * * Description: The vendor that provided this result.`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent ID
+        * * Display Name: Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
         * * Description: The agent that initiated the request, if any.`),
     ConfigurationID: z.string().nullable().describe(`
         * * Field Name: ConfigurationID
-        * * Display Name: Configuration ID
+        * * Display Name: Configuration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
         * * Description: The configuration used for this execution.`),
@@ -2449,17 +2449,17 @@ export const AIResultCacheSchema = z.object({
         * * Description: Vector representation of the prompt for similarity matching.`),
     PromptRunID: z.string().nullable().describe(`
         * * Field Name: PromptRunID
-        * * Display Name: Prompt Run ID
+        * * Display Name: Prompt Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: Reference to the AIPromptRun that created this cache entry.`),
     AIPrompt: z.string().describe(`
         * * Field Name: AIPrompt
-        * * Display Name: AIPrompt
+        * * Display Name: AI Prompt
         * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
-        * * Display Name: AIModel
+        * * Display Name: AI Model
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
@@ -4440,12 +4440,12 @@ export const ConversationSchema = z.object({
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     ExternalID: z.string().nullable().describe(`
         * * Field Name: ExternalID
-        * * Display Name: External ID
+        * * Display Name: External
         * * SQL Data Type: nvarchar(500)
         * * Description: External system identifier for cross-system conversation tracking.`),
     Name: z.string().nullable().describe(`
@@ -4464,23 +4464,23 @@ export const ConversationSchema = z.object({
         * * Description: The type or category of conversation (Skip, Support, Chat, etc.).`),
     IsArchived: z.boolean().describe(`
         * * Field Name: IsArchived
-        * * Display Name: Is Archived
+        * * Display Name: Archived
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation has been archived and should not appear in active lists.`),
     LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
-        * * Display Name: Linked Entity ID
+        * * Display Name: Linked Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     LinkedRecordID: z.string().nullable().describe(`
         * * Field Name: LinkedRecordID
-        * * Display Name: Linked Record ID
+        * * Display Name: Linked Record
         * * SQL Data Type: nvarchar(500)
         * * Description: ID of a related record this conversation is about (support ticket, order, etc.).`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
-        * * Display Name: Data Context ID
+        * * Display Name: Data Context
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -4505,24 +4505,24 @@ export const ConversationSchema = z.object({
         * * Description: Tracks the processing status of the conversation: Available, Processing`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment ID
+        * * Display Name: Environment
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ProjectID: z.string().nullable().describe(`
         * * Field Name: ProjectID
-        * * Display Name: Project ID
+        * * Display Name: Project
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     IsPinned: z.boolean().describe(`
         * * Field Name: IsPinned
-        * * Display Name: Is Pinned
+        * * Display Name: Pinned
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation is pinned to the top of lists`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run ID
+        * * Display Name: Test Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`),
@@ -5077,7 +5077,7 @@ export const DuplicateRunDetailSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunID: z.string().describe(`
         * * Field Name: DuplicateRunID
-        * * Display Name: Duplicate Run ID
+        * * Display Name: Duplicate Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)`),
     RecordID: z.string().describe(`
@@ -5249,26 +5249,27 @@ export type DuplicateRunEntityType = z.infer<typeof DuplicateRunSchema>;
 export const EmployeeCompanyIntegrationSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EmployeeID: z.string().describe(`
         * * Field Name: EmployeeID
-        * * Display Name: Employee ID
+        * * Display Name: Employee
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)`),
     CompanyIntegrationID: z.string().describe(`
         * * Field Name: CompanyIntegrationID
-        * * Display Name: Company Integration ID
+        * * Display Name: Company Integration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)`),
     ExternalSystemRecordID: z.string().describe(`
         * * Field Name: ExternalSystemRecordID
-        * * Display Name: External System Record
+        * * Display Name: External System Record ID
         * * SQL Data Type: nvarchar(750)
         * * Description: The employee's unique identifier in the external integrated system.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if this employee integration mapping is currently active.`),
@@ -5284,7 +5285,7 @@ export const EmployeeCompanyIntegrationSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee
+        * * Display Name: Employee Name
         * * SQL Data Type: nvarchar(81)`),
     CompanyIntegration: z.string().describe(`
         * * Field Name: CompanyIntegration
@@ -5305,27 +5306,27 @@ export const EmployeeRoleSchema = z.object({
         * * Default Value: newsequentialid()`),
     EmployeeID: z.string().describe(`
         * * Field Name: EmployeeID
-        * * Display Name: Employee ID
+        * * Display Name: Employee
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)`),
     RoleID: z.string().describe(`
         * * Field Name: RoleID
-        * * Display Name: Role ID
+        * * Display Name: Role
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Roles (vwRoles.ID)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee
+        * * Display Name: Employee Name
         * * SQL Data Type: nvarchar(81)`),
     Role: z.string().describe(`
         * * Field Name: Role
@@ -5346,22 +5347,22 @@ export const EmployeeSkillSchema = z.object({
         * * Default Value: newsequentialid()`),
     EmployeeID: z.string().describe(`
         * * Field Name: EmployeeID
-        * * Display Name: Employee ID
+        * * Display Name: Employee
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)`),
     SkillID: z.string().describe(`
         * * Field Name: SkillID
-        * * Display Name: Skill ID
+        * * Display Name: Skill
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Skills (vwSkills.ID)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
@@ -5838,12 +5839,12 @@ export const EntityActionFilterSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action ID
+        * * Display Name: Entity Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)`),
     ActionFilterID: z.string().describe(`
         * * Field Name: ActionFilterID
-        * * Display Name: Action Filter ID
+        * * Display Name: Action Filter
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)`),
     Sequence: z.number().describe(`
@@ -5864,12 +5865,12 @@ export const EntityActionFilterSchema = z.object({
         * * Description: Status of the entity action filter (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
@@ -5934,12 +5935,12 @@ export const EntityActionInvocationSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action ID
+        * * Display Name: Entity Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)`),
     InvocationTypeID: z.string().describe(`
         * * Field Name: InvocationTypeID
-        * * Display Name: Invocation Type ID
+        * * Display Name: Invocation Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)`),
     Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
@@ -5955,17 +5956,17 @@ export const EntityActionInvocationSchema = z.object({
         * * Description: Status of the entity action invocation (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Entity Action
+        * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
@@ -5986,12 +5987,12 @@ export const EntityActionParamSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action ID
+        * * Display Name: Entity Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)`),
     ActionParamID: z.string().describe(`
         * * Field Name: ActionParamID
-        * * Display Name: Action Param ID
+        * * Display Name: Action Parameter
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Params (vwActionParams.ID)`),
     ValueType: z.union([z.literal('Entity Field'), z.literal('Entity Object'), z.literal('Script'), z.literal('Static')]).describe(`
@@ -6031,7 +6032,7 @@ export const EntityActionParamSchema = z.object({
         * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
-        * * Display Name: Action Param
+        * * Display Name: Action Parameter
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -6208,7 +6209,7 @@ export const EntityCommunicationFieldSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityCommunicationMessageTypeID: z.string().describe(`
         * * Field Name: EntityCommunicationMessageTypeID
-        * * Display Name: Entity Communication Message Type ID
+        * * Display Name: Message Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)`),
     FieldName: z.string().describe(`
@@ -6223,17 +6224,17 @@ export const EntityCommunicationFieldSchema = z.object({
         * * Description: Priority of the field for the communication base message type`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EntityCommunicationMessageType: z.string().describe(`
         * * Field Name: EntityCommunicationMessageType
-        * * Display Name: Entity Communication Message Type
+        * * Display Name: Message Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -7426,24 +7427,27 @@ export type EntitySettingEntityType = z.infer<typeof EntitySettingSchema>;
 export const ErrorLogSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     CompanyIntegrationRunID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunID
-        * * Display Name: CompanyIntegrationRun ID
+        * * Display Name: Company Integration Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)`),
     CompanyIntegrationRunDetailID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunDetailID
-        * * Display Name: CompanyIntegrationRunDetail ID
+        * * Display Name: Company Integration Run Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
+        * * Display Name: Code
         * * SQL Data Type: nchar(20)
         * * Description: Error code for categorizing and handling specific error types.`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
+        * * Display Name: Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The primary error message describing what went wrong.`),
     CreatedBy: z.string().nullable().describe(`
@@ -7454,13 +7458,16 @@ export const ErrorLogSchema = z.object({
         * * Description: User or system process that encountered this error.`),
     Status: z.string().nullable().describe(`
         * * Field Name: Status
+        * * Display Name: Status
         * * SQL Data Type: nvarchar(10)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
+        * * Display Name: Category
         * * SQL Data Type: nvarchar(20)
         * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).`),
     Details: z.string().nullable().describe(`
         * * Field Name: Details
+        * * Display Name: Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Full error details including stack trace, inner exceptions, and context data.`),
     __mj_CreatedAt: z.date().describe(`
@@ -9336,7 +9343,7 @@ export const AIAgentRunStepSchema = z.object({
         * * Description: Unique identifier for this execution step`),
     AgentRunID: z.string().describe(`
         * * Field Name: AgentRunID
-        * * Display Name: Agent Run ID
+        * * Display Name: Agent Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Reference to the parent AIAgentRun that contains this step`),
@@ -9368,7 +9375,7 @@ export const AIAgentRunStepSchema = z.object({
         * * Description: Human-readable name of what this step accomplishes`),
     TargetID: z.string().nullable().describe(`
         * * Field Name: TargetID
-        * * Display Name: Target ID
+        * * Display Name: Target
         * * SQL Data Type: uniqueidentifier
         * * Description: ID of the specific target being executed (AIPrompt.ID, AIAction.ID, AIAgent.ID, etc.). NULL for steps that don't target a specific entity.`),
     Status: z.union([z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Running')]).describe(`
@@ -9426,7 +9433,7 @@ export const AIAgentRunStepSchema = z.object({
         * * Default Value: getutcdate()`),
     TargetLogID: z.string().nullable().describe(`
         * * Field Name: TargetLogID
-        * * Display Name: Target Log ID
+        * * Display Name: Target Log
         * * SQL Data Type: uniqueidentifier
         * * Description: ID of the execution log/run record created for this step (ActionExecutionLog.ID for action steps, AIAgentRun.ID for subagent steps, AIPromptRun.ID for prompt steps)`),
     PayloadAtStart: z.string().nullable().describe(`
@@ -9464,7 +9471,7 @@ permanently, Warn means validation failed but execution continues.`),
 detailed information about what validation rules failed.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles`),
@@ -9475,15 +9482,15 @@ detailed information about what validation rules failed.`),
         * * Description: Human-readable notes and comments about this agent run step`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
-        * * Display Name: Agent Run
+        * * Display Name: Agent Run Name
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -11983,7 +11990,7 @@ export const APIKeyScopeSchema = z.object({
         * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)`),
     ScopeID: z.string().describe(`
         * * Field Name: ScopeID
-        * * Display Name: Scope ID
+        * * Display Name: Scope
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -12013,7 +12020,7 @@ export const APIKeyScopeSchema = z.object({
         * * Description: How to interpret the pattern: Include (grant if matches) or Exclude (grant if does NOT match).`),
     IsDeny: z.boolean().describe(`
         * * Field Name: IsDeny
-        * * Display Name: Deny Rule
+        * * Display Name: Is Deny
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If true, this rule explicitly DENIES access. Deny rules trump allow rules at the same priority level.`),
@@ -12025,7 +12032,7 @@ export const APIKeyScopeSchema = z.object({
         * * Description: Rule evaluation order. Higher priority rules are evaluated first. Within same priority, deny rules are evaluated before allow rules.`),
     APIKey: z.string().describe(`
         * * Field Name: APIKey
-        * * Display Name: API Key Name
+        * * Display Name: API Key
         * * SQL Data Type: nvarchar(255)`),
     Scope: z.string().describe(`
         * * Field Name: Scope
@@ -12071,7 +12078,7 @@ export const APIKeyUsageLogSchema = z.object({
         * * Description: HTTP response status code returned to the client (e.g., 200 for success, 401 for unauthorized, 500 for server error).`),
     ResponseTimeMs: z.number().nullable().describe(`
         * * Field Name: ResponseTimeMs
-        * * Display Name: Response Time
+        * * Display Name: Response Time (ms)
         * * SQL Data Type: int
         * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.`),
     IPAddress: z.string().nullable().describe(`
@@ -12128,7 +12135,7 @@ export const APIKeyUsageLogSchema = z.object({
         * * Description: When authorization is denied, explains why (e.g., app ceiling blocked, no matching key scope, explicit deny rule).`),
     APIKey: z.string().describe(`
         * * Field Name: APIKey
-        * * Display Name: API Key Value
+        * * Display Name: API Key
         * * SQL Data Type: nvarchar(255)`),
     Application: z.string().nullable().describe(`
         * * Field Name: Application
@@ -12270,6 +12277,11 @@ export const APIScopeSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this scope is currently active. Inactive scopes are ignored during authorization.`),
+    UIConfig: z.string().nullable().describe(`
+        * * Field Name: UIConfig
+        * * Display Name: UI Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for UI presentation. Schema: { "icon": "fa-solid fa-xxx", "color": "#hexcolor" }. Icon should be a Font Awesome class. Color should be a hex color code.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -13528,13 +13540,13 @@ export const ConversationDetailArtifactSchema = z.object({
         * * Default Value: newsequentialid()`),
     ConversationDetailID: z.string().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail ID
+        * * Display Name: Conversation Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: Foreign key to ConversationDetail - the conversation message associated with this artifact`),
     ArtifactVersionID: z.string().describe(`
         * * Field Name: ArtifactVersionID
-        * * Display Name: Artifact Version ID
+        * * Display Name: Artifact Version
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
         * * Description: Foreign key to ArtifactVersion - the specific artifact version linked to this conversation message`),
@@ -13560,7 +13572,7 @@ export const ConversationDetailArtifactSchema = z.object({
         * * Default Value: getutcdate()`),
     ConversationDetail: z.string().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
+        * * Display Name: Message Content
         * * SQL Data Type: nvarchar(MAX)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
@@ -13684,7 +13696,7 @@ export const ConversationDetailRatingSchema = z.object({
         * * Default Value: newsequentialid()`),
     ConversationDetailID: z.string().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail ID
+        * * Display Name: Conversation Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: The conversation message being rated.`),
@@ -14790,6 +14802,548 @@ export const ListShareSchema = z.object({
 export type ListShareEntityType = z.infer<typeof ListShareSchema>;
 
 /**
+ * zod schema definition for the entity MJ: MCP Server Connection Permissions
+ */
+export const MCPServerConnectionPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MCPServerConnectionID: z.string().describe(`
+        * * Field Name: MCPServerConnectionID
+        * * Display Name: MCP Server Connection ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: FK to User (mutually exclusive with RoleID)`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Roles (vwRoles.ID)
+        * * Description: FK to Role (mutually exclusive with UserID)`),
+    CanExecute: z.boolean().describe(`
+        * * Field Name: CanExecute
+        * * Display Name: Can Execute
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Can invoke tools via this connection`),
+    CanModify: z.boolean().describe(`
+        * * Field Name: CanModify
+        * * Display Name: Can Modify
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Can modify connection settings`),
+    CanViewCredentials: z.boolean().describe(`
+        * * Field Name: CanViewCredentials
+        * * Display Name: Can View Credentials
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Can see credential info (but not decrypt)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    MCPServerConnection: z.string().describe(`
+        * * Field Name: MCPServerConnection
+        * * Display Name: MCP Server Connection
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MCPServerConnectionPermissionEntityType = z.infer<typeof MCPServerConnectionPermissionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: MCP Server Connection Tools
+ */
+export const MCPServerConnectionToolSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MCPServerConnectionID: z.string().describe(`
+        * * Field Name: MCPServerConnectionID
+        * * Display Name: MCP Server Connection
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
+    MCPServerToolID: z.string().describe(`
+        * * Field Name: MCPServerToolID
+        * * Display Name: MCP Server Tool
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)`),
+    IsEnabled: z.boolean().describe(`
+        * * Field Name: IsEnabled
+        * * Display Name: Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this tool is enabled for the connection`),
+    DefaultInputValues: z.string().nullable().describe(`
+        * * Field Name: DefaultInputValues
+        * * Display Name: Default Input Values
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON default values for tool inputs`),
+    MaxCallsPerMinute: z.number().nullable().describe(`
+        * * Field Name: MaxCallsPerMinute
+        * * Display Name: Max Calls Per Minute
+        * * SQL Data Type: int
+        * * Description: Override rate limit for this specific tool`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    MCPServerConnection: z.string().describe(`
+        * * Field Name: MCPServerConnection
+        * * Display Name: Connection
+        * * SQL Data Type: nvarchar(255)`),
+    MCPServerTool: z.string().nullable().describe(`
+        * * Field Name: MCPServerTool
+        * * Display Name: Tool
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MCPServerConnectionToolEntityType = z.infer<typeof MCPServerConnectionToolSchema>;
+
+/**
+ * zod schema definition for the entity MJ: MCP Server Connections
+ */
+export const MCPServerConnectionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MCPServerID: z.string().describe(`
+        * * Field Name: MCPServerID
+        * * Display Name: MCP Server
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Servers (vwMCPServers.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Connection name (unique per company)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: FK to Credential entity (uses existing credential types)`),
+    CustomHeaderName: z.string().nullable().describe(`
+        * * Field Name: CustomHeaderName
+        * * Display Name: Custom Header Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Custom header name for API key auth (default: X-API-Key)`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
+        * * Description: Optional company association. NULL means the connection is global and available to all companies. Non-NULL restricts the connection to that specific company.`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Active`),
+    AutoSyncTools: z.boolean().describe(`
+        * * Field Name: AutoSyncTools
+        * * Display Name: Auto Sync Tools
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Auto-sync tools when connecting`),
+    AutoGenerateActions: z.boolean().describe(`
+        * * Field Name: AutoGenerateActions
+        * * Display Name: Auto Generate Actions
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Auto-generate MJ Actions for discovered tools`),
+    LogToolCalls: z.boolean().describe(`
+        * * Field Name: LogToolCalls
+        * * Display Name: Log Tool Calls
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Log all tool calls to execution log`),
+    LogInputParameters: z.boolean().describe(`
+        * * Field Name: LogInputParameters
+        * * Display Name: Log Input Parameters
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Include input parameters in logs`),
+    LogOutputContent: z.boolean().describe(`
+        * * Field Name: LogOutputContent
+        * * Display Name: Log Output Content
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Include output content in logs`),
+    MaxOutputLogSize: z.number().nullable().describe(`
+        * * Field Name: MaxOutputLogSize
+        * * Display Name: Max Output Log Size
+        * * SQL Data Type: int
+        * * Default Value: 102400
+        * * Description: Max output size to log in bytes (default: 100KB)`),
+    LastConnectedAt: z.date().nullable().describe(`
+        * * Field Name: LastConnectedAt
+        * * Display Name: Last Connected At
+        * * SQL Data Type: datetimeoffset`),
+    LastErrorMessage: z.string().nullable().describe(`
+        * * Field Name: LastErrorMessage
+        * * Display Name: Last Error Message
+        * * SQL Data Type: nvarchar(MAX)`),
+    EnvironmentVars: z.string().nullable().describe(`
+        * * Field Name: EnvironmentVars
+        * * Display Name: Environment Variables
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object of environment variables for Stdio transport`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    MCPServer: z.string().describe(`
+        * * Field Name: MCPServer
+        * * Display Name: MCP Server
+        * * SQL Data Type: nvarchar(255)`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MCPServerConnectionEntityType = z.infer<typeof MCPServerConnectionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: MCP Server Tools
+ */
+export const MCPServerToolSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MCPServerID: z.string().describe(`
+        * * Field Name: MCPServerID
+        * * Display Name: MCP Server
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Servers (vwMCPServers.ID)`),
+    ToolName: z.string().describe(`
+        * * Field Name: ToolName
+        * * Display Name: Tool Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Tool identifier from the MCP server`),
+    ToolTitle: z.string().nullable().describe(`
+        * * Field Name: ToolTitle
+        * * Display Name: Tool Title
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable title for the tool`),
+    ToolDescription: z.string().nullable().describe(`
+        * * Field Name: ToolDescription
+        * * Display Name: Tool Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    InputSchema: z.string().describe(`
+        * * Field Name: InputSchema
+        * * Display Name: Input Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema for tool input parameters`),
+    OutputSchema: z.string().nullable().describe(`
+        * * Field Name: OutputSchema
+        * * Display Name: Output Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema for tool output (if provided)`),
+    Annotations: z.string().nullable().describe(`
+        * * Field Name: Annotations
+        * * Display Name: Annotations
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON with tool hints (readOnlyHint, destructiveHint, etc.)`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Active
+        * * Description: Tool status: Active, Inactive, or Deprecated`),
+    DiscoveredAt: z.date().describe(`
+        * * Field Name: DiscoveredAt
+        * * Display Name: Discovered At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    LastSeenAt: z.date().describe(`
+        * * Field Name: LastSeenAt
+        * * Display Name: Last Seen At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    GeneratedActionID: z.string().nullable().describe(`
+        * * Field Name: GeneratedActionID
+        * * Display Name: Generated Action
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        * * Description: FK to auto-generated Action (if promoted)`),
+    GeneratedActionCategoryID: z.string().nullable().describe(`
+        * * Field Name: GeneratedActionCategoryID
+        * * Display Name: Generated Action Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Action Categories (vwActionCategories.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    MCPServer: z.string().describe(`
+        * * Field Name: MCPServer
+        * * Display Name: MCP Server
+        * * SQL Data Type: nvarchar(255)`),
+    GeneratedAction: z.string().nullable().describe(`
+        * * Field Name: GeneratedAction
+        * * Display Name: Generated Action
+        * * SQL Data Type: nvarchar(425)`),
+    GeneratedActionCategory: z.string().nullable().describe(`
+        * * Field Name: GeneratedActionCategory
+        * * Display Name: Generated Action Category
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MCPServerToolEntityType = z.infer<typeof MCPServerToolSchema>;
+
+/**
+ * zod schema definition for the entity MJ: MCP Servers
+ */
+export const MCPServerSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique display name for the MCP server`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    ServerURL: z.string().nullable().describe(`
+        * * Field Name: ServerURL
+        * * Display Name: Server URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Server endpoint URL for HTTP/SSE/WebSocket transports`),
+    Command: z.string().nullable().describe(`
+        * * Field Name: Command
+        * * Display Name: Command
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Executable path for Stdio transport`),
+    CommandArgs: z.string().nullable().describe(`
+        * * Field Name: CommandArgs
+        * * Display Name: Command Arguments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of command arguments for Stdio transport`),
+    TransportType: z.string().describe(`
+        * * Field Name: TransportType
+        * * Display Name: Transport Type
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Transport type: StreamableHTTP, SSE, Stdio, or WebSocket`),
+    DefaultAuthType: z.string().describe(`
+        * * Field Name: DefaultAuthType
+        * * Display Name: Default Auth Type
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Default auth type: None, Bearer, APIKey, OAuth2, Basic, or Custom`),
+    CredentialTypeID: z.string().nullable().describe(`
+        * * Field Name: CredentialTypeID
+        * * Display Name: Credential Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+        * * Description: Expected credential type for this server`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Active
+        * * Description: Server status: Active, Inactive, or Deprecated`),
+    LastSyncAt: z.date().nullable().describe(`
+        * * Field Name: LastSyncAt
+        * * Display Name: Last Sync At
+        * * SQL Data Type: datetimeoffset`),
+    RateLimitPerMinute: z.number().nullable().describe(`
+        * * Field Name: RateLimitPerMinute
+        * * Display Name: Rate Limit Per Minute
+        * * SQL Data Type: int`),
+    RateLimitPerHour: z.number().nullable().describe(`
+        * * Field Name: RateLimitPerHour
+        * * Display Name: Rate Limit Per Hour
+        * * SQL Data Type: int`),
+    ConnectionTimeoutMs: z.number().nullable().describe(`
+        * * Field Name: ConnectionTimeoutMs
+        * * Display Name: Connection Timeout (ms)
+        * * SQL Data Type: int
+        * * Default Value: 30000`),
+    RequestTimeoutMs: z.number().nullable().describe(`
+        * * Field Name: RequestTimeoutMs
+        * * Display Name: Request Timeout (ms)
+        * * SQL Data Type: int
+        * * Default Value: 60000`),
+    DocumentationURL: z.string().nullable().describe(`
+        * * Field Name: DocumentationURL
+        * * Display Name: Documentation URL
+        * * SQL Data Type: nvarchar(1000)`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CredentialType: z.string().nullable().describe(`
+        * * Field Name: CredentialType
+        * * Display Name: Credential Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MCPServerEntityType = z.infer<typeof MCPServerSchema>;
+
+/**
+ * zod schema definition for the entity MJ: MCP Tool Execution Logs
+ */
+export const MCPToolExecutionLogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MCPServerConnectionID: z.string().describe(`
+        * * Field Name: MCPServerConnectionID
+        * * Display Name: MCP Server Connection
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
+    MCPServerToolID: z.string().nullable().describe(`
+        * * Field Name: MCPServerToolID
+        * * Display Name: MCP Server Tool
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
+        * * Description: FK to MCP Server Tool (null if tool not cached)`),
+    ToolName: z.string().describe(`
+        * * Field Name: ToolName
+        * * Display Name: Tool Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Tool name (stored directly for resilience)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: FK to User who initiated the call`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EndedAt: z.date().nullable().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset`),
+    DurationMs: z.number().nullable().describe(`
+        * * Field Name: DurationMs
+        * * Display Name: Duration (ms)
+        * * SQL Data Type: int
+        * * Description: Execution duration in milliseconds`),
+    Success: z.boolean().describe(`
+        * * Field Name: Success
+        * * Display Name: Success
+        * * SQL Data Type: bit
+        * * Default Value: 0`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)`),
+    InputParameters: z.string().nullable().describe(`
+        * * Field Name: InputParameters
+        * * Display Name: Input Parameters
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of input parameters (if logging enabled)`),
+    OutputContent: z.string().nullable().describe(`
+        * * Field Name: OutputContent
+        * * Display Name: Output Content
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of output content (if logging enabled)`),
+    OutputTruncated: z.boolean().describe(`
+        * * Field Name: OutputTruncated
+        * * Display Name: Output Truncated
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether output was truncated due to size`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    MCPServerConnection: z.string().describe(`
+        * * Field Name: MCPServerConnection
+        * * Display Name: MCP Server Connection Name
+        * * SQL Data Type: nvarchar(255)`),
+    MCPServerTool: z.string().nullable().describe(`
+        * * Field Name: MCPServerTool
+        * * Display Name: MCP Server Tool Name
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MCPToolExecutionLogEntityType = z.infer<typeof MCPToolExecutionLogSchema>;
+
+/**
  * zod schema definition for the entity MJ: Projects
  */
 export const ProjectSchema = z.object({
@@ -15619,7 +16173,7 @@ export const TaskSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
     Name: z.string().describe(`
@@ -15634,33 +16188,33 @@ export const TaskSchema = z.object({
         * * Description: Detailed description of the task requirements and objectives`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment ID
+        * * Display Name: Environment
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ProjectID: z.string().nullable().describe(`
         * * Field Name: ProjectID
-        * * Display Name: Project ID
+        * * Display Name: Project
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     ConversationDetailID: z.string().nullable().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail ID
+        * * Display Name: Conversation Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent ID
+        * * Display Name: Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
     Status: z.union([z.literal('Blocked'), z.literal('Cancelled'), z.literal('Complete'), z.literal('Deferred'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
@@ -15739,7 +16293,7 @@ export const TaskSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -26597,7 +27151,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AIPromptID
-    * * Display Name: AIPrompt ID
+    * * Display Name: AI Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Reference to the AI prompt this result corresponds to.
@@ -26611,7 +27165,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AIModelID
-    * * Display Name: AIModel ID
+    * * Display Name: AI Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     * * Description: Reference to the AI model that generated this result.
@@ -26714,7 +27268,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor ID
+    * * Display Name: Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     * * Description: The vendor that provided this result.
@@ -26728,7 +27282,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent ID
+    * * Display Name: Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: The agent that initiated the request, if any.
@@ -26742,7 +27296,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: ConfigurationID
-    * * Display Name: Configuration ID
+    * * Display Name: Configuration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
     * * Description: The configuration used for this execution.
@@ -26769,7 +27323,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: PromptRunID
-    * * Display Name: Prompt Run ID
+    * * Display Name: Prompt Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
     * * Description: Reference to the AIPromptRun that created this cache entry.
@@ -26783,7 +27337,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AIPrompt
-    * * Display Name: AIPrompt
+    * * Display Name: AI Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get AIPrompt(): string {
@@ -26792,7 +27346,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AIModel
-    * * Display Name: AIModel
+    * * Display Name: AI Model
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {
@@ -32029,7 +32583,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -32042,7 +32596,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: ExternalID
-    * * Display Name: External ID
+    * * Display Name: External
     * * SQL Data Type: nvarchar(500)
     * * Description: External system identifier for cross-system conversation tracking.
     */
@@ -32093,7 +32647,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: IsArchived
-    * * Display Name: Is Archived
+    * * Display Name: Archived
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation has been archived and should not appear in active lists.
@@ -32107,7 +32661,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntityID
-    * * Display Name: Linked Entity ID
+    * * Display Name: Linked Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -32120,7 +32674,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: LinkedRecordID
-    * * Display Name: Linked Record ID
+    * * Display Name: Linked Record
     * * SQL Data Type: nvarchar(500)
     * * Description: ID of a related record this conversation is about (support ticket, order, etc.).
     */
@@ -32133,7 +32687,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: DataContextID
-    * * Display Name: Data Context ID
+    * * Display Name: Data Context
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
     */
@@ -32184,7 +32738,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment ID
+    * * Display Name: Environment
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -32198,7 +32752,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: ProjectID
-    * * Display Name: Project ID
+    * * Display Name: Project
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -32211,7 +32765,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: IsPinned
-    * * Display Name: Is Pinned
+    * * Display Name: Pinned
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation is pinned to the top of lists
@@ -32225,7 +32779,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run ID
+    * * Display Name: Test Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.
@@ -33632,7 +34186,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
 
     /**
     * * Field Name: DuplicateRunID
-    * * Display Name: Duplicate Run ID
+    * * Display Name: Duplicate Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)
     */
@@ -34041,6 +34595,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -34053,7 +34608,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: EmployeeID
-    * * Display Name: Employee ID
+    * * Display Name: Employee
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
@@ -34066,7 +34621,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: CompanyIntegrationID
-    * * Display Name: Company Integration ID
+    * * Display Name: Company Integration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
     */
@@ -34079,7 +34634,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: ExternalSystemRecordID
-    * * Display Name: External System Record
+    * * Display Name: External System Record ID
     * * SQL Data Type: nvarchar(750)
     * * Description: The employee's unique identifier in the external integrated system.
     */
@@ -34092,7 +34647,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if this employee integration mapping is currently active.
@@ -34126,7 +34681,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee
+    * * Display Name: Employee Name
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -34189,7 +34744,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
 
     /**
     * * Field Name: EmployeeID
-    * * Display Name: Employee ID
+    * * Display Name: Employee
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
@@ -34202,7 +34757,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
 
     /**
     * * Field Name: RoleID
-    * * Display Name: Role ID
+    * * Display Name: Role
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Roles (vwRoles.ID)
     */
@@ -34215,7 +34770,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34225,7 +34780,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34235,7 +34790,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee
+    * * Display Name: Employee Name
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -34298,7 +34853,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: EmployeeID
-    * * Display Name: Employee ID
+    * * Display Name: Employee
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
@@ -34311,7 +34866,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: SkillID
-    * * Display Name: Skill ID
+    * * Display Name: Skill
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Skills (vwSkills.ID)
     */
@@ -34324,7 +34879,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34334,7 +34889,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35519,7 +36074,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action ID
+    * * Display Name: Entity Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
@@ -35532,7 +36087,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: ActionFilterID
-    * * Display Name: Action Filter ID
+    * * Display Name: Action Filter
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)
     */
@@ -35577,7 +36132,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35587,7 +36142,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35765,7 +36320,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action ID
+    * * Display Name: Entity Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
@@ -35778,7 +36333,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: InvocationTypeID
-    * * Display Name: Invocation Type ID
+    * * Display Name: Invocation Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
     */
@@ -35810,7 +36365,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35820,7 +36375,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35830,7 +36385,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Entity Action
+    * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -35893,7 +36448,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action ID
+    * * Display Name: Entity Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
@@ -35906,7 +36461,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: ActionParamID
-    * * Display Name: Action Param ID
+    * * Display Name: Action Parameter
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Params (vwActionParams.ID)
     */
@@ -35993,7 +36548,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: ActionParam
-    * * Display Name: Action Param
+    * * Display Name: Action Parameter
     * * SQL Data Type: nvarchar(255)
     */
     get ActionParam(): string {
@@ -36442,7 +36997,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: EntityCommunicationMessageTypeID
-    * * Display Name: Entity Communication Message Type ID
+    * * Display Name: Message Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)
     */
@@ -36481,7 +37036,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -36491,7 +37046,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -36501,7 +37056,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: EntityCommunicationMessageType
-    * * Display Name: Entity Communication Message Type
+    * * Display Name: Message Type
     * * SQL Data Type: nvarchar(100)
     */
     get EntityCommunicationMessageType(): string {
@@ -39446,6 +40001,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -39458,7 +40014,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunID
-    * * Display Name: CompanyIntegrationRun ID
+    * * Display Name: Company Integration Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
     */
@@ -39471,7 +40027,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunDetailID
-    * * Display Name: CompanyIntegrationRunDetail ID
+    * * Display Name: Company Integration Run Detail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)
     */
@@ -39484,6 +40040,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Code
+    * * Display Name: Code
     * * SQL Data Type: nchar(20)
     * * Description: Error code for categorizing and handling specific error types.
     */
@@ -39496,6 +40053,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Message
+    * * Display Name: Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The primary error message describing what went wrong.
     */
@@ -39522,6 +40080,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Status
+    * * Display Name: Status
     * * SQL Data Type: nvarchar(10)
     */
     get Status(): string | null {
@@ -39533,6 +40092,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Category
+    * * Display Name: Category
     * * SQL Data Type: nvarchar(20)
     * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).
     */
@@ -39545,6 +40105,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Details
+    * * Display Name: Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Full error details including stack trace, inner exceptions, and context data.
     */
@@ -44493,7 +45054,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * * Field Name: AgentRunID
-    * * Display Name: Agent Run ID
+    * * Display Name: Agent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: Reference to the parent AIAgentRun that contains this step
@@ -44557,7 +45118,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * * Field Name: TargetID
-    * * Display Name: Target ID
+    * * Display Name: Target
     * * SQL Data Type: uniqueidentifier
     * * Description: ID of the specific target being executed (AIPrompt.ID, AIAction.ID, AIAgent.ID, etc.). NULL for steps that don't target a specific entity.
     */
@@ -44689,7 +45250,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * * Field Name: TargetLogID
-    * * Display Name: Target Log ID
+    * * Display Name: Target Log
     * * SQL Data Type: uniqueidentifier
     * * Description: ID of the execution log/run record created for this step (ActionExecutionLog.ID for action steps, AIAgentRun.ID for subagent steps, AIPromptRun.ID for prompt steps)
     */
@@ -44767,7 +45328,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
     * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles
@@ -44794,7 +45355,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: AgentRun
-    * * Display Name: Agent Run
+    * * Display Name: Agent Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get AgentRun(): string | null {
@@ -44803,7 +45364,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -44812,7 +45373,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -51666,7 +52227,7 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
 
     /**
     * * Field Name: ScopeID
-    * * Display Name: Scope ID
+    * * Display Name: Scope
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
     */
@@ -51730,7 +52291,7 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
 
     /**
     * * Field Name: IsDeny
-    * * Display Name: Deny Rule
+    * * Display Name: Is Deny
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If true, this rule explicitly DENIES access. Deny rules trump allow rules at the same priority level.
@@ -51758,7 +52319,7 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
 
     /**
     * * Field Name: APIKey
-    * * Display Name: API Key Name
+    * * Display Name: API Key
     * * SQL Data Type: nvarchar(255)
     */
     get APIKey(): string {
@@ -51886,7 +52447,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: ResponseTimeMs
-    * * Display Name: Response Time
+    * * Display Name: Response Time (ms)
     * * SQL Data Type: int
     * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.
     */
@@ -52017,7 +52578,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: APIKey
-    * * Display Name: API Key Value
+    * * Display Name: API Key
     * * SQL Data Type: nvarchar(255)
     */
     get APIKey(): string {
@@ -52381,6 +52942,19 @@ export class APIScopeEntity extends BaseEntity<APIScopeEntityType> {
     }
     set IsActive(value: boolean) {
         this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: UIConfig
+    * * Display Name: UI Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for UI presentation. Schema: { "icon": "fa-solid fa-xxx", "color": "#hexcolor" }. Icon should be a Font Awesome class. Color should be a hex color code.
+    */
+    get UIConfig(): string | null {
+        return this.Get('UIConfig');
+    }
+    set UIConfig(value: string | null) {
+        this.Set('UIConfig', value);
     }
 
     /**
@@ -55620,7 +56194,7 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail ID
+    * * Display Name: Conversation Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     * * Description: Foreign key to ConversationDetail - the conversation message associated with this artifact
@@ -55634,7 +56208,7 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
 
     /**
     * * Field Name: ArtifactVersionID
-    * * Display Name: Artifact Version ID
+    * * Display Name: Artifact Version
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
     * * Description: Foreign key to ArtifactVersion - the specific artifact version linked to this conversation message
@@ -55686,7 +56260,7 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
+    * * Display Name: Message Content
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string {
@@ -56073,7 +56647,7 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail ID
+    * * Display Name: Conversation Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     * * Description: The conversation message being rated.
@@ -58858,6 +59432,1438 @@ export class ListShareEntity extends BaseEntity<ListShareEntityType> {
 
 
 /**
+ * MJ: MCP Server Connection Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MCPServerConnectionPermission
+ * * Base View: vwMCPServerConnectionPermissions
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: MCP Server Connection Permissions')
+export class MCPServerConnectionPermissionEntity extends BaseEntity<MCPServerConnectionPermissionEntityType> {
+    /**
+    * Loads the MJ: MCP Server Connection Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: MCP Server Connection Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MCPServerConnectionPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: MCP Server Connection Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Either a specific user or a role must be assigned to the permission record, but you cannot assign both at the same time and you cannot leave both empty. This ensures that each permission is linked to exactly one entity, maintaining clear ownership and preventing ambiguous access settings.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserIDOrRoleIDExclusive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Either a specific user or a role must be assigned to the permission record, but you cannot assign both at the same time and you cannot leave both empty. This ensures that each permission is linked to exactly one entity, maintaining clear ownership and preventing ambiguous access settings.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserIDOrRoleIDExclusive(result: ValidationResult) {
+    	// Ensure that exactly one of UserID or RoleID is set
+    	if ((this.UserID != null && this.RoleID != null) || (this.UserID == null && this.RoleID == null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"Either a specific user or a role must be assigned, but not both and not neither.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerConnectionID
+    * * Display Name: MCP Server Connection ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
+    */
+    get MCPServerConnectionID(): string {
+        return this.Get('MCPServerConnectionID');
+    }
+    set MCPServerConnectionID(value: string) {
+        this.Set('MCPServerConnectionID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: FK to User (mutually exclusive with RoleID)
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Roles (vwRoles.ID)
+    * * Description: FK to Role (mutually exclusive with UserID)
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: CanExecute
+    * * Display Name: Can Execute
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Can invoke tools via this connection
+    */
+    get CanExecute(): boolean {
+        return this.Get('CanExecute');
+    }
+    set CanExecute(value: boolean) {
+        this.Set('CanExecute', value);
+    }
+
+    /**
+    * * Field Name: CanModify
+    * * Display Name: Can Modify
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Can modify connection settings
+    */
+    get CanModify(): boolean {
+        return this.Get('CanModify');
+    }
+    set CanModify(value: boolean) {
+        this.Set('CanModify', value);
+    }
+
+    /**
+    * * Field Name: CanViewCredentials
+    * * Display Name: Can View Credentials
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Can see credential info (but not decrypt)
+    */
+    get CanViewCredentials(): boolean {
+        return this.Get('CanViewCredentials');
+    }
+    set CanViewCredentials(value: boolean) {
+        this.Set('CanViewCredentials', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MCPServerConnection
+    * * Display Name: MCP Server Connection
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerConnection(): string {
+        return this.Get('MCPServerConnection');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+}
+
+
+/**
+ * MJ: MCP Server Connection Tools - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MCPServerConnectionTool
+ * * Base View: vwMCPServerConnectionTools
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: MCP Server Connection Tools')
+export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectionToolEntityType> {
+    /**
+    * Loads the MJ: MCP Server Connection Tools record from the database
+    * @param ID: string - primary key value to load the MJ: MCP Server Connection Tools record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MCPServerConnectionToolEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerConnectionID
+    * * Display Name: MCP Server Connection
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
+    */
+    get MCPServerConnectionID(): string {
+        return this.Get('MCPServerConnectionID');
+    }
+    set MCPServerConnectionID(value: string) {
+        this.Set('MCPServerConnectionID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerToolID
+    * * Display Name: MCP Server Tool
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
+    */
+    get MCPServerToolID(): string {
+        return this.Get('MCPServerToolID');
+    }
+    set MCPServerToolID(value: string) {
+        this.Set('MCPServerToolID', value);
+    }
+
+    /**
+    * * Field Name: IsEnabled
+    * * Display Name: Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this tool is enabled for the connection
+    */
+    get IsEnabled(): boolean {
+        return this.Get('IsEnabled');
+    }
+    set IsEnabled(value: boolean) {
+        this.Set('IsEnabled', value);
+    }
+
+    /**
+    * * Field Name: DefaultInputValues
+    * * Display Name: Default Input Values
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON default values for tool inputs
+    */
+    get DefaultInputValues(): string | null {
+        return this.Get('DefaultInputValues');
+    }
+    set DefaultInputValues(value: string | null) {
+        this.Set('DefaultInputValues', value);
+    }
+
+    /**
+    * * Field Name: MaxCallsPerMinute
+    * * Display Name: Max Calls Per Minute
+    * * SQL Data Type: int
+    * * Description: Override rate limit for this specific tool
+    */
+    get MaxCallsPerMinute(): number | null {
+        return this.Get('MaxCallsPerMinute');
+    }
+    set MaxCallsPerMinute(value: number | null) {
+        this.Set('MaxCallsPerMinute', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MCPServerConnection
+    * * Display Name: Connection
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerConnection(): string {
+        return this.Get('MCPServerConnection');
+    }
+
+    /**
+    * * Field Name: MCPServerTool
+    * * Display Name: Tool
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerTool(): string | null {
+        return this.Get('MCPServerTool');
+    }
+}
+
+
+/**
+ * MJ: MCP Server Connections - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MCPServerConnection
+ * * Base View: vwMCPServerConnections
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: MCP Server Connections')
+export class MCPServerConnectionEntity extends BaseEntity<MCPServerConnectionEntityType> {
+    /**
+    * Loads the MJ: MCP Server Connections record from the database
+    * @param ID: string - primary key value to load the MJ: MCP Server Connections record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MCPServerConnectionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerID
+    * * Display Name: MCP Server
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Servers (vwMCPServers.ID)
+    */
+    get MCPServerID(): string {
+        return this.Get('MCPServerID');
+    }
+    set MCPServerID(value: string) {
+        this.Set('MCPServerID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Connection name (unique per company)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: FK to Credential entity (uses existing credential types)
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: CustomHeaderName
+    * * Display Name: Custom Header Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Custom header name for API key auth (default: X-API-Key)
+    */
+    get CustomHeaderName(): string | null {
+        return this.Get('CustomHeaderName');
+    }
+    set CustomHeaderName(value: string | null) {
+        this.Set('CustomHeaderName', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
+    * * Description: Optional company association. NULL means the connection is global and available to all companies. Non-NULL restricts the connection to that specific company.
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Active
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: AutoSyncTools
+    * * Display Name: Auto Sync Tools
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Auto-sync tools when connecting
+    */
+    get AutoSyncTools(): boolean {
+        return this.Get('AutoSyncTools');
+    }
+    set AutoSyncTools(value: boolean) {
+        this.Set('AutoSyncTools', value);
+    }
+
+    /**
+    * * Field Name: AutoGenerateActions
+    * * Display Name: Auto Generate Actions
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Auto-generate MJ Actions for discovered tools
+    */
+    get AutoGenerateActions(): boolean {
+        return this.Get('AutoGenerateActions');
+    }
+    set AutoGenerateActions(value: boolean) {
+        this.Set('AutoGenerateActions', value);
+    }
+
+    /**
+    * * Field Name: LogToolCalls
+    * * Display Name: Log Tool Calls
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Log all tool calls to execution log
+    */
+    get LogToolCalls(): boolean {
+        return this.Get('LogToolCalls');
+    }
+    set LogToolCalls(value: boolean) {
+        this.Set('LogToolCalls', value);
+    }
+
+    /**
+    * * Field Name: LogInputParameters
+    * * Display Name: Log Input Parameters
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Include input parameters in logs
+    */
+    get LogInputParameters(): boolean {
+        return this.Get('LogInputParameters');
+    }
+    set LogInputParameters(value: boolean) {
+        this.Set('LogInputParameters', value);
+    }
+
+    /**
+    * * Field Name: LogOutputContent
+    * * Display Name: Log Output Content
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Include output content in logs
+    */
+    get LogOutputContent(): boolean {
+        return this.Get('LogOutputContent');
+    }
+    set LogOutputContent(value: boolean) {
+        this.Set('LogOutputContent', value);
+    }
+
+    /**
+    * * Field Name: MaxOutputLogSize
+    * * Display Name: Max Output Log Size
+    * * SQL Data Type: int
+    * * Default Value: 102400
+    * * Description: Max output size to log in bytes (default: 100KB)
+    */
+    get MaxOutputLogSize(): number | null {
+        return this.Get('MaxOutputLogSize');
+    }
+    set MaxOutputLogSize(value: number | null) {
+        this.Set('MaxOutputLogSize', value);
+    }
+
+    /**
+    * * Field Name: LastConnectedAt
+    * * Display Name: Last Connected At
+    * * SQL Data Type: datetimeoffset
+    */
+    get LastConnectedAt(): Date | null {
+        return this.Get('LastConnectedAt');
+    }
+    set LastConnectedAt(value: Date | null) {
+        this.Set('LastConnectedAt', value);
+    }
+
+    /**
+    * * Field Name: LastErrorMessage
+    * * Display Name: Last Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get LastErrorMessage(): string | null {
+        return this.Get('LastErrorMessage');
+    }
+    set LastErrorMessage(value: string | null) {
+        this.Set('LastErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentVars
+    * * Display Name: Environment Variables
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object of environment variables for Stdio transport
+    */
+    get EnvironmentVars(): string | null {
+        return this.Get('EnvironmentVars');
+    }
+    set EnvironmentVars(value: string | null) {
+        this.Set('EnvironmentVars', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MCPServer
+    * * Display Name: MCP Server
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServer(): string {
+        return this.Get('MCPServer');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string | null {
+        return this.Get('Company');
+    }
+}
+
+
+/**
+ * MJ: MCP Server Tools - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MCPServerTool
+ * * Base View: vwMCPServerTools
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: MCP Server Tools')
+export class MCPServerToolEntity extends BaseEntity<MCPServerToolEntityType> {
+    /**
+    * Loads the MJ: MCP Server Tools record from the database
+    * @param ID: string - primary key value to load the MJ: MCP Server Tools record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MCPServerToolEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerID
+    * * Display Name: MCP Server
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Servers (vwMCPServers.ID)
+    */
+    get MCPServerID(): string {
+        return this.Get('MCPServerID');
+    }
+    set MCPServerID(value: string) {
+        this.Set('MCPServerID', value);
+    }
+
+    /**
+    * * Field Name: ToolName
+    * * Display Name: Tool Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Tool identifier from the MCP server
+    */
+    get ToolName(): string {
+        return this.Get('ToolName');
+    }
+    set ToolName(value: string) {
+        this.Set('ToolName', value);
+    }
+
+    /**
+    * * Field Name: ToolTitle
+    * * Display Name: Tool Title
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable title for the tool
+    */
+    get ToolTitle(): string | null {
+        return this.Get('ToolTitle');
+    }
+    set ToolTitle(value: string | null) {
+        this.Set('ToolTitle', value);
+    }
+
+    /**
+    * * Field Name: ToolDescription
+    * * Display Name: Tool Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ToolDescription(): string | null {
+        return this.Get('ToolDescription');
+    }
+    set ToolDescription(value: string | null) {
+        this.Set('ToolDescription', value);
+    }
+
+    /**
+    * * Field Name: InputSchema
+    * * Display Name: Input Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema for tool input parameters
+    */
+    get InputSchema(): string {
+        return this.Get('InputSchema');
+    }
+    set InputSchema(value: string) {
+        this.Set('InputSchema', value);
+    }
+
+    /**
+    * * Field Name: OutputSchema
+    * * Display Name: Output Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema for tool output (if provided)
+    */
+    get OutputSchema(): string | null {
+        return this.Get('OutputSchema');
+    }
+    set OutputSchema(value: string | null) {
+        this.Set('OutputSchema', value);
+    }
+
+    /**
+    * * Field Name: Annotations
+    * * Display Name: Annotations
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON with tool hints (readOnlyHint, destructiveHint, etc.)
+    */
+    get Annotations(): string | null {
+        return this.Get('Annotations');
+    }
+    set Annotations(value: string | null) {
+        this.Set('Annotations', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Active
+    * * Description: Tool status: Active, Inactive, or Deprecated
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: DiscoveredAt
+    * * Display Name: Discovered At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get DiscoveredAt(): Date {
+        return this.Get('DiscoveredAt');
+    }
+    set DiscoveredAt(value: Date) {
+        this.Set('DiscoveredAt', value);
+    }
+
+    /**
+    * * Field Name: LastSeenAt
+    * * Display Name: Last Seen At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get LastSeenAt(): Date {
+        return this.Get('LastSeenAt');
+    }
+    set LastSeenAt(value: Date) {
+        this.Set('LastSeenAt', value);
+    }
+
+    /**
+    * * Field Name: GeneratedActionID
+    * * Display Name: Generated Action
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Actions (vwActions.ID)
+    * * Description: FK to auto-generated Action (if promoted)
+    */
+    get GeneratedActionID(): string | null {
+        return this.Get('GeneratedActionID');
+    }
+    set GeneratedActionID(value: string | null) {
+        this.Set('GeneratedActionID', value);
+    }
+
+    /**
+    * * Field Name: GeneratedActionCategoryID
+    * * Display Name: Generated Action Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Action Categories (vwActionCategories.ID)
+    */
+    get GeneratedActionCategoryID(): string | null {
+        return this.Get('GeneratedActionCategoryID');
+    }
+    set GeneratedActionCategoryID(value: string | null) {
+        this.Set('GeneratedActionCategoryID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MCPServer
+    * * Display Name: MCP Server
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServer(): string {
+        return this.Get('MCPServer');
+    }
+
+    /**
+    * * Field Name: GeneratedAction
+    * * Display Name: Generated Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get GeneratedAction(): string | null {
+        return this.Get('GeneratedAction');
+    }
+
+    /**
+    * * Field Name: GeneratedActionCategory
+    * * Display Name: Generated Action Category
+    * * SQL Data Type: nvarchar(255)
+    */
+    get GeneratedActionCategory(): string | null {
+        return this.Get('GeneratedActionCategory');
+    }
+}
+
+
+/**
+ * MJ: MCP Servers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MCPServer
+ * * Base View: vwMCPServers
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: MCP Servers')
+export class MCPServerEntity extends BaseEntity<MCPServerEntityType> {
+    /**
+    * Loads the MJ: MCP Servers record from the database
+    * @param ID: string - primary key value to load the MJ: MCP Servers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MCPServerEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique display name for the MCP server
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ServerURL
+    * * Display Name: Server URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Server endpoint URL for HTTP/SSE/WebSocket transports
+    */
+    get ServerURL(): string | null {
+        return this.Get('ServerURL');
+    }
+    set ServerURL(value: string | null) {
+        this.Set('ServerURL', value);
+    }
+
+    /**
+    * * Field Name: Command
+    * * Display Name: Command
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Executable path for Stdio transport
+    */
+    get Command(): string | null {
+        return this.Get('Command');
+    }
+    set Command(value: string | null) {
+        this.Set('Command', value);
+    }
+
+    /**
+    * * Field Name: CommandArgs
+    * * Display Name: Command Arguments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of command arguments for Stdio transport
+    */
+    get CommandArgs(): string | null {
+        return this.Get('CommandArgs');
+    }
+    set CommandArgs(value: string | null) {
+        this.Set('CommandArgs', value);
+    }
+
+    /**
+    * * Field Name: TransportType
+    * * Display Name: Transport Type
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Transport type: StreamableHTTP, SSE, Stdio, or WebSocket
+    */
+    get TransportType(): string {
+        return this.Get('TransportType');
+    }
+    set TransportType(value: string) {
+        this.Set('TransportType', value);
+    }
+
+    /**
+    * * Field Name: DefaultAuthType
+    * * Display Name: Default Auth Type
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Default auth type: None, Bearer, APIKey, OAuth2, Basic, or Custom
+    */
+    get DefaultAuthType(): string {
+        return this.Get('DefaultAuthType');
+    }
+    set DefaultAuthType(value: string) {
+        this.Set('DefaultAuthType', value);
+    }
+
+    /**
+    * * Field Name: CredentialTypeID
+    * * Display Name: Credential Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+    * * Description: Expected credential type for this server
+    */
+    get CredentialTypeID(): string | null {
+        return this.Get('CredentialTypeID');
+    }
+    set CredentialTypeID(value: string | null) {
+        this.Set('CredentialTypeID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Active
+    * * Description: Server status: Active, Inactive, or Deprecated
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: LastSyncAt
+    * * Display Name: Last Sync At
+    * * SQL Data Type: datetimeoffset
+    */
+    get LastSyncAt(): Date | null {
+        return this.Get('LastSyncAt');
+    }
+    set LastSyncAt(value: Date | null) {
+        this.Set('LastSyncAt', value);
+    }
+
+    /**
+    * * Field Name: RateLimitPerMinute
+    * * Display Name: Rate Limit Per Minute
+    * * SQL Data Type: int
+    */
+    get RateLimitPerMinute(): number | null {
+        return this.Get('RateLimitPerMinute');
+    }
+    set RateLimitPerMinute(value: number | null) {
+        this.Set('RateLimitPerMinute', value);
+    }
+
+    /**
+    * * Field Name: RateLimitPerHour
+    * * Display Name: Rate Limit Per Hour
+    * * SQL Data Type: int
+    */
+    get RateLimitPerHour(): number | null {
+        return this.Get('RateLimitPerHour');
+    }
+    set RateLimitPerHour(value: number | null) {
+        this.Set('RateLimitPerHour', value);
+    }
+
+    /**
+    * * Field Name: ConnectionTimeoutMs
+    * * Display Name: Connection Timeout (ms)
+    * * SQL Data Type: int
+    * * Default Value: 30000
+    */
+    get ConnectionTimeoutMs(): number | null {
+        return this.Get('ConnectionTimeoutMs');
+    }
+    set ConnectionTimeoutMs(value: number | null) {
+        this.Set('ConnectionTimeoutMs', value);
+    }
+
+    /**
+    * * Field Name: RequestTimeoutMs
+    * * Display Name: Request Timeout (ms)
+    * * SQL Data Type: int
+    * * Default Value: 60000
+    */
+    get RequestTimeoutMs(): number | null {
+        return this.Get('RequestTimeoutMs');
+    }
+    set RequestTimeoutMs(value: number | null) {
+        this.Set('RequestTimeoutMs', value);
+    }
+
+    /**
+    * * Field Name: DocumentationURL
+    * * Display Name: Documentation URL
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get DocumentationURL(): string | null {
+        return this.Get('DocumentationURL');
+    }
+    set DocumentationURL(value: string | null) {
+        this.Set('DocumentationURL', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CredentialType
+    * * Display Name: Credential Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CredentialType(): string | null {
+        return this.Get('CredentialType');
+    }
+}
+
+
+/**
+ * MJ: MCP Tool Execution Logs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MCPToolExecutionLog
+ * * Base View: vwMCPToolExecutionLogs
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: MCP Tool Execution Logs')
+export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEntityType> {
+    /**
+    * Loads the MJ: MCP Tool Execution Logs record from the database
+    * @param ID: string - primary key value to load the MJ: MCP Tool Execution Logs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MCPToolExecutionLogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerConnectionID
+    * * Display Name: MCP Server Connection
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
+    */
+    get MCPServerConnectionID(): string {
+        return this.Get('MCPServerConnectionID');
+    }
+    set MCPServerConnectionID(value: string) {
+        this.Set('MCPServerConnectionID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerToolID
+    * * Display Name: MCP Server Tool
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
+    * * Description: FK to MCP Server Tool (null if tool not cached)
+    */
+    get MCPServerToolID(): string | null {
+        return this.Get('MCPServerToolID');
+    }
+    set MCPServerToolID(value: string | null) {
+        this.Set('MCPServerToolID', value);
+    }
+
+    /**
+    * * Field Name: ToolName
+    * * Display Name: Tool Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Tool name (stored directly for resilience)
+    */
+    get ToolName(): string {
+        return this.Get('ToolName');
+    }
+    set ToolName(value: string) {
+        this.Set('ToolName', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: FK to User who initiated the call
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: DurationMs
+    * * Display Name: Duration (ms)
+    * * SQL Data Type: int
+    * * Description: Execution duration in milliseconds
+    */
+    get DurationMs(): number | null {
+        return this.Get('DurationMs');
+    }
+    set DurationMs(value: number | null) {
+        this.Set('DurationMs', value);
+    }
+
+    /**
+    * * Field Name: Success
+    * * Display Name: Success
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    */
+    get Success(): boolean {
+        return this.Get('Success');
+    }
+    set Success(value: boolean) {
+        this.Set('Success', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: InputParameters
+    * * Display Name: Input Parameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of input parameters (if logging enabled)
+    */
+    get InputParameters(): string | null {
+        return this.Get('InputParameters');
+    }
+    set InputParameters(value: string | null) {
+        this.Set('InputParameters', value);
+    }
+
+    /**
+    * * Field Name: OutputContent
+    * * Display Name: Output Content
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of output content (if logging enabled)
+    */
+    get OutputContent(): string | null {
+        return this.Get('OutputContent');
+    }
+    set OutputContent(value: string | null) {
+        this.Set('OutputContent', value);
+    }
+
+    /**
+    * * Field Name: OutputTruncated
+    * * Display Name: Output Truncated
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether output was truncated due to size
+    */
+    get OutputTruncated(): boolean {
+        return this.Get('OutputTruncated');
+    }
+    set OutputTruncated(value: boolean) {
+        this.Set('OutputTruncated', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MCPServerConnection
+    * * Display Name: MCP Server Connection Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerConnection(): string {
+        return this.Get('MCPServerConnection');
+    }
+
+    /**
+    * * Field Name: MCPServerTool
+    * * Display Name: MCP Server Tool Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerTool(): string | null {
+        return this.Get('MCPServerTool');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+}
+
+
+/**
  * MJ: Projects - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Project
@@ -61126,7 +63132,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
     */
@@ -61165,7 +63171,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)
     */
@@ -61178,7 +63184,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment ID
+    * * Display Name: Environment
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -61192,7 +63198,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: ProjectID
-    * * Display Name: Project ID
+    * * Display Name: Project
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -61205,7 +63211,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail ID
+    * * Display Name: Conversation Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     */
@@ -61218,7 +63224,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -61231,7 +63237,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent ID
+    * * Display Name: Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     */
@@ -61403,7 +63409,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {

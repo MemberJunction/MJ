@@ -222,6 +222,78 @@ All API key usage is automatically logged with:
 
 This enables monitoring and auditing of API access patterns.
 
+## Scope-Based Authorization
+
+A2A Server implements a comprehensive scope-based authorization system that controls what operations API keys can perform. This provides fine-grained access control beyond simple authentication.
+
+### How Scope Authorization Works
+
+1. **Application Ceiling**: Each API application (A2A Server, MCP Server, GraphQL API) defines a maximum set of allowed scopes
+2. **API Key Scopes**: Each API key has assigned scopes from the API Scopes table
+3. **Two-Level Evaluation**: When an operation is requested, the system checks:
+   - Does the application allow this scope? (application ceiling)
+   - Does the API key have this scope assigned? (key-level permission)
+
+### Scope Format
+
+Scopes follow a hierarchical naming convention:
+- `entity:read` - Read entity records
+- `entity:create` - Create new records
+- `entity:update` - Update existing records
+- `entity:delete` - Delete records
+- `view:run` - Execute RunView queries
+- `agent:execute` - Execute AI agents
+- `agent:monitor` - Check agent run status
+- `agent:cancel` - Cancel running agents
+- `metadata:agents:read` - Read agent metadata (discover agents)
+- `full_access` - Bypass all scope checks ("god mode")
+
+### Default Behavior
+
+**Important**: API keys with **no scopes assigned** will have **no permissions** and all operation requests will be denied. This is a security-by-default approach.
+
+To grant full access to an API key, assign the `full_access` scope.
+
+### Operation-to-Scope Mapping
+
+Each A2A operation is mapped to a required scope:
+
+| Operation | Required Scope |
+|-----------|---------------|
+| `discoverAgents` | `metadata:agents:read` |
+| `executeAgent` | `agent:execute` |
+| `getAgentRunStatus` | `agent:monitor` |
+| `cancelAgentRun` | `agent:cancel` |
+| `get` (entity) | `entity:read` |
+| `create` (entity) | `entity:create` |
+| `update` (entity) | `entity:update` |
+| `delete` (entity) | `entity:delete` |
+| `query`/`runView` | `view:run` |
+
+### Wildcard Resource Matching
+
+Scopes support resource-level wildcards for granular control:
+- `*` - Match all resources
+- `Users` - Match exact resource name
+- `User*` - Match resources starting with "User"
+- `*Entity` - Match resources ending with "Entity"
+- `Users,Employees` - Match multiple specific resources (comma-separated)
+
+### Authorization Error Messages
+
+When authorization fails, the server returns detailed error messages:
+
+```json
+{
+  "error": {
+    "code": 403,
+    "message": "Authorization denied: API key is missing required scope 'agent:execute' on resource 'DataAnalysisAgent'. Allowed scopes: entity:read, view:run"
+  }
+}
+```
+
+This helps developers understand exactly why access was denied and what scopes are needed.
+
 ## Usage
 
 ### Starting the Server

@@ -205,6 +205,12 @@ import { EnvironmentFormComponent, LoadEnvironmentFormComponent } from "./Entiti
 import { FileStorageAccountFormComponent, LoadFileStorageAccountFormComponent } from "./Entities/FileStorageAccount/filestorageaccount.form.component";
 import { ListInvitationFormComponent, LoadListInvitationFormComponent } from "./Entities/ListInvitation/listinvitation.form.component";
 import { ListShareFormComponent, LoadListShareFormComponent } from "./Entities/ListShare/listshare.form.component";
+import { MCPServerConnectionPermissionFormComponent, LoadMCPServerConnectionPermissionFormComponent } from "./Entities/MCPServerConnectionPermission/mcpserverconnectionpermission.form.component";
+import { MCPServerConnectionToolFormComponent, LoadMCPServerConnectionToolFormComponent } from "./Entities/MCPServerConnectionTool/mcpserverconnectiontool.form.component";
+import { MCPServerConnectionFormComponent, LoadMCPServerConnectionFormComponent } from "./Entities/MCPServerConnection/mcpserverconnection.form.component";
+import { MCPServerToolFormComponent, LoadMCPServerToolFormComponent } from "./Entities/MCPServerTool/mcpservertool.form.component";
+import { MCPServerFormComponent, LoadMCPServerFormComponent } from "./Entities/MCPServer/mcpserver.form.component";
+import { MCPToolExecutionLogFormComponent, LoadMCPToolExecutionLogFormComponent } from "./Entities/MCPToolExecutionLog/mcptoolexecutionlog.form.component";
 import { ProjectFormComponent, LoadProjectFormComponent } from "./Entities/Project/project.form.component";
 import { PublicLinkFormComponent, LoadPublicLinkFormComponent } from "./Entities/PublicLink/publiclink.form.component";
 import { QueryParameterFormComponent, LoadQueryParameterFormComponent } from "./Entities/QueryParameter/queryparameter.form.component";
@@ -669,7 +675,7 @@ declarations: [
     FileStorageAccountFormComponent,
     ListInvitationFormComponent,
     ListShareFormComponent,
-    ProjectFormComponent],
+    MCPServerConnectionPermissionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -695,6 +701,12 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    MCPServerConnectionToolFormComponent,
+    MCPServerConnectionFormComponent,
+    MCPServerToolFormComponent,
+    MCPServerFormComponent,
+    MCPToolExecutionLogFormComponent,
+    ProjectFormComponent,
     PublicLinkFormComponent,
     QueryParameterFormComponent,
     RecordLinkFormComponent,
@@ -708,13 +720,7 @@ declarations: [
     TaskFormComponent,
     TestRubricFormComponent,
     TestRunFeedbackFormComponent,
-    TestRunFormComponent,
-    TestSuiteRunFormComponent,
-    TestSuiteTestFormComponent,
-    TestSuiteFormComponent,
-    TestTypeFormComponent,
-    TestFormComponent,
-    UserNotificationPreferenceFormComponent],
+    TestRunFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -740,6 +746,12 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    TestSuiteRunFormComponent,
+    TestSuiteTestFormComponent,
+    TestSuiteFormComponent,
+    TestTypeFormComponent,
+    TestFormComponent,
+    UserNotificationPreferenceFormComponent,
     UserNotificationTypeFormComponent,
     UserSettingFormComponent,
     OutputDeliveryTypeFormComponent,
@@ -753,13 +765,7 @@ declarations: [
     QueueTaskFormComponent,
     QueueTypeFormComponent,
     QueueFormComponent,
-    RecommendationItemFormComponent,
-    RecommendationProviderFormComponent,
-    RecommendationRunFormComponent,
-    RecommendationFormComponent,
-    RecordChangeReplayRunFormComponent,
-    RecordChangeFormComponent,
-    RecordMergeDeletionLogFormComponent],
+    RecommendationItemFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -785,6 +791,12 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    RecommendationProviderFormComponent,
+    RecommendationRunFormComponent,
+    RecommendationFormComponent,
+    RecordChangeReplayRunFormComponent,
+    RecordChangeFormComponent,
+    RecordMergeDeletionLogFormComponent,
     RecordMergeLogFormComponent,
     ReportCategoryFormComponent,
     ReportSnapshotFormComponent,
@@ -798,13 +810,7 @@ declarations: [
     ScheduledActionFormComponent,
     SchemaInfoFormComponent,
     SkillFormComponent,
-    TaggedItemFormComponent,
-    TagFormComponent,
-    TemplateCategoryFormComponent,
-    TemplateContentTypeFormComponent,
-    TemplateContentFormComponent,
-    TemplateParamFormComponent,
-    TemplateFormComponent],
+    TaggedItemFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -830,6 +836,12 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    TagFormComponent,
+    TemplateCategoryFormComponent,
+    TemplateContentTypeFormComponent,
+    TemplateContentFormComponent,
+    TemplateParamFormComponent,
+    TemplateFormComponent,
     UserApplicationEntityFormComponent,
     UserApplicationFormComponent,
     UserFavoriteFormComponent,
@@ -843,12 +855,7 @@ declarations: [
     UserFormComponent,
     VectorDatabaseFormComponent,
     VectorIndexFormComponent,
-    VersionInstallationFormComponent,
-    WorkflowEngineFormComponent,
-    WorkflowRunFormComponent,
-    WorkflowFormComponent,
-    WorkspaceItemFormComponent,
-    WorkspaceFormComponent],
+    VersionInstallationFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -874,6 +881,36 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    WorkflowEngineFormComponent,
+    WorkflowRunFormComponent,
+    WorkflowFormComponent,
+    WorkspaceItemFormComponent,
+    WorkspaceFormComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    EntityViewerModule,
+    LinkDirectivesModule,
+    BaseFormsModule,
+    FormToolbarModule,
+    MJTabStripModule,
+    ContainerDirectivesModule,
+    DropDownListModule,
+    ComboBoxModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_13 { }
+    
+
+
+@NgModule({
+declarations: [
 ],
 imports: [
     GeneratedForms_SubModule_0,
@@ -888,7 +925,8 @@ imports: [
     GeneratedForms_SubModule_9,
     GeneratedForms_SubModule_10,
     GeneratedForms_SubModule_11,
-    GeneratedForms_SubModule_12
+    GeneratedForms_SubModule_12,
+    GeneratedForms_SubModule_13
 ]
 })
 export class CoreGeneratedFormsModule { }
@@ -1078,6 +1116,12 @@ export function LoadCoreGeneratedForms() {
     LoadFileStorageAccountFormComponent();
     LoadListInvitationFormComponent();
     LoadListShareFormComponent();
+    LoadMCPServerConnectionPermissionFormComponent();
+    LoadMCPServerConnectionToolFormComponent();
+    LoadMCPServerConnectionFormComponent();
+    LoadMCPServerToolFormComponent();
+    LoadMCPServerFormComponent();
+    LoadMCPToolExecutionLogFormComponent();
     LoadProjectFormComponent();
     LoadPublicLinkFormComponent();
     LoadQueryParameterFormComponent();

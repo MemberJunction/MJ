@@ -4,6 +4,7 @@ import { LogError, Metadata } from "@memberjunction/core";
 import { APIKeyScopeEntity } from "@memberjunction/core-entities";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import { AppContext } from "../types.js";
+import { ResolverBase } from "../generic/ResolverBase.js";
 
 /**
  * Input type for creating a new API key
@@ -90,7 +91,7 @@ export class RevokeAPIKeyResult {
  * Handles secure server-side API key generation
  */
 @Resolver()
-export class APIKeyResolver {
+export class APIKeyResolver extends ResolverBase {
     /**
      * Creates a new API key with proper server-side cryptographic hashing.
      *
@@ -109,6 +110,9 @@ export class APIKeyResolver {
         @Arg("input") input: CreateAPIKeyInput,
         @Ctx() ctx: AppContext
     ): Promise<CreateAPIKeyResult> {
+        // Check API key scope authorization for API key creation
+        await this.CheckAPIKeyScopeAuthorization('apikey:create', '*', ctx.userPayload);
+
         try {
             // Get the authenticated user
             const user = ctx.userPayload.userRecord;
@@ -173,6 +177,9 @@ export class APIKeyResolver {
         @Arg("apiKeyId") apiKeyId: string,
         @Ctx() ctx: AppContext
     ): Promise<RevokeAPIKeyResult> {
+        // Check API key scope authorization for API key revocation
+        await this.CheckAPIKeyScopeAuthorization('apikey:revoke', apiKeyId, ctx.userPayload);
+
         try {
             const user = ctx.userPayload.userRecord;
             if (!user) {

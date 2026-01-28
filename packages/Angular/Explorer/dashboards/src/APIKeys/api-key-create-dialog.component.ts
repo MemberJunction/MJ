@@ -1,7 +1,8 @@
 import { Component, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/core';
 import { APIScopeEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLEncryptionClient } from '@memberjunction/graphql-dataprovider';
+import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 
 /** Scope selection item */
 interface ScopeItem {
@@ -73,20 +74,14 @@ export class APIKeyCreateDialogComponent implements OnInit {
     public KeyCopied = false;
     public Error = '';
 
-    // Category icons and colors
-    private readonly categoryConfig: Record<string, { icon: string; color: string }> = {
-        'Entities': { icon: 'fa-solid fa-database', color: '#6366f1' },
-        'Agents': { icon: 'fa-solid fa-robot', color: '#10b981' },
-        'Admin': { icon: 'fa-solid fa-shield-halved', color: '#f59e0b' },
-        'Actions': { icon: 'fa-solid fa-bolt', color: '#8b5cf6' },
-        'Queries': { icon: 'fa-solid fa-magnifying-glass', color: '#3b82f6' },
-        'Reports': { icon: 'fa-solid fa-chart-bar', color: '#ef4444' },
-        'Communication': { icon: 'fa-solid fa-envelope', color: '#ec4899' },
-        'Other': { icon: 'fa-solid fa-ellipsis', color: '#6b7280' }
+    // Default UI config for categories without explicit configuration
+    private readonly defaultUIConfig = {
+        icon: 'fa-solid fa-ellipsis',
+        color: '#6b7280'
     };
 
-    async ngOnInit(): Promise<void> {
-        await this.loadScopes();
+    ngOnInit(): void {
+        this.loadScopes();
     }
 
     /**
@@ -100,44 +95,56 @@ export class APIKeyCreateDialogComponent implements OnInit {
     }
 
     /**
-     * Load available scopes
+     * Load available scopes from cached data.
+     * Uses UIConfig from root scopes for category icons/colors.
      */
-    private async loadScopes(): Promise<void> {
+    private loadScopes(): void {
         this.IsLoadingScopes = true;
         try {
-            const rv = new RunView();
-            const result = await rv.RunView<APIScopeEntity>({
-                EntityName: 'MJ: API Scopes',
-                OrderBy: 'Category, Name',
-                ResultType: 'entity_object'
-            });
+            const base = APIKeysEngineBase.Instance;
+            const scopes = base.Scopes;
 
-            if (result.Success) {
-                const categoryMap = new Map<string, ScopeItem[]>();
-
-                for (const scope of result.Results) {
-                    const category = scope.Category || 'Other';
-                    if (!categoryMap.has(category)) {
-                        categoryMap.set(category, []);
-                    }
-                    categoryMap.get(category)!.push({
-                        scope,
-                        selected: false
+            // Build a map of category -> root scope UIConfig
+            // Root scopes (ParentID is null) define the UI appearance for their category
+            const categoryUIConfigs = new Map<string, { icon: string; color: string }>();
+            for (const scope of scopes) {
+                if (!scope.ParentID) {
+                    // This is a root scope - use its UIConfig for the category
+                    const uiConfig = parseAPIScopeUIConfig(scope);
+                    categoryUIConfigs.set(scope.Category, {
+                        icon: uiConfig.icon || this.defaultUIConfig.icon,
+                        color: uiConfig.color || this.defaultUIConfig.color
                     });
                 }
+            }
 
-                this.ScopeCategories = Array.from(categoryMap.entries()).map(([name, scopes]) => {
-                    const config = this.categoryConfig[name] || this.categoryConfig['Other'];
+            // Group scopes by category
+            const categoryMap = new Map<string, ScopeItem[]>();
+            for (const scope of scopes) {
+                const category = scope.Category || 'Other';
+                if (!categoryMap.has(category)) {
+                    categoryMap.set(category, []);
+                }
+                categoryMap.get(category)!.push({
+                    scope,
+                    selected: false
+                });
+            }
+
+            // Build categories with UI config from root scopes
+            this.ScopeCategories = Array.from(categoryMap.entries())
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([name, scopeItems]) => {
+                    const config = categoryUIConfigs.get(name) || this.defaultUIConfig;
                     return {
                         name,
                         icon: config.icon,
                         color: config.color,
-                        scopes,
+                        scopes: scopeItems.sort((a, b) => a.scope.Name.localeCompare(b.scope.Name)),
                         expanded: false,
                         allSelected: false
                     };
                 });
-            }
         } catch (error) {
             console.error('Error loading scopes:', error);
         } finally {

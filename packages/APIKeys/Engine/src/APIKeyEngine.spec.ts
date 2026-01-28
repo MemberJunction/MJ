@@ -438,11 +438,12 @@ describe('APIKeyEngine', () => {
         });
 
         it('should evaluate scope rules and allow', async () => {
-            // App ceiling allows
+            // App ceiling allows entity:read
             setMockRunViewResult('MJ: API Application Scopes', {
                 Success: true,
                 Results: [{
                     ID: 'app-scope-id',
+                    ScopePath: 'entity:read',
                     ResourcePattern: '*',
                     PatternType: 'Include',
                     IsDeny: false,
@@ -450,10 +451,19 @@ describe('APIKeyEngine', () => {
                 }]
             });
 
-            // No key scopes (default allow)
+            // API key has entity:read scope assigned (required with default deny behavior)
             setMockRunViewResult('MJ: API Key Scopes', {
                 Success: true,
-                Results: []
+                Results: [{
+                    ID: 'key-scope-id',
+                    APIKeyID: 'key-id',
+                    ScopeID: 'scope-id',
+                    Scope: 'entity:read',
+                    ResourcePattern: '*',
+                    PatternType: 'Include',
+                    IsDeny: false,
+                    Priority: 0
+                }]
             });
 
             const result = await engine.Authorize(
@@ -468,10 +478,12 @@ describe('APIKeyEngine', () => {
         });
 
         it('should include log ID in result', async () => {
+            // App ceiling allows entity:read
             setMockRunViewResult('MJ: API Application Scopes', {
                 Success: true,
                 Results: [{
                     ID: 'app-scope-id',
+                    ScopePath: 'entity:read',
                     ResourcePattern: '*',
                     PatternType: 'Include',
                     IsDeny: false,
@@ -479,9 +491,19 @@ describe('APIKeyEngine', () => {
                 }]
             });
 
+            // API key has entity:read scope assigned (required with default deny behavior)
             setMockRunViewResult('MJ: API Key Scopes', {
                 Success: true,
-                Results: []
+                Results: [{
+                    ID: 'key-scope-id',
+                    APIKeyID: 'key-id',
+                    ScopeID: 'scope-id',
+                    Scope: 'entity:read',
+                    ResourcePattern: '*',
+                    PatternType: 'Include',
+                    IsDeny: false,
+                    Priority: 0
+                }]
             });
 
             // Mock usage log entity
