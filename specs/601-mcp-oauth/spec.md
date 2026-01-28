@@ -1,9 +1,12 @@
-# Feature Specification: MCP Server OAuth Authentication
+# Feature Specification: MCP Server OAuth Authentication with OAuth Proxy
 
 **Feature Branch**: `601-mcp-oauth`
 **Created**: 2026-01-27
+**Updated**: 2026-01-27
 **Status**: Draft
 **Input**: User description: "Add support for OAuth to packages/AI/MCPServer. OAuth should use the same config values used by the front end (MJExplorer) and should be toggleable in the config file. The idea is that an installation could choose to enable OAuth instead of (or in addition to) API key auth, then when they use the MCP server with a client, it will open a browser prompting them to log in (same as if they were to visit their MJExplorer). Once authenticated, the MCP client can call tools normally (until the auth expires)."
+
+**Extended**: 2026-01-27 - Added OAuth Proxy Authorization Server to enable dynamic client registration (RFC 7591) for MCP clients like Claude Code that cannot manually register with upstream identity providers.
 
 ## Clarifications
 
@@ -11,6 +14,12 @@
 
 - Q: Which OAuth providers should be supported? → A: All providers from packages/MJServer/src/auth/providers: Auth0, MSAL (Microsoft Entra ID), Okta, Cognito, and Google.
 - Q: Should auth provider logic be duplicated or reused? → A: Reuse MJServer's auth providers directly via @memberjunction/server package dependency.
+
+### Session 2026-01-27 (OAuth Proxy Extension)
+
+- Q: Why is an OAuth proxy needed? → A: Azure AD (and some other providers) don't support RFC 7591 Dynamic Client Registration. MCP clients like Claude Code require dynamic registration to authenticate without manual app registration in each identity provider.
+- Q: Why not just use the upstream provider directly? → A: Testing revealed Azure AD v2.0 doesn't support RFC 8707 resource parameter (uses scope instead), and doesn't support dynamic client registration. This means MCP clients cannot initiate OAuth flows without manual Azure AD app configuration.
+- Q: Should the proxy support a web UI? → A: Yes, the MCP Server should serve a simple login web UI to provide a good user experience during the browser-based authentication flow.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -92,6 +101,50 @@ An organization wants to support both OAuth (for interactive developer use) and 
 
 ---
 
+### User Story 5 - MCP Client Dynamic Registration (Priority: P1)
+
+An MCP client (such as Claude Code or Claude Desktop) wants to connect to a MemberJunction MCP Server. The client does not have pre-registered credentials with the organization's identity provider (Azure AD, Auth0, etc.). The MCP Server acts as an OAuth Proxy Authorization Server that supports RFC 7591 Dynamic Client Registration.
+
+When the MCP client discovers the MCP Server's OAuth metadata, it dynamically registers itself with the MCP Server's OAuth proxy. The proxy issues temporary client credentials. The client then initiates an authorization flow through the proxy, which redirects to the upstream identity provider (Azure AD) for user authentication. After the user logs in via a browser, the proxy receives the authorization code, exchanges it for tokens from the upstream provider, and issues its own authorization code to the MCP client. The client exchanges this code for tokens and can make authenticated tool calls.
+
+**Why this priority**: This is essential for MCP client compatibility. Without dynamic registration support, users cannot use MCP clients like Claude Code with Azure AD or other providers that don't implement RFC 7591. This removes a major barrier to adoption.
+
+**Independent Test**: Can be tested by running `claude mcp add` with the MCP Server URL and completing the OAuth flow through the browser. Delivers immediate value for Claude Code users.
+
+**Acceptance Scenarios**:
+
+1. **Given** an MCP client that supports OAuth 2.1 and dynamic client registration, **When** the client fetches `/.well-known/oauth-authorization-server`, **Then** the server returns metadata including a `registration_endpoint` URL.
+
+2. **Given** an MCP client that needs to register, **When** the client POSTs a registration request to `/oauth/register` with redirect URIs, **Then** the server returns a client_id, client_secret, and registration metadata per RFC 7591.
+
+3. **Given** a dynamically registered MCP client, **When** the client initiates authorization at `/oauth/authorize` with PKCE, **Then** the server redirects to the upstream identity provider's login page.
+
+4. **Given** a user who has logged in at the upstream provider, **When** the provider redirects back to `/oauth/callback`, **Then** the MCP Server exchanges the upstream code for tokens, generates its own authorization code, and redirects to the MCP client's redirect URI.
+
+5. **Given** an MCP client with an authorization code, **When** the client exchanges the code at `/oauth/token`, **Then** the server validates PKCE, returns access and refresh tokens, and the client can make authenticated MCP tool calls.
+
+---
+
+### User Story 6 - OAuth Proxy Web Login UI (Priority: P2)
+
+When a user is redirected to the MCP Server's OAuth proxy for authentication, they see a branded login page that explains they're being asked to authenticate. The page shows the organization's identity provider options (if multiple) and provides a clear user experience rather than raw redirects.
+
+**Why this priority**: While functional OAuth can work with raw redirects, a proper web UI improves user confidence and reduces confusion during the authentication flow. It also allows displaying error messages and handling edge cases gracefully.
+
+**Independent Test**: Can be tested by navigating to the `/oauth/authorize` endpoint in a browser and verifying the login page renders correctly before redirecting to the identity provider.
+
+**Acceptance Scenarios**:
+
+1. **Given** a user arriving at `/oauth/authorize` via browser redirect, **When** the page loads, **Then** a simple, branded login page is displayed explaining the authentication request.
+
+2. **Given** the login page, **When** the user clicks to proceed, **Then** they are redirected to the configured upstream identity provider.
+
+3. **Given** an authentication error (invalid client, expired state, etc.), **When** the error occurs, **Then** the page displays a user-friendly error message with guidance.
+
+4. **Given** a successful callback from the upstream provider, **When** processing completes, **Then** the user is redirected to the MCP client's redirect URI with appropriate parameters.
+
+---
+
 ### Edge Cases
 
 - What happens when a user's OAuth account exists but they have no corresponding MemberJunction user record?
@@ -108,6 +161,21 @@ An organization wants to support both OAuth (for interactive developer use) and 
 
 - What happens when an MCP client does not support OAuth (older client)?
   - If API key auth is also enabled, the client can use API keys. If OAuth-only, the connection fails with a clear error.
+
+- What happens when a dynamically registered client attempts to use an unauthorized redirect URI?
+  - The OAuth proxy rejects the authorization request with an `invalid_request` error per RFC 6749.
+
+- What happens when the upstream identity provider rejects the user's credentials?
+  - The error is passed through to the user via the login UI, with guidance to check their credentials or contact their administrator.
+
+- What happens when the authorization state expires before the user completes login?
+  - The proxy returns an error page explaining the session expired and prompts the user to restart the authentication flow.
+
+- What happens when the upstream provider issues tokens but the MCP Server cannot map the user to MemberJunction?
+  - The proxy returns an error to the client with `access_denied` and the user sees a message explaining they need a MemberJunction account.
+
+- What happens when multiple dynamically registered clients have the same redirect URI?
+  - This is allowed per RFC 7591. Each client gets unique client_id/secret, and authorization state is tracked per-client.
 
 ## Requirements *(mandatory)*
 
@@ -139,6 +207,30 @@ An organization wants to support both OAuth (for interactive developer use) and 
 
 - **FR-012**: System MUST reject tokens that are expired, have invalid signatures, or were not issued by the configured provider.
 
+### OAuth Proxy Authorization Server Requirements
+
+- **FR-014**: System MUST implement OAuth 2.0 Authorization Server Metadata (RFC 8414) at `/.well-known/oauth-authorization-server`, advertising authorization, token, and registration endpoints.
+
+- **FR-015**: System MUST implement Dynamic Client Registration (RFC 7591) at `/oauth/register`, allowing MCP clients to register and receive client credentials without manual configuration.
+
+- **FR-016**: System MUST implement the authorization endpoint at `/oauth/authorize` that proxies authorization requests to the configured upstream identity provider.
+
+- **FR-017**: System MUST implement a callback endpoint at `/oauth/callback` to receive authorization codes from the upstream provider and complete the proxy flow.
+
+- **FR-018**: System MUST implement the token endpoint at `/oauth/token` that issues tokens to MCP clients after validating authorization codes and PKCE verifiers.
+
+- **FR-019**: System MUST support PKCE (RFC 7636) with S256 code challenge method as required by OAuth 2.1 and MCP specification.
+
+- **FR-020**: System MUST maintain authorization state mapping between MCP client requests and upstream provider flows, with appropriate TTL and cleanup.
+
+- **FR-021**: System MUST store dynamically registered clients in memory with configurable TTL (clients re-register on expiration).
+
+- **FR-022**: System MUST serve a simple web login UI at the authorization endpoint to provide a user-friendly authentication experience.
+
+- **FR-023**: System MUST proxy the upstream provider's tokens or issue derived tokens that the MCP Server can validate for subsequent tool calls.
+
+- **FR-024**: System MUST update Protected Resource Metadata to point to the OAuth proxy authorization server when OAuth proxy mode is enabled.
+
 ### Key Entities
 
 - **User**: The MemberJunction user associated with the OAuth subject claim. The system maps OAuth identity to an existing User record to establish permissions and context.
@@ -146,6 +238,12 @@ An organization wants to support both OAuth (for interactive developer use) and 
 - **OAuth Configuration**: Settings stored in mj.config.cjs that define the OAuth provider type, client ID, authority URL, tenant ID, and whether OAuth is enabled.
 
 - **MCP Session**: Represents an authenticated connection between an MCP client and the server. Contains either API key context or OAuth token claims, along with the resolved MemberJunction user.
+
+- **Registered Client**: A dynamically registered OAuth client (e.g., Claude Code instance). Contains client_id, hashed client_secret, allowed redirect URIs, grant types, and registration timestamp. Stored in-memory with TTL.
+
+- **Authorization State**: Temporary state tracking an in-progress authorization flow. Maps the MCP client's state/PKCE to the upstream provider flow. Contains redirect URI, code challenge, scopes, and expiration.
+
+- **Authorization Code**: A short-lived code issued to MCP clients after successful upstream authentication. Maps to the upstream tokens and PKCE verifier for exchange at the token endpoint.
 
 ## Success Criteria *(mandatory)*
 
@@ -165,6 +263,20 @@ An organization wants to support both OAuth (for interactive developer use) and 
 
 - **SC-007**: Existing API key authentication continues to work unchanged when OAuth is enabled alongside it.
 
+### OAuth Proxy Success Criteria
+
+- **SC-008**: MCP clients can dynamically register with the OAuth proxy in under 5 seconds.
+
+- **SC-009**: Users can complete the full OAuth proxy flow (client registration → browser login → token acquisition) in under 90 seconds.
+
+- **SC-010**: The OAuth proxy correctly handles 100% of PKCE validation scenarios (valid S256 challenges are accepted, invalid/missing verifiers are rejected).
+
+- **SC-011**: Claude Code can successfully connect to the MCP Server using the OAuth proxy without any manual Azure AD app registration.
+
+- **SC-012**: The login web UI displays correctly on desktop and mobile browsers.
+
+- **SC-013**: Authorization state and registered clients are cleaned up after their TTL expires (no memory leaks over time).
+
 ## Assumptions
 
 - MCP clients (Claude Desktop, etc.) support the OAuth 2.1 authorization flow as specified in the MCP Authorization specification.
@@ -173,10 +285,21 @@ An organization wants to support both OAuth (for interactive developer use) and 
 - The MCP Server runs over HTTPS in production environments (required for secure OAuth flows).
 - Token validation will use the provider's JWKS (JSON Web Key Set) endpoint for signature verification via the existing MJServer auth provider infrastructure.
 
+### OAuth Proxy Assumptions
+
+- The upstream identity provider (Azure AD, Auth0, etc.) has a client registration (app registration) configured for the MCP Server itself to use when proxying requests.
+- MCP clients support PKCE (S256) as required by OAuth 2.1 - this is standard for modern OAuth clients.
+- In-memory storage for registered clients and authorization state is acceptable for MVP (server restart clears state; clients re-register).
+- The OAuth proxy does not need to persist or audit dynamically registered clients beyond logging.
+- A single upstream identity provider per MCP Server deployment is sufficient (no need to support multiple upstream providers simultaneously in the proxy flow).
+
 ## Out of Scope
 
 - Automatic user provisioning from OAuth claims (users must exist in MemberJunction).
 - New OAuth providers beyond those already implemented in MJServer (Auth0, MSAL, Okta, Cognito, Google).
 - OAuth scopes beyond basic user identification (fine-grained permission scopes are a future enhancement).
 - Client credentials grant flow (machine-to-machine auth) - use API keys for this use case.
-- The MCP Server acting as an OAuth authorization server (it acts only as a resource server).
+- Persistent storage of dynamically registered clients (in-memory with TTL is sufficient for MVP).
+- Token introspection endpoint (RFC 7662) - not required by MCP specification.
+- Token revocation endpoint (RFC 7009) - tokens expire naturally.
+- Device authorization grant (RFC 8628) - standard authorization code flow is sufficient.

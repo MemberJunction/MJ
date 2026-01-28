@@ -63,6 +63,10 @@ import {
     extractAuthorizationServers,
 } from './auth/ProtectedResourceMetadata.js';
 import { hasAuthProviders } from './auth/TokenValidator.js';
+import { send401Response } from './auth/WWWAuthenticate.js';
+// OAuth Proxy imports
+import { createOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
+import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
 
 // Load AI Engine and all providers to prevent tree shaking - REQUIRED for agent execution
 LoadAIEngine();
@@ -821,6 +825,108 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         });
 
         // =====================================================================
+        // OAUTH PROXY AUTHORIZATION SERVER (RFC 7591, RFC 8414)
+        // =====================================================================
+        // When enabled, the MCP Server acts as an OAuth Authorization Server
+        // that supports dynamic client registration and proxies auth to upstream.
+        const oauthProxyEnabled = _config.mcpServerSettings?.auth?.proxy?.enabled ?? false;
+        let oauthProxyBaseUrl: string | undefined;
+
+        if (isOAuthEnabled() && oauthProxyEnabled) {
+            try {
+                // Get the upstream provider configuration
+                const { AuthProviderFactory } = await import('@memberjunction/server');
+                const factory = AuthProviderFactory.getInstance();
+                const providers = factory.getAllProviders();
+
+                if (providers.length === 0) {
+                    console.warn('[OAuth Proxy] No auth providers configured - OAuth proxy disabled');
+                } else {
+                    // Find the upstream provider (use configured name or first available)
+                    const upstreamProviderName = _config.mcpServerSettings?.auth?.proxy?.upstreamProvider;
+                    const upstreamProvider = upstreamProviderName
+                        ? providers.find((p: { name: string }) => p.name === upstreamProviderName)
+                        : providers[0];
+
+                    if (!upstreamProvider) {
+                        console.error(`[OAuth Proxy] Upstream provider '${upstreamProviderName}' not found`);
+                    } else {
+                        // Build OAuth proxy configuration
+                        oauthProxyBaseUrl = getResourceIdentifier();
+
+                        // Detect Azure AD v2.0 endpoints from issuer
+                        // Azure AD issuer: https://login.microsoftonline.com/{tenant}/v2.0
+                        // Cast to access the issuer property
+                        const provider = upstreamProvider as { issuer: string; audience: string; name: string };
+                        const issuer = provider.issuer;
+                        const isAzureAD = issuer?.includes('microsoftonline.com') || issuer?.includes('sts.windows.net');
+
+                        let authorizationEndpoint: string;
+                        let tokenEndpoint: string;
+
+                        if (isAzureAD) {
+                            // Azure AD v2.0 endpoints
+                            const baseUrl = issuer.replace(/\/v2\.0\/?$/, '');
+                            authorizationEndpoint = `${baseUrl}/oauth2/v2.0/authorize`;
+                            tokenEndpoint = `${baseUrl}/oauth2/v2.0/token`;
+                        } else {
+                            // Generic OIDC - assume standard paths (Auth0, Okta, etc.)
+                            // Most providers use /.well-known/openid-configuration but we need direct endpoints
+                            authorizationEndpoint = `${issuer}/authorize`;
+                            tokenEndpoint = `${issuer}/oauth/token`;
+                        }
+
+                        // Build scopes for upstream - use standard OIDC scopes only
+                        // Note: We don't include api://.../.default because that would cause
+                        // AADSTS90009 "app requesting token for itself" when using a single app registration.
+                        // The OAuth proxy only needs to authenticate the user, not access an API resource.
+                        const upstreamScopes: string[] = ['openid', 'profile', 'email'];
+                        if (!isAzureAD) {
+                            // For non-Azure providers, we might need additional scopes
+                            // (Azure AD doesn't need offline_access for refresh tokens in v2.0)
+                            upstreamScopes.push('offline_access');
+                        }
+
+                        // For OAuth proxy, we need client credentials from environment or config
+                        // The audience is typically the clientId for Azure AD
+                        // We also need a client secret for the token exchange
+                        const upstreamClientId = process.env.WEB_CLIENT_ID || provider.audience || '';
+                        const upstreamClientSecret = process.env.WEB_CLIENT_SECRET || undefined;
+
+                        if (!upstreamClientSecret) {
+                            console.warn('[OAuth Proxy] WEB_CLIENT_SECRET not set - token exchange may fail');
+                            console.warn('[OAuth Proxy] Set WEB_CLIENT_SECRET in .env for the MCP Server app registration');
+                        }
+
+                        const proxyConfig: OAuthProxyConfig = {
+                            baseUrl: oauthProxyBaseUrl,
+                            upstream: {
+                                authorizationEndpoint,
+                                tokenEndpoint,
+                                clientId: upstreamClientId,
+                                clientSecret: upstreamClientSecret,
+                                scopes: upstreamScopes,
+                            },
+                            enableDynamicRegistration: true,
+                            stateTtlMs: _config.mcpServerSettings?.auth?.proxy?.stateTtlMs,
+                        };
+
+                        // Create and mount OAuth proxy router
+                        const oauthProxyRouter = createOAuthProxyRouter(proxyConfig);
+                        app.use(oauthProxyRouter);
+
+                        console.log(`[OAuth Proxy] Enabled with upstream provider: ${provider.name}`);
+                        console.log(`[OAuth Proxy] Authorization endpoint: ${authorizationEndpoint}`);
+                        console.log(`[OAuth Proxy] Token endpoint: ${tokenEndpoint}`);
+                        console.log(`[OAuth Proxy] Base URL: ${oauthProxyBaseUrl}`);
+                    }
+                }
+            } catch (error) {
+                console.error('[OAuth Proxy] Failed to initialize:', error);
+            }
+        }
+
+        // =====================================================================
         // PROTECTED RESOURCE METADATA ENDPOINT (RFC 9728)
         // =====================================================================
         // This endpoint allows MCP clients to discover how to authenticate.
@@ -838,17 +944,22 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                         providers.map((p: { issuer: string }) => ({ issuer: p.issuer }))
                     );
 
-                    if (authorizationServers.length === 0) {
+                    if (authorizationServers.length === 0 && !oauthProxyBaseUrl) {
                         console.warn('[OAuth] No authorization servers configured - metadata endpoint returning empty list');
                     }
 
                     const metadata: ProtectedResourceMetadata = buildProtectedResourceMetadata({
                         authorizationServers,
                         resourceName: 'MemberJunction MCP Server',
+                        providers, // Pass providers for automatic scope generation
+                        // When OAuth proxy is enabled, point to ourselves as the authorization server
+                        useOAuthProxy: oauthProxyEnabled && !!oauthProxyBaseUrl,
+                        oauthProxyBaseUrl,
                     });
 
                     res.json(metadata);
-                    console.log(`[OAuth] Protected Resource Metadata served with ${authorizationServers.length} authorization server(s)`);
+                    const serverCount = oauthProxyEnabled ? 1 : authorizationServers.length;
+                    console.log(`[OAuth] Protected Resource Metadata served (proxy=${oauthProxyEnabled}, servers=${serverCount})`);
                 } catch (error) {
                     console.error('[OAuth] Error building Protected Resource Metadata:', error);
                     res.status(500).json({
@@ -945,20 +1056,38 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         });
 
         // Message endpoint for receiving MCP messages from clients
+        // Note: Authentication happens when establishing the SSE connection (/mcp/sse).
+        // This endpoint routes messages to existing authenticated sessions.
+        // The sessionId acts as a session token - clients must first authenticate via SSE.
         app.post('/mcp/messages', async (req: Request, res: Response) => {
             const sessionId = req.query.sessionId as string;
             console.log(`[Messages] Received POST for session: ${sessionId}`);
 
             if (!sessionId) {
                 console.log('[Messages] Error: Missing sessionId');
-                res.status(400).json({ error: 'Missing sessionId query parameter' });
+                // Protocol error - client didn't follow MCP protocol
+                res.status(400).json({
+                    error: 'invalid_request',
+                    message: 'Missing sessionId query parameter. Establish a session via /mcp/sse first.'
+                });
                 return;
             }
 
             const transport = transports.get(sessionId);
             if (!transport) {
                 console.log(`[Messages] Error: Session not found: ${sessionId}`);
-                res.status(404).json({ error: 'Session not found' });
+                // Session expired or invalid - client needs to re-authenticate
+                // When OAuth is enabled, include WWW-Authenticate header to guide client
+                if (isOAuthEnabled()) {
+                    send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
+                        errorDescription: 'Session not found - establish a new authenticated session'
+                    });
+                } else {
+                    res.status(401).json({
+                        error: 'session_expired',
+                        message: 'Session not found. Please re-establish connection via /mcp/sse endpoint.'
+                    });
+                }
                 return;
             }
 
@@ -1027,25 +1156,39 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         // Streamable HTTP endpoint - handles both GET (SSE stream) and POST (messages)
         // This is the newer, recommended MCP transport
         app.all('/mcp', async (req: Request, res: Response) => {
-            console.log(`[StreamableHTTP] ${req.method} request received`);
+            const requestTimestamp = new Date().toISOString();
+            const requestId = Math.random().toString(36).substring(7);
+            console.log(`[StreamableHTTP][${requestId}][${requestTimestamp}] ${req.method} request received`);
+            // Log request body for debugging MCP protocol
+            if (req.body) {
+                const bodyPreview = JSON.stringify(req.body).substring(0, 500);
+                console.log(`[StreamableHTTP][${requestId}] Request body: ${bodyPreview}`);
+            }
 
             // Get or validate session ID from header
             const sessionId = req.headers['mcp-session-id'] as string | undefined;
-            console.log(`[StreamableHTTP] Session ID from header: ${sessionId || 'none'}`);
+            console.log(`[StreamableHTTP][${requestId}] Session ID from header: ${sessionId || 'none'}`);
 
             // For existing sessions, route to the existing transport
             if (sessionId && streamableTransports.has(sessionId)) {
                 const transport = streamableTransports.get(sessionId)!;
                 console.log(`[StreamableHTTP] Routing to existing session: ${sessionId}`);
                 try {
-                    await transport.handleRequest(req, res);
+                    // Pass parsed body to handleRequest - required for SDK to properly parse the message
+                    await transport.handleRequest(req, res, req.body);
+                    console.log(`[StreamableHTTP] Existing session request completed, status: ${res.statusCode}`);
                 } catch (error) {
-                    console.error(`[StreamableHTTP] Error handling request:`, error);
+                    console.error(`[StreamableHTTP] Error handling request on existing session:`, error);
                     if (!res.headersSent) {
                         res.status(500).json({ error: 'Internal server error' });
                     }
                 }
                 return;
+            }
+
+            // If session ID was provided but doesn't exist, log this (stale session from previous server run?)
+            if (sessionId) {
+                console.log(`[StreamableHTTP] Unknown session ID: ${sessionId} (may be stale from previous server run)`);
             }
 
             // For new sessions (no session ID or unknown session ID with initialization request)
@@ -1073,12 +1216,20 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 console.log(`[StreamableHTTP] Tools registered for user: ${sessionContext.user.Email}`);
 
                 // Create Streamable HTTP transport with session ID generation
+                console.log(`[StreamableHTTP] Creating transport...`);
                 const transport = new StreamableHTTPServerTransport({
-                    sessionIdGenerator: () => randomUUID()
+                    sessionIdGenerator: () => {
+                        const id = randomUUID();
+                        console.log(`[StreamableHTTP] Generated session ID: ${id}`);
+                        return id;
+                    }
                 });
+                console.log(`[StreamableHTTP] Transport created`);
 
                 // Connect the server to the transport
+                console.log(`[StreamableHTTP] Connecting MCP server to transport...`);
                 await mcpServer.connect(transport);
+                console.log(`[StreamableHTTP] MCP server connected to transport`);
 
                 // Store for future requests (after first request establishes session)
                 transport.onclose = () => {
@@ -1090,13 +1241,27 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 };
 
                 // Handle the current request
-                await transport.handleRequest(req, res);
+                // Pass the parsed body to help the SDK recognize the initialize request
+                console.log(`[StreamableHTTP] Handling request with parsed body...`);
+                try {
+                    await transport.handleRequest(req, res, req.body);
+                    console.log(`[StreamableHTTP] Request handled, sessionId: ${transport.sessionId}`);
+                    console.log(`[StreamableHTTP] Response status: ${res.statusCode}, headersSent: ${res.headersSent}`);
+                    // Log the response headers to verify mcp-session-id is being set
+                    const sessionIdHeader = res.getHeader('mcp-session-id');
+                    console.log(`[StreamableHTTP] Response mcp-session-id header: ${sessionIdHeader || 'NOT SET'}`);
+                } catch (handleError) {
+                    console.error(`[StreamableHTTP] Error in handleRequest:`, handleError);
+                    throw handleError;
+                }
 
                 // Store the transport after successful request handling
                 const newSessionId = transport.sessionId;
                 if (newSessionId) {
                     streamableTransports.set(newSessionId, transport);
                     console.log(`[StreamableHTTP] New session created: ${newSessionId}`);
+                } else {
+                    console.log(`[StreamableHTTP] No session ID assigned after request`);
                 }
 
             } catch (error) {

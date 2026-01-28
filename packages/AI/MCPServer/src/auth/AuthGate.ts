@@ -17,7 +17,7 @@ import type { Request, Response } from 'express';
 import type * as http from 'http';
 import type { UserInfo } from '@memberjunction/core';
 import type { MCPSessionContext, AuthMode, AuthResult } from './types.js';
-import { getAuthMode, getResourceIdentifier, isOAuthEnabled, isApiKeyEnabled } from './OAuthConfig.js';
+import { getAuthMode, isOAuthEnabled } from './OAuthConfig.js';
 import { validateBearerToken, resolveOAuthUser } from './TokenValidator.js';
 import { send401Response, send403Response, send503Response } from './WWWAuthenticate.js';
 
@@ -320,12 +320,14 @@ async function validateApiKeyCredentials(
 
 /**
  * Validates OAuth Bearer token credentials.
+ *
+ * Audience validation uses the auth provider's configured audience
+ * (auto-populated from environment variables like WEB_CLIENT_ID for Azure AD),
+ * matching the same approach as MJExplorer.
  */
 async function validateOAuthCredentials(token: string): Promise<AuthResult> {
-  const resourceIdentifier = getResourceIdentifier();
-
-  // Validate the token
-  const validation = await validateBearerToken(token, resourceIdentifier);
+  // Validate the token - audience is derived from the auth provider
+  const validation = await validateBearerToken(token);
 
   if (!validation.valid || !validation.userInfo) {
     const errorCode = validation.error?.code || 'invalid_token';

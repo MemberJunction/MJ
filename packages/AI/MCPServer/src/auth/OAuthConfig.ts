@@ -20,13 +20,13 @@ export function getAuthMode(): AuthMode {
 }
 
 /**
- * Gets the resource identifier for OAuth audience validation.
+ * Gets the resource identifier for MCP Protocol metadata.
  *
- * The resource identifier is used to validate the 'aud' claim in OAuth tokens.
- * If not explicitly configured, it will be auto-generated from the server URL
- * (e.g., "http://localhost:3100").
+ * This is the server URL returned in Protected Resource Metadata,
+ * used by MCP clients for RFC 8707 resource parameter.
+ * If not explicitly configured, it will be auto-generated from the server URL.
  *
- * @returns The resource identifier URL
+ * @returns The resource identifier URL (e.g., "http://localhost:3100")
  */
 export function getResourceIdentifier(): string {
   // Return configured or auto-generated value
@@ -37,6 +37,37 @@ export function getResourceIdentifier(): string {
   // Fallback to auto-generated (should already be set by resolveAuthSettings)
   const port = mcpServerSettings?.port ?? 3100;
   return `http://localhost:${port}`;
+}
+
+/**
+ * @deprecated Token audience is now derived from the auth provider's `audience` field,
+ * which is auto-populated from environment variables (e.g., WEB_CLIENT_ID for Azure AD).
+ * This matches the same approach used by MJExplorer.
+ *
+ * This function is kept for backward compatibility but is no longer used for token validation.
+ */
+export function getTokenAudience(): string {
+  // Use tokenAudience if configured, otherwise fall back to resourceIdentifier
+  if (mcpServerAuth?.tokenAudience) {
+    return mcpServerAuth.tokenAudience;
+  }
+  return getResourceIdentifier();
+}
+
+/**
+ * Gets the OAuth scopes to include in Protected Resource Metadata.
+ *
+ * For Azure AD: use ["api://{client-id}/.default"]
+ * If not configured, returns standard OIDC scopes.
+ *
+ * @returns Array of OAuth scope strings
+ */
+export function getScopes(): string[] {
+  if (mcpServerAuth?.scopes && mcpServerAuth.scopes.length > 0) {
+    return mcpServerAuth.scopes;
+  }
+  // Default to standard OIDC scopes
+  return ['openid', 'profile', 'email'];
 }
 
 /**
@@ -153,7 +184,8 @@ export function logAuthConfig(effectiveMode: AuthMode, providerNames: string[]):
 
   if (effectiveMode === 'oauth' || effectiveMode === 'both') {
     console.log(`MCP Server: OAuth enabled with providers: ${providerNames.join(', ') || 'none'}`);
-    console.log(`MCP Server: Resource identifier: ${getResourceIdentifier()}`);
+    console.log(`MCP Server: Resource identifier (MCP metadata): ${getResourceIdentifier()}`);
+    // Token audience is now derived from auth provider config (same as MJExplorer)
   }
 
   if (effectiveMode === 'apiKey' || effectiveMode === 'both') {

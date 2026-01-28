@@ -450,9 +450,202 @@ The MCP protocol uses JSON-RPC 2.0 over Server-Sent Events for communication.
 
 ## Security and Authentication
 
-The MCP Server uses API key authentication to secure access. All requests must include a valid API key in the request headers.
+The MCP Server supports multiple authentication methods: API keys, OAuth 2.1 Bearer tokens, or both (default). This flexibility enables different deployment scenarios - from simple API key authentication for CLI tools to OAuth for browser-based and enterprise integrations.
 
-### Authentication Overview
+### Authentication Modes
+
+Configure the authentication mode in `mj.config.cjs`:
+
+```javascript
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+
+    // Authentication configuration
+    auth: {
+      // 'apiKey' - API key only
+      // 'oauth' - OAuth Bearer tokens only
+      // 'both' (default) - Accept either (API key takes precedence)
+      // 'none' - No authentication (development only!)
+      mode: 'both',
+
+      // Resource identifier for OAuth audience validation
+      // Required for OAuth modes - must match token's 'aud' claim
+      resourceIdentifier: 'https://mcp.example.com',
+
+      // Auto-generate resourceIdentifier from server URL (default: true)
+      // If true and resourceIdentifier not set, uses http://localhost:{port}
+      autoResourceIdentifier: true,
+    },
+    // ... other settings
+  },
+
+  // OAuth providers (shared with MJExplorer)
+  // Required when auth.mode is 'oauth' or 'both'
+  authProviders: [
+    {
+      name: 'azure-ad',
+      type: 'msal',
+      clientId: 'your-client-id',
+      tenantId: 'your-tenant-id',
+      issuer: 'https://login.microsoftonline.com/{tenant}/v2.0',
+      audience: 'api://your-app-id',
+      jwksUri: 'https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys'
+    }
+  ]
+}
+```
+
+### OAuth Configuration Examples
+
+#### Mode: both (Default)
+
+```javascript
+// No auth config needed - defaults to 'both' mode
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    // auth not specified = mode: 'both' (accepts API keys or OAuth tokens)
+  }
+}
+```
+
+#### Mode: apiKey (API Key Only)
+
+```javascript
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    auth: {
+      mode: 'apiKey'  // Only accept API keys, reject OAuth tokens
+    }
+  }
+}
+```
+
+#### Mode: oauth (OAuth Only)
+
+```javascript
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    auth: {
+      mode: 'oauth',
+      resourceIdentifier: 'https://mcp.example.com'
+    }
+  },
+  authProviders: [
+    {
+      name: 'azure-ad',
+      type: 'msal',
+      clientId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+      tenantId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+      issuer: 'https://login.microsoftonline.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/v2.0',
+      audience: 'api://mcp-server',
+      jwksUri: 'https://login.microsoftonline.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/discovery/v2.0/keys'
+    }
+  ]
+}
+```
+
+#### Mode: both (Explicit Configuration)
+
+```javascript
+// Explicitly configure 'both' mode with custom resource identifier
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    auth: {
+      mode: 'both',  // Accept API keys OR OAuth tokens (this is also the default)
+      resourceIdentifier: 'https://mcp.example.com'  // Custom audience for OAuth validation
+    }
+  },
+  authProviders: [/* ... */]
+}
+```
+
+#### Mode: none (Development Only)
+
+```javascript
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    auth: {
+      mode: 'none'  // WARNING: No authentication - development only!
+    }
+  }
+}
+```
+
+### OAuth Protocol Flow
+
+When OAuth is enabled, the MCP Server implements [RFC 9728 Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728):
+
+1. **Client connects without credentials** → Server returns `401 Unauthorized` with `WWW-Authenticate` header
+2. **Client fetches metadata** → `GET /.well-known/oauth-protected-resource` returns authorization server URLs
+3. **Client authenticates with IdP** → Completes OAuth flow with configured provider (Azure AD, Auth0, etc.)
+4. **Client retries with Bearer token** → `Authorization: Bearer <access_token>`
+5. **Server validates token** → Checks signature, expiration, audience, and maps to MemberJunction user
+6. **Tool calls execute** → With authenticated user's permissions
+
+### OAuth Endpoints
+
+When OAuth is enabled:
+
+- `GET /.well-known/oauth-protected-resource` - Protected Resource Metadata (RFC 9728)
+
+Example response:
+```json
+{
+  "resource": "https://mcp.example.com",
+  "authorization_servers": ["https://login.microsoftonline.com/tenant-id/v2.0"],
+  "scopes_supported": ["openid", "profile", "email"],
+  "bearer_methods_supported": ["header"],
+  "resource_name": "MemberJunction MCP Server"
+}
+```
+
+### OAuth Error Responses
+
+| Status | When | Response |
+|--------|------|----------|
+| 401 Unauthorized | Missing/invalid token | `WWW-Authenticate: Bearer resource_metadata="..."` |
+| 403 Forbidden | Valid token, user not in MJ | `WWW-Authenticate: Bearer error="insufficient_scope"` |
+| 503 Service Unavailable | OAuth provider unreachable | `Retry-After: 30` |
+
+### HTTPS Requirements
+
+For production OAuth deployments:
+
+- **Required**: HTTPS for the MCP Server endpoint
+- **Required**: Valid TLS certificate (not self-signed)
+- **Required**: `resourceIdentifier` must match the server's public URL
+
+Development mode (`http://localhost`) works for testing but should never be used in production when handling OAuth tokens.
+
+### Supported OAuth Providers
+
+The MCP Server uses MJServer's auth provider infrastructure, supporting:
+
+- **Azure AD (MSAL)** - Microsoft identity platform
+- **Auth0** - Universal authentication
+- **Okta** - Enterprise identity
+- **Cognito** - AWS authentication
+- **Google** - Google OAuth 2.0
+
+Configure providers in the `authProviders` array (shared with MJExplorer).
+
+---
+
+### API Key Authentication
+
+The MCP Server also supports API key authentication, which is the default mode.
 
 - **Authentication Method**: API Key via HTTP headers or Bearer token
 - **Supported Headers**:

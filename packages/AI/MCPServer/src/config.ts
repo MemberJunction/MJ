@@ -125,20 +125,62 @@ const mcpServerAgentToolInfoSchema = z.object({
 });
 
 /**
+ * Zod schema for OAuth Proxy settings.
+ * The OAuth proxy enables dynamic client registration (RFC 7591) for MCP clients.
+ */
+const oauthProxySettingsSchema = z.object({
+  /** Enable the OAuth proxy authorization server */
+  enabled: z.boolean().default(false),
+  /**
+   * Upstream provider to use for authentication.
+   * This should match one of the configured auth providers by name.
+   * If not specified, the first available provider is used.
+   */
+  upstreamProvider: z.string().optional(),
+  /** TTL for registered clients in milliseconds (default: 24 hours) */
+  clientTtlMs: z.number().default(24 * 60 * 60 * 1000),
+  /** TTL for authorization state in milliseconds (default: 10 minutes) */
+  stateTtlMs: z.number().default(10 * 60 * 1000),
+});
+
+/**
  * Zod schema for OAuth authentication settings.
  *
+ * Token audience for validation is automatically derived from auth provider config
+ * (e.g., WEB_CLIENT_ID for Azure AD), matching the same approach used by MJExplorer.
+ * No additional configuration is required for basic OAuth to work.
+ *
  * Validates the auth configuration section with defaults:
- * - mode: defaults to 'apiKey' for backward compatibility
- * - resourceIdentifier: optional URL for OAuth audience validation
+ * - mode: defaults to 'both' (accepts API keys or OAuth tokens)
+ * - resourceIdentifier: MCP server URL for Protected Resource Metadata (auto-generated if not set)
  * - autoResourceIdentifier: defaults to true (auto-generate from server URL)
  */
 const mcpServerAuthSettingsSchema = z.object({
   /** Authentication mode: 'apiKey' | 'oauth' | 'both' | 'none' */
-  mode: z.enum(['apiKey', 'oauth', 'both', 'none']).default('apiKey'),
-  /** Resource identifier for OAuth audience validation (e.g., "https://mcp.example.com") */
+  mode: z.enum(['apiKey', 'oauth', 'both', 'none']).default('both'),
+  /** Resource identifier for MCP clients - the server URL (e.g., "http://localhost:3100") */
   resourceIdentifier: z.string().optional(),
+  /**
+   * @deprecated Token audience is now derived from auth provider config (same as MJExplorer).
+   * This field is ignored - audience validation uses the provider's `audience` field
+   * which is auto-populated from environment variables like WEB_CLIENT_ID.
+   */
+  tokenAudience: z.string().optional(),
+  /**
+   * OAuth scopes to include in Protected Resource Metadata.
+   * Used for MCP client discovery - tells clients what scopes to request from the IdP.
+   * For Azure AD: use ["api://{client-id}/.default"]
+   * If not set, uses standard OIDC scopes ["openid", "profile", "email"]
+   */
+  scopes: z.array(z.string()).optional(),
   /** Auto-generate resourceIdentifier from server URL if not specified */
   autoResourceIdentifier: z.boolean().default(true),
+  /**
+   * OAuth Proxy settings - enables dynamic client registration for MCP clients.
+   * When enabled, the MCP Server acts as an OAuth Authorization Server that
+   * proxies authentication to the configured upstream provider (Azure AD, Auth0, etc.).
+   */
+  proxy: oauthProxySettingsSchema.optional(),
 });
 
 const mcpServerInfoSchema = z.object({
@@ -191,6 +233,7 @@ export type MCPServerQueryToolInfo = z.infer<typeof mcpServerQueryToolInfoSchema
 export type MCPServerPromptToolInfo = z.infer<typeof mcpServerPromptToolInfoSchema>;
 export type MCPServerCommunicationToolInfo = z.infer<typeof mcpServerCommunicationToolInfoSchema>;
 export type MCPServerAuthSettingsInfo = z.infer<typeof mcpServerAuthSettingsSchema>;
+export type OAuthProxySettingsInfo = z.infer<typeof oauthProxySettingsSchema>;
 
 // Config will be loaded asynchronously - exports are populated by initConfig()
 export let configInfo: ConfigInfo;
@@ -271,7 +314,7 @@ function resolveAuthSettings(
 ): MCPServerAuthSettingsInfo {
   // Start with defaults
   const defaults: MCPServerAuthSettingsInfo = {
-    mode: 'apiKey',
+    mode: 'both',
     autoResourceIdentifier: true,
   };
 
@@ -283,6 +326,8 @@ function resolveAuthSettings(
   const resolved: MCPServerAuthSettingsInfo = {
     mode: authConfig.mode ?? defaults.mode,
     resourceIdentifier: authConfig.resourceIdentifier,
+    tokenAudience: authConfig.tokenAudience,
+    scopes: authConfig.scopes,
     autoResourceIdentifier: authConfig.autoResourceIdentifier ?? defaults.autoResourceIdentifier,
   };
 

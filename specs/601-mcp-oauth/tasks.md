@@ -92,7 +92,7 @@ All paths are relative to `packages/AI/MCPServer/`:
 
 - [x] T023 [US1] Modify `packages/AI/MCPServer/src/Server.ts` to conditionally mount OAuth routes based on auth mode
 - [x] T024 [US1] Replace direct authenticateRequest() calls with AuthGate middleware in Server.ts for SSE endpoint
-- [ ] T025 [US1] Replace direct authenticateRequest() calls with AuthGate middleware in Server.ts for Messages endpoint
+- [x] T025 [US1] Replace direct authenticateRequest() calls with AuthGate middleware in Server.ts for Messages endpoint
 - [x] T026 [US1] Replace direct authenticateRequest() calls with AuthGate middleware in Server.ts for Streamable HTTP endpoint
 - [x] T027 [US1] Add startup logging in Server.ts showing active auth mode and configured providers
 
@@ -117,15 +117,15 @@ All paths are relative to `packages/AI/MCPServer/`:
 
 ### Configuration Validation
 
-- [ ] T030 [US2] Add OAuth config validation in `packages/AI/MCPServer/src/auth/OAuthConfig.ts` - check required fields when mode='oauth' or 'both'
-- [ ] T031 [US2] Add provider availability check in OAuthConfig.ts - verify AuthProviderFactory.hasProviders() when OAuth enabled
-- [ ] T032 [US2] Add fallback logic in OAuthConfig.ts - if OAuth config incomplete, log warning and return 'apiKey' mode
-- [ ] T033 [US2] Add startup validation in Server.ts - call validateOAuthConfig() and log clear messages for missing/invalid values
+- [x] T030 [US2] Add OAuth config validation in `packages/AI/MCPServer/src/auth/OAuthConfig.ts` - check required fields when mode='oauth' or 'both'
+- [x] T031 [US2] Add provider availability check in OAuthConfig.ts - verify AuthProviderFactory.hasProviders() when OAuth enabled
+- [x] T032 [US2] Add fallback logic in OAuthConfig.ts - if OAuth config incomplete, log warning and return 'apiKey' mode
+- [x] T033 [US2] Add startup validation in Server.ts - call validateOAuthConfig() and log clear messages for missing/invalid values
 
 ### Default Behavior (FR-007, FR-008)
 
-- [ ] T034 [US2] Ensure auth.mode defaults to 'apiKey' in mcpServerAuthSettingsSchema when auth section missing
-- [ ] T035 [US2] Verify backward compatibility - API key auth works identically when OAuth not configured
+- [x] T034 [US2] Ensure auth.mode defaults to 'apiKey' in mcpServerAuthSettingsSchema when auth section missing
+- [x] T035 [US2] Verify backward compatibility - API key auth works identically when OAuth not configured
 
 **Checkpoint**: User Story 2 complete - administrators have clear configuration path with helpful error messages
 
@@ -144,14 +144,14 @@ All paths are relative to `packages/AI/MCPServer/`:
 
 ### Token Expiration Handling (FR-012)
 
-- [ ] T036 [US3] Add explicit expiration check in TokenValidator.ts - verify exp claim before signature verification for fast fail
-- [ ] T037 [US3] Return specific error code 'expired_token' from TokenValidator when token expired
-- [ ] T038 [US3] Ensure 401 response includes WWW-Authenticate header for expired tokens in AuthGate.ts
+- [x] T036 [US3] Add explicit expiration check in TokenValidator.ts - verify exp claim before signature verification for fast fail
+- [x] T037 [US3] Return specific error code 'expired_token' from TokenValidator when token expired
+- [x] T038 [US3] Ensure 401 response includes WWW-Authenticate header for expired tokens in AuthGate.ts
 
 ### Token Metadata (optional enhancement)
 
-- [ ] T039 [US3] Add token expiry time to MCPSessionContext.oauth.tokenExpiresAt when OAuth auth succeeds
-- [ ] T040 [US3] Consider logging remaining token lifetime for monitoring (optional)
+- [x] T039 [US3] Add token expiry time to MCPSessionContext.oauth.tokenExpiresAt when OAuth auth succeeds
+- [x] T040 [US3] Consider logging remaining token lifetime for monitoring (optional)
 
 **Checkpoint**: User Story 3 complete - expired tokens handled gracefully with proper re-auth prompts
 
@@ -170,15 +170,15 @@ All paths are relative to `packages/AI/MCPServer/`:
 
 ### Dual Auth Logic (FR-008)
 
-- [ ] T041 [US4] Update credential extraction in AuthGate.ts to check for both API key headers and Bearer token
-- [ ] T042 [US4] Implement precedence logic in AuthGate.ts - API key takes precedence when both present
-- [ ] T043 [US4] Ensure mode='both' accepts either credential type successfully
-- [ ] T044 [US4] Add logging in AuthGate.ts to indicate which auth method was used
+- [x] T041 [US4] Update credential extraction in AuthGate.ts to check for both API key headers and Bearer token
+- [x] T042 [US4] Implement precedence logic in AuthGate.ts - API key takes precedence when both present
+- [x] T043 [US4] Ensure mode='both' accepts either credential type successfully
+- [x] T044 [US4] Add logging in AuthGate.ts to indicate which auth method was used
 
 ### Edge Cases
 
-- [ ] T045 [US4] Handle case where API key is invalid but Bearer token is valid in mode='both'
-- [ ] T046 [US4] Handle case where user has API key but OAuth token for different user (API key wins)
+- [x] T045 [US4] Handle case where API key is invalid but Bearer token is valid in mode='both'
+- [x] T046 [US4] Handle case where user has API key but OAuth token for different user (API key wins)
 
 **Checkpoint**: User Story 4 complete - both authentication methods work with clear precedence
 
@@ -190,19 +190,19 @@ All paths are relative to `packages/AI/MCPServer/`:
 
 ### User Not Found (403 Response)
 
-- [ ] T047 Add 403 Forbidden response in AuthGate.ts when OAuth token valid but user not in MemberJunction
-- [ ] T048 Include error="insufficient_scope" and descriptive message in 403 WWW-Authenticate header
+- [x] T047 Add 403 Forbidden response in AuthGate.ts when OAuth token valid but user not in MemberJunction
+- [x] T048 Include error="insufficient_scope" and descriptive message in 403 WWW-Authenticate header
 
 ### Provider Unavailable (503 Response)
 
-- [ ] T049 Add try/catch in TokenValidator.ts around JWKS fetch operations
-- [ ] T050 Return 503 Service Unavailable with Retry-After header when OAuth provider unreachable
-- [ ] T051 Log connectivity issues with provider URL for debugging
+- [x] T049 Add try/catch in TokenValidator.ts around JWKS fetch operations
+- [x] T050 Return 503 Service Unavailable with Retry-After header when OAuth provider unreachable
+- [x] T051 Log connectivity issues with provider URL for debugging
 
 ### Mode='none' for Development
 
-- [ ] T052 Implement mode='none' in AuthGate.ts - skip all authentication, use system user
-- [ ] T053 Add warning log at startup when mode='none' is configured (development only!)
+- [x] T052 Implement mode='none' in AuthGate.ts - skip all authentication, use system user
+- [x] T053 Add warning log at startup when mode='none' is configured (development only!)
 
 **Checkpoint**: All edge cases handled with appropriate HTTP status codes and messages
 
@@ -214,21 +214,21 @@ All paths are relative to `packages/AI/MCPServer/`:
 
 ### Documentation
 
-- [ ] T054 [P] Update `packages/AI/MCPServer/README.md` with OAuth configuration section
-- [ ] T055 [P] Add OAuth examples to README showing all four auth modes
-- [ ] T056 [P] Document environment requirements (HTTPS for production)
+- [x] T054 [P] Update `packages/AI/MCPServer/README.md` with OAuth configuration section
+- [x] T055 [P] Add OAuth examples to README showing all four auth modes
+- [x] T056 [P] Document environment requirements (HTTPS for production)
 
 ### Code Quality
 
-- [ ] T057 Export all public types from `packages/AI/MCPServer/src/auth/index.ts`
-- [ ] T058 Add JSDoc comments to all public functions in auth module
-- [ ] T059 Verify no `any` types used in auth module (Constitution compliance)
-- [ ] T060 Verify all functions under 40 lines (Constitution compliance)
+- [x] T057 Export all public types from `packages/AI/MCPServer/src/auth/index.ts`
+- [x] T058 Add JSDoc comments to all public functions in auth module
+- [x] T059 Verify no `any` types used in auth module (Constitution compliance)
+- [x] T060 Verify all functions under 40 lines (Constitution compliance)
 
 ### Integration Validation
 
-- [ ] T061 Run `npm run build` in `packages/AI/MCPServer` to verify TypeScript compilation
-- [ ] T062 Validate quickstart.md scenarios work end-to-end
+- [x] T061 Run `npm run build` in `packages/AI/MCPServer` to verify TypeScript compilation
+- [x] T062 Validate quickstart.md scenarios work end-to-end
 
 ---
 
