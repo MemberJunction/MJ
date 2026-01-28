@@ -1629,7 +1629,13 @@ export class SQLServerDataProvider
         });
 
         // Process data results
-        const retData = resultMap['data'] as Record<string, unknown>[] || [];
+        let retData = resultMap['data'] as Record<string, unknown>[] || [];
+
+        // Process rows for datetime conversion and field-level decryption
+        // This is critical for encrypted fields - without this, encrypted data stays encrypted in the UI
+        if (retData.length > 0 && params.ResultType !== 'count_only') {
+          retData = await this.ProcessEntityRows(retData, entityInfo, contextUser);
+        }
 
         // Process count results - also check if we need count based on result length
         let rowCount = null;
@@ -4107,7 +4113,7 @@ export class SQLServerDataProvider
               // Find the related entity info to process datetime fields correctly
               const relEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase());
               if (relEntityInfo) {
-                ret[rel] = await this.ProcessEntityRows(rawRelData, relEntityInfo);
+                ret[rel] = await this.ProcessEntityRows(rawRelData, relEntityInfo, user);
               } else {
                 // Fallback if we can't find entity info
                 ret[rel] = rawRelData;
@@ -4409,7 +4415,18 @@ export class SQLServerDataProvider
           });
         } else {
           // Process successful query result
-          const itemData = batchResults[queryIndex] || [];
+          let itemData = batchResults[queryIndex] || [];
+
+          // Process rows for datetime conversion and field-level decryption
+          // This is critical for datasets that contain encrypted fields
+          if (itemData.length > 0) {
+            const entityInfo = useThisProvider.Entities.find(e =>
+              e.Name.trim().toLowerCase() === item.Entity.trim().toLowerCase()
+            );
+            if (entityInfo) {
+              itemData = await useThisProvider.ProcessEntityRows(itemData, entityInfo, contextUser);
+            }
+          }
 
           const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
           const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
