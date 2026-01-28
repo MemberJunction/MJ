@@ -656,10 +656,16 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             throw new Error('System user not found in UserCache - required for server initialization');
         }
 
-        // Load API keys into cache for fast validation
-        console.log('Loading credentials and API keys into cache...');
+        // Load credentials for server operations
+        console.log('Loading credentials into cache...');
         await CredentialEngine.Instance.Config(false, systemUser);
-        console.log(`API keys loaded successfully. Count: ${CredentialEngine.Instance.APIKeys.length}`);
+        console.log('Credentials loaded successfully.');
+
+        // Initialize API Key engine for scope-based authorization
+        console.log('Initializing API Key engine...');
+        const apiKeyEngine = GetAPIKeyEngine();
+        await apiKeyEngine.Config(false, systemUser);
+        console.log(`API Key engine initialized. Scopes loaded: ${apiKeyEngine.Scopes.length}`);
 
         // Create Express app for SSE transport
         const app = express();

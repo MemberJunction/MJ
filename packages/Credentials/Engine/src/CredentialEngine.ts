@@ -12,10 +12,7 @@ import {
     AuditLogEntity,
     CredentialCategoryEntity,
     CredentialEntity,
-    CredentialTypeEntity,
-    APIKeyEntity,
-    APIScopeEntity,
-    APIKeyScopeEntity
+    CredentialTypeEntity
 } from "@memberjunction/core-entities";
 import {
     CredentialResolutionOptions,
@@ -67,9 +64,6 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     private _credentials: CredentialEntity[] = [];
     private _credentialTypes: CredentialTypeEntity[] = [];
     private _credentialCategories: CredentialCategoryEntity[] = [];
-    private _apiKeys: APIKeyEntity[] = [];
-    private _apiScopes: APIScopeEntity[] = [];
-    private _apiKeyScopes: APIKeyScopeEntity[] = []; // No entity class yet
 
     // Cached entity ID for audit logging
     private _credentialsEntityId: string | null = null;
@@ -98,22 +92,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                 PropertyName: '_credentialCategories',
                 EntityName: 'MJ: Credential Categories',
                 CacheLocal: true
-            },
-            {
-                PropertyName: '_apiScopes',
-                EntityName: 'MJ: API Scopes',
-                CacheLocal: true
-            },
-            {
-                PropertyName: '_apiKeys',
-                EntityName: 'MJ: API Keys',
-                CacheLocal: true
-            },           
-            {
-                PropertyName: '_apiKeyScopes',
-                EntityName: 'MJ: API Key Scopes',
-                CacheLocal: true
-            }      
+            }
         ];
 
         // get the entity ID for MJ: Credentials
@@ -166,38 +145,6 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     public get CredentialCategories(): CredentialCategoryEntity[] {
         return this._credentialCategories;
     }
-
-
-    /**
-     * Returns all cached API keys.
-     */
-    public get APIKeys(): APIKeyEntity[] {
-        return this._apiKeys;
-    }
-    /**
-     * Returns all cached API key scopes.
-     */
-    public get APIKeyScopes(): APIKeyScopeEntity[] {
-        return this._apiKeyScopes;
-    }
-    /**
-     * Returns all cached API scopes.
-     */
-    public get APIScopes(): APIScopeEntity[] {
-        return this._apiScopes;
-    }
-
-    /**
-     * Finds an API key by its hash.
-     * This is the primary lookup method for API key validation.
-     * 
-     * @param hash - The SHA-256 hash of the API key
-     * @returns The cached API key or undefined if not found
-     */
-    public getAPIKeyByHash(hash: string): APIKeyEntity | undefined {
-        return this._apiKeys.find(k => k.Hash === hash);
-    }
-
 
     // ====================================
     // Lookup Methods
