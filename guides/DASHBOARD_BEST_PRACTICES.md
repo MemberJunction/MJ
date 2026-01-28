@@ -5,15 +5,18 @@ This guide covers patterns and best practices for building dashboards in MemberJ
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Component Structure](#component-structure)
-3. [State Management with Getter/Setters](#state-management-with-gettersetters)
-4. [Using Engine Classes](#using-engine-classes)
-5. [User Preferences](#user-preferences)
-6. [Data Loading Patterns](#data-loading-patterns)
-7. [Layout Patterns](#layout-patterns)
-8. [Template Patterns](#template-patterns)
-9. [Permission Checking](#permission-checking)
-10. [Creating New Engines](#creating-new-engines)
+2. [Naming Conventions](#naming-conventions)
+3. [Navigation Patterns](#navigation-patterns)
+4. [Component Structure](#component-structure)
+5. [State Management with Getter/Setters](#state-management-with-gettersetters)
+6. [Using Engine Classes](#using-engine-classes)
+7. [User Preferences](#user-preferences)
+8. [Data Loading Patterns](#data-loading-patterns)
+9. [Local Caching with RunView](#local-caching-with-runview)
+10. [Layout Patterns](#layout-patterns)
+11. [Template Patterns](#template-patterns)
+12. [Permission Checking](#permission-checking)
+13. [Creating New Engines](#creating-new-engines)
 
 ---
 
@@ -36,6 +39,240 @@ MemberJunction dashboards follow a layered architecture:
 - **BaseResourceComponent** for dashboard tabs that integrate with the resource system
 - **Debounced user preferences** via UserInfoEngine with hierarchical keys
 - **CSS-based layouts** using Flexbox and Grid (no external layout libraries)
+- **Left panel navigation** within dashboards (top nav is reserved for shell)
+
+---
+
+## Naming Conventions
+
+MemberJunction uses specific casing conventions for class members:
+
+### Acronyms in Names
+
+**Important:** Common acronyms like `ID`, `URL`, `API`, `HTTP` should be **ALL CAPS** in names:
+
+```typescript
+// ✅ CORRECT
+AgentID, ModelID, UserID, RecordID
+APIKey, APIURL
+HTTPClient, HTTPStatus
+
+// ❌ WRONG
+AgentId, ModelId, UserId, RecordId
+ApiKey, ApiUrl
+HttpClient, HttpStatus
+```
+
+### PascalCase for Public Members
+
+All public properties, methods, inputs, and outputs use **PascalCase**:
+
+```typescript
+export class AgentConfigurationComponent extends BaseResourceComponent {
+  // Public properties - PascalCase
+  @Input() AgentID: string | null = null;
+  @Input() AutoRefresh: boolean = false;
+  @Output() AgentSelected = new EventEmitter<string>();
+
+  public IsLoading = false;
+  public SelectedAgent: AIAgentEntity | null = null;
+  public FilteredAgents: AIAgentEntity[] = [];
+
+  // Public methods - PascalCase
+  public LoadAgents(): Promise<void> { }
+  public RefreshData(): void { }
+  public GetAgentByID(id: string): AIAgentEntity | null { }
+}
+```
+
+### camelCase for Private/Protected Members
+
+All private and protected members use **camelCase**:
+
+```typescript
+export class AgentConfigurationComponent extends BaseResourceComponent {
+  // Private backing fields - camelCase
+  private _agentID: string | null = null;
+  private _isLoading = false;
+  private _agents: AIAgentEntity[] = [];
+  private _filterText = '';
+
+  // Protected members - camelCase
+  protected metadata = new Metadata();
+  protected permissionCache = new Map<string, boolean>();
+
+  // Private methods - camelCase
+  private loadAgentDetails(agentID: string): Promise<void> { }
+  private applyFilters(): void { }
+  private saveUserPreferences(): void { }
+}
+```
+
+### Combined Example
+
+```typescript
+export class ModelManagementComponent extends BaseResourceComponent {
+  // Private backing fields (camelCase)
+  private _selectedModelID: string | null = null;
+  private _viewMode: 'grid' | 'list' = 'grid';
+
+  // Public getter/setter (PascalCase) wrapping private field (camelCase)
+  @Input()
+  set SelectedModelID(value: string | null) {
+    if (value !== this._selectedModelID) {
+      this._selectedModelID = value;
+      this.onModelSelectionChanged(value);
+    }
+  }
+  get SelectedModelID(): string | null {
+    return this._selectedModelID;
+  }
+
+  // Public computed property (PascalCase)
+  get HasSelection(): boolean {
+    return this._selectedModelID !== null;
+  }
+
+  // Private reaction method (camelCase)
+  private onModelSelectionChanged(modelID: string | null): void {
+    // ...
+  }
+}
+```
+
+---
+
+## Navigation Patterns
+
+### Shell Uses Top Navigation
+
+The MJ Explorer shell uses **top navigation tabs** for switching between main areas within an application. Each Application in MemberJunction defines its nav items which appear as top tabs.
+
+### Dashboards Use Left Panel Navigation
+
+**IMPORTANT:** Dashboard components should use **left panel (sidebar) navigation**, not another layer of top tabs. Using top tabs within a dashboard creates a confusing double-layer of horizontal navigation that disorients users.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  [App Logo]    [Tab 1]  [Tab 2]  [Tab 3]    [User Menu]    │  ← Shell top nav
+├─────────────────────────────────────────────────────────────┤
+│ ┌──────────┐ ┌────────────────────────────────────────────┐ │
+│ │ Section 1│ │                                            │ │
+│ │ Section 2│ │         Main Content Area                  │ │  ← Dashboard uses
+│ │ Section 3│ │                                            │ │     LEFT nav
+│ │ Section 4│ │                                            │ │
+│ └──────────┘ └────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Left Navigation Implementation
+
+```html
+<div class="dashboard-layout">
+  <!-- Left Navigation Panel -->
+  <nav class="dashboard-nav" [class.collapsed]="NavCollapsed">
+    <div class="nav-header">
+      <h3>AI Dashboard</h3>
+      <button class="collapse-btn" (click)="toggleNav()">
+        <i class="fa-solid" [class.fa-chevron-left]="!NavCollapsed"
+                            [class.fa-chevron-right]="NavCollapsed"></i>
+      </button>
+    </div>
+
+    <ul class="nav-items">
+      @for (section of NavSections; track section.id) {
+        <li class="nav-item"
+            [class.active]="ActiveSection === section.id"
+            (click)="selectSection(section.id)">
+          <i [class]="section.icon"></i>
+          @if (!NavCollapsed) {
+            <span>{{ section.label }}</span>
+          }
+        </li>
+      }
+    </ul>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="dashboard-content">
+    @switch (ActiveSection) {
+      @case ('models') { <app-model-management></app-model-management> }
+      @case ('prompts') { <app-prompt-management></app-prompt-management> }
+      @case ('agents') { <app-agent-configuration></app-agent-configuration> }
+      @case ('monitor') { <app-execution-monitoring></app-execution-monitoring> }
+    }
+  </main>
+</div>
+```
+
+```scss
+.dashboard-layout {
+  display: flex;
+  height: 100%;
+}
+
+.dashboard-nav {
+  width: 220px;
+  background: #f8f9fa;
+  border-right: 1px solid #e0e6ed;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.2s ease;
+
+  &.collapsed {
+    width: 56px;
+
+    .nav-item span { display: none; }
+  }
+}
+
+.nav-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(99, 102, 241, 0.08);
+    color: #6366f1;
+  }
+
+  &.active {
+    background: rgba(99, 102, 241, 0.12);
+    color: #6366f1;
+    font-weight: 600;
+    border-left: 3px solid #6366f1;
+  }
+
+  i {
+    width: 20px;
+    text-align: center;
+  }
+}
+
+.dashboard-content {
+  flex: 1;
+  overflow: auto;
+}
+```
+
+### When Tabs ARE Appropriate
+
+Tabs within a dashboard content area are fine for **related content within a single view**, such as:
+- Detail view tabs (Overview, Settings, History)
+- Filter groupings (All, Active, Archived)
+- Data presentation modes (Table, Chart, Summary)
+
+The key is: **one level of primary navigation** (left panel), with optional secondary organization (tabs within content).
 
 ---
 
@@ -90,20 +327,20 @@ export interface KPICardData {
 @Component({
   selector: 'app-kpi-card',
   template: `
-    <div class="kpi-card" [class]="'kpi-card--' + data.color">
+    <div class="kpi-card" [class]="'kpi-card--' + Data.color">
       <div class="kpi-card__icon">
-        <i [class]="'fa-solid ' + data.icon"></i>
+        <i [class]="'fa-solid ' + Data.icon"></i>
       </div>
-      <div class="kpi-card__title">{{ data.title }}</div>
-      <div class="kpi-card__value">{{ formatValue(data.value) }}</div>
+      <div class="kpi-card__title">{{ Data.title }}</div>
+      <div class="kpi-card__value">{{ FormatValue(Data.value) }}</div>
     </div>
   `
 })
 export class KPICardComponent {
-  @Input() data!: KPICardData;
-  @Output() cardClick = new EventEmitter<KPICardData>();
+  @Input() Data!: KPICardData;
+  @Output() CardClick = new EventEmitter<KPICardData>();
 
-  formatValue(value: string | number): string {
+  FormatValue(value: string | number): string {
     if (typeof value === 'number') {
       return value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toString();
     }
@@ -128,10 +365,10 @@ export class KPICardComponent {
 export class AgentConfigurationComponent extends BaseResourceComponent {
 
   // ========================================================================
-  // PRIVATE BACKING FIELDS
+  // PRIVATE BACKING FIELDS (camelCase)
   // ========================================================================
 
-  private _selectedAgentId: string | null = null;
+  private _selectedAgentID: string | null = null;
   private _viewMode: 'grid' | 'list' = 'grid';
   private _isLoading = false;
   private _agents: AIAgentEntity[] = [];
@@ -139,47 +376,47 @@ export class AgentConfigurationComponent extends BaseResourceComponent {
   private _isDetailPanelVisible = false;
 
   // ========================================================================
-  // INPUT PROPERTIES WITH GETTER/SETTERS
+  // INPUT PROPERTIES WITH GETTER/SETTERS (PascalCase)
   // ========================================================================
 
   @Input()
-  set selectedAgentId(value: string | null) {
-    if (value !== this._selectedAgentId) {
-      this._selectedAgentId = value;
+  set SelectedAgentID(value: string | null) {
+    if (value !== this._selectedAgentID) {
+      this._selectedAgentID = value;
       // Explicit, deterministic reaction to value change
       this.onAgentSelectionChanged(value);
     }
   }
-  get selectedAgentId(): string | null {
-    return this._selectedAgentId;
+  get SelectedAgentID(): string | null {
+    return this._selectedAgentID;
   }
 
   // ========================================================================
-  // LOCAL STATE WITH GETTER/SETTERS
+  // LOCAL STATE WITH GETTER/SETTERS (PascalCase for public)
   // ========================================================================
 
-  set viewMode(value: 'grid' | 'list') {
+  set ViewMode(value: 'grid' | 'list') {
     if (value !== this._viewMode) {
       this._viewMode = value;
       this.saveUserPreferences();
     }
   }
-  get viewMode(): 'grid' | 'list' {
+  get ViewMode(): 'grid' | 'list' {
     return this._viewMode;
   }
 
-  set isLoading(value: boolean) {
+  set IsLoading(value: boolean) {
     this._isLoading = value;
   }
-  get isLoading(): boolean {
+  get IsLoading(): boolean {
     return this._isLoading;
   }
 
   // ========================================================================
-  // COMPUTED PROPERTIES (GETTERS ONLY)
+  // COMPUTED PROPERTIES (PascalCase - getters only)
   // ========================================================================
 
-  get filteredAgents(): AIAgentEntity[] {
+  get FilteredAgents(): AIAgentEntity[] {
     if (!this._filterText) return this._agents;
     const search = this._filterText.toLowerCase();
     return this._agents.filter(a =>
@@ -188,23 +425,23 @@ export class AgentConfigurationComponent extends BaseResourceComponent {
     );
   }
 
-  get hasSelection(): boolean {
-    return this._selectedAgentId !== null;
+  get HasSelection(): boolean {
+    return this._selectedAgentID !== null;
   }
 
-  get selectedAgent(): AIAgentEntity | null {
-    if (!this._selectedAgentId) return null;
-    return this._agents.find(a => a.ID === this._selectedAgentId) || null;
+  get SelectedAgent(): AIAgentEntity | null {
+    if (!this._selectedAgentID) return null;
+    return this._agents.find(a => a.ID === this._selectedAgentID) || null;
   }
 
   // ========================================================================
-  // REACTION METHODS
+  // REACTION METHODS (camelCase - private)
   // ========================================================================
 
-  private onAgentSelectionChanged(agentId: string | null): void {
-    if (agentId) {
+  private onAgentSelectionChanged(agentID: string | null): void {
+    if (agentID) {
       this._isDetailPanelVisible = true;
-      this.loadAgentDetails(agentId);
+      this.loadAgentDetails(agentID);
     } else {
       this._isDetailPanelVisible = false;
     }
@@ -438,11 +675,14 @@ For reasonably sized datasets, load all data once and filter in memory:
 
 ```typescript
 export class PromptManagementComponent extends BaseResourceComponent {
+  // Private backing fields (camelCase)
   private _allPrompts: AIPromptEntity[] = [];
   private _filterText = '';
   private _statusFilter: string[] = [];
+  private _isLoading = false;
 
-  async loadData(): Promise<void> {
+  // Public method (PascalCase)
+  async LoadData(): Promise<void> {
     this._isLoading = true;
 
     const rv = new RunView();
@@ -459,8 +699,8 @@ export class PromptManagementComponent extends BaseResourceComponent {
     this._isLoading = false;
   }
 
-  // Filter client-side for instant response
-  get filteredPrompts(): AIPromptEntity[] {
+  // Public computed property (PascalCase)
+  get FilteredPrompts(): AIPromptEntity[] {
     let filtered = this._allPrompts;
 
     if (this._filterText) {
@@ -522,6 +762,149 @@ const result = await rv.RunView<AIModelEntity>({
 for (const model of result.Results) {
   model.Status = 'Active';
   await model.Save();
+}
+```
+
+---
+
+## Local Caching with RunView
+
+For data that doesn't change frequently (like AI Prompts, configuration entities, lookup tables), use the `CacheLocal` option to store results in the browser's local storage. This dramatically improves load times on subsequent visits.
+
+### When to Use Local Caching
+
+**Good candidates for local caching:**
+- AI Prompts - configuration data, rarely changes
+- AI Models - model definitions, rarely changes
+- Lookup tables - status codes, types, categories
+- System configuration - settings that change infrequently
+
+**Not suitable for local caching:**
+- User-specific data that changes frequently
+- Real-time data (execution logs, notifications)
+- Data that must always be fresh
+
+### Basic Usage
+
+```typescript
+import { RunView } from '@memberjunction/core';
+
+export class PromptManagementComponent extends BaseResourceComponent {
+  private _prompts: AIPromptEntity[] = [];
+
+  async LoadPrompts(): Promise<void> {
+    this.IsLoading = true;
+
+    const rv = new RunView();
+    const result = await rv.RunView<AIPromptEntity>({
+      EntityName: 'AI Prompts',
+      OrderBy: 'Name',
+      ResultType: 'entity_object',
+      CacheLocal: true,           // Enable local caching
+      CacheLocalTTL: 300000       // Cache for 5 minutes (300,000ms)
+    });
+
+    if (result.Success) {
+      this._prompts = result.Results;
+    }
+
+    this.IsLoading = false;
+  }
+}
+```
+
+### Cache TTL Guidelines
+
+| Data Type | Recommended TTL | Example |
+|-----------|-----------------|---------|
+| Static configuration | 30-60 minutes | `1800000` - `3600000` |
+| Semi-static data | 5-15 minutes | `300000` - `900000` |
+| Frequently updated | 1-5 minutes | `60000` - `300000` |
+
+### Force Refresh Pattern
+
+When users need fresh data, pass `ForceRefresh: true`:
+
+```typescript
+export class PromptManagementComponent extends BaseResourceComponent {
+
+  async LoadPrompts(forceRefresh = false): Promise<void> {
+    this.IsLoading = true;
+
+    const rv = new RunView();
+    const result = await rv.RunView<AIPromptEntity>({
+      EntityName: 'AI Prompts',
+      OrderBy: 'Name',
+      ResultType: 'entity_object',
+      CacheLocal: true,
+      CacheLocalTTL: 300000,
+      ForceRefresh: forceRefresh   // Bypass cache when true
+    });
+
+    if (result.Success) {
+      this._prompts = result.Results;
+    }
+
+    this.IsLoading = false;
+  }
+
+  // UI refresh button handler
+  OnRefreshClicked(): void {
+    this.LoadPrompts(true);  // Force fresh data from server
+  }
+}
+```
+
+### Batch Loading with Caching
+
+Local caching works with `RunViews` (plural) as well:
+
+```typescript
+const rv = new RunView();
+const [prompts, models, vendors] = await rv.RunViews([
+  {
+    EntityName: 'AI Prompts',
+    ResultType: 'entity_object',
+    CacheLocal: true,
+    CacheLocalTTL: 300000  // 5 minutes
+  },
+  {
+    EntityName: 'AI Models',
+    ResultType: 'entity_object',
+    CacheLocal: true,
+    CacheLocalTTL: 600000  // 10 minutes
+  },
+  {
+    EntityName: 'MJ: AI Vendors',
+    ResultType: 'entity_object',
+    CacheLocal: true,
+    CacheLocalTTL: 3600000  // 1 hour (very static)
+  }
+]);
+```
+
+### Cache Invalidation After Mutations
+
+When you modify cached data, remember to force refresh or manually update the cache:
+
+```typescript
+async SavePrompt(prompt: AIPromptEntity): Promise<boolean> {
+  const saved = await prompt.Save();
+
+  if (saved) {
+    // Option 1: Force refresh to get updated data
+    await this.LoadPrompts(true);
+
+    // Option 2: Update local array directly (faster UX)
+    const index = this._prompts.findIndex(p => p.ID === prompt.ID);
+    if (index >= 0) {
+      this._prompts[index] = prompt;
+    } else {
+      this._prompts.push(prompt);
+    }
+  }
+
+  return saved;
 }
 ```
 
@@ -635,7 +1018,7 @@ Use Angular 17+ control flow syntax:
 @for (agent of filteredAgents; track agent.ID) {
   <app-agent-card
     [agent]="agent"
-    [selected]="agent.ID === selectedAgentId"
+    [selected]="agent.ID === SelectedAgentID"
     (click)="selectAgent(agent.ID)"
   ></app-agent-card>
 } @empty {
@@ -708,7 +1091,7 @@ export class AdminDashboardComponent extends BaseResourceComponent {
     }
   }
 
-  clearPermissionCache(): void {
+  ClearPermissionCache(): void {
     this._permissionCache.clear();
   }
 }
@@ -808,16 +1191,16 @@ export class MyDomainEngine extends BaseEngine<MyDomainEngine> {
   // Helper Methods
   // ========================================
 
-  public GetItemById(itemId: string): MyEntity | undefined {
-    return this._Items.find(i => i.ID === itemId);
+  public GetItemByID(itemID: string): MyEntity | undefined {
+    return this._Items.find(i => i.ID === itemID);
   }
 
-  public GetRelatedItemsForItem(itemId: string): MyRelatedEntity[] {
-    return this._RelatedItems.filter(r => r.ItemID === itemId);
+  public GetRelatedItemsForItem(itemID: string): MyRelatedEntity[] {
+    return this._RelatedItems.filter(r => r.ItemID === itemID);
   }
 
-  public GetItemName(itemId: string): string {
-    return this.GetItemById(itemId)?.Name ?? 'Unknown';
+  public GetItemName(itemID: string): string {
+    return this.GetItemByID(itemID)?.Name ?? 'Unknown';
   }
 }
 ```
@@ -850,16 +1233,35 @@ export * from './engines/MyDomainEngine';
 
 When building a new dashboard:
 
+**Component Setup**
 - [ ] Extend `BaseResourceComponent` with `@RegisterClass` decorator
 - [ ] Add tree-shaking prevention function (`export function LoadMyResource() {}`)
+- [ ] Register component in NgModule (no standalone components)
+
+**Naming Conventions**
+- [ ] Use **PascalCase** for all public members (properties, methods, @Input, @Output)
+- [ ] Use **camelCase** for private/protected members
+
+**State Management**
 - [ ] Use private backing fields with getter/setter wrappers for all state
+- [ ] Never use `ngOnChanges` - use getter/setters for deterministic reactions
+
+**Navigation**
+- [ ] Use **left panel navigation** within dashboards (shell uses top nav)
+
+**Data Loading**
 - [ ] Use existing Engine classes for data (MCPEngine, UserInfoEngine, etc.)
 - [ ] Use `RunViews` (plural) for batch data loading
+- [ ] Use `CacheLocal: true` for static/semi-static data (AI Prompts, Models, etc.)
+- [ ] Set appropriate `CacheLocalTTL` based on data volatility
+
+**User Preferences**
 - [ ] Define a TypeScript interface for user preferences
 - [ ] Use hierarchical settings keys (`APP_ROOT/component-name`)
 - [ ] Use `SetSettingDebounced` for preference saves
-- [ ] Use CSS Flexbox/Grid for layouts
+
+**UI/UX**
+- [ ] Use CSS Flexbox/Grid for layouts (no external layout libraries)
 - [ ] Use Angular 17+ control flow syntax (`@if`, `@for`, `@switch`)
-- [ ] Cache permission checks
 - [ ] Use `mj-loading` component for loading states
-- [ ] Register component in NgModule (no standalone components)
+- [ ] Cache permission checks for performance
