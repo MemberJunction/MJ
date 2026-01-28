@@ -11,11 +11,11 @@
       "prefix": "app",
       "architect": {
         "build": {
-          "builder": "@angular-devkit/build-angular:browser",
+          "builder": "@angular-devkit/build-angular:application",
           "options": {
             "outputPath": "dist/MJExplorer",
             "index": "src/index.html",
-            "main": "src/main.ts",
+            "browser": "src/main.ts",
             "polyfills": ["zone.js"],
             "tsConfig": "tsconfig.app.json",
             "assets": [
@@ -60,16 +60,9 @@
               ]
             },
             "development": {
-              "buildOptimizer": false,
               "optimization": false,
-              "vendorChunk": true,
               "extractLicenses": false,
-              "sourceMap": {
-                "scripts": true,
-                "styles": true,
-                "vendor": true,
-                "hidden": false
-              },
+              "sourceMap": true,
               "namedChunks": true,
               "fileReplacements": [
                 {
@@ -79,16 +72,9 @@
               ]
             },
             "local_modules": {
-              "buildOptimizer": false,
               "optimization": false,
-              "vendorChunk": true,
               "extractLicenses": false,
-              "sourceMap": {
-                "scripts": true,
-                "styles": true,
-                "vendor": true,
-                "hidden": false
-              },
+              "sourceMap": true,
               "namedChunks": true,
               "fileReplacements": [
                 {
