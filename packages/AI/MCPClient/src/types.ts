@@ -311,6 +311,28 @@ export interface MCPSyncToolsResult {
 }
 
 /**
+ * Result from syncing MCP tools to MJ Actions
+ */
+export interface MCPSyncActionsResult {
+    /** Whether the sync succeeded */
+    success: boolean;
+    /** Number of actions created */
+    actionsCreated: number;
+    /** Number of actions updated */
+    actionsUpdated: number;
+    /** Number of action params created */
+    paramsCreated: number;
+    /** Number of action params updated */
+    paramsUpdated: number;
+    /** Number of action params deleted */
+    paramsDeleted: number;
+    /** Server category ID that was used/created */
+    serverCategoryId?: string;
+    /** Error message if failed */
+    error?: string;
+}
+
+/**
  * Result from testing a connection
  */
 export interface MCPTestConnectionResult {
@@ -511,3 +533,35 @@ export interface MCPClientEvent {
  * Event listener function type
  */
 export type MCPClientEventListener = (event: MCPClientEvent) => void;
+
+/**
+ * JSON Schema property definition for MCP tool input parameters
+ */
+export interface JSONSchemaProperty {
+    /** Property type */
+    type?: string | string[];
+    /** Property description */
+    description?: string;
+    /** Default value */
+    default?: unknown;
+    /** Enum values */
+    enum?: unknown[];
+    /** Items schema for arrays */
+    items?: JSONSchemaProperty;
+    /** Nested properties for objects */
+    properties?: Record<string, JSONSchemaProperty>;
+    /** Required properties for objects */
+    required?: string[];
+}
+
+/**
+ * JSON Schema root definition for MCP tool input
+ */
+export interface JSONSchemaProperties {
+    /** Schema type (usually 'object') */
+    type?: string;
+    /** Property definitions */
+    properties?: Record<string, JSONSchemaProperty>;
+    /** Required property names */
+    required?: string[];
+}

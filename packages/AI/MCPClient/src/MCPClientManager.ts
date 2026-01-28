@@ -18,7 +18,14 @@ import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { MCPServerEntity, MCPServerConnectionEntity, MCPServerToolEntity } from '@memberjunction/core-entities';
+import {
+    MCPServerEntity,
+    MCPServerConnectionEntity,
+    MCPServerToolEntity,
+    ActionEntity,
+    ActionCategoryEntity,
+    ActionParamEntity
+} from '@memberjunction/core-entities';
 
 import { RateLimiterRegistry, RateLimiter } from './RateLimiter.js';
 import { ExecutionLogger } from './ExecutionLogger.js';
@@ -34,6 +41,7 @@ import type {
     MCPListToolsResult,
     MCPToolInfo,
     MCPSyncToolsResult,
+    MCPSyncActionsResult,
     MCPTestConnectionResult,
     MCPServerCapabilities,
     MCPActiveConnection,
@@ -46,7 +54,9 @@ import type {
     MCPClientEvent,
     MCPClientEventListener,
     MCPClientEventType,
-    MCPContentBlock
+    MCPContentBlock,
+    JSONSchemaProperties,
+    JSONSchemaProperty
 } from './types.js';
 
 /**
@@ -699,6 +709,12 @@ export class MCPClientManager {
             // Update server LastSyncAt
             await this.updateServerLastSync(connection.serverConfig.ID, contextUser);
 
+            // Sync Actions for the tools (creates Actions in System/AI/MCP/{ServerName})
+            const actionsResult = await this.syncActionsForServer(connection.serverConfig.ID, contextUser);
+            if (!actionsResult.success) {
+                LogError(`Warning: Tool sync succeeded but Actions sync failed: ${actionsResult.error}`);
+            }
+
             // Emit sync event
             this.emitEvent({
                 type: 'toolsSynced',
@@ -724,6 +740,470 @@ export class MCPClientManager {
                 total: 0,
                 error: error instanceof Error ? error.message : String(error)
             };
+        }
+    }
+
+    /**
+     * Syncs MCP Server Tools to MJ Actions.
+     * Creates the category hierarchy System/AI/MCP/{ServerName} and an Action for each tool.
+     *
+     * @param serverId - The MCP Server ID to sync actions for
+     * @param contextUser - The user context for database operations
+     * @returns Sync result with counts of created/updated actions and params
+     */
+    public async syncActionsForServer(
+        serverId: string,
+        contextUser: UserInfo
+    ): Promise<MCPSyncActionsResult> {
+        try {
+            const rv = new RunView();
+
+            // Load the server
+            const serverResult = await rv.RunView<MCPServerEntity>({
+                EntityName: MCPClientManager.ENTITY_MCP_SERVERS,
+                ExtraFilter: `ID='${serverId}'`,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!serverResult.Success || serverResult.Results.length === 0) {
+                return {
+                    success: false,
+                    actionsCreated: 0,
+                    actionsUpdated: 0,
+                    paramsCreated: 0,
+                    paramsUpdated: 0,
+                    paramsDeleted: 0,
+                    error: `Server not found: ${serverId}`
+                };
+            }
+
+            const server = serverResult.Results[0];
+
+            // Get or create the server's category under System/AI/MCP/{ServerName}
+            const serverCategoryId = await this.getOrCreateServerCategory(server.Name, contextUser);
+            if (!serverCategoryId) {
+                return {
+                    success: false,
+                    actionsCreated: 0,
+                    actionsUpdated: 0,
+                    paramsCreated: 0,
+                    paramsUpdated: 0,
+                    paramsDeleted: 0,
+                    error: 'Failed to create server category'
+                };
+            }
+
+            // Load all tools for this server
+            const toolsResult = await rv.RunView<MCPServerToolEntity>({
+                EntityName: MCPClientManager.ENTITY_MCP_TOOLS,
+                ExtraFilter: `MCPServerID='${serverId}' AND Status='Active'`,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!toolsResult.Success) {
+                return {
+                    success: false,
+                    actionsCreated: 0,
+                    actionsUpdated: 0,
+                    paramsCreated: 0,
+                    paramsUpdated: 0,
+                    paramsDeleted: 0,
+                    error: `Failed to load tools: ${toolsResult.ErrorMessage}`
+                };
+            }
+
+            let actionsCreated = 0;
+            let actionsUpdated = 0;
+            let paramsCreated = 0;
+            let paramsUpdated = 0;
+            let paramsDeleted = 0;
+
+            // Process each tool
+            for (const tool of toolsResult.Results) {
+                const result = await this.syncActionForTool(tool, serverCategoryId, contextUser);
+                if (result.created) {
+                    actionsCreated++;
+                } else {
+                    actionsUpdated++;
+                }
+                paramsCreated += result.paramsCreated;
+                paramsUpdated += result.paramsUpdated;
+                paramsDeleted += result.paramsDeleted;
+            }
+
+            LogStatus(`Synced actions for MCP Server '${server.Name}': ${actionsCreated} created, ${actionsUpdated} updated`);
+
+            return {
+                success: true,
+                actionsCreated,
+                actionsUpdated,
+                paramsCreated,
+                paramsUpdated,
+                paramsDeleted,
+                serverCategoryId
+            };
+
+        } catch (error) {
+            LogError(`Error syncing actions for server ${serverId}: ${error}`);
+            return {
+                success: false,
+                actionsCreated: 0,
+                actionsUpdated: 0,
+                paramsCreated: 0,
+                paramsUpdated: 0,
+                paramsDeleted: 0,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
+    }
+
+    /**
+     * Gets or creates the category hierarchy: System/AI/MCP/{ServerName}
+     *
+     * @param serverName - The MCP Server name to create category for
+     * @param contextUser - The user context
+     * @returns The server category ID or null if failed
+     */
+    private async getOrCreateServerCategory(
+        serverName: string,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        try {
+            // Step 1: Find or create "System" category (root)
+            const systemCategoryId = await this.findOrCreateCategory(
+                'System',
+                null,
+                'Core system actions and utilities',
+                contextUser
+            );
+            if (!systemCategoryId) {
+                LogError('Failed to find or create System category');
+                return null;
+            }
+
+            // Step 2: Find or create "AI" category under System
+            const aiCategoryId = await this.findOrCreateCategory(
+                'AI',
+                systemCategoryId,
+                'AI Actions',
+                contextUser
+            );
+            if (!aiCategoryId) {
+                LogError('Failed to find or create AI category');
+                return null;
+            }
+
+            // Step 3: Find or create "MCP" category under AI
+            const mcpCategoryId = await this.findOrCreateCategory(
+                'MCP',
+                aiCategoryId,
+                'Model Context Protocol (MCP) server tools exposed as Actions',
+                contextUser
+            );
+            if (!mcpCategoryId) {
+                LogError('Failed to find or create MCP category');
+                return null;
+            }
+
+            // Step 4: Find or create server-specific category under MCP
+            const serverCategoryId = await this.findOrCreateCategory(
+                serverName,
+                mcpCategoryId,
+                `Tools from MCP Server: ${serverName}`,
+                contextUser
+            );
+            if (!serverCategoryId) {
+                LogError(`Failed to find or create category for server: ${serverName}`);
+                return null;
+            }
+
+            return serverCategoryId;
+
+        } catch (error) {
+            LogError(`Error creating category hierarchy for server ${serverName}: ${error}`);
+            return null;
+        }
+    }
+
+    /**
+     * Finds or creates an ActionCategory with the given name and parent.
+     *
+     * @param name - Category name
+     * @param parentId - Parent category ID (null for root)
+     * @param description - Category description
+     * @param contextUser - User context
+     * @returns The category ID or null if failed
+     */
+    private async findOrCreateCategory(
+        name: string,
+        parentId: string | null,
+        description: string,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        const md = new Metadata();
+        const rv = new RunView();
+
+        // Build filter based on parent
+        const parentFilter = parentId
+            ? `ParentID='${parentId}'`
+            : 'ParentID IS NULL';
+
+        // Try to find existing category
+        const existingResult = await rv.RunView<ActionCategoryEntity>({
+            EntityName: 'Action Categories',
+            ExtraFilter: `Name='${name}' AND ${parentFilter}`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (existingResult.Success && existingResult.Results.length > 0) {
+            return existingResult.Results[0].ID;
+        }
+
+        // Create new category
+        const category = await md.GetEntityObject<ActionCategoryEntity>('Action Categories', contextUser);
+        category.NewRecord();
+        category.Name = name;
+        category.Description = description;
+        category.ParentID = parentId;
+        category.Status = 'Active';
+
+        const saved = await category.Save();
+        if (!saved) {
+            LogError(`Failed to create category '${name}': ${category.LatestResult?.Message}`);
+            return null;
+        }
+
+        LogStatus(`Created Action Category: ${name}`);
+        return category.ID;
+    }
+
+    /**
+     * Syncs a single MCP Server Tool to an Action.
+     *
+     * @param tool - The MCPServerTool entity
+     * @param categoryId - The server category ID
+     * @param contextUser - User context
+     * @returns Result with created flag and param counts
+     */
+    private async syncActionForTool(
+        tool: MCPServerToolEntity,
+        categoryId: string,
+        contextUser: UserInfo
+    ): Promise<{ created: boolean; paramsCreated: number; paramsUpdated: number; paramsDeleted: number }> {
+        const md = new Metadata();
+        const rv = new RunView();
+
+        let action: ActionEntity;
+        let created = false;
+
+        // Check if tool already has a linked action
+        if (tool.GeneratedActionID) {
+            const actionEntity = await md.GetEntityObject<ActionEntity>('Actions', contextUser);
+            const loaded = await actionEntity.Load(tool.GeneratedActionID);
+            if (loaded) {
+                action = actionEntity;
+            } else {
+                // Action was deleted, create new one
+                action = await this.createActionForTool(tool, categoryId, contextUser);
+                created = true;
+            }
+        } else {
+            // Check if an action with this name already exists in the category
+            const existingResult = await rv.RunView<ActionEntity>({
+                EntityName: 'Actions',
+                ExtraFilter: `Name='${tool.ToolName.replace(/'/g, "''")}' AND CategoryID='${categoryId}'`,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (existingResult.Success && existingResult.Results.length > 0) {
+                action = existingResult.Results[0];
+            } else {
+                action = await this.createActionForTool(tool, categoryId, contextUser);
+                created = true;
+            }
+        }
+
+        // Update action properties
+        action.Description = tool.ToolDescription || `MCP Tool: ${tool.ToolName}`;
+        action.CategoryID = categoryId;
+
+        // Save action if dirty
+        if (action.Dirty) {
+            await action.Save();
+        }
+
+        // Update the tool's GeneratedActionID and GeneratedActionCategoryID if needed
+        if (tool.GeneratedActionID !== action.ID || tool.GeneratedActionCategoryID !== categoryId) {
+            const toolEntity = await md.GetEntityObject<MCPServerToolEntity>(
+                MCPClientManager.ENTITY_MCP_TOOLS,
+                contextUser
+            );
+            await toolEntity.Load(tool.ID);
+            toolEntity.GeneratedActionID = action.ID;
+            toolEntity.GeneratedActionCategoryID = categoryId;
+            await toolEntity.Save();
+        }
+
+        // Sync action params from tool's InputSchema
+        const paramResult = await this.syncActionParamsFromSchema(action.ID, tool.InputSchema, contextUser);
+
+        return {
+            created,
+            paramsCreated: paramResult.created,
+            paramsUpdated: paramResult.updated,
+            paramsDeleted: paramResult.deleted
+        };
+    }
+
+    /**
+     * Creates a new Action for an MCP Server Tool.
+     *
+     * @param tool - The MCPServerTool entity
+     * @param categoryId - The category ID
+     * @param contextUser - User context
+     * @returns The created Action entity
+     */
+    private async createActionForTool(
+        tool: MCPServerToolEntity,
+        categoryId: string,
+        contextUser: UserInfo
+    ): Promise<ActionEntity> {
+        const md = new Metadata();
+
+        const action = await md.GetEntityObject<ActionEntity>('Actions', contextUser);
+        action.NewRecord();
+        action.Name = tool.ToolName;
+        action.Description = tool.ToolDescription || `MCP Tool: ${tool.ToolName}`;
+        action.CategoryID = categoryId;
+        action.Type = 'Custom';
+        action.DriverClass = 'MCPToolAction';  // Special driver class for MCP tools
+        action.Status = 'Active';
+        action.CodeApprovalStatus = 'Approved';  // MCP tools are pre-approved
+        action.CodeLocked = true;  // Prevent code generation
+
+        await action.Save();
+        LogStatus(`Created Action for MCP Tool: ${tool.ToolName}`);
+
+        return action;
+    }
+
+    /**
+     * Syncs ActionParams from a tool's InputSchema JSON Schema.
+     *
+     * @param actionId - The Action ID
+     * @param inputSchemaJson - The JSON Schema string for input parameters
+     * @param contextUser - User context
+     * @returns Counts of created, updated, and deleted params
+     */
+    private async syncActionParamsFromSchema(
+        actionId: string,
+        inputSchemaJson: string,
+        contextUser: UserInfo
+    ): Promise<{ created: number; updated: number; deleted: number }> {
+        const md = new Metadata();
+        const rv = new RunView();
+
+        let created = 0;
+        let updated = 0;
+        let deleted = 0;
+
+        // Parse the input schema
+        let schema: JSONSchemaProperties;
+        try {
+            schema = JSON.parse(inputSchemaJson);
+        } catch {
+            LogError(`Failed to parse InputSchema for action ${actionId}`);
+            return { created, updated, deleted };
+        }
+
+        // Get existing params for this action
+        const existingResult = await rv.RunView<ActionParamEntity>({
+            EntityName: 'Action Params',
+            ExtraFilter: `ActionID='${actionId}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        const existingParams = existingResult.Success ? existingResult.Results : [];
+        const existingParamMap = new Map(existingParams.map(p => [p.Name, p]));
+        const seenParamNames = new Set<string>();
+
+        // Process schema properties
+        const properties = schema.properties || {};
+        const required = new Set(schema.required || []);
+
+        for (const [paramName, paramDef] of Object.entries(properties)) {
+            seenParamNames.add(paramName);
+            const existing = existingParamMap.get(paramName);
+            const paramDefinition = paramDef as JSONSchemaProperty;
+
+            if (existing) {
+                // Update existing param
+                existing.Description = paramDefinition.description || null;
+                existing.IsRequired = required.has(paramName);
+                existing.ValueType = this.mapJsonSchemaTypeToValueType(paramDefinition.type);
+                existing.IsArray = paramDefinition.type === 'array';
+                existing.DefaultValue = paramDefinition.default !== undefined
+                    ? JSON.stringify(paramDefinition.default)
+                    : null;
+
+                if (existing.Dirty) {
+                    await existing.Save();
+                    updated++;
+                }
+            } else {
+                // Create new param
+                const param = await md.GetEntityObject<ActionParamEntity>('Action Params', contextUser);
+                param.NewRecord();
+                param.ActionID = actionId;
+                param.Name = paramName;
+                param.Description = paramDefinition.description || null;
+                param.Type = 'Input';
+                param.IsRequired = required.has(paramName);
+                param.ValueType = this.mapJsonSchemaTypeToValueType(paramDefinition.type);
+                param.IsArray = paramDefinition.type === 'array';
+                param.DefaultValue = paramDefinition.default !== undefined
+                    ? JSON.stringify(paramDefinition.default)
+                    : null;
+
+                await param.Save();
+                created++;
+            }
+        }
+
+        // Delete params that no longer exist in schema
+        for (const existing of existingParams) {
+            if (!seenParamNames.has(existing.Name)) {
+                await existing.Delete();
+                deleted++;
+            }
+        }
+
+        return { created, updated, deleted };
+    }
+
+    /**
+     * Maps JSON Schema type to ActionParam ValueType.
+     *
+     * @param jsonType - The JSON Schema type
+     * @returns The corresponding ActionParam ValueType
+     */
+    private mapJsonSchemaTypeToValueType(
+        jsonType: string | string[] | undefined
+    ): 'Scalar' | 'Simple Object' | 'Other' {
+        const type = Array.isArray(jsonType) ? jsonType[0] : jsonType;
+
+        switch (type) {
+            case 'string':
+            case 'number':
+            case 'integer':
+            case 'boolean':
+                return 'Scalar';
+            case 'object':
+                return 'Simple Object';
+            case 'array':
+                return 'Scalar';  // Array flag is set separately
+            default:
+                return 'Other';
         }
     }
 
