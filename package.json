@@ -55,6 +55,8 @@
     "deps:remove-unused": "node scripts/remove-unused-dependencies.mjs",
     "deps:remove-unused:dry": "node scripts/remove-unused-dependencies.mjs --dry-run",
     "docs": "typedoc",
+    "docs:fix-configs": "node scripts/fix-typedoc-configs.mjs --fix",
+    "docs:fix-configs:dry": "node scripts/fix-typedoc-configs.mjs",
     "change": "changeset",
     "version": "changeset version",
     "mergemain": "node ci/merge_main.mjs",
