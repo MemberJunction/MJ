@@ -103,7 +103,7 @@ module.exports = {
       args: ['run', 'build'],
       when: 'after',
     },
-    ],
+  ],
 
   /**
    * ====================
