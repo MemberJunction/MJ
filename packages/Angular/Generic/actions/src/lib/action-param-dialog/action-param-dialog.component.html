@@ -1,0 +1,169 @@
+@if (IsOpen) {
+    <div class="dialog-backdrop" (click)="OnBackdropClick($event)">
+        <div class="dialog-container">
+            <div class="dialog-header">
+                <span class="dialog-title">
+                    <i class="fa-solid fa-sliders"></i>
+                    {{ IsNew ? 'Add Parameter' : (EditMode ? 'Edit Parameter' : 'Parameter Details') }}
+                </span>
+                <button class="dialog-close-btn" (click)="OnCancel()" title="Close">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <div class="dialog-content">
+                <form class="param-form">
+                    <!-- Parameter Name -->
+                    <div class="form-field">
+                        <label>
+                            Parameter Name
+                            @if (EditMode) {
+                                <span class="required">*</span>
+                            }
+                        </label>
+                        @if (EditMode) {
+                            <input
+                                type="text"
+                                [(ngModel)]="ParamName"
+                                name="paramName"
+                                placeholder="Enter parameter name..."
+                                class="form-input">
+                        } @else {
+                            <div class="readonly-value">{{ ParamName || 'N/A' }}</div>
+                        }
+                    </div>
+
+                    <!-- Parameter Type -->
+                    <div class="form-field">
+                        <label>
+                            Type
+                            @if (EditMode) {
+                                <span class="required">*</span>
+                            }
+                        </label>
+                        @if (EditMode) {
+                            <select
+                                [(ngModel)]="ParamType"
+                                name="paramType"
+                                class="form-select">
+                                @for (pt of ParamTypes; track pt.Value) {
+                                    <option [value]="pt.Value">{{ pt.Text }}</option>
+                                }
+                            </select>
+                        } @else {
+                            <div class="readonly-value">
+                                <span class="type-badge" [class]="GetTypeClass(ParamType)">
+                                    {{ ParamType }}
+                                </span>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Value Type -->
+                    <div class="form-field">
+                        <label>
+                            Value Type
+                            @if (EditMode) {
+                                <span class="required">*</span>
+                            }
+                        </label>
+                        @if (EditMode) {
+                            <select
+                                [(ngModel)]="ValueType"
+                                name="valueType"
+                                class="form-select">
+                                @for (vt of ValueTypes; track vt.Value) {
+                                    <option [value]="vt.Value">{{ vt.Text }}</option>
+                                }
+                            </select>
+                        } @else {
+                            <div class="readonly-value">{{ ValueType }}</div>
+                        }
+                    </div>
+
+                    <!-- Description -->
+                    <div class="form-field">
+                        <label>Description</label>
+                        @if (EditMode) {
+                            <textarea
+                                [(ngModel)]="Description"
+                                name="description"
+                                rows="3"
+                                placeholder="Enter parameter description..."
+                                class="form-textarea"></textarea>
+                        } @else {
+                            <div class="readonly-value description">{{ Description || 'No description provided' }}</div>
+                        }
+                    </div>
+
+                    <!-- Default Value -->
+                    <div class="form-field">
+                        <label>Default Value</label>
+                        @if (EditMode) {
+                            <input
+                                type="text"
+                                [(ngModel)]="DefaultValue"
+                                name="defaultValue"
+                                placeholder="Enter default value..."
+                                class="form-input">
+                        } @else {
+                            <div class="readonly-value">
+                                @if (DefaultValue) {
+                                    <code>{{ DefaultValue }}</code>
+                                } @else {
+                                    <span class="no-value">No default value</span>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Checkboxes -->
+                    <div class="form-field-row">
+                        <div class="checkbox-field">
+                            <label class="checkbox-label">
+                                @if (EditMode) {
+                                    <input
+                                        type="checkbox"
+                                        [(ngModel)]="IsRequired"
+                                        name="isRequired"
+                                        class="checkbox-input">
+                                    <span class="checkbox-custom"></span>
+                                } @else {
+                                    <i class="fa-solid" [class.fa-check-circle]="IsRequired" [class.fa-times-circle]="!IsRequired"
+                                       [style.color]="IsRequired ? '#28a745' : '#6c757d'"></i>
+                                }
+                                <span class="checkbox-text">Required Parameter</span>
+                            </label>
+                        </div>
+
+                        <div class="checkbox-field">
+                            <label class="checkbox-label">
+                                @if (EditMode) {
+                                    <input
+                                        type="checkbox"
+                                        [(ngModel)]="IsArray"
+                                        name="isArray"
+                                        class="checkbox-input">
+                                    <span class="checkbox-custom"></span>
+                                } @else {
+                                    <i class="fa-solid" [class.fa-check-circle]="IsArray" [class.fa-times-circle]="!IsArray"
+                                       [style.color]="IsArray ? '#28a745' : '#6c757d'"></i>
+                                }
+                                <span class="checkbox-text">Array Type</span>
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div class="dialog-footer">
+                @if (EditMode) {
+                    <button class="btn btn-outline" (click)="OnCancel()">Cancel</button>
+                    <button class="btn btn-primary" (click)="OnSave()">Save</button>
+                } @else {
+                    <button class="btn btn-primary" (click)="OnCancel()">Close</button>
+                }
+            </div>
+        </div>
+    </div>
+}

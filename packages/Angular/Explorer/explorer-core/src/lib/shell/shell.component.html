@@ -77,31 +77,46 @@
             </div>
           </ng-template>
         </button>
-        <!-- User Context Menu -->
-        <div class="user-context-menu" *ngIf="userMenuVisible">
-          <div class="user-menu-header" *ngIf="userName">
-            <span class="user-name">{{ userName }}</span>
-          </div>
-          <div class="user-menu-divider" *ngIf="userName"></div>
-          <div class="user-menu-item" (click)="onSettings()">
-            <i class="fa-solid fa-gear"></i>
-            <span>Settings</span>
-          </div>
-          <div class="user-menu-divider"></div>
-          <div class="user-menu-item" (click)="onLogLayout()">
-            <i class="fa-solid fa-code"></i>
-            <span>Log Layout (Debug)</span>
-          </div>
-          <div class="user-menu-divider"></div>
-          <div class="user-menu-item danger" (click)="onResetLayout()">
-            <i class="fa-solid fa-rotate-left"></i>
-            <span>Reset Layout</span>
-          </div>
-          <div class="user-menu-divider"></div>
-          <div class="user-menu-item" (click)="onLogout()">
-            <i class="fa-solid fa-sign-out-alt"></i>
-            <span>Logout</span>
-          </div>
+        <!-- User Context Menu (Dynamic) -->
+        <div class="user-context-menu" *ngIf="userMenuVisible"
+             [class.menu-fade]="getUserMenuOptions()?.animationStyle === 'fade'"
+             [class.menu-slide]="getUserMenuOptions()?.animationStyle === 'slide'">
+
+          <!-- User Header -->
+          <ng-container *ngIf="getUserMenuOptions()?.showUserName">
+            <div class="user-menu-header">
+              <div class="user-info">
+                <span class="user-name">{{ getUserDisplayInfo()?.name || userName }}</span>
+                <span class="user-email" *ngIf="getUserMenuOptions()?.showUserEmail && getUserDisplayInfo()?.email">
+                  {{ getUserDisplayInfo()?.email }}
+                </span>
+              </div>
+            </div>
+            <div class="user-menu-divider"></div>
+          </ng-container>
+
+          <!-- Dynamic Menu Items -->
+          <ng-container *ngFor="let element of userMenuElements">
+
+            <!-- Divider -->
+            <div class="user-menu-divider" *ngIf="isMenuDivider(element)"></div>
+
+            <!-- Menu Item -->
+            <ng-container *ngIf="!isMenuDivider(element)">
+              <ng-container *ngIf="asMenuItem(element) as item">
+                <div class="user-menu-item"
+                     [class.disabled]="!item.enabled"
+                     [class.danger]="item.cssClass === 'danger'"
+                     [style.color]="item.color || null"
+                     [title]="item.tooltip || ''"
+                     (click)="item.enabled && onUserMenuItemClick(item.id)">
+                  <i [class]="item.icon"></i>
+                  <span class="menu-label">{{ item.label }}</span>
+                  <span class="menu-shortcut" *ngIf="item.shortcut">{{ item.shortcut }}</span>
+                </div>
+              </ng-container>
+            </ng-container>
+          </ng-container>
         </div>
       </div>
     </div>

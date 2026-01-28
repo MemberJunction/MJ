@@ -29,6 +29,17 @@ import { SecurityPermissionsComponent } from './Actions/components/security-perm
 import { ActionsListViewComponent } from './Actions/components/actions-list-view.component';
 import { ExecutionsListViewComponent } from './Actions/components/executions-list-view.component';
 import { CategoriesListViewComponent } from './Actions/components/categories-list-view.component';
+// Action Explorer Components
+import {
+  ActionExplorerComponent,
+  ActionTreePanelComponent,
+  ActionToolbarComponent,
+  ActionBreadcrumbComponent,
+  ActionCardComponent,
+  ActionListItemComponent,
+  NewCategoryPanelComponent,
+  NewActionPanelComponent
+} from './Actions/components/explorer';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { NavigationModule } from '@progress/kendo-angular-navigation';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -143,8 +154,12 @@ import { APIKeyListComponent } from './APIKeys/api-key-list.component';
 import { APIApplicationsPanelComponent } from './APIKeys/api-applications-panel.component';
 import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
 import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
+// Shared Pipes Module
+import { SharedPipesModule } from './shared/shared-pipes.module';
 // MCP Dashboard Module
 import { MCPModule } from './MCP';
+// Actions Module (test harness, dialogs)
+import { ActionsModule } from '@memberjunction/ng-actions';
 
 
 
@@ -170,6 +185,15 @@ import { MCPModule } from './MCP';
     ActionsListViewComponent,
     ExecutionsListViewComponent,
     CategoriesListViewComponent,
+    // Action Explorer Components
+    ActionExplorerComponent,
+    ActionTreePanelComponent,
+    ActionToolbarComponent,
+    ActionBreadcrumbComponent,
+    ActionCardComponent,
+    ActionListItemComponent,
+    NewCategoryPanelComponent,
+    NewActionPanelComponent,
     ModelPromptPriorityMatrixComponent,
     PromptVersionControlComponent,
     // AI Instrumentation Components
@@ -292,7 +316,9 @@ import { MCPModule } from './MCP';
     QueryViewerModule,
     DashboardViewerModule,
     MCPModule,
-    CredentialsModule
+    CredentialsModule,
+    SharedPipesModule,
+    ActionsModule
   ],
   providers: [
     AIInstrumentationService,
@@ -319,6 +345,15 @@ import { MCPModule } from './MCP';
     CodeManagementComponent,
     EntityIntegrationComponent,
     SecurityPermissionsComponent,
+    // Export Action Explorer components
+    ActionExplorerComponent,
+    ActionTreePanelComponent,
+    ActionToolbarComponent,
+    ActionBreadcrumbComponent,
+    ActionCardComponent,
+    ActionListItemComponent,
+    NewCategoryPanelComponent,
+    NewActionPanelComponent,
     // Export Scheduling resource components
     SchedulingMonitorResourceComponent,
     SchedulingJobsResourceComponent,
@@ -350,6 +385,7 @@ import { MCPModule } from './MCP';
     CredentialsCategoriesResourceComponent,
     CredentialsAuditResourceComponent,
     GroupByPipe,
+    SharedPipesModule,
     CredentialsModule,
     // System Diagnostics Components
     SystemDiagnosticsComponent,

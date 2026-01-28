@@ -362,6 +362,36 @@ kendo-splitter {
   color: #64748b;
 }
 
+/* Type Badge - for Agent Type display */
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #4f46e5;
+  border: 1px solid #c7d2fe;
+}
+
+.type-badge i {
+  font-size: 11px;
+  color: #6366f1;
+}
+
+/* Type badge in meta context (grid view) */
+.meta-item.type-badge {
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #4f46e5;
+  border: 1px solid #c7d2fe;
+}
+
+.meta-item.type-badge i {
+  color: #6366f1;
+}
+
 .expand-icon {
   font-size: 16px;
   color: #94a3b8;
@@ -1091,4 +1121,13 @@ kendo-splitter {
   .detail-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Search Highlight */
+:host ::ng-deep .search-highlight,
+.search-highlight {
+  background-color: #fef08a;
+  padding: 1px 2px;
+  border-radius: 2px;
+  font-weight: inherit;
 }

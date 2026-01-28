@@ -189,7 +189,7 @@
                             <i [class]="getPromptIcon(prompt)"></i>
                           </div>
                           <div class="prompt-details">
-                            <h4 class="prompt-name">{{ prompt.Name }}</h4>
+                            <h4 class="prompt-name" [innerHTML]="prompt.Name | highlightSearch:searchTerm"></h4>
                             <div class="prompt-meta">
                               <span class="meta-item">
                                 <i class="fa-solid fa-folder"></i>
@@ -212,7 +212,7 @@
                       <!-- Card Body -->
                       <div class="card-body">
                         @if (prompt.Description) {
-                          <p class="prompt-description">{{ prompt.Description }}</p>
+                          <p class="prompt-description" [innerHTML]="prompt.Description | highlightSearch:searchTerm"></p>
                         } @else {
                           <p class="prompt-description text-muted">No description provided</p>
                         }
@@ -320,9 +320,9 @@
                                 <i [class]="getPromptIcon(prompt)"></i>
                               </div>
                               <div>
-                                <div class="prompt-name">{{ prompt.Name }}</div>
+                                <div class="prompt-name" [innerHTML]="prompt.Name | highlightSearch:searchTerm"></div>
                                 @if (prompt.Description) {
-                                  <div class="prompt-description-small">{{ prompt.Description }}</div>
+                                  <div class="prompt-description-small" [innerHTML]="prompt.Description | highlightSearch:searchTerm"></div>
                                 }
                               </div>
                             </div>
