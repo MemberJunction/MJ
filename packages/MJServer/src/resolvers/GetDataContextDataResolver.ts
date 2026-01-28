@@ -1,9 +1,10 @@
-import { Arg, Ctx, Field, ObjectType, Query } from "type-graphql";
+import { Arg, Ctx, Field, ObjectType, Query, Resolver } from "type-graphql";
 import { AppContext } from "../types.js";
 import { DataContext } from "@memberjunction/data-context";
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from "../util.js";
 import { Metadata } from "@memberjunction/core";
 import { DataContextItemEntity } from "@memberjunction/core-entities";
+import { ResolverBase } from "../generic/ResolverBase.js";
 
 @ObjectType()
 export class GetDataContextItemDataOutputType {
@@ -39,16 +40,20 @@ export class GetDataContextDataOutputType {
 }
 
 
-export class GetDataContextDataResolver {
+@Resolver()
+export class GetDataContextDataResolver extends ResolverBase {
     /**
-     * Returns data for a given data context item. 
-     * @param DataContextItemID 
+     * Returns data for a given data context item.
+     * @param DataContextItemID
      */
     @Query(() => GetDataContextItemDataOutputType)
     async GetDataContextItemData(
         @Arg('DataContextItemID', () => String) DataContextItemID: string,
         @Ctx() appCtx: AppContext
     ) {
+        // Check API key scope authorization for data context read
+        await this.CheckAPIKeyScopeAuthorization('datacontext:read', DataContextItemID, appCtx.userPayload);
+
         try {
             const ds = GetReadOnlyDataSource(appCtx.dataSources, {
                 allowFallbackToReadWrite: true,
@@ -92,14 +97,17 @@ export class GetDataContextDataResolver {
     }
 
     /**
-     * Returns data for a given data context. 
-     * @param DataContextID 
+     * Returns data for a given data context.
+     * @param DataContextID
      */
     @Query(() => GetDataContextDataOutputType)
     async GetDataContextData(
         @Arg('DataContextID', () => String) DataContextID: string,
         @Ctx() appCtx: AppContext
     ) {
+        // Check API key scope authorization for data context read
+        await this.CheckAPIKeyScopeAuthorization('datacontext:read', DataContextID, appCtx.userPayload);
+
         try {
             // our job here is to load the entire data context, so we do that with the Data Context object
             const dc = new DataContext();

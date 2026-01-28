@@ -2,6 +2,7 @@ import { Component, EventEmitter, HostListener, Input, OnChanges, Output, Simple
 import { Metadata, RunView } from '@memberjunction/core';
 import { APIKeyEntity, APIScopeEntity, APIKeyScopeEntity, APIKeyUsageLogEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLEncryptionClient } from '@memberjunction/graphql-dataprovider';
+import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 
 /** Tree shaking prevention function */
 export function LoadAPIKeyEditPanel(): void {
@@ -85,16 +86,10 @@ export class APIKeyEditPanelComponent implements OnChanges {
     public SuccessMessage = '';
     public ErrorMessage = '';
 
-    // Category config
-    private readonly categoryConfig: Record<string, { icon: string; color: string }> = {
-        'Entities': { icon: 'fa-solid fa-database', color: '#6366f1' },
-        'Agents': { icon: 'fa-solid fa-robot', color: '#10b981' },
-        'Admin': { icon: 'fa-solid fa-shield-halved', color: '#f59e0b' },
-        'Actions': { icon: 'fa-solid fa-bolt', color: '#8b5cf6' },
-        'Queries': { icon: 'fa-solid fa-magnifying-glass', color: '#3b82f6' },
-        'Reports': { icon: 'fa-solid fa-chart-bar', color: '#ef4444' },
-        'Communication': { icon: 'fa-solid fa-envelope', color: '#ec4899' },
-        'Other': { icon: 'fa-solid fa-ellipsis', color: '#6b7280' }
+    // Default UI config for categories without explicit configuration
+    private readonly defaultUIConfig = {
+        icon: 'fa-solid fa-ellipsis',
+        color: '#6b7280'
     };
 
     async ngOnChanges(changes: SimpleChanges): Promise<void> {
@@ -149,29 +144,36 @@ export class APIKeyEditPanelComponent implements OnChanges {
         this.IsLoadingScopes = true;
         try {
             const rv = new RunView();
+            const base = APIKeysEngineBase.Instance;
 
-            // Load all scopes and assigned scopes in parallel
-            const [allScopesResult, assignedScopesResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: API Scopes',
-                    OrderBy: 'Category, Name',
-                    ResultType: 'entity_object'
-                },
-                {
-                    EntityName: 'MJ: API Key Scopes',
-                    ExtraFilter: `APIKeyID='${this.KeyId}'`,
-                    ResultType: 'entity_object'
-                }
-            ]);
+            // Get all scopes from cache, load assigned scopes from DB
+            const allScopes = base.Scopes;
+            const assignedScopesResult = await rv.RunView<APIKeyScopeEntity>({
+                EntityName: 'MJ: API Key Scopes',
+                ExtraFilter: `APIKeyID='${this.KeyId}'`,
+                ResultType: 'entity_object'
+            });
 
-            if (allScopesResult.Success && assignedScopesResult.Success) {
+            if (assignedScopesResult.Success) {
                 const assignedScopeIds = new Set(
-                    (assignedScopesResult.Results as APIKeyScopeEntity[]).map(ks => ks.ScopeID)
+                    assignedScopesResult.Results.map(ks => ks.ScopeID)
                 );
+
+                // Build category UI config from root scopes
+                const categoryUIConfigs = new Map<string, { icon: string; color: string }>();
+                for (const scope of allScopes) {
+                    if (!scope.ParentID) {
+                        const uiConfig = parseAPIScopeUIConfig(scope);
+                        categoryUIConfigs.set(scope.Category, {
+                            icon: uiConfig.icon || this.defaultUIConfig.icon,
+                            color: uiConfig.color || this.defaultUIConfig.color
+                        });
+                    }
+                }
 
                 const categoryMap = new Map<string, ScopeItem[]>();
 
-                for (const scope of allScopesResult.Results as APIScopeEntity[]) {
+                for (const scope of allScopes) {
                     const category = scope.Category || 'Other';
                     if (!categoryMap.has(category)) {
                         categoryMap.set(category, []);
@@ -185,16 +187,16 @@ export class APIKeyEditPanelComponent implements OnChanges {
                 }
 
                 this.ScopeCategories = Array.from(categoryMap.entries()).map(([name, scopes]) => {
-                    const config = this.categoryConfig[name] || this.categoryConfig['Other'];
+                    const config = categoryUIConfigs.get(name) || this.defaultUIConfig;
                     return {
                         name,
                         icon: config.icon,
                         color: config.color,
-                        scopes,
+                        scopes: scopes.sort((a, b) => a.scope.Name.localeCompare(b.scope.Name)),
                         expanded: scopes.some(s => s.selected),
                         allSelected: scopes.length > 0 && scopes.every(s => s.selected)
                     };
-                });
+                }).sort((a, b) => a.name.localeCompare(b.name));
             }
         } catch (error) {
             console.error('Error loading scopes:', error);

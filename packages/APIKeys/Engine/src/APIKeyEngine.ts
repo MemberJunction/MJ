@@ -6,17 +6,21 @@
  * - Scope-based authorization with pattern matching
  * - Usage logging and audit trails
  *
+ * Server-side only. Uses APIKeysEngineBase for cached metadata access.
+ *
  * @module @memberjunction/api-keys
  */
 
 import { createHash, randomBytes } from 'crypto';
-import { RunView, Metadata, UserInfo } from '@memberjunction/core';
+import { RunView, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
     APIKeyEntity,
     APIApplicationEntity,
     APIKeyApplicationEntity,
+    APIScopeEntity,
     UserEntity
 } from '@memberjunction/core-entities';
+import { APIKeysEngineBase, LoadAPIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { ScopeEvaluator } from './ScopeEvaluator';
 import { UsageLogger } from './UsageLogger';
 import { PatternMatcher } from './PatternMatcher';
@@ -75,19 +79,71 @@ export class APIKeyEngine {
     private _config: Required<APIKeyEngineConfig>;
     private _scopeEvaluator: ScopeEvaluator;
     private _usageLogger: UsageLogger;
-    private _applicationCache: Map<string, APIApplicationEntity> = new Map();
-    private _applicationNameCache: Map<string, APIApplicationEntity> = new Map();
+    private _configured: boolean = false;
 
     constructor(config: APIKeyEngineConfig = {}) {
         this._config = {
             enforcementEnabled: config.enforcementEnabled ?? true,
             loggingEnabled: config.loggingEnabled ?? true,
-            defaultBehaviorNoScopes: config.defaultBehaviorNoScopes ?? 'allow',
+            defaultBehaviorNoScopes: config.defaultBehaviorNoScopes ?? 'deny',
             scopeCacheTTLMs: config.scopeCacheTTLMs ?? 60000
         };
 
-        this._scopeEvaluator = new ScopeEvaluator(this._config.scopeCacheTTLMs, this._config.defaultBehaviorNoScopes);
+        // Ensure APIKeysEngineBase is loaded (tree-shaking prevention)
+        LoadAPIKeysEngineBase();
+
+        this._scopeEvaluator = new ScopeEvaluator(this._config.defaultBehaviorNoScopes);
         this._usageLogger = new UsageLogger();
+    }
+
+    /**
+     * Access to the cached metadata from APIKeysEngineBase.
+     * This allows direct access to cached scopes, applications, and key bindings.
+     */
+    protected get Base(): APIKeysEngineBase {
+        return APIKeysEngineBase.Instance;
+    }
+
+    /**
+     * Configure the engine and ensure the base engine is loaded.
+     * This should be called during server startup to preload all metadata.
+     *
+     * @param forceRefresh - If true, forces a reload even if already loaded
+     * @param contextUser - User context for database operations
+     * @param provider - Optional metadata provider override
+     */
+    public async Config(
+        forceRefresh?: boolean,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<void> {
+        await this.Base.Config(forceRefresh, contextUser, provider);
+        this._configured = true;
+    }
+
+    /**
+     * Check if the engine has been configured.
+     */
+    public get IsConfigured(): boolean {
+        return this._configured;
+    }
+
+    // =========================================================================
+    // DELEGATED GETTERS FROM BASE ENGINE
+    // =========================================================================
+
+    /**
+     * All cached API Scopes from the base engine.
+     */
+    public get Scopes(): APIScopeEntity[] {
+        return this.Base.Scopes;
+    }
+
+    /**
+     * All cached API Applications from the base engine.
+     */
+    public get Applications(): APIApplicationEntity[] {
+        return this.Base.Applications;
     }
 
     // =========================================================================
@@ -588,58 +644,32 @@ export class APIKeyEngine {
 
     /**
      * Get application by name.
+     * Uses cached data from APIKeysEngineBase.
+     * @param name - The application name (case-insensitive)
+     * @param _contextUser - Kept for API compatibility
      */
     public async GetApplicationByName(
         name: string,
-        contextUser: UserInfo
+        _contextUser: UserInfo
     ): Promise<APIApplicationEntity | null> {
-        if (this._applicationNameCache.has(name)) {
-            return this._applicationNameCache.get(name) || null;
-        }
-
-        const rv = new RunView();
-        const result = await rv.RunView<APIApplicationEntity>({
-            EntityName: 'MJ: API Applications',
-            ExtraFilter: `Name='${name}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (result.Success && result.Results.length > 0) {
-            const app = result.Results[0];
-            this._applicationNameCache.set(name, app);
-            this._applicationCache.set(app.ID, app);
-            return app;
-        }
-
-        return null;
+        // Use cached data from Base engine
+        const app = this.Base.GetApplicationByName(name);
+        return app || null;
     }
 
     /**
      * Get application by ID.
+     * Uses cached data from APIKeysEngineBase.
+     * @param id - The application ID
+     * @param _contextUser - Kept for API compatibility
      */
     public async GetApplicationById(
         id: string,
-        contextUser: UserInfo
+        _contextUser: UserInfo
     ): Promise<APIApplicationEntity | null> {
-        if (this._applicationCache.has(id)) {
-            return this._applicationCache.get(id) || null;
-        }
-
-        const rv = new RunView();
-        const result = await rv.RunView<APIApplicationEntity>({
-            EntityName: 'MJ: API Applications',
-            ExtraFilter: `ID='${id}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (result.Success && result.Results.length > 0) {
-            const app = result.Results[0];
-            this._applicationCache.set(app.ID, app);
-            this._applicationNameCache.set(app.Name, app);
-            return app;
-        }
-
-        return null;
+        // Use cached data from Base engine
+        const app = this.Base.GetApplicationById(id);
+        return app || null;
     }
 
     /**
@@ -668,12 +698,20 @@ export class APIKeyEngine {
     // =========================================================================
 
     /**
+     * Clear all caches and force a refresh of the base engine.
+     * @param contextUser - User context for database operations (required for refresh)
+     */
+    public async RefreshCache(contextUser: UserInfo): Promise<void> {
+        await this.Base.Config(true, contextUser);
+    }
+
+    /**
      * Clear all caches.
+     * @deprecated Use RefreshCache(contextUser) instead to force a refresh
      */
     public ClearCache(): void {
         this._scopeEvaluator.ClearCache();
-        this._applicationCache.clear();
-        this._applicationNameCache.clear();
+        // Note: Base engine cache is managed by calling Config(true, contextUser)
     }
 
     /**

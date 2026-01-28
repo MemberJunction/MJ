@@ -34,6 +34,7 @@
     "@memberjunction/actions-bizapps-lms": "3.3.0",
     "@memberjunction/actions-bizapps-social": "3.3.0",
     "@memberjunction/ai": "3.3.0",
+    "@memberjunction/ai-mcp-client": "3.3.0",
     "@memberjunction/ai-agent-manager": "3.3.0",
     "@memberjunction/ai-agent-manager-actions": "3.3.0",
     "@memberjunction/ai-agents": "3.3.0",

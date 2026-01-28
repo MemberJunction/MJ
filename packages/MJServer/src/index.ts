@@ -123,6 +123,7 @@ export * from './resolvers/TransactionGroupResolver.js';
 export * from './resolvers/CreateQueryResolver.js';
 export * from './resolvers/TelemetryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
+export * from './resolvers/MCPResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';

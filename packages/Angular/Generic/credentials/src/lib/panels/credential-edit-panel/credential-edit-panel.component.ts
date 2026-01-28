@@ -265,12 +265,13 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
                 this.saved.emit(entity);
                 this.closePanel();
             } else {
-                const errorMessage = entity.LatestResult?.Message || 'Unknown error';
-                console.error('Save failed:', errorMessage);
+                // Use CompleteMessage for full error details, fall back to Message
+                const errorMessage = entity.LatestResult?.CompleteMessage || entity.LatestResult?.Message || 'Unknown error';
+                console.error('Credential save failed:', errorMessage, entity.LatestResult);
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to save credential: ${errorMessage}`,
                     'error',
-                    5000
+                    8000
                 );
             }
         } catch (error) {
@@ -306,11 +307,13 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
                 this.deleted.emit(this.credential.ID);
                 this.closePanel();
             } else {
-                const errorMessage = this.credential.LatestResult?.Message || 'Unknown error';
+                // Use CompleteMessage for full error details, fall back to Message
+                const errorMessage = this.credential.LatestResult?.CompleteMessage || this.credential.LatestResult?.Message || 'Unknown error';
+                console.error('Credential delete failed:', errorMessage, this.credential.LatestResult);
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to delete credential: ${errorMessage}`,
                     'error',
-                    5000
+                    8000
                 );
             }
         } catch (error) {

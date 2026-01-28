@@ -1,16 +1,17 @@
 /**
  * Scope Evaluator for API Key Authorization
  * Implements two-level evaluation: Application Ceiling -> Key Scopes
+ * Uses APIKeysEngineBase for cached metadata access.
  * @module @memberjunction/api-keys
  */
 
-import { RunView, UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
 import {
     APIApplicationScopeEntity,
     APIKeyApplicationEntity,
-    APIKeyScopeEntity,
-    APIScopeEntity
+    APIKeyScopeEntity
 } from '@memberjunction/core-entities';
+import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { PatternMatcher } from './PatternMatcher';
 import {
     AuthorizationRequest,
@@ -37,35 +38,39 @@ interface LevelEvaluationResult {
  *
  * Both levels support pattern matching with Include/Exclude and Deny rules.
  * Deny rules always trump Allow rules at the same priority level.
+ *
+ * This class now uses APIKeysEngineBase for cached metadata access,
+ * eliminating redundant per-request database queries.
  */
 export class ScopeEvaluator {
-    private _scopeCache: Map<string, APIScopeEntity[]> = new Map();
-    private _appScopeCache: Map<string, APIApplicationScopeEntity[]> = new Map();
-    private _keyScopeCache: Map<string, APIKeyScopeEntity[]> = new Map();
-    private _keyAppCache: Map<string, APIKeyApplicationEntity[]> = new Map();
-    private _cacheExpiryMs: number;
-    private _lastCacheRefresh: number = 0;
     private _defaultBehaviorNoScopes: 'allow' | 'deny';
 
-    constructor(cacheTTLMs: number = 60000, defaultBehaviorNoScopes: 'allow' | 'deny' = 'allow') {
-        this._cacheExpiryMs = cacheTTLMs;
+    constructor(defaultBehaviorNoScopes: 'allow' | 'deny' = 'allow') {
         this._defaultBehaviorNoScopes = defaultBehaviorNoScopes;
     }
 
     /**
-     * Evaluate authorization for a request
+     * Access to the cached metadata from APIKeysEngineBase
+     */
+    protected get Base(): APIKeysEngineBase {
+        return APIKeysEngineBase.Instance;
+    }
+
+    /**
+     * Evaluate authorization for a request.
+     * Uses cached metadata from APIKeysEngineBase.
      * @param request - The authorization request
-     * @param contextUser - The user context for database operations
+     * @param _contextUser - The user context (kept for API compatibility)
      * @returns Authorization result with detailed evaluation info
      */
     public async EvaluateAccess(
         request: AuthorizationRequest,
-        contextUser: UserInfo
+        _contextUser: UserInfo
     ): Promise<AuthorizationResult> {
         const evaluatedRules: EvaluatedRule[] = [];
 
-        // 1. Check if API key is bound to specific applications
-        const keyApps = await this.loadKeyApplications(request.APIKeyId, contextUser);
+        // 1. Check if API key is bound to specific applications (from Base cache)
+        const keyApps = this.Base.GetKeyApplicationsByKeyId(request.APIKeyId);
 
         if (keyApps.length > 0) {
             const boundToThisApp = keyApps.some(ka => ka.ApplicationID === request.ApplicationId);
@@ -80,11 +85,10 @@ export class ScopeEvaluator {
         // If keyApps is empty, key works with all applications
 
         // 2. Evaluate application scope ceiling
-        const appResult = await this.evaluateApplicationCeiling(
+        const appResult = this.evaluateApplicationCeiling(
             request.ApplicationId,
             request.ScopePath,
-            request.Resource,
-            contextUser
+            request.Resource
         );
         evaluatedRules.push(...appResult.evaluatedRules);
 
@@ -98,11 +102,10 @@ export class ScopeEvaluator {
         }
 
         // 3. Evaluate API key scope rules
-        const keyResult = await this.evaluateKeyScopes(
+        const keyResult = this.evaluateKeyScopes(
             request.APIKeyId,
             request.ScopePath,
-            request.Resource,
-            contextUser
+            request.Resource
         );
         evaluatedRules.push(...keyResult.evaluatedRules);
 
@@ -116,39 +119,38 @@ export class ScopeEvaluator {
     }
 
     /**
-     * Clear all caches
+     * Clear cache - delegates to Base engine
+     * @deprecated Use APIKeysEngineBase.Instance.Config(true) to force refresh instead
      */
     public ClearCache(): void {
-        this._scopeCache.clear();
-        this._appScopeCache.clear();
-        this._keyScopeCache.clear();
-        this._keyAppCache.clear();
+        // The Base engine manages its own cache now.
+        // To force a refresh, call APIKeysEngineBase.Instance.Config(true, contextUser)
     }
 
     /**
      * Evaluate application-level scope ceiling
+     * Uses cached data from APIKeysEngineBase
      */
-    private async evaluateApplicationCeiling(
+    private evaluateApplicationCeiling(
         applicationId: string,
         scopePath: string,
-        resource: string,
-        contextUser: UserInfo
-    ): Promise<LevelEvaluationResult> {
-        const rules = await this.loadApplicationScopeRules(applicationId, scopePath, contextUser);
+        resource: string
+    ): LevelEvaluationResult {
+        const rules = this.getApplicationScopeRules(applicationId, scopePath);
         return this.evaluateRules(rules, resource, 'application');
     }
 
     /**
      * Evaluate key-level scope rules.
      * If the key has no scope rules defined, applies the defaultBehaviorNoScopes setting.
+     * Uses cached data from APIKeysEngineBase
      */
-    private async evaluateKeyScopes(
+    private evaluateKeyScopes(
         apiKeyId: string,
         scopePath: string,
-        resource: string,
-        contextUser: UserInfo
-    ): Promise<LevelEvaluationResult> {
-        const rules = await this.loadKeyScopeRules(apiKeyId, scopePath, contextUser);
+        resource: string
+    ): LevelEvaluationResult {
+        const rules = this.getKeyScopeRules(apiKeyId, scopePath);
 
         // If key has no scope rules for this scope, apply default behavior
         if (rules.length === 0) {
@@ -276,132 +278,54 @@ export class ScopeEvaluator {
     }
 
     /**
-     * Get applications bound to a key (public accessor)
+     * Get applications bound to a key.
+     * Uses cached data from APIKeysEngineBase.
+     * @param apiKeyId - The API key ID
+     * @param _contextUser - Kept for API compatibility
      */
     public async GetKeyApplications(
         apiKeyId: string,
-        contextUser: UserInfo
+        _contextUser: UserInfo
     ): Promise<APIKeyApplicationEntity[]> {
-        return this.loadKeyApplications(apiKeyId, contextUser);
+        return this.Base.GetKeyApplicationsByKeyId(apiKeyId);
     }
 
     /**
-     * Load applications bound to a key
+     * Get application scope rules for a scope path.
+     * Uses cached data from APIKeysEngineBase.
      */
-    private async loadKeyApplications(
-        apiKeyId: string,
-        contextUser: UserInfo
-    ): Promise<APIKeyApplicationEntity[]> {
-        const cacheKey = `keyApp:${apiKeyId}`;
-
-        if (this.isCacheValid() && this._keyAppCache.has(cacheKey)) {
-            return this._keyAppCache.get(cacheKey)!;
-        }
-
-        const rv = new RunView();
-        const result = await rv.RunView<APIKeyApplicationEntity>({
-            EntityName: 'MJ: API Key Applications',
-            ExtraFilter: `APIKeyID='${apiKeyId}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        const apps = result.Success ? result.Results : [];
-        this._keyAppCache.set(cacheKey, apps);
-        return apps;
-    }
-
-    /**
-     * Load application scope rules for a scope path
-     */
-    private async loadApplicationScopeRules(
+    private getApplicationScopeRules(
         applicationId: string,
-        scopePath: string,
-        contextUser: UserInfo
-    ): Promise<ScopeRule[]> {
-        const cacheKey = `appScope:${applicationId}:${scopePath}`;
-
-        if (this.isCacheValid() && this._appScopeCache.has(cacheKey)) {
-            const cached = this._appScopeCache.get(cacheKey)!;
-            return this.toScopeRules(cached);
-        }
-
-        // First get the scope ID for this path
-        const scope = await this.getScopeByPath(scopePath, contextUser);
+        scopePath: string
+    ): ScopeRule[] {
+        // Get the scope by path from cache
+        const scope = this.Base.GetScopeByPath(scopePath);
         if (!scope) {
             return [];
         }
 
-        const rv = new RunView();
-        const result = await rv.RunView<APIApplicationScopeEntity>({
-            EntityName: 'MJ: API Application Scopes',
-            ExtraFilter: `ApplicationID='${applicationId}' AND ScopeID='${scope.ID}'`,
-            OrderBy: 'Priority DESC',
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        const rules = result.Success ? result.Results : [];
-        this._appScopeCache.set(cacheKey, rules);
-        return this.toScopeRules(rules, scope.FullPath);
+        // Get application scope rules from cache
+        const appScopes = this.Base.GetApplicationScopeRules(applicationId, scope.ID);
+        return this.toScopeRules(appScopes, scope.FullPath);
     }
 
     /**
-     * Load key scope rules for a scope path
+     * Get key scope rules for a scope path.
+     * Uses cached data from APIKeysEngineBase.
      */
-    private async loadKeyScopeRules(
+    private getKeyScopeRules(
         apiKeyId: string,
-        scopePath: string,
-        contextUser: UserInfo
-    ): Promise<ScopeRule[]> {
-        const cacheKey = `keyScope:${apiKeyId}:${scopePath}`;
-
-        if (this.isCacheValid() && this._keyScopeCache.has(cacheKey)) {
-            const cached = this._keyScopeCache.get(cacheKey)!;
-            return this.toScopeRulesFromKey(cached);
-        }
-
-        // First get the scope ID for this path
-        const scope = await this.getScopeByPath(scopePath, contextUser);
+        scopePath: string
+    ): ScopeRule[] {
+        // Get the scope by path from cache
+        const scope = this.Base.GetScopeByPath(scopePath);
         if (!scope) {
             return [];
         }
 
-        const rv = new RunView();
-        const result = await rv.RunView<APIKeyScopeEntity>({
-            EntityName: 'MJ: API Key Scopes',
-            ExtraFilter: `APIKeyID='${apiKeyId}' AND ScopeID='${scope.ID}'`,
-            OrderBy: 'Priority DESC',
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        const rules = result.Success ? result.Results : [];
-        this._keyScopeCache.set(cacheKey, rules);
-        return this.toScopeRulesFromKey(rules, scope.FullPath);
-    }
-
-    /**
-     * Get scope by full path
-     */
-    private async getScopeByPath(
-        fullPath: string,
-        contextUser: UserInfo
-    ): Promise<APIScopeEntity | null> {
-        const cacheKey = `scope:${fullPath}`;
-
-        if (this.isCacheValid() && this._scopeCache.has(cacheKey)) {
-            const cached = this._scopeCache.get(cacheKey)!;
-            return cached.length > 0 ? cached[0] : null;
-        }
-
-        const rv = new RunView();
-        const result = await rv.RunView<APIScopeEntity>({
-            EntityName: 'MJ: API Scopes',
-            ExtraFilter: `FullPath='${fullPath}' AND IsActive=1`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        const scopes = result.Success ? result.Results : [];
-        this._scopeCache.set(cacheKey, scopes);
-        return scopes.length > 0 ? scopes[0] : null;
+        // Get key scope rules from cache
+        const keyScopes = this.Base.GetKeyScopeRules(apiKeyId, scope.ID);
+        return this.toScopeRulesFromKey(keyScopes, scope.FullPath);
     }
 
     /**
@@ -438,18 +362,5 @@ export class ScopeEvaluator {
             IsDeny: e.IsDeny,
             Priority: e.Priority
         }));
-    }
-
-    /**
-     * Check if cache is still valid
-     */
-    private isCacheValid(): boolean {
-        const now = Date.now();
-        if (now - this._lastCacheRefresh > this._cacheExpiryMs) {
-            this.ClearCache();
-            this._lastCacheRefresh = now;
-            return false;
-        }
-        return true;
     }
 }

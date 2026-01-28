@@ -552,6 +552,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
     ): Promise<AIAgentRunResult> {
+        // Check API key scope authorization for agent execution
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
+
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
             p,
@@ -741,6 +744,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
     ): Promise<AIAgentRunResult> {
+        // Check API key scope authorization for agent execution
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
+
         const p = GetReadWriteProvider(providers);
         const currentUser = this.GetUserFromPayload(userPayload);
 

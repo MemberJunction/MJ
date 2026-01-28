@@ -1,0 +1,371 @@
+<!-- Backdrop -->
+@if (Visible) {
+    <div class="panel-backdrop" (click)="closeDialog()"></div>
+}
+
+<!-- Slide-out Panel -->
+<div class="slide-out-panel"
+     *ngIf="Visible"
+     @slideIn
+     [style.width.px]="IsMobileMode ? null : PanelWidth"
+     [class.mobile]="IsMobileMode"
+     [class.resizing]="IsResizing">
+
+    <!-- Resize Handle (left edge) -->
+    @if (!IsMobileMode) {
+        <div class="resize-handle"
+             (mousedown)="onResizeStart($event)"
+             [class.active]="IsResizing"
+             title="Drag to resize">
+            <div class="resize-grip"></div>
+        </div>
+    }
+
+    <!-- Panel Header -->
+    <div class="panel-header">
+        <h2 class="panel-title">
+            <i class="fa-solid fa-flask"></i>
+            Test MCP Tool
+        </h2>
+        <button class="close-btn" (click)="closeDialog()" title="Close">
+            <i class="fa-solid fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Step Indicator -->
+    <div class="step-indicator">
+        <div class="step" [class.active]="CurrentStep === 'select'" [class.completed]="CurrentStep !== 'select'">
+            <span class="step-number">1</span>
+            <span class="step-label">Select Tool</span>
+        </div>
+        <div class="step-connector" [class.completed]="CurrentStep !== 'select'"></div>
+        <div class="step" [class.active]="CurrentStep === 'configure'" [class.completed]="CurrentStep === 'results'">
+            <span class="step-number">2</span>
+            <span class="step-label">Configure</span>
+        </div>
+        <div class="step-connector" [class.completed]="CurrentStep === 'results'"></div>
+        <div class="step" [class.active]="CurrentStep === 'results'">
+            <span class="step-number">3</span>
+            <span class="step-label">Results</span>
+        </div>
+    </div>
+
+    <!-- Panel Content -->
+    <div class="panel-content">
+        <!-- Step 1: Select Server, Connection, Tool -->
+        <div class="step-content" *ngIf="CurrentStep === 'select'">
+            <div class="selection-form">
+                <!-- Server Selection -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fa-solid fa-server"></i>
+                        Server
+                        <span class="required">*</span>
+                    </label>
+                    <kendo-dropdownlist
+                        [data]="DisplayServers"
+                        [textField]="'Name'"
+                        [valueField]="'ID'"
+                        [valuePrimitive]="true"
+                        [(ngModel)]="ServerID"
+                        (valueChange)="onServerChange()"
+                        [filterable]="true"
+                        (filterChange)="onServerFilterChange($event)"
+                        placeholder="Select a server...">
+                        <ng-template kendoDropDownListItemTemplate let-dataItem>
+                            <div class="dropdown-item">
+                                <span class="item-name">{{ dataItem.Name }}</span>
+                                <span class="item-status" [class]="'status-' + dataItem.Status.toLowerCase()">
+                                    {{ dataItem.Status }}
+                                </span>
+                            </div>
+                        </ng-template>
+                    </kendo-dropdownlist>
+                </div>
+
+                <!-- Connection Selection -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fa-solid fa-link"></i>
+                        Connection
+                        <span class="required">*</span>
+                    </label>
+                    <kendo-dropdownlist
+                        [data]="DisplayConnections"
+                        [textField]="'Name'"
+                        [valueField]="'ID'"
+                        [valuePrimitive]="true"
+                        [(ngModel)]="ConnectionID"
+                        (valueChange)="onConnectionChange()"
+                        [disabled]="!ServerID || NoConnectionsWarning !== null"
+                        [filterable]="true"
+                        (filterChange)="onConnectionFilterChange($event)"
+                        placeholder="Select a connection...">
+                        <ng-template kendoDropDownListItemTemplate let-dataItem>
+                            <div class="dropdown-item">
+                                <span class="item-name">{{ dataItem.Name }}</span>
+                                @if (dataItem.Description) {
+                                    <span class="item-description">{{ dataItem.Description }}</span>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-dropdownlist>
+                    @if (!ServerID) {
+                        <span class="field-hint">Select a server first</span>
+                    }
+                    @if (NoConnectionsWarning) {
+                        <span class="field-error">
+                            <i class="fa-solid fa-exclamation-triangle"></i>
+                            {{ NoConnectionsWarning }}
+                        </span>
+                    }
+                    @if (FilteredConnections.length === 1 && ConnectionID) {
+                        <span class="field-hint auto-selected">
+                            <i class="fa-solid fa-check"></i>
+                            Auto-selected (only connection available)
+                        </span>
+                    }
+                </div>
+
+                <!-- Tool Selection -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fa-solid fa-wrench"></i>
+                        Tool
+                        <span class="required">*</span>
+                    </label>
+                    <kendo-dropdownlist
+                        [data]="DisplayTools"
+                        [textField]="'ToolTitle'"
+                        [valueField]="'ID'"
+                        [valuePrimitive]="true"
+                        [(ngModel)]="ToolID"
+                        (valueChange)="onToolChange()"
+                        [disabled]="!ServerID"
+                        [filterable]="true"
+                        (filterChange)="onToolFilterChange($event)"
+                        placeholder="Select a tool...">
+                        <ng-template kendoDropDownListValueTemplate let-dataItem>
+                            {{ dataItem?.ToolTitle || dataItem?.ToolName || 'Select a tool...' }}
+                        </ng-template>
+                        <ng-template kendoDropDownListItemTemplate let-dataItem>
+                            <div class="dropdown-item tool-item">
+                                <span class="item-name">{{ dataItem.ToolTitle || dataItem.ToolName }}</span>
+                                @if (dataItem.ToolDescription) {
+                                    <span class="item-description">{{ dataItem.ToolDescription }}</span>
+                                }
+                            </div>
+                        </ng-template>
+                    </kendo-dropdownlist>
+                    @if (!ServerID) {
+                        <span class="field-hint">Select a server first</span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Configure Parameters -->
+        <div class="step-content" *ngIf="CurrentStep === 'configure'">
+            <div class="tool-header">
+                <div class="tool-info">
+                    <h3 class="tool-name">
+                        <i class="fa-solid fa-wrench"></i>
+                        {{ SelectedTool?.ToolTitle || SelectedTool?.ToolName }}
+                    </h3>
+                    @if (SelectedTool?.ToolDescription) {
+                        <p class="tool-description">{{ SelectedTool?.ToolDescription }}</p>
+                    }
+                </div>
+                <div class="tool-context">
+                    <span class="context-item">
+                        <i class="fa-solid fa-server"></i>
+                        {{ SelectedServerName }}
+                    </span>
+                    <span class="context-item">
+                        <i class="fa-solid fa-link"></i>
+                        {{ SelectedConnectionName }}
+                    </span>
+                </div>
+            </div>
+
+            @if (ParameterConfigs.length === 0) {
+                <div class="no-params">
+                    <i class="fa-solid fa-check-circle"></i>
+                    <p>This tool requires no parameters.</p>
+                </div>
+            } @else {
+                <div class="parameters-form">
+                    <h4 class="params-title">Parameters</h4>
+                    @for (config of ParameterConfigs; track config.name) {
+                        <div class="param-group" [class.required]="config.required">
+                            <label class="param-label">
+                                {{ config.name }}
+                                @if (config.required) {
+                                    <span class="required">*</span>
+                                }
+                            </label>
+                            @if (config.description) {
+                                <p class="param-description">{{ config.description }}</p>
+                            }
+
+                            <!-- Enum/Select -->
+                            @if (config.enumValues.length > 0) {
+                                <kendo-dropdownlist
+                                    [data]="config.enumValues"
+                                    [valuePrimitive]="true"
+                                    [(ngModel)]="ParameterValues[config.name]"
+                                    (valueChange)="onParameterChange(config.name, $event)">
+                                </kendo-dropdownlist>
+                            }
+                            <!-- Boolean -->
+                            @else if (config.type === 'boolean') {
+                                <div class="checkbox-wrapper">
+                                    <input type="checkbox"
+                                           [id]="'param-' + config.name"
+                                           [checked]="ParameterValues[config.name]"
+                                           (change)="onParameterChange(config.name, $any($event.target).checked)">
+                                    <label [for]="'param-' + config.name">Enabled</label>
+                                </div>
+                            }
+                            <!-- Number/Integer -->
+                            @else if (config.type === 'number' || config.type === 'integer') {
+                                <kendo-numerictextbox
+                                    [format]="config.type === 'integer' ? 'n0' : 'n'"
+                                    [step]="config.type === 'integer' ? 1 : 0.1"
+                                    [(ngModel)]="ParameterValues[config.name]"
+                                    (valueChange)="onParameterChange(config.name, $event)">
+                                </kendo-numerictextbox>
+                            }
+                            <!-- Array/Object (Textarea with JSON) -->
+                            @else if (config.type === 'array' || config.type === 'object') {
+                                <textarea class="json-input"
+                                          rows="4"
+                                          [value]="getTextareaValue(config.name)"
+                                          (input)="onTextareaChange(config.name, $any($event.target).value, config)"
+                                          placeholder="Enter JSON {{ config.type }}..."></textarea>
+                                <span class="field-hint">Enter valid JSON</span>
+                            }
+                            <!-- String (default) -->
+                            @else {
+                                @if (isTextarea(config)) {
+                                    <textarea class="text-input"
+                                              rows="3"
+                                              [(ngModel)]="ParameterValues[config.name]"
+                                              (input)="onParameterChange(config.name, $any($event.target).value)"
+                                              [placeholder]="config.description || 'Enter value...'"></textarea>
+                                } @else {
+                                    <kendo-textbox
+                                        [(ngModel)]="ParameterValues[config.name]"
+                                        (valueChange)="onParameterChange(config.name, $event)"
+                                        [placeholder]="config.description || 'Enter value...'">
+                                    </kendo-textbox>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Step 3: Results -->
+        <div class="step-content results-step" *ngIf="CurrentStep === 'results'">
+            <div class="results-container">
+                <!-- Success/Error Header -->
+                <div class="result-header" [class.success]="ExecutionResult?.Success" [class.error]="!ExecutionResult?.Success">
+                    @if (ExecutionResult?.Success) {
+                        <i class="fa-solid fa-check-circle"></i>
+                        <span class="result-status">Execution Successful</span>
+                    } @else {
+                        <i class="fa-solid fa-times-circle"></i>
+                        <span class="result-status">Execution Failed</span>
+                    }
+                    @if (ExecutionResult?.DurationMs) {
+                        <span class="duration">{{ ExecutionResult?.DurationMs }}ms</span>
+                    }
+                </div>
+
+                <!-- Executed Tool Info (moved to top) -->
+                <div class="execution-info">
+                    <div class="info-row">
+                        <span class="info-label">Tool:</span>
+                        <span class="info-value">{{ SelectedToolName }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Server:</span>
+                        <span class="info-value">{{ SelectedServerName }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Connection:</span>
+                        <span class="info-value">{{ SelectedConnectionName }}</span>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                @if (ExecutionResult?.ErrorMessage) {
+                    <div class="error-panel">
+                        <h4><i class="fa-solid fa-exclamation-triangle"></i> Error</h4>
+                        <pre class="error-message">{{ ExecutionResult?.ErrorMessage }}</pre>
+                    </div>
+                }
+
+                <!-- Result Data (fills remaining space) -->
+                @if (ExecutionResult?.Result) {
+                    <div class="result-panel fill-space">
+                        <div class="result-panel-header">
+                            <h4><i class="fa-solid fa-code"></i> Result</h4>
+                            <button kendoButton fillMode="flat" (click)="copyResult()" title="Copy to clipboard">
+                                <i class="fa-solid fa-copy"></i>
+                            </button>
+                        </div>
+                        <div class="code-editor-container">
+                            <mj-code-editor
+                                [ngModel]="FormattedResult"
+                                [language]="'json'"
+                                [readonly]="true">
+                            </mj-code-editor>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel Actions -->
+    <div class="panel-actions">
+        @switch (CurrentStep) {
+            @case ('select') {
+                <button kendoButton themeColor="primary" (click)="proceedToConfig()" [disabled]="!CanProceedToConfig">
+                    <i class="fa-solid fa-arrow-right"></i>
+                    Next
+                </button>
+                <button kendoButton fillMode="flat" (click)="closeDialog()">Cancel</button>
+            }
+            @case ('configure') {
+                <button kendoButton themeColor="primary" (click)="executeTool()" [disabled]="!IsValid || IsExecuting">
+                    @if (IsExecuting) {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        Executing...
+                    } @else {
+                        <i class="fa-solid fa-play"></i>
+                        Execute Tool
+                    }
+                </button>
+                <button kendoButton fillMode="flat" (click)="goBack()">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Back
+                </button>
+            }
+            @case ('results') {
+                <button kendoButton themeColor="primary" (click)="runAgain()">
+                    <i class="fa-solid fa-redo"></i>
+                    Run Again
+                </button>
+                <button kendoButton fillMode="flat" (click)="goBack()">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Edit Parameters
+                </button>
+                <button kendoButton fillMode="flat" (click)="closeDialog()">Close</button>
+            }
+        }
+    </div>
+</div>

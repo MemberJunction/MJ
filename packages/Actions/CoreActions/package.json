@@ -26,6 +26,7 @@
     "@memberjunction/actions": "3.3.0",
     "@memberjunction/actions-base": "3.3.0",
     "@memberjunction/ai": "3.3.0",
+    "@memberjunction/ai-mcp-client": "3.3.0",
     "@memberjunction/ai-agent-manager": "3.3.0",
     "@memberjunction/ai-agents": "3.3.0",
     "@memberjunction/ai-betty-bot": "3.3.0",

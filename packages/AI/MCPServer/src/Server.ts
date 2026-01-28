@@ -626,6 +626,7 @@ async function registerAllTools(
         name: "Get_Entity_List",
         description: "Retrieves a list of all entity names. Use Get_Single_Entity(entityName) to get full details including description, fields, and relationships for a specific entity.",
         parameters: z.object({}),
+        scopeInfo: { scopePath: 'metadata:entities:read', resource: '*' },
         async execute() {
             const md = new Metadata();
             // Just return entity names - minimal payload
@@ -641,6 +642,7 @@ async function registerAllTools(
         parameters: z.object({
             entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'AI Models')")
         }),
+        scopeInfo: (props) => ({ scopePath: 'metadata:entities:read', resource: props.entityName as string || '*' }),
         async execute(params: Record<string, unknown>) {
             const entityName = params.entityName as string;
             const md = new Metadata();
@@ -732,10 +734,16 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             throw new Error('System user not found in UserCache - required for server initialization');
         }
 
-        // Load API keys into cache for fast validation
-        console.log('Loading credentials and API keys into cache...');
+        // Load credentials for server operations
+        console.log('Loading credentials into cache...');
         await CredentialEngine.Instance.Config(false, systemUser);
-        console.log(`API keys loaded successfully. Count: ${CredentialEngine.Instance.APIKeys.length}`);
+        console.log('Credentials loaded successfully.');
+
+        // Initialize API Key engine for scope-based authorization
+        console.log('Initializing API Key engine...');
+        const apiKeyEngine = GetAPIKeyEngine();
+        await apiKeyEngine.Config(false, systemUser);
+        console.log(`API Key engine initialized. Scopes loaded: ${apiKeyEngine.Scopes.length}`);
 
         // Initialize AuthGate configuration for unified authentication
         authGateConfig = {
@@ -1247,6 +1255,7 @@ async function loadActionTools(
                     pattern: z.string().optional().describe("Name pattern to match actions (supports wildcards: *, *Action, Action*, *Action*)"),
                     category: z.string().optional().describe("Category name to filter actions")
                 }),
+                scopeInfo: { scopePath: 'metadata:actions:read', resource: '*' },
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const actions = await discoverActions(props.pattern as string || '*', props.category as string | undefined, sessionUser);
@@ -1350,6 +1359,7 @@ async function loadActionTools(
                     actionName: z.string().optional().describe("Name of the action"),
                     actionId: z.string().optional().describe("ID of the action")
                 }),
+                scopeInfo: (props) => ({ scopePath: 'metadata:actions:read', resource: (props.actionName as string) || (props.actionId as string) || '*' }),
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const actionEngine = ActionEngineServer.Instance;
@@ -1562,6 +1572,7 @@ async function loadAgentTools(
                 parameters: z.object({
                     pattern: z.string().describe("Name pattern to match agents (supports wildcards: *, *Agent, Agent*, *Agent*)")
                 }),
+                scopeInfo: { scopePath: 'metadata:agents:read', resource: '*' },
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const agents = await discoverAgents(props.pattern as string, sessionUser);
@@ -1695,6 +1706,7 @@ async function loadAgentTools(
                 parameters: z.object({
                     runId: z.string().describe("The agent run ID")
                 }),
+                scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: props.runId as string || '*' }),
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const md = new Metadata();
@@ -1727,6 +1739,7 @@ async function loadAgentTools(
                 parameters: z.object({
                     runId: z.string().describe("The run ID of the agent execution to cancel")
                 }),
+                scopeInfo: (props) => ({ scopePath: 'agent:cancel', resource: props.runId as string || '*' }),
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     // Note: Actual cancellation would require the agent to check the cancellation token
@@ -1777,6 +1790,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             days: z.number().default(7).describe("Number of days to look back"),
             limit: z.number().default(10).describe("Maximum number of runs to return")
         }),
+        scopeInfo: { scopePath: 'agent:monitor', resource: '*' },
         async execute(props) {
             const sessionUser = sessionContext.user;
             const rv = new RunView();
@@ -1812,6 +1826,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
     addToolWithFilter({
         name: "Get_Agent_Run_Summary",
         description: "Comprehensive summary of an agent run with step-level metadata (excludes large I/O data)",
+        scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: (props as Record<string, unknown>).runId as string || '*' }),
         parameters: z.object({
             runId: z.string().describe("The agent run ID to summarize")
         }),
@@ -1888,6 +1903,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             maxChars: z.number().default(5000).describe("Maximum characters for I/O data (0 = no truncation)")
         }),
+        scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: props.runId as string || '*' }),
         async execute(props) {
             const sessionUser = sessionContext.user;
             const rv = new RunView();
@@ -1944,6 +1960,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
     addToolWithFilter({
         name: "Get_Agent_Run_Step_Full_Data",
         description: "Export complete untruncated step data to JSON file for detailed analysis",
+        scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: (props as Record<string, unknown>).runId as string || '*' }),
         parameters: z.object({
             runId: z.string().describe("The agent run ID"),
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
@@ -2033,6 +2050,7 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 pattern: z.string().optional().describe("Name pattern to match queries (supports wildcards: *, *Query, Query*, *Query*)"),
                 category: z.string().optional().describe("Category name or path to filter queries (e.g., 'Reports', '/MJ/AI/')")
             }),
+            scopeInfo: { scopePath: 'metadata:queries:read', resource: '*' },
             async execute(props) {
                 const sessionUser = sessionContext.user;
 
@@ -2146,6 +2164,7 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 schemaFilter: z.string().optional().describe("Filter by schema name (e.g., 'dbo', '__mj')"),
                 entityFilter: z.string().optional().describe("Filter by entity name pattern")
             }),
+            scopeInfo: { scopePath: 'metadata:entities:read', resource: '*' },
             async execute(props) {
                 const md = new Metadata();
                 let entities = md.Entities;
@@ -2239,6 +2258,7 @@ async function loadPromptTools(
                     pattern: z.string().optional().describe("Name pattern to match prompts (supports wildcards)"),
                     category: z.string().optional().describe("Category name to filter prompts")
                 }),
+                scopeInfo: { scopePath: 'metadata:prompts:read', resource: '*' },
                 async execute(props) {
                     const sessionUser = sessionContext.user;
 
@@ -2382,6 +2402,7 @@ function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MC
                 body: z.string().describe("Email body (can be HTML)"),
                 isHtml: z.boolean().optional().default(true).describe("Whether body is HTML (default: true)")
             }),
+            scopeInfo: { scopePath: 'communication:send', resource: '*' },
             async execute(_props) {
                 try {
                     // Note: This is a placeholder - actual implementation would use CommunicationEngine
@@ -2405,6 +2426,7 @@ function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MC
             name: "Get_Communication_Providers",
             description: "List available communication providers configured in the system",
             parameters: z.object({}),
+            scopeInfo: { scopePath: 'metadata:communication:read', resource: '*' },
             async execute() {
                 const sessionUser = sessionContext.user;
                 const rv = new RunView();

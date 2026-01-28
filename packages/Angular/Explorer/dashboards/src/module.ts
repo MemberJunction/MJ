@@ -114,10 +114,9 @@ import { CredentialsListResourceComponent } from './Credentials/components/crede
 import { CredentialsTypesResourceComponent } from './Credentials/components/credentials-types-resource.component';
 import { CredentialsCategoriesResourceComponent } from './Credentials/components/credentials-categories-resource.component';
 import { CredentialsAuditResourceComponent } from './Credentials/components/credentials-audit-resource.component';
-import { CredentialEditPanelComponent } from './Credentials/components/credential-edit-panel.component';
-import { CredentialTypeEditPanelComponent } from './Credentials/components/credential-type-edit-panel.component';
-import { CredentialCategoryEditPanelComponent } from './Credentials/components/credential-category-edit-panel.component';
 import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
+// Credentials Module from generic package (panels and dialogs)
+import { CredentialsModule } from '@memberjunction/ng-credentials';
 // System Diagnostics Components
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
 // Lists Dashboard Components
@@ -144,6 +143,8 @@ import { APIKeyListComponent } from './APIKeys/api-key-list.component';
 import { APIApplicationsPanelComponent } from './APIKeys/api-applications-panel.component';
 import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
 import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
+// MCP Dashboard Module
+import { MCPModule } from './MCP';
 
 
 
@@ -224,16 +225,13 @@ import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
     CommunicationRunsResourceComponent,
-    // Credentials Dashboard Components
+    // Credentials Dashboard Components (panels now come from CredentialsModule)
     CredentialsDashboardComponent,
     CredentialsOverviewResourceComponent,
     CredentialsListResourceComponent,
     CredentialsTypesResourceComponent,
     CredentialsCategoriesResourceComponent,
     CredentialsAuditResourceComponent,
-    CredentialEditPanelComponent,
-    CredentialTypeEditPanelComponent,
-    CredentialCategoryEditPanelComponent,
     GroupByPipe,
     // System Diagnostics Components
     SystemDiagnosticsComponent,
@@ -292,7 +290,9 @@ import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
     ListManagementModule,
     ExportServiceModule,
     QueryViewerModule,
-    DashboardViewerModule
+    DashboardViewerModule,
+    MCPModule,
+    CredentialsModule
   ],
   providers: [
     AIInstrumentationService,
@@ -342,17 +342,15 @@ import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
     CommunicationRunsResourceComponent,
-    // Export Credentials Dashboard
+    // Export Credentials Dashboard (panels re-exported via CredentialsModule)
     CredentialsDashboardComponent,
     CredentialsOverviewResourceComponent,
     CredentialsListResourceComponent,
     CredentialsTypesResourceComponent,
     CredentialsCategoriesResourceComponent,
     CredentialsAuditResourceComponent,
-    CredentialEditPanelComponent,
-    CredentialTypeEditPanelComponent,
-    CredentialCategoryEditPanelComponent,
     GroupByPipe,
+    CredentialsModule,
     // System Diagnostics Components
     SystemDiagnosticsComponent,
     // Lists Dashboard Components
@@ -373,7 +371,9 @@ import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
     APIKeyListComponent,
     APIApplicationsPanelComponent,
     APIScopesPanelComponent,
-    APIUsagePanelComponent
+    APIUsagePanelComponent,
+    // MCP Dashboard Module (re-exports its components)
+    MCPModule
   ]
 })
 export class DashboardsModule { }

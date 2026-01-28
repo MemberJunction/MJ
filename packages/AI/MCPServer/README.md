@@ -945,6 +945,87 @@ module.exports = {
 8. Session is created with the authenticated user context
 9. All tool executions use this user's permissions
 
+## Scope-Based Authorization
+
+MCP Server implements a comprehensive scope-based authorization system that controls what operations API keys can perform. This provides fine-grained access control beyond simple authentication.
+
+### How Scope Authorization Works
+
+1. **Application Ceiling**: Each API application (MCP Server, A2A Server, GraphQL API) defines a maximum set of allowed scopes
+2. **API Key Scopes**: Each API key has assigned scopes from the API Scopes table
+3. **Two-Level Evaluation**: When a tool is called, the system checks:
+   - Does the application allow this scope? (application ceiling)
+   - Does the API key have this scope assigned? (key-level permission)
+
+### Scope Format
+
+Scopes follow a hierarchical naming convention:
+- `entity:read` - Read entity records
+- `entity:create` - Create new records
+- `entity:update` - Update existing records
+- `entity:delete` - Delete records
+- `view:run` - Execute RunView queries
+- `agent:execute` - Execute AI agents
+- `agent:monitor` - Check agent run status
+- `agent:cancel` - Cancel running agents
+- `action:execute` - Execute MJ Actions
+- `prompt:execute` - Execute AI prompts
+- `query:run` - Execute SQL queries
+- `metadata:entities:read` - Read entity metadata
+- `metadata:agents:read` - Read agent metadata
+- `metadata:actions:read` - Read action metadata
+- `metadata:prompts:read` - Read prompt metadata
+- `communication:send` - Send emails/messages
+- `full_access` - Bypass all scope checks ("god mode")
+
+### Default Behavior
+
+**Important**: API keys with **no scopes assigned** will have **no permissions** and all tool calls will be denied. This is a security-by-default approach.
+
+To grant full access to an API key, assign the `full_access` scope.
+
+### Tool-to-Scope Mapping
+
+Each MCP tool is mapped to a required scope:
+
+| Tool | Required Scope |
+|------|---------------|
+| Get/Create/Update/Delete Entity | `entity:read/create/update/delete` |
+| RunView | `view:run` |
+| Discover_Agents | `metadata:agents:read` |
+| Run_Agent, Execute_*_Agent | `agent:execute` |
+| Get_Agent_Run_Status | `agent:monitor` |
+| Cancel_Agent_Run | `agent:cancel` |
+| Discover_Actions | `metadata:actions:read` |
+| Run_Action, Execute_*_Action | `action:execute` |
+| Discover_Prompts | `metadata:prompts:read` |
+| Run_Prompt | `prompt:execute` |
+| Run_SQL_Query | `query:run` |
+| Get_All_Entities, Get_Database_Schema | `metadata:entities:read` |
+| Send_Email | `communication:send` |
+
+### Wildcard Resource Matching
+
+Scopes support resource-level wildcards for granular control:
+- `*` - Match all resources
+- `Users` - Match exact resource name
+- `User*` - Match resources starting with "User"
+- `*Entity` - Match resources ending with "Entity"
+- `*User*` - Match resources containing "User"
+- `Users,Employees,Departments` - Match multiple specific resources (comma-separated)
+
+### Authorization Error Messages
+
+When authorization fails, the server returns detailed error messages:
+
+```json
+{
+  "error": "Authorization denied for scope 'entity:create' on resource 'Users'. API key is missing required scope 'entity:create' on resource 'Users'. Allowed scopes: entity:read. Allowed resources: *"
+}
+```
+
+This helps developers understand exactly why access was denied and what scopes are needed.
+
 ### Troubleshooting Authentication
 
 **"API key required"**
