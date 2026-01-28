@@ -41,7 +41,6 @@ import { BaseFormComponent, FormWidthMode } from '@memberjunction/ng-base-forms'
                             <ng-content select="[slot='before-panels']"></ng-content>
                         </div>
                         <ng-content select="[slot='field-panels']"></ng-content>
-                        <div class="related-entities-divider" *ngIf="formComponent.HasRelatedEntities"></div>
                         <div class="related-entity-grid">
                             <ng-content select="[slot='after-panels']"></ng-content>
                         </div>

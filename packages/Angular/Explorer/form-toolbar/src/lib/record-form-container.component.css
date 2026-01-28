@@ -118,19 +118,6 @@ button {
   display: contents; /* Makes children participate in parent grid */
 }
 
-/* Visual separator before related entities */
-.related-entities-divider {
-  grid-column: 1 / -1;
-  height: 2px;
-  background: linear-gradient(to right, transparent, #d1d5db 20%, #d1d5db 80%, transparent);
-  margin: 12px 0;
-  position: relative;
-}
-
-.related-entities-divider::before {
-  content: '';
-}
-
 .form-card {
   background: white;
   border-radius: 8px;
