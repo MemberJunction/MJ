@@ -11,24 +11,28 @@ MemberJunction supports defining primary keys and foreign keys for tables that d
 
 ## How It Works
 
-1. **Configuration via mj.config.cjs**: Specify the path to your JSON config file using the `additionalSchemaInfo` property
-2. **Constraint-Based Fallback**: If not configured, CodeGen uses standard database constraint detection
-3. **Discovered Metadata**: Configuration values set `IsPrimaryKey=1` + `IsSoftPrimaryKey=1` for PKs, and `RelatedEntityID` + `IsSoftForeignKey=1` for FKs
-4. **CI/CD Integration**: All UPDATE statements are logged to migration files (`migrations/v3/CodeGen_Run_*.sql`)
-5. **Transparent Integration**: Throughout MemberJunction (GraphQL, BaseEntity, UI), soft PKs/FKs work exactly like constraint-based ones
+1. **Configuration via mj.config.cjs**: Specify the path to your JSON config file using the `codeGen.additionalSchemaInfo` property
+2. **Supplements Database Constraints**: Configuration values **supplement** database-level constraints. CodeGen applies soft PK/FK metadata for tables without database constraints
+3. **Conflict Detection**: If a field is configured as a soft PK/FK but already has a database constraint (or vice versa), CodeGen logs all violations and stops with an error to prevent inconsistent metadata states
+4. **Discovered Metadata**: Valid configuration values set `IsPrimaryKey=1` + `IsSoftPrimaryKey=1` for PKs, and `RelatedEntityID` + `IsSoftForeignKey=1` for FKs
+5. **CI/CD Integration**: All UPDATE statements are logged to migration files (`migrations/v3/CodeGen_Run_*.sql`)
+6. **Transparent Integration**: Throughout MemberJunction (GraphQL, BaseEntity, UI), soft PKs/FKs work exactly like constraint-based ones
 
 ## Setup
 
 ### Step 1: Configure mj.config.cjs
 
-Add the `additionalSchemaInfo` property to your `mj.config.cjs` file:
+Add the `additionalSchemaInfo` property under the `codeGen` section in your `mj.config.cjs` file:
 
 ```javascript
 module.exports = {
   // ... other config properties ...
 
-  // Path to your soft PK/FK configuration file (relative to mj.config.cjs)
-  additionalSchemaInfo: './config/database-metadata-config.json',
+  codeGen: {
+    // Path to your soft PK/FK configuration file (relative to mj.config.cjs)
+    additionalSchemaInfo: './config/database-metadata-config.json',
+    // ... other CodeGen settings ...
+  },
 };
 ```
 
@@ -49,29 +53,44 @@ npm run mj:codegen    # Applies config + generates code
 
 ## Configuration Format
 
+The configuration uses an organic hierarchy organized by database schema:
+
 ```json
 {
   "description": "Database metadata configuration",
   "version": "1.0",
-  "tables": [
+  "dbo": [
     {
-      "schemaName": "dbo",
-      "tableName": "Orders",
-      "primaryKeys": [
+      "TableName": "Orders",
+      "Description": "Example Orders table configuration",
+      "PrimaryKey": [
         {
-          "fieldName": "OrderID",
-          "comment": "Primary key field (no database constraint)"
+          "FieldName": "OrderID",
+          "Description": "Primary key field (no database constraint)"
         }
       ],
-      "foreignKeys": [
+      "ForeignKeys": [
         {
-          "fieldName": "CustomerID",
-          "relatedSchema": "dbo",
-          "relatedTable": "Customers",
-          "relatedField": "ID",
-          "comment": "Foreign key to Customers table (no database constraint)"
+          "FieldName": "CustomerID",
+          "SchemaName": "dbo",
+          "RelatedTable": "Customers",
+          "RelatedField": "ID",
+          "Description": "Foreign key to Customers table (no database constraint)"
         }
       ]
+    }
+  ],
+  "sales": [
+    {
+      "TableName": "Invoices",
+      "Description": "Sales invoices",
+      "PrimaryKey": [
+        {
+          "FieldName": "InvoiceID",
+          "Description": "Primary key"
+        }
+      ],
+      "ForeignKeys": []
     }
   ]
 }
@@ -79,33 +98,54 @@ npm run mj:codegen    # Applies config + generates code
 
 ## Field Definitions
 
+### Schema-Level Organization
+- Top-level keys are schema names (e.g., "dbo", "sales", "reporting")
+- Each schema contains an array of table configurations
+
+### Table Configuration
+- `TableName`: Name of the table in the database
+- `Description`: Optional description of the table
+
 ### Primary Keys
-- `fieldName`: Name of the field that acts as a primary key
-- `comment`: Optional explanation
+- `FieldName`: Name of the field that acts as a primary key
+- `Description`: Optional explanation
 
 ### Foreign Keys
-- `fieldName`: Name of the field that acts as a foreign key
-- `relatedSchema`: Schema of the related table (e.g., "dbo", "__mj")
-- `relatedTable`: Name of the related table
-- `relatedField`: Field in the related table (usually its primary key)
-- `comment`: Optional explanation
+- `FieldName`: Name of the field that acts as a foreign key
+- `SchemaName`: Schema of the related table (e.g., "dbo", "__mj")
+- `RelatedTable`: Name of the related table
+- `RelatedField`: Field in the related table (usually its primary key)
+- `Description`: Optional explanation
 
 ## Composite Primary Keys
 
-For tables with composite primary keys, list multiple fields in the `primaryKeys` array:
+For tables with composite primary keys, list multiple fields in the `PrimaryKey` array:
 
 ```json
 {
-  "schemaName": "dbo",
-  "tableName": "OrderDetails",
-  "primaryKeys": [
+  "dbo": [
     {
-      "fieldName": "OrderID",
-      "comment": "Part 1 of composite key"
-    },
-    {
-      "fieldName": "ProductID",
-      "comment": "Part 2 of composite key"
+      "TableName": "OrderDetails",
+      "Description": "Order details with composite key",
+      "PrimaryKey": [
+        {
+          "FieldName": "OrderID",
+          "Description": "Part 1 of composite key"
+        },
+        {
+          "FieldName": "ProductID",
+          "Description": "Part 2 of composite key"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "OrderID",
+          "SchemaName": "dbo",
+          "RelatedTable": "Orders",
+          "RelatedField": "OrderID",
+          "Description": "References parent order"
+        }
+      ]
     }
   ]
 }
@@ -176,18 +216,28 @@ npm run mj:codegen
 ## Troubleshooting
 
 ### Tables skipped with "No primary key found"
-- Verify `additionalSchemaInfo` is set in `mj.config.cjs`
-- Verify `schemaName` in your JSON config matches your database exactly (case-insensitive)
+- Verify `codeGen.additionalSchemaInfo` is set in `mj.config.cjs`
+- Verify the schema name (top-level key in JSON) matches your database exactly (case-insensitive)
 - Check CodeGen output for: `[Soft PK Check] No config found for <schema>.<table>`
 
 ### Config file not found
-- Ensure path in `additionalSchemaInfo` is relative to the `mj.config.cjs` location
+- Ensure path in `codeGen.additionalSchemaInfo` is relative to the `mj.config.cjs` location
 - Check CodeGen output for the actual path being searched
+
+### Conflict Detection
+If CodeGen stops with a conflict error:
+- A field is configured as soft PK/FK but has a database constraint, or vice versa
+- Review all violations in the CodeGen output log
+- Either remove the configuration for constrained fields, or add constraints for configured fields
+- Fix all conflicts before running CodeGen again
 
 ## Notes
 
 - **One FK per field**: Each field can only have one foreign key
+- **Supplements, not replaces**: Configuration provides metadata for tables without database constraints
+- **Conflict prevention**: CodeGen stops if configured soft PK/FK conflicts with actual database constraints
 - **IsPrimaryKey is source of truth**: The `IsSoftPrimaryKey` flag just protects from schema sync overwriting
 - **RelatedEntityID is source of truth**: The `IsSoftForeignKey` flag just protects from schema sync overwriting
 - **No constraint changes**: This doesn't modify your actual database schema
 - **Backward compatible**: Existing databases with proper constraints work as before
+- **Atomic validation**: All violations are logged together; CodeGen must succeed completely or not at all

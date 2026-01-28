@@ -6,7 +6,7 @@ import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityIn
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse } from "@memberjunction/global"
 
 /**
  * The possible status values for a record change
@@ -603,16 +603,48 @@ export class EntityFieldInfo extends BaseInfo {
     }>;
 
     /**
+     * Cached parsed RelatedEntityJoinFieldsConfig to avoid repeated JSON.parse calls.
+     * Lazy-initialized on first access.
+     */
+    private _relatedEntityJoinFieldsParsed: RelatedEntityJoinFieldConfig | null = undefined;
+
+    /**
+     * Flag to track if RelatedEntityJoinFieldsConfig parsing failed to avoid repeated parse attempts on bad JSON.
+     */
+    private _relatedEntityJoinFieldsFailedParsing: boolean = false;
+
+    /**
      * JSON configuration for additional fields to join from the related entity.
-     * Parsed from the RelatedEntityJoinFields column.
+     * Parsed from the RelatedEntityJoinFields column. Uses lazy initialization and caching
+     * to avoid repeated JSON.parse calls. If parsing fails, it won't be attempted again.
      */
     get RelatedEntityJoinFieldsConfig(): RelatedEntityJoinFieldConfig | null {
-        if (!this.RelatedEntityJoinFields) return null;
-        try {
-            return JSON.parse(this.RelatedEntityJoinFields);
-        } catch {
+        // If parsing already failed, don't try again
+        if (this._relatedEntityJoinFieldsFailedParsing) {
             return null;
         }
+
+        // If no RelatedEntityJoinFields data, return null
+        if (!this.RelatedEntityJoinFields) {
+            return null;
+        }
+
+        // If already parsed and cached, return cached value
+        if (this._relatedEntityJoinFieldsParsed !== undefined) {
+            return this._relatedEntityJoinFieldsParsed;
+        }
+
+        // Parse and cache the configuration
+        const parsed = SafeJSONParse<RelatedEntityJoinFieldConfig>(this.RelatedEntityJoinFields, null);
+        if (parsed === null) {
+            // Parsing failed - mark as failed so we don't try again
+            this._relatedEntityJoinFieldsFailedParsing = true;
+            return null;
+        }
+
+        // Successfully parsed - cache and return
+        this._relatedEntityJoinFieldsParsed = parsed;
+        return parsed;
     }
 
     get EntityFieldValues(): EntityFieldValueInfo[] {

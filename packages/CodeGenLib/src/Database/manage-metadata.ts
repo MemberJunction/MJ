@@ -65,6 +65,41 @@ export class ManageMetadataBase {
       return this._generatedValidators;
    }
 
+   private static _softPKFKConfigCache: any = null;
+   private static _softPKFKConfigPath: string = '';
+   /**
+    * Loads and caches the soft PK/FK configuration from the additionalSchemaInfo file.
+    * The file is only loaded once per session to avoid repeated I/O.
+    */
+   private static getSoftPKFKConfig(): any {
+      // Return cached config if path hasn't changed
+      const configPath = configInfo.codeGen?.additionalSchemaInfo
+         ? path.join(currentWorkingDirectory, configInfo.codeGen.additionalSchemaInfo)
+         : '';
+
+      if (this._softPKFKConfigCache !== null && this._softPKFKConfigPath === configPath) {
+         return this._softPKFKConfigCache;
+      }
+
+      // Cache miss or path changed - reload from disk
+      if (!configPath || !fs.existsSync(configPath)) {
+         this._softPKFKConfigCache = null;
+         this._softPKFKConfigPath = configPath;
+         return null;
+      }
+
+      try {
+         const configContent = fs.readFileSync(configPath, 'utf-8');
+         this._softPKFKConfigCache = JSON.parse(configContent);
+         this._softPKFKConfigPath = configPath;
+         return this._softPKFKConfigCache;
+      } catch (e) {
+         this._softPKFKConfigCache = null;
+         this._softPKFKConfigPath = configPath;
+         return null;
+      }
+   }
+
    /**
     * Primary function to manage metadata within the CodeGen system. This function will call a series of sub-functions to manage the metadata.
     * @param pool - the ConnectionPool object to use for querying and updating the database
@@ -650,13 +685,13 @@ export class ManageMetadataBase {
     * All UPDATE statements are logged to migration files via LogSQLAndExecute() for CI/CD traceability.
     */
    protected async applySoftPKFKConfig(pool: sql.ConnectionPool): Promise<boolean> {
-      // Check if additionalSchemaInfo is configured in mj.config.cjs
-      if (!configInfo.additionalSchemaInfo) {
+      // Check if additionalSchemaInfo is configured in mj.config.cjs under codeGen
+      if (!configInfo.codeGen?.additionalSchemaInfo) {
          // No additional schema info configured - this is fine, it's optional
          return true;
       }
 
-      const configPath = path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo);
+      const configPath = path.join(currentWorkingDirectory, configInfo.codeGen.additionalSchemaInfo);
 
       if (!fs.existsSync(configPath)) {
          logStatus(`         ⚠️  additionalSchemaInfo configured but file not found: ${configPath}`);
@@ -664,9 +699,8 @@ export class ManageMetadataBase {
       }
 
       try {
-         logStatus(`         Found ${configInfo.additionalSchemaInfo}, applying soft PK/FK configuration...`);
-         const configContent = fs.readFileSync(configPath, 'utf-8');
-         const config = JSON.parse(configContent);
+         logStatus(`         Found ${configInfo.codeGen.additionalSchemaInfo}, applying soft PK/FK configuration...`);
+         const config = ManageMetadataBase.getSoftPKFKConfig();
 
          let totalPKs = 0;
          let totalFKs = 0;
@@ -1802,20 +1836,19 @@ NumberedRows AS (
     * Checks if a table has a soft primary key defined in the additionalSchemaInfo JSON file (configured in mj.config.cjs)
     */
    protected hasSoftPrimaryKeyInConfig(schemaName: string, tableName: string): boolean {
-      // Check if additionalSchemaInfo is configured
-      if (!configInfo.additionalSchemaInfo) {
+      // Check if additionalSchemaInfo is configured under codeGen
+      if (!configInfo.codeGen?.additionalSchemaInfo) {
          return false;
       }
 
-      const configPath = path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo);
+      const configPath = path.join(currentWorkingDirectory, configInfo.codeGen.additionalSchemaInfo);
       if (!fs.existsSync(configPath)) {
          logStatus(`         [Soft PK Check] Config file not found at: ${configPath}`);
          return false;
       }
 
       try {
-         const configContent = fs.readFileSync(configPath, 'utf-8');
-         const config = JSON.parse(configContent);
+         const config = ManageMetadataBase.getSoftPKFKConfig();
          if (!config || !config.tables) {
             logStatus(`         [Soft PK Check] Config file found but no tables array`);
             return false;

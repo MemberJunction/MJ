@@ -1218,6 +1218,11 @@ ${whereClause}GO${permissions}
         const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
         for (let i: number = 0; i < entityFields.length; i++) {
             const ef: EntityFieldInfo = entityFields[i];
+            // Generate SQL JOIN for related entities that have configured join fields
+            // _RelatedEntityJoinFieldMappings is populated during field analysis if:
+            // - IncludeRelatedEntityNameFieldInBaseView is true (legacy), OR
+            // - RelatedEntityJoinFieldsConfig specifies fields to join
+            // This generates the JOIN clause; the actual field aliases are added separately in generateBaseViewFields()
             if (ef.RelatedEntityID && ef._RelatedEntityJoinFieldMappings && ef._RelatedEntityJoinFieldMappings.length > 0 && ef._RelatedEntityTableAlias) {
                 sOutput += sOutput == '' ? '' : '\n';
                 sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER'} JOIN\n    ${'[' + ef.RelatedEntitySchemaName + '].'}[${ef._RelatedEntityNameFieldIsVirtual ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable}] AS ${ef._RelatedEntityTableAlias}\n  ON\n    [${classNameFirstChar}].[${ef.Name}] = ${ef._RelatedEntityTableAlias}.[${ef.RelatedEntityFieldName}]`;
@@ -1233,8 +1238,17 @@ ${whereClause}GO${permissions}
         const md = new Metadata();
         const allGeneratedAliases: string[] = [];
 
-        // next get the fields that are related entities and have the IncludeRelatedEntityNameFieldInBaseView flag set to true
-        // OR have the new RelatedEntityJoinFields configuration
+        // Get fields that are related entities with join field configuration.
+        //
+        // BACKWARD COMPATIBILITY LOGIC:
+        // This handles two cases:
+        // 1. Legacy behavior: IncludeRelatedEntityNameFieldInBaseView=true, no RelatedEntityJoinFieldsConfig
+        //    → Automatically defaults to { mode: 'extend' } and joins the related entity's NameField (as before)
+        // 2. New behavior: RelatedEntityJoinFieldsConfig specified
+        //    → Can 'extend' the NameField with additional fields, 'override' it completely, or 'disable' joins
+        //
+        // Result: _RelatedEntityJoinFieldMappings is populated with all fields to be joined from the related entity.
+        //         If both old and new configs are set, they work together (new fields extend or replace the NameField).
         const qualifyingFields = entityFields.filter(f => f.RelatedEntityID && (f.IncludeRelatedEntityNameFieldInBaseView || f.RelatedEntityJoinFieldsConfig));
         for (const ef of qualifyingFields) {
             const config = ef.RelatedEntityJoinFieldsConfig || { mode: 'extend' };
@@ -1246,6 +1260,8 @@ ${whereClause}GO${permissions}
             let anyFieldIsVirtual = false;
 
             // 1. Handle NameField (if not overridden)
+            // In 'extend' mode: include the NameField (backward compatible with IncludeRelatedEntityNameFieldInBaseView)
+            // In 'override' mode: skip the NameField, only use explicitly configured fields
             if (config.mode !== 'override' && ef.IncludeRelatedEntityNameFieldInBaseView) {
                 const { nameField, nameFieldIsVirtual } = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
                 if (nameField !== '') {
