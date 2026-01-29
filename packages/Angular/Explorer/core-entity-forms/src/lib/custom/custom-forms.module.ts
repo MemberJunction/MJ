@@ -47,11 +47,8 @@ import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.c
 import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
 import { ChatMessageViewerComponent } from "./AIPromptRuns/chat-message-viewer.component";
 import { ActionFormComponentExtended, LoadActionFormComponentExtended } from "./Actions/action-form.component";
-import { ActionTestHarnessComponent } from "./Actions/action-test-harness.component";
-import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
 import { ActionExecutionLogFormComponentExtended, LoadActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
-import { ActionParamDialogComponent } from "./Actions/action-param-dialog.component";
-import { ActionResultCodeDialogComponent } from "./Actions/action-result-code-dialog.component";
+import { ActionsModule } from "@memberjunction/ng-actions";
 import { AIAgentRunFormComponentExtended, LoadAIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
@@ -97,11 +94,7 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         AIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
         ActionFormComponentExtended,
-        ActionTestHarnessComponent,
-        ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
-        ActionParamDialogComponent,
-        ActionResultCodeDialogComponent,
         AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
@@ -165,7 +158,8 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         MJIntegratedFlowEditorComponent,
         SharedGenericModule,
         EntityRelationshipDiagramModule,
-        ListManagementModule
+        ListManagementModule,
+        ActionsModule
     ],
     exports: [
         EntityFormComponentExtended,
@@ -177,8 +171,6 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         AIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
         ActionFormComponentExtended,
-        ActionTestHarnessComponent,
-        ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
         AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
@@ -196,7 +188,8 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         TestRunFeedbackFormComponentExtended,
         TestRubricFormComponentExtended,
         EntityLinkPillComponent,
-        ListFormComponentExtended
+        ListFormComponentExtended,
+        ActionsModule
     ],
     providers: [
         NewAgentDialogService,

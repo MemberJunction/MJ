@@ -69,5 +69,8 @@ export * from './Misc/system_integrity';
 export * from './Misc/runCommand'
 export * from './Misc/util'
 
+// Manifest generation
+export * from './Manifest/GenerateClassRegistrationsManifest'
+
 // Main runner
 export * from './runCodeGen'

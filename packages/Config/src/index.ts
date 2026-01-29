@@ -29,3 +29,7 @@ export {
   type MJConfig,
   isValidConfig
 } from './config-types';
+
+export {
+  parseBooleanEnv
+} from './env-utils';

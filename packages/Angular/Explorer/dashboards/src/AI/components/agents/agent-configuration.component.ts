@@ -1,6 +1,8 @@
 import { Component, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { Subject } from 'rxjs';
+import { debounceTime, takeUntil } from 'rxjs/operators';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { RegisterClass } from '@memberjunction/global';
@@ -14,6 +16,17 @@ interface AgentFilter {
   status: string;
   executionMode: string;
   exposeAsAction: string;
+}
+
+/**
+ * User preferences for the Agent Configuration dashboard
+ */
+interface AgentConfigurationUserPreferences {
+  filterPanelVisible: boolean;
+  viewMode: 'grid' | 'list';
+  sortColumn: string;
+  sortDirection: 'asc' | 'desc';
+  filters: AgentFilter;
 }
 
 /**
@@ -34,11 +47,17 @@ export function LoadAIAgentsResource() {
   styleUrls: ['./agent-configuration.component.css']
 })
 export class AgentConfigurationComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
+  // Settings persistence
+  private readonly USER_SETTINGS_KEY = 'AI.Agents.UserPreferences';
+  private settingsPersistSubject = new Subject<void>();
+  private destroy$ = new Subject<void>();
+  private settingsLoaded = false;
+
   public isLoading = false;
   public filterPanelVisible = true;
   public viewMode: 'grid' | 'list' = 'grid';
   public expandedAgentId: string | null = null;
-  
+
   public agents: AIAgentEntityExtended[] = [];
   public filteredAgents: AIAgentEntityExtended[] = [];
 
@@ -148,21 +167,120 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     private cdr: ChangeDetectorRef
   ) {
     super();
+
+    // Set up debounced settings persistence
+    this.settingsPersistSubject.pipe(
+      debounceTime(500),
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.persistUserPreferences();
+    });
   }
 
   async ngAfterViewInit() {
-    // Apply initial state from resource configuration if provided
+    // Load saved user preferences first
+    this.loadUserPreferences();
+
+    // Apply initial state from resource configuration if provided (overrides saved prefs)
     if (this.Data?.Configuration) {
       this.applyInitialState(this.Data.Configuration);
     }
     await this.loadAgents();
+
+    // Apply filters after data is loaded (uses saved preferences)
+    this.applyFilters();
 
     // Notify that the resource has finished loading
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
-    // Clean up if needed
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  // ========================================
+  // User Settings Persistence
+  // ========================================
+
+  /**
+   * Load saved user preferences from the UserInfoEngine
+   */
+  private loadUserPreferences(): void {
+    try {
+      const savedPrefs = UserInfoEngine.Instance.GetSetting(this.USER_SETTINGS_KEY);
+      if (savedPrefs) {
+        const prefs = JSON.parse(savedPrefs) as AgentConfigurationUserPreferences;
+        this.applyUserPreferences(prefs);
+      }
+    } catch (error) {
+      console.warn('[AgentConfiguration] Failed to load user preferences:', error);
+    } finally {
+      this.settingsLoaded = true;
+    }
+  }
+
+  /**
+   * Apply loaded preferences to component state
+   */
+  private applyUserPreferences(prefs: AgentConfigurationUserPreferences): void {
+    if (prefs.filterPanelVisible !== undefined) {
+      this.filterPanelVisible = prefs.filterPanelVisible;
+    }
+    if (prefs.viewMode) {
+      this.viewMode = prefs.viewMode;
+    }
+    if (prefs.sortColumn) {
+      this.sortColumn = prefs.sortColumn;
+    }
+    if (prefs.sortDirection) {
+      this.sortDirection = prefs.sortDirection;
+    }
+    if (prefs.filters) {
+      this.currentFilters = {
+        searchTerm: prefs.filters.searchTerm || '',
+        agentType: prefs.filters.agentType || 'all',
+        parentAgent: prefs.filters.parentAgent || 'all',
+        status: prefs.filters.status || 'all',
+        executionMode: prefs.filters.executionMode || 'all',
+        exposeAsAction: prefs.filters.exposeAsAction || 'all'
+      };
+    }
+  }
+
+  /**
+   * Get current preferences as an object for saving
+   */
+  private getCurrentPreferences(): AgentConfigurationUserPreferences {
+    return {
+      filterPanelVisible: this.filterPanelVisible,
+      viewMode: this.viewMode,
+      sortColumn: this.sortColumn,
+      sortDirection: this.sortDirection,
+      filters: {
+        ...this.currentFilters
+      }
+    };
+  }
+
+  /**
+   * Persist user preferences to storage (debounced)
+   */
+  private saveUserPreferencesDebounced(): void {
+    if (!this.settingsLoaded) return; // Don't save during initial load
+    this.settingsPersistSubject.next();
+  }
+
+  /**
+   * Actually persist user preferences to the UserInfoEngine
+   */
+  private async persistUserPreferences(): Promise<void> {
+    try {
+      const prefs = this.getCurrentPreferences();
+      await UserInfoEngine.Instance.SetSetting(this.USER_SETTINGS_KEY, JSON.stringify(prefs));
+    } catch (error) {
+      console.warn('[AgentConfiguration] Failed to persist user preferences:', error);
+    }
   }
 
   private applyInitialState(state: any): void {
@@ -202,6 +320,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   public toggleFilterPanel(): void {
     this.filterPanelVisible = !this.filterPanelVisible;
     this.emitStateChange();
+    this.saveUserPreferencesDebounced();
   }
 
   public onMainSplitterChange(_event: any): void {
@@ -211,6 +330,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   public onFiltersChange(filters: AgentFilter): void {
     this.currentFilters = { ...filters };
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public onFilterChange(): void {
@@ -227,6 +347,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       exposeAsAction: 'all'
     };
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   private applyFilters(): void {
@@ -295,6 +416,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       this.sortDirection = 'asc';
     }
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   /**
@@ -340,6 +462,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   public setViewMode(mode: 'grid' | 'list'): void {
     this.viewMode = mode;
     this.emitStateChange();
+    this.saveUserPreferencesDebounced();
   }
 
   public toggleAgentExpansion(agentId: string): void {

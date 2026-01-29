@@ -1304,3 +1304,12 @@ kendo-splitter {
     grid-template-columns: 1fr;
   }
 }
+
+/* Search Highlight */
+:host ::ng-deep .search-highlight,
+.search-highlight {
+  background-color: #fef08a;
+  padding: 1px 2px;
+  border-radius: 2px;
+  font-weight: inherit;
+}

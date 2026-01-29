@@ -1,0 +1,315 @@
+.action-card {
+  background: var(--kendo-color-surface);
+  border: 1px solid var(--kendo-color-border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-card:hover {
+  border-color: var(--kendo-color-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.action-card.expanded {
+  border-color: var(--kendo-color-primary);
+}
+
+.card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+}
+
+/* Icon */
+.action-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--kendo-color-primary-subtle);
+  flex-shrink: 0;
+}
+
+.action-icon i {
+  font-size: 20px;
+  color: var(--kendo-color-primary);
+}
+
+.action-icon.ai-generated {
+  background: linear-gradient(135deg, var(--kendo-color-info-subtle), var(--kendo-color-primary-subtle));
+}
+
+.action-icon.ai-generated i {
+  background: linear-gradient(135deg, var(--kendo-color-info), var(--kendo-color-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Content */
+.action-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.action-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.action-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--kendo-color-on-app-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action-badges {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.action-badges kendo-chip:has(i) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.action-badges kendo-chip i {
+  font-size: 10px;
+}
+
+.action-description {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: var(--kendo-color-subtle);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.action-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--kendo-color-subtle);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+
+.meta-item.category {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.meta-item.category:hover {
+  background: var(--kendo-color-base-hover);
+  color: var(--kendo-color-primary);
+}
+
+.meta-item i {
+  font-size: 11px;
+  color: var(--kendo-color-primary);
+}
+
+.meta-item[data-status="Approved"] i {
+  color: var(--kendo-color-success);
+}
+
+.meta-item[data-status="Pending"] i {
+  color: var(--kendo-color-warning);
+}
+
+.meta-item[data-status="Rejected"] i {
+  color: var(--kendo-color-error);
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.action-card:hover .action-buttons {
+  opacity: 1;
+}
+
+.action-buttons button {
+  padding: 6px;
+}
+
+/* Expanded Section */
+.card-expanded {
+  padding: 0 20px 20px 20px;
+  border-top: 1px solid var(--kendo-color-border);
+  margin-top: -1px;
+  padding-top: 16px;
+  background: var(--kendo-color-app-surface);
+}
+
+.stats-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  color: var(--kendo-color-subtle);
+  font-size: 13px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 12px 8px;
+  background: var(--kendo-color-surface);
+  border-radius: 8px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--kendo-color-on-app-surface);
+  margin-bottom: 4px;
+}
+
+.stat-value.success {
+  color: var(--kendo-color-success);
+}
+
+.stat-value.warning {
+  color: var(--kendo-color-warning);
+}
+
+.stat-value.error {
+  color: var(--kendo-color-error);
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--kendo-color-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Params Preview */
+.params-preview {
+  padding: 12px;
+  background: var(--kendo-color-surface);
+  border-radius: 8px;
+}
+
+.params-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--kendo-color-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.params-header i {
+  font-size: 12px;
+}
+
+.params-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.param-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 10px;
+  background: var(--kendo-color-base-subtle);
+  border-radius: 14px;
+  font-size: 12px;
+  color: var(--kendo-color-on-app-surface);
+}
+
+.param-tag.required {
+  background: var(--kendo-color-primary-subtle);
+  color: var(--kendo-color-primary);
+}
+
+.required-marker {
+  color: var(--kendo-color-error);
+  font-weight: 600;
+}
+
+.param-more {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--kendo-color-subtle);
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .card-main {
+    flex-wrap: wrap;
+  }
+
+  .action-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .action-icon i {
+    font-size: 16px;
+  }
+
+  .action-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .action-buttons {
+    flex-direction: row;
+    opacity: 1;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
