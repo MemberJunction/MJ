@@ -542,6 +542,50 @@ type Customer {
 
 **Total: 500+ lines of production code from 6 lines of SQL.**
 
+### Class Registrations Manifest Generation
+
+Generates an import manifest that prevents tree-shaking of `@RegisterClass` decorated classes. The tool walks an app's transitive dependency tree and produces a tailored manifest for each application.
+
+**Why this matters:** Decorators like `@RegisterClass` only execute if their file is imported. Bundlers can tree-shake entire files that appear unused, silently breaking MemberJunction's class factory system. The manifest ensures all registered classes are imported.
+
+**How it works:**
+1. Reads the app's `package.json` and walks the full transitive dependency tree
+2. Scans each dependency's `src/**/*.ts` for `@RegisterClass` decorators using the TypeScript Compiler API
+3. Generates a manifest file with `import` statements for every package that contains registered classes
+
+**Per-app results (verified):**
+
+| App | Deps Walked | Packages with @RegisterClass | Total Classes |
+|-----|-------------|------------------------------|---------------|
+| MJAPI | 985 | 54 | 715 |
+| MJExplorer | 1179 | 17 | 721 |
+
+**Programmatic usage:**
+```typescript
+import { generateClassRegistrationsManifest } from '@memberjunction/codegen-lib';
+
+const result = await generateClassRegistrationsManifest({
+    outputPath: './src/generated/class-registrations-manifest.ts',
+    appDir: './packages/MJAPI',  // defaults to process.cwd()
+    filterBaseClasses: ['BaseEngine'],  // optional filter
+});
+
+if (result.success) {
+    console.log(`${result.packages.length} packages, ${result.classes.length} classes`);
+}
+```
+
+**CLI usage (via MJCLI):**
+```bash
+mj codegen manifest --output ./src/generated/class-registrations-manifest.ts
+```
+
+See the [MJCLI README](../MJCLI/README.md) for full CLI documentation.
+
+**Example output:**
+- [MJAPI manifest (server-side)](EXAMPLE_MANIFEST_MJAPI.md) — 54 packages, 715 classes (AI providers, actions, encryption, scheduling, storage, etc.)
+- [MJExplorer manifest (client-side)](EXAMPLE_MANIFEST_MJEXPLORER.md) — 17 packages, 721 classes (Angular components, dashboards, forms, etc.)
+
 ## API Reference
 
 ### Core Functions
@@ -552,7 +596,7 @@ await runCodeGen();
 
 // Generate specific components
 await generateEntitySubClasses(options);
-await generateAngularEntityCode(options); 
+await generateAngularEntityCode(options);
 await generateSQLScripts(options);
 await generateGraphQLServerCode(options);
 ```
