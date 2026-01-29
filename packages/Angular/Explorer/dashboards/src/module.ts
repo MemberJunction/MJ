@@ -101,7 +101,6 @@ import { OracleBreakdownTableComponent } from './Testing/components/widgets/orac
 import { TestRunDetailPanelComponent } from './Testing/components/widgets/test-run-detail-panel.component';
 import { TestingInstrumentationService } from './Testing/services/testing-instrumentation.service';
 import { TestingModule } from '@memberjunction/ng-testing';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 // Data Explorer Dashboard Components
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
@@ -315,7 +314,6 @@ import { ActionsModule } from '@memberjunction/ng-actions';
     PanelBarModule,
     MJNotificationsModule,
     TestingModule,
-    UserViewGridModule,
     EntityViewerModule,
     ExplorerSettingsModule,
     SharedGenericModule,
