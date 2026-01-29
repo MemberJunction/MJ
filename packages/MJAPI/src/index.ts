@@ -10,6 +10,9 @@ import { resolve } from 'node:path';
 import 'mj_generatedentities';
 import 'mj_generatedactions';
 
+// Import class registrations manifest to prevent tree-shaking
+import './generated/class-registrations-manifest';
+
 // Optional: Import communication providers if needed
 // import '@memberjunction/communication-sendgrid';
 // import '@memberjunction/communication-teams';
