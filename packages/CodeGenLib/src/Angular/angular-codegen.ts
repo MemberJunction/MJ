@@ -2,7 +2,7 @@ import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSTyp
 import { logError, logStatus } from '../Misc/status_logging';
 import fs from 'fs';
 import path from 'path';
-import { mjCoreSchema, outputOptionValue } from '../Config/config';
+import { mjCoreSchema, outputOptionValue, configInfo } from '../Config/config';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
 import { sortBySequenceAndCreatedAt } from '../Misc/util';
 
@@ -448,8 +448,9 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
             ? `\n\n    override async ngOnInit() {\n        await super.ngOnInit();\n        this.initSections([\n${sectionInitEntries.join(',\n')}\n        ]);\n    }`
             : '';
 
+        const entityPackageName = configInfo.entityPackageName || 'mj_generatedentities';
         return `import { Component } from '@angular/core';
-import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
+import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : entityPackageName}';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 ${generationImports.length > 0 ? generationImports + '\n' : ''}
