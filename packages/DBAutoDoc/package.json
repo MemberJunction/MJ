@@ -38,7 +38,7 @@
     "start": "ts-node-dev src/cli/cli.ts",
     "build": "tsc",
     "watch": "tsc --watch",
-    "clean": "rm -rf dist",
+    "clean": "rimraf dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
