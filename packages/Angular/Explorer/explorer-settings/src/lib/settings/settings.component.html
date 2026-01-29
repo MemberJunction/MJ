@@ -56,15 +56,20 @@
                 <li
                   class="nav-item"
                   [class.active]="activeTab === tab.id"
+                  [class.disabled]="tab.disabled"
                   (click)="onTabChange(tab.id)"
                   (keydown.enter)="onTabChange(tab.id)"
                   role="tab"
                   [attr.aria-selected]="activeTab === tab.id"
                   [attr.aria-controls]="'panel-' + tab.id"
+                  [attr.aria-disabled]="tab.disabled"
                   tabindex="0"
                 >
                   <i [class]="tab.icon" aria-hidden="true"></i>
                   <span class="nav-label">{{ tab.label }}</span>
+                  @if (tab.disabled) {
+                    <span class="coming-soon-badge">Soon</span>
+                  }
                   @if (tab.badgeCount && tab.badgeCount > 0) {
                     <span class="nav-badge" [class]="'badge-' + (tab.badgeColor || 'primary')">
                       {{ tab.badgeCount }}
@@ -80,61 +85,7 @@
             <div class="tab-content">
               @switch (activeTab) {
                 @case ('general') {
-                  <div class="general-settings">
-                    <h2 class="section-title">General Settings</h2>
-                    <div class="mj-grid mj-grid-responsive">
-                      <mj-settings-card
-                        title="Profile Information"
-                        icon="fa-solid fa-user"
-                        [expanded]="isSectionExpanded('profile')"
-                        (toggle)="toggleSection('profile')"
-                      >
-                        <div class="card-content">
-                          <mj-user-profile-settings></mj-user-profile-settings>
-                        </div>
-                      </mj-settings-card>
-
-                      <mj-settings-card
-                        title="Preferences"
-                        icon="fa-solid fa-sliders"
-                        [expanded]="isSectionExpanded('preferences')"
-                        (toggle)="toggleSection('preferences')"
-                      >
-                        <div class="card-content">
-                          <p>Customize your experience with display and behavior preferences.</p>
-                          <!-- Preferences content will go here -->
-                        </div>
-                      </mj-settings-card>
-                    </div>
-                  </div>
-                }
-
-                @case ('users') {
-                  <div class="users-settings">
-                    <h2 class="section-title">User Management</h2>
-                    <p class="section-description">Manage user accounts, roles, and permissions</p>
-                    <mj-user-management></mj-user-management>
-                  </div>
-                }
-
-                @case ('roles') {
-                  <div class="roles-settings">
-                    <h2 class="section-title">Role Management</h2>
-                    <p class="section-description">Define and manage security roles.</p>
-                    <mj-role-management></mj-role-management>
-                  </div>
-                }
-
-                @case ('applications') {
-                  <div class="applications-settings">
-                    <mj-application-management></mj-application-management>
-                  </div>
-                }
-
-                @case ('permissions') {
-                  <div class="permissions-settings">
-                    <mj-entity-permissions></mj-entity-permissions>
-                  </div>
+                  <mj-general-settings></mj-general-settings>
                 }
 
                 @case ('notifications') {
@@ -145,74 +96,12 @@
                   </div>
                 }
 
-                @case ('advanced') {
-                  <div class="advanced-settings">
-                    <h2 class="section-title">Advanced Settings</h2>
-                    <div class="beta-warning">
-                      <i class="fa-solid fa-flask" aria-hidden="true"></i>
-                      <span>Beta features - Use with caution</span>
-                    </div>
+                @case ('applications') {
+                  <mj-application-settings></mj-application-settings>
+                }
 
-                    <!-- Tab Navigation -->
-                    <div class="advanced-tabs" role="tablist" aria-label="Advanced settings tabs">
-                      <button
-                        class="tab-btn"
-                        [class.active]="advancedActiveTab === 'sql-logging'"
-                        (click)="setAdvancedTab('sql-logging')"
-                        role="tab"
-                        [attr.aria-selected]="advancedActiveTab === 'sql-logging'"
-                        aria-controls="panel-sql-logging"
-                      >
-                        <i class="fa-solid fa-database" aria-hidden="true"></i>
-                        SQL Logging
-                      </button>
-                      <button
-                        class="tab-btn"
-                        [class.active]="advancedActiveTab === 'performance'"
-                        (click)="setAdvancedTab('performance')"
-                        role="tab"
-                        [attr.aria-selected]="advancedActiveTab === 'performance'"
-                        aria-controls="panel-performance"
-                      >
-                        <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
-                        Performance
-                      </button>
-                      <button
-                        class="tab-btn"
-                        [class.active]="advancedActiveTab === 'developer'"
-                        (click)="setAdvancedTab('developer')"
-                        role="tab"
-                        [attr.aria-selected]="advancedActiveTab === 'developer'"
-                        aria-controls="panel-developer"
-                      >
-                        <i class="fa-solid fa-code" aria-hidden="true"></i>
-                        Developer Tools
-                      </button>
-                    </div>
-
-                    <!-- Tab Content -->
-                    <div class="advanced-tab-content">
-                      @switch (advancedActiveTab) {
-                        @case ('sql-logging') {
-                          <div id="panel-sql-logging" role="tabpanel">
-                            <mj-sql-logging></mj-sql-logging>
-                          </div>
-                        }
-                        @case ('performance') {
-                          <div id="panel-performance" role="tabpanel" class="performance-settings">
-                            <h3>Performance Settings</h3>
-                            <p>Performance monitoring and optimization tools coming soon.</p>
-                          </div>
-                        }
-                        @case ('developer') {
-                          <div id="panel-developer" role="tabpanel" class="developer-settings">
-                            <h3>Developer Tools</h3>
-                            <p>Advanced developer options coming soon.</p>
-                          </div>
-                        }
-                      }
-                    </div>
-                  </div>
+                @case ('appearance') {
+                  <mj-appearance-settings></mj-appearance-settings>
                 }
               }
             </div>
@@ -223,7 +112,7 @@
       <!-- Mobile Layout -->
       @if (isMobile) {
         <div class="mobile-layout">
-          <!-- Mobile Header (Hidden when nav is open) -->
+          <!-- Mobile Header -->
           @if (!isMobileNavOpen) {
             <header class="mobile-header">
               <button
@@ -248,24 +137,24 @@
             ></div>
           }
 
-          <!-- Mobile Navigation Rail (Collapsible) -->
+          <!-- Mobile Navigation Rail -->
           <nav
             class="mobile-nav-rail"
             [class.open]="isMobileNavOpen"
             role="navigation"
             aria-label="Settings navigation"
           >
-            <!-- Navigation Header -->
             <div class="nav-rail-header">
               <span class="nav-rail-title">Settings</span>
             </div>
 
-            <!-- Navigation Items -->
             <div class="nav-rail-items" role="tablist">
               @for (tab of filteredTabs; track tab.id) {
                 <button
                   class="nav-rail-item"
                   [class.active]="activeTab === tab.id"
+                  [class.disabled]="tab.disabled"
+                  [disabled]="tab.disabled"
                   (click)="onMobileTabChange(tab.id)"
                   role="tab"
                   [attr.aria-selected]="activeTab === tab.id"
@@ -273,6 +162,9 @@
                 >
                   <i [class]="tab.icon" aria-hidden="true"></i>
                   <span class="nav-rail-label">{{ tab.label }}</span>
+                  @if (tab.disabled) {
+                    <span class="coming-soon-badge">Soon</span>
+                  }
                   @if (tab.badgeCount && tab.badgeCount > 0) {
                     <span class="rail-badge" [class]="'badge-' + (tab.badgeColor || 'primary')">
                       {{ tab.badgeCount }}
@@ -281,7 +173,6 @@
                 </button>
               }
 
-              <!-- Close Navigation Item -->
               <button
                 class="nav-rail-item nav-rail-close-item"
                 (click)="closeSettings()"
@@ -298,57 +189,9 @@
             <div class="tab-content">
               @switch (activeTab) {
                 @case ('general') {
-                  <div class="general-settings">
-                    <h2 class="section-title">General Settings</h2>
-                    <div class="mj-grid mj-grid-responsive">
-                      <mj-settings-card
-                        title="Profile Information"
-                        icon="fa-solid fa-user"
-                        [expanded]="isSectionExpanded('profile')"
-                        (toggle)="toggleSection('profile')"
-                      >
-                        <div class="card-content">
-                          <mj-user-profile-settings></mj-user-profile-settings>
-                        </div>
-                      </mj-settings-card>
+                  <mj-general-settings></mj-general-settings>
+                }
 
-                      <mj-settings-card
-                        title="Preferences"
-                        icon="fa-solid fa-sliders"
-                        [expanded]="isSectionExpanded('preferences')"
-                        (toggle)="toggleSection('preferences')"
-                      >
-                        <div class="card-content">
-                          <p>Customize your experience with display and behavior preferences.</p>
-                        </div>
-                      </mj-settings-card>
-                    </div>
-                  </div>
-                }
-                @case ('users') {
-                  <div class="users-settings">
-                    <h2 class="section-title">User Management</h2>
-                    <p class="section-description">Manage user accounts, roles, and permissions</p>
-                    <mj-user-management></mj-user-management>
-                  </div>
-                }
-                @case ('roles') {
-                  <div class="roles-settings">
-                    <h2 class="section-title">Role Management</h2>
-                    <p class="section-description">Define and manage security roles.</p>
-                    <mj-role-management></mj-role-management>
-                  </div>
-                }
-                @case ('applications') {
-                  <div class="applications-settings">
-                    <mj-application-management></mj-application-management>
-                  </div>
-                }
-                @case ('permissions') {
-                  <div class="permissions-settings">
-                    <mj-entity-permissions></mj-entity-permissions>
-                  </div>
-                }
                 @case ('notifications') {
                   <div class="notifications-settings">
                     <h2 class="section-title">Notifications</h2>
@@ -356,74 +199,13 @@
                     <mj-notification-preferences></mj-notification-preferences>
                   </div>
                 }
-                @case ('advanced') {
-                  <div class="advanced-settings">
-                    <h2 class="section-title">Advanced Settings</h2>
-                    <div class="beta-warning">
-                      <i class="fa-solid fa-flask" aria-hidden="true"></i>
-                      <span>Beta features - Use with caution</span>
-                    </div>
 
-                    <!-- Tab Navigation (Mobile) -->
-                    <div class="advanced-tabs" role="tablist" aria-label="Advanced settings tabs">
-                      <button
-                        class="tab-btn"
-                        [class.active]="advancedActiveTab === 'sql-logging'"
-                        (click)="setAdvancedTab('sql-logging')"
-                        role="tab"
-                        [attr.aria-selected]="advancedActiveTab === 'sql-logging'"
-                        aria-controls="panel-sql-logging-mobile"
-                      >
-                        <i class="fa-solid fa-database" aria-hidden="true"></i>
-                        SQL Logging
-                      </button>
-                      <button
-                        class="tab-btn"
-                        [class.active]="advancedActiveTab === 'performance'"
-                        (click)="setAdvancedTab('performance')"
-                        role="tab"
-                        [attr.aria-selected]="advancedActiveTab === 'performance'"
-                        aria-controls="panel-performance-mobile"
-                      >
-                        <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
-                        Performance
-                      </button>
-                      <button
-                        class="tab-btn"
-                        [class.active]="advancedActiveTab === 'developer'"
-                        (click)="setAdvancedTab('developer')"
-                        role="tab"
-                        [attr.aria-selected]="advancedActiveTab === 'developer'"
-                        aria-controls="panel-developer-mobile"
-                      >
-                        <i class="fa-solid fa-code" aria-hidden="true"></i>
-                        Developer Tools
-                      </button>
-                    </div>
+                @case ('applications') {
+                  <mj-application-settings></mj-application-settings>
+                }
 
-                    <!-- Tab Content (Mobile) -->
-                    <div class="advanced-tab-content">
-                      @switch (advancedActiveTab) {
-                        @case ('sql-logging') {
-                          <div id="panel-sql-logging-mobile" role="tabpanel">
-                            <mj-sql-logging></mj-sql-logging>
-                          </div>
-                        }
-                        @case ('performance') {
-                          <div id="panel-performance-mobile" role="tabpanel" class="performance-settings">
-                            <h3>Performance Settings</h3>
-                            <p>Performance monitoring and optimization tools coming soon.</p>
-                          </div>
-                        }
-                        @case ('developer') {
-                          <div id="panel-developer-mobile" role="tabpanel" class="developer-settings">
-                            <h3>Developer Tools</h3>
-                            <p>Advanced developer options coming soon.</p>
-                          </div>
-                        }
-                      }
-                    </div>
-                  </div>
+                @case ('appearance') {
+                  <mj-appearance-settings></mj-appearance-settings>
                 }
               }
             </div>

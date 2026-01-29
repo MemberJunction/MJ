@@ -1,0 +1,30 @@
+<div class="general-settings">
+  <h2 class="section-title">General Settings</h2>
+  <p class="section-description">Manage your profile and account information</p>
+
+  <div class="settings-grid">
+    <!-- Profile Information Section -->
+    <mj-settings-card
+      title="Profile Information"
+      icon="fa-solid fa-user"
+      [expanded]="ProfileExpanded"
+      (toggle)="ToggleProfile()"
+    >
+      <div class="card-content">
+        <mj-user-profile-settings></mj-user-profile-settings>
+      </div>
+    </mj-settings-card>
+
+    <!-- Account Information Section -->
+    <mj-settings-card
+      title="Account Information"
+      icon="fa-solid fa-id-card"
+      [expanded]="AccountExpanded"
+      (toggle)="ToggleAccount()"
+    >
+      <div class="card-content">
+        <mj-account-info></mj-account-info>
+      </div>
+    </mj-settings-card>
+  </div>
+</div>
