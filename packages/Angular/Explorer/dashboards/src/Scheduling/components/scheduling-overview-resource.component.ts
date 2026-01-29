@@ -1,5 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
+import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -7,19 +6,19 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 /**
  * Tree-shaking prevention function
  */
-export function LoadSchedulingTypesResource() {
+export function LoadSchedulingDashboardResource() {
   // Force inclusion in production builds
 }
 
 /**
- * Scheduling Types Resource - manage job types and configurations
+ * Scheduling Dashboard Resource - displays the overview dashboard with KPIs, health, and alerts
  */
-@RegisterClass(BaseResourceComponent, 'SchedulingTypesResource')
+@RegisterClass(BaseResourceComponent, 'SchedulingDashboardResource')
 @Component({
-  selector: 'mj-scheduling-types-resource',
+  selector: 'mj-scheduling-dashboard-resource',
   template: `
     <div class="resource-container">
-      <app-scheduling-types></app-scheduling-types>
+      <app-scheduling-overview></app-scheduling-overview>
     </div>
   `,
   styles: [`
@@ -32,22 +31,17 @@ export function LoadSchedulingTypesResource() {
     }
   `]
 })
-export class SchedulingTypesResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class SchedulingOverviewResourceComponent extends BaseResourceComponent implements OnInit {
 
   ngOnInit(): void {
-    // Notify that loading is complete
     this.NotifyLoadComplete();
   }
 
-  ngOnDestroy(): void {
-    // Cleanup if needed
-  }
-
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'Types';
+    return 'Dashboard';
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {
-    return 'fa-solid fa-cogs';
+    return 'fa-solid fa-gauge-high';
   }
 }

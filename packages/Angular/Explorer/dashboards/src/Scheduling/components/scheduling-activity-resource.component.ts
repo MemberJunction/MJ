@@ -1,5 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
+import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -7,19 +6,19 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 /**
  * Tree-shaking prevention function
  */
-export function LoadSchedulingMonitorResource() {
+export function LoadSchedulingActivityResource() {
   // Force inclusion in production builds
 }
 
 /**
- * Scheduling Monitor Resource - displays real-time job monitoring and metrics
+ * Scheduling Activity Resource - displays execution history, trends, and job type statistics
  */
-@RegisterClass(BaseResourceComponent, 'SchedulingMonitorResource')
+@RegisterClass(BaseResourceComponent, 'SchedulingActivityResource')
 @Component({
-  selector: 'mj-scheduling-monitor-resource',
+  selector: 'mj-scheduling-activity-resource',
   template: `
     <div class="resource-container">
-      <app-scheduling-monitoring></app-scheduling-monitoring>
+      <app-scheduling-activity></app-scheduling-activity>
     </div>
   `,
   styles: [`
@@ -32,22 +31,17 @@ export function LoadSchedulingMonitorResource() {
     }
   `]
 })
-export class SchedulingMonitorResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class SchedulingActivityResourceComponent extends BaseResourceComponent implements OnInit {
 
   ngOnInit(): void {
-    // Notify that loading is complete
     this.NotifyLoadComplete();
   }
 
-  ngOnDestroy(): void {
-    // Cleanup if needed
-  }
-
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'Monitor';
+    return 'Activity';
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {
-    return 'fa-solid fa-chart-line';
+    return 'fa-solid fa-clock-rotate-left';
   }
 }
