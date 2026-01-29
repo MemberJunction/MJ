@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { simpleGit, SimpleGit } from 'simple-git';
 import { z } from 'zod';
-import { mergeConfigs } from '@memberjunction/config';
+import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
 
@@ -18,7 +18,7 @@ const DEFAULT_CLI_CONFIG = {
   dbHost: process.env.DB_HOST ?? 'localhost',
   dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
   dbDatabase: process.env.DB_DATABASE ?? '',
-  dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true' || process.env.DB_TRUST_SERVER_CERTIFICATE === '1',
+  dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE),
   codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
   coreSchema: '__mj',

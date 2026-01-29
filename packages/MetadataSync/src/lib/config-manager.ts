@@ -8,7 +8,7 @@
  */
 
 import { cosmiconfigSync } from 'cosmiconfig';
-import { mergeConfigs } from '@memberjunction/config';
+import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { MJConfig } from '../config';
 
 /**
@@ -25,7 +25,7 @@ const DEFAULT_SYNC_CONFIG: Partial<MJConfig> = {
   dbDatabase: process.env.DB_DATABASE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,
-  dbTrustServerCertificate: ['true', '1', 'Y', 'y'].includes(process.env.DB_TRUST_SERVER_CERTIFICATE ?? '') ? 'Y' : 'N',
+  dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE) ? 'Y' : 'N',
   dbEncrypt: process.env.DB_ENCRYPT ?? undefined,
   dbInstanceName: process.env.DB_INSTANCE_NAME,
   mjCoreSchema: process.env.MJ_CORE_SCHEMA ?? '__mj',
