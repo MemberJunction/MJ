@@ -3,9 +3,9 @@
   "database": {
     "server": "localhost",
     "port": 1433,
-    "database": "UniversityDB",
+    "database": "",
     "user": "sa",
-    "password": "BlueCypress2026@",
+    "password": "",
     "encrypt": true,
     "trustServerCertificate": true,
     "connectionTimeout": 30000
@@ -13,7 +13,7 @@
   "ai": {
     "provider": "gemini",
     "model": "gemini-2.0-flash",
-    "apiKey": "AIzaSyCT2K8A4FEh8Kf1De5jkYdc00uBD0XIrFI",
+    "apiKey": "",
     "temperature": 0.1,
     "maxTokens": 4000
   },
