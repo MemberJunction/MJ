@@ -291,8 +291,10 @@ if (result.success) {
 
 | App | Deps Walked | Packages with @RegisterClass | Total Classes |
 |-----|-------------|------------------------------|---------------|
-| **MJAPI** | 985 | 54 | 715 |
-| **MJExplorer** | 1179 | 17 | 721 |
+| **MJAPI** | 985 | 52 | 683 |
+| **MJExplorer** | 1179 | 14 | 433 |
+
+> **Note:** These numbers reflect export verification filtering — the generator confirms each discovered class is actually exported from its package before including it in the manifest. Earlier unfiltered scans reported 54 packages / 715 classes for MJAPI and 17 packages / 721 classes for MJExplorer.
 
 **MJAPI** includes server-only packages: AI providers, actions, scheduling, encryption, communication, etc.
 **MJExplorer** includes Angular `ng-*` packages: artifacts, dashboards, forms, explorer-core, etc.
@@ -372,14 +374,13 @@ See full examples: [MJAPI manifest](../packages/CodeGenLib/EXAMPLE_MANIFEST_MJAP
 
 ### Build Integration
 
-Each app adds a `generate:manifest` script to its own `package.json`:
+Each app adds a `prebuild` script to its own `package.json` that invokes the manifest generator directly:
 
 ```json
 // packages/MJAPI/package.json
 {
   "scripts": {
-    "generate:manifest": "mj codegen manifest --output ./src/generated/class-registrations-manifest.ts",
-    "prebuild": "npm run generate:manifest",
+    "prebuild": "mj codegen manifest --output ./src/generated/class-registrations-manifest.ts",
     "build": "tsc"
   }
 }
@@ -389,8 +390,7 @@ Each app adds a `generate:manifest` script to its own `package.json`:
 // packages/MJExplorer/package.json
 {
   "scripts": {
-    "generate:manifest": "mj codegen manifest --output ./src/generated/class-registrations-manifest.ts",
-    "prebuild": "npm run generate:manifest",
+    "prebuild": "mj codegen manifest --output ./src/generated/class-registrations-manifest.ts",
     "build": "ng build"
   }
 }
@@ -412,55 +412,7 @@ import './generated/class-registrations-manifest';
 
 ## Supporting Non-Engine Classes
 
-### The Need
-
-Some classes might want to use `@RegisterForStartup` for tree-shaking prevention without implementing `IStartupSink`. For example:
-- Provider implementations
-- Action implementations
-- UI components that need to be registered
-
-### Proposed Approach
-
-Modify `StartupManager.ExecuteLoad()` to check if `HandleStartup` exists before calling it:
-
-```typescript
-private async initializeClass(reg: StartupRegistration): Promise<LoadResult> {
-    const loadStart = Date.now();
-    try {
-        const instance = reg.getInstance();
-
-        // Only call HandleStartup if the method exists
-        if (typeof instance.HandleStartup === 'function') {
-            await instance.HandleStartup(contextUser, provider);
-        }
-        // If no HandleStartup, the class is included just for tree-shaking prevention
-
-        reg.loadedAt = new Date();
-        reg.loadDurationMs = Date.now() - loadStart;
-
-        return {
-            className: reg.constructor.name,
-            success: true,
-            durationMs: reg.loadDurationMs
-        };
-    } catch (error) {
-        // ... error handling
-    }
-}
-```
-
-This allows:
-```typescript
-// Engine with startup logic
-@RegisterForStartup({ priority: 10 })
-export class MyEngine extends BaseEngine<MyEngine> { }  // Has HandleStartup via BaseEngine
-
-// Non-engine class - just prevent tree-shaking
-@RegisterForStartup()
-export class MyActionProvider {
-    // No HandleStartup needed - class is included but not "started"
-}
-```
+> **Note:** This section is no longer a concern. The manifest generator scans for **all** `@RegisterClass` decorated classes, not just engines. This means non-engine classes — BaseEntity subclasses, BaseAction subclasses, provider implementations, Angular components, and anything else using `@RegisterClass` — are automatically discovered and included in the generated manifest. No special handling or additional decorators are needed for tree-shaking prevention of non-engine classes.
 
 ---
 
@@ -483,10 +435,10 @@ export class MyActionProvider {
 4. ~~Export programmatic API for custom build scripts~~
 5. ~~Generate named imports with runtime reference array (prevents individual class tree-shaking)~~
 
-### Phase 4: 🚧 PENDING - App Integration
-1. Add `generate:manifest` script to root package.json
-2. Add manifest import to MJAPI entry point
-3. Add manifest import to MJExplorer entry point
+### Phase 4: 🚧 IN PROGRESS - App Integration
+1. ~~Add `generate:manifest` script to app package.json prebuild scripts~~
+2. ~~Add manifest import to MJAPI entry point~~
+3. ~~Add manifest import to MJExplorer entry point~~
 4. Remove manual `LoadXxx()` stub functions after validation
 5. Update documentation
 
@@ -514,16 +466,11 @@ Or integrate with existing watch tooling.
 
 ### Git Strategy
 
-**Recommended:** Gitignore the generated manifest file
+**Decision:** Generated manifests are **committed** to the repository, consistent with how other generated code is handled (e.g., `entity_subclasses.ts`, `generated.ts`). They are not gitignored.
 
-```gitignore
-# Generated startup manifest
-packages/MJCore/src/generated/startup-manifest.ts
-```
-
-- Pro: No merge conflicts, always fresh
-- Con: Must ensure CI runs generator
-- CI enforcement: Build fails if manifest is stale/missing
+- Manifests are regenerated as part of the prebuild step, so they stay up to date
+- Committing them ensures CI and fresh clones work without an extra generation step
+- This matches the established MemberJunction convention for generated code
 
 ### Error Handling
 
@@ -561,7 +508,7 @@ The manifest generator should fail the build if:
 1. ~~**Manifest Location**: Should it be in `@memberjunction/core` or a separate package?~~ → Logic in `@memberjunction/codegen-lib`, CLI command in `@memberjunction/cli` (follows established CodeGenLib + MJCLI pattern)
 2. **Watch Mode**: How to handle watch mode during development efficiently?
 3. ~~**Per-App Manifests**: Should different apps have different manifests?~~ → Yes, each app walks its own dependency tree and gets a tailored manifest
-4. **Git Strategy**: Gitignore generated manifest or commit it?
+4. ~~**Git Strategy**: Gitignore generated manifest or commit it?~~ → **Commit them** — generated manifests are committed to the repo like other generated code (entity_subclasses.ts, generated.ts)
 
 ---
 
@@ -571,7 +518,7 @@ The manifest generator should fail the build if:
 2. ✅ Implement decorator and StartupManager
 3. ✅ Add decorator to initial engines
 4. ✅ Create manifest generation in `@memberjunction/codegen-lib` + `mj codegen manifest` CLI command
-5. 🚧 Add `generate:manifest` to app package.json prebuild scripts
-6. 🚧 Add manifest imports to app entry points
+5. ✅ Add `generate:manifest` to app package.json prebuild scripts
+6. ✅ Add manifest imports to app entry points
 7. 🚧 Remove `LoadXxx()` functions after validation
 8. 🚧 Update developer documentation
