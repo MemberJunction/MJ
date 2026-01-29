@@ -62,7 +62,6 @@
     "@memberjunction/ng-shared": "3.3.0",
     "@memberjunction/ng-shared-generic": "3.3.0",
     "@memberjunction/ng-testing": "3.3.0",
-    "@memberjunction/ng-user-view-grid": "3.3.0",
     "@memberjunction/skip-types": "3.3.0",
     "@memberjunction/templates-base-types": "3.3.0",
     "@memberjunction/testing-engine-base": "3.3.0",
