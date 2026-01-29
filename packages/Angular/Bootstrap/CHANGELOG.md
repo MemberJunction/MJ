@@ -1,5 +1,14 @@
 # @memberjunction/ng-bootstrap
 
+## 3.3.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@3.3.0
+- @memberjunction/graphql-dataprovider@3.3.0
+- @memberjunction/ng-auth-services@3.3.0
+- @memberjunction/core@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

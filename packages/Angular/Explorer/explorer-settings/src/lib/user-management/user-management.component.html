@@ -141,39 +141,19 @@
           />
         </div>
 
-        <!-- Mobile: Combined Status & Role row -->
-        <div class="mobile-filters-row">
-          <!-- Status Filter - Mobile dropdown only in this row -->
-          <div class="mj-filter-group mobile-filter-group">
-            <label class="mj-filter-label" id="status-filter-label-mobile">Status</label>
-            <select
-              class="mj-filter-select"
-              [value]="filters$.value.status"
-              (change)="onStatusFilterChange($any($event.target).value)"
-              aria-labelledby="status-filter-label-mobile"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-
-          <!-- Role Filter - Mobile dropdown only in this row -->
-          <div class="mj-filter-group mobile-filter-group">
-            <label class="mj-filter-label" for="role-filter-mobile">Role</label>
-            <select
-              id="role-filter-mobile"
-              class="mj-filter-select"
-              (change)="onRoleFilterChange($any($event.target).value)"
-              aria-label="Filter by role"
-            >
-              <option value="">All Roles</option>
-              @for (role of roles; track role.ID) {
-                <option [value]="role.ID">{{ role.Name }}</option>
-              }
-            </select>
-          </div>
-        </div>
+        <!-- Mobile: Filter Toggle Button -->
+        <button
+          class="mobile-filter-toggle"
+          (click)="showMobileFilters = !showMobileFilters"
+          [class.active]="showMobileFilters"
+          [attr.aria-expanded]="showMobileFilters"
+          aria-label="Toggle filters"
+        >
+          <i class="fa-solid fa-filter" aria-hidden="true"></i>
+          @if (hasActiveFilters) {
+            <span class="filter-badge">{{ activeFilterCount }}</span>
+          }
+        </button>
 
         <!-- Desktop: Status Filter - Button group -->
         <div class="mj-filter-group desktop-filter-group">
@@ -222,6 +202,52 @@
           </select>
         </div>
       </div>
+
+      <!-- Mobile: Filter Dropdown Panel -->
+      @if (showMobileFilters) {
+        <div class="mobile-filter-dropdown">
+          <div class="mobile-filter-content">
+            <!-- Status Filter -->
+            <div class="mj-filter-group">
+              <label class="mj-filter-label" id="status-filter-label-mobile">Status</label>
+              <select
+                class="mj-filter-select"
+                [value]="filters$.value.status"
+                (change)="onStatusFilterChange($any($event.target).value)"
+                aria-labelledby="status-filter-label-mobile"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+
+            <!-- Role Filter -->
+            <div class="mj-filter-group">
+              <label class="mj-filter-label" for="role-filter-mobile">Role</label>
+              <select
+                id="role-filter-mobile"
+                class="mj-filter-select"
+                (change)="onRoleFilterChange($any($event.target).value)"
+                aria-label="Filter by role"
+              >
+                <option value="">All Roles</option>
+                @for (role of roles; track role.ID) {
+                  <option [value]="role.ID">{{ role.Name }}</option>
+                }
+              </select>
+            </div>
+
+            <!-- Clear Filters Button -->
+            @if (hasActiveFilters) {
+              <button class="mj-btn mj-btn-ghost mj-btn-sm clear-filters-btn" (click)="clearFilters()">
+                <i class="fa-solid fa-times" aria-hidden="true"></i>
+                Clear Filters
+              </button>
+            }
+          </div>
+        </div>
+      }
     </div>
   </div><!-- End Sticky Header -->
 

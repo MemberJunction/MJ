@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
 import { EntityPermissionEntity, EntityEntity, RoleEntity } from '@memberjunction/core-entities';
-import { WindowModule } from '@progress/kendo-angular-dialog';
 
 export interface PermissionDialogData {
   entity: EntityEntity;

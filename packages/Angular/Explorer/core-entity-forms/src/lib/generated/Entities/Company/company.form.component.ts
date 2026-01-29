@@ -21,6 +21,7 @@ export class CompanyFormComponent extends BaseFormComponent {
             { sectionKey: 'companyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
             { sectionKey: 'employees', sectionName: 'Employees', isExpanded: false },
             { sectionKey: 'workflows', sectionName: 'Workflows', isExpanded: false },
+            { sectionKey: 'mJMCPServerConnections', sectionName: 'MJ: MCP Server Connections', isExpanded: false },
             { sectionKey: 'aIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false }
         ]);

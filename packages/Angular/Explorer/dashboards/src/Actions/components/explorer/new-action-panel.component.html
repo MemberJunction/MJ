@@ -1,0 +1,125 @@
+@if (IsOpen) {
+  <div class="panel-backdrop" (click)="onBackdropClick($event)">
+    <div class="slide-panel" @slideIn>
+      <div class="panel-header">
+        <h2>
+          <i class="fa-solid fa-bolt"></i>
+          New Action
+        </h2>
+        <button kendoButton
+          [fillMode]="'flat'"
+          (click)="onClose()">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+
+      <div class="panel-content">
+        @if (Errors['general']) {
+          <div class="error-banner">
+            <i class="fa-solid fa-exclamation-circle"></i>
+            {{ Errors['general'] }}
+          </div>
+        }
+
+        <!-- Action Type Selection -->
+        <div class="form-group">
+          <label class="form-label required">Action Type</label>
+          <div class="type-selector">
+            @for (option of TypeOptions; track option.value) {
+              <button class="type-option"
+                [class.selected]="Type === option.value"
+                (click)="selectType(option.value)">
+                <div class="type-icon">
+                  <i [class]="option.icon"></i>
+                </div>
+                <div class="type-info">
+                  <span class="type-label">{{ option.label }}</span>
+                  <span class="type-description">{{ option.description }}</span>
+                </div>
+                @if (Type === option.value) {
+                  <i class="fa-solid fa-check check-icon"></i>
+                }
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="actionName" class="form-label required">
+            Action Name
+          </label>
+          <kendo-textbox
+            id="actionName"
+            [(ngModel)]="Name"
+            [placeholder]="'Enter action name'"
+            [maxlength]="425"
+            [class.invalid]="Errors['name']">
+          </kendo-textbox>
+          @if (Errors['name']) {
+            <span class="error-text">{{ Errors['name'] }}</span>
+          }
+        </div>
+
+        <div class="form-group">
+          <label for="actionDescription" class="form-label">
+            Description
+          </label>
+          <kendo-textarea
+            id="actionDescription"
+            [(ngModel)]="Description"
+            [placeholder]="'Describe what this action does'"
+            [rows]="3">
+          </kendo-textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="actionCategory" class="form-label required">
+            Category
+          </label>
+          <kendo-dropdownlist
+            id="actionCategory"
+            [(ngModel)]="CategoryID"
+            [data]="getCategoryOptions()"
+            textField="text"
+            valueField="value"
+            [valuePrimitive]="true"
+            [class.invalid]="Errors['category']">
+          </kendo-dropdownlist>
+          @if (Errors['category']) {
+            <span class="error-text">{{ Errors['category'] }}</span>
+          }
+        </div>
+
+        <div class="info-box">
+          <i class="fa-solid fa-info-circle"></i>
+          <p>
+            After creating the action, you'll be taken to the full action editor
+            where you can configure parameters, code, and other settings.
+          </p>
+        </div>
+      </div>
+
+      <div class="panel-footer">
+        <button kendoButton
+          [fillMode]="'solid'"
+          [themeColor]="'primary'"
+          [disabled]="IsSaving"
+          (click)="onSave()">
+          @if (IsSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            Creating...
+          } @else {
+            <i class="fa-solid fa-check"></i>
+            Create Action
+          }
+        </button>
+        <button kendoButton
+          [fillMode]="'outline'"
+          [disabled]="IsSaving"
+          (click)="onClose()">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+}

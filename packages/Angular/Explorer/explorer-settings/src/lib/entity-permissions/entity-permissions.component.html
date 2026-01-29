@@ -91,17 +91,30 @@
     <!-- Filters Section -->
     <div class="filters-section" role="search" aria-label="Entity filters">
       <div class="filters-row">
-        <!-- Entity Search -->
-        <div class="mj-search">
-          <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
-          <input
-            type="text"
-            class="mj-search-input"
-            placeholder="Search entities by name or description..."
-            (input)="onSearchChange($event)"
-            [value]="filters$.value.entitySearch"
-            aria-label="Search entities"
-          />
+        <!-- Mobile: Search + Filter Button Container -->
+        <div class="mobile-search-container">
+          <!-- Entity Search -->
+          <div class="mj-search">
+            <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
+            <input
+              type="text"
+              class="mj-search-input"
+              placeholder="Search entities by name or description..."
+              (input)="onSearchChange($event)"
+              [value]="filters$.value.entitySearch"
+              aria-label="Search entities"
+            />
+          </div>
+
+          <!-- Filter Button (Mobile Only) -->
+          <button
+            class="filter-button"
+            (click)="showMobileFilters = true"
+            aria-label="Open filters"
+          >
+            <i class="fa-solid fa-filter" aria-hidden="true"></i>
+            <span>Filters</span>
+          </button>
         </div>
 
         <!-- Access Level Filter -->
@@ -423,4 +436,145 @@
     [data]="permissionDialogData"
     (result)="onPermissionDialogResult($event)"
   ></mj-permission-dialog>
+
+  <!-- Mobile Filter Modal -->
+  @if (showMobileFilters) {
+    <div
+      class="filter-modal-backdrop"
+      (click)="showMobileFilters = false"
+      role="presentation"
+    >
+      <div
+        class="filter-modal"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="filter-modal-title"
+      >
+        <div class="filter-modal-header">
+          <h3 class="filter-modal-title" id="filter-modal-title">
+            <i class="fa-solid fa-filter" aria-hidden="true"></i>
+            Filters
+          </h3>
+          <button
+            class="filter-modal-close"
+            (click)="showMobileFilters = false"
+            aria-label="Close filters"
+          >
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <div class="filter-modal-body">
+          <div class="filter-options-container">
+            <!-- Access Level Filter -->
+            <div class="filter-group">
+              <h4 class="filter-group-label">Access Level</h4>
+              <div class="filter-group-options">
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.accessLevel === 'all'"
+                >
+                  <input
+                    type="radio"
+                    name="accessLevel"
+                    value="all"
+                    [checked]="filters$.value.accessLevel === 'all'"
+                    (change)="onAccessLevelChange('all')"
+                  />
+                  <span class="filter-option-label">All Levels</span>
+                </label>
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.accessLevel === 'public'"
+                >
+                  <input
+                    type="radio"
+                    name="accessLevel"
+                    value="public"
+                    [checked]="filters$.value.accessLevel === 'public'"
+                    (change)="onAccessLevelChange('public')"
+                  />
+                  <span class="filter-option-label">Public Entities</span>
+                </label>
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.accessLevel === 'restricted'"
+                >
+                  <input
+                    type="radio"
+                    name="accessLevel"
+                    value="restricted"
+                    [checked]="filters$.value.accessLevel === 'restricted'"
+                    (change)="onAccessLevelChange('restricted')"
+                  />
+                  <span class="filter-option-label">Restricted Entities</span>
+                </label>
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.accessLevel === 'custom'"
+                >
+                  <input
+                    type="radio"
+                    name="accessLevel"
+                    value="custom"
+                    [checked]="filters$.value.accessLevel === 'custom'"
+                    (change)="onAccessLevelChange('custom')"
+                  />
+                  <span class="filter-option-label">Custom Access Entities</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Role Filter -->
+            <div class="filter-group">
+              <h4 class="filter-group-label">Filter by Role</h4>
+              <div class="filter-group-options">
+                <label class="filter-option" [class.selected]="!filters$.value.roleId">
+                  <input
+                    type="radio"
+                    name="role"
+                    value=""
+                    [checked]="!filters$.value.roleId"
+                    (change)="onRoleFilterChange($event)"
+                  />
+                  <span class="filter-option-label">All Roles</span>
+                </label>
+                @for (role of roles; track role.ID) {
+                  <label
+                    class="filter-option"
+                    [class.selected]="filters$.value.roleId === role.ID"
+                  >
+                    <input
+                      type="radio"
+                      name="role"
+                      [value]="role.ID"
+                      [checked]="filters$.value.roleId === role.ID"
+                      (change)="onRoleFilterChange($event)"
+                    />
+                    <span class="filter-option-label">{{ role.Name }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-modal-footer">
+          <button
+            class="mj-btn mj-btn-primary"
+            (click)="showMobileFilters = false"
+          >
+            Apply Filters
+          </button>
+          <button
+            class="mj-btn mj-btn-secondary"
+            (click)="showMobileFilters = false"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  }
 </div>

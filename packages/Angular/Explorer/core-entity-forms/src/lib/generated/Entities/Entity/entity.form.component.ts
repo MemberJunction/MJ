@@ -57,11 +57,14 @@ export class EntityFormComponent extends BaseFormComponent {
             { sectionKey: 'userViewCategories', sectionName: 'User View Categories', isExpanded: false },
             { sectionKey: 'userViews', sectionName: 'User Views', isExpanded: false },
             { sectionKey: 'users', sectionName: 'Users', isExpanded: false },
+            { sectionKey: 'aIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJAccessControlRules', sectionName: 'MJ: Access Control Rules', isExpanded: false },
+            { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJRecordLinks', sectionName: 'MJ: Record Links', isExpanded: false },
             { sectionKey: 'queryEntities', sectionName: 'Query Entities', isExpanded: false },
             { sectionKey: 'generatedCodes', sectionName: 'Generated Codes', isExpanded: false },
             { sectionKey: 'mJRecordLinks1', sectionName: 'MJ: Record Links', isExpanded: false },
+            { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'MJ: Test Runs', isExpanded: false }
         ]);
     }

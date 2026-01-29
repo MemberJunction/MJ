@@ -552,6 +552,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
     ): Promise<AIAgentRunResult> {
+        // Check API key scope authorization for agent execution
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
+
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
             p,
@@ -741,6 +744,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
     ): Promise<AIAgentRunResult> {
+        // Check API key scope authorization for agent execution
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
+
         const p = GetReadWriteProvider(providers);
         const currentUser = this.GetUserFromPayload(userPayload);
 
@@ -896,7 +902,7 @@ export class RunAIAgentResolver extends ResolverBase {
     private mapDetailRoleToMessageRole(role: string): 'user' | 'assistant' | 'system' {
         const roleLower = (role || '').toLowerCase();
         if (roleLower === 'user') return 'user';
-        if (roleLower === 'assistant' || roleLower === 'agent') return 'assistant';
+        if (roleLower === 'assistant' || roleLower === 'agent' || roleLower === 'ai') return 'assistant';
         if (roleLower === 'system') return 'system';
         return 'user'; // Default to user
     }

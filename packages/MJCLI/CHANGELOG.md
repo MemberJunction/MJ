@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/cli
 
+## 3.3.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@3.3.0
+- @memberjunction/codegen-lib@3.3.0
+- @memberjunction/metadata-sync@3.3.0
+- @memberjunction/query-gen@3.3.0
+- @memberjunction/sqlserver-dataprovider@3.3.0
+- @memberjunction/testing-cli@3.3.0
+- @memberjunction/db-auto-doc@3.3.0
+- @memberjunction/config@3.3.0
+- @memberjunction/core@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

@@ -22,11 +22,19 @@
       "cwd": "${workspaceFolder}/packages/AI/MCPServer",
       "preLaunchTask": "build-mcp-server",
       "program": "${workspaceFolder}/packages/AI/MCPServer/dist/index.js",
-      "outFiles": ["${workspaceFolder}/packages/AI/MCPServer/dist/**/*.js"],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
       "sourceMaps": true,
       "smartStep": true,
       "console": "integratedTerminal",
-      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"] 
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"],
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "runtimeArgs": ["--enable-source-maps"]
     },
     {
       "type": "node",

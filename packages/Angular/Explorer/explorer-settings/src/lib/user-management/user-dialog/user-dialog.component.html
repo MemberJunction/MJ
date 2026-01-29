@@ -1,239 +1,240 @@
-<kendo-window
-  *ngIf="visible"
-  [width]="850"
-  [height]="700"
-  [resizable]="false"
-  [draggable]="true"
-  [keepContent]="true"
-  (close)="onCancel()"
-  kendoWindowContainer>
-  
-  <kendo-window-titlebar>
-    <div class="dialog-header">
-      <h2 class="dialog-title">
-        <i class="fa-solid fa-user"></i>
-        {{ isEditMode ? 'Edit User' : 'Create New User' }}
-      </h2>
-      <p class="dialog-subtitle">
-        {{ isEditMode ? 'Update user information and role assignments' : 'Add a new user to the system' }}
-      </p>
+<!-- MD3 Modal Dialog -->
+<div class="modal-backdrop" *ngIf="visible" (click)="onCancel()">
+  <div class="modal-dialog" (click)="$event.stopPropagation()">
+
+    <!-- Modal Header with MJ Blue -->
+    <div class="modal-header">
+      <div class="dialog-header">
+        <h2 class="dialog-title">
+          <i class="fa-solid fa-user"></i>
+          {{ isEditMode ? 'Edit User' : 'Create New User' }}
+        </h2>
+        <p class="dialog-subtitle">
+          {{ isEditMode ? 'Update user information and role assignments' : 'Add a new user to the system' }}
+        </p>
+      </div>
+      <button type="button" class="modal-close" (click)="onCancel()" aria-label="Close dialog">
+        <i class="fa-solid fa-times"></i>
+      </button>
     </div>
-  </kendo-window-titlebar>
 
-  <div class="dialog-content">
-    <form [formGroup]="userForm" (ngSubmit)="onSubmit()">
-      
-      @if (error) {
+    <!-- Modal Body -->
+    <div class="modal-body">
+      <form [formGroup]="userForm" (ngSubmit)="onSubmit()">
+
+        @if (error) {
+          <div class="content-section">
+            <div class="alert alert-error">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <div>{{ error }}</div>
+            </div>
+          </div>
+        }
+
+        <!-- Basic Information Section -->
         <div class="content-section">
-          <div class="alert alert-error">
-            <i class="fa-solid fa-exclamation-triangle"></i>
-            <div>{{ error }}</div>
-          </div>
-        </div>
-      }
-
-      <!-- Basic Information Section -->
-      <div class="content-section">
-        <div class="form-section">
-          <div class="section-header">
-            <h3 class="section-title">
-              <i class="fa-solid fa-id-card"></i>
-              Basic Information
-            </h3>
-            <p class="section-description">Enter the user's personal and contact details</p>
-          </div>
-          
-          <div class="form-grid">
-            <div class="form-field">
-              <label class="field-label required" for="name">Username/Email</label>
-              <input 
-                id="name"
-                type="email" 
-                class="field-input" 
-                formControlName="name"
-                placeholder="john@company.com"
-                [class.error]="userForm.get('name')?.invalid && userForm.get('name')?.touched"
-              />
-              @if (userForm.get('name')?.invalid && userForm.get('name')?.touched) {
-                <div class="field-error">
-                  <i class="fa-solid fa-exclamation-circle"></i>
-                  @if (userForm.get('name')?.errors?.['required']) {
-                    Username/Email is required
-                  }
-                  @if (userForm.get('name')?.errors?.['email']) {
-                    Please enter a valid email address
-                  }
-                </div>
-              }
+          <div class="form-section">
+            <div class="section-header">
+              <h3 class="section-title">
+                <i class="fa-solid fa-id-card"></i>
+                Basic Information
+              </h3>
+              <p class="section-description">Enter the user's personal and contact details</p>
             </div>
 
-            <div class="form-row">
+            <div class="form-grid">
               <div class="form-field">
-                <label class="field-label" for="firstName">First Name</label>
-                <input 
-                  id="firstName"
-                  type="text" 
-                  class="field-input" 
-                  formControlName="firstName"
-                  placeholder="John"
+                <label class="field-label required" for="name">Username/Email</label>
+                <input
+                  id="name"
+                  type="email"
+                  class="field-input"
+                  formControlName="name"
+                  placeholder="john@company.com"
+                  [class.error]="userForm.get('name')?.invalid && userForm.get('name')?.touched"
                 />
-              </div>
-              
-              <div class="form-field">
-                <label class="field-label" for="lastName">Last Name</label>
-                <input 
-                  id="lastName"
-                  type="text" 
-                  class="field-input" 
-                  formControlName="lastName"
-                  placeholder="Doe"
-                />
-              </div>
-            </div>
-
-            <div class="form-field">
-              <label class="field-label required" for="email">Email Address</label>
-              <input 
-                id="email"
-                type="email" 
-                class="field-input" 
-                formControlName="email"
-                placeholder="john@company.com"
-                [class.error]="userForm.get('email')?.invalid && userForm.get('email')?.touched"
-              />
-              @if (userForm.get('email')?.invalid && userForm.get('email')?.touched) {
-                <div class="field-error">
-                  <i class="fa-solid fa-exclamation-circle"></i>
-                  @if (userForm.get('email')?.errors?.['required']) {
-                    Email address is required
-                  }
-                  @if (userForm.get('email')?.errors?.['email']) {
-                    Please enter a valid email address
-                  }
-                </div>
-              }
-            </div>
-
-            <div class="form-field">
-              <label class="field-label" for="title">Job Title</label>
-              <input 
-                id="title"
-                type="text" 
-                class="field-input" 
-                formControlName="title"
-                placeholder="Software Engineer"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- User Settings Section -->
-      <div class="content-section">
-        <div class="form-section">
-          <div class="section-header">
-            <h3 class="section-title">
-              <i class="fa-solid fa-cog"></i>
-              User Settings
-            </h3>
-            <p class="section-description">Configure user type and account status</p>
-          </div>
-          
-          <div class="form-grid">
-            <div class="form-row">
-              <div class="form-field">
-                <label class="field-label" for="type">User Type</label>
-                <select id="type" class="field-select" formControlName="type">
-                  <option value="User">Standard User</option>
-                  <option value="Owner">System Owner</option>
-                </select>
-              </div>
-              
-              <div class="form-field">
-                <div class="checkbox-field">
-                  <input 
-                    id="isActive"
-                    type="checkbox" 
-                    class="checkbox-input" 
-                    formControlName="isActive"
-                  />
-                  <label class="checkbox-label" for="isActive">
-                    <div class="checkbox-indicator"></div>
-                    <div>
-                      <strong>Active Account</strong>
-                      <div style="font-size: 12px; color: #666; margin-top: 2px;">
-                        User can log in and access the system
-                      </div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Role Assignment Section -->
-      <div class="content-section">
-        <div class="form-section">
-          <div class="section-header">
-            <h3 class="section-title">
-              <i class="fa-solid fa-user-tag"></i>
-              Role Assignment
-            </h3>
-            <p class="section-description">Select the roles to assign to this user</p>
-          </div>
-          
-          <div class="roles-grid">
-            @for (role of data?.availableRoles; track role.ID) {
-              <div class="role-card" 
-                   [class.selected]="selectedRoleIds.has(role.ID)"
-                   (click)="toggleRole(role.ID)">
-                <div class="role-content">
-                  <div class="checkbox-field">
-                    <input 
-                      type="checkbox" 
-                      class="checkbox-input" 
-                      [id]="'role-' + role.ID"
-                      [checked]="selectedRoleIds.has(role.ID)"
-                      (change)="onRoleToggle(role.ID, $event)"
-                    />
-                    <label class="checkbox-label" [for]="'role-' + role.ID">
-                      <div class="checkbox-indicator"></div>
-                    </label>
-                  </div>
-                  <div class="role-info">
-                    <h4 class="role-name">{{ role.Name }}</h4>
-                    @if (role.Description) {
-                      <p class="role-description">{{ role.Description }}</p>
+                @if (userForm.get('name')?.invalid && userForm.get('name')?.touched) {
+                  <div class="field-error">
+                    <i class="fa-solid fa-exclamation-circle"></i>
+                    @if (userForm.get('name')?.errors?.['required']) {
+                      Username/Email is required
+                    }
+                    @if (userForm.get('name')?.errors?.['email']) {
+                      Please enter a valid email address
                     }
                   </div>
+                }
+              </div>
+
+              <div class="form-row">
+                <div class="form-field">
+                  <label class="field-label" for="firstName">First Name</label>
+                  <input
+                    id="firstName"
+                    type="text"
+                    class="field-input"
+                    formControlName="firstName"
+                    placeholder="John"
+                  />
+                </div>
+
+                <div class="form-field">
+                  <label class="field-label" for="lastName">Last Name</label>
+                  <input
+                    id="lastName"
+                    type="text"
+                    class="field-input"
+                    formControlName="lastName"
+                    placeholder="Doe"
+                  />
                 </div>
               </div>
-            }
+
+              <div class="form-field">
+                <label class="field-label required" for="email">Email Address</label>
+                <input
+                  id="email"
+                  type="email"
+                  class="field-input"
+                  formControlName="email"
+                  placeholder="john@company.com"
+                  [class.error]="userForm.get('email')?.invalid && userForm.get('email')?.touched"
+                />
+                @if (userForm.get('email')?.invalid && userForm.get('email')?.touched) {
+                  <div class="field-error">
+                    <i class="fa-solid fa-exclamation-circle"></i>
+                    @if (userForm.get('email')?.errors?.['required']) {
+                      Email address is required
+                    }
+                    @if (userForm.get('email')?.errors?.['email']) {
+                      Please enter a valid email address
+                    }
+                  </div>
+                }
+              </div>
+
+              <div class="form-field">
+                <label class="field-label" for="title">Job Title</label>
+                <input
+                  id="title"
+                  type="text"
+                  class="field-input"
+                  formControlName="title"
+                  placeholder="Software Engineer"
+                />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="dialog-footer">
-        <button type="button" class="btn btn-secondary" (click)="onCancel()">
-          <i class="fa-solid fa-times"></i>
-          Cancel
-        </button>
-        <button 
-          type="submit" 
-          class="btn btn-primary" 
-          [disabled]="userForm.invalid || isLoading"
-        >
-          @if (isLoading) {
-            <i class="fa-solid fa-spinner fa-spin"></i>
-            Saving...
-          } @else {
-            <i class="fa-solid fa-save"></i>
-            {{ isEditMode ? 'Update User' : 'Create User' }}
-          }
-        </button>
-      </div>
-    </form>
+        <!-- User Settings Section -->
+        <div class="content-section">
+          <div class="form-section">
+            <div class="section-header">
+              <h3 class="section-title">
+                <i class="fa-solid fa-cog"></i>
+                User Settings
+              </h3>
+              <p class="section-description">Configure user type and account status</p>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-row">
+                <div class="form-field">
+                  <label class="field-label" for="type">User Type</label>
+                  <select id="type" class="field-select" formControlName="type">
+                    <option value="User">Standard User</option>
+                    <option value="Owner">System Owner</option>
+                  </select>
+                </div>
+
+                <div class="form-field">
+                  <div class="checkbox-field">
+                    <input
+                      id="isActive"
+                      type="checkbox"
+                      class="checkbox-input"
+                      formControlName="isActive"
+                    />
+                    <label class="checkbox-label" for="isActive">
+                      <div class="checkbox-indicator"></div>
+                      <div>
+                        <strong>Active Account</strong>
+                        <div style="font-size: 12px; color: var(--md-on-surface-variant); margin-top: 2px;">
+                          User can log in and access the system
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Role Assignment Section -->
+        <div class="content-section">
+          <div class="form-section">
+            <div class="section-header">
+              <h3 class="section-title">
+                <i class="fa-solid fa-user-tag"></i>
+                Role Assignment
+              </h3>
+              <p class="section-description">Select the roles to assign to this user</p>
+            </div>
+
+            <div class="roles-grid">
+              @for (role of data?.availableRoles; track role.ID) {
+                <div class="role-card"
+                     [class.selected]="selectedRoleIds.has(role.ID)"
+                     (click)="toggleRole(role.ID)">
+                  <div class="role-content">
+                    <div class="checkbox-field">
+                      <input
+                        type="checkbox"
+                        class="checkbox-input"
+                        [id]="'role-' + role.ID"
+                        [checked]="selectedRoleIds.has(role.ID)"
+                        (change)="onRoleToggle(role.ID, $event)"
+                      />
+                      <label class="checkbox-label" [for]="'role-' + role.ID">
+                        <div class="checkbox-indicator"></div>
+                      </label>
+                    </div>
+                    <div class="role-info">
+                      <h4 class="role-name">{{ role.Name }}</h4>
+                      @if (role.Description) {
+                        <p class="role-description">{{ role.Description }}</p>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer">
+          <button
+            type="submit"
+            class="btn btn-primary"
+            [disabled]="userForm.invalid || isLoading"
+          >
+            @if (isLoading) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              Saving...
+            } @else {
+              <i class="fa-solid fa-save"></i>
+              {{ isEditMode ? 'Update User' : 'Create User' }}
+            }
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="onCancel()">
+            <i class="fa-solid fa-times"></i>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
-</kendo-window>
+</div>

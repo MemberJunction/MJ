@@ -22,6 +22,7 @@ export class RoleFormComponent extends BaseFormComponent {
             { sectionKey: 'entityPermissions', sectionName: 'Entity Permissions', isExpanded: false },
             { sectionKey: 'queryPermissions', sectionName: 'Query Permissions', isExpanded: false },
             { sectionKey: 'userRoles', sectionName: 'User Roles', isExpanded: false },
+            { sectionKey: 'mJMCPServerConnectionPermissions', sectionName: 'MJ: MCP Server Connection Permissions', isExpanded: false },
             { sectionKey: 'resourcePermissions', sectionName: 'Resource Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentPermissions', sectionName: 'MJ: AI Agent Permissions', isExpanded: false }
         ]);

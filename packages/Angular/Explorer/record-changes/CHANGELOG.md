@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-record-changes
 
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [ca551dd]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/ng-compare-records@3.3.0
+  - @memberjunction/ng-notifications@3.3.0
+  - @memberjunction/ng-shared-generic@3.3.0
+  - @memberjunction/ng-container-directives@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Patch Changes

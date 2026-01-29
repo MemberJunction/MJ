@@ -1,5 +1,14 @@
 # @memberjunction/db-auto-doc
 
+## 3.3.0
+
+### Patch Changes
+
+- @memberjunction/ai-provider-bundle@3.3.0
+- @memberjunction/ai@3.3.0
+- @memberjunction/core@3.3.0
+- @memberjunction/global@3.3.0
+
 ## 3.2.0
 
 ### Minor Changes

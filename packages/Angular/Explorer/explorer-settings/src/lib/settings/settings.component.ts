@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy, EventEmitter, Output } from '@angular/core';
+import { Location } from '@angular/common';
 import { RegisterClass } from '@memberjunction/global';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -83,6 +84,12 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       badgeCount: 0
     },
     {
+      id: 'notifications',
+      label: 'Notifications',
+      icon: 'fa-solid fa-bell',
+      badgeCount: 0
+    },
+    {
       id: 'advanced',
       label: 'Advanced',
       icon: 'fa-solid fa-flask',
@@ -112,7 +119,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     },
     {
       id: 'notifications',
-      tabId: 'general',
+      tabId: 'notifications',
       sectionId: 'notifications',
       label: 'Notifications',
       keywords: ['notifications', 'alerts', 'email', 'push', 'messages', 'inbox'],
@@ -184,10 +191,11 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
 
   // Mobile state
   public isMobile = window.innerWidth < 768;
+  public isMobileNavOpen = false;
 
   private destroy$ = new Subject<void>();
 
-  constructor() {
+  constructor(private location: Location) {
     // Listen for window resize
     super();
     window.addEventListener('resize', this.handleResize.bind(this));
@@ -326,8 +334,41 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     this.filteredTabs = [...this.tabs];
   }
 
+  /**
+   * Toggles the mobile navigation rail open/closed
+   */
+  public toggleMobileNav(): void {
+    this.isMobileNavOpen = !this.isMobileNavOpen;
+  }
+
+  /**
+   * Closes the mobile navigation rail
+   */
+  public closeMobileNav(): void {
+    this.isMobileNavOpen = false;
+  }
+
+  /**
+   * Closes the settings page and navigates back
+   */
+  public closeSettings(): void {
+    this.location.back();
+  }
+
+  /**
+   * Handles tab change on mobile and closes the nav rail
+   */
+  public onMobileTabChange(tabId: string): void {
+    this.onTabChange(tabId);
+    this.closeMobileNav();
+  }
+
   private handleResize(): void {
     this.isMobile = window.innerWidth < 768;
+    // Close mobile nav on resize to desktop
+    if (!this.isMobile) {
+      this.isMobileNavOpen = false;
+    }
   }
 
   private emitStateChange(): void {

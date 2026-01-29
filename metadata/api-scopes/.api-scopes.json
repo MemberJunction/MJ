@@ -1,0 +1,796 @@
+[
+  {
+    "fields": {
+      "Name": "full_access",
+      "FullPath": "full_access",
+      "ParentID": null,
+      "Category": "Admin",
+      "Description": "DANGER: Grants unrestricted access to all operations. This is a 'god power' scope that bypasses all other scope checks. Use with extreme caution and only for trusted system integrations.",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-shield-halved", "color": "#f59e0b"}
+    },
+    "primaryKey": {
+      "ID": "C262DF10-DCA6-41A3-A68B-2FB0925C97E5"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.787Z",
+      "checksum": "b8a36a59c77e77890546b3c0e75c3060d344e096b10702179f27ee7c02e62fb3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "query",
+      "FullPath": "query",
+      "ParentID": null,
+      "Category": "Queries",
+      "Description": "Parent scope for RunQuery operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-database", "color": "#3b82f6"}
+    },
+    "primaryKey": {
+      "ID": "6B4F338F-7D29-4E08-9224-4C6B28AB77F0"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.800Z",
+      "checksum": "3154543d2262a319e747a6ef44574d34fb3630f1f988416f6f24da286931a12a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "run",
+      "FullPath": "query:run",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=query",
+      "Category": "Queries",
+      "Description": "Execute queries via RunQuery",
+      "ResourceType": "Query",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "BC484BC3-AC25-49A8-911E-EAF05E72DF42"
+    }
+  },
+  {
+    "fields": {
+      "Name": "view",
+      "FullPath": "view",
+      "ParentID": null,
+      "Category": "Views",
+      "Description": "Parent scope for RunView operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-table-list", "color": "#06b6d4"}
+    },
+    "primaryKey": {
+      "ID": "ED5E88F4-2CAE-45B5-B452-1F5F6F034507"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.811Z",
+      "checksum": "9f03f265b3e85c2ff8f01b6b0bc4672b80e87f26e0acd4d33b066fcf8f953649"
+    }
+  },
+  {
+    "fields": {
+      "Name": "run",
+      "FullPath": "view:run",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=view",
+      "Category": "Views",
+      "Description": "Execute views via RunView",
+      "ResourceType": "View",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "E29B56DA-C650-4493-96D8-D0BB7C6A8DFF"
+    }
+  },
+  {
+    "fields": {
+      "Name": "agent",
+      "FullPath": "agent",
+      "ParentID": null,
+      "Category": "Agents",
+      "Description": "Parent scope for agent operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-robot", "color": "#10b981"}
+    },
+    "primaryKey": {
+      "ID": "E26DD357-399D-47E2-B831-54743E47A870"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.823Z",
+      "checksum": "3b21b08c1cc8adada0e69be931c1be16976ce863ff9bd223979c320e492f170a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "agent:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=agent",
+      "Category": "Agents",
+      "Description": "Execute AI agents",
+      "ResourceType": "Agent",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "D9F4DC9A-EBDD-47FB-9934-441549051A5B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "monitor",
+      "FullPath": "agent:monitor",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=agent",
+      "Category": "Agents",
+      "Description": "Read agent run status, history, and step details",
+      "ResourceType": "Agent",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "E5BA5C42-323E-4828-AFBC-96BB23A2970C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "cancel",
+      "FullPath": "agent:cancel",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=agent",
+      "Category": "Agents",
+      "Description": "Cancel running agent executions",
+      "ResourceType": "Agent",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "139493D2-86E9-48C1-A820-BBEF44B6B6B7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "entity",
+      "FullPath": "entity",
+      "ParentID": null,
+      "Category": "Entities",
+      "Description": "Parent scope for entity CRUD operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-table", "color": "#6366f1"}
+    },
+    "primaryKey": {
+      "ID": "8E46B18C-8DBF-43A8-943E-E1039326105C"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.836Z",
+      "checksum": "e1be788d57b93fd1ff50e66bff9d32f71279a4cdeb4a9f8f6f3eaba56323e8c4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "create",
+      "FullPath": "entity:create",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=entity",
+      "Category": "Entities",
+      "Description": "Create entity records",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "A428AA6F-0C1F-4752-AC53-B57B15BE8ACD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "entity:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=entity",
+      "Category": "Entities",
+      "Description": "Read entity records",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "88DC0CDF-444B-49E4-AF6D-A057F21FC04E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "update",
+      "FullPath": "entity:update",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=entity",
+      "Category": "Entities",
+      "Description": "Update entity records",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "7640DE54-C91B-4B19-8B82-3CA9A7E443B1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "delete",
+      "FullPath": "entity:delete",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=entity",
+      "Category": "Entities",
+      "Description": "Delete entity records",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "76782769-F2DC-483A-9176-1D0677F8DAF1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "merge",
+      "FullPath": "entity:merge",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=entity",
+      "Category": "Entities",
+      "Description": "Merge duplicate entity records",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "F8021BDA-5E28-444E-A6D1-11045F8AFCD9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "action",
+      "FullPath": "action",
+      "ParentID": null,
+      "Category": "Actions",
+      "Description": "Parent scope for action operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-bolt", "color": "#8b5cf6"}
+    },
+    "primaryKey": {
+      "ID": "A1B2C3D4-1234-5678-9ABC-DEF012345678"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.850Z",
+      "checksum": "e02ce2468820b28601f8de12b58d6914bedc5a908f015770f39997079a7fa4ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "action:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=action",
+      "Category": "Actions",
+      "Description": "Execute actions",
+      "ResourceType": "Action",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "B2C3D4E5-2345-6789-ABCD-EF0123456789"
+    }
+  },
+  {
+    "fields": {
+      "Name": "prompt",
+      "FullPath": "prompt",
+      "ParentID": null,
+      "Category": "Prompts",
+      "Description": "Parent scope for prompt operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-comment-dots", "color": "#f97316"}
+    },
+    "primaryKey": {
+      "ID": "C3D4E5F6-3456-789A-BCDE-F01234567890"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.861Z",
+      "checksum": "9ca868a0fd60f577c442ca7c7a5e3820e89e13d6dfc5a71d9d4a011130370aa0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "prompt:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=prompt",
+      "Category": "Prompts",
+      "Description": "Execute AI prompts",
+      "ResourceType": "Prompt",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "D4E5F6A7-4567-89AB-CDEF-012345678901"
+    }
+  },
+  {
+    "fields": {
+      "Name": "embedding",
+      "FullPath": "embedding",
+      "ParentID": null,
+      "Category": "Embeddings",
+      "Description": "Parent scope for embedding operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-cube", "color": "#14b8a6"}
+    },
+    "primaryKey": {
+      "ID": "83972D76-C9F0-4B4F-B0C9-612CA74955C6"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.873Z",
+      "checksum": "bdeb4170ebff8d25f1be15571c01227a19811d5429141c0468dc59754fb02697"
+    }
+  },
+  {
+    "fields": {
+      "Name": "generate",
+      "FullPath": "embedding:generate",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=embedding",
+      "Category": "Embeddings",
+      "Description": "Generate text embeddings",
+      "ResourceType": "Embedding",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "A29708F7-2A24-424C-ABA2-2E8015057327"
+    }
+  },
+  {
+    "fields": {
+      "Name": "template",
+      "FullPath": "template",
+      "ParentID": null,
+      "Category": "Templates",
+      "Description": "Parent scope for template operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-file-code", "color": "#a855f7"}
+    },
+    "primaryKey": {
+      "ID": "088DF604-0322-4F1F-9565-3F0BF810A4A2"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.883Z",
+      "checksum": "b0379da13990e67c482847b4d99c4ce3850ac8826383e0bead5eaba58c2a14e9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "template:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=template",
+      "Category": "Templates",
+      "Description": "Render/execute templates",
+      "ResourceType": "Template",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "3FD0E2CF-4BEC-4982-83D1-346F33260169"
+    }
+  },
+  {
+    "fields": {
+      "Name": "dataset",
+      "FullPath": "dataset",
+      "ParentID": null,
+      "Category": "Datasets",
+      "Description": "Parent scope for dataset operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-table-cells", "color": "#0ea5e9"}
+    },
+    "primaryKey": {
+      "ID": "A76B8C74-89EF-42D8-9E80-CC1787C733C9"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.894Z",
+      "checksum": "bbd08f88de378d265da0a15b46f8adb5c30927c4e1f49f1b7047b6860a79630f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "dataset:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=dataset",
+      "Category": "Datasets",
+      "Description": "Load datasets",
+      "ResourceType": "Dataset",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "B93CBD38-042F-43E1-B838-8E16D3ED31E9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "task",
+      "FullPath": "task",
+      "ParentID": null,
+      "Category": "Tasks",
+      "Description": "Parent scope for task graph operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-list-check", "color": "#84cc16"}
+    },
+    "primaryKey": {
+      "ID": "87366A22-ECAA-410D-9266-DD9675B7E3C6"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.976Z",
+      "checksum": "31c72694878584bceb711805cca834ddd763dd7ee91fcc08b36206106b4bfd4f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "task:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=task",
+      "Category": "Tasks",
+      "Description": "Read task status and history",
+      "ResourceType": "Task",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "A00BA25E-D852-4221-8038-B3118FBF7072"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "task:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=task",
+      "Category": "Tasks",
+      "Description": "Execute task graphs",
+      "ResourceType": "Task",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "96100CC6-3A9B-4252-96F3-80A55BFA6B65"
+    }
+  },
+  {
+    "fields": {
+      "Name": "cancel",
+      "FullPath": "task:cancel",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=task",
+      "Category": "Tasks",
+      "Description": "Cancel running tasks",
+      "ResourceType": "Task",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "37C440A8-E17E-47E5-8763-8A44A4EE1F6D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "datacontext",
+      "FullPath": "datacontext",
+      "ParentID": null,
+      "Category": "DataContexts",
+      "Description": "Parent scope for data context operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-sitemap", "color": "#22c55e"}
+    },
+    "primaryKey": {
+      "ID": "3A9F004E-4286-4E48-AEF6-70EAFDC81259"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:07.988Z",
+      "checksum": "f5958014d5a6365fc815e468975a405ffacb9bfa8b88418be4495190fcfa9946"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "datacontext:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=datacontext",
+      "Category": "DataContexts",
+      "Description": "Load data context items",
+      "ResourceType": "DataContext",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "F807AEB6-156B-42F5-9D83-0E0C7DA78741"
+    }
+  },
+  {
+    "fields": {
+      "Name": "communication",
+      "FullPath": "communication",
+      "ParentID": null,
+      "Category": "Communication",
+      "Description": "Parent scope for communication operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-envelope", "color": "#ec4899"}
+    },
+    "primaryKey": {
+      "ID": "E95729D3-E14A-4676-BEAD-40CDD5016719"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:08.001Z",
+      "checksum": "415b2f3fac8e302abb4eb87078e0c169d8c852a4f0e9f711afac8870af49ac64"
+    }
+  },
+  {
+    "fields": {
+      "Name": "send",
+      "FullPath": "communication:send",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=communication",
+      "Category": "Communication",
+      "Description": "Send emails/messages",
+      "ResourceType": "Communication",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "A89E8DEF-BE4A-498D-A52D-C5A36C718E8F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "apikey",
+      "FullPath": "apikey",
+      "ParentID": null,
+      "Category": "APIKeys",
+      "Description": "Parent scope for API key management operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-key", "color": "#eab308"}
+    },
+    "primaryKey": {
+      "ID": "F89FF78E-957A-4A53-A12C-940C2A1441D2"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:08.013Z",
+      "checksum": "bd35a6bde3935cbdccb315bfa6a396bcf9e842b6566dca022cb851ffbdadeb9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "create",
+      "FullPath": "apikey:create",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=apikey",
+      "Category": "APIKeys",
+      "Description": "Create new API keys",
+      "ResourceType": "APIKey",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "0003F154-213E-4447-9D99-26025B2B37BD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "revoke",
+      "FullPath": "apikey:revoke",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=apikey",
+      "Category": "APIKeys",
+      "Description": "Revoke API keys",
+      "ResourceType": "APIKey",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "2E77A00A-D1CB-4791-8DF8-2D990EDB6208"
+    }
+  },
+  {
+    "fields": {
+      "Name": "user",
+      "FullPath": "user",
+      "ParentID": null,
+      "Category": "Users",
+      "Description": "Parent scope for user operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-user", "color": "#64748b"}
+    },
+    "primaryKey": {
+      "ID": "DF335D22-8DBA-4DA4-958F-946B7D824AFB"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:08.026Z",
+      "checksum": "cdcee4bdce3f1df8f30576871f1a325a29f474d577d312862045a6cc749d4a9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "user:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=user",
+      "Category": "Users",
+      "Description": "Read user information (for UserByID, UserByEmail, etc.)",
+      "ResourceType": "User",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "87DBFC60-587E-497B-8F9D-FAFA0FAC7EB8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "metadata",
+      "FullPath": "metadata",
+      "ParentID": null,
+      "Category": "Metadata",
+      "Description": "Parent scope for metadata/discovery operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {"icon": "fa-solid fa-circle-info", "color": "#6366f1"}
+    },
+    "primaryKey": {
+      "ID": "35CB44CB-3DA8-4745-AFE8-37F6626254AC"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T21:53:08.037Z",
+      "checksum": "cd125ae33285b3635503b67f1ca645827a2ac83d5a0beb54793159d1331fbefe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "entities",
+      "FullPath": "metadata:entities",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "Category": "Metadata",
+      "Description": "Parent scope for entity metadata operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "DD7078F9-53CB-461B-A9E5-3A9E85546DE2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "metadata:entities:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:entities",
+      "Category": "Metadata",
+      "Description": "Read entity schema/metadata definitions",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "71F7E12C-9FAD-490D-AAB9-123FF78C9C01"
+    }
+  },
+  {
+    "fields": {
+      "Name": "actions",
+      "FullPath": "metadata:actions",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "Category": "Metadata",
+      "Description": "Parent scope for action metadata operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "99BF01DE-915A-4E9A-BD3D-604ECEDA4FB9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "metadata:actions:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:actions",
+      "Category": "Metadata",
+      "Description": "Discover and read action definitions",
+      "ResourceType": "Action",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "BBDEFE8E-8F8F-4984-97EC-DBEAF6FA3A08"
+    }
+  },
+  {
+    "fields": {
+      "Name": "agents",
+      "FullPath": "metadata:agents",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "Category": "Metadata",
+      "Description": "Parent scope for agent metadata operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "4F1A27D2-75F0-4D0B-8E1D-5344AB7C29E0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "metadata:agents:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:agents",
+      "Category": "Metadata",
+      "Description": "Discover and read agent definitions",
+      "ResourceType": "Agent",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "95A3367C-1C4B-4F1D-973A-8BDD7A77D82A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "prompts",
+      "FullPath": "metadata:prompts",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "Category": "Metadata",
+      "Description": "Parent scope for prompt metadata operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "23954840-AC5D-494E-B6C9-DC87D10B76DF"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "metadata:prompts:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:prompts",
+      "Category": "Metadata",
+      "Description": "Discover and read prompt definitions",
+      "ResourceType": "Prompt",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "308991E2-F214-4A4C-94CF-9AE908A29BFC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "queries",
+      "FullPath": "metadata:queries",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "Category": "Metadata",
+      "Description": "Parent scope for query metadata operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "D207CE40-E9A9-4A4E-9287-194C8FF53623"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "metadata:queries:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:queries",
+      "Category": "Metadata",
+      "Description": "Discover and read query definitions",
+      "ResourceType": "Query",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "8825DDDB-FC26-412B-B7DC-E93FF7AB85FD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "communication",
+      "FullPath": "metadata:communication",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "Category": "Metadata",
+      "Description": "Parent scope for communication metadata operations",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "DCEC9CA5-F272-4525-8959-46C5FCCC301E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "metadata:communication:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:communication",
+      "Category": "Metadata",
+      "Description": "Read communication provider information",
+      "ResourceType": "Communication",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "DD430C14-9DF0-4A60-A292-4CF0FF078755"
+    }
+  }
+]

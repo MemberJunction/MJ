@@ -98,8 +98,14 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
   /** Whether the start session dialog is currently visible */
   showStartSessionDialog = false;
 
+  /** Whether to show the statistics cards section */
+  showStats = false;
+
   /** Whether the log viewer is in expanded (fullscreen) mode */
   isLogViewerExpanded = false;
+
+  /** Whether the start session dialog is in fullscreen mode */
+  isStartDialogFullscreen = false;
 
   /** Whether the stop session confirmation dialog is visible */
   showStopConfirmDialog = false;
@@ -671,6 +677,13 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
   }
 
   /**
+   * Toggles the start session dialog between normal and fullscreen mode.
+   */
+  toggleStartDialogFullscreen() {
+    this.isStartDialogFullscreen = !this.isStartDialogFullscreen;
+  }
+
+  /**
    * Handles keyboard events for the component.
    * Closes expanded log viewer or confirmation dialog when Escape is pressed.
    */
@@ -680,6 +693,8 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
       this.cancelStopConfirm();
     } else if (this.isLogViewerExpanded) {
       this.isLogViewerExpanded = false;
+    } else if (this.isStartDialogFullscreen) {
+      this.isStartDialogFullscreen = false;
     } else if (this.showStartSessionDialog) {
       this.showStartSessionDialog = false;
     }

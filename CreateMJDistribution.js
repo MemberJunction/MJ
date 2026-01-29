@@ -2,6 +2,27 @@ const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
 
+function handleMJExplorerPackageJson(dir, normalizedDir, archive) {
+  console.log(`   Processing MJExplorer package.json to remove monorepo-specific port settings...`);
+  const packageJsonPath = path.join(dir, 'package.json');
+  const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+  const packageJson = JSON.parse(packageJsonContent);
+
+  // Remove --port flags from scripts (monorepo uses 4201 to avoid conflicts, distribution should use default 4200)
+  if (packageJson.scripts) {
+    for (const [scriptName, scriptCommand] of Object.entries(packageJson.scripts)) {
+      if (typeof scriptCommand === 'string' && scriptCommand.includes('--port')) {
+        // Remove --port and its value (handles both "--port 4201" and "--port=4201" formats)
+        packageJson.scripts[scriptName] = scriptCommand.replace(/\s*--port[=\s]+\d+/g, '');
+        console.log(`      Removed --port flag from script: ${scriptName}`);
+      }
+    }
+  }
+
+  // Append modified package.json to archive
+  archive.append(JSON.stringify(packageJson, null, 2), { name: path.join(normalizedDir, 'package.json') });
+}
+
 async function handleMJExplorerDirectory(dir, normalizedDir, archive) {
   console.log(`   Handling MJ Explorer directory...`);
   const configFilePath = `${dir}/angular.json`;
@@ -10,6 +31,9 @@ async function handleMJExplorerDirectory(dir, normalizedDir, archive) {
   const configJson = JSON.parse(configFileContent);
   // No longer need to fix hardcoded paths - now using SCSS imports with package resolution
   archive.append(JSON.stringify(configJson, null, 2), { name: configFileOutputPath });
+
+  // Handle package.json - remove monorepo-specific port settings
+  handleMJExplorerPackageJson(dir, normalizedDir, archive);
 
   // now handle the environment files (environment.ts, environment.development.ts, environment.staging.ts)
   await handleSingleEnvironmentFile(dir, normalizedDir, archive, 'src/environments/', 'environment.ts', false);
@@ -30,7 +54,7 @@ async function handleSingleEnvironmentFile(dir, normalizedDir, archive, subDir, 
       CLIENT_ID: '',
       TENANT_ID: '',
       CLIENT_AUTHORITY: '',
-      AUTH_TYPE: 'MSAL',
+      AUTH_TYPE: 'msal',
       NODE_ENV: isDevelopment ? 'development' : 'production',
       AUTOSAVE_DEBOUNCE_MS: 1200,
       SEARCH_DEBOUNCE_MS: 800,
@@ -41,7 +65,7 @@ async function handleSingleEnvironmentFile(dir, normalizedDir, archive, subDir, 
       APPLICATION_INSTANCE: isDevelopment ? 'DEV' : fileName.includes('staging') ? 'STAGE' : 'PROD',
       AUTH0_DOMAIN: '',
       AUTH0_CLIENTID: '',
-    });
+    }, null, 2);
   }
 
   // Clear values for sensitive keys in the environment configuration
@@ -49,6 +73,9 @@ async function handleSingleEnvironmentFile(dir, normalizedDir, archive, subDir, 
   if (!fileContent.includes('export const environment = ')) {
     fileContent = `export const environment = ${fileContent}`;
   }
+
+  // Convert AUTH_TYPE to TypeScript 'as const' syntax
+  fileContent = fileContent.replace(/"AUTH_TYPE":\s*"msal"/, "AUTH_TYPE: 'msal' as const");
 
   // Append modified content to the archive
   archive.append(fileContent, { name: path.join(normalizedDir, subDir, fileName) });
@@ -159,6 +186,7 @@ async function createMJDistribution() {
 
       // Add directory-specific exclusions
       if (dirName === 'MJExplorer') {
+        ignorePatterns.push('package.json'); // Ignore the original package.json (we handle it separately to remove monorepo-specific ports)
         ignorePatterns.push('angular.json'); // Ignore the original angular.json (we handle it separately)
         ignorePatterns.push('src/environments/**'); // Ignore the original environment files (we handle them separately)
         ignorePatterns.push('kendo-ui-license.txt'); // Don't want to include this!

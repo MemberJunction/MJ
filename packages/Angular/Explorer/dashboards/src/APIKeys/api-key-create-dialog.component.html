@@ -1,0 +1,242 @@
+<!-- Slide-out Backdrop -->
+<div class="slideout-backdrop" *ngIf="Visible" (click)="Step !== 'success' ? close() : null"></div>
+
+<!-- Slide-out Panel -->
+<div class="slideout-panel" [class.open]="Visible">
+    <!-- Header -->
+    <div class="slideout-header">
+        <div class="slideout-title">
+            <i class="fa-solid fa-key"></i>
+            <span>Generate New API Key</span>
+        </div>
+        <button class="slideout-close" *ngIf="Step !== 'success'" (click)="close()" title="Close (Esc)">
+            <i class="fa-solid fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Step Indicator -->
+    <div class="step-indicator" *ngIf="Step !== 'success'">
+        <div class="step" [class.active]="Step === 'configure'" [class.completed]="Step === 'scopes'">
+            <div class="step-number">1</div>
+            <div class="step-label">Configure</div>
+        </div>
+        <div class="step-connector" [class.active]="Step === 'scopes'"></div>
+        <div class="step" [class.active]="Step === 'scopes'">
+            <div class="step-number">2</div>
+            <div class="step-label">Permissions</div>
+        </div>
+    </div>
+
+    <div class="slideout-content">
+        <!-- Configure Step -->
+        <div class="step-panel" *ngIf="Step === 'configure'">
+            <div class="form-section">
+                <label class="form-label required">Key Label</label>
+                <input kendoTextBox [(ngModel)]="Label"
+                       placeholder="e.g., ElevenLabs Integration, CI/CD Pipeline"
+                       class="form-input" />
+                <div class="form-hint">A memorable name to identify this key's purpose</div>
+            </div>
+
+            <div class="form-section">
+                <label class="form-label">Description</label>
+                <textarea kendoTextArea [(ngModel)]="Description"
+                          placeholder="Optional notes about how this key will be used..."
+                          [rows]="3"
+                          class="form-textarea"></textarea>
+            </div>
+
+            <div class="form-section">
+                <label class="form-label">Expiration</label>
+                <div class="expiration-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" kendoCheckBox
+                               [(ngModel)]="NeverExpires"
+                               (change)="onNeverExpiresChange()" />
+                        <span>Never expires</span>
+                    </label>
+
+                    <div class="preset-buttons" *ngIf="!NeverExpires">
+                        <button *ngFor="let preset of ExpirationPresets"
+                                class="preset-btn"
+                                [class.active]="SelectedPreset === preset"
+                                (click)="onPresetSelect(preset)">
+                            {{preset.label}}
+                        </button>
+                    </div>
+
+                    <div class="custom-date" *ngIf="!NeverExpires && SelectedPreset?.days === -1">
+                        <kendo-datepicker [(ngModel)]="ExpiresAt"
+                                          [min]="getMinDate()"
+                                          format="MMM d, yyyy"
+                                          placeholder="Select expiration date">
+                        </kendo-datepicker>
+                    </div>
+
+                    <div class="expiration-preview" *ngIf="!NeverExpires && ExpiresAt">
+                        <i class="fa-solid fa-calendar-check"></i>
+                        <span>Key will expire on {{ExpiresAt | date:'MMMM d, yyyy'}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="error-message" *ngIf="Error">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                {{Error}}
+            </div>
+        </div>
+
+        <!-- Scopes Step -->
+        <div class="step-panel scopes-step" *ngIf="Step === 'scopes'">
+            <div class="scopes-header">
+                <div class="scopes-info">
+                    <h4>Select Permission Scopes</h4>
+                    <p>Choose what this API key can access. You can always modify this later.</p>
+                </div>
+                <div class="scopes-count" *ngIf="getSelectedScopeCount() > 0">
+                    <span class="count">{{getSelectedScopeCount()}}</span> selected
+                </div>
+            </div>
+
+            <mj-loading *ngIf="IsLoadingScopes" text="Loading scopes..."></mj-loading>
+
+            <div class="scope-categories" *ngIf="!IsLoadingScopes">
+                <div class="scope-category" *ngFor="let category of ScopeCategories">
+                    <div class="category-header" (click)="toggleCategory(category)">
+                        <div class="category-left">
+                            <i [class]="category.icon" [style.color]="category.color"></i>
+                            <span class="category-name">{{category.name}}</span>
+                            <span class="category-badge">{{category.scopes.length}}</span>
+                        </div>
+                        <div class="category-right">
+                            <label class="select-all-label" (click)="$event.stopPropagation()">
+                                <input type="checkbox" kendoCheckBox
+                                       [checked]="category.allSelected"
+                                       (change)="toggleCategoryAll(category)" />
+                                <span>All</span>
+                            </label>
+                            <i class="fa-solid" [class.fa-chevron-down]="!category.expanded"
+                               [class.fa-chevron-up]="category.expanded"></i>
+                        </div>
+                    </div>
+
+                    <div class="category-scopes" *ngIf="category.expanded">
+                        <div class="scope-item" *ngFor="let item of category.scopes">
+                            <label class="scope-label">
+                                <input type="checkbox" kendoCheckBox
+                                       [(ngModel)]="item.selected"
+                                       (change)="updateCategoryState(category)" />
+                                <div class="scope-info">
+                                    <span class="scope-name">{{item.scope.Name}}</span>
+                                    <span class="scope-desc" *ngIf="item.scope.Description">
+                                        {{item.scope.Description}}
+                                    </span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="scope-tip">
+                <i class="fa-solid fa-lightbulb"></i>
+                <span>Tip: Use wildcards like <code>entities:*</code> for broad access within a category</span>
+            </div>
+
+            <!-- No Scopes Warning -->
+            <div class="no-scopes-warning" *ngIf="!IsLoadingScopes && getSelectedScopeCount() === 0">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <div>
+                    <strong>Warning: No permissions selected</strong>
+                    <p>API keys without any assigned scopes will have <strong>no permissions</strong> and cannot perform any operations. This key will be rejected by all API endpoints until scopes are assigned.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Step -->
+        <div class="step-panel success-step" *ngIf="Step === 'success'">
+            <div class="success-icon">
+                <i class="fa-solid fa-check-circle"></i>
+            </div>
+            <h3 class="success-title">API Key Created Successfully!</h3>
+
+            <div class="key-display">
+                <div class="key-warning">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>Copy this key now. It won't be shown again!</span>
+                </div>
+
+                <div class="key-value">
+                    <code>{{RawApiKey}}</code>
+                    <button class="copy-btn" (click)="copyKey()" [class.copied]="KeyCopied">
+                        <i class="fa-solid" [class.fa-copy]="!KeyCopied" [class.fa-check]="KeyCopied"></i>
+                        <span>{{KeyCopied ? 'Copied!' : 'Copy'}}</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="key-details">
+                <div class="detail-row">
+                    <span class="detail-label">Label:</span>
+                    <span class="detail-value">{{Label}}</span>
+                </div>
+                <div class="detail-row" *ngIf="Description">
+                    <span class="detail-label">Description:</span>
+                    <span class="detail-value">{{Description}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Expires:</span>
+                    <span class="detail-value">
+                        {{NeverExpires ? 'Never' : (ExpiresAt | date:'MMMM d, yyyy')}}
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Scopes:</span>
+                    <span class="detail-value">{{getSelectedScopeCount()}} permissions</span>
+                </div>
+            </div>
+
+            <div class="security-note">
+                <i class="fa-solid fa-shield-check"></i>
+                <div>
+                    <strong>Security Note:</strong>
+                    Store this key securely. We only store a hash - the original key cannot be recovered.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="slideout-footer">
+        <ng-container *ngIf="Step === 'configure'">
+            <button kendoButton [themeColor]="'primary'" (click)="goToScopes()">
+                Next: Permissions
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+            <button kendoButton (click)="close()">Cancel</button>
+        </ng-container>
+
+        <ng-container *ngIf="Step === 'scopes'">
+            <button kendoButton [themeColor]="'primary'"
+                    [disabled]="IsCreating"
+                    (click)="createKey()">
+                <mj-loading *ngIf="IsCreating" [showText]="false" size="small"></mj-loading>
+                <span *ngIf="!IsCreating">
+                    <i class="fa-solid fa-key"></i>
+                    Generate Key
+                </span>
+            </button>
+            <button kendoButton (click)="goBack()">
+                <i class="fa-solid fa-arrow-left"></i>
+                Back
+            </button>
+        </ng-container>
+
+        <ng-container *ngIf="Step === 'success'">
+            <button kendoButton [themeColor]="'primary'" (click)="close()">
+                <i class="fa-solid fa-check"></i>
+                Done
+            </button>
+        </ng-container>
+    </div>
+</div>

@@ -257,6 +257,149 @@ You can use wildcards in `entityName` and `schemaName`:
 - `*Users`: Match entities/schemas ending with "Users"
 - `*Users*`: Match entities/schemas containing "Users"
 
+### Action Tools
+
+Action tools allow AI models to discover and execute MemberJunction Actions.
+
+```javascript
+actionTools: [
+  {
+    // Action matching (supports wildcards)
+    actionName: '*',              // Action name pattern (use '*' for all actions)
+    actionCategory: 'Workflow',   // Optional category filter
+
+    // Operations to enable
+    discover: true,   // Enable action discovery
+    execute: true     // Enable action execution
+  }
+]
+```
+
+#### Action Tool Naming
+
+- `Discover_Actions`: Lists available actions based on name/category pattern
+- `Run_Action`: General tool to execute any action by name or ID
+- `Get_Action_Params`: Get parameter definitions for a specific action
+- `Execute_[ActionName]_Action`: Specific tools for each configured action
+
+#### Action Tool Parameters and Responses
+
+**Discover_Actions**
+- Parameters:
+  - `pattern` (optional): Wildcard pattern to match action names
+  - `category` (optional): Category name to filter actions
+- Returns: Array of action metadata (id, name, description, category, type, status, paramCount)
+
+**Run_Action**
+- Parameters:
+  - `actionName` (optional): Name of the action to execute
+  - `actionId` (optional): ID of the action to execute
+  - `params` (optional): Parameters for the action as key-value pairs
+- Returns: `{ success: boolean, resultCode?: string, message?: string, runId?: string }`
+
+**Get_Action_Params**
+- Parameters:
+  - `actionName` (optional): Name of the action
+  - `actionId` (optional): ID of the action
+- Returns: `{ actionId, actionName, description, params: [{ name, description, type, isRequired, defaultValue }] }`
+
+### Query Tools
+
+Query tools allow AI models to execute SQL queries against the database.
+
+```javascript
+queryTools: {
+  enabled: true,
+  allowedSchemas: ['dbo', 'sales'],  // Optional: restrict to specific schemas
+  blockedSchemas: ['__mj']           // Optional: block specific schemas
+}
+```
+
+#### Query Tool Naming
+
+- `Run_SQL_Query`: Execute a read-only SQL SELECT query
+- `Get_Database_Schema`: Get schema information for available tables
+
+#### Query Tool Parameters and Responses
+
+**Run_SQL_Query**
+- Parameters:
+  - `sql`: The SQL SELECT query to execute (must start with SELECT)
+  - `maxRows` (optional): Maximum number of rows to return (default: 1000)
+- Returns: `{ success: boolean, rowCount: number, results: [], error?: string }`
+
+**Get_Database_Schema**
+- Parameters:
+  - `schemaFilter` (optional): Filter by schema name
+  - `tableFilter` (optional): Filter by table name pattern
+- Returns: Array of table information with columns
+
+### Prompt Tools
+
+Prompt tools allow AI models to discover and execute MemberJunction AI Prompts.
+
+```javascript
+promptTools: [
+  {
+    promptName: '*',           // Prompt name pattern
+    promptCategory: 'System',  // Optional category filter
+    discover: true,            // Enable prompt discovery
+    execute: true              // Enable prompt execution
+  }
+]
+```
+
+#### Prompt Tool Naming
+
+- `Discover_Prompts`: Lists available AI prompts
+- `Run_Prompt`: Execute any prompt by name or ID
+
+#### Prompt Tool Parameters and Responses
+
+**Discover_Prompts**
+- Parameters:
+  - `pattern` (optional): Wildcard pattern to match prompt names
+  - `category` (optional): Category name to filter prompts
+- Returns: Array of prompt metadata (id, name, description, category, responseFormat)
+
+**Run_Prompt**
+- Parameters:
+  - `promptName` (optional): Name of the prompt to execute
+  - `promptId` (optional): ID of the prompt to execute
+  - `data` (optional): Data to pass to the prompt template
+  - `modelId` (optional): Specific model ID to use
+- Returns: `{ success: boolean, result: any, rawOutput?: string, tokensUsed?: number, errorMessage?: string }`
+
+### Communication Tools
+
+Communication tools allow AI models to send messages through configured communication channels.
+
+```javascript
+communicationTools: {
+  enabled: true,
+  allowedProviders: ['SendGrid', 'Twilio']  // Optional: restrict to specific providers
+}
+```
+
+#### Communication Tool Naming
+
+- `Send_Email`: Send an email message (requires provider configuration)
+- `Get_Communication_Providers`: List available communication providers
+
+#### Communication Tool Parameters and Responses
+
+**Send_Email**
+- Parameters:
+  - `to`: Recipient email address
+  - `subject`: Email subject
+  - `body`: Email body (can be HTML)
+  - `isHtml` (optional): Whether body is HTML (default: true)
+- Returns: `{ success: boolean, error?: string }`
+
+**Get_Communication_Providers**
+- Parameters: None
+- Returns: Array of provider metadata (id, name, description, status, supportsSending)
+
 ## Connecting Models to the Server
 
 The server endpoint is available at:
@@ -500,6 +643,87 @@ module.exports = {
 7. Server updates `LastUsedAt` timestamp and logs usage
 8. Session is created with the authenticated user context
 9. All tool executions use this user's permissions
+
+## Scope-Based Authorization
+
+MCP Server implements a comprehensive scope-based authorization system that controls what operations API keys can perform. This provides fine-grained access control beyond simple authentication.
+
+### How Scope Authorization Works
+
+1. **Application Ceiling**: Each API application (MCP Server, A2A Server, GraphQL API) defines a maximum set of allowed scopes
+2. **API Key Scopes**: Each API key has assigned scopes from the API Scopes table
+3. **Two-Level Evaluation**: When a tool is called, the system checks:
+   - Does the application allow this scope? (application ceiling)
+   - Does the API key have this scope assigned? (key-level permission)
+
+### Scope Format
+
+Scopes follow a hierarchical naming convention:
+- `entity:read` - Read entity records
+- `entity:create` - Create new records
+- `entity:update` - Update existing records
+- `entity:delete` - Delete records
+- `view:run` - Execute RunView queries
+- `agent:execute` - Execute AI agents
+- `agent:monitor` - Check agent run status
+- `agent:cancel` - Cancel running agents
+- `action:execute` - Execute MJ Actions
+- `prompt:execute` - Execute AI prompts
+- `query:run` - Execute SQL queries
+- `metadata:entities:read` - Read entity metadata
+- `metadata:agents:read` - Read agent metadata
+- `metadata:actions:read` - Read action metadata
+- `metadata:prompts:read` - Read prompt metadata
+- `communication:send` - Send emails/messages
+- `full_access` - Bypass all scope checks ("god mode")
+
+### Default Behavior
+
+**Important**: API keys with **no scopes assigned** will have **no permissions** and all tool calls will be denied. This is a security-by-default approach.
+
+To grant full access to an API key, assign the `full_access` scope.
+
+### Tool-to-Scope Mapping
+
+Each MCP tool is mapped to a required scope:
+
+| Tool | Required Scope |
+|------|---------------|
+| Get/Create/Update/Delete Entity | `entity:read/create/update/delete` |
+| RunView | `view:run` |
+| Discover_Agents | `metadata:agents:read` |
+| Run_Agent, Execute_*_Agent | `agent:execute` |
+| Get_Agent_Run_Status | `agent:monitor` |
+| Cancel_Agent_Run | `agent:cancel` |
+| Discover_Actions | `metadata:actions:read` |
+| Run_Action, Execute_*_Action | `action:execute` |
+| Discover_Prompts | `metadata:prompts:read` |
+| Run_Prompt | `prompt:execute` |
+| Run_SQL_Query | `query:run` |
+| Get_All_Entities, Get_Database_Schema | `metadata:entities:read` |
+| Send_Email | `communication:send` |
+
+### Wildcard Resource Matching
+
+Scopes support resource-level wildcards for granular control:
+- `*` - Match all resources
+- `Users` - Match exact resource name
+- `User*` - Match resources starting with "User"
+- `*Entity` - Match resources ending with "Entity"
+- `*User*` - Match resources containing "User"
+- `Users,Employees,Departments` - Match multiple specific resources (comma-separated)
+
+### Authorization Error Messages
+
+When authorization fails, the server returns detailed error messages:
+
+```json
+{
+  "error": "Authorization denied for scope 'entity:create' on resource 'Users'. API key is missing required scope 'entity:create' on resource 'Users'. Allowed scopes: entity:read. Allowed resources: *"
+}
+```
+
+This helps developers understand exactly why access was denied and what scopes are needed.
 
 ### Troubleshooting Authentication
 

@@ -3,7 +3,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
-import { RecordOpenedEvent, ViewGridStateConfig, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
+import { RecordOpenedEvent, ViewGridState, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 
 export function LoadViewResource() {
@@ -148,7 +148,7 @@ export class UserViewResource extends BaseResourceComponent {
     public errorMessage: string | null = null;
     public entityInfo: EntityInfo | null = null;
     public viewEntity: UserViewEntityExtended | null = null;
-    public gridState: ViewGridStateConfig | null = null;
+    public gridState: ViewGridState | null = null;
 
     // Export state
     public isExporting: boolean = false;
@@ -254,7 +254,7 @@ export class UserViewResource extends BaseResourceComponent {
         // Parse grid state if available
         if (this.viewEntity.GridState) {
             try {
-                this.gridState = JSON.parse(this.viewEntity.GridState) as ViewGridStateConfig;
+                this.gridState = JSON.parse(this.viewEntity.GridState) as ViewGridState;
             } catch (e) {
                 console.warn('Failed to parse GridState:', e);
                 this.gridState = null;

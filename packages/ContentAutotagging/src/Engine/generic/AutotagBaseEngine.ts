@@ -636,8 +636,8 @@ export class AutotagBaseEngine extends AIEngine {
     * @returns The extracted text from the DOCX file
     */
     public async parseDOCX(dataBuffer: Buffer): Promise<string> {
-        const dataDOCX = await officeparser.parseOfficeAsync(dataBuffer);
-        return dataDOCX
+        const dataDOCX = await officeparser.parseOffice(dataBuffer);
+        return dataDOCX.toText()
     }
 
     public async parseHTML(data: string): Promise<string> {
