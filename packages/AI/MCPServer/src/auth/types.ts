@@ -295,6 +295,16 @@ export interface SignProxyJWTOptions {
 }
 
 /**
+ * UI configuration for scope display.
+ */
+export interface ScopeUIConfig {
+  /** Font Awesome icon class */
+  icon?: string;
+  /** Hex color for category header */
+  color?: string;
+}
+
+/**
  * Scope information loaded from __mj.APIScope entity.
  * Used for consent screen display and scope validation.
  */
@@ -302,8 +312,14 @@ export interface APIScopeInfo {
   /** Unique identifier */
   ID: string;
 
-  /** Scope name (e.g., "entity:read") */
+  /** Scope name (e.g., "read" - the last segment) */
   Name: string;
+
+  /** Full scope path including parent (e.g., "entity:read") */
+  FullPath: string;
+
+  /** Parent scope ID (null for root scopes) */
+  ParentID: string | null;
 
   /** Category for grouping (e.g., "Entities", "Actions") */
   Category: string;
@@ -313,6 +329,9 @@ export interface APIScopeInfo {
 
   /** Whether this scope is active */
   IsActive: boolean;
+
+  /** UI configuration for display */
+  UIConfig?: ScopeUIConfig;
 }
 
 /**

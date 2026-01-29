@@ -138,6 +138,96 @@ export function getOAuthStyles(): string {
       margin-bottom: 1rem;
     }
 
+    /* Full Access Section - Special treatment for full_access scope */
+    .full-access-section {
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--mj-border);
+    }
+
+    .full-access-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: linear-gradient(135deg, #fef3c7, #fffbeb);
+      border: 2px solid #f59e0b;
+      border-radius: var(--mj-border-radius);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .full-access-item:hover {
+      background: linear-gradient(135deg, #fde68a, #fef3c7);
+      border-color: #d97706;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+    }
+
+    .full-access-item input[type="checkbox"] {
+      flex-shrink: 0;
+      width: 1.25rem;
+      height: 1.25rem;
+      margin-top: 0.25rem;
+      accent-color: #f59e0b;
+    }
+
+    .full-access-content {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      flex: 1;
+    }
+
+    .full-access-icon {
+      font-size: 1.5rem;
+      color: #f59e0b;
+      flex-shrink: 0;
+    }
+
+    .full-access-text {
+      flex: 1;
+    }
+
+    .full-access-label {
+      display: block;
+      font-weight: 700;
+      font-size: 1rem;
+      color: #92400e;
+    }
+
+    .full-access-desc {
+      display: block;
+      font-size: 0.8125rem;
+      color: #a16207;
+      margin-top: 0.25rem;
+      line-height: 1.4;
+    }
+
+    .clear-all-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+      margin-top: 0.75rem;
+      padding: 0.5rem 1rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      background: transparent;
+      color: var(--mj-text-muted);
+      border: 1px solid var(--mj-border);
+      border-radius: var(--mj-border-radius);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .clear-all-btn:hover {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #dc2626;
+    }
+
+    /* Legacy grant-all styles - kept for backwards compatibility */
     .grant-all-section {
       margin-bottom: 1.5rem;
       padding-bottom: 1rem;
@@ -191,31 +281,95 @@ export function getOAuthStyles(): string {
       align-items: center;
       gap: 0.5rem;
       cursor: pointer;
-      padding: 0.5rem 0;
+      padding: 0.75rem;
       user-select: none;
+      background: var(--mj-background);
+      border-radius: var(--mj-border-radius);
+      transition: background 0.2s ease;
     }
 
     .category-header:hover {
-      color: var(--mj-navy);
+      background: #e8e8e8;
+    }
+
+    .category-header i {
+      font-size: 1rem;
+      width: 1.25rem;
+      text-align: center;
     }
 
     .category-toggle {
-      font-size: 0.75rem;
+      font-size: 0.625rem;
       color: var(--mj-text-muted);
       transition: transform 0.2s ease;
+      width: 0.75rem;
+    }
+
+    .category-name {
+      font-weight: 600;
+      color: var(--mj-text);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.8125rem;
     }
 
     .category-count {
       font-size: 0.75rem;
       font-weight: 400;
       color: var(--mj-text-muted);
+    }
+
+    .category-select-btn {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: transparent;
+      color: var(--mj-primary);
+      border: 1px solid var(--mj-primary);
+      border-radius: 0.25rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-left: 0.25rem;
+    }
+
+    .category-select-btn:first-of-type {
       margin-left: auto;
+    }
+
+    .category-select-btn:hover {
+      background: var(--mj-primary);
+      color: white;
     }
 
     .scope-list {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      padding-top: 0.5rem;
+    }
+
+    /* Prefix group container */
+    .prefix-group {
+      border-left: 3px solid var(--mj-border);
+      padding-left: 0.75rem;
+    }
+
+    .prefix-group.orphaned {
+      border-left-color: var(--mj-text-muted);
+    }
+
+    /* Scope children container */
+    .scope-children {
+      margin-left: 1.5rem;
+      margin-top: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+      border-left: 2px solid var(--mj-border);
+      padding-left: 0.75rem;
     }
 
     .scope-item {
@@ -226,11 +380,52 @@ export function getOAuthStyles(): string {
       background: var(--mj-background);
       border-radius: var(--mj-border-radius);
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
     }
 
     .scope-item:hover {
       background: var(--mj-light-blue);
+    }
+
+    /* Parent scope styling */
+    .scope-item.scope-parent {
+      background: white;
+      border: 1px solid var(--mj-border);
+    }
+
+    .scope-item.scope-parent:hover {
+      border-color: var(--mj-primary);
+      background: #f8fafc;
+    }
+
+    .scope-item.scope-parent .scope-content {
+      flex: 1;
+    }
+
+    /* Child scope styling */
+    .scope-item.scope-child {
+      padding: 0.5rem 0.75rem;
+      background: #fafafa;
+    }
+
+    .scope-item.scope-child:hover {
+      background: var(--mj-light-blue);
+    }
+
+    /* Disabled state for implied scopes */
+    .scope-item input[type="checkbox"]:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .scope-item:has(input:disabled) {
+      opacity: 0.7;
+      cursor: not-allowed;
+      background: #f0f0f0;
+    }
+
+    .scope-item:has(input:disabled):hover {
+      background: #f0f0f0;
     }
 
     .scope-item input[type="checkbox"] {
@@ -253,6 +448,123 @@ export function getOAuthStyles(): string {
       font-size: 0.8125rem;
       color: var(--mj-text-muted);
       margin-top: 0.125rem;
+    }
+
+    .scope-children-note {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--mj-primary);
+      margin-top: 0.25rem;
+      font-style: italic;
+    }
+
+    /* Parent scope header with collapsible children */
+    .parent-scope-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      background: white;
+      border: 1px solid var(--mj-border);
+      border-radius: var(--mj-border-radius);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .parent-scope-header:hover {
+      border-color: var(--mj-primary);
+      background: #f8fafc;
+    }
+
+    .parent-scope-header input[type="checkbox"] {
+      flex-shrink: 0;
+      width: 1.125rem;
+      height: 1.125rem;
+      margin-top: 0.125rem;
+      accent-color: var(--mj-primary);
+    }
+
+    .parent-scope-header .scope-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .children-toggle {
+      flex-shrink: 0;
+      width: 1.5rem;
+      height: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.625rem;
+      color: var(--mj-text-muted);
+      background: var(--mj-background);
+      border-radius: 0.25rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .children-toggle:hover {
+      background: var(--mj-light-blue);
+      color: var(--mj-primary);
+    }
+
+    /* Single parent in category - more compact styling */
+    .prefix-group.single-in-category {
+      border-left: none;
+      padding-left: 0;
+    }
+
+    .prefix-group.single-in-category .parent-scope-header {
+      border: none;
+      background: transparent;
+      padding: 0.5rem 0;
+    }
+
+    .prefix-group.single-in-category .parent-scope-header:hover {
+      background: transparent;
+    }
+
+    /* Integrated parent checkbox in category header */
+    .category-header.integrated-parent {
+      flex-wrap: wrap;
+      gap: 0.5rem 0.75rem;
+    }
+
+    .category-header.integrated-parent .category-toggle {
+      cursor: pointer;
+    }
+
+    .integrated-parent-checkbox {
+      display: flex;
+      align-items: center;
+      margin-left: auto;
+      cursor: pointer;
+    }
+
+    .integrated-parent-checkbox input[type="checkbox"] {
+      width: 1.125rem;
+      height: 1.125rem;
+      accent-color: var(--mj-primary);
+    }
+
+    .integrated-parent-desc {
+      flex-basis: 100%;
+      font-size: 0.8125rem;
+      color: var(--mj-text-muted);
+      margin-left: 1.25rem;
+      margin-top: -0.25rem;
+    }
+
+    /* Single-parent category scope list - show children directly */
+    .scope-category.single-parent .scope-list {
+      padding-left: 1.25rem;
+    }
+
+    .scope-category.single-parent .scope-list .scope-children {
+      margin-left: 0;
+      border-left: 2px solid var(--mj-border);
+      padding-left: 0.75rem;
     }
 
     .button-group {

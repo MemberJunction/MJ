@@ -9,7 +9,7 @@
 
 import { RunView } from '@memberjunction/core';
 import { getSystemUser } from '@memberjunction/server';
-import type { APIScopeInfo } from './types.js';
+import type { APIScopeInfo, ScopeUIConfig } from './types.js';
 
 /**
  * In-memory cache for scopes to avoid repeated database queries.
@@ -53,14 +53,17 @@ export async function loadActiveScopes(): Promise<APIScopeInfo[]> {
     const result = await rv.RunView<{
       ID: string;
       Name: string;
+      FullPath: string;
+      ParentID: string | null;
       Category: string;
       Description: string;
       IsActive: boolean;
+      UIConfig: string | null;
     }>(
       {
         EntityName: 'MJ: API Scopes',
         ExtraFilter: 'IsActive = 1',
-        OrderBy: 'Category, Name',
+        OrderBy: 'Category, FullPath',
         ResultType: 'simple',
       },
       systemUser
@@ -71,13 +74,26 @@ export async function loadActiveScopes(): Promise<APIScopeInfo[]> {
       return scopeCache ?? [];
     }
 
-    const scopes: APIScopeInfo[] = result.Results.map((row) => ({
-      ID: row.ID,
-      Name: row.Name,
-      Category: row.Category ?? 'General',
-      Description: row.Description ?? row.Name,
-      IsActive: row.IsActive,
-    }));
+    const scopes: APIScopeInfo[] = result.Results.map((row) => {
+      let uiConfig: ScopeUIConfig | undefined;
+      if (row.UIConfig) {
+        try {
+          uiConfig = JSON.parse(row.UIConfig) as ScopeUIConfig;
+        } catch {
+          // Ignore parse errors
+        }
+      }
+      return {
+        ID: row.ID,
+        Name: row.Name,
+        FullPath: row.FullPath ?? row.Name,
+        ParentID: row.ParentID,
+        Category: row.Category ?? 'General',
+        Description: row.Description ?? row.Name,
+        IsActive: row.IsActive,
+        UIConfig: uiConfig,
+      };
+    });
 
     // Update cache
     scopeCache = scopes;
@@ -172,5 +188,143 @@ export function groupScopesByCategory(
  */
 export async function getDefaultScopes(): Promise<string[]> {
   const scopes = await loadActiveScopes();
-  return scopes.map((s) => s.Name);
+  return scopes.map((s) => s.FullPath);
+}
+
+/**
+ * Represents a scope with its children in a tree structure.
+ */
+export interface ScopeTreeNode {
+  scope: APIScopeInfo;
+  children: ScopeTreeNode[];
+}
+
+/**
+ * Represents a group of scopes under a parent scope prefix.
+ */
+export interface ScopePrefixGroup {
+  /** The parent scope (null if scopes have no common parent) */
+  parent: APIScopeInfo | null;
+  /** Child scopes under this parent */
+  children: APIScopeInfo[];
+}
+
+/**
+ * Hierarchical grouping of scopes by category and prefix.
+ */
+export interface HierarchicalScopeGroups {
+  /** The full_access scope if present (special treatment) */
+  fullAccessScope: APIScopeInfo | null;
+  /** Categories with their prefix groups */
+  categories: Map<string, ScopePrefixGroup[]>;
+}
+
+/**
+ * Groups scopes hierarchically by category and then by parent scope prefix.
+ *
+ * This creates a two-level hierarchy:
+ * 1. First level: Category (e.g., "Entities", "Agents")
+ * 2. Second level: Parent scope prefix (e.g., "entity", "agent")
+ *
+ * The full_access scope is extracted separately for special UI treatment.
+ *
+ * @param scopes - Array of scope info to group
+ * @returns Hierarchical grouping with full_access separated
+ */
+export function groupScopesHierarchically(scopes: APIScopeInfo[]): HierarchicalScopeGroups {
+  // Extract full_access scope for special treatment
+  const fullAccessScope = scopes.find((s) => s.FullPath === 'full_access') ?? null;
+  const remainingScopes = scopes.filter((s) => s.FullPath !== 'full_access');
+
+  // Build a map of ID -> scope for parent lookups
+  const scopeById = new Map<string, APIScopeInfo>();
+  for (const scope of remainingScopes) {
+    scopeById.set(scope.ID, scope);
+  }
+
+  // Group by category first
+  const byCategory = new Map<string, APIScopeInfo[]>();
+  for (const scope of remainingScopes) {
+    const category = scope.Category || 'General';
+    const existing = byCategory.get(category) ?? [];
+    existing.push(scope);
+    byCategory.set(category, existing);
+  }
+
+  // Within each category, group by parent scope
+  const categories = new Map<string, ScopePrefixGroup[]>();
+
+  for (const [category, categoryScopes] of byCategory) {
+    const prefixGroups: ScopePrefixGroup[] = [];
+
+    // Find root scopes (no parent) and scopes with parents
+    const rootScopes = categoryScopes.filter((s) => !s.ParentID);
+    const childScopes = categoryScopes.filter((s) => s.ParentID);
+
+    // Group children by their parent
+    const childrenByParent = new Map<string, APIScopeInfo[]>();
+    for (const child of childScopes) {
+      if (child.ParentID) {
+        const existing = childrenByParent.get(child.ParentID) ?? [];
+        existing.push(child);
+        childrenByParent.set(child.ParentID, existing);
+      }
+    }
+
+    // Create prefix groups for each root scope
+    for (const rootScope of rootScopes) {
+      const children = childrenByParent.get(rootScope.ID) ?? [];
+      prefixGroups.push({
+        parent: rootScope,
+        children: children.sort((a, b) => a.FullPath.localeCompare(b.FullPath)),
+      });
+    }
+
+    // Handle any orphaned scopes (parent not in same category or not found)
+    const orphanedScopes = childScopes.filter((s) => {
+      if (!s.ParentID) return false;
+      const parent = scopeById.get(s.ParentID);
+      // Orphaned if parent doesn't exist or is in a different category
+      return !parent || parent.Category !== category;
+    });
+
+    if (orphanedScopes.length > 0) {
+      prefixGroups.push({
+        parent: null,
+        children: orphanedScopes.sort((a, b) => a.FullPath.localeCompare(b.FullPath)),
+      });
+    }
+
+    // Sort prefix groups by parent name (null groups at end)
+    prefixGroups.sort((a, b) => {
+      if (!a.parent && !b.parent) return 0;
+      if (!a.parent) return 1;
+      if (!b.parent) return -1;
+      return a.parent.FullPath.localeCompare(b.parent.FullPath);
+    });
+
+    categories.set(category, prefixGroups);
+  }
+
+  return {
+    fullAccessScope,
+    categories,
+  };
+}
+
+/**
+ * Gets all child scope FullPaths for a given parent scope.
+ * Used to determine which scopes are implied when a parent is selected.
+ *
+ * @param parentFullPath - The parent scope's FullPath
+ * @param scopes - All available scopes
+ * @returns Array of child scope FullPaths
+ */
+export function getChildScopeFullPaths(parentFullPath: string, scopes: APIScopeInfo[]): string[] {
+  const parent = scopes.find((s) => s.FullPath === parentFullPath);
+  if (!parent) return [];
+
+  return scopes
+    .filter((s) => s.ParentID === parent.ID)
+    .map((s) => s.FullPath);
 }

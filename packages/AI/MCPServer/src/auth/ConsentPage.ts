@@ -7,8 +7,8 @@
  * @module @memberjunction/ai-mcp-server/auth/ConsentPage
  */
 
-import type { APIScopeInfo, ConsentRequest } from './types.js';
-import { groupScopesByCategory } from './ScopeService.js';
+import type { ConsentRequest } from './types.js';
+import { groupScopesHierarchically, type HierarchicalScopeGroups, type ScopePrefixGroup } from './ScopeService.js';
 import { getOAuthStyles } from './styles.js';
 
 /**
@@ -28,9 +28,9 @@ const MJ_LOGO_SVG = `<svg class="logo-svg" viewBox="0 0 230 128" xmlns="http://w
  */
 export function renderConsentPage(consentRequest: ConsentRequest): string {
   const { user, availableScopes, clientId, requestId } = consentRequest;
-  const groupedScopes = groupScopesByCategory(availableScopes);
+  const hierarchicalGroups = groupScopesHierarchically(availableScopes);
 
-  const scopeCheckboxes = renderScopeCheckboxes(groupedScopes, consentRequest.requestedScope);
+  const scopeCheckboxes = renderScopeCheckboxes(hierarchicalGroups, consentRequest.requestedScope);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -88,94 +88,496 @@ export function renderConsentPage(consentRequest: ConsentRequest): string {
 }
 
 /**
- * Renders scope checkboxes grouped by category.
- * Per FR-030: Two-tier UI with "Grant All" at top, collapsible categories below.
- * Per FR-030a: No scopes pre-selected by default.
- *
- * @param groupedScopes - Scopes grouped by category
- * @param requestedScope - Optional scope string from client request (space-delimited)
+ * Renders a single prefix group (parent scope with its children).
+ * @param isSingleInCategory - If true, this is the only parent in its category (renders inline with category)
  */
-function renderScopeCheckboxes(
-  groupedScopes: Map<string, APIScopeInfo[]>,
-  requestedScope?: string
+function renderPrefixGroup(
+  group: ScopePrefixGroup,
+  categoryId: string,
+  groupIndex: number,
+  isSingleInCategory: boolean = false
 ): string {
-  const categories: string[] = [];
+  const groupId = `${categoryId}-group-${groupIndex}`;
+  const parentScope = group.parent;
+  const children = group.children;
 
-  // Count total scopes for "Grant All" label
-  let totalScopes = 0;
-  for (const scopes of groupedScopes.values()) {
-    totalScopes += scopes.length;
+  if (!parentScope && children.length === 0) {
+    return '';
   }
 
-  // Grant All checkbox (FR-030)
-  const grantAllSection = `
-    <div class="grant-all-section">
-      <label class="grant-all-item">
-        <input type="checkbox" id="grant-all-checkbox" onchange="toggleAllScopes(this.checked)">
-        <span class="grant-all-label">Grant All Permissions</span>
-        <span class="grant-all-desc">Select all ${totalScopes} available scopes</span>
-      </label>
-    </div>
-  `;
-
-  for (const [category, scopes] of groupedScopes) {
-    const scopeItems = scopes
+  // If we have a parent scope with children, render hierarchically with collapsible children
+  if (parentScope && children.length > 0) {
+    const childItems = children
       .map(
-        (scope) => `
-        <label class="scope-item">
-          <input type="checkbox" name="scopes" value="${escapeHtml(scope.Name)}" class="scope-checkbox">
-          <span class="scope-name">${escapeHtml(scope.Name)}</span>
-          <span class="scope-desc">${escapeHtml(scope.Description)}</span>
+        (child) => `
+        <label class="scope-item scope-child" data-parent="${escapeHtml(parentScope.FullPath)}">
+          <input type="checkbox" name="scopes" value="${escapeHtml(child.FullPath)}"
+                 class="scope-checkbox child-scope" data-parent-scope="${escapeHtml(parentScope.FullPath)}"
+                 onchange="handleChildScopeChange(this)">
+          <span class="scope-name">${escapeHtml(child.FullPath)}</span>
+          <span class="scope-desc">${escapeHtml(child.Description)}</span>
         </label>`
       )
       .join('');
 
-    categories.push(`
-      <div class="scope-category">
-        <h3 class="category-header" onclick="toggleCategory(this)">
-          <span class="category-toggle">▼</span>
-          ${escapeHtml(category)}
-          <span class="category-count">(${scopes.length})</span>
-        </h3>
-        <div class="scope-list">
-          ${scopeItems}
+    // If single parent in category, render more compactly (category acts as container)
+    if (isSingleInCategory) {
+      return `
+        <div class="prefix-group single-in-category" id="${groupId}">
+          <div class="parent-scope-header">
+            <input type="checkbox" name="scopes" value="${escapeHtml(parentScope.FullPath)}"
+                   class="scope-checkbox parent-scope" data-group-id="${groupId}" data-child-count="${children.length}"
+                   onchange="handleParentScopeChange(this)">
+            <div class="scope-content">
+              <span class="scope-desc">${escapeHtml(parentScope.Description)}</span>
+              </div>
+            <span class="children-toggle" onclick="toggleChildren('${groupId}')">&#9654;</span>
+          </div>
+          <div class="scope-children" style="display: none;">
+            ${childItems}
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="prefix-group" id="${groupId}">
+        <div class="parent-scope-header">
+          <input type="checkbox" name="scopes" value="${escapeHtml(parentScope.FullPath)}"
+                 class="scope-checkbox parent-scope" data-group-id="${groupId}" data-child-count="${children.length}"
+                 onchange="handleParentScopeChange(this)">
+          <div class="scope-content">
+            <span class="scope-name">${escapeHtml(parentScope.FullPath)}</span>
+            <span class="scope-desc">${escapeHtml(parentScope.Description)}</span>
+          </div>
+          <span class="children-toggle" onclick="toggleChildren('${groupId}')">&#9654;</span>
+        </div>
+        <div class="scope-children" style="display: none;">
+          ${childItems}
         </div>
       </div>
-    `);
+    `;
   }
 
-  // JavaScript for Grant All and category toggle functionality
+  // Parent scope with no children
+  if (parentScope) {
+    return `
+      <div class="prefix-group" id="${groupId}">
+        <label class="scope-item scope-parent standalone">
+          <input type="checkbox" name="scopes" value="${escapeHtml(parentScope.FullPath)}"
+                 class="scope-checkbox parent-scope">
+          <span class="scope-name">${escapeHtml(parentScope.FullPath)}</span>
+          <span class="scope-desc">${escapeHtml(parentScope.Description)}</span>
+        </label>
+      </div>
+    `;
+  }
+
+  // Orphaned children (no parent in this category)
+  const orphanItems = children
+    .map(
+      (child) => `
+      <label class="scope-item">
+        <input type="checkbox" name="scopes" value="${escapeHtml(child.FullPath)}" class="scope-checkbox">
+        <span class="scope-name">${escapeHtml(child.FullPath)}</span>
+        <span class="scope-desc">${escapeHtml(child.Description)}</span>
+      </label>`
+    )
+    .join('');
+
+  return `
+    <div class="prefix-group orphaned" id="${groupId}">
+      ${orphanItems}
+    </div>
+  `;
+}
+
+/**
+ * Renders scope checkboxes with hierarchical grouping.
+ *
+ * Features:
+ * - full_access scope at top with special treatment (acts as global grant all)
+ * - Categories collapsed by default
+ * - Within categories, scopes grouped by parent prefix
+ * - Selecting parent scope implies all children (children shown as selected + disabled)
+ * - Select all/none per category
+ * - LocalStorage persistence for scope selections
+ *
+ * @param hierarchicalGroups - Hierarchically grouped scopes
+ * @param requestedScope - Optional scope string from client request (space-delimited)
+ */
+function renderScopeCheckboxes(
+  hierarchicalGroups: HierarchicalScopeGroups,
+  _requestedScope?: string // Reserved for future: pre-select client-requested scopes
+): string {
+  const { fullAccessScope, categories } = hierarchicalGroups;
+
+  // Count total scopes for display
+  let totalScopes = fullAccessScope ? 1 : 0;
+  for (const prefixGroups of categories.values()) {
+    for (const group of prefixGroups) {
+      if (group.parent) totalScopes++;
+      totalScopes += group.children.length;
+    }
+  }
+
+  // full_access scope with special UI treatment (replaces "Grant All" checkbox)
+  // Also add a global "Clear All" button
+  const fullAccessSection = `
+    <div class="full-access-section">
+      ${
+        fullAccessScope
+          ? `
+      <label class="full-access-item">
+        <input type="checkbox" id="full-access-checkbox" name="scopes" value="full_access"
+               class="scope-checkbox" onchange="handleFullAccessChange(this.checked)">
+        <div class="full-access-content">
+          ${fullAccessScope.UIConfig?.icon ? `<i class="${escapeHtml(fullAccessScope.UIConfig.icon)} full-access-icon"></i>` : ''}
+          <div class="full-access-text">
+            <span class="full-access-label">Full Access</span>
+            <span class="full-access-desc">${escapeHtml(fullAccessScope.Description)}</span>
+          </div>
+        </div>
+      </label>
+      `
+          : ''
+      }
+      <button type="button" class="clear-all-btn" onclick="clearAllScopes()">
+        <i class="fa-solid fa-xmark"></i> Clear All Selections
+      </button>
+    </div>
+  `;
+
+  // Render categories (default collapsed)
+  const categoryElements: string[] = [];
+  let categoryIndex = 0;
+
+  for (const [category, prefixGroups] of categories) {
+    const categoryId = `category-${categoryIndex}`;
+    categoryIndex++;
+
+    // Count scopes in this category
+    let categoryTotal = 0;
+    for (const group of prefixGroups) {
+      if (group.parent) categoryTotal++;
+      categoryTotal += group.children.length;
+    }
+
+    // Get category icon and color from first parent scope with UIConfig
+    let categoryIcon = '';
+    let categoryColor = '';
+    for (const group of prefixGroups) {
+      if (group.parent?.UIConfig) {
+        categoryIcon = group.parent.UIConfig.icon ?? '';
+        categoryColor = group.parent.UIConfig.color ?? '';
+        break;
+      }
+    }
+
+    // Check if this is a single-parent category (one parent with children, no orphans)
+    const isSingleParentCategory =
+      prefixGroups.length === 1 && prefixGroups[0].parent !== null && prefixGroups[0].children.length > 0;
+
+    const prefixGroupsHtml = prefixGroups
+      .map((group, idx) => renderPrefixGroup(group, categoryId, idx, isSingleParentCategory))
+      .join('');
+
+    // For single-parent categories, integrate the parent checkbox directly into the category header
+    // This avoids double-clicking: users expand category and immediately see leaf scopes
+    if (isSingleParentCategory) {
+      const singleParent = prefixGroups[0].parent!;
+      const singleChildren = prefixGroups[0].children;
+      const groupId = `${categoryId}-group-0`;
+
+      // Render just the children (parent checkbox is in header)
+      const childItems = singleChildren
+        .map(
+          (child) => `
+          <label class="scope-item scope-child" data-parent="${escapeHtml(singleParent.FullPath)}">
+            <input type="checkbox" name="scopes" value="${escapeHtml(child.FullPath)}"
+                   class="scope-checkbox child-scope" data-parent-scope="${escapeHtml(singleParent.FullPath)}"
+                   onchange="handleChildScopeChange(this)">
+            <span class="scope-name">${escapeHtml(child.FullPath)}</span>
+            <span class="scope-desc">${escapeHtml(child.Description)}</span>
+          </label>`
+        )
+        .join('');
+
+      categoryElements.push(`
+        <div class="scope-category single-parent" id="${categoryId}">
+          <div class="category-header integrated-parent" data-group-id="${groupId}">
+            <span class="category-toggle" onclick="event.stopPropagation(); toggleCategory('${categoryId}')">&#9654;</span>
+            ${categoryIcon ? `<i class="${escapeHtml(categoryIcon)}" style="color: ${escapeHtml(categoryColor)}"></i>` : ''}
+            <span class="category-name">${escapeHtml(category)}</span>
+            <span class="category-count">(${categoryTotal})</span>
+            <label class="integrated-parent-checkbox" onclick="event.stopPropagation()">
+              <input type="checkbox" name="scopes" value="${escapeHtml(singleParent.FullPath)}"
+                     class="scope-checkbox parent-scope" data-group-id="${groupId}" data-child-count="${singleChildren.length}"
+                     onchange="handleParentScopeChange(this)">
+            </label>
+            <span class="integrated-parent-desc">${escapeHtml(singleParent.Description)}</span>
+          </div>
+          <div class="scope-list" style="display: none;">
+            <div class="scope-children" id="${groupId}" style="display: flex;">
+              ${childItems}
+            </div>
+          </div>
+        </div>
+      `);
+    } else {
+      categoryElements.push(`
+        <div class="scope-category" id="${categoryId}">
+          <div class="category-header" onclick="toggleCategory('${categoryId}')">
+            <span class="category-toggle">&#9654;</span>
+            ${categoryIcon ? `<i class="${escapeHtml(categoryIcon)}" style="color: ${escapeHtml(categoryColor)}"></i>` : ''}
+            <span class="category-name">${escapeHtml(category)}</span>
+            <span class="category-count">(${categoryTotal})</span>
+            <button type="button" class="category-select-btn" onclick="event.stopPropagation(); toggleCategoryScopes('${categoryId}', true)">All</button>
+            <button type="button" class="category-select-btn" onclick="event.stopPropagation(); toggleCategoryScopes('${categoryId}', false)">None</button>
+          </div>
+          <div class="scope-list" style="display: none;">
+            ${prefixGroupsHtml}
+          </div>
+        </div>
+      `);
+    }
+  }
+
+  // JavaScript for all interactive functionality
   const script = `
     <script>
-      function toggleAllScopes(checked) {
-        const checkboxes = document.querySelectorAll('.scope-checkbox');
-        checkboxes.forEach(cb => cb.checked = checked);
+      const STORAGE_KEY = 'mj_oauth_selected_scopes';
+
+      // Initialize on page load
+      document.addEventListener('DOMContentLoaded', function() {
+        loadSavedScopes();
+        updateAllParentStates();
+      });
+
+      // Handle full_access checkbox - when checked, visually indicate all scopes are granted
+      function handleFullAccessChange(checked) {
+        // Only affect parent scopes - children are already implied by parents
+        const parentCheckboxes = document.querySelectorAll('.parent-scope');
+        const standaloneCheckboxes = document.querySelectorAll('.scope-checkbox:not(.parent-scope):not(.child-scope):not(#full-access-checkbox)');
+
+        parentCheckboxes.forEach(cb => {
+          cb.disabled = checked;
+          if (checked) {
+            cb.checked = true;
+            // Also disable children of this parent
+            const parentScope = cb.value;
+            document.querySelectorAll('input.child-scope[data-parent-scope="' + parentScope + '"]').forEach(child => {
+              child.disabled = true;
+              child.checked = true;
+            });
+          }
+        });
+
+        standaloneCheckboxes.forEach(cb => {
+          cb.disabled = checked;
+          if (checked) cb.checked = true;
+        });
+
+        saveSelectedScopes();
       }
 
-      function toggleCategory(header) {
-        const scopeList = header.nextElementSibling;
-        const toggle = header.querySelector('.category-toggle');
+      // Clear all scope selections
+      function clearAllScopes() {
+        const fullAccessCb = document.getElementById('full-access-checkbox');
+        if (fullAccessCb) {
+          fullAccessCb.checked = false;
+        }
+
+        // Re-enable and uncheck all parent scopes
+        document.querySelectorAll('.parent-scope').forEach(cb => {
+          cb.disabled = false;
+          cb.checked = false;
+        });
+
+        // Re-enable and uncheck all child scopes
+        document.querySelectorAll('.child-scope').forEach(cb => {
+          cb.disabled = false;
+          cb.checked = false;
+        });
+
+        // Uncheck any standalone scopes
+        document.querySelectorAll('.scope-checkbox:not(.parent-scope):not(.child-scope):not(#full-access-checkbox)').forEach(cb => {
+          cb.disabled = false;
+          cb.checked = false;
+        });
+
+        saveSelectedScopes();
+      }
+
+      // Handle parent scope checkbox - when checked, disable and check all children; when unchecked, enable and uncheck all children
+      function handleParentScopeChange(checkbox) {
+        const parentScope = checkbox.value;
+        const isChecked = checkbox.checked;
+
+        // Find all child checkboxes for this parent
+        const childCheckboxes = document.querySelectorAll('input.child-scope[data-parent-scope="' + parentScope + '"]');
+        childCheckboxes.forEach(child => {
+          child.disabled = isChecked;
+          // When checked, select all children; when unchecked, clear all children
+          child.checked = isChecked;
+        });
+
+        saveSelectedScopes();
+      }
+
+      // Handle child scope checkbox - auto-select parent if all children are selected
+      function handleChildScopeChange(checkbox) {
+        const parentScope = checkbox.dataset.parentScope;
+        if (!parentScope) return;
+
+        // Find the parent checkbox and all siblings
+        const parentCb = document.querySelector('input.parent-scope[value="' + parentScope + '"]');
+        if (!parentCb) return;
+
+        const allChildren = document.querySelectorAll('input.child-scope[data-parent-scope="' + parentScope + '"]');
+        const checkedChildren = document.querySelectorAll('input.child-scope[data-parent-scope="' + parentScope + '"]:checked');
+
+        // If all children are checked, auto-select the parent
+        if (allChildren.length > 0 && allChildren.length === checkedChildren.length) {
+          parentCb.checked = true;
+          handleParentScopeChange(parentCb);
+        }
+
+        saveSelectedScopes();
+      }
+
+      // Toggle category expand/collapse
+      function toggleCategory(categoryId) {
+        const category = document.getElementById(categoryId);
+        if (!category) return;
+
+        const scopeList = category.querySelector('.scope-list');
+        const toggle = category.querySelector('.category-toggle');
+
         if (scopeList.style.display === 'none') {
           scopeList.style.display = 'block';
-          toggle.textContent = '▼';
+          toggle.innerHTML = '&#9660;';
         } else {
           scopeList.style.display = 'none';
-          toggle.textContent = '▶';
+          toggle.innerHTML = '&#9654;';
         }
       }
 
-      // Update Grant All checkbox when individual scopes change
+      // Toggle children visibility within a prefix group
+      function toggleChildren(groupId) {
+        const group = document.getElementById(groupId);
+        if (!group) return;
+
+        const children = group.querySelector('.scope-children');
+        const toggle = group.querySelector('.children-toggle');
+
+        if (children.style.display === 'none') {
+          children.style.display = 'flex';
+          toggle.innerHTML = '&#9660;';
+        } else {
+          children.style.display = 'none';
+          toggle.innerHTML = '&#9654;';
+        }
+      }
+
+      // Select all/none for a category
+      function toggleCategoryScopes(categoryId, selectAll) {
+        const category = document.getElementById(categoryId);
+        if (!category) return;
+
+        // Don't modify if full_access is checked
+        if (document.getElementById('full-access-checkbox')?.checked) return;
+
+        // When selecting all, just select parent scopes (which implies children)
+        // When deselecting, deselect parents and re-enable children
+        const parentCheckboxes = category.querySelectorAll('.parent-scope:not(:disabled)');
+        parentCheckboxes.forEach(cb => {
+          cb.checked = selectAll;
+          handleParentScopeChange(cb);
+        });
+
+        // Handle standalone scopes (no parent/child relationship)
+        const standaloneCheckboxes = category.querySelectorAll('.scope-checkbox:not(.parent-scope):not(.child-scope):not(:disabled)');
+        standaloneCheckboxes.forEach(cb => {
+          cb.checked = selectAll;
+        });
+
+        saveSelectedScopes();
+      }
+
+      // Update parent checkbox states based on children
+      function updateAllParentStates() {
+        document.querySelectorAll('.parent-scope').forEach(parent => {
+          if (parent.checked) {
+            handleParentScopeChange(parent);
+          }
+        });
+      }
+
+      // Save selected scopes to localStorage
+      function saveSelectedScopes() {
+        const selected = [];
+        document.querySelectorAll('.scope-checkbox:checked').forEach(cb => {
+          // Only save non-disabled checkboxes OR full_access
+          if (!cb.disabled || cb.id === 'full-access-checkbox') {
+            selected.push(cb.value);
+          }
+        });
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(selected));
+        } catch (e) {
+          // localStorage may not be available
+        }
+      }
+
+      // Load saved scopes from localStorage
+      function loadSavedScopes() {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (!saved) return;
+
+          const selectedScopes = JSON.parse(saved);
+          if (!Array.isArray(selectedScopes)) return;
+
+          // Check full_access first if it was saved
+          if (selectedScopes.includes('full_access')) {
+            const fullAccessCb = document.getElementById('full-access-checkbox');
+            if (fullAccessCb) {
+              fullAccessCb.checked = true;
+              handleFullAccessChange(true);
+              return;
+            }
+          }
+
+          // Check individual scopes (parents first to set up disabled state)
+          document.querySelectorAll('.parent-scope').forEach(cb => {
+            if (selectedScopes.includes(cb.value)) {
+              cb.checked = true;
+              handleParentScopeChange(cb);
+            }
+          });
+
+          // Then check remaining child scopes (only if not already disabled by parent)
+          document.querySelectorAll('.child-scope').forEach(cb => {
+            if (selectedScopes.includes(cb.value) && !cb.disabled) {
+              cb.checked = true;
+            }
+          });
+        } catch (e) {
+          // localStorage may not be available or data may be invalid
+        }
+      }
+
+      // Update localStorage when any scope changes
       document.addEventListener('change', function(e) {
         if (e.target.classList.contains('scope-checkbox')) {
-          const all = document.querySelectorAll('.scope-checkbox');
-          const checked = document.querySelectorAll('.scope-checkbox:checked');
-          document.getElementById('grant-all-checkbox').checked = (all.length === checked.length);
+          saveSelectedScopes();
         }
       });
     </script>
   `;
 
-  return grantAllSection + categories.join('') + script;
+  return fullAccessSection + categoryElements.join('') + script;
 }
 
 /**
