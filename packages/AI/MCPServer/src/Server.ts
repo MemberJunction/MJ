@@ -102,12 +102,20 @@ interface MCPSessionContext {
     user: UserInfo;
     /** Authentication method used for this session */
     authMethod: 'apiKey' | 'oauth' | 'none';
+    /**
+     * Granted scopes for this session.
+     * Populated from OAuth JWT 'scopes' claim or APIKeyScope entity.
+     * Used for authorization checks.
+     */
+    scopes?: string[];
     /** OAuth-specific context (present when authMethod='oauth') */
     oauth?: {
         issuer: string;
         subject: string;
         email: string;
         tokenExpiresAt: Date;
+        /** Granted scopes from the JWT token */
+        scopes?: string[];
     };
 }
 
@@ -381,7 +389,7 @@ interface ToolScopeInfo {
  * Authorizes a tool call based on the session's authentication method.
  *
  * For API key auth: Uses the two-level scope evaluation (application ceiling + key scopes).
- * For OAuth auth: Allows the call since the authenticated user is authorized by their OAuth token.
+ * For OAuth auth: Uses scope-based authorization from JWT token with hierarchical matching.
  * For no auth: Allows the call (authentication is disabled).
  *
  * @param sessionContext - The authenticated session context
@@ -395,11 +403,9 @@ async function authorizeToolCall(
     // Handle different authentication methods
     switch (sessionContext.authMethod) {
         case 'oauth':
-            // OAuth authentication implies authorization - the user is authenticated
-            // and their access is controlled by the OAuth provider's token issuance.
-            // The user is already validated and resolved to a MemberJunction user.
-            console.log(`[Auth] OAuth user ${sessionContext.oauth?.email} authorized for ${scopeInfo.scopePath}`);
-            return { allowed: true };
+            // OAuth authentication uses scope-based authorization from the JWT token.
+            // The user consented to specific scopes during the OAuth flow.
+            return authorizeOAuthToolCall(sessionContext, scopeInfo);
 
         case 'none':
             // No authentication configured - allow all tool calls
@@ -461,6 +467,87 @@ async function authorizeApiKeyToolCall(
         console.error('[Auth] Authorization error:', error);
         return { allowed: false, error: error instanceof Error ? error.message : 'Authorization failed' };
     }
+}
+
+/**
+ * Checks if a granted scope matches a required scope using hierarchical matching.
+ * A parent scope grants access to all child scopes.
+ *
+ * Examples:
+ * - "entity" grants access to "entity:read", "entity:write", etc.
+ * - "entity:read" grants access only to "entity:read" (exact match)
+ * - "admin" grants access to "admin:users", "admin:settings", etc.
+ *
+ * @param grantedScope - A scope the user has been granted
+ * @param requiredScope - The scope required for the operation
+ * @returns true if the granted scope satisfies the requirement
+ */
+function scopeMatchesHierarchically(grantedScope: string, requiredScope: string): boolean {
+    // Exact match
+    if (grantedScope === requiredScope) {
+        return true;
+    }
+
+    // Hierarchical match: granted scope is a parent of required scope
+    // e.g., "entity" matches "entity:read" or "entity:read:all"
+    if (requiredScope.startsWith(grantedScope + ':')) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Checks if a user's granted scopes satisfy a required scope.
+ * Supports hierarchical scope matching where parent scopes grant child permissions.
+ *
+ * @param grantedScopes - Array of scopes the user has been granted
+ * @param requiredScope - The scope required for the operation
+ * @returns true if any granted scope satisfies the requirement
+ */
+function hasRequiredScope(grantedScopes: string[], requiredScope: string): boolean {
+    return grantedScopes.some((granted) => scopeMatchesHierarchically(granted, requiredScope));
+}
+
+/**
+ * Authorizes an OAuth-authenticated tool call against the token's scope permissions.
+ * Uses hierarchical scope matching where parent scopes grant access to child scopes.
+ *
+ * @param sessionContext - The authenticated session context (must have scopes)
+ * @param scopeInfo - The scope information for the tool call
+ * @returns Object with allowed flag and error message if denied
+ */
+function authorizeOAuthToolCall(
+    sessionContext: MCPSessionContext,
+    scopeInfo: ToolScopeInfo
+): { allowed: boolean; error?: string } {
+    const grantedScopes = sessionContext.scopes ?? [];
+
+    // If no scopes granted, deny access (user didn't consent to any scopes)
+    if (grantedScopes.length === 0) {
+        console.log(`[Auth] OAuth user ${sessionContext.oauth?.email} denied for ${scopeInfo.scopePath}: no scopes granted`);
+        return {
+            allowed: false,
+            error: `Access denied: no scopes granted. Required scope: ${scopeInfo.scopePath}`,
+        };
+    }
+
+    // Check if any granted scope satisfies the required scope
+    if (hasRequiredScope(grantedScopes, scopeInfo.scopePath)) {
+        console.log(`[Auth] OAuth user ${sessionContext.oauth?.email} authorized for ${scopeInfo.scopePath}`);
+        return { allowed: true };
+    }
+
+    // Scope not granted
+    console.log(
+        `[Auth] OAuth user ${sessionContext.oauth?.email} denied for ${scopeInfo.scopePath}: ` +
+            `granted scopes [${grantedScopes.join(', ')}] do not include required scope`
+    );
+    return {
+        allowed: false,
+        error: `Access denied: scope '${scopeInfo.scopePath}' not granted. ` +
+            `Your granted scopes: [${grantedScopes.join(', ')}]`,
+    };
 }
 
 /*******************************************************************************
