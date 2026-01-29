@@ -1216,3 +1216,12 @@ Each nav item with `ResourceType: "Custom"` requires a corresponding component:
 3. Add a tree-shaking prevention function: `export function LoadYourResource() {}`
 4. Call the load function from the module's `public-api.ts`
 5. Register the component in the module's declarations and exports
+
+## Active Technologies
+- TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk` (601-mcp-oauth)
+- N/A (token validation only, no new persistent state) (601-mcp-oauth)
+- TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `@modelcontextprotocol/sdk`, `express`, `jsonwebtoken`, `jwks-rsa` (601-mcp-oauth)
+- SQL Server (MemberJunction database) for `APIScope`, `APIKeyScope` entities; In-memory for OAuth proxy state (601-mcp-oauth)
+
+## Recent Changes
+- 601-mcp-oauth: Added TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk`

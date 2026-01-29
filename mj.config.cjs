@@ -115,11 +115,46 @@ module.exports = {
     port: 3100,
     enableMCPServer: true,
     systemApiKey: 'MY_API_KEY_FOR_MCP_SERVER',
+
+    // Authentication configuration
+    // Supports: 'apiKey' (default), 'oauth', 'both', 'none'
+    // OAuth uses the same auth providers as MJExplorer - no extra config needed!
+    // Token audience is derived from the provider's config (WEB_CLIENT_ID env var for Azure AD)
+    // Scopes are auto-generated from auth providers (e.g., api://{clientId}/.default for Azure AD)
+    auth: {
+      mode: 'both', // 'apiKey' | 'oauth' | 'both' | 'none'
+      // resourceIdentifier: auto-generated as http://localhost:{port} for MCP client discovery
+      // scopes: auto-generated from auth providers, or override with explicit array
+
+      // OAuth Proxy - enables dynamic client registration (RFC 7591) for MCP clients
+      // When enabled, the MCP Server acts as an OAuth Authorization Server that proxies
+      // auth to the configured upstream provider (Azure AD, Auth0, etc.)
+      // This allows MCP clients like Claude Code to authenticate without manual app registration
+      proxy: {
+        enabled: true, // Enable OAuth proxy for dynamic client registration
+        upstreamProvider: 'auth0', // Optional: specify provider by name (defaults to first)
+        // clientTtlMs: 24 * 60 * 60 * 1000, // 24 hours (default)
+        // stateTtlMs: 10 * 60 * 1000, // 10 minutes (default)
+
+        // Consent Screen - prompts users to select which scopes to grant
+        // Scopes are loaded from __mj.APIScope table in the database
+        // When false, all available scopes are granted automatically
+        enableConsentScreen: true,
+
+        // JWT Signing - the proxy issues its own JWTs (not upstream provider tokens)
+        // Configure a secret for consistent token validation across server restarts
+        // If not set, tokens won't be signed and consent screen won't work!
+        // REQUIRED for consent screen to function
+        jwtSigningSecret: process.env.MCP_JWT_SECRET,
+        jwtExpiresIn: '1h', // Token expiration (default: 1h)
+      },
+    },
+
     actionTools: [
       {
         actionName: 'NOT YET SUPPORTED',
         actionCategory: '*',
-      }
+      },
     ],
     entityTools: [
       {
@@ -134,12 +169,12 @@ module.exports = {
     ],
     agentTools: [
       {
-        agentName: '*',        // All agents (or specific name pattern)
+        agentName: '*', // All agents (or specific name pattern)
         execute: true,
         status: true,
-        cancel: true
-      }
-    ]
+        cancel: true,
+      },
+    ],
   },
 
   /**
@@ -160,7 +195,7 @@ module.exports = {
         delete: true,
         runView: true,
       },
-    ]
+    ],
   },
 
   /**
@@ -170,8 +205,43 @@ module.exports = {
    */
 
   queryGen: {
-    includeEntities: ["Members"], // Override to specific entities
+    includeEntities: ['Members'], // Override to specific entities
   },
+
+  /**
+   * ====================
+   * OAuth Providers (for MCP Server auth.mode: 'oauth' or 'both')
+   * ====================
+   *
+   * AUTH PROVIDERS ARE AUTO-CONFIGURED FROM ENVIRONMENT VARIABLES:
+   *
+   * Azure AD / Entra ID (if TENANT_ID and WEB_CLIENT_ID are set in .env):
+   *   - Automatically creates an 'azure' provider using these env vars
+   *   - No manual authProviders config needed!
+   *
+   * Auth0 (if AUTH0_DOMAIN and AUTH0_CLIENT_ID are set in .env):
+   *   - Automatically creates an 'auth0' provider using these env vars
+   *   - Optional: AUTH0_CLIENT_SECRET
+   *
+   * MANUAL OVERRIDE: Only add authProviders below if you need to:
+   *   - Use Okta, Cognito, or Google (no env var defaults yet)
+   *   - Override the auto-configured settings
+   *   - Add multiple providers
+   *
+   * authProviders: [
+   *   {
+   *     name: 'azure-ad',
+   *     type: 'msal',
+   *     clientId: 'your-client-id',
+   *     tenantId: 'your-tenant-id',
+   *     issuer: 'https://login.microsoftonline.com/{tenant}/v2.0',
+   *     audience: 'api://your-app-id',
+   *     jwksUri: 'https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys'
+   *   }
+   * ],
+   *
+   * Supported provider types: 'msal' (Azure AD), 'auth0', 'okta', 'cognito', 'google'
+   */
 
   /**
    * ====================

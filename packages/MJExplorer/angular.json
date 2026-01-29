@@ -29,10 +29,7 @@
                 "output": "/assets"
               }
             ],
-            "styles": [
-              "@memberjunction/ng-explorer-app/dist/styles.scss",
-              "src/styles.css"
-            ],
+            "styles": ["src/styles.scss"],
             "scripts": []
           },
           "configurations": {
@@ -136,9 +133,7 @@
                 "output": "/assets"
               }
             ],
-            "styles": [
-              "src/styles/main.scss"
-            ],
+            "styles": ["src/styles/main.scss"],
             "scripts": []
           }
         }
