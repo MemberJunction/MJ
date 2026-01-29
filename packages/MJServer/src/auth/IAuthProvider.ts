@@ -27,6 +27,11 @@ export interface IAuthProvider {
   jwksUri: string;
 
   /**
+   * OAuth client ID for this provider (optional, used by OAuth proxy for upstream authentication)
+   */
+  clientId?: string;
+
+  /**
    * Validates that the provider configuration is complete and valid
    */
   validateConfig(): boolean;
