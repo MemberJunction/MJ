@@ -1,0 +1,340 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.component-preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f8f9fa;
+  overflow: hidden;
+}
+
+/* ============================================================
+   TOOLBAR
+   ============================================================ */
+
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  min-height: 42px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.preview-toolbar .toolbar-left,
+.preview-toolbar .toolbar-center,
+.preview-toolbar .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.preview-toolbar .toolbar-left {
+  flex: 0 0 auto;
+}
+
+.preview-toolbar .toolbar-center {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.preview-toolbar .toolbar-right {
+  flex: 0 0 auto;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.toolbar-btn i {
+  font-size: 11px;
+}
+
+.run-btn {
+  color: #059669;
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+}
+
+.run-btn:hover {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.stop-btn {
+  color: #dc2626;
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.stop-btn:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+.ai-fix-btn {
+  color: #7c3aed;
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+}
+
+.ai-fix-btn:hover {
+  background: #ede9fe;
+  border-color: #a78bfa;
+}
+
+.running-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.running-indicator .running-dot {
+  font-size: 7px;
+  color: #22c55e;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ============================================================
+   VIEWPORT SELECTOR (segmented control)
+   ============================================================ */
+
+.viewport-selector {
+  display: inline-flex;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f9fafb;
+}
+
+.viewport-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+
+.viewport-btn:not(:last-child) {
+  border-right: 1px solid #d1d5db;
+}
+
+.viewport-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.viewport-btn.active {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.viewport-btn.active:hover {
+  background: #4f46e5;
+}
+
+/* ============================================================
+   PREVIEW AREA
+   ============================================================ */
+
+.preview-area {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.preview-container {
+  width: 100%;
+  height: 100%;
+  margin: 0 auto;
+  transition: max-width 0.3s ease;
+  overflow: auto;
+  background: #ffffff;
+}
+
+.preview-container.mobile,
+.preview-container.tablet {
+  border-left: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+}
+
+.preview-container.desktop {
+  max-width: 100% !important;
+}
+
+/* ============================================================
+   EMPTY STATES
+   ============================================================ */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  text-align: center;
+  padding: 40px 24px;
+  color: #94a3b8;
+}
+
+.empty-state i {
+  margin-bottom: 16px;
+  color: #cbd5e1;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 14px;
+  color: #94a3b8;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.run-state h3 {
+  color: #334155;
+}
+
+.run-component-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  background: #6366f1;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.run-component-btn:hover {
+  background: #4f46e5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.run-component-btn:active {
+  transform: translateY(0);
+}
+
+.run-component-btn i {
+  font-size: 13px;
+}
+
+/* ============================================================
+   ERROR OVERLAY
+   ============================================================ */
+
+.error-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: rgba(254, 242, 242, 0.95);
+  border-top: 2px solid #f87171;
+  backdrop-filter: blur(4px);
+  padding: 16px 20px;
+  animation: slide-up 0.2s ease-out;
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.error-overlay-content {
+  max-width: 600px;
+}
+
+.error-overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.error-overlay-header i {
+  color: #dc2626;
+  font-size: 16px;
+}
+
+.error-overlay-header .error-overlay-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #991b1b;
+}
+
+.error-overlay-message {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #7f1d1d;
+  line-height: 1.4;
+}
+
+.error-overlay-actions {
+  display: flex;
+  gap: 8px;
+}
