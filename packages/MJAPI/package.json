@@ -10,6 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "check-types": "tsc -noEmit",
     "zip": "zip -qr deploy.zip ./node_modules ./dist ./package.json ./config.json",
+    "prestart": "mj codegen manifest --output ./src/generated/class-registrations-manifest.ts",
     "prebuild": "mj codegen manifest --output ./src/generated/class-registrations-manifest.ts",
     "build": "tsc"
   },

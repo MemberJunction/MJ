@@ -6,6 +6,7 @@
     "ng": "ng",
     "start": "NODE_OPTIONS=--max-old-space-size=8192 ng serve --port 4201",
     "start:stage": "NODE_OPTIONS=--max-old-space-size=8192 ng serve --configuration staging",
+    "prestart": "mj codegen manifest --output ./src/app/generated/class-registrations-manifest.ts",
     "prebuild": "mj codegen manifest --output ./src/app/generated/class-registrations-manifest.ts",
     "build": "NODE_OPTIONS=--max-old-space-size=8192 ng build",
     "build:stage": "NODE_OPTIONS=--max-old-space-size=8192 ng build --configuration staging",
