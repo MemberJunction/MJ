@@ -24,6 +24,7 @@ export class ActionFormComponent extends BaseFormComponent {
             { sectionKey: 'libraries', sectionName: 'Libraries', isExpanded: false },
             { sectionKey: 'resultCodes', sectionName: 'Result Codes', isExpanded: false },
             { sectionKey: 'aIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
+            { sectionKey: 'mJMCPServerTools', sectionName: 'MJ: MCP Server Tools', isExpanded: false },
             { sectionKey: 'scheduledActions', sectionName: 'Scheduled Actions', isExpanded: false },
             { sectionKey: 'actionContexts', sectionName: 'Action Contexts', isExpanded: false },
             { sectionKey: 'entityActions', sectionName: 'Entity Actions', isExpanded: false },

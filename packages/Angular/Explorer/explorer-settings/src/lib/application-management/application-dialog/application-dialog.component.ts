@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { Metadata, RunView } from '@memberjunction/core';
 import { ApplicationEntity, ApplicationEntityEntity, EntityEntity } from '@memberjunction/core-entities';
 
@@ -39,7 +40,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
   public applicationForm: FormGroup;
   public isLoading = false;
   public error: string | null = null;
-  
+
   // Entity management
   public applicationEntities: ApplicationEntityConfig[] = [];
   public availableEntities: EntityEntity[] = [];
@@ -47,6 +48,16 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
 
   // Search filter for available entities
   public entitySearchTerm = '';
+
+  // Section expansion state
+  public sectionExpanded = {
+    basicInfo: true,
+    entities: true,
+    systemInfo: false
+  };
+
+  // Fullscreen state
+  public isFullscreen = false;
 
   constructor() {
     this.applicationForm = this.fb.group({
@@ -114,8 +125,8 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
     this.error = null;
   }
 
-  @HostListener('document:keydown.escape', ['$event'])
-  onEscapeKey(event: KeyboardEvent): void {
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
     if (this.visible) {
       this.onCancel();
     }
@@ -267,6 +278,21 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
 
   public clearEntitySearch(): void {
     this.entitySearchTerm = '';
+  }
+
+  public toggleSection(section: 'basicInfo' | 'entities' | 'systemInfo'): void {
+    this.sectionExpanded[section] = !this.sectionExpanded[section];
+  }
+
+  public toggleFullscreen(): void {
+    this.isFullscreen = !this.isFullscreen;
+  }
+
+  public onEntityDrop(event: CdkDragDrop<ApplicationEntityConfig[]>): void {
+    if (event.previousIndex !== event.currentIndex) {
+      moveItemInArray(this.applicationEntities, event.previousIndex, event.currentIndex);
+      this.updateSequences();
+    }
   }
 
   public async onSubmit(): Promise<void> {

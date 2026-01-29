@@ -98,11 +98,18 @@ TENANT_ID=your-azure-tenant-id
 
 If you need to override specific settings beyond environment variables, edit `mj.config.cjs`. The file includes extensive comments showing all available options and their defaults. You only need to uncomment and modify settings you want to override.
 
-### 3. Install Dependencies
+### 3. **Install Dependencies** ⚠️ IMPORTANT
+
+**This step must be completed before any other commands.**
 
 ```bash
 npm install
 ```
+
+✅ This command now works perfectly without any flags!
+✅ Installs all dependencies with pinned versions for reproducible builds.
+
+**Note**: Do not use `--legacy-peer-deps` - it's no longer needed!
 
 This will install all dependencies for all packages in the monorepo.
 

@@ -13,4 +13,6 @@ export { NewAgentDialogService } from './lib/custom/AIAgents/new-agent-dialog.se
 // Export Flow Agent components
 export { FlowAgentFormSectionComponent } from './lib/custom/AIAgents/FlowAgentType/flow-agent-form-section.component';
 export { StepInfoControlComponent } from './lib/custom/AIAgents/FlowAgentType/step-info-control.component';
+
+// NOTE: Action Test Harness components have moved to @memberjunction/ng-actions
  

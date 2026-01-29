@@ -37,4 +37,7 @@ export * from './lib/services/system-validation.service'
 export * from './lib/services/startup-validation.service'
 export * from './lib/system-validation/system-validation-banner.component'
 
+// User Menu Plugin System
+export * from './lib/user-menu'
+
 export * from './module';

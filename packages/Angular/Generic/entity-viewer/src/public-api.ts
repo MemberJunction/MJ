@@ -26,5 +26,11 @@ export * from './lib/entity-data-grid/events/grid-events';
 // View Config Panel (sliding panel for view configuration)
 export * from './lib/view-config-panel/view-config-panel.component';
 
+// Aggregate Panel (card-based aggregate display)
+export * from './lib/aggregate-panel/aggregate-panel.component';
+
+// Aggregate Setup Dialog (3-mode dialog for configuring aggregates)
+export * from './lib/aggregate-setup-dialog/aggregate-setup-dialog.component';
+
 // Utilities
 export * from './lib/utils/highlight.util';

@@ -246,28 +246,43 @@ export class UnsupportedOperationError extends Error {
  * Configuration options for initializing a storage provider.
  * This interface defines the standard configuration that can be passed to initialize().
  *
- * In the enterprise model, every storage driver instance is associated with a
- * FileStorageAccount entity. The accountId is required to link the driver to
- * the specific organizational storage account it operates on behalf of.
+ * ## Usage Patterns
+ *
+ * ### Simple Deployment (Environment Variables)
+ * - Omit accountId when using environment variables
+ * - Constructor loads credentials automatically
+ * - Call initialize() with no config or empty object
+ *
+ * ### Multi-Tenant Enterprise (Database)
+ * - Provide accountId to link driver to FileStorageAccount
+ * - Include decrypted credentials from database
+ * - Or use initializeDriverWithAccountCredentials() utility
  */
 export interface StorageProviderConfig {
   /**
    * The ID of the FileStorageAccount entity this driver instance is operating for.
    * This links the driver to a specific organizational storage account.
    *
-   * Required in the enterprise model - every driver instance must be associated
-   * with a FileStorageAccount.
+   * **Optional**: Provide for multi-tenant mode to track account association.
+   * Omit for simple deployment using environment variables.
    */
-  accountId: string;
+  accountId?: string;
 
   /**
    * The name of the account (for logging/display purposes).
+   *
+   * **Optional**: Useful for logging and debugging in multi-tenant scenarios.
    */
   accountName?: string;
 
   /**
    * Provider-specific configuration values (e.g., API keys, bucket names, etc.).
-   * These are typically decrypted from the Credential entity at runtime.
+   *
+   * **Simple Deployment**: Not needed - constructor loads from environment variables.
+   * **Multi-Tenant**: Provide decrypted credentials from Credential entity.
+   *
+   * If provided, these values override the constructor defaults.
+   * If omitted, uses credentials already loaded by constructor.
    */
   [key: string]: unknown;
 }
@@ -712,55 +727,77 @@ export abstract class FileStorageBase {
   public abstract DirectoryExists(directoryPath: string): Promise<boolean>;
 
   /**
-   * Initialization method for storage providers.
+   * Initialize storage provider with optional configuration.
    *
-   * This method must be called before using the storage provider. It sets up the
-   * account association and can be overridden by subclasses to perform provider-specific
-   * initialization such as setting up access tokens, establishing connections, or
-   * verifying permissions.
+   * ## Standard Usage Pattern
    *
-   * The base implementation extracts and stores accountId and accountName from the config.
-   * Subclass implementations should call super.initialize(config) first to ensure these
-   * values are properly set before performing provider-specific initialization.
+   * **ALWAYS call this method** after creating a provider instance.
    *
-   * @param config - Configuration object containing account information and provider-specific
-   *                 settings. The accountId property is required and links this driver instance
-   *                 to a specific FileStorageAccount entity. Additional provider-specific values
-   *                 (e.g., API keys, bucket names) are typically decrypted from the associated
-   *                 Credential entity.
+   * ### Simple Deployment (Environment Variables)
+   * Constructor loads credentials from environment variables, then call
+   * initialize() with no config to complete setup:
    *
-   * @example
    * ```typescript
-   * // In a specific provider implementation:
-   * public async initialize(config: StorageProviderConfig): Promise<void> {
-   *   // Always call super first to set accountId and accountName
-   *   await super.initialize(config);
+   * // Set environment variables:
+   * // STORAGE_AWS_ACCESS_KEY_ID=...
+   * // STORAGE_AWS_SECRET_ACCESS_KEY=...
+   * // STORAGE_AWS_BUCKET_NAME=...
+   * // STORAGE_AWS_REGION=...
    *
-   *   // Then handle provider-specific configuration
-   *   if (config.accessToken) {
-   *     this._client = new ProviderClient({ accessToken: config.accessToken as string });
-   *   }
-   *   await this.verifyBucketAccess();
-   * }
-   *
-   * // Usage:
-   * const storage = new MyStorageProvider();
-   * await storage.initialize({
-   *   accountId: 'F1234567-89AB-CDEF-0123-456789ABCDEF',
-   *   accountName: 'Company AWS S3 Storage',
-   *   accessKeyId: 'AKIA...',
-   *   secretAccessKey: '...',
-   *   bucket: 'my-bucket'
-   * });
-   * // Now the provider is ready to use
+   * const storage = new AWSFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/'); // Ready to use
    * ```
    *
-   * @returns A Promise that resolves when initialization is complete.
+   * ### Multi-Tenant Enterprise (Database)
+   * Constructor loads defaults, then call initialize() with configuration
+   * to override with database credentials and track account:
+   *
+   * ```typescript
+   * // Preferred: Use infrastructure utility
+   * const storage = await initializeDriverWithAccountCredentials({
+   *   accountEntity,
+   *   providerEntity,
+   *   contextUser
+   * });
+   *
+   * // Alternative: Manual initialization
+   * const storage = new AWSFileStorage();
+   * await storage.initialize({
+   *   accountId: account.id,
+   *   accountName: account.name,
+   *   accessKeyID: creds.accessKeyID,
+   *   secretAccessKey: creds.secretAccessKey,
+   *   region: creds.region,
+   *   defaultBucket: creds.bucket
+   * });
+   * ```
+   *
+   * ## How It Works
+   *
+   * - **No config**: Uses credentials already loaded by constructor from environment variables
+   * - **With config**: Overrides constructor credentials with provided values
+   * - **accountId**: Optional - provide for multi-tenant tracking
+   *
+   * ## Implementation Notes for Subclasses
+   *
+   * Subclass implementations should:
+   * 1. Call super.initialize(config) first to set accountId and accountName
+   * 2. Check if config is provided before attempting to override credentials
+   * 3. Only override values that are present in config
+   * 4. Reinitialize client/connection if credentials changed
+   *
+   * @param config - Optional configuration object
+   *                 - Omit for simple deployment (uses env vars from constructor)
+   *                 - Provide for multi-tenant (overrides with database credentials)
+   * @returns A Promise that resolves when initialization is complete
    */
-  public async initialize(config: StorageProviderConfig): Promise<void> {
-    // Extract and store account information from the config
-    this._accountId = config.accountId;
-    this._accountName = config.accountName;
+  public async initialize(config?: StorageProviderConfig): Promise<void> {
+    // Extract and store account information from the config if provided
+    if (config) {
+      this._accountId = config.accountId;
+      this._accountName = config.accountName;
+    }
   }
 
   /**

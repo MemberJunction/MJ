@@ -4,6 +4,7 @@
       "Name": "Memory Manager",
       "Description": "System agent that automatically extracts notes and examples from conversations and agent runs. Analyzes user ratings and artifact usage to identify valuable learnings. Runs on a 15-minute schedule.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "DriverClass": "MemoryManagerAgent",
       "Status": "Active",
       "ExecutionOrder": 0,
       "ArtifactCreationMode": "Never",
@@ -55,8 +56,8 @@
       "ID": "A1575099-1576-45E9-A6FD-88102FB7E510"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:35.036Z",
-      "checksum": "d3b47703def5e9b2624c542db5aa78abe1288bd8795c11ea07cf2ccaa0df2897"
+      "lastModified": "2026-01-27T02:14:24.360Z",
+      "checksum": "4210deb426a00d44ed3d1aa0cb843c7dc834b4c92c9a89c93c1776d3abcc0e86"
     }
   }
 ]

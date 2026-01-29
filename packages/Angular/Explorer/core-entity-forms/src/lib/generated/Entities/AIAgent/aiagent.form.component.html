@@ -556,6 +556,76 @@
 
     </mj-collapsible-panel>
 
+    <!-- Scope Configuration Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="scopeConfiguration"
+        sectionName="Scope Configuration"
+        icon="fa fa-sliders-h"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="ScopeConfig"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Retention & Archiving Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="retentionArchiving"
+        sectionName="Retention & Archiving"
+        icon="fa fa-archive"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="NoteRetentionDays"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ExampleRetentionDays"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AutoArchiveEnabled"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Retrieval & Ranking Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="retrievalRanking"
+        sectionName="Retrieval & Ranking"
+        icon="fa fa-search"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="RerankerConfiguration"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel slot="field-panels"
         sectionKey="systemMetadata"

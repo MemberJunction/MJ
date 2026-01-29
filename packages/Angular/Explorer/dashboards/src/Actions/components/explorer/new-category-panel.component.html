@@ -1,0 +1,94 @@
+@if (IsOpen) {
+  <div class="panel-backdrop" (click)="onBackdropClick($event)">
+    <div class="slide-panel" @slideIn>
+      <div class="panel-header">
+        <h2>
+          <i class="fa-solid fa-folder-plus"></i>
+          New Category
+        </h2>
+        <button kendoButton
+          [fillMode]="'flat'"
+          (click)="onClose()">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+
+      <div class="panel-content">
+        @if (Errors['general']) {
+          <div class="error-banner">
+            <i class="fa-solid fa-exclamation-circle"></i>
+            {{ Errors['general'] }}
+          </div>
+        }
+
+        <div class="form-group">
+          <label for="categoryName" class="form-label required">
+            Category Name
+          </label>
+          <kendo-textbox
+            id="categoryName"
+            [(ngModel)]="Name"
+            [placeholder]="'Enter category name'"
+            [maxlength]="200"
+            [class.invalid]="Errors['name']">
+          </kendo-textbox>
+          @if (Errors['name']) {
+            <span class="error-text">{{ Errors['name'] }}</span>
+          }
+        </div>
+
+        <div class="form-group">
+          <label for="categoryDescription" class="form-label">
+            Description
+          </label>
+          <kendo-textarea
+            id="categoryDescription"
+            [(ngModel)]="Description"
+            [placeholder]="'Optional description for this category'"
+            [rows]="3"
+            [maxlength]="1000">
+          </kendo-textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="categoryParent" class="form-label">
+            Parent Category
+          </label>
+          <kendo-dropdownlist
+            id="categoryParent"
+            [(ngModel)]="ParentID"
+            [data]="getParentOptions()"
+            textField="text"
+            valueField="value"
+            [valuePrimitive]="true">
+          </kendo-dropdownlist>
+          <span class="help-text">
+            Leave empty to create a root-level category
+          </span>
+        </div>
+      </div>
+
+      <div class="panel-footer">
+        <button kendoButton
+          [fillMode]="'solid'"
+          [themeColor]="'primary'"
+          [disabled]="IsSaving"
+          (click)="onSave()">
+          @if (IsSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            Creating...
+          } @else {
+            <i class="fa-solid fa-check"></i>
+            Create Category
+          }
+        </button>
+        <button kendoButton
+          [fillMode]="'outline'"
+          [disabled]="IsSaving"
+          (click)="onClose()">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+}

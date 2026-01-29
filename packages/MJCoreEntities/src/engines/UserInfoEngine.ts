@@ -76,6 +76,33 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   // Track in-progress CreateDefaultApplications call to prevent duplicate execution
   private _createDefaultAppsPromise: Promise<UserApplicationEntity[]> | null = null;
 
+  // ========================================================================
+  // DEBOUNCED SETTINGS SUPPORT
+  // ========================================================================
+
+  /**
+   * Debounce time in milliseconds for SetSettingDebounced calls.
+   * Default is 500ms. Change via the SettingsDebounceMs setter.
+   */
+  private _settingsDebounceMs: number = 500;
+
+  /**
+   * Map of pending setting updates: key -> { value, contextUser, timestamp }
+   * These are queued and flushed after the debounce period of inactivity.
+   */
+  private _pendingSettings: Map<string, { value: string; contextUser?: UserInfo; timestamp: number }> = new Map();
+
+  /**
+   * Timer handle for the debounce flush
+   */
+  private _settingsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Promise that resolves when the current flush operation completes.
+   * Used to prevent concurrent flush operations.
+   */
+  private _flushPromise: Promise<void> | null = null;
+
   /**
    * Configures the engine by loading user-specific metadata from the database.
    * All entities are filtered by the current user's ID and cached locally for performance.
@@ -278,6 +305,139 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       console.error('UserInfoEngine.DeleteSetting: Error:', error instanceof Error ? error.message : String(error));
       return false;
     }
+  }
+
+  // ========================================================================
+  // DEBOUNCED SETTINGS METHODS
+  // ========================================================================
+
+  /**
+   * Get the current debounce time in milliseconds for SetSettingDebounced calls.
+   */
+  public get SettingsDebounceMs(): number {
+    return this._settingsDebounceMs;
+  }
+
+  /**
+   * Set the debounce time in milliseconds for SetSettingDebounced calls.
+   * When changed, any pending settings are flushed first before the new debounce time takes effect.
+   * @param value - The debounce time in milliseconds (minimum 100ms, maximum 10000ms)
+   */
+  public set SettingsDebounceMs(value: number) {
+    const clampedValue = Math.max(100, Math.min(10000, value));
+    if (clampedValue !== this._settingsDebounceMs) {
+      // Flush any pending settings before changing the debounce time
+      this.FlushPendingSettings();
+      this._settingsDebounceMs = clampedValue;
+    }
+  }
+
+  /**
+   * Queue a setting update with debouncing. Multiple calls within the debounce period
+   * are batched together, with only the last value for each key being saved.
+   * The actual database save occurs after the debounce period of inactivity.
+   *
+   * This is the preferred method for UI components that may update settings frequently
+   * (e.g., on every resize, scroll, or input change).
+   *
+   * @param settingKey - The setting key (e.g., "AI_DASHBOARD_ROOT/ai-models")
+   * @param value - The setting value (string, typically JSON for complex data)
+   * @param contextUser - Optional user context for server-side use
+   */
+  public SetSettingDebounced(settingKey: string, value: string, contextUser?: UserInfo): void {
+    // Queue the setting update
+    this._pendingSettings.set(settingKey, {
+      value,
+      contextUser,
+      timestamp: Date.now(),
+    });
+
+    // Reset the debounce timer
+    if (this._settingsDebounceTimer) {
+      clearTimeout(this._settingsDebounceTimer);
+    }
+
+    this._settingsDebounceTimer = setTimeout(() => {
+      this.FlushPendingSettings();
+    }, this._settingsDebounceMs);
+  }
+
+  /**
+   * Immediately flush all pending debounced settings to the database.
+   * Call this when you need to ensure settings are saved (e.g., before navigation).
+   * Safe to call multiple times - concurrent calls will wait for the current flush to complete.
+   *
+   * @returns Promise that resolves when all pending settings have been saved
+   */
+  public async FlushPendingSettings(): Promise<void> {
+    // Clear the timer since we're flushing now
+    if (this._settingsDebounceTimer) {
+      clearTimeout(this._settingsDebounceTimer);
+      this._settingsDebounceTimer = null;
+    }
+
+    // If nothing pending, return immediately
+    if (this._pendingSettings.size === 0) {
+      return;
+    }
+
+    // If a flush is already in progress, wait for it and then check again
+    if (this._flushPromise) {
+      await this._flushPromise;
+      // After waiting, there might be new pending settings, so recurse
+      if (this._pendingSettings.size > 0) {
+        return this.FlushPendingSettings();
+      }
+      return;
+    }
+
+    // Take a snapshot of pending settings and clear the queue
+    const settingsToSave = new Map(this._pendingSettings);
+    this._pendingSettings.clear();
+
+    // Create the flush promise
+    this._flushPromise = this.doFlushSettings(settingsToSave);
+
+    try {
+      await this._flushPromise;
+    } finally {
+      this._flushPromise = null;
+    }
+  }
+
+  /**
+   * Internal method to perform the actual flush of settings.
+   * @param settingsToSave - Map of settings to save
+   */
+  private async doFlushSettings(
+    settingsToSave: Map<string, { value: string; contextUser?: UserInfo; timestamp: number }>,
+  ): Promise<void> {
+    const savePromises: Promise<boolean>[] = [];
+
+    for (const [key, { value, contextUser }] of settingsToSave) {
+      savePromises.push(this.SetSetting(key, value, contextUser));
+    }
+
+    const results = await Promise.all(savePromises);
+    const failedCount = results.filter((r) => !r).length;
+
+    if (failedCount > 0) {
+      console.warn(`UserInfoEngine.FlushPendingSettings: ${failedCount} of ${results.length} settings failed to save`);
+    }
+  }
+
+  /**
+   * Check if there are any pending debounced settings waiting to be saved.
+   */
+  public get HasPendingSettings(): boolean {
+    return this._pendingSettings.size > 0;
+  }
+
+  /**
+   * Get the number of pending debounced settings.
+   */
+  public get PendingSettingsCount(): number {
+    return this._pendingSettings.size;
   }
 
   /**

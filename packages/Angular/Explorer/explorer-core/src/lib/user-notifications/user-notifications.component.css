@@ -1,16 +1,46 @@
 /* ===================================
-   USER NOTIFICATIONS - MODERN UI
+   USER NOTIFICATIONS - MD3 DESIGN
+   iPhone-inspired UX with Circular Buttons
    =================================== */
 
-/* Container */
+/* MD3 Color Tokens */
+:host {
+  /* Primary - MJ Blue */
+  --mj-blue: #0076B6;
+  --mj-blue-hover: #3395C8;
+  --mj-blue-active: #4BA5D4;
+  --mj-blue-light: #AAE7FD;
+
+  /* Surface Colors */
+  --surface: #FAFCFF;
+  --surface-container: #EDF0F4;
+  --surface-container-low: #F3F5F9;
+  --on-surface: #191C20;
+  --on-surface-variant: #43474E;
+  --outline: #74777F;
+  --outline-variant: #C4C6D0;
+
+  /* Elevation */
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --elevation-2: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.08);
+  --elevation-3: 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.08);
+
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ===================================
+   CONTAINER
+   =================================== */
+
 .notifications-container {
   height: 100%;
-  max-height: 800px;
   display: flex;
   flex-direction: column;
-  background: var(--white-color);
+  background: var(--surface);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--elevation-1);
   overflow: hidden;
 }
 
@@ -19,8 +49,8 @@
    =================================== */
 
 .notifications-header {
-  background: linear-gradient(to bottom, var(--white-color), var(--gray-600));
-  border-bottom: 1px solid var(--gray-700);
+  background: linear-gradient(to bottom, #FFFFFF, var(--surface-container-low));
+  border-bottom: 1px solid var(--outline-variant);
   padding: 0;
   flex-shrink: 0;
 }
@@ -30,7 +60,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 16px;
+  padding: 24px 24px 16px;
   gap: 16px;
 }
 
@@ -41,80 +71,145 @@
 }
 
 .title-icon {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   background: linear-gradient(135deg, var(--mj-blue) 0%, #0091d5 100%);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 12px rgba(0, 118, 182, 0.3);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.title-icon:hover {
+  transform: scale(1.05);
 }
 
 .title-icon i {
-  font-size: 20px;
+  font-size: 22px;
   color: white;
 }
 
 .header-title h1 {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--on-surface);
   margin: 0;
   letter-spacing: -0.02em;
 }
 
-/* Header Actions */
+/* ===================================
+   HEADER ACTIONS - Circular Buttons
+   =================================== */
+
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  border: 1px solid var(--gray-700);
-  background: var(--white-color);
-  color: var(--navy);
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 9999px;  /* Circular design */
+  font-size: 14px;
+  font-weight: 600;
+  border: 2px solid var(--mj-blue);
   cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.action-btn:hover {
-  background: var(--gray-600);
-  border-color: var(--gray-800);
-}
-
-.action-btn-primary {
-  background: var(--mj-blue);
-  border-color: var(--mj-blue);
-  color: white;
-}
-
-.action-btn-primary:hover {
-  background: #005a8c;
-  border-color: #005a8c;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 44px;
+  font-family: inherit;
 }
 
 .action-btn i {
-  font-size: 14px;
+  font-size: 16px;
+  transition: transform 0.2s ease;
+}
+
+.action-btn:hover i {
+  transform: scale(1.1);
+}
+
+/* Ghost Button - White Background (Mark All Read) */
+.action-btn-ghost {
+  background: white;
+  color: var(--mj-blue);
+  border-color: var(--mj-blue);
+}
+
+.action-btn-ghost:hover {
+  background: var(--mj-blue);
+  color: white;
+  border-color: var(--mj-blue);
+  box-shadow: var(--elevation-2);
+}
+
+.action-btn-ghost:active {
+  background: var(--mj-blue-active);
+  transform: scale(0.98);
+}
+
+/* Secondary Button */
+.action-btn-secondary {
+  background: white;
+  color: var(--mj-blue);
+  border-color: var(--mj-blue);
+}
+
+.action-btn-secondary:hover {
+  background: var(--mj-blue);
+  color: white;
+  border-color: var(--mj-blue);
+}
+
+.action-btn-secondary:active {
+  transform: scale(0.98);
 }
 
 /* ===================================
-   STATS PILLS (Filter Tabs)
+   FILTERS SECTION
+   =================================== */
+
+.filters-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface-container-low);
+  border-top: 1px solid var(--outline-variant);
+}
+
+.filters-slider {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.filters-slider::-webkit-scrollbar {
+  display: none;
+}
+
+.slider-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  min-width: min-content;
+}
+
+/* ===================================
+   STATS PILLS (Filter Tabs) - Circular with mj-blue Active
    =================================== */
 
 .header-stats {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 24px 16px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .hidden-radio {
@@ -127,51 +222,57 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
-  border-radius: 100px;
-  border: 1px solid var(--gray-700);
-  background: var(--white-color);
+  padding: 10px 20px;
+  border-radius: 9999px;  /* Circular design */
+  border: 2px solid var(--mj-blue);
+  background: white;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: inherit;
+  min-height: 44px;
 }
 
 .stat-pill:hover:not(.active) {
-  background: var(--gray-600);
-  border-color: var(--gray-800);
+  background: var(--surface-container-low);
+  border-color: var(--mj-blue-hover);
+  transform: translateY(-1px);
 }
 
+/* Active State - MJ Blue */
 .stat-pill.active {
-  background: var(--navy);
-  border-color: var(--navy);
+  background: var(--mj-blue);
+  border-color: var(--mj-blue);
   color: white;
-  box-shadow: 0 2px 8px rgba(9, 35, 64, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 118, 182, 0.35);
+  transform: translateY(-1px);
 }
 
 .stat-label {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .stat-count {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 100px;
-  background: var(--gray-700);
-  color: var(--navy);
-  min-width: 24px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  min-width: 28px;
   text-align: center;
+  transition: all 0.2s ease;
 }
 
 .stat-pill.active .stat-count {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
   color: white;
 }
 
 .stat-count.unread-count {
-  background: var(--mj-blue);
-  color: white;
+  background: var(--mj-blue-light);
+  color: var(--mj-blue);
+  font-weight: 700;
 }
 
 .stat-pill.has-unread:not(.active) {
@@ -179,70 +280,128 @@
 }
 
 /* ===================================
-   FILTER TOOLBAR
+   TYPE FILTER IN SLIDER
    =================================== */
 
-.header-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 24px 16px;
-  gap: 16px;
-  background: var(--gray-600);
-  border-top: 1px solid var(--gray-700);
-}
-
-.toolbar-filters {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-}
-
-.filter-item {
+.type-filter-slider {
   flex-shrink: 0;
+  min-width: 180px;
 }
 
-.type-filter {
-  min-width: 160px;
+/* ===================================
+   SEARCH SECTION
+   =================================== */
+
+.search-section {
+  padding: 0 24px 16px;
 }
 
-.type-dropdown {
+/* ===================================
+   FILTER INFO
+   =================================== */
+
+.filter-info {
+  padding: 0 24px 16px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Native Select Dropdown Styling */
+.type-select {
   width: 100%;
+  padding: 10px 16px;
+  border: 2px solid var(--mj-blue);
+  border-radius: 9999px;  /* Circular design */
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--on-surface);
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%230076B6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 42px;
 }
 
-.search-filter {
-  flex: 1;
-  max-width: 280px;
+.type-select:hover {
+  border-color: var(--mj-blue-hover);
+  background-color: var(--surface-container-low);
+}
+
+.type-select:focus {
+  outline: none;
+  border-color: var(--mj-blue);
+  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.15);
+}
+
+.search-container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+}
+
+.search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--on-surface-variant);
+  font-size: 14px;
+  pointer-events: none;
+  transition: color 0.2s ease;
 }
 
 .search-input {
   width: 100%;
-}
-
-.search-icon {
-  color: var(--gray-800);
+  padding: 10px 16px 10px 44px;
+  border: 2px solid var(--mj-blue);
+  border-radius: 9999px;  /* Circular design */
   font-size: 14px;
+  font-weight: 500;
+  background: white;
+  color: var(--on-surface);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
 }
 
-.toolbar-info {
-  flex-shrink: 0;
+.search-input::placeholder {
+  color: var(--on-surface-variant);
+}
+
+.search-input:hover {
+  border-color: var(--mj-blue-hover);
+  background: var(--surface-container-low);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--mj-blue);
+  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.15);
+  background: white;
+}
+
+.search-container:focus-within .search-icon {
+  color: var(--mj-blue);
 }
 
 .filter-badge {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  background: var(--light-blue);
+  padding: 8px 14px;
+  background: var(--mj-blue-light);
   color: var(--mj-blue);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
+  border-radius: 9999px;  /* Circular design */
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--mj-blue);
 }
 
 .filter-badge i {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* ===================================
@@ -253,46 +412,69 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;  /* iPhone smooth scrolling */
 }
 
-/* Empty State */
+/* Custom Scrollbar */
+.notifications-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.notifications-content::-webkit-scrollbar-track {
+  background: var(--surface-container-low);
+}
+
+.notifications-content::-webkit-scrollbar-thumb {
+  background: var(--outline-variant);
+  border-radius: 4px;
+}
+
+.notifications-content::-webkit-scrollbar-thumb:hover {
+  background: var(--outline);
+}
+
+/* ===================================
+   EMPTY STATE
+   =================================== */
+
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 24px;
+  padding: 80px 32px;
   text-align: center;
 }
 
 .empty-icon {
-  width: 80px;
-  height: 80px;
-  background: var(--gray-600);
+  width: 96px;
+  height: 96px;
+  background: var(--surface-container);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .empty-icon i {
-  font-size: 32px;
-  color: var(--gray-800);
+  font-size: 40px;
+  color: var(--outline);
 }
 
 .empty-state h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--navy);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--on-surface);
   margin: 0 0 8px;
 }
 
 .empty-state p {
-  font-size: 14px;
-  color: var(--gray-800);
+  font-size: 15px;
+  color: var(--on-surface-variant);
   margin: 0;
-  max-width: 280px;
+  max-width: 320px;
+  line-height: 1.5;
 }
 
 /* ===================================
@@ -300,27 +482,22 @@
    =================================== */
 
 .notifications-list {
-  border: none;
   background: transparent;
 }
 
-.notifications-list .k-listview-content {
-  padding: 0;
-}
-
 /* ===================================
-   NOTIFICATION CARD
+   NOTIFICATION CARD - iPhone UX Style
    =================================== */
 
 .notification-card {
   display: grid;
-  grid-template-columns: 4px 48px 1fr auto;
-  gap: 16px;
+  grid-template-columns: 4px 56px 1fr auto;
+  gap: 14px;
   align-items: start;
-  padding: 20px 24px;
-  background: var(--white-color);
-  border-bottom: 1px solid var(--gray-700);
-  transition: all 0.2s ease;
+  padding: 16px 20px;
+  background: white;
+  border-bottom: 1px solid var(--outline-variant);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
 }
 
@@ -329,47 +506,48 @@
 }
 
 .notification-card:hover {
-  background: var(--gray-600);
+  background: var(--surface-container-low);
 }
 
 .notification-card.clickable {
   cursor: pointer;
 }
 
-.notification-card.clickable:hover {
-  box-shadow: inset 0 0 0 1px var(--gray-700);
+.notification-card.clickable:active {
+  background: var(--surface-container);
+  transform: scale(0.995);
 }
 
-/* Unread State */
+/* Unread State with Blue Highlight */
 .notification-card.unread {
-  background: linear-gradient(90deg, rgba(170, 231, 253, 0.4) 0%, var(--white-color) 50%);
+  background: linear-gradient(90deg, rgba(170, 231, 253, 0.3) 0%, white 60%);
 }
 
 .notification-card.unread:hover {
-  background: linear-gradient(90deg, rgba(170, 231, 253, 0.5) 0%, var(--gray-600) 50%);
+  background: linear-gradient(90deg, rgba(170, 231, 253, 0.4) 0%, var(--surface-container-low) 60%);
 }
 
-/* Card Indicator */
+/* Card Indicator - Blue Bar for Unread */
 .card-indicator {
   width: 4px;
   height: 100%;
-  min-height: 60px;
-  border-radius: 4px;
+  min-height: 64px;
+  border-radius: 2px;
   background: transparent;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
   align-self: stretch;
 }
 
 .notification-card.unread .card-indicator {
   background: var(--mj-blue);
-  box-shadow: 0 0 8px rgba(0, 118, 182, 0.4);
+  box-shadow: 0 0 8px rgba(0, 118, 182, 0.5);
 }
 
-/* Card Icon */
+/* Card Icon - Larger and More Prominent */
 .card-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -382,7 +560,7 @@
 }
 
 .card-icon i {
-  font-size: 20px;
+  font-size: 24px;
 }
 
 /* Card Content */
@@ -400,16 +578,17 @@
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
-  color: var(--navy);
+  color: var(--on-surface);
   margin: 0;
   line-height: 1.4;
   word-wrap: break-word;
 }
 
 .card-title-unread {
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--on-surface);
 }
 
 .notification-card.clickable .card-title {
@@ -424,14 +603,14 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
-  color: var(--gray-800);
+  font-size: 13px;
+  color: var(--on-surface-variant);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .card-time i {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* Card Meta */
@@ -442,18 +621,18 @@
 .card-type {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
-  border-radius: 100px;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 9999px;  /* Circular design */
+  font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 /* Card Message */
 .card-message {
-  font-size: 14px;
-  color: var(--gray-900);
+  font-size: 15px;
+  color: var(--on-surface-variant);
   line-height: 1.5;
   margin: 0;
   display: -webkit-box;
@@ -462,48 +641,55 @@
   overflow: hidden;
 }
 
-/* Card Actions */
+/* Card Actions - Circular Buttons */
 .card-actions {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding-top: 4px;
+  padding-top: 6px;
 }
 
 .card-action-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  border: 1px solid var(--gray-700);
-  background: var(--white-color);
-  color: var(--navy);
+  padding: 8px 16px;
+  border-radius: 9999px;  /* Circular design */
+  font-size: 13px;
+  font-weight: 600;
+  border: 2px solid var(--mj-blue);
+  background: white;
+  color: var(--mj-blue);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
+  font-family: inherit;
 }
 
 .card-action-btn:hover {
-  background: var(--gray-600);
+  background: var(--mj-blue);
   border-color: var(--mj-blue);
-  color: var(--mj-blue);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: var(--elevation-2);
+}
+
+.card-action-btn:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .card-action-btn i {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 /* ===================================
    ANIMATIONS
    =================================== */
 
-@keyframes fadeIn {
+@keyframes slideInUp {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -512,20 +698,105 @@
 }
 
 .notification-card {
-  animation: fadeIn 0.3s ease;
+  animation: slideInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ===================================
-   RESPONSIVE DESIGN
+   ACCESSIBILITY
    =================================== */
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--mj-blue);
+  outline-offset: 2px;
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===================================
+   RESPONSIVE DESIGN - iPhone UX
+   =================================== */
+
+/* iPad and smaller */
 @media (max-width: 768px) {
   .notifications-container {
     border-radius: 0;
-    max-height: none;
-    height: 100%;
+    box-shadow: none;
   }
 
+  .header-top {
+    padding: 20px 20px 14px;
+  }
+
+  .title-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .title-icon i {
+    font-size: 20px;
+  }
+
+  .header-title h1 {
+    font-size: 1.5rem;
+  }
+
+  /* Horizontal Slider on Mobile */
+  .slider-content {
+    padding: 14px 20px;
+    gap: 10px;
+  }
+
+  .stat-pill {
+    padding: 8px 16px;
+    flex-shrink: 0;
+  }
+
+  .type-filter-slider {
+    min-width: 160px;
+  }
+
+  .search-section {
+    padding: 0 20px 14px;
+  }
+
+  .filter-info {
+    padding: 0 20px 14px;
+  }
+
+  .notification-card {
+    grid-template-columns: 4px 52px 1fr;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .card-actions {
+    grid-column: 2 / -1;
+    padding-top: 10px;
+  }
+
+  .card-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  .card-icon i {
+    font-size: 22px;
+  }
+}
+
+/* iPhone SE and smaller */
+@media (max-width: 480px) {
   .header-top {
     flex-direction: column;
     align-items: stretch;
@@ -534,145 +805,124 @@
   }
 
   .header-title {
-    justify-content: center;
-  }
-
-  .header-actions {
-    justify-content: center;
-  }
-
-  .header-stats {
-    padding: 0 16px 12px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
-  .stat-pill {
-    padding: 8px 14px;
-  }
-
-  .header-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 12px 16px;
-    gap: 12px;
-  }
-
-  .toolbar-filters {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .type-filter,
-  .search-filter {
-    width: 100%;
-    max-width: none;
-  }
-
-  .toolbar-info {
-    text-align: center;
-  }
-
-  .notification-card {
-    grid-template-columns: 4px 40px 1fr;
-    gap: 12px;
-    padding: 16px;
-  }
-
-  .card-actions {
-    grid-column: 2 / -1;
-    padding-top: 12px;
     justify-content: flex-start;
   }
 
-  .card-icon {
+  .title-icon {
     width: 40px;
     height: 40px;
-  }
-
-  .card-icon i {
-    font-size: 18px;
-  }
-
-  .card-header {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .card-time {
-    order: -1;
-  }
-
-  .btn-text {
-    display: none;
-  }
-
-  .action-btn {
-    padding: 8px 10px;
-  }
-}
-
-@media (max-width: 480px) {
-  .header-title h1 {
-    font-size: 1.25rem;
-  }
-
-  .title-icon {
-    width: 38px;
-    height: 38px;
   }
 
   .title-icon i {
     font-size: 18px;
   }
 
+  .header-title h1 {
+    font-size: 1.375rem;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: stretch;
+    gap: 8px;
+  }
+
+  .action-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .btn-text {
+    display: none;
+  }
+
+  /* Horizontal Slider - iPhone */
+  .slider-content {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+
+  .header-stats {
+    gap: 8px;
+  }
+
   .stat-pill {
-    padding: 6px 12px;
+    padding: 8px 14px;
+    min-height: 40px;
+    flex-shrink: 0;
   }
 
   .stat-label {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .stat-count {
-    font-size: 11px;
-    padding: 2px 6px;
-    min-width: 20px;
+    font-size: 12px;
+    padding: 3px 8px;
+    min-width: 24px;
+  }
+
+  .type-filter-slider {
+    min-width: 140px;
+  }
+
+  .type-select,
+  .search-input {
+    font-size: 16px;  /* Prevent iOS zoom on focus */
+  }
+
+  .search-section {
+    padding: 0 16px 12px;
+  }
+
+  .filter-info {
+    padding: 0 16px 12px;
   }
 
   .notification-card {
-    grid-template-columns: 3px 36px 1fr;
+    grid-template-columns: 3px 48px 1fr;
     gap: 10px;
-    padding: 14px 12px;
+    padding: 12px 12px;
   }
 
   .card-indicator {
     width: 3px;
-    min-height: 50px;
+    min-height: 56px;
   }
 
   .card-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
   }
 
   .card-icon i {
-    font-size: 16px;
+    font-size: 20px;
   }
 
   .card-title {
-    font-size: 14px;
+    font-size: 15px;
+  }
+
+  .card-time {
+    font-size: 12px;
   }
 
   .card-message {
-    font-size: 13px;
+    font-size: 14px;
     -webkit-line-clamp: 2;
   }
 
   .card-type {
-    font-size: 10px;
-    padding: 2px 8px;
+    font-size: 11px;
+    padding: 3px 10px;
+  }
+
+  .card-actions {
+    padding-top: 8px;
+    gap: 6px;
   }
 
   .action-text {
@@ -680,57 +930,45 @@
   }
 
   .card-action-btn {
-    padding: 8px;
+    padding: 8px 12px;
+    min-width: 40px;
+    justify-content: center;
   }
 
   .empty-state {
-    padding: 40px 16px;
+    padding: 60px 20px;
   }
 
   .empty-icon {
-    width: 64px;
-    height: 64px;
+    width: 80px;
+    height: 80px;
   }
 
   .empty-icon i {
-    font-size: 26px;
+    font-size: 32px;
+  }
+
+  .empty-state h3 {
+    font-size: 18px;
+  }
+
+  .empty-state p {
+    font-size: 14px;
   }
 }
 
-/* ===================================
-   KENDO OVERRIDES
-   =================================== */
+/* iPhone 12/13/14 Pro Max and similar */
+@media (min-width: 390px) and (max-width: 480px) {
+  .btn-text {
+    display: inline;
+  }
 
-.notifications-list.k-listview {
-  font-family: inherit;
-  border: none;
-  background: transparent;
+  .action-btn {
+    font-size: 14px;
+  }
 }
 
-.type-dropdown.k-dropdownlist {
-  border-radius: 8px;
-  border-color: var(--gray-700);
-}
-
-.type-dropdown.k-dropdownlist:hover {
-  border-color: var(--gray-800);
-}
-
-.type-dropdown.k-dropdownlist.k-focus {
-  border-color: var(--mj-blue);
-  box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.15);
-}
-
-.search-input.k-textbox {
-  border-radius: 8px;
-  border-color: var(--gray-700);
-}
-
-.search-input.k-textbox:hover {
-  border-color: var(--gray-800);
-}
-
-.search-input.k-textbox.k-focus {
-  border-color: var(--mj-blue);
-  box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.15);
+/* Dark mode support (if needed in future) */
+@media (prefers-color-scheme: dark) {
+  /* Dark mode styles would go here */
 }

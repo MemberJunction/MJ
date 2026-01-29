@@ -29,6 +29,17 @@ import { SecurityPermissionsComponent } from './Actions/components/security-perm
 import { ActionsListViewComponent } from './Actions/components/actions-list-view.component';
 import { ExecutionsListViewComponent } from './Actions/components/executions-list-view.component';
 import { CategoriesListViewComponent } from './Actions/components/categories-list-view.component';
+// Action Explorer Components
+import {
+  ActionExplorerComponent,
+  ActionTreePanelComponent,
+  ActionToolbarComponent,
+  ActionBreadcrumbComponent,
+  ActionCardComponent,
+  ActionListItemComponent,
+  NewCategoryPanelComponent,
+  NewActionPanelComponent
+} from './Actions/components/explorer';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { NavigationModule } from '@progress/kendo-angular-navigation';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -114,10 +125,9 @@ import { CredentialsListResourceComponent } from './Credentials/components/crede
 import { CredentialsTypesResourceComponent } from './Credentials/components/credentials-types-resource.component';
 import { CredentialsCategoriesResourceComponent } from './Credentials/components/credentials-categories-resource.component';
 import { CredentialsAuditResourceComponent } from './Credentials/components/credentials-audit-resource.component';
-import { CredentialEditPanelComponent } from './Credentials/components/credential-edit-panel.component';
-import { CredentialTypeEditPanelComponent } from './Credentials/components/credential-type-edit-panel.component';
-import { CredentialCategoryEditPanelComponent } from './Credentials/components/credential-category-edit-panel.component';
 import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
+// Credentials Module from generic package (panels and dialogs)
+import { CredentialsModule } from '@memberjunction/ng-credentials';
 // System Diagnostics Components
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
 // Lists Dashboard Components
@@ -136,6 +146,20 @@ import { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-shar
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 // Dashboard Viewer Module
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
+// API Keys Dashboard Components
+import { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
+import { APIKeyCreateDialogComponent } from './APIKeys/api-key-create-dialog.component';
+import { APIKeyEditPanelComponent } from './APIKeys/api-key-edit-panel.component';
+import { APIKeyListComponent } from './APIKeys/api-key-list.component';
+import { APIApplicationsPanelComponent } from './APIKeys/api-applications-panel.component';
+import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
+import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
+// Shared Pipes Module
+import { SharedPipesModule } from './shared/shared-pipes.module';
+// MCP Dashboard Module
+import { MCPModule } from './MCP';
+// Actions Module (test harness, dialogs)
+import { ActionsModule } from '@memberjunction/ng-actions';
 
 
 
@@ -161,6 +185,15 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     ActionsListViewComponent,
     ExecutionsListViewComponent,
     CategoriesListViewComponent,
+    // Action Explorer Components
+    ActionExplorerComponent,
+    ActionTreePanelComponent,
+    ActionToolbarComponent,
+    ActionBreadcrumbComponent,
+    ActionCardComponent,
+    ActionListItemComponent,
+    NewCategoryPanelComponent,
+    NewActionPanelComponent,
     ModelPromptPriorityMatrixComponent,
     PromptVersionControlComponent,
     // AI Instrumentation Components
@@ -216,16 +249,13 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
     CommunicationRunsResourceComponent,
-    // Credentials Dashboard Components
+    // Credentials Dashboard Components (panels now come from CredentialsModule)
     CredentialsDashboardComponent,
     CredentialsOverviewResourceComponent,
     CredentialsListResourceComponent,
     CredentialsTypesResourceComponent,
     CredentialsCategoriesResourceComponent,
     CredentialsAuditResourceComponent,
-    CredentialEditPanelComponent,
-    CredentialTypeEditPanelComponent,
-    CredentialCategoryEditPanelComponent,
     GroupByPipe,
     // System Diagnostics Components
     SystemDiagnosticsComponent,
@@ -239,7 +269,15 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     QueryBrowserResourceComponent,
     // Dashboard Browser Components
     DashboardBrowserResourceComponent,
-    DashboardShareDialogComponent
+    DashboardShareDialogComponent,
+    // API Keys Dashboard Components
+    APIKeysResourceComponent,
+    APIKeyCreateDialogComponent,
+    APIKeyEditPanelComponent,
+    APIKeyListComponent,
+    APIApplicationsPanelComponent,
+    APIScopesPanelComponent,
+    APIUsagePanelComponent
   ],
   imports: [
     CommonModule,
@@ -276,7 +314,11 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     ListManagementModule,
     ExportServiceModule,
     QueryViewerModule,
-    DashboardViewerModule
+    DashboardViewerModule,
+    MCPModule,
+    CredentialsModule,
+    SharedPipesModule,
+    ActionsModule
   ],
   providers: [
     AIInstrumentationService,
@@ -303,6 +345,15 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     CodeManagementComponent,
     EntityIntegrationComponent,
     SecurityPermissionsComponent,
+    // Export Action Explorer components
+    ActionExplorerComponent,
+    ActionTreePanelComponent,
+    ActionToolbarComponent,
+    ActionBreadcrumbComponent,
+    ActionCardComponent,
+    ActionListItemComponent,
+    NewCategoryPanelComponent,
+    NewActionPanelComponent,
     // Export Scheduling resource components
     SchedulingMonitorResourceComponent,
     SchedulingJobsResourceComponent,
@@ -326,17 +377,16 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
     CommunicationRunsResourceComponent,
-    // Export Credentials Dashboard
+    // Export Credentials Dashboard (panels re-exported via CredentialsModule)
     CredentialsDashboardComponent,
     CredentialsOverviewResourceComponent,
     CredentialsListResourceComponent,
     CredentialsTypesResourceComponent,
     CredentialsCategoriesResourceComponent,
     CredentialsAuditResourceComponent,
-    CredentialEditPanelComponent,
-    CredentialTypeEditPanelComponent,
-    CredentialCategoryEditPanelComponent,
     GroupByPipe,
+    SharedPipesModule,
+    CredentialsModule,
     // System Diagnostics Components
     SystemDiagnosticsComponent,
     // Lists Dashboard Components
@@ -349,7 +399,17 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     QueryBrowserResourceComponent,
     // Dashboard Browser Components
     DashboardBrowserResourceComponent,
-    DashboardShareDialogComponent
+    DashboardShareDialogComponent,
+    // API Keys Dashboard Components
+    APIKeysResourceComponent,
+    APIKeyCreateDialogComponent,
+    APIKeyEditPanelComponent,
+    APIKeyListComponent,
+    APIApplicationsPanelComponent,
+    APIScopesPanelComponent,
+    APIUsagePanelComponent,
+    // MCP Dashboard Module (re-exports its components)
+    MCPModule
   ]
 })
 export class DashboardsModule { }

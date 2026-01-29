@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ActionAuthorizationEntity, ActionCategoryEntity, ActionContextTypeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, ActionEntity, AIActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentNoteEntity, AIAgentRequestEntity, AIAgentEntity, AIModelActionEntity, AIModelTypeEntity, AIModelEntity, AIPromptCategoryEntity, AIPromptTypeEntity, AIPromptEntity, AIResultCacheEntity, ApplicationEntityEntity, ApplicationSettingEntity, ApplicationEntity, AuditLogTypeEntity, AuditLogEntity, AuthorizationRoleEntity, AuthorizationEntity, CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationProviderEntity, CommunicationRunEntity, CompanyEntity, CompanyIntegrationRecordMapEntity, CompanyIntegrationRunAPILogEntity, CompanyIntegrationRunDetailEntity, CompanyIntegrationRunEntity, CompanyIntegrationEntity, ContentFileTypeEntity, ContentItemAttributeEntity, ContentItemTagEntity, ContentItemEntity, ContentProcessRunEntity, ContentSourceParamEntity, ContentSourceTypeParamEntity, ContentSourceTypeEntity, ContentSourceEntity, ContentTypeAttributeEntity, ContentTypeEntity, ConversationDetailEntity, ConversationEntity, DashboardCategoryEntity, DashboardEntity, DataContextItemEntity, DataContextEntity, DatasetItemEntity, DatasetEntity, DuplicateRunDetailMatchEntity, DuplicateRunDetailEntity, DuplicateRunEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, EmployeeEntity, EntityEntity, EntityActionFilterEntity, EntityActionInvocationTypeEntity, EntityActionInvocationEntity, EntityActionParamEntity, EntityActionEntity, EntityAIActionEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity, EntityDocumentRunEntity, EntityDocumentSettingEntity, EntityDocumentTypeEntity, EntityDocumentEntity, EntityFieldValueEntity, EntityFieldEntity, EntityPermissionEntity, EntityRecordDocumentEntity, EntityRelationshipDisplayComponentEntity, EntityRelationshipEntity, EntitySettingEntity, ErrorLogEntity, ExplorerNavigationItemEntity, FileCategoryEntity, FileEntityRecordLinkEntity, FileStorageProviderEntity, FileEntity, GeneratedCodeCategoryEntity, GeneratedCodeEntity, IntegrationURLFormatEntity, IntegrationEntity, LibraryEntity, LibraryItemEntity, ListCategoryEntity, ListDetailEntity, ListEntity, AccessControlRuleEntity, AIAgentArtifactTypeEntity, AIAgentConfigurationEntity, AIAgentDataSourceEntity, AIAgentExampleEntity, AIAgentModalityEntity, AIAgentPermissionEntity, AIAgentPromptEntity, AIAgentRelationshipEntity, AIAgentRunMediaEntity, AIAgentRunStepEntity, AIAgentRunEntity, AIAgentStepPathEntity, AIAgentStepEntity, AIAgentTypeEntity, AIArchitectureEntity, AIConfigurationParamEntity, AIConfigurationEntity, AICredentialBindingEntity, AIModalityEntity, AIModelArchitectureEntity, AIModelCostEntity, AIModelModalityEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity, AIModelVendorEntity, AIPromptModelEntity, AIPromptRunMediaEntity, AIPromptRunEntity, AIVendorTypeDefinitionEntity, AIVendorTypeEntity, AIVendorEntity, APIKeyScopeEntity, APIKeyUsageLogEntity, APIKeyEntity, APIScopeEntity, ArtifactPermissionEntity, ArtifactTypeEntity, ArtifactUseEntity, ArtifactVersionAttributeEntity, ArtifactVersionEntity, ArtifactEntity, CollectionArtifactEntity, CollectionPermissionEntity, CollectionEntity, ComponentDependencyEntity, ComponentLibraryEntity, ComponentLibraryLinkEntity, ComponentRegistryEntity, ComponentEntity, ConversationArtifactPermissionEntity, ConversationArtifactVersionEntity, ConversationArtifactEntity, ConversationDetailArtifactEntity, ConversationDetailAttachmentEntity, ConversationDetailRatingEntity, CredentialCategoryEntity, CredentialTypeEntity, CredentialEntity, DashboardCategoryLinkEntity, DashboardCategoryPermissionEntity, DashboardPartTypeEntity, DashboardPermissionEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, EncryptionAlgorithmEntity, EncryptionKeySourceEntity, EncryptionKeyEntity, EnvironmentEntity, FileStorageAccountEntity, ListInvitationEntity, ListShareEntity, ProjectEntity, PublicLinkEntity, QueryParameterEntity, RecordLinkEntity, ReportUserStateEntity, ReportVersionEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity, ScheduledJobEntity, TaskDependencyEntity, TaskTypeEntity, TaskEntity, TestRubricEntity, TestRunFeedbackEntity, TestRunEntity, TestSuiteRunEntity, TestSuiteTestEntity, TestSuiteEntity, TestTypeEntity, TestEntity, UserNotificationPreferenceEntity, UserNotificationTypeEntity, UserSettingEntity, OutputDeliveryTypeEntity, OutputFormatTypeEntity, OutputTriggerTypeEntity, QueryEntity, QueryCategoryEntity, QueryEntityEntity, QueryFieldEntity, QueryPermissionEntity, QueueTaskEntity, QueueTypeEntity, QueueEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationEntity, RecordChangeReplayRunEntity, RecordChangeEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, ReportCategoryEntity, ReportSnapshotEntity, ReportEntity, ResourceLinkEntity, ResourcePermissionEntity, ResourceTypeEntity, RoleEntity, RowLevelSecurityFilterEntity, ScheduledActionParamEntity, ScheduledActionEntity, SchemaInfoEntity, SkillEntity, TaggedItemEntity, TagEntity, TemplateCategoryEntity, TemplateContentTypeEntity, TemplateContentEntity, TemplateParamEntity, TemplateEntity, UserApplicationEntityEntity, UserApplicationEntity, UserFavoriteEntity, UserNotificationEntity, UserRecordLogEntity, UserRoleEntity, UserViewCategoryEntity, UserViewRunDetailEntity, UserViewRunEntity, UserViewEntity, UserEntity, VectorDatabaseEntity, VectorIndexEntity, VersionInstallationEntity, WorkflowEngineEntity, WorkflowRunEntity, WorkflowEntity, WorkspaceItemEntity, WorkspaceEntity } from '@memberjunction/core-entities';
+import { ActionAuthorizationEntity, ActionCategoryEntity, ActionContextTypeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, ActionEntity, AIActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentNoteEntity, AIAgentRequestEntity, AIAgentEntity, AIModelActionEntity, AIModelTypeEntity, AIModelEntity, AIPromptCategoryEntity, AIPromptTypeEntity, AIPromptEntity, AIResultCacheEntity, ApplicationEntityEntity, ApplicationSettingEntity, ApplicationEntity, AuditLogTypeEntity, AuditLogEntity, AuthorizationRoleEntity, AuthorizationEntity, CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationProviderEntity, CommunicationRunEntity, CompanyEntity, CompanyIntegrationRecordMapEntity, CompanyIntegrationRunAPILogEntity, CompanyIntegrationRunDetailEntity, CompanyIntegrationRunEntity, CompanyIntegrationEntity, ContentFileTypeEntity, ContentItemAttributeEntity, ContentItemTagEntity, ContentItemEntity, ContentProcessRunEntity, ContentSourceParamEntity, ContentSourceTypeParamEntity, ContentSourceTypeEntity, ContentSourceEntity, ContentTypeAttributeEntity, ContentTypeEntity, ConversationDetailEntity, ConversationEntity, DashboardCategoryEntity, DashboardEntity, DataContextItemEntity, DataContextEntity, DatasetItemEntity, DatasetEntity, DuplicateRunDetailMatchEntity, DuplicateRunDetailEntity, DuplicateRunEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, EmployeeEntity, EntityEntity, EntityActionFilterEntity, EntityActionInvocationTypeEntity, EntityActionInvocationEntity, EntityActionParamEntity, EntityActionEntity, EntityAIActionEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity, EntityDocumentRunEntity, EntityDocumentSettingEntity, EntityDocumentTypeEntity, EntityDocumentEntity, EntityFieldValueEntity, EntityFieldEntity, EntityPermissionEntity, EntityRecordDocumentEntity, EntityRelationshipDisplayComponentEntity, EntityRelationshipEntity, EntitySettingEntity, ErrorLogEntity, ExplorerNavigationItemEntity, FileCategoryEntity, FileEntityRecordLinkEntity, FileStorageProviderEntity, FileEntity, GeneratedCodeCategoryEntity, GeneratedCodeEntity, IntegrationURLFormatEntity, IntegrationEntity, LibraryEntity, LibraryItemEntity, ListCategoryEntity, ListDetailEntity, ListEntity, AccessControlRuleEntity, AIAgentArtifactTypeEntity, AIAgentConfigurationEntity, AIAgentDataSourceEntity, AIAgentExampleEntity, AIAgentModalityEntity, AIAgentPermissionEntity, AIAgentPromptEntity, AIAgentRelationshipEntity, AIAgentRunMediaEntity, AIAgentRunStepEntity, AIAgentRunEntity, AIAgentStepPathEntity, AIAgentStepEntity, AIAgentTypeEntity, AIArchitectureEntity, AIConfigurationParamEntity, AIConfigurationEntity, AICredentialBindingEntity, AIModalityEntity, AIModelArchitectureEntity, AIModelCostEntity, AIModelModalityEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity, AIModelVendorEntity, AIPromptModelEntity, AIPromptRunMediaEntity, AIPromptRunEntity, AIVendorTypeDefinitionEntity, AIVendorTypeEntity, AIVendorEntity, APIApplicationScopeEntity, APIApplicationEntity, APIKeyApplicationEntity, APIKeyScopeEntity, APIKeyUsageLogEntity, APIKeyEntity, APIScopeEntity, ArtifactPermissionEntity, ArtifactTypeEntity, ArtifactUseEntity, ArtifactVersionAttributeEntity, ArtifactVersionEntity, ArtifactEntity, CollectionArtifactEntity, CollectionPermissionEntity, CollectionEntity, ComponentDependencyEntity, ComponentLibraryEntity, ComponentLibraryLinkEntity, ComponentRegistryEntity, ComponentEntity, ConversationArtifactPermissionEntity, ConversationArtifactVersionEntity, ConversationArtifactEntity, ConversationDetailArtifactEntity, ConversationDetailAttachmentEntity, ConversationDetailRatingEntity, CredentialCategoryEntity, CredentialTypeEntity, CredentialEntity, DashboardCategoryLinkEntity, DashboardCategoryPermissionEntity, DashboardPartTypeEntity, DashboardPermissionEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, EncryptionAlgorithmEntity, EncryptionKeySourceEntity, EncryptionKeyEntity, EnvironmentEntity, FileStorageAccountEntity, ListInvitationEntity, ListShareEntity, MCPServerConnectionPermissionEntity, MCPServerConnectionToolEntity, MCPServerConnectionEntity, MCPServerToolEntity, MCPServerEntity, MCPToolExecutionLogEntity, ProjectEntity, PublicLinkEntity, QueryParameterEntity, RecordLinkEntity, ReportUserStateEntity, ReportVersionEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity, ScheduledJobEntity, TaskDependencyEntity, TaskTypeEntity, TaskEntity, TestRubricEntity, TestRunFeedbackEntity, TestRunEntity, TestSuiteRunEntity, TestSuiteTestEntity, TestSuiteEntity, TestTypeEntity, TestEntity, UserNotificationPreferenceEntity, UserNotificationTypeEntity, UserSettingEntity, OutputDeliveryTypeEntity, OutputFormatTypeEntity, OutputTriggerTypeEntity, QueryEntity, QueryCategoryEntity, QueryEntityEntity, QueryFieldEntity, QueryPermissionEntity, QueueTaskEntity, QueueTypeEntity, QueueEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationEntity, RecordChangeReplayRunEntity, RecordChangeEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, ReportCategoryEntity, ReportSnapshotEntity, ReportEntity, ResourceLinkEntity, ResourcePermissionEntity, ResourceTypeEntity, RoleEntity, RowLevelSecurityFilterEntity, ScheduledActionParamEntity, ScheduledActionEntity, SchemaInfoEntity, SkillEntity, TaggedItemEntity, TagEntity, TemplateCategoryEntity, TemplateContentTypeEntity, TemplateContentEntity, TemplateParamEntity, TemplateEntity, UserApplicationEntityEntity, UserApplicationEntity, UserFavoriteEntity, UserNotificationEntity, UserRecordLogEntity, UserRoleEntity, UserViewCategoryEntity, UserViewRunDetailEntity, UserViewRunEntity, UserViewEntity, UserEntity, VectorDatabaseEntity, VectorIndexEntity, VersionInstallationEntity, WorkflowEngineEntity, WorkflowRunEntity, WorkflowEntity, WorkspaceItemEntity, WorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -233,6 +233,9 @@ export class MJActionCategory_ {
     @Field(() => [MJAction_])
     Actions_CategoryIDArray: MJAction_[]; // Link to Actions
     
+    @Field(() => [MJMCPServerTool_])
+    MJ_MCPServerTools_GeneratedActionCategoryIDArray: MJMCPServerTool_[]; // Link to MJ_MCPServerTools
+    
 }
 
 //****************************************************************************
@@ -358,6 +361,17 @@ export class MJActionCategoryResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CategoryID]='${mjactioncategory_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Actions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('Actions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPServerTool_])
+    async MJ_MCPServerTools_GeneratedActionCategoryIDArray(@Root() mjactioncategory_: MJActionCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Tools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerTools] WHERE [GeneratedActionCategoryID]='${mjactioncategory_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Tools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Tools', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -1812,6 +1826,9 @@ export class MJAction_ {
     @Field(() => [MJAIAgentAction_])
     AIAgentActions_ActionIDArray: MJAIAgentAction_[]; // Link to AIAgentActions
     
+    @Field(() => [MJMCPServerTool_])
+    MJ_MCPServerTools_GeneratedActionIDArray: MJMCPServerTool_[]; // Link to MJ_MCPServerTools
+    
     @Field(() => [MJActionContext_])
     ActionContexts_ActionIDArray: MJActionContext_[]; // Link to ActionContexts
     
@@ -2084,6 +2101,17 @@ export class MJActionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [ActionID]='${mjaction_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('AI Agent Actions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPServerTool_])
+    async MJ_MCPServerTools_GeneratedActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Tools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerTools] WHERE [GeneratedActionID]='${mjaction_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Tools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Tools', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -3240,6 +3268,28 @@ export class MJAIAgentNote_ {
     @MaxLength(16)
     EmbeddingModelID?: string;
         
+    @Field({nullable: true, description: `Foreign key to Entity table identifying which entity type is used for primary scoping. NULL means this is a global note.`}) 
+    @MaxLength(16)
+    PrimaryScopeEntityID?: string;
+        
+    @Field({nullable: true, description: `The record ID within the primary scope entity. NULL means global note. When set with empty SecondaryScopes, indicates primary-scope-only note.`}) 
+    @MaxLength(200)
+    PrimaryScopeRecordID?: string;
+        
+    @Field({nullable: true, description: `JSON object containing additional scope dimensions. Empty/NULL with PrimaryScopeRecordID set = org-level note. Populated = fully-scoped note.`}) 
+    SecondaryScopes?: string;
+        
+    @Field({nullable: true, description: `Timestamp of when this note was last accessed/injected into agent context. Used for lifecycle management and cleanup.`}) 
+    @MaxLength(10)
+    LastAccessedAt?: Date;
+        
+    @Field(() => Int, {description: `Number of times this note has been accessed/injected into agent context. Used for analytics and determining note value.`}) 
+    AccessCount: number;
+        
+    @Field({nullable: true, description: `Optional expiration timestamp. Notes past this date are candidates for archival. NULL means no expiration.`}) 
+    @MaxLength(10)
+    ExpiresAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -3270,6 +3320,10 @@ export class MJAIAgentNote_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     EmbeddingModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    PrimaryScopeEntity?: string;
         
 }
 
@@ -3322,6 +3376,24 @@ export class CreateMJAIAgentNoteInput {
 
     @Field({ nullable: true })
     EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes: string | null;
+
+    @Field({ nullable: true })
+    LastAccessedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    AccessCount?: number;
+
+    @Field({ nullable: true })
+    ExpiresAt: Date | null;
 }
     
 
@@ -3374,6 +3446,24 @@ export class UpdateMJAIAgentNoteInput {
 
     @Field({ nullable: true })
     EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID?: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes?: string | null;
+
+    @Field({ nullable: true })
+    LastAccessedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    AccessCount?: number;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3898,6 +3988,21 @@ if this limit is exceeded.`})
     @Field({nullable: true, description: `JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.`}) 
     AgentTypePromptParams?: string;
         
+    @Field({nullable: true, description: `JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`}) 
+    ScopeConfig?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default.`}) 
+    NoteRetentionDays?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default.`}) 
+    ExampleRetentionDays?: number;
+        
+    @Field(() => Boolean, {description: `Whether automatic archival of stale notes/examples is enabled for this agent. Default true.`}) 
+    AutoArchiveEnabled: boolean;
+        
+    @Field({nullable: true, description: `JSON configuration for optional reranking of retrieved memory items. Schema: { enabled: boolean, rerankerModelId: string, retrievalMultiplier: number (default 3), minRelevanceThreshold: number (default 0.5), rerankPromptId?: string, contextFields?: string[], fallbackOnError: boolean (default true) }. When null or disabled, vector search results are used directly without reranking.`}) 
+    RerankerConfiguration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -4160,6 +4265,21 @@ export class CreateMJAIAgentInput {
 
     @Field({ nullable: true })
     AgentTypePromptParams: string | null;
+
+    @Field({ nullable: true })
+    ScopeConfig: string | null;
+
+    @Field(() => Int, { nullable: true })
+    NoteRetentionDays?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ExampleRetentionDays?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoArchiveEnabled?: boolean;
+
+    @Field({ nullable: true })
+    RerankerConfiguration: string | null;
 }
     
 
@@ -4329,6 +4449,21 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     AgentTypePromptParams?: string | null;
+
+    @Field({ nullable: true })
+    ScopeConfig?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    NoteRetentionDays?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ExampleRetentionDays?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoArchiveEnabled?: boolean;
+
+    @Field({ nullable: true })
+    RerankerConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9700,6 +9835,9 @@ export class MJCompany_ {
     @Field(() => [MJWorkflow_])
     Workflows_CompanyNameArray: MJWorkflow_[]; // Link to Workflows
     
+    @Field(() => [MJMCPServerConnection_])
+    MJ_MCPServerConnections_CompanyIDArray: MJMCPServerConnection_[]; // Link to MJ_MCPServerConnections
+    
     @Field(() => [MJAIAgentNote_])
     AIAgentNotes_CompanyIDArray: MJAIAgentNote_[]; // Link to AIAgentNotes
     
@@ -9859,6 +9997,17 @@ export class MJCompanyResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflows] WHERE [CompanyName]='${mjcompany_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Workflows', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('Workflows', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPServerConnection_])
+    async MJ_MCPServerConnections_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnections] WHERE [CompanyID]='${mjcompany_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connections', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connections', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -17261,6 +17410,12 @@ export class MJEntity_ {
     @Field(() => [MJRecordLink_])
     MJ_RecordLinks_SourceEntityIDArray: MJRecordLink_[]; // Link to MJ_RecordLinks
     
+    @Field(() => [MJAIAgentExample_])
+    MJ_AIAgentExamples_PrimaryScopeEntityIDArray: MJAIAgentExample_[]; // Link to MJ_AIAgentExamples
+    
+    @Field(() => [MJAIAgentNote_])
+    AIAgentNotes_PrimaryScopeEntityIDArray: MJAIAgentNote_[]; // Link to AIAgentNotes
+    
     @Field(() => [MJGeneratedCode_])
     GeneratedCodes_LinkedEntityIDArray: MJGeneratedCode_[]; // Link to GeneratedCodes
     
@@ -17269,6 +17424,9 @@ export class MJEntity_ {
     
     @Field(() => [MJTestRun_])
     MJ_TestRuns_TargetLogEntityIDArray: MJTestRun_[]; // Link to MJ_TestRuns
+    
+    @Field(() => [MJAIAgentRun_])
+    MJ_AIAgentRuns_PrimaryScopeEntityIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
     
 }
 
@@ -18093,6 +18251,28 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAIAgentExample_])
+    async MJ_AIAgentExamples_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentExamples] WHERE [PrimaryScopeEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Examples', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Examples', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentNote_])
+    async AIAgentNotes_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [PrimaryScopeEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJGeneratedCode_])
     async GeneratedCodes_LinkedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Generated Codes', userPayload);
@@ -18123,6 +18303,17 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRuns] WHERE [TargetLogEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Test Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentRun_])
+    async MJ_AIAgentRuns_PrimaryScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [PrimaryScopeEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -26674,6 +26865,28 @@ export class MJAIAgentExample_ {
     @MaxLength(16)
     EmbeddingModelID?: string;
         
+    @Field({nullable: true, description: `Foreign key to Entity table identifying which entity type is used for primary scoping. NULL means this is a global example.`}) 
+    @MaxLength(16)
+    PrimaryScopeEntityID?: string;
+        
+    @Field({nullable: true, description: `The record ID within the primary scope entity. NULL means global example. When set with empty SecondaryScopes, indicates primary-scope-only example.`}) 
+    @MaxLength(200)
+    PrimaryScopeRecordID?: string;
+        
+    @Field({nullable: true, description: `JSON object containing additional scope dimensions. Empty/NULL with PrimaryScopeRecordID set = org-level example. Populated = fully-scoped example.`}) 
+    SecondaryScopes?: string;
+        
+    @Field({nullable: true, description: `Timestamp of when this example was last accessed/used for agent context. Used for lifecycle management and cleanup.`}) 
+    @MaxLength(10)
+    LastAccessedAt?: Date;
+        
+    @Field(() => Int, {description: `Number of times this example has been accessed/used. Used for analytics and determining example value.`}) 
+    AccessCount: number;
+        
+    @Field({nullable: true, description: `Optional expiration timestamp. Examples past this date are candidates for archival. NULL means no expiration.`}) 
+    @MaxLength(10)
+    ExpiresAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -26700,6 +26913,10 @@ export class MJAIAgentExample_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     EmbeddingModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    PrimaryScopeEntity?: string;
         
 }
 
@@ -26755,6 +26972,24 @@ export class CreateMJAIAgentExampleInput {
 
     @Field({ nullable: true })
     EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes: string | null;
+
+    @Field({ nullable: true })
+    LastAccessedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    AccessCount?: number;
+
+    @Field({ nullable: true })
+    ExpiresAt: Date | null;
 }
     
 
@@ -26810,6 +27045,24 @@ export class UpdateMJAIAgentExampleInput {
 
     @Field({ nullable: true })
     EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID?: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes?: string | null;
+
+    @Field({ nullable: true })
+    LastAccessedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    AccessCount?: number;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -28521,6 +28774,17 @@ each time the agent processes a prompt step.`})
     @MaxLength(16)
     TestRunID?: string;
         
+    @Field({nullable: true, description: `Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)`}) 
+    @MaxLength(16)
+    PrimaryScopeEntityID?: string;
+        
+    @Field({nullable: true, description: `The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.`}) 
+    @MaxLength(200)
+    PrimaryScopeRecordID?: string;
+        
+    @Field({nullable: true, description: `JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`}) 
+    SecondaryScopes?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -28563,6 +28827,10 @@ each time the agent processes a prompt step.`})
     @Field({nullable: true}) 
     @MaxLength(510)
     TestRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    PrimaryScopeEntity?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
@@ -28713,6 +28981,15 @@ export class CreateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     TestRunID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes: string | null;
 }
     
 
@@ -28837,6 +29114,15 @@ export class UpdateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     TestRunID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeEntityID?: string | null;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID?: string | null;
+
+    @Field({ nullable: true })
+    SecondaryScopes?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -34517,6 +34803,555 @@ export class MJAIVendorResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: API Application Scopes
+//****************************************************************************
+@ObjectType({ description: `Defines the scope ceiling for each application with pattern-based rules. Controls which scopes and resource patterns an application can use, regardless of what API keys grant.` })
+export class MJAPIApplicationScope_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Reference to the application this ceiling rule applies to.`}) 
+    @MaxLength(16)
+    ApplicationID: string;
+        
+    @Field({description: `Reference to the scope this rule applies to.`}) 
+    @MaxLength(16)
+    ScopeID: string;
+        
+    @Field({nullable: true, description: `Glob pattern for matching resources (e.g., Users,Accounts or Skip* or *). NULL means match all resources.`}) 
+    @MaxLength(1500)
+    ResourcePattern?: string;
+        
+    @Field({description: `How to interpret the pattern: Include (grant if matches) or Exclude (grant if does NOT match).`}) 
+    @MaxLength(40)
+    PatternType: string;
+        
+    @Field(() => Boolean, {description: `If true, this rule explicitly DENIES access. Deny rules trump allow rules at the same priority level.`}) 
+    IsDeny: boolean;
+        
+    @Field(() => Int, {description: `Rule evaluation order. Higher priority rules are evaluated first. Within same priority, deny rules are evaluated before allow rules.`}) 
+    Priority: number;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    Application: string;
+        
+    @Field() 
+    @MaxLength(200)
+    Scope: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: API Application Scopes
+//****************************************************************************
+@InputType()
+export class CreateMJAPIApplicationScopeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field({ nullable: true })
+    ScopeID?: string;
+
+    @Field({ nullable: true })
+    ResourcePattern: string | null;
+
+    @Field({ nullable: true })
+    PatternType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDeny?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: API Application Scopes
+//****************************************************************************
+@InputType()
+export class UpdateMJAPIApplicationScopeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field({ nullable: true })
+    ScopeID?: string;
+
+    @Field({ nullable: true })
+    ResourcePattern?: string | null;
+
+    @Field({ nullable: true })
+    PatternType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDeny?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: API Application Scopes
+//****************************************************************************
+@ObjectType()
+export class RunMJAPIApplicationScopeViewResult {
+    @Field(() => [MJAPIApplicationScope_])
+    Results: MJAPIApplicationScope_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAPIApplicationScope_)
+export class MJAPIApplicationScopeResolver extends ResolverBase {
+    @Query(() => RunMJAPIApplicationScopeViewResult)
+    async RunMJAPIApplicationScopeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAPIApplicationScopeViewResult)
+    async RunMJAPIApplicationScopeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAPIApplicationScopeViewResult)
+    async RunMJAPIApplicationScopeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: API Application Scopes';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAPIApplicationScope_, { nullable: true })
+    async MJAPIApplicationScope(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAPIApplicationScope_ | null> {
+        this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIApplicationScopes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Application Scopes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: API Application Scopes', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAPIApplicationScope_)
+    async CreateMJAPIApplicationScope(
+        @Arg('input', () => CreateMJAPIApplicationScopeInput) input: CreateMJAPIApplicationScopeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: API Application Scopes', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAPIApplicationScope_)
+    async UpdateMJAPIApplicationScope(
+        @Arg('input', () => UpdateMJAPIApplicationScopeInput) input: UpdateMJAPIApplicationScopeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: API Application Scopes', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAPIApplicationScope_)
+    async DeleteMJAPIApplicationScope(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: API Application Scopes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: API Applications
+//****************************************************************************
+@ObjectType({ description: `Registry of applications that can consume MemberJunction APIs. Each application defines a scope ceiling that limits what API keys can access when used with that application.` })
+export class MJAPIApplication_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Unique name identifying the application (e.g., MJAPI, MCPServer, Portal, CLI).`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Human-readable description of the application and its purpose.`}) 
+    @MaxLength(1000)
+    Description?: string;
+        
+    @Field(() => Boolean, {description: `Whether this application is currently active. Inactive applications reject all API key authentication.`}) 
+    IsActive: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJAPIKeyUsageLog_])
+    MJ_APIKeyUsageLogs_ApplicationIDArray: MJAPIKeyUsageLog_[]; // Link to MJ_APIKeyUsageLogs
+    
+    @Field(() => [MJAPIApplicationScope_])
+    MJ_APIApplicationScopes_ApplicationIDArray: MJAPIApplicationScope_[]; // Link to MJ_APIApplicationScopes
+    
+    @Field(() => [MJAPIKeyApplication_])
+    MJ_APIKeyApplications_ApplicationIDArray: MJAPIKeyApplication_[]; // Link to MJ_APIKeyApplications
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: API Applications
+//****************************************************************************
+@InputType()
+export class CreateMJAPIApplicationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: API Applications
+//****************************************************************************
+@InputType()
+export class UpdateMJAPIApplicationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: API Applications
+//****************************************************************************
+@ObjectType()
+export class RunMJAPIApplicationViewResult {
+    @Field(() => [MJAPIApplication_])
+    Results: MJAPIApplication_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAPIApplication_)
+export class MJAPIApplicationResolver extends ResolverBase {
+    @Query(() => RunMJAPIApplicationViewResult)
+    async RunMJAPIApplicationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAPIApplicationViewResult)
+    async RunMJAPIApplicationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAPIApplicationViewResult)
+    async RunMJAPIApplicationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: API Applications';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAPIApplication_, { nullable: true })
+    async MJAPIApplication(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAPIApplication_ | null> {
+        this.CheckUserReadPermissions('MJ: API Applications', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIApplications] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: API Applications', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJAPIKeyUsageLog_])
+    async MJ_APIKeyUsageLogs_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Key Usage Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeyUsageLogs] WHERE [ApplicationID]='${mjapiapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Key Usage Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Key Usage Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAPIApplicationScope_])
+    async MJ_APIApplicationScopes_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIApplicationScopes] WHERE [ApplicationID]='${mjapiapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Application Scopes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Application Scopes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAPIKeyApplication_])
+    async MJ_APIKeyApplications_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Key Applications', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeyApplications] WHERE [ApplicationID]='${mjapiapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Key Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Key Applications', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJAPIApplication_)
+    async CreateMJAPIApplication(
+        @Arg('input', () => CreateMJAPIApplicationInput) input: CreateMJAPIApplicationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: API Applications', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAPIApplication_)
+    async UpdateMJAPIApplication(
+        @Arg('input', () => UpdateMJAPIApplicationInput) input: UpdateMJAPIApplicationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: API Applications', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAPIApplication_)
+    async DeleteMJAPIApplication(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: API Applications', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: API Key Applications
+//****************************************************************************
+@ObjectType({ description: `Optional binding of API keys to specific applications. If no records exist for a key, it works with all applications. If records exist, the key only works with those specific applications.` })
+export class MJAPIKeyApplication_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Reference to the API key being bound to an application.`}) 
+    @MaxLength(16)
+    APIKeyID: string;
+        
+    @Field({description: `Reference to the application this key is authorized to use.`}) 
+    @MaxLength(16)
+    ApplicationID: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    APIKey: string;
+        
+    @Field() 
+    @MaxLength(200)
+    Application: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: API Key Applications
+//****************************************************************************
+@InputType()
+export class CreateMJAPIKeyApplicationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    APIKeyID?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: API Key Applications
+//****************************************************************************
+@InputType()
+export class UpdateMJAPIKeyApplicationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    APIKeyID?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: API Key Applications
+//****************************************************************************
+@ObjectType()
+export class RunMJAPIKeyApplicationViewResult {
+    @Field(() => [MJAPIKeyApplication_])
+    Results: MJAPIKeyApplication_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAPIKeyApplication_)
+export class MJAPIKeyApplicationResolver extends ResolverBase {
+    @Query(() => RunMJAPIKeyApplicationViewResult)
+    async RunMJAPIKeyApplicationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAPIKeyApplicationViewResult)
+    async RunMJAPIKeyApplicationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAPIKeyApplicationViewResult)
+    async RunMJAPIKeyApplicationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: API Key Applications';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAPIKeyApplication_, { nullable: true })
+    async MJAPIKeyApplication(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAPIKeyApplication_ | null> {
+        this.CheckUserReadPermissions('MJ: API Key Applications', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeyApplications] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Key Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: API Key Applications', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAPIKeyApplication_)
+    async CreateMJAPIKeyApplication(
+        @Arg('input', () => CreateMJAPIKeyApplicationInput) input: CreateMJAPIKeyApplicationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: API Key Applications', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAPIKeyApplication_)
+    async UpdateMJAPIKeyApplication(
+        @Arg('input', () => UpdateMJAPIKeyApplicationInput) input: UpdateMJAPIKeyApplicationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: API Key Applications', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAPIKeyApplication_)
+    async DeleteMJAPIKeyApplication(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: API Key Applications', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: API Key Scopes
 //****************************************************************************
 @ObjectType({ description: `Junction table linking API keys to their assigned permission scopes. Each key can have multiple scopes, and scopes can be shared across multiple keys.` })
@@ -34541,6 +35376,20 @@ export class MJAPIKeyScope_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Glob pattern for matching resources (e.g., Users,Accounts or Skip* or *). NULL means match all resources under this scope.`}) 
+    @MaxLength(1500)
+    ResourcePattern?: string;
+        
+    @Field({description: `How to interpret the pattern: Include (grant if matches) or Exclude (grant if does NOT match).`}) 
+    @MaxLength(40)
+    PatternType: string;
+        
+    @Field(() => Boolean, {description: `If true, this rule explicitly DENIES access. Deny rules trump allow rules at the same priority level.`}) 
+    IsDeny: boolean;
+        
+    @Field(() => Int, {description: `Rule evaluation order. Higher priority rules are evaluated first. Within same priority, deny rules are evaluated before allow rules.`}) 
+    Priority: number;
+        
     @Field() 
     @MaxLength(510)
     APIKey: string;
@@ -34564,6 +35413,18 @@ export class CreateMJAPIKeyScopeInput {
 
     @Field({ nullable: true })
     ScopeID?: string;
+
+    @Field({ nullable: true })
+    ResourcePattern: string | null;
+
+    @Field({ nullable: true })
+    PatternType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDeny?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
 }
     
 
@@ -34580,6 +35441,18 @@ export class UpdateMJAPIKeyScopeInput {
 
     @Field({ nullable: true })
     ScopeID?: string;
+
+    @Field({ nullable: true })
+    ResourcePattern?: string | null;
+
+    @Field({ nullable: true })
+    PatternType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDeny?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -34719,9 +35592,32 @@ export class MJAPIKeyUsageLog_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The application through which this request was made (MJAPI, MCPServer, etc.).`}) 
+    @MaxLength(16)
+    ApplicationID?: string;
+        
+    @Field({nullable: true, description: `The specific resource that was requested (e.g., entity name, agent name, query name).`}) 
+    @MaxLength(1000)
+    RequestedResource?: string;
+        
+    @Field({nullable: true, description: `JSON array containing detailed evaluation of each scope rule checked during authorization.`}) 
+    ScopesEvaluated?: string;
+        
+    @Field({description: `Final authorization result: Allowed, Denied, or NoScopesRequired (for operations that do not require scope checks).`}) 
+    @MaxLength(40)
+    AuthorizationResult: string;
+        
+    @Field({nullable: true, description: `When authorization is denied, explains why (e.g., app ceiling blocked, no matching key scope, explicit deny rule).`}) 
+    @MaxLength(1000)
+    DeniedReason?: string;
+        
     @Field() 
     @MaxLength(510)
     APIKey: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Application?: string;
         
 }
 
@@ -34756,6 +35652,21 @@ export class CreateMJAPIKeyUsageLogInput {
 
     @Field({ nullable: true })
     UserAgent: string | null;
+
+    @Field({ nullable: true })
+    ApplicationID: string | null;
+
+    @Field({ nullable: true })
+    RequestedResource: string | null;
+
+    @Field({ nullable: true })
+    ScopesEvaluated: string | null;
+
+    @Field({ nullable: true })
+    AuthorizationResult?: string;
+
+    @Field({ nullable: true })
+    DeniedReason: string | null;
 }
     
 
@@ -34790,6 +35701,21 @@ export class UpdateMJAPIKeyUsageLogInput {
 
     @Field({ nullable: true })
     UserAgent?: string | null;
+
+    @Field({ nullable: true })
+    ApplicationID?: string | null;
+
+    @Field({ nullable: true })
+    RequestedResource?: string | null;
+
+    @Field({ nullable: true })
+    ScopesEvaluated?: string | null;
+
+    @Field({ nullable: true })
+    AuthorizationResult?: string;
+
+    @Field({ nullable: true })
+    DeniedReason?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -34945,6 +35871,9 @@ export class MJAPIKey_ {
     @Field(() => [MJAPIKeyScope_])
     MJ_APIKeyScopes_APIKeyIDArray: MJAPIKeyScope_[]; // Link to MJ_APIKeyScopes
     
+    @Field(() => [MJAPIKeyApplication_])
+    MJ_APIKeyApplications_APIKeyIDArray: MJAPIKeyApplication_[]; // Link to MJ_APIKeyApplications
+    
 }
 
 //****************************************************************************
@@ -35097,6 +36026,17 @@ export class MJAPIKeyResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAPIKeyApplication_])
+    async MJ_APIKeyApplications_APIKeyIDArray(@Root() mjapikey_: MJAPIKey_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Key Applications', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeyApplications] WHERE [APIKeyID]='${mjapikey_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Key Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Key Applications', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJAPIKey_)
     async CreateMJAPIKey(
         @Arg('input', () => CreateMJAPIKeyInput) input: CreateMJAPIKeyInput,
@@ -35155,8 +36095,40 @@ export class MJAPIScope_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Reference to parent scope for hierarchical organization. NULL indicates a root-level scope.`}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
+    @Field({description: `Full hierarchical path of the scope (e.g., entity:runview, agent:execute). Used for matching during authorization.`}) 
+    @MaxLength(1000)
+    FullPath: string;
+        
+    @Field({nullable: true, description: `Type of resource this scope applies to (Entity, Agent, Query, Mutation, or NULL for abstract grouping scopes).`}) 
+    @MaxLength(100)
+    ResourceType?: string;
+        
+    @Field(() => Boolean, {description: `Whether this scope is currently active. Inactive scopes are ignored during authorization.`}) 
+    IsActive: boolean;
+        
+    @Field({nullable: true, description: `JSON configuration for UI presentation. Schema: { "icon": "fa-solid fa-xxx", "color": "#hexcolor" }. Icon should be a Font Awesome class. Color should be a hex color code.`}) 
+    UIConfig?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [MJAPIKeyScope_])
     MJ_APIKeyScopes_ScopeIDArray: MJAPIKeyScope_[]; // Link to MJ_APIKeyScopes
+    
+    @Field(() => [MJAPIApplicationScope_])
+    MJ_APIApplicationScopes_ScopeIDArray: MJAPIApplicationScope_[]; // Link to MJ_APIApplicationScopes
+    
+    @Field(() => [MJAPIScope_])
+    MJ_APIScopes_ParentIDArray: MJAPIScope_[]; // Link to MJ_APIScopes
     
 }
 
@@ -35176,6 +36148,21 @@ export class CreateMJAPIScopeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    FullPath?: string;
+
+    @Field({ nullable: true })
+    ResourceType: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field({ nullable: true })
+    UIConfig: string | null;
 }
     
 
@@ -35195,6 +36182,21 @@ export class UpdateMJAPIScopeInput {
 
     @Field({ nullable: true })
     Description?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    FullPath?: string;
+
+    @Field({ nullable: true })
+    ResourceType?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field({ nullable: true })
+    UIConfig?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -35266,6 +36268,28 @@ export class MJAPIScopeResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeyScopes] WHERE [ScopeID]='${mjapiscope_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Key Scopes', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Key Scopes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAPIApplicationScope_])
+    async MJ_APIApplicationScopes_ScopeIDArray(@Root() mjapiscope_: MJAPIScope_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIApplicationScopes] WHERE [ScopeID]='${mjapiscope_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Application Scopes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Application Scopes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAPIScope_])
+    async MJ_APIScopes_ParentIDArray(@Root() mjapiscope_: MJAPIScope_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Scopes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIScopes] WHERE [ParentID]='${mjapiscope_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Scopes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Scopes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -39940,6 +40964,9 @@ export class MJCredentialType_ {
     @Field(() => [MJCredential_])
     MJ_Credentials_CredentialTypeIDArray: MJCredential_[]; // Link to MJ_Credentials
     
+    @Field(() => [MJMCPServer_])
+    MJ_MCPServers_CredentialTypeIDArray: MJMCPServer_[]; // Link to MJ_MCPServers
+    
     @Field(() => [MJAIVendor_])
     MJ_AIVendors_CredentialTypeIDArray: MJAIVendor_[]; // Link to MJ_AIVendors
     
@@ -40072,6 +41099,17 @@ export class MJCredentialTypeResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJMCPServer_])
+    async MJ_MCPServers_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Servers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServers] WHERE [CredentialTypeID]='${mjcredentialtype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Servers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Servers', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIVendor_])
     async MJ_AIVendors_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Vendors', userPayload);
@@ -40179,6 +41217,9 @@ export class MJCredential_ {
         
     @Field(() => [MJFileStorageAccount_])
     MJ_FileStorageAccounts_CredentialIDArray: MJFileStorageAccount_[]; // Link to MJ_FileStorageAccounts
+    
+    @Field(() => [MJMCPServerConnection_])
+    MJ_MCPServerConnections_CredentialIDArray: MJMCPServerConnection_[]; // Link to MJ_MCPServerConnections
     
     @Field(() => [MJAICredentialBinding_])
     MJ_AICredentialBindings_CredentialIDArray: MJAICredentialBinding_[]; // Link to MJ_AICredentialBindings
@@ -40339,6 +41380,17 @@ export class MJCredentialResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileStorageAccounts] WHERE [CredentialID]='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Accounts', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: File Storage Accounts', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPServerConnection_])
+    async MJ_MCPServerConnections_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnections] WHERE [CredentialID]='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connections', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connections', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -43031,6 +44083,1571 @@ export class MJListShareResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: List Shares', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: MCP Server Connection Permissions
+//****************************************************************************
+@ObjectType()
+export class MJMCPServerConnectionPermission_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    MCPServerConnectionID: string;
+        
+    @Field({nullable: true, description: `FK to User (mutually exclusive with RoleID)`}) 
+    @MaxLength(16)
+    UserID?: string;
+        
+    @Field({nullable: true, description: `FK to Role (mutually exclusive with UserID)`}) 
+    @MaxLength(16)
+    RoleID?: string;
+        
+    @Field(() => Boolean, {description: `Can invoke tools via this connection`}) 
+    CanExecute: boolean;
+        
+    @Field(() => Boolean, {description: `Can modify connection settings`}) 
+    CanModify: boolean;
+        
+    @Field(() => Boolean, {description: `Can see credential info (but not decrypt)`}) 
+    CanViewCredentials: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    MCPServerConnection: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    User?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Role?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Server Connection Permissions
+//****************************************************************************
+@InputType()
+export class CreateMJMCPServerConnectionPermissionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field({ nullable: true })
+    RoleID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CanExecute?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanModify?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanViewCredentials?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Server Connection Permissions
+//****************************************************************************
+@InputType()
+export class UpdateMJMCPServerConnectionPermissionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
+
+    @Field({ nullable: true })
+    RoleID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CanExecute?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanModify?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanViewCredentials?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: MCP Server Connection Permissions
+//****************************************************************************
+@ObjectType()
+export class RunMJMCPServerConnectionPermissionViewResult {
+    @Field(() => [MJMCPServerConnectionPermission_])
+    Results: MJMCPServerConnectionPermission_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMCPServerConnectionPermission_)
+export class MJMCPServerConnectionPermissionResolver extends ResolverBase {
+    @Query(() => RunMJMCPServerConnectionPermissionViewResult)
+    async RunMJMCPServerConnectionPermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPServerConnectionPermissionViewResult)
+    async RunMJMCPServerConnectionPermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPServerConnectionPermissionViewResult)
+    async RunMJMCPServerConnectionPermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: MCP Server Connection Permissions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMCPServerConnectionPermission_, { nullable: true })
+    async MJMCPServerConnectionPermission(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMCPServerConnectionPermission_ | null> {
+        this.CheckUserReadPermissions('MJ: MCP Server Connection Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnectionPermissions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connection Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: MCP Server Connection Permissions', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMCPServerConnectionPermission_)
+    async CreateMJMCPServerConnectionPermission(
+        @Arg('input', () => CreateMJMCPServerConnectionPermissionInput) input: CreateMJMCPServerConnectionPermissionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: MCP Server Connection Permissions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMCPServerConnectionPermission_)
+    async UpdateMJMCPServerConnectionPermission(
+        @Arg('input', () => UpdateMJMCPServerConnectionPermissionInput) input: UpdateMJMCPServerConnectionPermissionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: MCP Server Connection Permissions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMCPServerConnectionPermission_)
+    async DeleteMJMCPServerConnectionPermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: MCP Server Connection Permissions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: MCP Server Connection Tools
+//****************************************************************************
+@ObjectType()
+export class MJMCPServerConnectionTool_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    MCPServerConnectionID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    MCPServerToolID: string;
+        
+    @Field(() => Boolean, {description: `Whether this tool is enabled for the connection`}) 
+    IsEnabled: boolean;
+        
+    @Field({nullable: true, description: `JSON default values for tool inputs`}) 
+    DefaultInputValues?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Override rate limit for this specific tool`}) 
+    MaxCallsPerMinute?: number;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    MCPServerConnection: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    MCPServerTool?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Server Connection Tools
+//****************************************************************************
+@InputType()
+export class CreateMJMCPServerConnectionToolInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    MCPServerToolID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsEnabled?: boolean;
+
+    @Field({ nullable: true })
+    DefaultInputValues: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxCallsPerMinute: number | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Server Connection Tools
+//****************************************************************************
+@InputType()
+export class UpdateMJMCPServerConnectionToolInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    MCPServerToolID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsEnabled?: boolean;
+
+    @Field({ nullable: true })
+    DefaultInputValues?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxCallsPerMinute?: number | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: MCP Server Connection Tools
+//****************************************************************************
+@ObjectType()
+export class RunMJMCPServerConnectionToolViewResult {
+    @Field(() => [MJMCPServerConnectionTool_])
+    Results: MJMCPServerConnectionTool_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMCPServerConnectionTool_)
+export class MJMCPServerConnectionToolResolver extends ResolverBase {
+    @Query(() => RunMJMCPServerConnectionToolViewResult)
+    async RunMJMCPServerConnectionToolViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPServerConnectionToolViewResult)
+    async RunMJMCPServerConnectionToolViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPServerConnectionToolViewResult)
+    async RunMJMCPServerConnectionToolDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: MCP Server Connection Tools';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMCPServerConnectionTool_, { nullable: true })
+    async MJMCPServerConnectionTool(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMCPServerConnectionTool_ | null> {
+        this.CheckUserReadPermissions('MJ: MCP Server Connection Tools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnectionTools] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connection Tools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: MCP Server Connection Tools', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMCPServerConnectionTool_)
+    async CreateMJMCPServerConnectionTool(
+        @Arg('input', () => CreateMJMCPServerConnectionToolInput) input: CreateMJMCPServerConnectionToolInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: MCP Server Connection Tools', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMCPServerConnectionTool_)
+    async UpdateMJMCPServerConnectionTool(
+        @Arg('input', () => UpdateMJMCPServerConnectionToolInput) input: UpdateMJMCPServerConnectionToolInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: MCP Server Connection Tools', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMCPServerConnectionTool_)
+    async DeleteMJMCPServerConnectionTool(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: MCP Server Connection Tools', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: MCP Server Connections
+//****************************************************************************
+@ObjectType()
+export class MJMCPServerConnection_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    MCPServerID: string;
+        
+    @Field({description: `Connection name (unique per company)`}) 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `FK to Credential entity (uses existing credential types)`}) 
+    @MaxLength(16)
+    CredentialID?: string;
+        
+    @Field({nullable: true, description: `Custom header name for API key auth (default: X-API-Key)`}) 
+    @MaxLength(200)
+    CustomHeaderName?: string;
+        
+    @Field({nullable: true, description: `Optional company association. NULL means the connection is global and available to all companies. Non-NULL restricts the connection to that specific company.`}) 
+    @MaxLength(16)
+    CompanyID?: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Status: string;
+        
+    @Field(() => Boolean, {description: `Auto-sync tools when connecting`}) 
+    AutoSyncTools: boolean;
+        
+    @Field(() => Boolean, {description: `Auto-generate MJ Actions for discovered tools`}) 
+    AutoGenerateActions: boolean;
+        
+    @Field(() => Boolean, {description: `Log all tool calls to execution log`}) 
+    LogToolCalls: boolean;
+        
+    @Field(() => Boolean, {description: `Include input parameters in logs`}) 
+    LogInputParameters: boolean;
+        
+    @Field(() => Boolean, {description: `Include output content in logs`}) 
+    LogOutputContent: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Max output size to log in bytes (default: 100KB)`}) 
+    MaxOutputLogSize?: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    LastConnectedAt?: Date;
+        
+    @Field({nullable: true}) 
+    LastErrorMessage?: string;
+        
+    @Field({nullable: true, description: `JSON object of environment variables for Stdio transport`}) 
+    EnvironmentVars?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    MCPServer: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(400)
+    Credential?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Company?: string;
+        
+    @Field(() => [MJMCPServerConnectionTool_])
+    MJ_MCPServerConnectionTools_MCPServerConnectionIDArray: MJMCPServerConnectionTool_[]; // Link to MJ_MCPServerConnectionTools
+    
+    @Field(() => [MJMCPToolExecutionLog_])
+    MJ_MCPToolExecutionLogs_MCPServerConnectionIDArray: MJMCPToolExecutionLog_[]; // Link to MJ_MCPToolExecutionLogs
+    
+    @Field(() => [MJMCPServerConnectionPermission_])
+    MJ_MCPServerConnectionPermissions_MCPServerConnectionIDArray: MJMCPServerConnectionPermission_[]; // Link to MJ_MCPServerConnectionPermissions
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Server Connections
+//****************************************************************************
+@InputType()
+export class CreateMJMCPServerConnectionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MCPServerID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
+
+    @Field({ nullable: true })
+    CustomHeaderName: string | null;
+
+    @Field({ nullable: true })
+    CompanyID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoSyncTools?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoGenerateActions?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    LogToolCalls?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    LogInputParameters?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    LogOutputContent?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxOutputLogSize?: number | null;
+
+    @Field({ nullable: true })
+    LastConnectedAt: Date | null;
+
+    @Field({ nullable: true })
+    LastErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    EnvironmentVars: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Server Connections
+//****************************************************************************
+@InputType()
+export class UpdateMJMCPServerConnectionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MCPServerID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
+
+    @Field({ nullable: true })
+    CustomHeaderName?: string | null;
+
+    @Field({ nullable: true })
+    CompanyID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoSyncTools?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoGenerateActions?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    LogToolCalls?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    LogInputParameters?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    LogOutputContent?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxOutputLogSize?: number | null;
+
+    @Field({ nullable: true })
+    LastConnectedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    EnvironmentVars?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: MCP Server Connections
+//****************************************************************************
+@ObjectType()
+export class RunMJMCPServerConnectionViewResult {
+    @Field(() => [MJMCPServerConnection_])
+    Results: MJMCPServerConnection_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMCPServerConnection_)
+export class MJMCPServerConnectionResolver extends ResolverBase {
+    @Query(() => RunMJMCPServerConnectionViewResult)
+    async RunMJMCPServerConnectionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPServerConnectionViewResult)
+    async RunMJMCPServerConnectionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPServerConnectionViewResult)
+    async RunMJMCPServerConnectionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: MCP Server Connections';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMCPServerConnection_, { nullable: true })
+    async MJMCPServerConnection(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMCPServerConnection_ | null> {
+        this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnections] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connections', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: MCP Server Connections', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJMCPServerConnectionTool_])
+    async MJ_MCPServerConnectionTools_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Connection Tools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnectionTools] WHERE [MCPServerConnectionID]='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connection Tools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connection Tools', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPToolExecutionLog_])
+    async MJ_MCPToolExecutionLogs_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Tool Execution Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPToolExecutionLogs] WHERE [MCPServerConnectionID]='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Execution Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPServerConnectionPermission_])
+    async MJ_MCPServerConnectionPermissions_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Connection Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnectionPermissions] WHERE [MCPServerConnectionID]='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connection Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connection Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJMCPServerConnection_)
+    async CreateMJMCPServerConnection(
+        @Arg('input', () => CreateMJMCPServerConnectionInput) input: CreateMJMCPServerConnectionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: MCP Server Connections', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMCPServerConnection_)
+    async UpdateMJMCPServerConnection(
+        @Arg('input', () => UpdateMJMCPServerConnectionInput) input: UpdateMJMCPServerConnectionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: MCP Server Connections', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMCPServerConnection_)
+    async DeleteMJMCPServerConnection(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: MCP Server Connections', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: MCP Server Tools
+//****************************************************************************
+@ObjectType()
+export class MJMCPServerTool_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    MCPServerID: string;
+        
+    @Field({description: `Tool identifier from the MCP server`}) 
+    @MaxLength(510)
+    ToolName: string;
+        
+    @Field({nullable: true, description: `Human-readable title for the tool`}) 
+    @MaxLength(510)
+    ToolTitle?: string;
+        
+    @Field({nullable: true}) 
+    ToolDescription?: string;
+        
+    @Field({description: `JSON Schema for tool input parameters`}) 
+    InputSchema: string;
+        
+    @Field({nullable: true, description: `JSON Schema for tool output (if provided)`}) 
+    OutputSchema?: string;
+        
+    @Field({nullable: true, description: `JSON with tool hints (readOnlyHint, destructiveHint, etc.)`}) 
+    Annotations?: string;
+        
+    @Field({description: `Tool status: Active, Inactive, or Deprecated`}) 
+    @MaxLength(100)
+    Status: string;
+        
+    @Field() 
+    @MaxLength(10)
+    DiscoveredAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    LastSeenAt: Date;
+        
+    @Field({nullable: true, description: `FK to auto-generated Action (if promoted)`}) 
+    @MaxLength(16)
+    GeneratedActionID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    GeneratedActionCategoryID?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    MCPServer: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(850)
+    GeneratedAction?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    GeneratedActionCategory?: string;
+        
+    @Field(() => [MJMCPServerConnectionTool_])
+    MJ_MCPServerConnectionTools_MCPServerToolIDArray: MJMCPServerConnectionTool_[]; // Link to MJ_MCPServerConnectionTools
+    
+    @Field(() => [MJMCPToolExecutionLog_])
+    MJ_MCPToolExecutionLogs_MCPServerToolIDArray: MJMCPToolExecutionLog_[]; // Link to MJ_MCPToolExecutionLogs
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Server Tools
+//****************************************************************************
+@InputType()
+export class CreateMJMCPServerToolInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MCPServerID?: string;
+
+    @Field({ nullable: true })
+    ToolName?: string;
+
+    @Field({ nullable: true })
+    ToolTitle: string | null;
+
+    @Field({ nullable: true })
+    ToolDescription: string | null;
+
+    @Field({ nullable: true })
+    InputSchema?: string;
+
+    @Field({ nullable: true })
+    OutputSchema: string | null;
+
+    @Field({ nullable: true })
+    Annotations: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    DiscoveredAt?: Date;
+
+    @Field({ nullable: true })
+    LastSeenAt?: Date;
+
+    @Field({ nullable: true })
+    GeneratedActionID: string | null;
+
+    @Field({ nullable: true })
+    GeneratedActionCategoryID: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Server Tools
+//****************************************************************************
+@InputType()
+export class UpdateMJMCPServerToolInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MCPServerID?: string;
+
+    @Field({ nullable: true })
+    ToolName?: string;
+
+    @Field({ nullable: true })
+    ToolTitle?: string | null;
+
+    @Field({ nullable: true })
+    ToolDescription?: string | null;
+
+    @Field({ nullable: true })
+    InputSchema?: string;
+
+    @Field({ nullable: true })
+    OutputSchema?: string | null;
+
+    @Field({ nullable: true })
+    Annotations?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    DiscoveredAt?: Date;
+
+    @Field({ nullable: true })
+    LastSeenAt?: Date;
+
+    @Field({ nullable: true })
+    GeneratedActionID?: string | null;
+
+    @Field({ nullable: true })
+    GeneratedActionCategoryID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: MCP Server Tools
+//****************************************************************************
+@ObjectType()
+export class RunMJMCPServerToolViewResult {
+    @Field(() => [MJMCPServerTool_])
+    Results: MJMCPServerTool_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMCPServerTool_)
+export class MJMCPServerToolResolver extends ResolverBase {
+    @Query(() => RunMJMCPServerToolViewResult)
+    async RunMJMCPServerToolViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPServerToolViewResult)
+    async RunMJMCPServerToolViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPServerToolViewResult)
+    async RunMJMCPServerToolDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: MCP Server Tools';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMCPServerTool_, { nullable: true })
+    async MJMCPServerTool(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMCPServerTool_ | null> {
+        this.CheckUserReadPermissions('MJ: MCP Server Tools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerTools] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Tools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: MCP Server Tools', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJMCPServerConnectionTool_])
+    async MJ_MCPServerConnectionTools_MCPServerToolIDArray(@Root() mjmcpservertool_: MJMCPServerTool_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Connection Tools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnectionTools] WHERE [MCPServerToolID]='${mjmcpservertool_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connection Tools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connection Tools', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPToolExecutionLog_])
+    async MJ_MCPToolExecutionLogs_MCPServerToolIDArray(@Root() mjmcpservertool_: MJMCPServerTool_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Tool Execution Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPToolExecutionLogs] WHERE [MCPServerToolID]='${mjmcpservertool_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Execution Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJMCPServerTool_)
+    async CreateMJMCPServerTool(
+        @Arg('input', () => CreateMJMCPServerToolInput) input: CreateMJMCPServerToolInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: MCP Server Tools', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMCPServerTool_)
+    async UpdateMJMCPServerTool(
+        @Arg('input', () => UpdateMJMCPServerToolInput) input: UpdateMJMCPServerToolInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: MCP Server Tools', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMCPServerTool_)
+    async DeleteMJMCPServerTool(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: MCP Server Tools', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: MCP Servers
+//****************************************************************************
+@ObjectType()
+export class MJMCPServer_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Unique display name for the MCP server`}) 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `Server endpoint URL for HTTP/SSE/WebSocket transports`}) 
+    @MaxLength(2000)
+    ServerURL?: string;
+        
+    @Field({nullable: true, description: `Executable path for Stdio transport`}) 
+    @MaxLength(1000)
+    Command?: string;
+        
+    @Field({nullable: true, description: `JSON array of command arguments for Stdio transport`}) 
+    CommandArgs?: string;
+        
+    @Field({description: `Transport type: StreamableHTTP, SSE, Stdio, or WebSocket`}) 
+    @MaxLength(100)
+    TransportType: string;
+        
+    @Field({description: `Default auth type: None, Bearer, APIKey, OAuth2, Basic, or Custom`}) 
+    @MaxLength(100)
+    DefaultAuthType: string;
+        
+    @Field({nullable: true, description: `Expected credential type for this server`}) 
+    @MaxLength(16)
+    CredentialTypeID?: string;
+        
+    @Field({description: `Server status: Active, Inactive, or Deprecated`}) 
+    @MaxLength(100)
+    Status: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    LastSyncAt?: Date;
+        
+    @Field(() => Int, {nullable: true}) 
+    RateLimitPerMinute?: number;
+        
+    @Field(() => Int, {nullable: true}) 
+    RateLimitPerHour?: number;
+        
+    @Field(() => Int, {nullable: true}) 
+    ConnectionTimeoutMs?: number;
+        
+    @Field(() => Int, {nullable: true}) 
+    RequestTimeoutMs?: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(2000)
+    DocumentationURL?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    IconClass?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    CredentialType?: string;
+        
+    @Field(() => [MJMCPServerConnection_])
+    MJ_MCPServerConnections_MCPServerIDArray: MJMCPServerConnection_[]; // Link to MJ_MCPServerConnections
+    
+    @Field(() => [MJMCPServerTool_])
+    MJ_MCPServerTools_MCPServerIDArray: MJMCPServerTool_[]; // Link to MJ_MCPServerTools
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Servers
+//****************************************************************************
+@InputType()
+export class CreateMJMCPServerInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ServerURL: string | null;
+
+    @Field({ nullable: true })
+    Command: string | null;
+
+    @Field({ nullable: true })
+    CommandArgs: string | null;
+
+    @Field({ nullable: true })
+    TransportType?: string;
+
+    @Field({ nullable: true })
+    DefaultAuthType?: string;
+
+    @Field({ nullable: true })
+    CredentialTypeID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    LastSyncAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitPerMinute: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitPerHour: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ConnectionTimeoutMs?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RequestTimeoutMs?: number | null;
+
+    @Field({ nullable: true })
+    DocumentationURL: string | null;
+
+    @Field({ nullable: true })
+    IconClass: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Servers
+//****************************************************************************
+@InputType()
+export class UpdateMJMCPServerInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ServerURL?: string | null;
+
+    @Field({ nullable: true })
+    Command?: string | null;
+
+    @Field({ nullable: true })
+    CommandArgs?: string | null;
+
+    @Field({ nullable: true })
+    TransportType?: string;
+
+    @Field({ nullable: true })
+    DefaultAuthType?: string;
+
+    @Field({ nullable: true })
+    CredentialTypeID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    LastSyncAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitPerMinute?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitPerHour?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ConnectionTimeoutMs?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RequestTimeoutMs?: number | null;
+
+    @Field({ nullable: true })
+    DocumentationURL?: string | null;
+
+    @Field({ nullable: true })
+    IconClass?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: MCP Servers
+//****************************************************************************
+@ObjectType()
+export class RunMJMCPServerViewResult {
+    @Field(() => [MJMCPServer_])
+    Results: MJMCPServer_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMCPServer_)
+export class MJMCPServerResolver extends ResolverBase {
+    @Query(() => RunMJMCPServerViewResult)
+    async RunMJMCPServerViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPServerViewResult)
+    async RunMJMCPServerViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPServerViewResult)
+    async RunMJMCPServerDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: MCP Servers';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMCPServer_, { nullable: true })
+    async MJMCPServer(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMCPServer_ | null> {
+        this.CheckUserReadPermissions('MJ: MCP Servers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServers] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Servers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: MCP Servers', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJMCPServerConnection_])
+    async MJ_MCPServerConnections_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnections] WHERE [MCPServerID]='${mjmcpserver_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connections', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connections', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPServerTool_])
+    async MJ_MCPServerTools_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Tools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerTools] WHERE [MCPServerID]='${mjmcpserver_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Tools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Tools', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJMCPServer_)
+    async CreateMJMCPServer(
+        @Arg('input', () => CreateMJMCPServerInput) input: CreateMJMCPServerInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: MCP Servers', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMCPServer_)
+    async UpdateMJMCPServer(
+        @Arg('input', () => UpdateMJMCPServerInput) input: UpdateMJMCPServerInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: MCP Servers', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMCPServer_)
+    async DeleteMJMCPServer(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: MCP Servers', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: MCP Tool Execution Logs
+//****************************************************************************
+@ObjectType()
+export class MJMCPToolExecutionLog_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    MCPServerConnectionID: string;
+        
+    @Field({nullable: true, description: `FK to MCP Server Tool (null if tool not cached)`}) 
+    @MaxLength(16)
+    MCPServerToolID?: string;
+        
+    @Field({description: `Tool name (stored directly for resilience)`}) 
+    @MaxLength(510)
+    ToolName: string;
+        
+    @Field({description: `FK to User who initiated the call`}) 
+    @MaxLength(16)
+    UserID: string;
+        
+    @Field() 
+    @MaxLength(10)
+    StartedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    EndedAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: `Execution duration in milliseconds`}) 
+    DurationMs?: number;
+        
+    @Field(() => Boolean) 
+    Success: boolean;
+        
+    @Field({nullable: true}) 
+    ErrorMessage?: string;
+        
+    @Field({nullable: true, description: `JSON of input parameters (if logging enabled)`}) 
+    InputParameters?: string;
+        
+    @Field({nullable: true, description: `JSON of output content (if logging enabled)`}) 
+    OutputContent?: string;
+        
+    @Field(() => Boolean, {description: `Whether output was truncated due to size`}) 
+    OutputTruncated: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    MCPServerConnection: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    MCPServerTool?: string;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Tool Execution Logs
+//****************************************************************************
+@InputType()
+export class CreateMJMCPToolExecutionLogInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    MCPServerToolID: string | null;
+
+    @Field({ nullable: true })
+    ToolName?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    EndedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    DurationMs: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Success?: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    InputParameters: string | null;
+
+    @Field({ nullable: true })
+    OutputContent: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OutputTruncated?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Tool Execution Logs
+//****************************************************************************
+@InputType()
+export class UpdateMJMCPToolExecutionLogInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    MCPServerToolID?: string | null;
+
+    @Field({ nullable: true })
+    ToolName?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    EndedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    DurationMs?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Success?: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    InputParameters?: string | null;
+
+    @Field({ nullable: true })
+    OutputContent?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OutputTruncated?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: MCP Tool Execution Logs
+//****************************************************************************
+@ObjectType()
+export class RunMJMCPToolExecutionLogViewResult {
+    @Field(() => [MJMCPToolExecutionLog_])
+    Results: MJMCPToolExecutionLog_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMCPToolExecutionLog_)
+export class MJMCPToolExecutionLogResolver extends ResolverBase {
+    @Query(() => RunMJMCPToolExecutionLogViewResult)
+    async RunMJMCPToolExecutionLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPToolExecutionLogViewResult)
+    async RunMJMCPToolExecutionLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPToolExecutionLogViewResult)
+    async RunMJMCPToolExecutionLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: MCP Tool Execution Logs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMCPToolExecutionLog_, { nullable: true })
+    async MJMCPToolExecutionLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMCPToolExecutionLog_ | null> {
+        this.CheckUserReadPermissions('MJ: MCP Tool Execution Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPToolExecutionLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: MCP Tool Execution Logs', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMCPToolExecutionLog_)
+    async CreateMJMCPToolExecutionLog(
+        @Arg('input', () => CreateMJMCPToolExecutionLogInput) input: CreateMJMCPToolExecutionLogInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: MCP Tool Execution Logs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMCPToolExecutionLog_)
+    async UpdateMJMCPToolExecutionLog(
+        @Arg('input', () => UpdateMJMCPToolExecutionLogInput) input: UpdateMJMCPToolExecutionLogInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: MCP Tool Execution Logs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMCPToolExecutionLog_)
+    async DeleteMJMCPToolExecutionLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: MCP Tool Execution Logs', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -54148,6 +56765,9 @@ export class MJRole_ {
     @Field(() => [MJResourcePermission_])
     ResourcePermissions_RoleIDArray: MJResourcePermission_[]; // Link to ResourcePermissions
     
+    @Field(() => [MJMCPServerConnectionPermission_])
+    MJ_MCPServerConnectionPermissions_RoleIDArray: MJMCPServerConnectionPermission_[]; // Link to MJ_MCPServerConnectionPermissions
+    
     @Field(() => [MJAIAgentPermission_])
     MJ_AIAgentPermissions_RoleIDArray: MJAIAgentPermission_[]; // Link to MJ_AIAgentPermissions
     
@@ -54331,6 +56951,17 @@ export class MJRoleResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [RoleID]='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('Resource Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPServerConnectionPermission_])
+    async MJ_MCPServerConnectionPermissions_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Connection Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnectionPermissions] WHERE [RoleID]='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connection Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connection Permissions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -59219,11 +61850,14 @@ export class MJUser_ {
     @Field(() => [MJDashboardPermission_])
     MJ_DashboardPermissions_SharedByUserIDArray: MJDashboardPermission_[]; // Link to MJ_DashboardPermissions
     
+    @Field(() => [MJAPIKey_])
+    MJ_APIKeys_UserIDArray: MJAPIKey_[]; // Link to MJ_APIKeys
+    
     @Field(() => [MJUserNotificationPreference_])
     MJ_UserNotificationPreferences_UserIDArray: MJUserNotificationPreference_[]; // Link to MJ_UserNotificationPreferences
     
-    @Field(() => [MJAPIKey_])
-    MJ_APIKeys_UserIDArray: MJAPIKey_[]; // Link to MJ_APIKeys
+    @Field(() => [MJMCPToolExecutionLog_])
+    MJ_MCPToolExecutionLogs_UserIDArray: MJMCPToolExecutionLog_[]; // Link to MJ_MCPToolExecutionLogs
     
     @Field(() => [MJResourcePermission_])
     ResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to ResourcePermissions
@@ -59260,6 +61894,9 @@ export class MJUser_ {
     
     @Field(() => [MJAPIKey_])
     MJ_APIKeys_CreatedByUserIDArray: MJAPIKey_[]; // Link to MJ_APIKeys
+    
+    @Field(() => [MJMCPServerConnectionPermission_])
+    MJ_MCPServerConnectionPermissions_UserIDArray: MJMCPServerConnectionPermission_[]; // Link to MJ_MCPServerConnectionPermissions
     
     @Field(() => [MJAIAgentRun_])
     MJ_AIAgentRuns_UserIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
@@ -60036,6 +62673,17 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAPIKey_])
+    async MJ_APIKeys_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Keys', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeys] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Keys', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Keys', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJUserNotificationPreference_])
     async MJ_UserNotificationPreferences_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Notification Preferences', userPayload);
@@ -60047,14 +62695,14 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJAPIKey_])
-    async MJ_APIKeys_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: API Keys', userPayload);
+    @FieldResolver(() => [MJMCPToolExecutionLog_])
+    async MJ_MCPToolExecutionLogs_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Tool Execution Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeys] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Keys', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPToolExecutionLogs] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Keys', rows, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Execution Logs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -60187,6 +62835,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeys] WHERE [CreatedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Keys', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Keys', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPServerConnectionPermission_])
+    async MJ_MCPServerConnectionPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Connection Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnectionPermissions] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connection Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connection Permissions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

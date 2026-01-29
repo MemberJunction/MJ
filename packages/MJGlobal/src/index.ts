@@ -10,6 +10,7 @@ export * from './util/PatternUtils';
 export * from './ValidationTypes'
 export * from './JSONValidator'
 export * from './SafeExpressionEvaluator'
+export * from './SQLExpressionValidator'
 export * from './warningManager'
 export * from './EncryptionUtils'
 

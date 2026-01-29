@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/server-bootstrap",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "MemberJunction Server Bootstrap - Encapsulates all server initialization logic",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "clean": "rm -rf dist"
+    "clean": "rimraf dist"
   },
   "keywords": [
     "memberjunction",
@@ -18,8 +18,8 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/core": "3.2.0",
-    "@memberjunction/server": "3.2.0",
+    "@memberjunction/core": "3.3.0",
+    "@memberjunction/server": "3.3.0",
     "cosmiconfig": "^9.0.0"
   },
   "devDependencies": {

@@ -94,6 +94,26 @@ const mcpServerEntityToolInfoSchema = z.object({
 const mcpServerActionToolInfoSchema = z.object({
   actionName: z.string().optional(),
   actionCategory: z.string().optional(),
+  discover: z.boolean().optional().default(false),
+  execute: z.boolean().optional().default(false),
+});
+
+const mcpServerQueryToolInfoSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  allowedSchemas: z.array(z.string()).optional(),
+  blockedSchemas: z.array(z.string()).optional(),
+});
+
+const mcpServerPromptToolInfoSchema = z.object({
+  promptName: z.string().optional(),
+  promptCategory: z.string().optional(),
+  discover: z.boolean().optional().default(false),
+  execute: z.boolean().optional().default(false),
+});
+
+const mcpServerCommunicationToolInfoSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  allowedProviders: z.array(z.string()).optional(),
 });
 
 const mcpServerAgentToolInfoSchema = z.object({
@@ -104,13 +124,101 @@ const mcpServerAgentToolInfoSchema = z.object({
   cancel: z.boolean().optional().default(false),
 });
 
+/**
+ * Zod schema for OAuth Proxy settings.
+ * The OAuth proxy enables dynamic client registration (RFC 7591) for MCP clients.
+ */
+const oauthProxySettingsSchema = z.object({
+  /** Enable the OAuth proxy authorization server */
+  enabled: z.boolean().default(false),
+  /**
+   * Upstream provider to use for authentication.
+   * This should match one of the configured auth providers by name.
+   * If not specified, the first available provider is used.
+   */
+  upstreamProvider: z.string().optional(),
+  /** TTL for registered clients in milliseconds (default: 24 hours) */
+  clientTtlMs: z.number().default(24 * 60 * 60 * 1000),
+  /** TTL for authorization state in milliseconds (default: 10 minutes) */
+  stateTtlMs: z.number().default(10 * 60 * 1000),
+  /**
+   * Secret key for signing proxy-issued JWTs (HS256).
+   * Must be at least 32 bytes (256 bits). Can be base64 encoded.
+   * Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   * If not set, the proxy will pass through upstream tokens instead of issuing its own.
+   */
+  jwtSigningSecret: z.string().optional(),
+  /**
+   * JWT expiration time for proxy-issued tokens.
+   * @default '1h' (1 hour)
+   */
+  jwtExpiresIn: z.string().default('1h'),
+  /**
+   * Issuer claim for proxy-signed JWTs.
+   * @default 'urn:mj:mcp-server'
+   */
+  jwtIssuer: z.string().default('urn:mj:mcp-server'),
+  /**
+   * Enable the consent screen for users to select scopes.
+   * When enabled, users will see a UI to approve/deny scope requests
+   * after authenticating with the upstream provider.
+   * @default false
+   */
+  enableConsentScreen: z.boolean().default(false),
+});
+
+/**
+ * Zod schema for OAuth authentication settings.
+ *
+ * Token audience for validation is automatically derived from auth provider config
+ * (e.g., WEB_CLIENT_ID for Azure AD), matching the same approach used by MJExplorer.
+ * No additional configuration is required for basic OAuth to work.
+ *
+ * Validates the auth configuration section with defaults:
+ * - mode: defaults to 'both' (accepts API keys or OAuth tokens)
+ * - resourceIdentifier: MCP server URL for Protected Resource Metadata (auto-generated if not set)
+ * - autoResourceIdentifier: defaults to true (auto-generate from server URL)
+ */
+const mcpServerAuthSettingsSchema = z.object({
+  /** Authentication mode: 'apiKey' | 'oauth' | 'both' | 'none' */
+  mode: z.enum(['apiKey', 'oauth', 'both', 'none']).default('both'),
+  /** Resource identifier for MCP clients - the server URL (e.g., "http://localhost:3100") */
+  resourceIdentifier: z.string().optional(),
+  /**
+   * @deprecated Token audience is now derived from auth provider config (same as MJExplorer).
+   * This field is ignored - audience validation uses the provider's `audience` field
+   * which is auto-populated from environment variables like WEB_CLIENT_ID.
+   */
+  tokenAudience: z.string().optional(),
+  /**
+   * OAuth scopes to include in Protected Resource Metadata.
+   * Used for MCP client discovery - tells clients what scopes to request from the IdP.
+   * For Azure AD: use ["api://{client-id}/.default"]
+   * If not set, uses standard OIDC scopes ["openid", "profile", "email"]
+   */
+  scopes: z.array(z.string()).optional(),
+  /** Auto-generate resourceIdentifier from server URL if not specified */
+  autoResourceIdentifier: z.boolean().default(true),
+  /**
+   * OAuth Proxy settings - enables dynamic client registration for MCP clients.
+   * When enabled, the MCP Server acts as an OAuth Authorization Server that
+   * proxies authentication to the configured upstream provider (Azure AD, Auth0, etc.).
+   */
+  proxy: oauthProxySettingsSchema.optional(),
+});
+
 const mcpServerInfoSchema = z.object({
   port: z.coerce.number().optional().default(3100),
   entityTools: z.array(mcpServerEntityToolInfoSchema).optional(),
   actionTools: z.array(mcpServerActionToolInfoSchema).optional(),
   agentTools: z.array(mcpServerAgentToolInfoSchema).optional(),
+  queryTools: mcpServerQueryToolInfoSchema.optional(),
+  promptTools: z.array(mcpServerPromptToolInfoSchema).optional(),
+  communicationTools: mcpServerCommunicationToolInfoSchema.optional(),
   enableMCPServer: z.boolean().optional().default(false),
   systemApiKey: z.string().optional(),
+  /** OAuth authentication settings for the MCP Server */
+  auth: mcpServerAuthSettingsSchema.optional(),
 });
 
 const configInfoSchema = z.object({
@@ -133,10 +241,23 @@ const configInfoSchema = z.object({
   mcpServerSettings: mcpServerInfoSchema.optional(),
 
   mjCoreSchema: z.string(),
+
+  // System API key from MJ_API_KEY environment variable
+  // Note: This may come from DEFAULT_SERVER_CONFIG, but initConfig() also reads
+  // directly from process.env to handle cases where dotenv runs after MJServer import
+  apiKey: z.string().optional(),
 });
 
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
+export type MCPServerEntityToolInfo = z.infer<typeof mcpServerEntityToolInfoSchema>;
+export type MCPServerActionToolInfo = z.infer<typeof mcpServerActionToolInfoSchema>;
+export type MCPServerAgentToolInfo = z.infer<typeof mcpServerAgentToolInfoSchema>;
+export type MCPServerQueryToolInfo = z.infer<typeof mcpServerQueryToolInfoSchema>;
+export type MCPServerPromptToolInfo = z.infer<typeof mcpServerPromptToolInfoSchema>;
+export type MCPServerCommunicationToolInfo = z.infer<typeof mcpServerCommunicationToolInfoSchema>;
+export type MCPServerAuthSettingsInfo = z.infer<typeof mcpServerAuthSettingsSchema>;
+export type OAuthProxySettingsInfo = z.infer<typeof oauthProxySettingsSchema>;
 
 // Config will be loaded asynchronously - exports are populated by initConfig()
 export let configInfo: ConfigInfo;
@@ -151,6 +272,8 @@ export let mcpServerSettings: ConfigInfo['mcpServerSettings'];
 export let mj_core_schema: string;
 export let dbReadOnlyUsername: string | undefined;
 export let dbReadOnlyPassword: string | undefined;
+/** OAuth authentication settings, resolved with defaults */
+export let mcpServerAuth: MCPServerAuthSettingsInfo;
 
 let _initialized = false;
 
@@ -171,6 +294,17 @@ export async function initConfig(): Promise<ConfigInfo> {
 
   configInfo = loadConfig(DEFAULT_SERVER_CONFIG);
 
+  // Ensure apiKey is read directly from process.env (dotenv has definitely run by now)
+  // DEFAULT_SERVER_CONFIG.apiKey may have been evaluated before dotenv ran if @memberjunction/server
+  // was imported elsewhere first
+  const envApiKey = process.env.MJ_API_KEY;
+  console.log(`[Config] apiKey sources: configInfo.apiKey=${configInfo.apiKey ? `"${configInfo.apiKey.substring(0, 10)}..." (${configInfo.apiKey.length} chars)` : 'undefined'}, process.env.MJ_API_KEY=${envApiKey ? `"${envApiKey.substring(0, 10)}..." (${envApiKey.length} chars)` : 'undefined'}`);
+
+  if (!configInfo.apiKey && envApiKey) {
+    console.log('[Config] Using MJ_API_KEY from process.env (DEFAULT_SERVER_CONFIG was stale)');
+    configInfo.apiKey = envApiKey;
+  }
+
   // Populate the exported variables
   dbUsername = configInfo.dbUsername;
   dbPassword = configInfo.dbPassword;
@@ -184,8 +318,120 @@ export async function initConfig(): Promise<ConfigInfo> {
   dbReadOnlyUsername = configInfo.dbReadOnlyUsername;
   dbReadOnlyPassword = configInfo.dbReadOnlyPassword;
 
+  // Resolve auth settings with defaults
+  mcpServerAuth = resolveAuthSettings(configInfo.mcpServerSettings?.auth, configInfo.mcpServerSettings?.port);
+
   _initialized = true;
   return configInfo;
+}
+
+/** Minimum required length for JWT signing secret (32 bytes = 256 bits) */
+const MIN_JWT_SECRET_LENGTH = 32;
+
+/**
+ * Validates the JWT signing secret for the OAuth proxy.
+ *
+ * @param secret - The JWT signing secret (may be base64 encoded)
+ * @returns Object with validation result and decoded secret
+ */
+function validateJwtSigningSecret(secret: string | undefined): {
+  valid: boolean;
+  error?: string;
+  decodedSecret?: string;
+} {
+  if (!secret) {
+    return { valid: false, error: 'JWT signing secret is not configured' };
+  }
+
+  // Try to decode base64 first to get actual byte length
+  let secretBytes: Buffer;
+  try {
+    // Check if it looks like base64 (only alphanumeric, +, /, =)
+    if (/^[A-Za-z0-9+/=]+$/.test(secret) && secret.length % 4 === 0) {
+      secretBytes = Buffer.from(secret, 'base64');
+      // If base64 decode gives reasonable output, use it
+      if (secretBytes.length >= MIN_JWT_SECRET_LENGTH) {
+        return { valid: true, decodedSecret: secret };
+      }
+    }
+    // Otherwise treat as raw string
+    secretBytes = Buffer.from(secret, 'utf-8');
+  } catch {
+    secretBytes = Buffer.from(secret, 'utf-8');
+  }
+
+  if (secretBytes.length < MIN_JWT_SECRET_LENGTH) {
+    return {
+      valid: false,
+      error: `JWT signing secret is too short (${secretBytes.length} bytes). Minimum required: ${MIN_JWT_SECRET_LENGTH} bytes (256 bits). Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`,
+    };
+  }
+
+  return { valid: true, decodedSecret: secret };
+}
+
+/**
+ * Resolves OAuth authentication settings with defaults.
+ *
+ * @param authConfig - The raw auth configuration from mj.config.cjs
+ * @param port - The MCP server port for auto-generating resourceIdentifier
+ * @returns Resolved auth settings with all defaults applied
+ */
+function resolveAuthSettings(
+  authConfig: z.infer<typeof mcpServerAuthSettingsSchema> | undefined,
+  port: number | undefined
+): MCPServerAuthSettingsInfo {
+  // Start with defaults
+  const defaults: MCPServerAuthSettingsInfo = {
+    mode: 'both',
+    autoResourceIdentifier: true,
+  };
+
+  if (!authConfig) {
+    return defaults;
+  }
+
+  // Merge with config values
+  const resolved: MCPServerAuthSettingsInfo = {
+    mode: authConfig.mode ?? defaults.mode,
+    resourceIdentifier: authConfig.resourceIdentifier,
+    tokenAudience: authConfig.tokenAudience,
+    scopes: authConfig.scopes,
+    autoResourceIdentifier: authConfig.autoResourceIdentifier ?? defaults.autoResourceIdentifier,
+    proxy: authConfig.proxy,
+  };
+
+  // Auto-generate resourceIdentifier if needed
+  if (!resolved.resourceIdentifier && resolved.autoResourceIdentifier) {
+    const serverPort = port ?? 3100;
+    resolved.resourceIdentifier = `http://localhost:${serverPort}`;
+  }
+
+  // Validate JWT signing secret if OAuth proxy is enabled with JWT signing
+  if (resolved.proxy?.enabled && resolved.proxy?.jwtSigningSecret) {
+    const secretValidation = validateJwtSigningSecret(resolved.proxy.jwtSigningSecret);
+    if (!secretValidation.valid) {
+      console.error(`[Config] OAuth Proxy Error: ${secretValidation.error}`);
+      console.error(`[Config] OAuth Proxy will be DISABLED due to invalid JWT signing secret`);
+      console.warn(`[Config] Falling back to API key authentication only`);
+
+      // Disable the proxy but keep the rest of auth settings
+      resolved.proxy = {
+        ...resolved.proxy,
+        enabled: false,
+      };
+
+      // If mode was 'oauth', fall back to 'apiKey'
+      if (resolved.mode === 'oauth') {
+        console.warn(`[Config] Auth mode changed from 'oauth' to 'apiKey' because OAuth proxy is disabled`);
+        resolved.mode = 'apiKey';
+      }
+    } else {
+      console.log(`[Config] JWT signing secret validated (${MIN_JWT_SECRET_LENGTH}+ bytes)`);
+    }
+  }
+
+  return resolved;
 }
 
 /**

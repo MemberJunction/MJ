@@ -15,7 +15,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunQueryParams, BaseEntityResult,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
-         KeyValuePair, getGraphQLTypeNameBase } from "@memberjunction/core";
+         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -42,14 +42,24 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     set Token(token: string) { this.Data.Token = token}
 
     /**
-     * This optional parameter is used when using a shared secret key that is static and provided by the publisher of the MJAPI server. Providing this value will result in 
+     * This optional parameter is used when using a shared secret key that is static and provided by the publisher of the MJAPI server. Providing this value will result in
      * a special header x-mj-api-key being set with this value in the HTTP request to the server. This is useful when the server is configured to require this key for certain requests.
-     * 
-     * WARNING: This should NEVER BE USED IN A CLIENT APP like a browser. The only suitable use for this is if you are using GraphQLDataProvider on the server side from another MJAPI, or 
+     *
+     * WARNING: This should NEVER BE USED IN A CLIENT APP like a browser. The only suitable use for this is if you are using GraphQLDataProvider on the server side from another MJAPI, or
      * some other secure computing environment where the key can be kept secure.
      */
     get MJAPIKey(): string { return this.Data.MJAPIKey }
     set MJAPIKey(key: string) { this.Data.MJAPIKey = key }
+
+    /**
+     * This optional parameter is used when authenticating with a MemberJunction user API key (format: mj_sk_*).
+     * When provided, it will be sent in the X-API-Key header. This authenticates as the specific user who owns the API key.
+     *
+     * Unlike MJAPIKey (system key), this is a user-specific key that can be used for automated access on behalf of a user.
+     * Use this when you want to make API calls as a specific user without requiring OAuth authentication.
+     */
+    get UserAPIKey(): string { return this.Data.UserAPIKey }
+    set UserAPIKey(key: string) { this.Data.UserAPIKey = key }
 
     /**
      * URL is the URL to the GraphQL endpoint
@@ -75,7 +85,8 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      * @param MJCoreSchemaName the name of the MJ Core schema, if it is not the default name of __mj
      * @param includeSchemas optional, an array of schema names to include in the metadata. If not passed, all schemas are included
      * @param excludeSchemas optional, an array of schema names to exclude from the metadata. If not passed, no schemas are excluded
-     * @param mjAPIKey optional, a shared secret key that is static and provided by the publisher of the MJAPI server. 
+     * @param mjAPIKey optional, a shared secret key that is static and provided by the publisher of the MJAPI server.
+     * @param userAPIKey optional, a user-specific API key (mj_sk_* format) for authenticating as a specific user
      */
     constructor(token: string,
                 url: string,
@@ -84,13 +95,15 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
                 MJCoreSchemaName?: string,
                 includeSchemas?: string[],
                 excludeSchemas?: string[],
-                mjAPIKey?: string) {
+                mjAPIKey?: string,
+                userAPIKey?: string) {
         super(
                 {
                     Token: token,
                     URL: url,
                     WSURL: wsurl,
                     MJAPIKey: mjAPIKey,
+                    UserAPIKey: userAPIKey,
                     RefreshTokenFunction: refreshTokenFunction,
                 },
                 MJCoreSchemaName,
@@ -256,7 +269,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // Get UUID after setting the configData, so that it can be used to get any stored session ID
                 this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
 
-                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey);
+                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
                 // Store the session ID for this connection
                 await this.SaveStoredSessionID(this._sessionId);
             }
@@ -270,7 +283,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 // now create the new client, if it isn't already created
                 if (!GraphQLDataProvider.Instance._client)
-                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey);
+                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
 
                 // Store the session ID for the global instance
                 await GraphQLDataProvider.Instance.SaveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
@@ -673,7 +686,28 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     innerParams.SaveViewResults = params.SaveViewResults ? params.SaveViewResults : false;
                 }
 
+                // Include Aggregates if provided
+                if (params.Aggregates && params.Aggregates.length > 0) {
+                    innerParams.Aggregates = params.Aggregates.map((a: AggregateExpression) => ({
+                        expression: a.expression,
+                        alias: a.alias
+                    }));
+                }
+
                 const fieldList = this.getViewRunTimeFieldList(e, viewEntity, params, dynamicView);
+
+                // Build aggregate fields for response if aggregates requested
+                const aggregateResponseFields = params.Aggregates && params.Aggregates.length > 0
+                    ? `
+                        AggregateResults {
+                            alias
+                            expression
+                            value
+                            error
+                        }
+                        AggregateExecutionTime`
+                    : '';
+
                 const query = gql`
                     query RunViewQuery ($input: ${paramType}!) {
                     ${qName}(input: $input) {
@@ -685,12 +719,33 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         TotalRowCount
                         ExecutionTime
                         Success
-                        ErrorMessage
+                        ErrorMessage${aggregateResponseFields}
                     }
                 }`
 
+                // Log aggregate request for debugging
+                if (innerParams.Aggregates?.length > 0) {
+                    console.log('[GraphQLDataProvider] Sending RunView with aggregates:', {
+                        entityName: entity,
+                        queryName: qName,
+                        aggregateCount: innerParams.Aggregates.length,
+                        aggregates: innerParams.Aggregates
+                    });
+                }
+
                 const viewData = await this.ExecuteGQL(query, {input: innerParams} );
                 if (viewData && viewData[qName]) {
+                    // Log aggregate response for debugging
+                    const responseAggregates = viewData[qName].AggregateResults;
+                    if (innerParams.Aggregates?.length > 0) {
+                        console.log('[GraphQLDataProvider] Received aggregate results:', {
+                            entityName: entity,
+                            aggregateResultCount: responseAggregates?.length || 0,
+                            aggregateResults: responseAggregates,
+                            aggregateExecutionTime: viewData[qName].AggregateExecutionTime
+                        });
+                    }
+
                     // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
                     // so that the caller gets back what they expect
                     const results = viewData[qName].Results;
@@ -794,9 +849,30 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         innerParam.SaveViewResults = param.SaveViewResults || false;
                     }
 
+                    // Include Aggregates if provided
+                    if (param.Aggregates && param.Aggregates.length > 0) {
+                        innerParam.Aggregates = param.Aggregates.map((a: AggregateExpression) => ({
+                            expression: a.expression,
+                            alias: a.alias
+                        }));
+                    }
+
                     innerParams.push(innerParam);
                     fieldList.push(...this.getViewRunTimeFieldList(e, viewEntity, param, dynamicView));
             }
+
+            // Check if any view in the batch has aggregates
+            const hasAnyAggregates = params.some(p => p.Aggregates && p.Aggregates.length > 0);
+            const aggregateResponseFields = hasAnyAggregates
+                ? `
+                    AggregateResults {
+                        alias
+                        expression
+                        value
+                        error
+                    }
+                    AggregateExecutionTime`
+                : '';
 
             const query = gql`
                 query RunViewsQuery ($input: [RunViewGenericInput!]!) {
@@ -814,7 +890,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     TotalRowCount
                     ExecutionTime
                     Success
-                    ErrorMessage
+                    ErrorMessage${aggregateResponseFields}
                 }
             }`;
 
@@ -2016,7 +2092,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const newClient = this.CreateNewGraphQLClient(this._configData.URL,
                                                               this._configData.Token,
                                                               this._sessionId,
-                                                              this._configData.MJAPIKey);
+                                                              this._configData.MJAPIKey,
+                                                              this._configData.UserAPIKey);
 
                 // Update this instance's client
                 this._client = newClient;
@@ -2041,7 +2118,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return GraphQLDataProvider.Instance.RefreshToken();
     }
 
-    protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string): GraphQLClient {
+    protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string, userAPIKey?: string): GraphQLClient {
         // Enhanced logging to diagnose token issues
         // const tokenPreview = token ? `${token.substring(0, 20)}...${token.substring(token.length - 10)}` : 'NO TOKEN';
         // console.log('[GraphQL] Creating new client:', {
@@ -2049,7 +2126,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         //     tokenPreview,
         //     tokenLength: token?.length,
         //     sessionId,
-        //     hasMJAPIKey: !!mjAPIKey
+        //     hasMJAPIKey: !!mjAPIKey,
+        //     hasUserAPIKey: !!userAPIKey
         // });
 
         const headers: Record<string, string> = {
@@ -2059,6 +2137,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             headers.authorization = 'Bearer ' + token;
         if (mjAPIKey)
             headers['x-mj-api-key'] = mjAPIKey;
+        if (userAPIKey)
+            headers['x-api-key'] = userAPIKey;
 
         return new GraphQLClient(url, {
             headers
@@ -2103,8 +2183,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _localStorageProvider: ILocalStorageProvider;
     get LocalStorageProvider(): ILocalStorageProvider {
-        if (!this._localStorageProvider)
-            this._localStorageProvider = new BrowserIndexedDBStorageProvider();
+        if (!this._localStorageProvider) {
+            // Use BrowserIndexedDBStorageProvider in browser environments where indexedDB is available,
+            // otherwise fall back to InMemoryLocalStorageProvider for Node.js/server environments
+            if (typeof indexedDB !== 'undefined') {
+                this._localStorageProvider = new BrowserIndexedDBStorageProvider();
+            } else {
+                this._localStorageProvider = new InMemoryLocalStorageProvider();
+            }
+        }
 
         return this._localStorageProvider;
     }

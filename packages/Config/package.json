@@ -1,13 +1,13 @@
 {
   "name": "@memberjunction/config",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "Central configuration package for MemberJunction framework with default configurations and merge utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "clean": "rm -rf dist",
+    "clean": "rimraf dist",
     "test": "jest"
   },
   "keywords": [

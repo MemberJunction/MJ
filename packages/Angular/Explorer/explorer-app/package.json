@@ -1,14 +1,14 @@
 {
   "name": "@memberjunction/ng-explorer-app",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "MemberJunction Explorer Application Shell - Complete branded entry point for Explorer-style applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "npm run clean && ngc && npm run copy-assets",
-    "copy-assets": "cp -r src/lib/styles dist/ && cp -r src/lib/assets dist/ && cp src/lib/styles.scss dist/",
+    "copy-assets": "cpy 'src/lib/styles/**' dist/styles --flat && cpy 'src/lib/assets/**' dist/assets && cpy src/lib/styles.scss dist --flat",
     "watch": "ngc --watch",
-    "clean": "rm -rf dist"
+    "clean": "rimraf dist"
   },
   "keywords": [
     "memberjunction",
@@ -20,11 +20,11 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/core": "3.2.0",
-    "@memberjunction/ng-auth-services": "3.2.0",
-    "@memberjunction/ng-bootstrap": "3.2.0",
-    "@memberjunction/ng-explorer-core": "3.2.0",
-    "@memberjunction/ng-workspace-initializer": "3.2.0"
+    "@memberjunction/core": "3.3.0",
+    "@memberjunction/ng-auth-services": "3.3.0",
+    "@memberjunction/ng-bootstrap": "3.3.0",
+    "@memberjunction/ng-explorer-core": "3.3.0",
+    "@memberjunction/ng-workspace-initializer": "3.3.0"
   },
   "peerDependencies": {
     "@angular/common": "^18.0.0",

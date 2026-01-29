@@ -1,6 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 
 import { WindowModule } from '@progress/kendo-angular-dialog';
 
@@ -57,6 +58,7 @@ import { NotificationPreferencesComponent } from './notification-preferences/not
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
+    DragDropModule,
     CompareRecordsModule,
     ContainerDirectivesModule,
     EntityPermissionsModule,
