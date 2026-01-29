@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accordions - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .demo-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--mj-space-4);
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-4);
+    }
+    .code-block {
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: var(--mj-space-4);
+      font-family: var(--mj-font-family-mono);
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+      overflow-x: auto;
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Accordions</h1>
+      <p>Expandable content sections for organizing information hierarchically.</p>
+    </header>
+
+    <!-- Basic Accordion -->
+    <section class="section">
+      <h2 class="section-title">Basic Accordion</h2>
+      <p class="mj-text-secondary mj-mb-4">Simple accordion with expandable sections.</p>
+      <div class="demo-row">
+        <div class="mj-accordion">
+          <div class="mj-accordion-item mj-accordion-expanded">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Section 1: Getting Started</span>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Welcome to the getting started guide. This section covers the basic setup and configuration needed to begin using the application.</p>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Section 2: Configuration</span>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Learn about all the configuration options available.</p>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Section 3: Advanced Features</span>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Explore advanced features and customization options.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-accordion"&gt;
+  &lt;div class="mj-accordion-item mj-accordion-expanded"&gt;
+    &lt;div class="mj-accordion-header"&gt;
+      &lt;i class="fa-solid fa-chevron-down mj-accordion-icon"&gt;&lt;/i&gt;
+      &lt;span class="mj-accordion-title"&gt;Section Title&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;div class="mj-accordion-content"&gt;
+      &lt;p&gt;Section content goes here.&lt;/p&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Multi-Expand Accordion -->
+    <section class="section">
+      <h2 class="section-title">Multi-Expand Accordion</h2>
+      <p class="mj-text-secondary mj-mb-4">Accordion that allows multiple sections to be open simultaneously.</p>
+      <div class="demo-row">
+        <div class="mj-accordion mj-accordion-multi">
+          <div class="mj-accordion-item mj-accordion-expanded">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Personal Information</span>
+            </div>
+            <div class="mj-accordion-content">
+              <div class="mj-form-group">
+                <label class="mj-label">Full Name</label>
+                <input type="text" class="mj-input" value="John Doe">
+              </div>
+              <div class="mj-form-group">
+                <label class="mj-label">Email</label>
+                <input type="email" class="mj-input" value="john@example.com">
+              </div>
+            </div>
+          </div>
+          <div class="mj-accordion-item mj-accordion-expanded">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Address Information</span>
+            </div>
+            <div class="mj-accordion-content">
+              <div class="mj-form-group">
+                <label class="mj-label">Street Address</label>
+                <input type="text" class="mj-input" value="123 Main St">
+              </div>
+              <div class="mj-form-group">
+                <label class="mj-label">City</label>
+                <input type="text" class="mj-input" value="New York">
+              </div>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Preferences</span>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Notification and display preferences.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-accordion mj-accordion-multi"&gt;
+  &lt;!-- Multiple items can be expanded at once --&gt;
+  &lt;div class="mj-accordion-item mj-accordion-expanded"&gt;...&lt;/div&gt;
+  &lt;div class="mj-accordion-item mj-accordion-expanded"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Accordion with Icons -->
+    <section class="section">
+      <h2 class="section-title">Accordion with Icons</h2>
+      <p class="mj-text-secondary mj-mb-4">Accordion items with leading icons for visual context.</p>
+      <div class="demo-row">
+        <div class="mj-accordion">
+          <div class="mj-accordion-item mj-accordion-expanded">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+              <div class="mj-accordion-header-content">
+                <i class="fa-solid fa-user mj-accordion-lead-icon"></i>
+                <span class="mj-accordion-title">User Profile</span>
+              </div>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Manage your user profile settings including display name, avatar, and bio.</p>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <div class="mj-accordion-header-content">
+                <i class="fa-solid fa-shield-halved mj-accordion-lead-icon"></i>
+                <span class="mj-accordion-title">Security Settings</span>
+              </div>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Password, two-factor authentication, and login history.</p>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <div class="mj-accordion-header-content">
+                <i class="fa-solid fa-bell mj-accordion-lead-icon"></i>
+                <span class="mj-accordion-title">Notifications</span>
+              </div>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Email and push notification preferences.</p>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <div class="mj-accordion-header-content">
+                <i class="fa-solid fa-credit-card mj-accordion-lead-icon"></i>
+                <span class="mj-accordion-title">Billing</span>
+              </div>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Payment methods and billing history.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-accordion-header"&gt;
+  &lt;i class="fa-solid fa-chevron-down mj-accordion-icon"&gt;&lt;/i&gt;
+  &lt;div class="mj-accordion-header-content"&gt;
+    &lt;i class="fa-solid fa-user mj-accordion-lead-icon"&gt;&lt;/i&gt;
+    &lt;span class="mj-accordion-title"&gt;User Profile&lt;/span&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Accordion with Badges -->
+    <section class="section">
+      <h2 class="section-title">Accordion with Badges & Actions</h2>
+      <p class="mj-text-secondary mj-mb-4">Accordion headers with badges, counts, or action buttons.</p>
+      <div class="demo-row">
+        <div class="mj-accordion">
+          <div class="mj-accordion-item mj-accordion-expanded">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Pending Tasks</span>
+              <span class="mj-badge mj-badge-warning mj-ml-auto">3</span>
+            </div>
+            <div class="mj-accordion-content">
+              <ul class="mj-list">
+                <li class="mj-list-item">Review quarterly report</li>
+                <li class="mj-list-item">Update documentation</li>
+                <li class="mj-list-item">Schedule team meeting</li>
+              </ul>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Completed Tasks</span>
+              <span class="mj-badge mj-badge-success mj-ml-auto">12</span>
+            </div>
+            <div class="mj-accordion-content">
+              <p>View your completed tasks from this week.</p>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Archived Tasks</span>
+              <button class="mj-btn mj-btn-ghost mj-btn-sm mj-ml-auto" onclick="event.stopPropagation()">
+                <i class="fa-solid fa-archive"></i> View All
+              </button>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Tasks that have been archived.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-accordion-header"&gt;
+  &lt;i class="fa-solid fa-chevron-down mj-accordion-icon"&gt;&lt;/i&gt;
+  &lt;span class="mj-accordion-title"&gt;Pending Tasks&lt;/span&gt;
+  &lt;span class="mj-badge mj-badge-warning mj-ml-auto"&gt;3&lt;/span&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Nested Accordions -->
+    <section class="section">
+      <h2 class="section-title">Nested Accordions</h2>
+      <p class="mj-text-secondary mj-mb-4">Accordions within accordions for hierarchical content.</p>
+      <div class="demo-row">
+        <div class="mj-accordion">
+          <div class="mj-accordion-item mj-accordion-expanded">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Documentation</span>
+            </div>
+            <div class="mj-accordion-content">
+              <!-- Nested Accordion -->
+              <div class="mj-accordion mj-accordion-nested">
+                <div class="mj-accordion-item mj-accordion-expanded">
+                  <div class="mj-accordion-header">
+                    <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+                    <span class="mj-accordion-title">Getting Started</span>
+                  </div>
+                  <div class="mj-accordion-content">
+                    <ul class="mj-list">
+                      <li class="mj-list-item">Installation Guide</li>
+                      <li class="mj-list-item">Quick Start Tutorial</li>
+                      <li class="mj-list-item">Basic Concepts</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="mj-accordion-item">
+                  <div class="mj-accordion-header">
+                    <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+                    <span class="mj-accordion-title">API Reference</span>
+                  </div>
+                  <div class="mj-accordion-content">
+                    <p>Complete API documentation.</p>
+                  </div>
+                </div>
+                <div class="mj-accordion-item">
+                  <div class="mj-accordion-header">
+                    <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+                    <span class="mj-accordion-title">Examples</span>
+                  </div>
+                  <div class="mj-accordion-content">
+                    <p>Code examples and tutorials.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Resources</span>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Additional resources and community links.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-accordion"&gt;
+  &lt;div class="mj-accordion-item mj-accordion-expanded"&gt;
+    &lt;div class="mj-accordion-header"&gt;...&lt;/div&gt;
+    &lt;div class="mj-accordion-content"&gt;
+      &lt;!-- Nested accordion --&gt;
+      &lt;div class="mj-accordion mj-accordion-nested"&gt;
+        &lt;div class="mj-accordion-item"&gt;...&lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Bordered Accordion -->
+    <section class="section">
+      <h2 class="section-title">Bordered Accordion</h2>
+      <p class="mj-text-secondary mj-mb-4">Accordion with more prominent borders between sections.</p>
+      <div class="demo-row">
+        <div class="mj-accordion mj-accordion-bordered">
+          <div class="mj-accordion-item mj-accordion-expanded">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+              <span class="mj-accordion-title">What is MemberJunction?</span>
+            </div>
+            <div class="mj-accordion-content">
+              <p>MemberJunction is an open-source framework for building data-driven applications with powerful AI capabilities.</p>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <span class="mj-accordion-title">How do I get started?</span>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Follow our quick start guide to set up your first MemberJunction project.</p>
+            </div>
+          </div>
+          <div class="mj-accordion-item">
+            <div class="mj-accordion-header">
+              <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+              <span class="mj-accordion-title">Is it free to use?</span>
+            </div>
+            <div class="mj-accordion-content">
+              <p>Yes, MemberJunction is open-source and free to use under the MIT license.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-accordion mj-accordion-bordered"&gt;
+  &lt;div class="mj-accordion-item"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Flush Accordion -->
+    <section class="section">
+      <h2 class="section-title">Flush Accordion</h2>
+      <p class="mj-text-secondary mj-mb-4">Minimal accordion without outer border, for embedding in other containers.</p>
+      <div class="demo-row">
+        <div class="mj-panel">
+          <div class="mj-panel-header">
+            <h3 class="mj-panel-title">FAQ</h3>
+          </div>
+          <div class="mj-panel-body mj-p-0">
+            <div class="mj-accordion mj-accordion-flush">
+              <div class="mj-accordion-item mj-accordion-expanded">
+                <div class="mj-accordion-header">
+                  <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+                  <span class="mj-accordion-title">What payment methods do you accept?</span>
+                </div>
+                <div class="mj-accordion-content">
+                  <p>We accept all major credit cards, PayPal, and bank transfers.</p>
+                </div>
+              </div>
+              <div class="mj-accordion-item">
+                <div class="mj-accordion-header">
+                  <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+                  <span class="mj-accordion-title">Can I cancel my subscription?</span>
+                </div>
+                <div class="mj-accordion-content">
+                  <p>Yes, you can cancel your subscription at any time from your account settings.</p>
+                </div>
+              </div>
+              <div class="mj-accordion-item">
+                <div class="mj-accordion-header">
+                  <i class="fa-solid fa-chevron-right mj-accordion-icon"></i>
+                  <span class="mj-accordion-title">Do you offer refunds?</span>
+                </div>
+                <div class="mj-accordion-content">
+                  <p>We offer a 30-day money-back guarantee on all plans.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-accordion mj-accordion-flush"&gt;
+  &lt;!-- No outer border, fits flush inside containers --&gt;
+  &lt;div class="mj-accordion-item"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+  <script>
+    // Accordion functionality
+    document.querySelectorAll('.mj-accordion').forEach(accordion => {
+      const isMulti = accordion.classList.contains('mj-accordion-multi');
+
+      accordion.querySelectorAll('.mj-accordion-header').forEach(header => {
+        header.addEventListener('click', (e) => {
+          // Don't toggle if clicking a button inside the header
+          if (e.target.closest('button')) return;
+
+          const item = header.closest('.mj-accordion-item');
+          const isExpanded = item.classList.contains('mj-accordion-expanded');
+
+          // For single-expand accordion, close other items first
+          if (!isMulti && !isExpanded) {
+            accordion.querySelectorAll('.mj-accordion-item.mj-accordion-expanded').forEach(openItem => {
+              openItem.classList.remove('mj-accordion-expanded');
+              const icon = openItem.querySelector('.mj-accordion-icon');
+              if (icon) {
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-right');
+              }
+            });
+          }
+
+          // Toggle current item
+          item.classList.toggle('mj-accordion-expanded');
+
+          // Update icon
+          const icon = header.querySelector('.mj-accordion-icon');
+          if (icon) {
+            if (item.classList.contains('mj-accordion-expanded')) {
+              icon.classList.remove('fa-chevron-right');
+              icon.classList.add('fa-chevron-down');
+            } else {
+              icon.classList.remove('fa-chevron-down');
+              icon.classList.add('fa-chevron-right');
+            }
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>

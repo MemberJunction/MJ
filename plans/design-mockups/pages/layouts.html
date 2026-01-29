@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layouts - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .demo-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--mj-space-4);
+      padding: var(--mj-space-4);
+      background: var(--mj-bg-page);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-4);
+    }
+    .code-block {
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: var(--mj-space-4);
+      font-family: var(--mj-font-family-mono);
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+      overflow-x: auto;
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+    /* Demo layout placeholder styling */
+    .demo-placeholder {
+      background: var(--mj-bg-surface-sunken);
+      border: 2px dashed var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: var(--mj-space-4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--mj-text-muted);
+      font-size: var(--mj-text-sm);
+      min-height: 100px;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Standardized Layouts</h1>
+      <p>Common page layout patterns for consistent application structure.</p>
+    </header>
+
+    <!-- Master-Detail Layout -->
+    <section class="section">
+      <h2 class="section-title">Master-Detail Layout</h2>
+      <p class="mj-text-secondary mj-mb-4">Classic layout with a list on the left and detail view on the right.</p>
+      <div class="demo-row" style="height: 400px;">
+        <div class="mj-layout-master-detail">
+          <div class="mj-layout-master">
+            <div class="mj-panel mj-panel-flat" style="height: 100%;">
+              <div class="mj-panel-header">
+                <h3 class="mj-panel-title">Records</h3>
+              </div>
+              <div class="mj-panel-toolbar">
+                <div class="mj-search-box mj-search-box-sm mj-w-full">
+                  <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+                  <input type="text" class="mj-search-input" placeholder="Search...">
+                </div>
+              </div>
+              <div class="mj-panel-body mj-p-0">
+                <div class="mj-list">
+                  <div class="mj-list-item mj-list-item-active">
+                    <div class="mj-list-item-content">
+                      <div class="mj-list-item-title">John Smith</div>
+                      <div class="mj-list-item-subtitle">john@example.com</div>
+                    </div>
+                  </div>
+                  <div class="mj-list-item">
+                    <div class="mj-list-item-content">
+                      <div class="mj-list-item-title">Jane Doe</div>
+                      <div class="mj-list-item-subtitle">jane@example.com</div>
+                    </div>
+                  </div>
+                  <div class="mj-list-item">
+                    <div class="mj-list-item-content">
+                      <div class="mj-list-item-title">Bob Wilson</div>
+                      <div class="mj-list-item-subtitle">bob@example.com</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mj-layout-detail">
+            <div class="mj-panel mj-panel-flat" style="height: 100%;">
+              <div class="mj-panel-header">
+                <h3 class="mj-panel-title">John Smith</h3>
+                <div class="mj-panel-actions">
+                  <button class="mj-btn mj-btn-primary mj-btn-sm">Edit</button>
+                </div>
+              </div>
+              <div class="mj-panel-body">
+                <div class="mj-form-group">
+                  <label class="mj-label">Email</label>
+                  <p class="mj-text-primary">john@example.com</p>
+                </div>
+                <div class="mj-form-group">
+                  <label class="mj-label">Status</label>
+                  <span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Active</span>
+                </div>
+                <div class="mj-form-group">
+                  <label class="mj-label">Role</label>
+                  <p class="mj-text-primary">Administrator</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-layout-master-detail"&gt;
+  &lt;div class="mj-layout-master"&gt;
+    &lt;!-- Master list/grid --&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-layout-detail"&gt;
+    &lt;!-- Detail view --&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Sidebar Layout -->
+    <section class="section">
+      <h2 class="section-title">Two-Column with Sidebar</h2>
+      <p class="mj-text-secondary mj-mb-4">Main content area with a navigation or filter sidebar.</p>
+      <div class="demo-row" style="height: 400px;">
+        <div class="mj-layout-sidebar">
+          <aside class="mj-layout-sidebar-nav">
+            <nav class="mj-sidebar-nav">
+              <div class="mj-sidebar-section">
+                <div class="mj-sidebar-section-title">Main Menu</div>
+                <a href="#" class="mj-nav-item active">
+                  <i class="fa-solid fa-home"></i> Dashboard
+                </a>
+                <a href="#" class="mj-nav-item">
+                  <i class="fa-solid fa-users"></i> Users
+                </a>
+                <a href="#" class="mj-nav-item">
+                  <i class="fa-solid fa-folder"></i> Projects
+                </a>
+                <a href="#" class="mj-nav-item">
+                  <i class="fa-solid fa-chart-bar"></i> Reports
+                </a>
+              </div>
+              <div class="mj-sidebar-section">
+                <div class="mj-sidebar-section-title">Settings</div>
+                <a href="#" class="mj-nav-item">
+                  <i class="fa-solid fa-gear"></i> General
+                </a>
+                <a href="#" class="mj-nav-item">
+                  <i class="fa-solid fa-shield"></i> Security
+                </a>
+              </div>
+            </nav>
+          </aside>
+          <main class="mj-layout-content">
+            <div class="mj-dashboard-header">
+              <div class="mj-dashboard-title">
+                <div class="mj-dashboard-icon">
+                  <i class="fa-solid fa-home"></i>
+                </div>
+                <div>
+                  <h1>Dashboard</h1>
+                  <div class="mj-dashboard-subtitle">Welcome back, John</div>
+                </div>
+              </div>
+            </div>
+            <div class="mj-grid mj-grid-cols-2 mj-gap-4 mj-mt-4">
+              <div class="mj-card mj-metric-card">
+                <div class="mj-metric-icon">
+                  <i class="fa-solid fa-users"></i>
+                </div>
+                <div class="mj-metric-content">
+                  <div class="mj-metric-label">Total Users</div>
+                  <div class="mj-metric-value">1,234</div>
+                </div>
+              </div>
+              <div class="mj-card mj-metric-card">
+                <div class="mj-metric-icon">
+                  <i class="fa-solid fa-folder"></i>
+                </div>
+                <div class="mj-metric-content">
+                  <div class="mj-metric-label">Active Projects</div>
+                  <div class="mj-metric-value">56</div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-layout-sidebar"&gt;
+  &lt;aside class="mj-layout-sidebar-nav"&gt;
+    &lt;nav class="mj-sidebar-nav"&gt;...&lt;/nav&gt;
+  &lt;/aside&gt;
+  &lt;main class="mj-layout-content"&gt;
+    &lt;!-- Main content --&gt;
+  &lt;/main&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Three-Column Layout -->
+    <section class="section">
+      <h2 class="section-title">Three-Column Layout</h2>
+      <p class="mj-text-secondary mj-mb-4">Layout with navigation, main content, and a detail/info panel.</p>
+      <div class="demo-row" style="height: 350px;">
+        <div class="mj-layout-three-column">
+          <div class="mj-layout-column mj-layout-column-nav">
+            <div class="mj-panel mj-panel-flat" style="height: 100%;">
+              <div class="mj-panel-header">
+                <h3 class="mj-panel-title">Navigation</h3>
+              </div>
+              <div class="mj-panel-body mj-p-0">
+                <nav class="mj-sidebar-nav">
+                  <a href="#" class="mj-nav-item active">
+                    <i class="fa-solid fa-inbox"></i> Inbox
+                  </a>
+                  <a href="#" class="mj-nav-item">
+                    <i class="fa-solid fa-paper-plane"></i> Sent
+                  </a>
+                  <a href="#" class="mj-nav-item">
+                    <i class="fa-solid fa-file"></i> Drafts
+                  </a>
+                </nav>
+              </div>
+            </div>
+          </div>
+          <div class="mj-layout-column mj-layout-column-main">
+            <div class="mj-panel mj-panel-flat" style="height: 100%;">
+              <div class="mj-panel-header">
+                <h3 class="mj-panel-title">Messages</h3>
+              </div>
+              <div class="mj-panel-body mj-p-0">
+                <div class="mj-list">
+                  <div class="mj-list-item mj-list-item-active">
+                    <div class="mj-list-item-content">
+                      <div class="mj-list-item-title">Project Update</div>
+                      <div class="mj-list-item-subtitle">Here's the latest on...</div>
+                    </div>
+                  </div>
+                  <div class="mj-list-item">
+                    <div class="mj-list-item-content">
+                      <div class="mj-list-item-title">Meeting Reminder</div>
+                      <div class="mj-list-item-subtitle">Don't forget about...</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mj-layout-column mj-layout-column-info">
+            <div class="mj-panel mj-panel-flat" style="height: 100%;">
+              <div class="mj-panel-header">
+                <h3 class="mj-panel-title">Message Details</h3>
+              </div>
+              <div class="mj-panel-body">
+                <h4>Project Update</h4>
+                <p class="mj-text-sm mj-text-secondary mj-mt-2">From: team@example.com</p>
+                <p class="mj-text-sm mj-mt-4">Here's the latest update on the project progress...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-layout-three-column"&gt;
+  &lt;div class="mj-layout-column mj-layout-column-nav"&gt;...&lt;/div&gt;
+  &lt;div class="mj-layout-column mj-layout-column-main"&gt;...&lt;/div&gt;
+  &lt;div class="mj-layout-column mj-layout-column-info"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Centered Content Layout -->
+    <section class="section">
+      <h2 class="section-title">Centered Content Layout</h2>
+      <p class="mj-text-secondary mj-mb-4">Full-width page with max-width content area, ideal for forms and articles.</p>
+      <div class="demo-row" style="background: var(--mj-bg-surface-sunken);">
+        <div class="mj-layout-centered">
+          <div class="mj-layout-centered-content">
+            <div class="mj-panel">
+              <div class="mj-panel-header">
+                <h3 class="mj-panel-title">Create New Record</h3>
+              </div>
+              <div class="mj-panel-body">
+                <div class="mj-form-group">
+                  <label class="mj-label mj-label-required">Name</label>
+                  <input type="text" class="mj-input" placeholder="Enter name">
+                </div>
+                <div class="mj-form-group">
+                  <label class="mj-label">Description</label>
+                  <textarea class="mj-input mj-textarea" placeholder="Enter description"></textarea>
+                </div>
+              </div>
+              <div class="mj-panel-footer">
+                <div class="mj-flex mj-gap-2">
+                  <button class="mj-btn mj-btn-primary">Save</button>
+                  <button class="mj-btn mj-btn-secondary">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-layout-centered"&gt;
+  &lt;div class="mj-layout-centered-content"&gt;
+    &lt;!-- Content with max-width, centered on page --&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Dashboard Grid Layout -->
+    <section class="section">
+      <h2 class="section-title">Dashboard Grid Layout</h2>
+      <p class="mj-text-secondary mj-mb-4">Flexible grid for dashboard cards and widgets.</p>
+      <div class="demo-row">
+        <div class="mj-layout-dashboard">
+          <div class="mj-dashboard-header mj-dashboard-full-width">
+            <div class="mj-dashboard-title">
+              <div class="mj-dashboard-icon">
+                <i class="fa-solid fa-chart-line"></i>
+              </div>
+              <div>
+                <h1>Analytics Dashboard</h1>
+                <div class="mj-dashboard-subtitle">Overview of key metrics</div>
+              </div>
+            </div>
+            <div class="mj-dashboard-actions">
+              <button class="mj-btn mj-btn-secondary">
+                <i class="fa-solid fa-download"></i> Export
+              </button>
+            </div>
+          </div>
+
+          <!-- Metrics Row -->
+          <div class="mj-card mj-metric-card">
+            <div class="mj-metric-icon">
+              <i class="fa-solid fa-dollar-sign"></i>
+            </div>
+            <div class="mj-metric-content">
+              <div class="mj-metric-label">Total Revenue</div>
+              <div class="mj-metric-value">$45,231</div>
+              <div class="mj-metric-change positive">
+                <i class="fa-solid fa-arrow-up"></i> 12.5%
+              </div>
+            </div>
+          </div>
+          <div class="mj-card mj-metric-card">
+            <div class="mj-metric-icon">
+              <i class="fa-solid fa-users"></i>
+            </div>
+            <div class="mj-metric-content">
+              <div class="mj-metric-label">Active Users</div>
+              <div class="mj-metric-value">2,847</div>
+              <div class="mj-metric-change positive">
+                <i class="fa-solid fa-arrow-up"></i> 8.2%
+              </div>
+            </div>
+          </div>
+          <div class="mj-card mj-metric-card">
+            <div class="mj-metric-icon">
+              <i class="fa-solid fa-percent"></i>
+            </div>
+            <div class="mj-metric-content">
+              <div class="mj-metric-label">Conversion Rate</div>
+              <div class="mj-metric-value">3.24%</div>
+              <div class="mj-metric-change negative">
+                <i class="fa-solid fa-arrow-down"></i> 2.1%
+              </div>
+            </div>
+          </div>
+          <div class="mj-card mj-metric-card">
+            <div class="mj-metric-icon">
+              <i class="fa-solid fa-clock"></i>
+            </div>
+            <div class="mj-metric-content">
+              <div class="mj-metric-label">Avg. Session</div>
+              <div class="mj-metric-value">4m 32s</div>
+              <div class="mj-metric-change positive">
+                <i class="fa-solid fa-arrow-up"></i> 5.7%
+              </div>
+            </div>
+          </div>
+
+          <!-- Wide Chart Card -->
+          <div class="mj-card mj-dashboard-wide">
+            <div class="mj-card-header">
+              <h3>Revenue Over Time</h3>
+            </div>
+            <div class="mj-card-body">
+              <div class="demo-placeholder" style="height: 150px;">
+                Chart placeholder
+              </div>
+            </div>
+          </div>
+
+          <!-- Two Regular Cards -->
+          <div class="mj-card">
+            <div class="mj-card-header">
+              <h3>Top Products</h3>
+            </div>
+            <div class="mj-card-body">
+              <div class="mj-list">
+                <div class="mj-list-item">Product A - $12,450</div>
+                <div class="mj-list-item">Product B - $9,320</div>
+                <div class="mj-list-item">Product C - $7,890</div>
+              </div>
+            </div>
+          </div>
+          <div class="mj-card">
+            <div class="mj-card-header">
+              <h3>Recent Activity</h3>
+            </div>
+            <div class="mj-card-body">
+              <div class="mj-list">
+                <div class="mj-list-item">New user registered</div>
+                <div class="mj-list-item">Order #1234 completed</div>
+                <div class="mj-list-item">Report generated</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-layout-dashboard"&gt;
+  &lt;!-- Full-width header --&gt;
+  &lt;div class="mj-dashboard-header mj-dashboard-full-width"&gt;...&lt;/div&gt;
+
+  &lt;!-- Metric cards (auto-fit into grid) --&gt;
+  &lt;div class="mj-card mj-metric-card"&gt;...&lt;/div&gt;
+  &lt;div class="mj-card mj-metric-card"&gt;...&lt;/div&gt;
+
+  &lt;!-- Wide card spanning 2 columns --&gt;
+  &lt;div class="mj-card mj-dashboard-wide"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Split View Layout -->
+    <section class="section">
+      <h2 class="section-title">Split View Layout</h2>
+      <p class="mj-text-secondary mj-mb-4">Equal split layout for comparison views or side-by-side editors.</p>
+      <div class="demo-row" style="height: 300px;">
+        <div class="mj-layout-split">
+          <div class="mj-layout-split-pane">
+            <div class="mj-panel mj-panel-flat" style="height: 100%;">
+              <div class="mj-panel-header">
+                <h3 class="mj-panel-title">Original</h3>
+              </div>
+              <div class="mj-panel-body">
+                <pre class="mj-text-sm" style="margin: 0; font-family: var(--mj-font-family-mono);">
+{
+  "name": "Project A",
+  "version": "1.0.0",
+  "status": "active"
+}
+                </pre>
+              </div>
+            </div>
+          </div>
+          <div class="mj-layout-split-divider"></div>
+          <div class="mj-layout-split-pane">
+            <div class="mj-panel mj-panel-flat" style="height: 100%;">
+              <div class="mj-panel-header">
+                <h3 class="mj-panel-title">Modified</h3>
+              </div>
+              <div class="mj-panel-body">
+                <pre class="mj-text-sm" style="margin: 0; font-family: var(--mj-font-family-mono);">
+{
+  "name": "Project A",
+  "version": "1.1.0",
+  "status": "active",
+  "updated": true
+}
+                </pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-layout-split"&gt;
+  &lt;div class="mj-layout-split-pane"&gt;
+    &lt;!-- Left content --&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-layout-split-divider"&gt;&lt;/div&gt;
+  &lt;div class="mj-layout-split-pane"&gt;
+    &lt;!-- Right content --&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+</body>
+</html>

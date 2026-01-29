@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Badges - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .demo-area {
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-4);
+    }
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--mj-space-4);
+      align-items: center;
+    }
+    .badge-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--mj-space-2);
+    }
+    .badge-label {
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
+      text-transform: uppercase;
+      letter-spacing: var(--mj-tracking-wide);
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+    .usage-example {
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-3);
+      padding: var(--mj-space-3);
+      background: var(--mj-bg-surface-sunken);
+      border-radius: var(--mj-radius-md);
+      margin-bottom: var(--mj-space-2);
+    }
+    .usage-label {
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Status Badges</h1>
+      <p>Badges and tags for displaying status, categories, and labels.</p>
+    </header>
+
+    <!-- Status Badges -->
+    <section class="section">
+      <h2 class="section-title">Status Badges</h2>
+      <p class="mj-text-secondary mj-mb-4">Use status badges to indicate the current state of an item.</p>
+      <div class="demo-area">
+        <div class="badge-row">
+          <div class="badge-group">
+            <span class="badge-label">Success</span>
+            <span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Active</span>
+          </div>
+          <div class="badge-group">
+            <span class="badge-label">Warning</span>
+            <span class="mj-badge mj-badge-warning"><span class="mj-badge-dot"></span> Pending</span>
+          </div>
+          <div class="badge-group">
+            <span class="badge-label">Error</span>
+            <span class="mj-badge mj-badge-error"><span class="mj-badge-dot"></span> Failed</span>
+          </div>
+          <div class="badge-group">
+            <span class="badge-label">Info</span>
+            <span class="mj-badge mj-badge-info"><span class="mj-badge-dot"></span> In Progress</span>
+          </div>
+          <div class="badge-group">
+            <span class="badge-label">Neutral</span>
+            <span class="mj-badge mj-badge-neutral">Draft</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Without Dots -->
+    <section class="section">
+      <h2 class="section-title">Badges Without Dots</h2>
+      <p class="mj-text-secondary mj-mb-4">Simple badges without the status indicator dot.</p>
+      <div class="demo-area">
+        <div class="badge-row">
+          <span class="mj-badge mj-badge-success">Completed</span>
+          <span class="mj-badge mj-badge-warning">Review</span>
+          <span class="mj-badge mj-badge-error">Rejected</span>
+          <span class="mj-badge mj-badge-info">Processing</span>
+          <span class="mj-badge mj-badge-neutral">Archived</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Common Use Cases -->
+    <section class="section">
+      <h2 class="section-title">Common Use Cases</h2>
+      <div class="demo-area">
+        <h4 class="mj-text-sm mj-font-semibold mj-mb-4">User Status</h4>
+        <div class="badge-row mj-mb-6">
+          <span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Online</span>
+          <span class="mj-badge mj-badge-warning"><span class="mj-badge-dot"></span> Away</span>
+          <span class="mj-badge mj-badge-neutral"><span class="mj-badge-dot"></span> Offline</span>
+          <span class="mj-badge mj-badge-error"><span class="mj-badge-dot"></span> Do Not Disturb</span>
+        </div>
+
+        <h4 class="mj-text-sm mj-font-semibold mj-mb-4">Task Status</h4>
+        <div class="badge-row mj-mb-6">
+          <span class="mj-badge mj-badge-neutral">To Do</span>
+          <span class="mj-badge mj-badge-info"><span class="mj-badge-dot"></span> In Progress</span>
+          <span class="mj-badge mj-badge-warning"><span class="mj-badge-dot"></span> In Review</span>
+          <span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Done</span>
+        </div>
+
+        <h4 class="mj-text-sm mj-font-semibold mj-mb-4">API/Integration Status</h4>
+        <div class="badge-row mj-mb-6">
+          <span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Connected</span>
+          <span class="mj-badge mj-badge-warning"><span class="mj-badge-dot"></span> Reconnecting</span>
+          <span class="mj-badge mj-badge-error"><span class="mj-badge-dot"></span> Disconnected</span>
+          <span class="mj-badge mj-badge-neutral">Not Configured</span>
+        </div>
+
+        <h4 class="mj-text-sm mj-font-semibold mj-mb-4">AI Model Status</h4>
+        <div class="badge-row">
+          <span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Active</span>
+          <span class="mj-badge mj-badge-info"><span class="mj-badge-dot"></span> Running</span>
+          <span class="mj-badge mj-badge-warning"><span class="mj-badge-dot"></span> Queued</span>
+          <span class="mj-badge mj-badge-error"><span class="mj-badge-dot"></span> Error</span>
+          <span class="mj-badge mj-badge-neutral">Deprecated</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- In Context -->
+    <section class="section">
+      <h2 class="section-title">Badges in Context</h2>
+      <p class="mj-text-secondary mj-mb-4">Examples showing how badges appear in real interfaces.</p>
+      <div class="demo-area">
+        <div class="usage-example">
+          <span class="usage-label">User: john.doe@example.com</span>
+          <span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Active</span>
+        </div>
+        <div class="usage-example">
+          <span class="usage-label">API Integration: Salesforce</span>
+          <span class="mj-badge mj-badge-warning"><span class="mj-badge-dot"></span> Pending Setup</span>
+        </div>
+        <div class="usage-example">
+          <span class="usage-label">Background Job: Data Import</span>
+          <span class="mj-badge mj-badge-info"><span class="mj-badge-dot"></span> Running</span>
+        </div>
+        <div class="usage-example">
+          <span class="usage-label">AI Model: GPT-4 Turbo</span>
+          <span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Ready</span>
+        </div>
+        <div class="usage-example">
+          <span class="usage-label">Report: Q4 Sales Analysis</span>
+          <span class="mj-badge mj-badge-neutral">Draft</span>
+        </div>
+        <div class="usage-example">
+          <span class="usage-label">Workflow: Order Processing</span>
+          <span class="mj-badge mj-badge-error"><span class="mj-badge-dot"></span> Failed</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Brand Badges -->
+    <section class="section">
+      <h2 class="section-title">Brand Badges</h2>
+      <p class="mj-text-secondary mj-mb-4">Badges using brand colors for emphasis and highlighting. Use sparingly for featured items, promotions, or important labels.</p>
+      <div class="demo-area">
+        <h4 class="mj-text-sm mj-font-semibold mj-mb-4">Brand Color Badges</h4>
+        <div class="badge-row mj-mb-6">
+          <div class="badge-group">
+            <span class="badge-label">Primary</span>
+            <span class="mj-badge mj-badge-primary">Featured</span>
+          </div>
+          <div class="badge-group">
+            <span class="badge-label">Accent</span>
+            <span class="mj-badge mj-badge-accent">New</span>
+          </div>
+          <div class="badge-group">
+            <span class="badge-label">Tertiary</span>
+            <span class="mj-badge mj-badge-tertiary">Beta</span>
+          </div>
+        </div>
+
+        <h4 class="mj-text-sm mj-font-semibold mj-mb-4">Use Cases</h4>
+        <div class="badge-row">
+          <span class="mj-badge mj-badge-accent"><i class="fa-solid fa-star" style="font-size: 10px;"></i> Featured</span>
+          <span class="mj-badge mj-badge-accent">New</span>
+          <span class="mj-badge mj-badge-accent">Hot</span>
+          <span class="mj-badge mj-badge-primary">Pro</span>
+          <span class="mj-badge mj-badge-primary">Recommended</span>
+          <span class="mj-badge mj-badge-tertiary">Beta</span>
+          <span class="mj-badge mj-badge-tertiary">Preview</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Category Tags -->
+    <section class="section">
+      <h2 class="section-title">Category Tags</h2>
+      <p class="mj-text-secondary mj-mb-4">Use neutral badges as category or type indicators.</p>
+      <div class="demo-area">
+        <div class="badge-row">
+          <span class="mj-badge mj-badge-neutral">Entity</span>
+          <span class="mj-badge mj-badge-neutral">Report</span>
+          <span class="mj-badge mj-badge-neutral">Dashboard</span>
+          <span class="mj-badge mj-badge-neutral">Query</span>
+          <span class="mj-badge mj-badge-neutral">Action</span>
+          <span class="mj-badge mj-badge-neutral">Workflow</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dashboard Status Badges -->
+    <section class="section">
+      <h2 class="section-title">Dashboard Status Badges</h2>
+      <p class="mj-text-secondary mj-mb-4">Compact status badges used in existing AI dashboards. These use the <code>.status-badge</code> class pattern.</p>
+      <div class="demo-area">
+        <h4 class="mj-text-sm mj-font-semibold mj-mb-4">Standard Status Badges</h4>
+        <div class="badge-row mj-mb-6">
+          <div class="badge-group">
+            <span class="badge-label">Active</span>
+            <span class="status-badge status-active">Active</span>
+          </div>
+          <div class="badge-group">
+            <span class="badge-label">Inactive</span>
+            <span class="status-badge status-inactive">Inactive</span>
+          </div>
+          <div class="badge-group">
+            <span class="badge-label">Pending</span>
+            <span class="status-badge status-pending">Pending</span>
+          </div>
+        </div>
+
+        <h4 class="mj-text-sm mj-font-semibold mj-mb-4">In Context (Entity Cards)</h4>
+        <div class="usage-example">
+          <span class="usage-label">AI Agent: Customer Support Bot</span>
+          <span class="status-badge status-active">Active</span>
+        </div>
+        <div class="usage-example">
+          <span class="usage-label">AI Model: Legacy GPT-3</span>
+          <span class="status-badge status-inactive">Inactive</span>
+        </div>
+        <div class="usage-example">
+          <span class="usage-label">Prompt: Email Summary v2</span>
+          <span class="status-badge status-pending">Pending</span>
+        </div>
+      </div>
+      <div class="code-block" style="margin-top: var(--mj-space-4);">
+&lt;span class="status-badge status-active"&gt;Active&lt;/span&gt;
+&lt;span class="status-badge status-inactive"&gt;Inactive&lt;/span&gt;
+&lt;span class="status-badge status-pending"&gt;Pending&lt;/span&gt;
+      </div>
+    </section>
+
+    <!-- Alerts Section -->
+    <section class="section">
+      <h2 class="section-title">Alert Components</h2>
+      <p class="mj-text-secondary mj-mb-4">Larger alert components for important notifications.</p>
+      <div class="mj-flex mj-flex-col mj-gap-4">
+        <div class="mj-alert mj-alert-success">
+          <i class="fa-solid fa-circle-check mj-alert-icon"></i>
+          <div class="mj-alert-content">
+            <div class="mj-alert-title">Success</div>
+            <div class="mj-alert-message">Your changes have been saved successfully.</div>
+          </div>
+        </div>
+        <div class="mj-alert mj-alert-warning">
+          <i class="fa-solid fa-triangle-exclamation mj-alert-icon"></i>
+          <div class="mj-alert-content">
+            <div class="mj-alert-title">Warning</div>
+            <div class="mj-alert-message">Your session will expire in 5 minutes. Please save your work.</div>
+          </div>
+        </div>
+        <div class="mj-alert mj-alert-error">
+          <i class="fa-solid fa-circle-xmark mj-alert-icon"></i>
+          <div class="mj-alert-content">
+            <div class="mj-alert-title">Error</div>
+            <div class="mj-alert-message">Failed to connect to the database. Please check your connection settings.</div>
+          </div>
+        </div>
+        <div class="mj-alert mj-alert-info">
+          <i class="fa-solid fa-circle-info mj-alert-icon"></i>
+          <div class="mj-alert-content">
+            <div class="mj-alert-title">Information</div>
+            <div class="mj-alert-message">A new version of the application is available. Click here to update.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+</body>
+</html>

@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dropdowns - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .section-description {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+      margin-bottom: var(--mj-space-4);
+    }
+    .demo-area {
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-4);
+    }
+    .demo-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--mj-space-4);
+      align-items: flex-start;
+      margin-bottom: var(--mj-space-6);
+    }
+    .demo-row:last-child {
+      margin-bottom: 0;
+    }
+    .demo-label {
+      font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-semibold);
+      color: var(--mj-text-muted);
+      text-transform: uppercase;
+      letter-spacing: var(--mj-tracking-wide);
+      margin-bottom: var(--mj-space-3);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--mj-space-4);
+    }
+    @media (max-width: 600px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+    .code-hint {
+      margin-top: var(--mj-space-3);
+      padding: var(--mj-space-3);
+      background: var(--mj-bg-surface-sunken);
+      border-radius: var(--mj-radius-md);
+      font-family: var(--mj-font-family-mono);
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-secondary);
+    }
+    /* Ensure dropdowns have space to open */
+    .dropdown-demo-container {
+      min-height: 200px;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Dropdowns</h1>
+      <p>Select dropdowns, dropdown menus, and dropdown buttons for actions and navigation.</p>
+    </header>
+
+    <!-- Select Dropdowns -->
+    <section class="section">
+      <h2 class="section-title">Select Dropdowns</h2>
+      <p class="section-description">Styled native select elements with size variants and icons.</p>
+
+      <div class="demo-area">
+        <div class="demo-label">Size Variants</div>
+        <div class="form-grid">
+          <div class="mj-form-group">
+            <label class="mj-label">Small Select</label>
+            <select class="mj-input mj-select mj-select-sm">
+              <option value="">Choose...</option>
+              <option value="1">Option 1</option>
+              <option value="2">Option 2</option>
+              <option value="3">Option 3</option>
+            </select>
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label">Default Select</label>
+            <select class="mj-input mj-select">
+              <option value="">Select an option...</option>
+              <option value="1">Option 1</option>
+              <option value="2">Option 2</option>
+              <option value="3">Option 3</option>
+            </select>
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label">Large Select</label>
+            <select class="mj-input mj-select mj-select-lg">
+              <option value="">Select an option...</option>
+              <option value="1">Option 1</option>
+              <option value="2">Option 2</option>
+              <option value="3">Option 3</option>
+            </select>
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label">Select with Icon</label>
+            <div class="mj-select-with-icon">
+              <i class="fa-solid fa-user mj-select-icon"></i>
+              <select class="mj-input mj-select">
+                <option value="">Select user...</option>
+                <option value="1">John Doe</option>
+                <option value="2">Jane Smith</option>
+                <option value="3">Bob Wilson</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-area">
+        <div class="demo-label">Grouped Options</div>
+        <div class="mj-form-group">
+          <label class="mj-label">Category</label>
+          <select class="mj-input mj-select">
+            <option value="">Select a category...</option>
+            <optgroup label="Fruits">
+              <option value="apple">Apple</option>
+              <option value="banana">Banana</option>
+              <option value="orange">Orange</option>
+            </optgroup>
+            <optgroup label="Vegetables">
+              <option value="carrot">Carrot</option>
+              <option value="broccoli">Broccoli</option>
+              <option value="spinach">Spinach</option>
+            </optgroup>
+            <optgroup label="Dairy">
+              <option value="milk">Milk</option>
+              <option value="cheese">Cheese</option>
+              <option value="yogurt">Yogurt</option>
+            </optgroup>
+          </select>
+        </div>
+      </div>
+
+      <div class="demo-area">
+        <div class="demo-label">States</div>
+        <div class="form-grid">
+          <div class="mj-form-group">
+            <label class="mj-label">Disabled</label>
+            <select class="mj-input mj-select" disabled>
+              <option value="">Cannot change</option>
+            </select>
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label">With Error</label>
+            <select class="mj-input mj-select mj-input-error">
+              <option value="">Select required</option>
+            </select>
+            <span class="mj-error-text">Please select an option.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dropdown Menus -->
+    <section class="section">
+      <h2 class="section-title">Dropdown Menus</h2>
+      <p class="section-description">Action menus triggered by click, with icons, dividers, and grouped items.</p>
+
+      <div class="demo-area dropdown-demo-container">
+        <div class="demo-label">Basic Dropdown Menu</div>
+        <div class="demo-row">
+          <div class="mj-dropdown" id="dropdown-basic">
+            <button class="mj-btn mj-btn-secondary mj-dropdown-trigger" onclick="toggleDropdown('dropdown-basic')">
+              Actions
+              <i class="fa-solid fa-chevron-down mj-dropdown-caret"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-eye"></i> View
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-pen"></i> Edit
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-copy"></i> Duplicate
+              </button>
+            </div>
+          </div>
+
+          <div class="mj-dropdown" id="dropdown-primary">
+            <button class="mj-btn mj-btn-primary mj-dropdown-trigger" onclick="toggleDropdown('dropdown-primary')">
+              <i class="fa-solid fa-plus"></i>
+              Create New
+              <i class="fa-solid fa-chevron-down mj-dropdown-caret"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-file"></i> New Document
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-folder"></i> New Folder
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-upload"></i> Upload File
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-area dropdown-demo-container">
+        <div class="demo-label">With Dividers and Groups</div>
+        <div class="demo-row">
+          <div class="mj-dropdown" id="dropdown-grouped">
+            <button class="mj-btn mj-btn-secondary mj-dropdown-trigger" onclick="toggleDropdown('dropdown-grouped')">
+              <i class="fa-solid fa-ellipsis-v"></i>
+              More Options
+              <i class="fa-solid fa-chevron-down mj-dropdown-caret"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <div class="mj-dropdown-header">Actions</div>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-pen"></i> Edit
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-copy"></i> Duplicate
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-share"></i> Share
+              </button>
+              <div class="mj-dropdown-divider"></div>
+              <div class="mj-dropdown-header">Export</div>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-file-pdf"></i> Export as PDF
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-file-csv"></i> Export as CSV
+              </button>
+              <div class="mj-dropdown-divider"></div>
+              <button class="mj-dropdown-item mj-dropdown-item-danger">
+                <i class="fa-solid fa-trash"></i> Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-area dropdown-demo-container">
+        <div class="demo-label">With Disabled Items</div>
+        <div class="demo-row">
+          <div class="mj-dropdown" id="dropdown-disabled">
+            <button class="mj-btn mj-btn-secondary mj-dropdown-trigger" onclick="toggleDropdown('dropdown-disabled')">
+              User Actions
+              <i class="fa-solid fa-chevron-down mj-dropdown-caret"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-user"></i> View Profile
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-gear"></i> Settings
+              </button>
+              <button class="mj-dropdown-item mj-dropdown-item-disabled">
+                <i class="fa-solid fa-lock"></i> Admin Panel (No Access)
+              </button>
+              <div class="mj-dropdown-divider"></div>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-right-from-bracket"></i> Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-area dropdown-demo-container">
+        <div class="demo-label">Right-Aligned Menu</div>
+        <div class="demo-row" style="justify-content: flex-end;">
+          <div class="mj-dropdown" id="dropdown-right">
+            <button class="mj-btn mj-btn-secondary mj-dropdown-trigger" onclick="toggleDropdown('dropdown-right')">
+              <i class="fa-solid fa-user-circle"></i>
+              Account
+              <i class="fa-solid fa-chevron-down mj-dropdown-caret"></i>
+            </button>
+            <div class="mj-dropdown-menu mj-dropdown-menu-right">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-user"></i> My Profile
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-bell"></i> Notifications
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-gear"></i> Settings
+              </button>
+              <div class="mj-dropdown-divider"></div>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-right-from-bracket"></i> Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Split Buttons -->
+    <section class="section">
+      <h2 class="section-title">Split Buttons</h2>
+      <p class="section-description">Buttons with a primary action and a dropdown for additional options.</p>
+
+      <div class="demo-area dropdown-demo-container">
+        <div class="demo-label">Split Button Variants</div>
+        <div class="demo-row">
+          <!-- Primary Split Button -->
+          <div class="mj-dropdown" id="dropdown-split-primary">
+            <div class="mj-btn-split">
+              <button class="mj-btn mj-btn-primary">
+                <i class="fa-solid fa-save"></i> Save
+              </button>
+              <button class="mj-btn mj-btn-primary mj-btn-split-toggle" onclick="toggleDropdown('dropdown-split-primary')">
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+            </div>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-save"></i> Save
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-floppy-disk"></i> Save As...
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-file-export"></i> Save & Export
+              </button>
+            </div>
+          </div>
+
+          <!-- Secondary Split Button -->
+          <div class="mj-dropdown" id="dropdown-split-secondary">
+            <div class="mj-btn-split">
+              <button class="mj-btn mj-btn-secondary">
+                <i class="fa-solid fa-download"></i> Download
+              </button>
+              <button class="mj-btn mj-btn-secondary mj-btn-split-toggle" onclick="toggleDropdown('dropdown-split-secondary')">
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+            </div>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-file-pdf"></i> Download PDF
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-file-excel"></i> Download Excel
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-file-csv"></i> Download CSV
+              </button>
+            </div>
+          </div>
+
+          <!-- Accent Split Button -->
+          <div class="mj-dropdown" id="dropdown-split-accent">
+            <div class="mj-btn-split">
+              <button class="mj-btn mj-btn-accent">
+                <i class="fa-solid fa-paper-plane"></i> Send
+              </button>
+              <button class="mj-btn mj-btn-accent mj-btn-split-toggle" onclick="toggleDropdown('dropdown-split-accent')">
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+            </div>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-paper-plane"></i> Send Now
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-clock"></i> Schedule Send
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-file-lines"></i> Save as Draft
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Icon-Only Dropdown Buttons -->
+    <section class="section">
+      <h2 class="section-title">Icon-Only Dropdown Buttons</h2>
+      <p class="section-description">Compact dropdown triggers using only icons.</p>
+
+      <div class="demo-area dropdown-demo-container">
+        <div class="demo-label">Icon Dropdown Triggers</div>
+        <div class="demo-row">
+          <!-- Ellipsis Menu -->
+          <div class="mj-dropdown" id="dropdown-icon-ellipsis">
+            <button class="mj-btn mj-btn-ghost mj-btn-dropdown-icon" onclick="toggleDropdown('dropdown-icon-ellipsis')" title="More options">
+              <i class="fa-solid fa-ellipsis"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-eye"></i> View Details
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-pen"></i> Edit
+              </button>
+              <div class="mj-dropdown-divider"></div>
+              <button class="mj-dropdown-item mj-dropdown-item-danger">
+                <i class="fa-solid fa-trash"></i> Delete
+              </button>
+            </div>
+          </div>
+
+          <!-- Vertical Ellipsis -->
+          <div class="mj-dropdown" id="dropdown-icon-vertical">
+            <button class="mj-btn mj-btn-ghost mj-btn-dropdown-icon" onclick="toggleDropdown('dropdown-icon-vertical')" title="More options">
+              <i class="fa-solid fa-ellipsis-vertical"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-star"></i> Add to Favorites
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-bookmark"></i> Bookmark
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-share"></i> Share
+              </button>
+            </div>
+          </div>
+
+          <!-- Gear/Settings Menu -->
+          <div class="mj-dropdown" id="dropdown-icon-gear">
+            <button class="mj-btn mj-btn-secondary mj-btn-dropdown-icon" onclick="toggleDropdown('dropdown-icon-gear')" title="Settings">
+              <i class="fa-solid fa-gear"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-sliders"></i> Preferences
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-palette"></i> Theme
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-bell"></i> Notifications
+              </button>
+            </div>
+          </div>
+
+          <!-- Plus Menu -->
+          <div class="mj-dropdown" id="dropdown-icon-plus">
+            <button class="mj-btn mj-btn-primary mj-btn-dropdown-icon" onclick="toggleDropdown('dropdown-icon-plus')" title="Add new">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-file"></i> New File
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-folder"></i> New Folder
+              </button>
+              <button class="mj-dropdown-item">
+                <i class="fa-solid fa-link"></i> New Shortcut
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dropdown Button Sizes -->
+    <section class="section">
+      <h2 class="section-title">Button Sizes</h2>
+      <p class="section-description">Dropdown buttons in different sizes.</p>
+
+      <div class="demo-area dropdown-demo-container">
+        <div class="demo-label">Size Variants</div>
+        <div class="demo-row" style="align-items: center;">
+          <!-- Small -->
+          <div class="mj-dropdown" id="dropdown-size-sm">
+            <button class="mj-btn mj-btn-secondary mj-btn-sm mj-dropdown-trigger" onclick="toggleDropdown('dropdown-size-sm')">
+              Small
+              <i class="fa-solid fa-chevron-down mj-dropdown-caret"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">Option 1</button>
+              <button class="mj-dropdown-item">Option 2</button>
+              <button class="mj-dropdown-item">Option 3</button>
+            </div>
+          </div>
+
+          <!-- Default -->
+          <div class="mj-dropdown" id="dropdown-size-default">
+            <button class="mj-btn mj-btn-secondary mj-dropdown-trigger" onclick="toggleDropdown('dropdown-size-default')">
+              Default
+              <i class="fa-solid fa-chevron-down mj-dropdown-caret"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">Option 1</button>
+              <button class="mj-dropdown-item">Option 2</button>
+              <button class="mj-dropdown-item">Option 3</button>
+            </div>
+          </div>
+
+          <!-- Large -->
+          <div class="mj-dropdown" id="dropdown-size-lg">
+            <button class="mj-btn mj-btn-secondary mj-btn-lg mj-dropdown-trigger" onclick="toggleDropdown('dropdown-size-lg')">
+              Large
+              <i class="fa-solid fa-chevron-down mj-dropdown-caret"></i>
+            </button>
+            <div class="mj-dropdown-menu">
+              <button class="mj-dropdown-item">Option 1</button>
+              <button class="mj-dropdown-item">Option 2</button>
+              <button class="mj-dropdown-item">Option 3</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Usage in Context -->
+    <section class="section">
+      <h2 class="section-title">Usage in Context</h2>
+      <p class="section-description">Examples of dropdowns used in common UI patterns.</p>
+
+      <div class="demo-area">
+        <div class="demo-label">Table Row Actions</div>
+        <div class="mj-table-container">
+          <table class="mj-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th style="width: 60px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Project Alpha</td>
+                <td><span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Active</span></td>
+                <td>Jan 15, 2025</td>
+                <td>
+                  <div class="mj-dropdown" id="dropdown-table-1">
+                    <button class="mj-btn mj-btn-ghost mj-btn-dropdown-icon" onclick="toggleDropdown('dropdown-table-1')">
+                      <i class="fa-solid fa-ellipsis"></i>
+                    </button>
+                    <div class="mj-dropdown-menu mj-dropdown-menu-right">
+                      <button class="mj-dropdown-item"><i class="fa-solid fa-eye"></i> View</button>
+                      <button class="mj-dropdown-item"><i class="fa-solid fa-pen"></i> Edit</button>
+                      <div class="mj-dropdown-divider"></div>
+                      <button class="mj-dropdown-item mj-dropdown-item-danger"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>Project Beta</td>
+                <td><span class="mj-badge mj-badge-warning"><span class="mj-badge-dot"></span> Pending</span></td>
+                <td>Jan 18, 2025</td>
+                <td>
+                  <div class="mj-dropdown" id="dropdown-table-2">
+                    <button class="mj-btn mj-btn-ghost mj-btn-dropdown-icon" onclick="toggleDropdown('dropdown-table-2')">
+                      <i class="fa-solid fa-ellipsis"></i>
+                    </button>
+                    <div class="mj-dropdown-menu mj-dropdown-menu-right">
+                      <button class="mj-dropdown-item"><i class="fa-solid fa-eye"></i> View</button>
+                      <button class="mj-dropdown-item"><i class="fa-solid fa-pen"></i> Edit</button>
+                      <div class="mj-dropdown-divider"></div>
+                      <button class="mj-dropdown-item mj-dropdown-item-danger"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>Project Gamma</td>
+                <td><span class="mj-badge mj-badge-neutral">Draft</span></td>
+                <td>Jan 20, 2025</td>
+                <td>
+                  <div class="mj-dropdown" id="dropdown-table-3">
+                    <button class="mj-btn mj-btn-ghost mj-btn-dropdown-icon" onclick="toggleDropdown('dropdown-table-3')">
+                      <i class="fa-solid fa-ellipsis"></i>
+                    </button>
+                    <div class="mj-dropdown-menu mj-dropdown-menu-right">
+                      <button class="mj-dropdown-item"><i class="fa-solid fa-eye"></i> View</button>
+                      <button class="mj-dropdown-item"><i class="fa-solid fa-pen"></i> Edit</button>
+                      <div class="mj-dropdown-divider"></div>
+                      <button class="mj-dropdown-item mj-dropdown-item-danger"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="demo-area dropdown-demo-container">
+        <div class="demo-label">Card Header Actions</div>
+        <div class="mj-card" style="max-width: 400px;">
+          <div class="mj-card-header">
+            <h3>Recent Activity</h3>
+            <div class="mj-dropdown" id="dropdown-card">
+              <button class="mj-btn mj-btn-ghost mj-btn-dropdown-icon" onclick="toggleDropdown('dropdown-card')">
+                <i class="fa-solid fa-ellipsis"></i>
+              </button>
+              <div class="mj-dropdown-menu mj-dropdown-menu-right">
+                <button class="mj-dropdown-item"><i class="fa-solid fa-sync"></i> Refresh</button>
+                <button class="mj-dropdown-item"><i class="fa-solid fa-expand"></i> Expand</button>
+                <button class="mj-dropdown-item"><i class="fa-solid fa-download"></i> Export</button>
+                <div class="mj-dropdown-divider"></div>
+                <button class="mj-dropdown-item"><i class="fa-solid fa-gear"></i> Settings</button>
+              </div>
+            </div>
+          </div>
+          <div class="mj-card-body">
+            <p class="mj-text-secondary mj-text-sm">Card content with dropdown actions in the header.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-area dropdown-demo-container">
+        <div class="demo-label">Toolbar with Dropdowns</div>
+        <div class="mj-table-toolbar">
+          <div class="mj-search-box" style="width: 250px;">
+            <i class="fa-solid fa-search mj-search-icon"></i>
+            <input type="text" class="mj-search-input" placeholder="Search...">
+          </div>
+          <div class="mj-flex mj-gap-2">
+            <div class="mj-dropdown" id="dropdown-toolbar-filter">
+              <button class="mj-btn mj-btn-secondary mj-dropdown-trigger" onclick="toggleDropdown('dropdown-toolbar-filter')">
+                <i class="fa-solid fa-filter"></i>
+                Filter
+                <i class="fa-solid fa-chevron-down mj-dropdown-caret"></i>
+              </button>
+              <div class="mj-dropdown-menu mj-dropdown-menu-right">
+                <div class="mj-dropdown-header">Status</div>
+                <button class="mj-dropdown-item"><i class="fa-solid fa-check"></i> Active</button>
+                <button class="mj-dropdown-item"><i class="fa-solid fa-clock"></i> Pending</button>
+                <button class="mj-dropdown-item"><i class="fa-solid fa-ban"></i> Inactive</button>
+                <div class="mj-dropdown-divider"></div>
+                <button class="mj-dropdown-item"><i class="fa-solid fa-times"></i> Clear Filters</button>
+              </div>
+            </div>
+            <div class="mj-dropdown" id="dropdown-toolbar-new">
+              <div class="mj-btn-split">
+                <button class="mj-btn mj-btn-primary">
+                  <i class="fa-solid fa-plus"></i> New
+                </button>
+                <button class="mj-btn mj-btn-primary mj-btn-split-toggle" onclick="toggleDropdown('dropdown-toolbar-new')">
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+              </div>
+              <div class="mj-dropdown-menu mj-dropdown-menu-right">
+                <button class="mj-dropdown-item"><i class="fa-solid fa-file"></i> New Record</button>
+                <button class="mj-dropdown-item"><i class="fa-solid fa-upload"></i> Import</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CSS Classes Reference -->
+    <section class="section">
+      <h2 class="section-title">CSS Classes Reference</h2>
+      <div class="demo-area">
+        <div class="code-hint">
+          <strong>Container:</strong><br>
+          .mj-dropdown - Dropdown container (add .open class to show menu)<br><br>
+
+          <strong>Trigger:</strong><br>
+          .mj-dropdown-trigger - Button that opens menu<br>
+          .mj-dropdown-caret - Chevron icon that rotates when open<br><br>
+
+          <strong>Menu:</strong><br>
+          .mj-dropdown-menu - The dropdown panel<br>
+          .mj-dropdown-menu-right - Right-align the menu<br><br>
+
+          <strong>Items:</strong><br>
+          .mj-dropdown-item - Clickable menu item<br>
+          .mj-dropdown-item-disabled - Disabled item<br>
+          .mj-dropdown-item-danger - Destructive action styling<br>
+          .mj-dropdown-divider - Horizontal separator<br>
+          .mj-dropdown-header - Section header text<br><br>
+
+          <strong>Split Button:</strong><br>
+          .mj-btn-split - Container for split button<br>
+          .mj-btn-split-toggle - The dropdown trigger part<br><br>
+
+          <strong>Icon Button:</strong><br>
+          .mj-btn-dropdown-icon - Icon-only trigger button<br><br>
+
+          <strong>Select Sizes:</strong><br>
+          .mj-select-sm - Small select<br>
+          .mj-select-lg - Large select<br>
+          .mj-select-with-icon - Container for select with icon prefix
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+  <script>
+    // Simple dropdown toggle functionality
+    function toggleDropdown(id) {
+      const dropdown = document.getElementById(id);
+      const wasOpen = dropdown.classList.contains('open');
+
+      // Close all dropdowns first
+      document.querySelectorAll('.mj-dropdown.open').forEach(d => {
+        d.classList.remove('open');
+      });
+
+      // Toggle the clicked one (unless it was already open)
+      if (!wasOpen) {
+        dropdown.classList.add('open');
+      }
+    }
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.mj-dropdown')) {
+        document.querySelectorAll('.mj-dropdown.open').forEach(d => {
+          d.classList.remove('open');
+        });
+      }
+    });
+
+    // Prevent menu clicks from closing the dropdown immediately
+    document.querySelectorAll('.mj-dropdown-menu').forEach(menu => {
+      menu.addEventListener('click', function(e) {
+        // Close dropdown after item click
+        const dropdown = this.closest('.mj-dropdown');
+        if (dropdown && e.target.closest('.mj-dropdown-item')) {
+          setTimeout(() => dropdown.classList.remove('open'), 100);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
