@@ -2725,7 +2725,43 @@ export class AIPromptRunner {
           candidate.effortLevel
         );
 
-        // Success! Update promptRun with failover information if we had prior failures
+        // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
+        // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
+        // instead of throwing, so we must check result.success here.
+        if (!result.success && result.errorInfo?.canFailover) {
+          lastError = result.exception || new Error(result.errorMessage || 'Model execution failed');
+
+          // Use shared failover error handling logic
+          const decision = await this.processFailoverError(
+            lastError,
+            result.errorInfo,
+            candidate,
+            attemptStartTime,
+            i,
+            allCandidates,
+            failoverAttempts,
+            prompt,
+            failoverConfig
+          );
+
+          // Update candidates list (may have been filtered)
+          allCandidates = decision.updatedCandidates;
+
+          if (decision.shouldRetry) {
+            i--; // Retry same model/vendor
+            continue;
+          }
+
+          if (decision.shouldContinue) {
+            continue; // Try next candidate
+          }
+
+          // Otherwise break (fatal error or last candidate)
+          break;
+        }
+
+        // If we reach here, the result was successful
+        // Update promptRun with failover information if we had prior failures
         if (failoverAttempts.length > 0 && promptRun) {
           this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, candidate.model, candidate.vendorId || null);
         }
@@ -2733,64 +2769,38 @@ export class AIPromptRunner {
         return result;
 
       } catch (error) {
-        const attemptDuration = Date.now() - attemptStartTime;
         lastError = error as Error;
 
-        // Analyze error
-        const errorAnalysis = ErrorAnalyzer.analyzeError(lastError);
+        // Analyze error to get error info
+        const errorInfo = ErrorAnalyzer.analyzeError(lastError);
 
-        // Create failover attempt record
-        const failoverAttempt: FailoverAttempt = {
-          attemptNumber: i + 1,
-          modelId: candidate.model.ID,
-          vendorId: candidate.vendorId,
-          error: lastError,
-          errorType: errorAnalysis.errorType,
-          duration: attemptDuration,
-          timestamp: new Date()
-        };
-        failoverAttempts.push(failoverAttempt);
+        // Use shared failover error handling logic
+        const decision = await this.processFailoverError(
+          lastError,
+          errorInfo,
+          candidate,
+          attemptStartTime,
+          i,
+          allCandidates,
+          failoverAttempts,
+          prompt,
+          failoverConfig
+        );
 
-        // Vendor-level errors: filter out all candidates from this vendor to avoid wasting attempts
-        // Authentication: Invalid API key affects all models from vendor
-        // VendorValidationError: API schema/validation is vendor-level, not model-level
-        if (errorAnalysis.errorType === 'Authentication' || errorAnalysis.errorType === 'VendorValidationError') {
-          allCandidates = this.filterVendorCandidates(
-            errorAnalysis.errorType,
-            candidate.vendorId,
-            allCandidates
-          );
+        // Update candidates list (may have been filtered)
+        allCandidates = decision.updatedCandidates;
+
+        if (decision.shouldRetry) {
+          i--; // Retry same model/vendor
+          continue;
         }
 
-        // Determine if we should try the next candidate
-        const isLastCandidate = i === allCandidates.length - 1;
-
-        // Fatal errors: stop immediately, don't try more candidates
-        // ErrorAnalyzer has already distinguished InvalidRequest (structural) from VendorValidationError
-        if (errorAnalysis.severity === 'Fatal') {
-          const errorMessage = error?.message || error?.errorMessage || 'Unknown error';
-          LogErrorEx(`Stopping failover: Fatal error (${errorAnalysis.errorType}): ${errorMessage}`);
-          this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-          break;
+        if (decision.shouldContinue) {
+          continue; // Try next candidate
         }
 
-        // Check errorScope filter if configured
-        if (failoverConfig.errorScope && failoverConfig.errorScope !== 'All') {
-          const matchesScope = this.errorMatchesScope(errorAnalysis.errorType, failoverConfig.errorScope);
-          if (!matchesScope) {
-            this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-            break;
-          }
-        }
-
-        // If this is the last candidate, we're done
-        if (isLastCandidate) {
-          this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-          break;
-        }
-
-        // Log and continue to next candidate (instant failover, no delay)
-        this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
+        // Otherwise break (fatal error or last candidate)
+        break;
       }
     }
 
@@ -3542,6 +3552,98 @@ export class AIPromptRunner {
     }
 
     return false; // Too many retries, proceed to failover
+  }
+
+  /**
+   * Processes a failover error (either from catch block or from failed ChatResult).
+   * Handles vendor filtering, rate limit retries, fatal error detection, and failover logic.
+   *
+   * @returns Decision object indicating whether to retry same model, continue to next candidate, or stop
+   */
+  private async processFailoverError(
+    error: Error,
+    errorInfo: AIErrorInfo,
+    candidate: ModelVendorCandidate,
+    attemptStartTime: number,
+    attemptIndex: number,
+    allCandidates: ModelVendorCandidate[],
+    failoverAttempts: FailoverAttempt[],
+    prompt: AIPromptEntityExtended,
+    failoverConfig: { strategy: string; errorScope?: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly'; delaySeconds?: number; maxAttempts: number }
+  ): Promise<{
+    shouldRetry: boolean;      // Retry same model/vendor (rate limit)
+    shouldContinue: boolean;   // Continue to next candidate
+    updatedCandidates: ModelVendorCandidate[];
+  }> {
+    const attemptDuration = Date.now() - attemptStartTime;
+
+    // Create failover attempt record
+    const failoverAttempt: FailoverAttempt = {
+      attemptNumber: attemptIndex + 1,
+      modelId: candidate.model.ID,
+      vendorId: candidate.vendorId,
+      error: error,
+      errorType: errorInfo.errorType,
+      duration: attemptDuration,
+      timestamp: new Date()
+    };
+    failoverAttempts.push(failoverAttempt);
+
+    // Vendor-level errors: filter out all candidates from this vendor
+    let updatedCandidates = allCandidates;
+    if (errorInfo.errorType === 'Authentication' || errorInfo.errorType === 'VendorValidationError') {
+      updatedCandidates = this.filterVendorCandidates(
+        errorInfo.errorType,
+        candidate.vendorId,
+        allCandidates
+      );
+    }
+
+    const isLastCandidate = attemptIndex === updatedCandidates.length - 1;
+
+    // Fatal errors: stop immediately
+    if (errorInfo.severity === 'Fatal') {
+      const errorMessage = error?.message || 'Unknown error';
+      LogErrorEx(`Stopping failover: Fatal error (${errorInfo.errorType}): ${errorMessage}`);
+      this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
+      return { shouldRetry: false, shouldContinue: false, updatedCandidates };
+    }
+
+    // Check errorScope filter if configured
+    if (failoverConfig.errorScope && failoverConfig.errorScope !== 'All') {
+      const matchesScope = this.errorMatchesScope(errorInfo.errorType, failoverConfig.errorScope);
+      if (!matchesScope) {
+        this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
+        return { shouldRetry: false, shouldContinue: false, updatedCandidates };
+      }
+    }
+
+    // Rate limit errors: check if we should retry the same model before failing over
+    if (errorInfo.errorType === 'RateLimit') {
+      const shouldRetry = await this.handleRateLimitRetry(
+        errorInfo,
+        candidate.model,
+        candidate.vendorId,
+        failoverAttempts,
+        prompt,
+        attemptIndex,
+        updatedCandidates.length,
+        failoverAttempt
+      );
+      if (shouldRetry) {
+        return { shouldRetry: true, shouldContinue: false, updatedCandidates };
+      }
+    }
+
+    // If this is the last candidate, we're done
+    if (isLastCandidate) {
+      this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
+      return { shouldRetry: false, shouldContinue: false, updatedCandidates };
+    }
+
+    // Log and signal to continue to next candidate
+    this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
+    return { shouldRetry: false, shouldContinue: true, updatedCandidates };
   }
 
   /**

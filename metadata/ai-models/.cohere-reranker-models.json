@@ -5,10 +5,10 @@
       "Description": "Cohere Rerank v3.5 - Latest semantic reranking model with state-of-the-art performance for English content. Optimized for RAG retrieval quality improvement.",
       "AIModelTypeID": "@lookup:AI Model Types.Name=Reranker",
       "PowerRank": 100,
-      "IsActive": true
-    },
-    "primaryKey": {
-      "ID": "1AF4B81D-B7A2-41E4-8514-E72A619E63DE"
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -17,20 +17,30 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
             "Priority": 1,
-            "DriverClass": "CohereLLM",
-            "APIName": "rerank-v3.5",
             "Status": "Active",
+            "DriverClass": "CohereReranker",
+            "APIName": "rerank-v3.5",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
             "ID": "E0BEEDA5-7189-4E6A-9B60-BA65FA41B85F"
           },
           "sync": {
-            "lastModified": "2026-01-27T03:03:50.705Z",
-            "checksum": "773c45b28b0f459e7079ec74df3231b080167f736b39bce4d18a4431abcfd527"
+            "lastModified": "2026-01-28T22:07:13.542Z",
+            "checksum": "14b98f65c79421d2d27df9d51999b428c8841fe7273df5c6c297a1c759d9064a"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "1AF4B81D-B7A2-41E4-8514-E72A619E63DE"
+    },
+    "sync": {
+      "lastModified": "2026-01-28T22:07:13.560Z",
+      "checksum": "65b5b691639977f0590170fba28d74ef3789a6082b00ebcef3e2c4ee60f823c0"
     }
   },
   {
@@ -39,10 +49,10 @@
       "Description": "Cohere Rerank Multilingual v3.0 - Semantic reranking model supporting 100+ languages for global RAG deployments.",
       "AIModelTypeID": "@lookup:AI Model Types.Name=Reranker",
       "PowerRank": 80,
-      "IsActive": true
-    },
-    "primaryKey": {
-      "ID": "2E8F662B-3842-41E1-87BF-3C14541BF93B"
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -51,20 +61,30 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
             "Priority": 1,
-            "DriverClass": "CohereLLM",
-            "APIName": "rerank-multilingual-v3.0",
             "Status": "Active",
+            "DriverClass": "CohereReranker",
+            "APIName": "rerank-multilingual-v3.0",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
             "ID": "A7F3B2C1-8D4E-4F5A-9C6B-1E2F3A4B5C6D"
           },
           "sync": {
-            "lastModified": "2026-01-27T03:03:50.717Z",
-            "checksum": "b104dccc58816aa8e951b3ac5ebb88c2665d7a1baf70e67c5c965eaa885cb3b3"
+            "lastModified": "2026-01-28T22:07:13.541Z",
+            "checksum": "aeabe80be67ab25dfdcb74e5d2bdf4f2754692e047525391cda40fd9bd7beab1"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "2E8F662B-3842-41E1-87BF-3C14541BF93B"
+    },
+    "sync": {
+      "lastModified": "2026-01-28T22:07:13.555Z",
+      "checksum": "f0bd7197e468d5c6ed36615bbce9d6162ab3a52e42dfab9b08bdf81b9a310e5a"
     }
   }
 ]
