@@ -626,26 +626,52 @@ interface AuthContext {
 
 ```typescript
 /**
- * Helper for tools to evaluate scopes
+ * Helper for tools to evaluate scopes.
+ *
+ * IMPORTANT: Implements hierarchical scope matching per FR-029a.
+ * A scope check succeeds if the token contains the exact scope OR any parent prefix.
+ *
+ * Example: hasScope('entity:read') returns true if token contains:
+ * - 'entity:read' (exact match), OR
+ * - 'entity' (parent scope grants all children)
+ *
+ * This allows parent scopes to implicitly grant all child permissions and
+ * enables future sub-scopes to work without re-issuing tokens.
  */
 interface ScopeEvaluator {
   /**
-   * Check if a specific scope is granted
+   * Check if a specific scope is granted (with hierarchical matching).
+   *
+   * Returns true if:
+   * - Token contains the exact scope, OR
+   * - Token contains a parent scope (prefix before the last ':')
+   *
+   * @example
+   * // Token scopes: ['entity']
+   * hasScope('entity:read')  // true (parent 'entity' grants all entity:* scopes)
+   * hasScope('entity:update') // true
+   * hasScope('action:execute') // false (no 'action' parent)
+   *
+   * @example
+   * // Token scopes: ['entity:read']
+   * hasScope('entity:read')  // true (exact match)
+   * hasScope('entity:update') // false (different child)
+   * hasScope('entity') // false (child doesn't grant parent)
    */
   hasScope(scope: string): boolean;
 
   /**
-   * Check if any of the specified scopes is granted
+   * Check if any of the specified scopes is granted (with hierarchical matching).
    */
   hasAnyScope(scopes: string[]): boolean;
 
   /**
-   * Check if all specified scopes are granted
+   * Check if all specified scopes are granted (with hierarchical matching).
    */
   hasAllScopes(scopes: string[]): boolean;
 
   /**
-   * Get all granted scopes
+   * Get all granted scopes (exact scopes from token, not expanded)
    */
   getScopes(): string[];
 
@@ -653,7 +679,37 @@ interface ScopeEvaluator {
    * Get scopes matching a pattern (e.g., "entity:*")
    */
   getScopesMatching(pattern: string): string[];
+
+  /**
+   * Check if a parent scope that covers the given scope is granted.
+   *
+   * @example
+   * // Token scopes: ['entity']
+   * hasParentScope('entity:read') // true ('entity' is parent)
+   *
+   * @example
+   * // Token scopes: ['entity:read']
+   * hasParentScope('entity:read') // false (exact match, not parent)
+   */
+  hasParentScope(scope: string): boolean;
 }
+```
+
+### Canonical Base Scopes (Added 2026-01-28)
+
+The following hierarchical scope structure is defined for MCP server tools:
+
+| Parent Scope | Sub-scopes | Description |
+|--------------|------------|-------------|
+| `action` | `action:read`, `action:execute` | Action discovery and execution |
+| `agent` | `agent:read`, `agent:execute` | AI agent discovery and execution |
+| `communication` | `communication:read` | Communication provider discovery |
+| `entity` | `entity:create`, `entity:delete`, `entity:read`, `entity:update` | Entity CRUD operations |
+| `prompt` | `prompt:read`, `prompt:execute` | AI prompt discovery and execution |
+| `query` | `query:read`, `query:run` | Query discovery and execution |
+| `view` | `view:run` | View execution permissions |
+
+**Hierarchy Rule**: If a user grants a parent scope (e.g., `entity`), the JWT stores only `entity`. Tools check if granted scopes include the required scope OR any parent prefix. This allows future sub-scopes to work automatically without re-issuing tokens.
 ```
 
 ---

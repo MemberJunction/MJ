@@ -40,6 +40,7 @@
 - Q: Can MCP clients request specific scopes in the authorization request? → A: Yes. If client requests specific scopes, only those are shown on consent screen. If no scopes requested, all active scopes are shown. Supports OAuth 2.0 scope parameter.
 - Q: What happens if client requests unknown scopes? → A: Silently ignore unknown scopes; show only valid matching scopes on consent screen. Provides resilience for clients requesting standard OAuth scopes or scopes from different MJ deployments.
 - Q: Should the OAuth Proxy require a client_secret for upstream provider authentication? → A: No. The proxy uses PKCE-only for upstream authentication (same as MJExplorer SPA), requiring no client secret. Users can reuse the exact same OAuth app registration as MJExplorer, only adding the /oauth/callback redirect URI.
+- Q: How should scope hierarchy be evaluated? → A: Store parent scope only in JWT, tools match by prefix. If user grants `entity`, JWT stores `entity`. Tools check if granted scopes include the required scope OR any parent prefix (e.g., `entity:read` is granted if token has `entity` or `entity:read`). This allows future sub-scopes to work automatically without re-issuing tokens.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -167,17 +168,17 @@ When a user is redirected to the MCP Server's OAuth proxy for authentication, th
 
 ### User Story 7 - Scope-Based Access Control (Priority: P2)
 
-A developer authenticates via OAuth and is presented with a consent screen showing available scopes (e.g., "action:execute", "entity:read", "entity:write"). The developer selects only the scopes needed for their current task. When calling MCP tools, each tool receives the JWT with granted scopes and can allow/deny operations or selectively limit data access based on those scopes.
+A developer authenticates via OAuth and is presented with a consent screen showing available scopes (e.g., "action:execute", "entity:read", "entity:update"). The developer selects only the scopes needed for their current task. When calling MCP tools, each tool receives the JWT with granted scopes and can allow/deny operations or selectively limit data access based on those scopes.
 
 **Why this priority**: Scope-based authorization provides fine-grained access control, enabling the principle of least privilege. Tools can limit their behavior based on granted scopes, improving security.
 
-**Independent Test**: Can be tested by authenticating with limited scopes, then verifying tools behave appropriately (e.g., a tool requiring "entity:write" scope fails gracefully when only "entity:read" was granted).
+**Independent Test**: Can be tested by authenticating with limited scopes, then verifying tools behave appropriately (e.g., a tool requiring "entity:update" scope fails gracefully when only "entity:read" was granted).
 
 **Acceptance Scenarios**:
 
 1. **Given** a user authenticating via OAuth, **When** the consent screen appears, **Then** all active scopes are displayed with descriptions, and the user can select which to grant.
 
-2. **Given** a user who granted only "entity:read" scope, **When** they call a tool that requires "entity:write", **Then** the tool either denies the operation or limits its behavior to read-only.
+2. **Given** a user who granted only "entity:read" scope, **When** they call a tool that requires "entity:update", **Then** the tool either denies the operation or limits its behavior to read-only.
 
 3. **Given** an API key with assigned scopes, **When** a request is made with that key, **Then** tools receive the scopes and evaluate them the same way as OAuth token scopes.
 
@@ -297,6 +298,8 @@ A developer authenticates via OAuth and is presented with a consent screen showi
 
 - **FR-029**: Tools MUST receive the full JWT to evaluate scopes and determine allowed behavior, including selectively limiting data access based on granted scopes.
 
+- **FR-029a**: Tools MUST implement hierarchical scope matching: a scope check for `entity:read` succeeds if the token contains `entity:read` OR `entity` (parent scope). This enables parent scopes to implicitly grant all child permissions and allows future sub-scopes to work without re-issuing tokens.
+
 - **FR-030**: System MUST display a consent screen during OAuth authorization with a two-tier UI: a "Grant All" checkbox at top for convenience, plus collapsible category groups (from APIScope.Category) below for granular scope selection (principle of least privilege).
 
 - **FR-030a**: System MUST default to no scopes selected on initial consent screen load. User must explicitly select individual scopes or use "Grant All" to proceed. This enforces least privilege by default.
@@ -325,7 +328,18 @@ A developer authenticates via OAuth and is presented with a consent screen showi
 
 - **Authorization Code**: A short-lived code issued to MCP clients after successful upstream authentication. Maps to the upstream tokens and PKCE verifier for exchange at the token endpoint.
 
-- **API Scope** (`__mj.APIScope`): A permission scope stored in the MJ database. Contains scope name (e.g., "action:execute", "entity:read"), description, and active status. Applies to both OAuth tokens and API keys. Managed via MJ admin UI. Tools receive the full JWT and evaluate scopes to determine allowed behavior.
+- **API Scope** (`__mj.APIScope`): A permission scope stored in the MJ database. Contains scope name (FullPath), description, category, and active status. Applies to both OAuth tokens and API keys. Managed via MJ admin UI. Tools receive the full JWT and evaluate scopes to determine allowed behavior. Scopes follow a hierarchical naming convention where parent scopes implicitly grant all child scopes (e.g., `entity` grants `entity:read`, `entity:create`, `entity:update`, `entity:delete`).
+
+  **Canonical Base Scopes** (MCP server tool visibility depends on these):
+  | Parent | Sub-scopes |
+  |--------|------------|
+  | `action` | `action:read`, `action:execute` |
+  | `agent` | `agent:read`, `agent:execute` |
+  | `communication` | `communication:read` |
+  | `entity` | `entity:create`, `entity:delete`, `entity:read`, `entity:update` |
+  | `prompt` | `prompt:read`, `prompt:execute` |
+  | `query` | `query:read`, `query:run` |
+  | `view` | `view:run` |
 
 - **API Key Scope** (`__mj.APIKeyScope`): Junction table linking API keys to their assigned scopes. When an API key is used, its associated scopes are included in the request context for tool evaluation.
 

@@ -238,7 +238,14 @@ All paths are relative to `packages/AI/MCPServer/`:
 - [x] T078 [US7] Create `packages/AI/MCPServer/src/auth/ScopeEvaluator.ts` with hasScope(), hasAnyScope(), hasAllScopes() methods
 - [x] T079 [US7] Export ScopeEvaluator from auth/index.ts for tool use
 
-**Checkpoint**: User Story 7 complete - scope-based authorization works for OAuth tokens
+### Hierarchical Scope Matching (FR-029a) - Added 2026-01-28
+
+- [ ] T079a [US7] Update `packages/AI/MCPServer/src/auth/ScopeEvaluator.ts` to implement hierarchical prefix matching: hasScope('entity:read') returns true if token contains 'entity:read' OR 'entity' (parent scope)
+- [ ] T079b [US7] Add hasParentScope(scope: string) method to ScopeEvaluator for explicit parent scope checking
+- [ ] T079c [US7] Update ScopeEvaluator unit tests to verify hierarchical matching behavior
+- [ ] T079d [US7] Document hierarchical scope matching in ScopeEvaluator JSDoc comments
+
+**Checkpoint**: User Story 7 complete - scope-based authorization works for OAuth tokens with hierarchical matching
 
 ---
 
@@ -424,7 +431,7 @@ All paths are relative to `packages/AI/MCPServer/`:
 ### Seed Data for Default Scopes (P2)
 
 - [ ] T136 Create SQL migration V202601281500__v3.5.x__Default_API_Scopes.sql with default scopes
-- [ ] T137 Insert default scopes: entity:read, entity:write, action:execute, agent:execute, query:run, view:run
+- [ ] T137 Insert default scopes with hierarchical structure: parent scopes (action, agent, communication, entity, prompt, query, view) and child scopes (action:read, action:execute, agent:read, agent:execute, communication:read, entity:create, entity:delete, entity:read, entity:update, prompt:read, prompt:execute, query:read, query:run, view:run)
 - [ ] T138 Add scope descriptions and categories for consent screen display
 - [ ] T139 Verify scopes appear in /oauth/scopes endpoint after migration
 
@@ -537,30 +544,31 @@ claude mcp add http://localhost:3100 --name "MJ MCP Server"
 | Phase 3: US1 (P1) | T011-T029 (19) | ✅ Complete |
 | Phase 4: US5 (P1) | T030-T052 (23) | ✅ Complete |
 | Phase 5: JWT Issuance | T053-T064 (12) | ✅ Complete |
-| Phase 6: US7 (P2) | T065-T079 (15) | ✅ Complete |
+| Phase 6: US7 (P2) | T065-T079d (19) | 🔄 In Progress (hierarchical scope matching) |
 | Phase 7: US6 (P2) | T080-T088 (9) | ✅ Complete |
 | Phase 8: US3 (P2) | T089-T096 (8) | ✅ Complete |
 | Phase 9: US2 (P2) | T097-T103 (7) | ✅ Complete |
 | Phase 10: US4 (P3) | T104-T112 (9) | ✅ Complete |
 | Phase 11: Edge Cases | T113-T123 (11) | ✅ Complete |
 | Phase 12: Remaining Work | T124-T144 (21) | 🔄 In Progress |
-| **Total** | **144** | |
+| **Total** | **148** | |
 
 ### Remaining Work Summary (from plan.md)
 
 | Category | Priority | Tasks | Description |
 |----------|----------|-------|-------------|
+| Hierarchical Scope Matching | P2 | T079a-T079d (4) | Implement FR-029a hierarchical prefix matching |
 | Integration Testing | P1 | T125-T130 (6) | Claude Code end-to-end OAuth flow validation |
 | Documentation | P2 | T132-T135 (4) | README and quickstart.md updates |
-| Seed Data | P2 | T136-T139 (4) | Default API scopes migration |
+| Seed Data | P2 | T136-T139 (4) | Default API scopes migration (updated for hierarchy) |
 | Error Page Styling | P3 | T140-T144 (5) | Improve error UX |
-| **Remaining Total** | | **19** | |
+| **Remaining Total** | | **23** | |
 
 ### Tasks per User Story (Implementation Complete)
 
 - **US1 (Browser Login)**: 19 tasks ✅ Complete
 - **US5 (Dynamic Registration)**: 23 tasks ✅ Complete
-- **US7 (Scope-Based Access)**: 15 tasks ✅ Complete
+- **US7 (Scope-Based Access)**: 19 tasks 🔄 In Progress (hierarchical scope matching)
 - **US6 (Web Login UI)**: 9 tasks ✅ Complete
 - **US3 (Token Refresh)**: 8 tasks ✅ Complete
 - **US2 (Admin Config)**: 7 tasks ✅ Complete

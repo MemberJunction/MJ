@@ -8,14 +8,17 @@
       "Description": "DANGER: Grants unrestricted access to all operations. This is a 'god power' scope that bypasses all other scope checks. Use with extreme caution and only for trusted system integrations.",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-shield-halved", "color": "#f59e0b"}
+      "UIConfig": {
+        "icon": "fa-solid fa-shield-halved",
+        "color": "#f59e0b"
+      }
     },
     "primaryKey": {
       "ID": "C262DF10-DCA6-41A3-A68B-2FB0925C97E5"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.787Z",
-      "checksum": "b8a36a59c77e77890546b3c0e75c3060d344e096b10702179f27ee7c02e62fb3"
+      "lastModified": "2026-01-29T01:37:10.993Z",
+      "checksum": "2def1a6808f8ed92ff7b9d91648ac91aecc6f9557fc831876178e1ad7e686957"
     }
   },
   {
@@ -27,14 +30,17 @@
       "Description": "Parent scope for RunQuery operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-database", "color": "#3b82f6"}
+      "UIConfig": {
+        "icon": "fa-solid fa-database",
+        "color": "#3b82f6"
+      }
     },
     "primaryKey": {
       "ID": "6B4F338F-7D29-4E08-9224-4C6B28AB77F0"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.800Z",
-      "checksum": "3154543d2262a319e747a6ef44574d34fb3630f1f988416f6f24da286931a12a"
+      "lastModified": "2026-01-29T01:37:05.925Z",
+      "checksum": "22b014adb292c0d186817a3b8dc3b85d81fbc085212f22206c17e3abcf5289b0"
     }
   },
   {
@@ -53,6 +59,24 @@
   },
   {
     "fields": {
+      "Name": "read",
+      "FullPath": "query:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=query",
+      "Category": "Queries",
+      "Description": "Discover and read query definitions",
+      "ResourceType": "Query",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "6613AD82-312D-40FC-8051-C5C580F6827F"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.446Z",
+      "checksum": "d46c54ba12af89c6e6a2b523e2f11836201b60bd939fbff2fb6c42bad531ddbc"
+    }
+  },
+  {
+    "fields": {
       "Name": "view",
       "FullPath": "view",
       "ParentID": null,
@@ -60,14 +84,17 @@
       "Description": "Parent scope for RunView operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-table-list", "color": "#06b6d4"}
+      "UIConfig": {
+        "icon": "fa-solid fa-table-list",
+        "color": "#06b6d4"
+      }
     },
     "primaryKey": {
       "ID": "ED5E88F4-2CAE-45B5-B452-1F5F6F034507"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.811Z",
-      "checksum": "9f03f265b3e85c2ff8f01b6b0bc4672b80e87f26e0acd4d33b066fcf8f953649"
+      "lastModified": "2026-01-29T01:37:10.904Z",
+      "checksum": "cb33af3ce9a751bb44eb4c19ff0c29b03e6e83e5f86bb133e9745c3f2c3ee01e"
     }
   },
   {
@@ -93,14 +120,17 @@
       "Description": "Parent scope for agent operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-robot", "color": "#10b981"}
+      "UIConfig": {
+        "icon": "fa-solid fa-robot",
+        "color": "#10b981"
+      }
     },
     "primaryKey": {
       "ID": "E26DD357-399D-47E2-B831-54743E47A870"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.823Z",
-      "checksum": "3b21b08c1cc8adada0e69be931c1be16976ce863ff9bd223979c320e492f170a"
+      "lastModified": "2026-01-29T01:37:10.921Z",
+      "checksum": "2e9fc565ee80e9abd48b7cd84636d25e3e5fe93b86e0d1e681d2fdfe119a4bf6"
     }
   },
   {
@@ -119,6 +149,24 @@
   },
   {
     "fields": {
+      "Name": "read",
+      "FullPath": "agent:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=agent",
+      "Category": "Agents",
+      "Description": "Discover and read AI agent definitions",
+      "ResourceType": "Agent",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "D3B72FF2-3F0D-4E29-B49C-B6B580F78245"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.465Z",
+      "checksum": "82cd81909ae50b87defbb71ccacc9af86cf15a1916d5fae4c60db57d59b05793"
+    }
+  },
+  {
+    "fields": {
       "Name": "monitor",
       "FullPath": "agent:monitor",
       "ParentID": "@lookup:MJ: API Scopes.FullPath=agent",
@@ -129,6 +177,10 @@
     },
     "primaryKey": {
       "ID": "E5BA5C42-323E-4828-AFBC-96BB23A2970C"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.497Z",
+      "checksum": "14982507316c682d7558e18ca2106caf936acf8f3270cb46196bd92aeca3a413"
     }
   },
   {
@@ -143,6 +195,10 @@
     },
     "primaryKey": {
       "ID": "139493D2-86E9-48C1-A820-BBEF44B6B6B7"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.521Z",
+      "checksum": "dc13195d7893f6da898e83014e33774ac92865f674c423d0acb8366fa04483a3"
     }
   },
   {
@@ -154,14 +210,17 @@
       "Description": "Parent scope for entity CRUD operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-table", "color": "#6366f1"}
+      "UIConfig": {
+        "icon": "fa-solid fa-table",
+        "color": "#6366f1"
+      }
     },
     "primaryKey": {
       "ID": "8E46B18C-8DBF-43A8-943E-E1039326105C"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.836Z",
-      "checksum": "e1be788d57b93fd1ff50e66bff9d32f71279a4cdeb4a9f8f6f3eaba56323e8c4"
+      "lastModified": "2026-01-29T01:37:10.932Z",
+      "checksum": "5fbf6b76f7d3259b22b189b6e54901f8f05f9edf2bd66709d9494f00473c8cc2"
     }
   },
   {
@@ -232,6 +291,10 @@
     },
     "primaryKey": {
       "ID": "F8021BDA-5E28-444E-A6D1-11045F8AFCD9"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.708Z",
+      "checksum": "5de0cb18398fe6058a3f1f11c274085ab360ef00a1bf7ecaf3f914bbfbdc9faa"
     }
   },
   {
@@ -243,14 +306,17 @@
       "Description": "Parent scope for action operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-bolt", "color": "#8b5cf6"}
+      "UIConfig": {
+        "icon": "fa-solid fa-bolt",
+        "color": "#8b5cf6"
+      }
     },
     "primaryKey": {
       "ID": "A1B2C3D4-1234-5678-9ABC-DEF012345678"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.850Z",
-      "checksum": "e02ce2468820b28601f8de12b58d6914bedc5a908f015770f39997079a7fa4ad"
+      "lastModified": "2026-01-29T01:37:10.938Z",
+      "checksum": "5b44e29a471c435178bbb249fe210161b1a0514dcf5e075a51e52ba39c8975d8"
     }
   },
   {
@@ -269,6 +335,24 @@
   },
   {
     "fields": {
+      "Name": "read",
+      "FullPath": "action:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=action",
+      "Category": "Actions",
+      "Description": "Discover and read action definitions and parameters",
+      "ResourceType": "Action",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "4693E497-26F1-4888-AD9F-0BE3D8149E49"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.664Z",
+      "checksum": "963f2cb941fbd951cfd75143cdc76a83430a992f86e069054630b3e6f95c39a0"
+    }
+  },
+  {
+    "fields": {
       "Name": "prompt",
       "FullPath": "prompt",
       "ParentID": null,
@@ -276,14 +360,17 @@
       "Description": "Parent scope for prompt operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-comment-dots", "color": "#f97316"}
+      "UIConfig": {
+        "icon": "fa-solid fa-comment-dots",
+        "color": "#f97316"
+      }
     },
     "primaryKey": {
       "ID": "C3D4E5F6-3456-789A-BCDE-F01234567890"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.861Z",
-      "checksum": "9ca868a0fd60f577c442ca7c7a5e3820e89e13d6dfc5a71d9d4a011130370aa0"
+      "lastModified": "2026-01-29T01:37:10.955Z",
+      "checksum": "316e795e1ab9a9334e150960372aba2f0de3dc1ea1199c9f76a21ed615f082a3"
     }
   },
   {
@@ -302,6 +389,24 @@
   },
   {
     "fields": {
+      "Name": "read",
+      "FullPath": "prompt:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=prompt",
+      "Category": "Prompts",
+      "Description": "Discover and read AI prompt definitions",
+      "ResourceType": "Prompt",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "0749560B-70A8-4FD0-B025-73E3725713B7"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.683Z",
+      "checksum": "dc58dec42c41b64fcc54598de4b5df7209fa058ad53d8a2d68a2f7b8de5ed0ba"
+    }
+  },
+  {
+    "fields": {
       "Name": "embedding",
       "FullPath": "embedding",
       "ParentID": null,
@@ -309,14 +414,17 @@
       "Description": "Parent scope for embedding operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-cube", "color": "#14b8a6"}
+      "UIConfig": {
+        "icon": "fa-solid fa-cube",
+        "color": "#14b8a6"
+      }
     },
     "primaryKey": {
       "ID": "83972D76-C9F0-4B4F-B0C9-612CA74955C6"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.873Z",
-      "checksum": "bdeb4170ebff8d25f1be15571c01227a19811d5429141c0468dc59754fb02697"
+      "lastModified": "2026-01-29T01:37:11.015Z",
+      "checksum": "d1924a80184b05764040409f838bee95958de9db34e533c14505d5f412368a4a"
     }
   },
   {
@@ -331,6 +439,10 @@
     },
     "primaryKey": {
       "ID": "A29708F7-2A24-424C-ABA2-2E8015057327"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.737Z",
+      "checksum": "123d74853cf4dff01c8b7f5caa42cb30c2b87d11cbf34e22da2125fcdd3363cc"
     }
   },
   {
@@ -342,14 +454,17 @@
       "Description": "Parent scope for template operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-file-code", "color": "#a855f7"}
+      "UIConfig": {
+        "icon": "fa-solid fa-file-code",
+        "color": "#a855f7"
+      }
     },
     "primaryKey": {
       "ID": "088DF604-0322-4F1F-9565-3F0BF810A4A2"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.883Z",
-      "checksum": "b0379da13990e67c482847b4d99c4ce3850ac8826383e0bead5eaba58c2a14e9"
+      "lastModified": "2026-01-29T01:37:11.036Z",
+      "checksum": "d51c18972638954db6899314653dc2f78c158bf714416dc7fed17326f6df32e1"
     }
   },
   {
@@ -364,6 +479,10 @@
     },
     "primaryKey": {
       "ID": "3FD0E2CF-4BEC-4982-83D1-346F33260169"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.764Z",
+      "checksum": "579242f3e28ca5425b1f8bab82cae0310f51a0acd4bc046bef1673edcdaeb817"
     }
   },
   {
@@ -375,14 +494,17 @@
       "Description": "Parent scope for dataset operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-table-cells", "color": "#0ea5e9"}
+      "UIConfig": {
+        "icon": "fa-solid fa-table-cells",
+        "color": "#0ea5e9"
+      }
     },
     "primaryKey": {
       "ID": "A76B8C74-89EF-42D8-9E80-CC1787C733C9"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.894Z",
-      "checksum": "bbd08f88de378d265da0a15b46f8adb5c30927c4e1f49f1b7047b6860a79630f"
+      "lastModified": "2026-01-29T01:37:11.057Z",
+      "checksum": "5c5e409ae4842db8a3466031567175cf1f0fbc7bd982209413df5bedcaf74bc1"
     }
   },
   {
@@ -397,6 +519,10 @@
     },
     "primaryKey": {
       "ID": "B93CBD38-042F-43E1-B838-8E16D3ED31E9"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.786Z",
+      "checksum": "57d5275e06c136ad1445fbc274ef478aa5b33a13a3aab9763832dd7b1b2c05de"
     }
   },
   {
@@ -408,14 +534,17 @@
       "Description": "Parent scope for task graph operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-list-check", "color": "#84cc16"}
+      "UIConfig": {
+        "icon": "fa-solid fa-list-check",
+        "color": "#84cc16"
+      }
     },
     "primaryKey": {
       "ID": "87366A22-ECAA-410D-9266-DD9675B7E3C6"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.976Z",
-      "checksum": "31c72694878584bceb711805cca834ddd763dd7ee91fcc08b36206106b4bfd4f"
+      "lastModified": "2026-01-29T01:37:11.103Z",
+      "checksum": "160502ac87de19d2f67d0bacc39a26eec56c320304135563358387d1c0facaa0"
     }
   },
   {
@@ -430,6 +559,10 @@
     },
     "primaryKey": {
       "ID": "A00BA25E-D852-4221-8038-B3118FBF7072"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.806Z",
+      "checksum": "e6b5a56c1e8a31f920b520338af55036a5efee31aa343652f489569fc28fc5ba"
     }
   },
   {
@@ -444,6 +577,10 @@
     },
     "primaryKey": {
       "ID": "96100CC6-3A9B-4252-96F3-80A55BFA6B65"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.925Z",
+      "checksum": "886379bd21b00c36062978c952b037138443cc5a26d72b84e5d7f187b1b7a038"
     }
   },
   {
@@ -458,6 +595,10 @@
     },
     "primaryKey": {
       "ID": "37C440A8-E17E-47E5-8763-8A44A4EE1F6D"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.946Z",
+      "checksum": "ca2d578ac85761827592749c4abff5a1cf9d8ac886dc2aed1944810c3196a953"
     }
   },
   {
@@ -469,14 +610,17 @@
       "Description": "Parent scope for data context operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-sitemap", "color": "#22c55e"}
+      "UIConfig": {
+        "icon": "fa-solid fa-sitemap",
+        "color": "#22c55e"
+      }
     },
     "primaryKey": {
       "ID": "3A9F004E-4286-4E48-AEF6-70EAFDC81259"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:07.988Z",
-      "checksum": "f5958014d5a6365fc815e468975a405ffacb9bfa8b88418be4495190fcfa9946"
+      "lastModified": "2026-01-29T01:37:11.124Z",
+      "checksum": "68d5f2aa8c8cd7435403a3eb9b85c12a9a30853a00a80cdad6ed6fc3c55b5ecf"
     }
   },
   {
@@ -491,6 +635,10 @@
     },
     "primaryKey": {
       "ID": "F807AEB6-156B-42F5-9D83-0E0C7DA78741"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.969Z",
+      "checksum": "d97cf6123da1de3706cf1642ae1b28d14a4cb5b6e8464217a5e58737ebdd2947"
     }
   },
   {
@@ -502,14 +650,17 @@
       "Description": "Parent scope for communication operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-envelope", "color": "#ec4899"}
+      "UIConfig": {
+        "icon": "fa-solid fa-envelope",
+        "color": "#ec4899"
+      }
     },
     "primaryKey": {
       "ID": "E95729D3-E14A-4676-BEAD-40CDD5016719"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:08.001Z",
-      "checksum": "415b2f3fac8e302abb4eb87078e0c169d8c852a4f0e9f711afac8870af49ac64"
+      "lastModified": "2026-01-29T01:37:11.144Z",
+      "checksum": "f274d6a52b3901bf9a2ff2f9e834483e4dd00c3155c7efed30f087a4252b73ab"
     }
   },
   {
@@ -524,6 +675,10 @@
     },
     "primaryKey": {
       "ID": "A89E8DEF-BE4A-498D-A52D-C5A36C718E8F"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.995Z",
+      "checksum": "c9dd31388517a7d6653798c954376ffc9810d4ce52fb25c9373be1ee22ad264a"
     }
   },
   {
@@ -535,14 +690,17 @@
       "Description": "Parent scope for API key management operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-key", "color": "#eab308"}
+      "UIConfig": {
+        "icon": "fa-solid fa-key",
+        "color": "#eab308"
+      }
     },
     "primaryKey": {
       "ID": "F89FF78E-957A-4A53-A12C-940C2A1441D2"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:08.013Z",
-      "checksum": "bd35a6bde3935cbdccb315bfa6a396bcf9e842b6566dca022cb851ffbdadeb9a"
+      "lastModified": "2026-01-29T01:37:11.163Z",
+      "checksum": "a9486a8fb247d01a28faceace1d0a08a0c9e93e1f96671bdcc513783d211168b"
     }
   },
   {
@@ -557,6 +715,10 @@
     },
     "primaryKey": {
       "ID": "0003F154-213E-4447-9D99-26025B2B37BD"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:12.018Z",
+      "checksum": "1d37a6abe24366f58872f296b4d97601ed285e5609a4d63d8a12e371fbfd44a1"
     }
   },
   {
@@ -571,6 +733,10 @@
     },
     "primaryKey": {
       "ID": "2E77A00A-D1CB-4791-8DF8-2D990EDB6208"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:12.042Z",
+      "checksum": "ecdf1ef09a8709decb6ab141d3404fdbeaf3f243c85cfb6d0a66d9dbf5068e85"
     }
   },
   {
@@ -582,14 +748,17 @@
       "Description": "Parent scope for user operations",
       "ResourceType": null,
       "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-user", "color": "#64748b"}
+      "UIConfig": {
+        "icon": "fa-solid fa-user",
+        "color": "#64748b"
+      }
     },
     "primaryKey": {
       "ID": "DF335D22-8DBA-4DA4-958F-946B7D824AFB"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:08.026Z",
-      "checksum": "cdcee4bdce3f1df8f30576871f1a325a29f474d577d312862045a6cc749d4a9a"
+      "lastModified": "2026-01-29T01:37:11.183Z",
+      "checksum": "0624da9d3205f6888d970d738d5d4eb17ebf8269a208ed8151831bb555667d68"
     }
   },
   {
@@ -604,32 +773,17 @@
     },
     "primaryKey": {
       "ID": "87DBFC60-587E-497B-8F9D-FAFA0FAC7EB8"
-    }
-  },
-  {
-    "fields": {
-      "Name": "metadata",
-      "FullPath": "metadata",
-      "ParentID": null,
-      "Category": "Metadata",
-      "Description": "Parent scope for metadata/discovery operations",
-      "ResourceType": null,
-      "IsActive": true,
-      "UIConfig": {"icon": "fa-solid fa-circle-info", "color": "#6366f1"}
-    },
-    "primaryKey": {
-      "ID": "35CB44CB-3DA8-4745-AFE8-37F6626254AC"
     },
     "sync": {
-      "lastModified": "2026-01-27T21:53:08.037Z",
-      "checksum": "cd125ae33285b3635503b67f1ca645827a2ac83d5a0beb54793159d1331fbefe"
+      "lastModified": "2026-01-29T01:37:12.067Z",
+      "checksum": "3ec17e8bb181127133aaf88c682eb7f52182bf492c436179d77820fde455fccb"
     }
   },
   {
     "fields": {
       "Name": "entities",
-      "FullPath": "metadata:entities",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "FullPath": "entities",
+      "ParentID": null,
       "Category": "Metadata",
       "Description": "Parent scope for entity metadata operations",
       "ResourceType": null,
@@ -637,13 +791,17 @@
     },
     "primaryKey": {
       "ID": "DD7078F9-53CB-461B-A9E5-3A9E85546DE2"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.206Z",
+      "checksum": "b1557cb35e0aef353541afc6308792b9375ac5ae795c7595fc246e830e065e20"
     }
   },
   {
     "fields": {
       "Name": "read",
-      "FullPath": "metadata:entities:read",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:entities",
+      "FullPath": "entities:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=entities",
       "Category": "Metadata",
       "Description": "Read entity schema/metadata definitions",
       "ResourceType": "Entity",
@@ -651,13 +809,17 @@
     },
     "primaryKey": {
       "ID": "71F7E12C-9FAD-490D-AAB9-123FF78C9C01"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:12.090Z",
+      "checksum": "639bec07d656f879b0f642ca6732d6266e0b3ff6e14e41da29c579d3b38345c9"
     }
   },
   {
     "fields": {
       "Name": "actions",
-      "FullPath": "metadata:actions",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "FullPath": "actions",
+      "ParentID": null,
       "Category": "Metadata",
       "Description": "Parent scope for action metadata operations",
       "ResourceType": null,
@@ -665,13 +827,17 @@
     },
     "primaryKey": {
       "ID": "99BF01DE-915A-4E9A-BD3D-604ECEDA4FB9"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.286Z",
+      "checksum": "40ac57cb2704f3d2babb8eac92aa2c0974f44ce58a36f156d136a62f57926697"
     }
   },
   {
     "fields": {
       "Name": "read",
-      "FullPath": "metadata:actions:read",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:actions",
+      "FullPath": "actions:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=actions",
       "Category": "Metadata",
       "Description": "Discover and read action definitions",
       "ResourceType": "Action",
@@ -679,13 +845,17 @@
     },
     "primaryKey": {
       "ID": "BBDEFE8E-8F8F-4984-97EC-DBEAF6FA3A08"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:12.114Z",
+      "checksum": "96c24b133f7c676377e5f2cbbaff71491609cee9ce2528bbe6bd09929c3fe5c6"
     }
   },
   {
     "fields": {
       "Name": "agents",
-      "FullPath": "metadata:agents",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "FullPath": "agents",
+      "ParentID": null,
       "Category": "Metadata",
       "Description": "Parent scope for agent metadata operations",
       "ResourceType": null,
@@ -693,13 +863,17 @@
     },
     "primaryKey": {
       "ID": "4F1A27D2-75F0-4D0B-8E1D-5344AB7C29E0"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.305Z",
+      "checksum": "b878fefc2ac7d624f1e1962c901170bb369654bb167b7f30fbe03a3e737dc24b"
     }
   },
   {
     "fields": {
       "Name": "read",
-      "FullPath": "metadata:agents:read",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:agents",
+      "FullPath": "agents:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=agents",
       "Category": "Metadata",
       "Description": "Discover and read agent definitions",
       "ResourceType": "Agent",
@@ -707,13 +881,17 @@
     },
     "primaryKey": {
       "ID": "95A3367C-1C4B-4F1D-973A-8BDD7A77D82A"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:12.136Z",
+      "checksum": "dd646d5e48716fe7a7fccb26efc6f9acdd45a305ab438e35077ddeed7f5cb215"
     }
   },
   {
     "fields": {
       "Name": "prompts",
-      "FullPath": "metadata:prompts",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "FullPath": "prompts",
+      "ParentID": null,
       "Category": "Metadata",
       "Description": "Parent scope for prompt metadata operations",
       "ResourceType": null,
@@ -721,13 +899,17 @@
     },
     "primaryKey": {
       "ID": "23954840-AC5D-494E-B6C9-DC87D10B76DF"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.332Z",
+      "checksum": "5b73816dd320e0d30485a6176e537ee76a8081358666703bf3332a0b87cf9863"
     }
   },
   {
     "fields": {
       "Name": "read",
-      "FullPath": "metadata:prompts:read",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:prompts",
+      "FullPath": "prompts:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=prompts",
       "Category": "Metadata",
       "Description": "Discover and read prompt definitions",
       "ResourceType": "Prompt",
@@ -735,13 +917,17 @@
     },
     "primaryKey": {
       "ID": "308991E2-F214-4A4C-94CF-9AE908A29BFC"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:12.187Z",
+      "checksum": "4efd688b5a173e3bd51370d521b1279dc8c7ba8e3b4d58682fdda7570f646c70"
     }
   },
   {
     "fields": {
       "Name": "queries",
-      "FullPath": "metadata:queries",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
+      "FullPath": "queries",
+      "ParentID": null,
       "Category": "Metadata",
       "Description": "Parent scope for query metadata operations",
       "ResourceType": null,
@@ -749,13 +935,17 @@
     },
     "primaryKey": {
       "ID": "D207CE40-E9A9-4A4E-9287-194C8FF53623"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:11.353Z",
+      "checksum": "c0971dcbe2657b72d73ce88cd31e7ec03c6071c619d4f2b740320badcf056c2d"
     }
   },
   {
     "fields": {
       "Name": "read",
-      "FullPath": "metadata:queries:read",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:queries",
+      "FullPath": "queries:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=queries",
       "Category": "Metadata",
       "Description": "Discover and read query definitions",
       "ResourceType": "Query",
@@ -763,27 +953,17 @@
     },
     "primaryKey": {
       "ID": "8825DDDB-FC26-412B-B7DC-E93FF7AB85FD"
-    }
-  },
-  {
-    "fields": {
-      "Name": "communication",
-      "FullPath": "metadata:communication",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata",
-      "Category": "Metadata",
-      "Description": "Parent scope for communication metadata operations",
-      "ResourceType": null,
-      "IsActive": true
     },
-    "primaryKey": {
-      "ID": "DCEC9CA5-F272-4525-8959-46C5FCCC301E"
+    "sync": {
+      "lastModified": "2026-01-29T01:37:12.213Z",
+      "checksum": "76be54b5b023db9cf71805df99a9a0adc11fc066698713216107e5a79a136282"
     }
   },
   {
     "fields": {
       "Name": "read",
-      "FullPath": "metadata:communication:read",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=metadata:communication",
+      "FullPath": "communication:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=communication",
       "Category": "Metadata",
       "Description": "Read communication provider information",
       "ResourceType": "Communication",
@@ -791,6 +971,10 @@
     },
     "primaryKey": {
       "ID": "DD430C14-9DF0-4A60-A292-4CF0FF078755"
+    },
+    "sync": {
+      "lastModified": "2026-01-29T01:37:12.234Z",
+      "checksum": "6cb148c45325244898f6f673df4791736b9ea5c291648406a8591f0e8494fc72"
     }
   }
 ]

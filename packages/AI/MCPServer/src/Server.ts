@@ -668,7 +668,7 @@ async function registerAllTools(
         name: "Get_Entity_List",
         description: "Retrieves a list of all entity names. Use Get_Single_Entity(entityName) to get full details including description, fields, and relationships for a specific entity.",
         parameters: z.object({}),
-        scopeInfo: { scopePath: 'metadata:entities:read', resource: '*' },
+        scopeInfo: { scopePath: 'entity:read', resource: '*' },
         async execute() {
             const md = new Metadata();
             // Just return entity names - minimal payload
@@ -684,7 +684,7 @@ async function registerAllTools(
         parameters: z.object({
             entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'AI Models')")
         }),
-        scopeInfo: (props) => ({ scopePath: 'metadata:entities:read', resource: props.entityName as string || '*' }),
+        scopeInfo: (props) => ({ scopePath: 'entity:read', resource: props.entityName as string || '*' }),
         async execute(params: Record<string, unknown>) {
             const entityName = params.entityName as string;
             const md = new Metadata();
@@ -1340,7 +1340,7 @@ async function loadActionTools(
                     pattern: z.string().optional().describe("Name pattern to match actions (supports wildcards: *, *Action, Action*, *Action*)"),
                     category: z.string().optional().describe("Category name to filter actions")
                 }),
-                scopeInfo: { scopePath: 'metadata:actions:read', resource: '*' },
+                scopeInfo: { scopePath: 'action:read', resource: '*' },
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const actions = await discoverActions(props.pattern as string || '*', props.category as string | undefined, sessionUser);
@@ -1444,7 +1444,7 @@ async function loadActionTools(
                     actionName: z.string().optional().describe("Name of the action"),
                     actionId: z.string().optional().describe("ID of the action")
                 }),
-                scopeInfo: (props) => ({ scopePath: 'metadata:actions:read', resource: (props.actionName as string) || (props.actionId as string) || '*' }),
+                scopeInfo: (props) => ({ scopePath: 'action:read', resource: (props.actionName as string) || (props.actionId as string) || '*' }),
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const actionEngine = ActionEngineServer.Instance;
@@ -1657,7 +1657,7 @@ async function loadAgentTools(
                 parameters: z.object({
                     pattern: z.string().describe("Name pattern to match agents (supports wildcards: *, *Agent, Agent*, *Agent*)")
                 }),
-                scopeInfo: { scopePath: 'metadata:agents:read', resource: '*' },
+                scopeInfo: { scopePath: 'agent:read', resource: '*' },
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const agents = await discoverAgents(props.pattern as string, sessionUser);
@@ -2135,7 +2135,7 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 pattern: z.string().optional().describe("Name pattern to match queries (supports wildcards: *, *Query, Query*, *Query*)"),
                 category: z.string().optional().describe("Category name or path to filter queries (e.g., 'Reports', '/MJ/AI/')")
             }),
-            scopeInfo: { scopePath: 'metadata:queries:read', resource: '*' },
+            scopeInfo: { scopePath: 'query:read', resource: '*' },
             async execute(props) {
                 const sessionUser = sessionContext.user;
 
@@ -2249,7 +2249,7 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 schemaFilter: z.string().optional().describe("Filter by schema name (e.g., 'dbo', '__mj')"),
                 entityFilter: z.string().optional().describe("Filter by entity name pattern")
             }),
-            scopeInfo: { scopePath: 'metadata:entities:read', resource: '*' },
+            scopeInfo: { scopePath: 'entity:read', resource: '*' },
             async execute(props) {
                 const md = new Metadata();
                 let entities = md.Entities;
@@ -2343,7 +2343,7 @@ async function loadPromptTools(
                     pattern: z.string().optional().describe("Name pattern to match prompts (supports wildcards)"),
                     category: z.string().optional().describe("Category name to filter prompts")
                 }),
-                scopeInfo: { scopePath: 'metadata:prompts:read', resource: '*' },
+                scopeInfo: { scopePath: 'prompt:read', resource: '*' },
                 async execute(props) {
                     const sessionUser = sessionContext.user;
 
@@ -2511,7 +2511,7 @@ function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MC
             name: "Get_Communication_Providers",
             description: "List available communication providers configured in the system",
             parameters: z.object({}),
-            scopeInfo: { scopePath: 'metadata:communication:read', resource: '*' },
+            scopeInfo: { scopePath: 'communication:read', resource: '*' },
             async execute() {
                 const sessionUser = sessionContext.user;
                 const rv = new RunView();

@@ -1,179 +1,145 @@
-# Implementation Plan: MCP Server OAuth Authentication with OAuth Proxy
+# Implementation Plan: MCP Server OAuth - Hierarchical Scope Matching (Incremental)
 
 **Branch**: `601-mcp-oauth` | **Date**: 2026-01-28 | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `/specs/601-mcp-oauth/spec.md`
+**Input**: Staged changes to spec.md adding hierarchical scope matching (FR-029a)
+
+**Note**: This is an **incremental plan** based on staged changes to the feature spec. The core OAuth implementation is substantially complete.
 
 ## Summary
 
-Add OAuth 2.1 authentication support to the MCP Server as a toggleable alternative to API key authentication. The implementation includes an OAuth Proxy Authorization Server that enables MCP clients (like Claude Code) to authenticate via browser login using the organization's existing identity provider (Auth0, MSAL/Azure AD, Okta, Cognito, or Google) without requiring manual app registration. The proxy implements RFC 7591 Dynamic Client Registration and issues its own JWTs with MemberJunction-specific scopes stored in the database.
+This incremental update adds **hierarchical scope matching** to the MCP Server OAuth implementation. When a user grants a parent scope (e.g., `entity`), tools should accept that as authorization for any child scope (e.g., `entity:read`, `entity:update`). This enables future sub-scopes to work automatically without re-issuing tokens.
 
-**Note**: This implementation is **substantially complete** in the current codebase. This plan documents the existing architecture and any remaining work.
+## Staged Spec Changes Analysis
+
+### New Q&A (Clarification)
+- **Q**: How should scope hierarchy be evaluated?
+- **A**: Store parent scope only in JWT, tools match by prefix. If user grants `entity`, JWT stores `entity`. Tools check if granted scopes include the required scope OR any parent prefix.
+
+### Terminology Update
+- Changed `entity:write` → `entity:update` for consistency throughout the spec
+
+### New Functional Requirement (FR-029a)
+Tools MUST implement hierarchical scope matching: a scope check for `entity:read` succeeds if the token contains `entity:read` OR `entity` (parent scope).
+
+### Updated API Scope Definition
+Added canonical base scopes table:
+
+| Parent | Sub-scopes |
+|--------|------------|
+| `action` | `action:execute` |
+| `agent` | `agent:execute` |
+| `entity` | `entity:create`, `entity:delete`, `entity:read`, `entity:update` |
+| `prompt` | `prompt:execute` |
+| `query` | `query:run` |
+| `view` | `view:run` |
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.x, Node.js 18+ (20+ recommended)
-**Primary Dependencies**:
-- `@memberjunction/server` (auth providers: BaseAuthProvider, AuthProviderFactory)
-- `@modelcontextprotocol/sdk` (MCP protocol implementation)
-- `express` (HTTP server and routing)
-- `jsonwebtoken` (JWT signing/verification for proxy tokens)
-- `jwks-rsa` (JWKS client for upstream token validation)
-
-**Storage**:
-- SQL Server (MemberJunction database) for `APIScope`, `APIKeyScope`, `APIApplication` entities
-- In-memory for OAuth proxy state (authorization codes, registered clients)
-
-**Testing**: Manual integration testing with Claude Code and other MCP clients
-
-**Target Platform**: Node.js server (same as MCP Server)
-
-**Performance Goals**:
-- <100ms token validation overhead
-- <5s dynamic client registration
-- <90s full OAuth flow (registration + login + token)
-
-**Constraints**:
-- PKCE (S256) required for all OAuth flows
-- No client_secret for upstream providers (PKCE-only, same as MJExplorer SPA)
-- In-memory state (server restart clears registered clients - they re-register)
-
-**Scale/Scope**: Single upstream identity provider per MCP Server deployment
+**Language/Version**: TypeScript 5.x, Node.js 18+
+**Primary Dependencies**: `@memberjunction/server` (auth providers), `@modelcontextprotocol/sdk`, `express`, `jsonwebtoken`
+**Storage**: In-memory for OAuth proxy state; SQL Server for APIScope entities
+**Testing**: Manual integration testing with Claude Code
+**Target Platform**: Node.js server (MCP Server)
+**Project Type**: Monorepo package (packages/AI/MCPServer)
 
 ## Constitution Check
 
-*GATE: Verified against MemberJunction Constitution v1.1.0*
+*All gates PASS - no violations*
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| I. Metadata-Driven Development | PASS | Scopes stored in `APIScope` entity, managed via MJ admin UI |
-| II. Type Safety (NON-NEGOTIABLE) | PASS | All code uses explicit TypeScript types, no `any` usage |
-| III. Actions as Boundaries | PASS | OAuth is internal infrastructure, uses `@memberjunction/server` directly |
-| IV. Functional Decomposition | PASS | Auth module split into focused files (<300 lines each) |
-| V. Angular NgModules | N/A | No Angular components in this feature |
-| VI. Entity Access Pattern | PASS | Uses `Metadata.GetEntityObject<T>()` and `RunView<T>()` with contextUser |
-| VII. Query Optimization | PASS | Uses `ResultType: 'simple'` for scope lookups with caching |
-| VIII. Batch Operations | PASS | Loads all scopes in single query, cached for 5 minutes |
-| IX. Naming Conventions | PASS | PascalCase for public members, camelCase for private |
-| X. CodeGen Workflow | PASS | Database migrations use CodeGen for views/SPs |
+| I. Metadata-Driven | ✅ PASS | Scopes stored in database entity, no hardcoding |
+| II. Type Safety | ✅ PASS | ScopeEvaluator interface properly typed |
+| III. Actions as Boundaries | ✅ PASS | ScopeEvaluator is internal helper, not Action |
+| IV. Functional Decomposition | ✅ PASS | Scope matching is single-purpose function |
+| V. Angular NgModules | N/A | No Angular components in this change |
+| VI. Entity Access Pattern | ✅ PASS | Scopes loaded via RunView with proper typing |
+| VII. Query Optimization | ✅ PASS | Scopes loaded once at startup/consent |
+| VIII. Batch Operations | ✅ PASS | All scopes loaded in single query |
+| IX. Naming Conventions | ✅ PASS | PascalCase for public methods |
+| X. CodeGen Workflow | ✅ PASS | No generated files modified |
 
-## Project Structure
+## Artifacts Updated
 
-### Documentation (this feature)
+### 1. data-model.md
+**Changes**:
+- Updated `ScopeEvaluator` interface with hierarchical matching documentation
+- Added `hasParentScope()` method to interface
+- Added detailed JSDoc explaining prefix matching behavior
+- Added "Canonical Base Scopes" table with hierarchy definition
 
-```text
-specs/601-mcp-oauth/
-├── plan.md              # This file
-├── research.md          # Phase 0: OAuth specification research
-├── data-model.md        # Phase 1: Entity and scope definitions
-├── quickstart.md        # Phase 1: Configuration guide
-├── contracts/           # Phase 1: OAuth endpoint specifications
-│   └── oauth-api.yaml   # OpenAPI 3.0 specification
-└── tasks.md             # Phase 2 output (created by /speckit.tasks)
+### 2. tasks.md
+**Changes**:
+- Updated T137 to include parent scopes and use `entity:update` instead of `entity:write`
+- Added new tasks T079a-T079d for hierarchical scope implementation:
+  - T079a: Implement prefix matching in ScopeEvaluator
+  - T079b: Add hasParentScope() method
+  - T079c: Add unit tests for hierarchical behavior
+  - T079d: Update JSDoc documentation
+- Updated Phase 6 status to "In Progress"
+- Updated task counts (144 → 148 total, 19 → 23 remaining)
+
+### 3. contracts/oauth-proxy-api.yaml
+**Status**: No changes needed
+- Hierarchical scope matching is tool-side behavior
+- API contract (scope names as strings) unchanged
+
+## New Tasks Summary
+
+| Task ID | Description | Priority |
+|---------|-------------|----------|
+| T079a | Implement hierarchical prefix matching in ScopeEvaluator | P2 |
+| T079b | Add hasParentScope() method | P2 |
+| T079c | Add unit tests for hierarchical behavior | P2 |
+| T079d | Update JSDoc documentation | P2 |
+
+## Implementation Notes
+
+### Hierarchical Matching Algorithm
+
+```typescript
+hasScope(requiredScope: string): boolean {
+  // 1. Check exact match
+  if (this.scopes.includes(requiredScope)) {
+    return true;
+  }
+
+  // 2. Check parent scope match
+  // e.g., 'entity:read' → check if 'entity' is granted
+  const parts = requiredScope.split(':');
+  if (parts.length > 1) {
+    const parentScope = parts[0]; // 'entity' from 'entity:read'
+    return this.scopes.includes(parentScope);
+  }
+
+  return false;
+}
 ```
 
-### Source Code (existing implementation)
+### Seed Data Update
 
-```text
-packages/AI/MCPServer/
-├── src/
-│   ├── Server.ts              # Main server with OAuth integration
-│   ├── config.ts              # Configuration loading and validation
-│   └── auth/                  # OAuth authentication module
-│       ├── index.ts           # Module exports
-│       ├── types.ts           # TypeScript interfaces
-│       ├── OAuthConfig.ts     # OAuth configuration types
-│       ├── OAuthProxyTypes.ts # OAuth proxy types
-│       ├── AuthGate.ts        # Request authentication middleware
-│       ├── TokenValidator.ts  # JWT validation logic
-│       ├── JWTIssuer.ts       # Proxy JWT signing (HS256)
-│       ├── ScopeService.ts    # Database scope loading
-│       ├── ScopeEvaluator.ts  # Scope-based authorization
-│       ├── ClientRegistry.ts  # RFC 7591 dynamic client registration
-│       ├── AuthorizationStateManager.ts  # OAuth state tracking
-│       ├── AuthorizationServerMetadataBuilder.ts  # RFC 8414 metadata
-│       ├── ProtectedResourceMetadata.ts  # RFC 9728 metadata
-│       ├── OAuthProxyRouter.ts    # OAuth proxy endpoints
-│       ├── WWWAuthenticate.ts     # RFC 9728 headers
-│       ├── ConsentPage.ts         # Scope consent UI
-│       ├── LoginPage.ts           # Web login UI
-│       └── styles.ts              # Shared CSS styles
+The default scopes migration should include both parent and child scopes:
 
-packages/MJServer/src/auth/
-├── BaseAuthProvider.ts        # Abstract base for auth providers
-├── AuthProviderFactory.ts     # Provider registry and factory
-└── providers/
-    ├── Auth0Provider.ts       # Auth0 implementation
-    ├── MSALProvider.ts        # Azure AD implementation
-    ├── OktaProvider.ts        # Okta implementation
-    ├── CognitoProvider.ts     # AWS Cognito implementation
-    └── GoogleProvider.ts      # Google implementation
+**Parent Scopes** (grant all children):
+- `entity`, `action`, `agent`, `prompt`, `query`, `view`
 
-migrations/v3/
-├── V202601211825__v3.2.x__APIKeys.sql           # APIKey, APIScope tables
-├── V202601261008__v3.3.x__API_Key_Scopes_Authorization.sql  # Hierarchical scopes
-└── V202601271500__v3.4.x__APIScope_UIConfig.sql # UI presentation metadata
-```
+**Child Scopes** (specific permissions):
+- `entity:create`, `entity:delete`, `entity:read`, `entity:update`
+- `action:execute`, `agent:execute`, `prompt:execute`
+- `query:run`, `view:run`
 
-**Structure Decision**: Monorepo structure using existing packages. OAuth implementation in `packages/AI/MCPServer/src/auth/`, auth providers reused from `packages/MJServer/src/auth/`.
+## Execution Order
 
-## Complexity Tracking
+1. **T079a**: Implement prefix matching (blocking for other scope tasks)
+2. **T079b-d**: Can run in parallel after T079a
+3. **T137**: Update seed data migration (independent)
 
-> No constitution violations requiring justification. Implementation follows all principles.
+## Branch and Path Summary
 
-| Area | Complexity Level | Justification |
-|------|-----------------|---------------|
-| OAuth Proxy | Medium | Required for RFC 7591 dynamic registration (Azure AD doesn't support it natively) |
-| In-memory state | Low | Acceptable for MVP; clients re-register on restart |
-| Scope hierarchy | Medium | Enables fine-grained permissions with inheritance |
-
-## Implementation Status
-
-### Completed Components
-
-| Component | File | Status |
-|-----------|------|--------|
-| Auth modes (apiKey, oauth, both, none) | AuthGate.ts | Complete |
-| Token validation | TokenValidator.ts | Complete |
-| JWT issuing (HS256) | JWTIssuer.ts | Complete |
-| Dynamic client registration | ClientRegistry.ts | Complete |
-| OAuth proxy endpoints | OAuthProxyRouter.ts | Complete |
-| Protected resource metadata | ProtectedResourceMetadata.ts | Complete |
-| Authorization server metadata | AuthorizationServerMetadataBuilder.ts | Complete |
-| State management | AuthorizationStateManager.ts | Complete |
-| Scope loading from DB | ScopeService.ts | Complete |
-| Scope evaluation | ScopeEvaluator.ts | Complete |
-| Login page UI | LoginPage.ts | Complete |
-| Consent page UI | ConsentPage.ts | Complete |
-| Database migrations | migrations/v3/*.sql | Complete |
-| Provider implementations | MJServer/src/auth/providers/ | Complete |
-
-### Remaining Work
-
-| Item | Priority | Notes |
-|------|----------|-------|
-| Integration testing with Claude Code | P1 | Verify full flow works |
-| Documentation updates | P2 | README, configuration examples |
-| Seed data for default scopes | P2 | Pre-populate common scopes |
-| Error page styling | P3 | Improve error UX |
-
-## Key Design Decisions
-
-### 1. OAuth Proxy Pattern
-**Decision**: Implement OAuth proxy rather than direct upstream token passthrough
-**Rationale**: Azure AD doesn't support RFC 7591 Dynamic Client Registration. The proxy enables MCP clients to authenticate without manual app registration.
-
-### 2. PKCE-Only for Upstream
-**Decision**: Use PKCE without client_secret for upstream provider authentication
-**Rationale**: Allows reuse of MJExplorer's existing OAuth app registration (public/SPA client). Users only add `/oauth/callback` redirect URI.
-
-### 3. HS256 for Proxy JWTs
-**Decision**: Sign proxy-issued tokens with HS256 (symmetric)
-**Rationale**: Simpler than asymmetric keys, configurable secret in mj.config.cjs, sufficient for MCP Server's trust model.
-
-### 4. Database-Stored Scopes
-**Decision**: Store scopes in `APIScope` entity with hierarchy
-**Rationale**: Enables dynamic scope management via MJ admin UI, applies to both OAuth and API keys (system-wide).
-
-### 5. In-Memory State Storage
-**Decision**: Store registered clients and authorization state in memory
-**Rationale**: Acceptable for MVP. Clients re-register on server restart. Simplifies deployment without external state store.
+- **Branch**: `601-mcp-oauth`
+- **Plan Path**: `/specs/601-mcp-oauth/plan.md`
+- **Generated Artifacts**:
+  - Updated: `data-model.md` (ScopeEvaluator interface)
+  - Updated: `tasks.md` (new tasks T079a-d, updated T137)
+  - Unchanged: `contracts/oauth-proxy-api.yaml`
+  - Unchanged: `research.md`, `quickstart.md`
