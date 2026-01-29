@@ -450,9 +450,409 @@ The MCP protocol uses JSON-RPC 2.0 over Server-Sent Events for communication.
 
 ## Security and Authentication
 
-The MCP Server uses API key authentication to secure access. All requests must include a valid API key in the request headers.
+The MCP Server supports multiple authentication methods: API keys, OAuth 2.1 Bearer tokens, or both (default). This flexibility enables different deployment scenarios - from simple API key authentication for CLI tools to OAuth for browser-based and enterprise integrations.
 
-### Authentication Overview
+### Authentication Modes
+
+Configure the authentication mode in `mj.config.cjs`:
+
+```javascript
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+
+    // Authentication configuration
+    auth: {
+      // 'apiKey' - API key only
+      // 'oauth' - OAuth Bearer tokens only
+      // 'both' (default) - Accept either (API key takes precedence)
+      // 'none' - No authentication (development only!)
+      mode: 'both',
+
+      // Resource identifier for OAuth audience validation
+      // Required for OAuth modes - must match token's 'aud' claim
+      resourceIdentifier: 'https://mcp.example.com',
+
+      // Auto-generate resourceIdentifier from server URL (default: true)
+      // If true and resourceIdentifier not set, uses http://localhost:{port}
+      autoResourceIdentifier: true,
+    },
+    // ... other settings
+  },
+
+  // OAuth providers (shared with MJExplorer)
+  // Required when auth.mode is 'oauth' or 'both'
+  authProviders: [
+    {
+      name: 'azure-ad',
+      type: 'msal',
+      clientId: 'your-client-id',
+      tenantId: 'your-tenant-id',
+      issuer: 'https://login.microsoftonline.com/{tenant}/v2.0',
+      audience: 'api://your-app-id',
+      jwksUri: 'https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys'
+    }
+  ]
+}
+```
+
+### OAuth Configuration Examples
+
+#### Mode: both (Default)
+
+```javascript
+// No auth config needed - defaults to 'both' mode
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    // auth not specified = mode: 'both' (accepts API keys or OAuth tokens)
+  }
+}
+```
+
+#### Mode: apiKey (API Key Only)
+
+```javascript
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    auth: {
+      mode: 'apiKey'  // Only accept API keys, reject OAuth tokens
+    }
+  }
+}
+```
+
+#### Mode: oauth (OAuth Only)
+
+```javascript
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    auth: {
+      mode: 'oauth',
+      resourceIdentifier: 'https://mcp.example.com'
+    }
+  },
+  authProviders: [
+    {
+      name: 'azure-ad',
+      type: 'msal',
+      clientId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+      tenantId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+      issuer: 'https://login.microsoftonline.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/v2.0',
+      audience: 'api://mcp-server',
+      jwksUri: 'https://login.microsoftonline.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/discovery/v2.0/keys'
+    }
+  ]
+}
+```
+
+#### Mode: both (Explicit Configuration)
+
+```javascript
+// Explicitly configure 'both' mode with custom resource identifier
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    auth: {
+      mode: 'both',  // Accept API keys OR OAuth tokens (this is also the default)
+      resourceIdentifier: 'https://mcp.example.com'  // Custom audience for OAuth validation
+    }
+  },
+  authProviders: [/* ... */]
+}
+```
+
+#### Mode: none (Development Only)
+
+```javascript
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    auth: {
+      mode: 'none'  // WARNING: No authentication - development only!
+    }
+  }
+}
+```
+
+### OAuth Protocol Flow
+
+When OAuth is enabled, the MCP Server implements [RFC 9728 Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728):
+
+1. **Client connects without credentials** → Server returns `401 Unauthorized` with `WWW-Authenticate` header
+2. **Client fetches metadata** → `GET /.well-known/oauth-protected-resource` returns authorization server URLs
+3. **Client authenticates with IdP** → Completes OAuth flow with configured provider (Azure AD, Auth0, etc.)
+4. **Client retries with Bearer token** → `Authorization: Bearer <access_token>`
+5. **Server validates token** → Checks signature, expiration, audience, and maps to MemberJunction user
+6. **Tool calls execute** → With authenticated user's permissions
+
+### OAuth Endpoints
+
+When OAuth is enabled:
+
+- `GET /.well-known/oauth-protected-resource` - Protected Resource Metadata (RFC 9728)
+
+Example response:
+```json
+{
+  "resource": "https://mcp.example.com",
+  "authorization_servers": ["https://login.microsoftonline.com/tenant-id/v2.0"],
+  "scopes_supported": ["openid", "profile", "email"],
+  "bearer_methods_supported": ["header"],
+  "resource_name": "MemberJunction MCP Server"
+}
+```
+
+### OAuth Error Responses
+
+| Status | When | Response |
+|--------|------|----------|
+| 401 Unauthorized | Missing/invalid token | `WWW-Authenticate: Bearer resource_metadata="..."` |
+| 403 Forbidden | Valid token, user not in MJ | `WWW-Authenticate: Bearer error="insufficient_scope"` |
+| 503 Service Unavailable | OAuth provider unreachable | `Retry-After: 30` |
+
+### HTTPS Requirements
+
+For production OAuth deployments:
+
+- **Required**: HTTPS for the MCP Server endpoint
+- **Required**: Valid TLS certificate (not self-signed)
+- **Required**: `resourceIdentifier` must match the server's public URL
+
+Development mode (`http://localhost`) works for testing but should never be used in production when handling OAuth tokens.
+
+### Supported OAuth Providers
+
+The MCP Server uses MJServer's auth provider infrastructure, supporting:
+
+- **Azure AD (MSAL)** - Microsoft identity platform
+- **Auth0** - Universal authentication
+- **Okta** - Enterprise identity
+- **Cognito** - AWS authentication
+- **Google** - Google OAuth 2.0
+
+Configure providers in the `authProviders` array (shared with MJExplorer).
+
+---
+
+### OAuth Proxy (Dynamic Client Registration)
+
+The OAuth Proxy enables MCP clients like Claude Code to authenticate via your identity provider (e.g., Azure AD) **without requiring manual app registration for each client**. It implements [RFC 7591 Dynamic Client Registration](https://datatracker.ietf.org/doc/html/rfc7591), allowing the MCP Server to act as an OAuth Authorization Server that proxies authentication to your upstream provider.
+
+#### Why Use the OAuth Proxy?
+
+Without the OAuth Proxy, each MCP client would need to:
+1. Be manually registered in your identity provider (Azure AD, Auth0, etc.)
+2. Have its own client ID configured
+3. Handle provider-specific authentication flows
+
+With the OAuth Proxy:
+1. MCP clients dynamically register with the MCP Server
+2. The MCP Server handles all identity provider interaction
+3. Users authenticate via a simple web-based login flow
+4. Users select scopes via a consent screen (optional)
+5. No manual client registration required in your IdP
+
+#### Full OAuth Proxy Configuration
+
+```javascript
+module.exports = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    auth: {
+      mode: 'both',  // 'apiKey' | 'oauth' | 'both' | 'none'
+      proxy: {
+        enabled: true,
+
+        // Upstream provider (optional - defaults to first configured provider)
+        upstreamProvider: 'azure',  // Match 'name' field in authProviders
+
+        // Consent Screen - prompts users to select scopes during auth
+        // Scopes are loaded from __mj.APIScope table in the database
+        // When false, all available scopes are granted automatically
+        enableConsentScreen: true,
+
+        // JWT Signing - proxy issues its own JWTs (not upstream provider tokens)
+        // Configure a secret for consistent validation across server restarts
+        jwtSigningSecret: process.env.MCP_JWT_SECRET,  // Required for production
+        jwtExpiresIn: '1h',  // Token expiration (default: 1h)
+
+        // TTL settings
+        clientTtlMs: 24 * 60 * 60 * 1000,  // 24 hours (default)
+        stateTtlMs: 10 * 60 * 1000,  // 10 minutes (default)
+      },
+    },
+  },
+}
+```
+
+#### Consent Screen
+
+When `enableConsentScreen: true`, users are presented with a scope selection screen after authenticating with the upstream provider. This provides:
+
+- **Transparency**: Users see exactly what permissions they're granting
+- **Security**: Principle of least privilege - users select only needed scopes
+- **Flexibility**: Different sessions can have different scope levels
+
+The consent screen shows:
+- A "Grant All" checkbox for convenience
+- Collapsible category groups (from `APIScope.Category`)
+- Individual scope checkboxes with descriptions
+
+**Default behavior**: No scopes are pre-selected. Users must explicitly select scopes or click "Grant All".
+
+#### JWT Signing Configuration
+
+The OAuth Proxy issues its own JWTs rather than passing through upstream provider tokens. This provides:
+
+- **Consistent format**: Same JWT structure regardless of upstream provider
+- **MemberJunction context**: JWTs include `mjUserId`, `email`, and granted `scopes`
+- **Scope enforcement**: Tools receive the JWT and can evaluate scopes
+
+**Important**: Configure `jwtSigningSecret` in production for token persistence across server restarts.
+
+```javascript
+// Environment variable (recommended)
+jwtSigningSecret: process.env.MCP_JWT_SECRET,
+
+// Or generate a secure secret:
+// node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+#### Provider-Specific Redirect URI Setup
+
+When using the OAuth Proxy, you must add a redirect URI to your identity provider. The redirect URI is:
+
+- **Development**: `http://localhost:3100/oauth/callback`
+- **Production**: `https://your-mcp-server.com/oauth/callback`
+
+##### Azure AD / Entra ID
+
+1. Go to **Azure Portal** → **App Registrations** → Your App → **Authentication**
+2. Under **Single-page application** platform (same as MJExplorer), add:
+   - `http://localhost:3100/oauth/callback` (development)
+   - `https://your-mcp-server.com/oauth/callback` (production)
+3. Ensure **Access tokens** and **ID tokens** are checked
+4. No client secret needed - the proxy uses PKCE
+
+##### Auth0
+
+1. Go to **Auth0 Dashboard** → **Applications** → Your App → **Settings**
+2. Under **Allowed Callback URLs**, add:
+   - `http://localhost:3100/oauth/callback` (development)
+   - `https://your-mcp-server.com/oauth/callback` (production)
+3. Under **Allowed Web Origins**, add your MCP server URL
+4. Save changes
+
+##### Okta
+
+1. Go to **Okta Admin Console** → **Applications** → Your App → **General**
+2. Under **Login redirect URIs**, add:
+   - `http://localhost:3100/oauth/callback` (development)
+   - `https://your-mcp-server.com/oauth/callback` (production)
+3. Ensure **Authorization Code** grant type is enabled
+4. Save changes
+
+##### AWS Cognito
+
+1. Go to **AWS Console** → **Cognito** → **User Pools** → Your Pool → **App Integration**
+2. Under **App client settings**, find your app client
+3. Add to **Callback URL(s)**:
+   - `http://localhost:3100/oauth/callback` (development)
+   - `https://your-mcp-server.com/oauth/callback` (production)
+4. Enable **Authorization code grant** under OAuth 2.0
+5. Save changes
+
+##### Google Identity Platform
+
+1. Go to **Google Cloud Console** → **APIs & Services** → **Credentials**
+2. Edit your OAuth 2.0 Client ID
+3. Under **Authorized redirect URIs**, add:
+   - `http://localhost:3100/oauth/callback` (development)
+   - `https://your-mcp-server.com/oauth/callback` (production)
+4. Save changes
+
+#### OAuth Proxy Endpoints
+
+When the OAuth Proxy is enabled, these additional endpoints are available:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /.well-known/oauth-authorization-server` | Authorization server metadata (RFC 8414) |
+| `POST /oauth/register` | Dynamic client registration (RFC 7591) |
+| `GET /oauth/authorize` | Authorization endpoint (redirects to upstream IdP) |
+| `POST /oauth/token` | Token endpoint (exchanges codes for tokens) |
+| `GET /oauth/callback` | Callback from upstream IdP after user authenticates |
+| `GET /oauth/consent` | Consent screen for scope selection (if enabled) |
+| `POST /oauth/consent` | Submit scope selection |
+| `GET /oauth/scopes` | List available scopes |
+
+#### OAuth Proxy Authentication Flow
+
+```
+1. MCP Client connects to MCP Server
+2. Server returns 401 with WWW-Authenticate header
+3. Client fetches /.well-known/oauth-authorization-server
+4. Client dynamically registers via POST /oauth/register
+5. Client redirects user to GET /oauth/authorize
+6. User authenticates with upstream provider (Azure AD, etc.)
+7. Provider redirects to GET /oauth/callback
+8. [If consent enabled] User selects scopes on consent screen
+9. Server creates authorization code
+10. Client exchanges code for tokens via POST /oauth/token
+11. Server issues proxy JWT with selected scopes
+12. Client uses JWT for subsequent MCP tool calls
+```
+
+#### Troubleshooting OAuth Proxy
+
+**Error: "AADSTS50011: The reply URL specified in the request does not match..."**
+
+This error means the redirect URI isn't configured correctly in Azure AD.
+
+**Fix:** Add `http://localhost:3100/oauth/callback` (or your production URL) as a redirect URI in your existing **Single-page application** platform configuration. This is the same platform MJExplorer uses - just add the additional redirect URI.
+
+**Error: "AADSTS9002325: Proof Key for Code Exchange is required for cross-origin authorization code redemption"**
+
+This error means PKCE is required but not being used properly.
+
+**Fix:** This should not occur with the OAuth Proxy as it automatically generates PKCE code_verifier and code_challenge for upstream flows. If you see this error, ensure you're using the latest version of the MCP Server.
+
+**Error: "OAuth Proxy: No upstream provider configured"**
+
+This error means no auth providers are available for the OAuth Proxy to use.
+
+**Fix:** Ensure you have at least one auth provider configured (either via `authProviders` in config or via environment variables like `AUTH_TYPE`, `WEB_CLIENT_ID`, `TENANT_ID`).
+
+**Error: "OAuth Proxy: Failed to exchange authorization code"**
+
+This error typically means the upstream provider rejected the token exchange.
+
+**Fix:**
+1. Verify the redirect URI matches exactly (including trailing slashes)
+2. Check that your OAuth app registration allows the authorization_code grant type
+3. Ensure the app is configured for public client flows (PKCE) in Azure AD
+
+**Error: "Session Expired" on consent screen**
+
+The authorization state expired before the user completed the flow.
+
+**Fix:** Increase `stateTtlMs` in the proxy configuration, or have users complete the flow more quickly.
+
+---
+
+### API Key Authentication
+
+The MCP Server also supports API key authentication, which is the default mode.
 
 - **Authentication Method**: API Key via HTTP headers or Bearer token
 - **Supported Headers**:

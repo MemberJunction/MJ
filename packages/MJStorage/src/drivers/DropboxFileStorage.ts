@@ -165,10 +165,27 @@ export class DropboxFileStorage extends FileStorageBase {
   }
 
   /**
-   * Initialize the Dropbox client with configuration from database or other runtime source.
-   * This allows configuration to be passed after construction, overriding environment variables.
+   * Initialize Dropbox storage provider.
    *
-   * @param config - Optional configuration object with accessToken, refreshToken, etc.
+   * **Always call this method** after creating an instance.
+   *
+   * @example Simple Deployment (Environment Variables)
+   * const storage = new DropboxFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/');
+   *
+   * @example Multi-Tenant (Database Credentials)
+   * const storage = new DropboxFileStorage();
+   * await storage.initialize({
+   *   accountId: '12345',
+   *   accountName: 'Dropbox Account',
+   *   clientID: '...',
+   *   clientSecret: '...',
+   *   refreshToken: '...',
+   *   rootPath: '/optional-root-path'
+   * });
+   *
+   * @param config - Optional. Omit to use env vars, provide to override with database creds.
    */
   public async initialize(config?: DropboxConfig): Promise<void> {
     // Always call super to store accountId and accountName
@@ -230,9 +247,35 @@ export class DropboxFileStorage extends FileStorageBase {
   /**
    * Checks if Dropbox provider is properly configured.
    * Returns true if access token is present.
+   * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
-    return !!this._accessToken;
+    const hasAccessToken = !!this._accessToken;
+
+    if (!hasAccessToken) {
+      console.error(
+        `❌ Dropbox provider not configured. Missing: Access Token\n\n` +
+        `Configuration Options:\n\n` +
+        `Option 1: Environment Variables (Access Token)\n` +
+        `  export STORAGE_DROPBOX_ACCESS_TOKEN="..."\n` +
+        `  const storage = new DropboxFileStorage();\n` +
+        `  await storage.initialize(); // No config needed\n\n` +
+        `Option 2: Environment Variables (Refresh Token)\n` +
+        `  export STORAGE_DROPBOX_REFRESH_TOKEN="..."\n` +
+        `  export STORAGE_DROPBOX_APP_KEY="..."\n` +
+        `  export STORAGE_DROPBOX_APP_SECRET="..."\n` +
+        `  const storage = new DropboxFileStorage();\n` +
+        `  await storage.initialize(); // No config needed\n\n` +
+        `Option 3: Database Credentials (Multi-Tenant)\n` +
+        `  const storage = new DropboxFileStorage();\n` +
+        `  await storage.initialize({\n` +
+        `    accountId: "...",\n` +
+        `    accessToken: "..."\n` +
+        `  });\n`
+      );
+    }
+
+    return hasAccessToken;
   }
 
   /**

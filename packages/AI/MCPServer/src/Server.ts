@@ -38,6 +38,35 @@ import { ActionEngineServer } from "@memberjunction/actions";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { ActionParamEntity } from "@memberjunction/core-entities";
+// OAuth authentication imports
+import {
+    MCPSessionContext as OAuthMCPSessionContext,
+    AuthMode,
+    AuthResult,
+    ProtectedResourceMetadata,
+} from './auth/types.js';
+import {
+    getAuthMode,
+    getResourceIdentifier,
+    isOAuthEnabled,
+    validateOAuthConfig,
+    logAuthConfig,
+} from './auth/OAuthConfig.js';
+import {
+    authenticateRequest as oauthAuthenticateRequest,
+    toSessionContext,
+    sendAuthErrorResponse,
+    AuthGateConfig,
+} from './auth/AuthGate.js';
+import {
+    buildProtectedResourceMetadata,
+    extractAuthorizationServers,
+} from './auth/ProtectedResourceMetadata.js';
+import { hasAuthProviders, setProxyTokenConfig } from './auth/TokenValidator.js';
+import { send401Response } from './auth/WWWAuthenticate.js';
+// OAuth Proxy imports
+import { createOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
+import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
 
 // Load AI Engine and all providers to prevent tree shaking - REQUIRED for agent execution
 LoadAIEngine();
@@ -60,17 +89,34 @@ export interface ToolFilterOptions {
 
 /**
  * Session context stored for each authenticated MCP connection.
- * Contains the API key information and the authenticated user.
+ * Extended to support both API key and OAuth authentication.
  */
 interface MCPSessionContext {
-    /** The raw API key used for authentication */
-    apiKey: string;
-    /** The database ID of the API key record */
-    apiKeyId: string;
-    /** The SHA-256 hash of the API key (used for authorization calls) */
-    apiKeyHash: string;
-    /** The MemberJunction user associated with the API key */
+    /** The raw API key used for authentication (present when authMethod='apiKey') */
+    apiKey?: string;
+    /** The database ID of the API key record (present when authMethod='apiKey') */
+    apiKeyId?: string;
+    /** The SHA-256 hash of the API key (present when authMethod='apiKey') */
+    apiKeyHash?: string;
+    /** The MemberJunction user associated with the authenticated session */
     user: UserInfo;
+    /** Authentication method used for this session */
+    authMethod: 'apiKey' | 'oauth' | 'none';
+    /**
+     * Granted scopes for this session.
+     * Populated from OAuth JWT 'scopes' claim or APIKeyScope entity.
+     * Used for authorization checks.
+     */
+    scopes?: string[];
+    /** OAuth-specific context (present when authMethod='oauth') */
+    oauth?: {
+        issuer: string;
+        subject: string;
+        email: string;
+        tokenExpiresAt: Date;
+        /** Granted scopes from the JWT token */
+        scopes?: string[];
+    };
 }
 
 /*******************************************************************************
@@ -207,82 +253,122 @@ function extractRequestContext(request: Request | http.IncomingMessage): {
 }
 
 /**
- * Authenticates an incoming MCP request using API key authentication.
+ * Validates an API key and returns the validation result.
+ * This is used by the AuthGate middleware for API key authentication.
  *
- * Authentication flow:
- * 1. Extract API key from request headers/query params
- * 2. If no key but systemApiKey is configured, use system user (dev mode)
- * 3. Validate the API key against the database
- * 4. Return the session context with the authenticated user
- *
- * @param request - The incoming HTTP request from the MCP client
- * @returns Promise resolving to the session context with authenticated user
- * @throws Error if authentication fails (invalid/missing key, inactive user, etc.)
+ * @param apiKey - The raw API key to validate
+ * @param request - The incoming HTTP request (for logging context)
+ * @returns Validation result with user if valid
  */
-async function authenticateRequest(request: Request | http.IncomingMessage): Promise<MCPSessionContext> {
-    const apiKey = extractAPIKeyFromRequest(request);
-
-    console.log(`[Auth] API key found: ${apiKey ? 'yes' : 'no'}`);
-    if (apiKey) {
-        // Log masked key for debugging (show prefix and last 4 chars)
-        const masked = apiKey.length > 10
-            ? `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}`
-            : `${apiKey.substring(0, 3)}***`;
-        console.log(`[Auth] API key value (masked): ${masked}`);
-    }
-
-    if (!apiKey) {
-        throw new Error('API key required. Provide via x-api-key header.');
-    }
-
-    console.log(`[Auth] Validating API key...`);
+async function validateApiKey(
+    apiKey: string,
+    request: Request | http.IncomingMessage
+): Promise<{
+    valid: boolean;
+    user?: UserInfo;
+    apiKeyId?: string;
+    apiKeyHash?: string;
+    error?: string;
+}> {
     try {
-        // Use system user as context for the validation query itself
         const systemUser = UserCache.Instance.GetSystemUser();
         if (!systemUser) {
-            throw new Error('System user not found in UserCache for API key validation');
+            return { valid: false, error: 'System user not found for API key validation' };
         }
 
-        // Extract request context for logging
-        const requestContext = extractRequestContext(request);
+        // Check for system API key first
+        // Priority: mcpServerSettings.systemApiKey (MCP-specific) > apiKey (from MJ_API_KEY env var)
+        // This authenticates as the system user for system-level operations
+        const mcpSystemKey = _config.mcpServerSettings?.systemApiKey;
+        const sharedApiKey = _config.apiKey;
+        const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
 
+        if (configuredSystemApiKey && apiKey === configuredSystemApiKey) {
+            return {
+                valid: true,
+                user: systemUser,
+                // System API key doesn't have an ID/hash in the database
+                apiKeyId: 'system',
+                apiKeyHash: 'system',
+            };
+        }
+
+        // Fall back to user-level API key validation through the API Key Engine
+        const requestContext = extractRequestContext(request);
         const apiKeyEngine = GetAPIKeyEngine();
+
         const validation = await apiKeyEngine.ValidateAPIKey(
             {
                 RawKey: apiKey,
-                ApplicationName: 'MCPServer', // Check if key is bound to this application
+                ApplicationName: 'MCPServer',
                 Endpoint: requestContext.endpoint,
                 Method: requestContext.method,
-                Operation: undefined, // MCP tool name not known at auth time
-                StatusCode: 200, // Auth succeeded if we get here
-                ResponseTimeMs: undefined, // Not available at auth time
+                Operation: undefined,
+                StatusCode: 200,
+                ResponseTimeMs: undefined,
                 IPAddress: requestContext.ipAddress ?? undefined,
                 UserAgent: requestContext.userAgent ?? undefined,
             },
             systemUser
         );
 
-        console.log(`[Auth] Validation result: IsValid=${validation.IsValid}, user=${validation.User?.Email}`);
-
         if (!validation.IsValid) {
-            console.error(`[Auth] Validation failed: ${validation.Error}`);
-            throw new Error(validation.Error || 'Invalid API key');
+            return { valid: false, error: validation.Error || 'Invalid API key' };
         }
 
-        // Get the user from UserCache to ensure EntityPermissions are loaded
-        // The validation.User might not have permissions populated
+        // Get user from UserCache to ensure EntityPermissions are loaded
         const cachedUser = UserCache.Instance.Users.find(u => u.ID === validation.User?.ID);
         if (!cachedUser) {
-            console.error(`[Auth] User ${validation.User?.Email} not found in UserCache`);
-            throw new Error('User not found in cache. Ensure user is active and has logged in.');
+            return { valid: false, error: 'User not found in cache' };
         }
 
-        console.log(`Authenticated via API key for user: ${cachedUser.Email}`);
-        return { apiKey, apiKeyId: validation.APIKeyId!, apiKeyHash: validation.APIKeyHash!, user: cachedUser };
+        return {
+            valid: true,
+            user: cachedUser,
+            apiKeyId: validation.APIKeyId!,
+            apiKeyHash: validation.APIKeyHash!,
+        };
     } catch (error) {
-        console.error(`[Auth] Exception during validation:`, error);
-        throw error;
+        return {
+            valid: false,
+            error: error instanceof Error ? error.message : 'API key validation failed',
+        };
     }
+}
+
+/** AuthGate configuration - populated during server initialization */
+let authGateConfig: AuthGateConfig;
+
+/**
+ * Authenticates an incoming MCP request using the configured auth mode.
+ * Supports API key, OAuth Bearer token, both, or none (development).
+ *
+ * @param request - The incoming HTTP request from the MCP client
+ * @returns Promise resolving to the session context with authenticated user
+ * @throws Error if authentication fails
+ */
+async function authenticateRequest(request: Request | http.IncomingMessage): Promise<MCPSessionContext> {
+    const result = await oauthAuthenticateRequest(request, authGateConfig);
+
+    if (!result.authenticated) {
+        const error = result.error;
+        throw new Error(error?.message || 'Authentication failed');
+    }
+
+    return toSessionContext(result);
+}
+
+/**
+ * Authenticates a request and returns the full AuthResult for error handling.
+ * Use this when you need to send proper WWW-Authenticate headers on failure.
+ *
+ * @param request - The incoming HTTP request
+ * @returns The AuthResult with success/failure details
+ */
+async function authenticateRequestWithResult(
+    request: Request | http.IncomingMessage
+): Promise<AuthResult> {
+    return oauthAuthenticateRequest(request, authGateConfig);
 }
 
 /*******************************************************************************
@@ -300,8 +386,11 @@ interface ToolScopeInfo {
 }
 
 /**
- * Authorizes a tool call against the API key's scope permissions.
- * Uses the two-level scope evaluation (application ceiling + key scopes).
+ * Authorizes a tool call based on the session's authentication method.
+ *
+ * For API key auth: Uses the two-level scope evaluation (application ceiling + key scopes).
+ * For OAuth auth: Uses scope-based authorization from JWT token with hierarchical matching.
+ * For no auth: Allows the call (authentication is disabled).
  *
  * @param sessionContext - The authenticated session context
  * @param scopeInfo - The scope information for the tool call
@@ -311,9 +400,46 @@ async function authorizeToolCall(
     sessionContext: MCPSessionContext,
     scopeInfo: ToolScopeInfo
 ): Promise<{ allowed: boolean; error?: string }> {
+    // Handle different authentication methods
+    switch (sessionContext.authMethod) {
+        case 'oauth':
+            // OAuth authentication uses scope-based authorization from the JWT token.
+            // The user consented to specific scopes during the OAuth flow.
+            return authorizeOAuthToolCall(sessionContext, scopeInfo);
+
+        case 'none':
+            // No authentication configured - allow all tool calls
+            return { allowed: true };
+
+        case 'apiKey':
+            // API key authentication uses the API Key Engine for scope-based authorization
+            return authorizeApiKeyToolCall(sessionContext, scopeInfo);
+
+        default:
+            // Unknown auth method - deny by default
+            return { allowed: false, error: `Unknown authentication method: ${sessionContext.authMethod}` };
+    }
+}
+
+/**
+ * Authorizes an API key-authenticated tool call against the key's scope permissions.
+ * Uses the two-level scope evaluation (application ceiling + key scopes).
+ *
+ * @param sessionContext - The authenticated session context (must have apiKeyHash)
+ * @param scopeInfo - The scope information for the tool call
+ * @returns Object with allowed flag and error message if denied
+ */
+async function authorizeApiKeyToolCall(
+    sessionContext: MCPSessionContext,
+    scopeInfo: ToolScopeInfo
+): Promise<{ allowed: boolean; error?: string }> {
     const systemUser = UserCache.Instance.GetSystemUser();
     if (!systemUser) {
         return { allowed: false, error: 'System user not available for authorization' };
+    }
+
+    if (!sessionContext.apiKeyHash) {
+        return { allowed: false, error: 'API key hash not available for authorization' };
     }
 
     try {
@@ -341,6 +467,87 @@ async function authorizeToolCall(
         console.error('[Auth] Authorization error:', error);
         return { allowed: false, error: error instanceof Error ? error.message : 'Authorization failed' };
     }
+}
+
+/**
+ * Checks if a granted scope matches a required scope using hierarchical matching.
+ * A parent scope grants access to all child scopes.
+ *
+ * Examples:
+ * - "entity" grants access to "entity:read", "entity:write", etc.
+ * - "entity:read" grants access only to "entity:read" (exact match)
+ * - "admin" grants access to "admin:users", "admin:settings", etc.
+ *
+ * @param grantedScope - A scope the user has been granted
+ * @param requiredScope - The scope required for the operation
+ * @returns true if the granted scope satisfies the requirement
+ */
+function scopeMatchesHierarchically(grantedScope: string, requiredScope: string): boolean {
+    // Exact match
+    if (grantedScope === requiredScope) {
+        return true;
+    }
+
+    // Hierarchical match: granted scope is a parent of required scope
+    // e.g., "entity" matches "entity:read" or "entity:read:all"
+    if (requiredScope.startsWith(grantedScope + ':')) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Checks if a user's granted scopes satisfy a required scope.
+ * Supports hierarchical scope matching where parent scopes grant child permissions.
+ *
+ * @param grantedScopes - Array of scopes the user has been granted
+ * @param requiredScope - The scope required for the operation
+ * @returns true if any granted scope satisfies the requirement
+ */
+function hasRequiredScope(grantedScopes: string[], requiredScope: string): boolean {
+    return grantedScopes.some((granted) => scopeMatchesHierarchically(granted, requiredScope));
+}
+
+/**
+ * Authorizes an OAuth-authenticated tool call against the token's scope permissions.
+ * Uses hierarchical scope matching where parent scopes grant access to child scopes.
+ *
+ * @param sessionContext - The authenticated session context (must have scopes)
+ * @param scopeInfo - The scope information for the tool call
+ * @returns Object with allowed flag and error message if denied
+ */
+function authorizeOAuthToolCall(
+    sessionContext: MCPSessionContext,
+    scopeInfo: ToolScopeInfo
+): { allowed: boolean; error?: string } {
+    const grantedScopes = sessionContext.scopes ?? [];
+
+    // If no scopes granted, deny access (user didn't consent to any scopes)
+    if (grantedScopes.length === 0) {
+        console.log(`[Auth] OAuth user ${sessionContext.oauth?.email} denied for ${scopeInfo.scopePath}: no scopes granted`);
+        return {
+            allowed: false,
+            error: `Access denied: no scopes granted. Required scope: ${scopeInfo.scopePath}`,
+        };
+    }
+
+    // Check if any granted scope satisfies the required scope
+    if (hasRequiredScope(grantedScopes, scopeInfo.scopePath)) {
+        console.log(`[Auth] OAuth user ${sessionContext.oauth?.email} authorized for ${scopeInfo.scopePath}`);
+        return { allowed: true };
+    }
+
+    // Scope not granted
+    console.log(
+        `[Auth] OAuth user ${sessionContext.oauth?.email} denied for ${scopeInfo.scopePath}: ` +
+            `granted scopes [${grantedScopes.join(', ')}] do not include required scope`
+    );
+    return {
+        allowed: false,
+        error: `Access denied: scope '${scopeInfo.scopePath}' not granted. ` +
+            `Your granted scopes: [${grantedScopes.join(', ')}]`,
+    };
 }
 
 /*******************************************************************************
@@ -548,7 +755,7 @@ async function registerAllTools(
         name: "Get_Entity_List",
         description: "Retrieves a list of all entity names. Use Get_Single_Entity(entityName) to get full details including description, fields, and relationships for a specific entity.",
         parameters: z.object({}),
-        scopeInfo: { scopePath: 'metadata:entities:read', resource: '*' },
+        scopeInfo: { scopePath: 'entity:read', resource: '*' },
         async execute() {
             const md = new Metadata();
             // Just return entity names - minimal payload
@@ -564,7 +771,7 @@ async function registerAllTools(
         parameters: z.object({
             entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'AI Models')")
         }),
-        scopeInfo: (props) => ({ scopePath: 'metadata:entities:read', resource: props.entityName as string || '*' }),
+        scopeInfo: (props) => ({ scopePath: 'entity:read', resource: props.entityName as string || '*' }),
         async execute(params: Record<string, unknown>) {
             const entityName = params.entityName as string;
             const md = new Metadata();
@@ -667,6 +874,52 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         await apiKeyEngine.Config(false, systemUser);
         console.log(`API Key engine initialized. Scopes loaded: ${apiKeyEngine.Scopes.length}`);
 
+        // Initialize AuthGate configuration for unified authentication
+        authGateConfig = {
+            validateApiKey: validateApiKey,
+            getSystemUser: () => UserCache.Instance.GetSystemUser(),
+        };
+
+        // Validate OAuth configuration if OAuth is enabled
+        const authMode = getAuthMode();
+        let effectiveAuthMode = authMode;
+        let configuredProviderNames: string[] = [];
+
+        if (authMode === 'oauth' || authMode === 'both') {
+            // Check if auth providers are configured
+            const providersConfigured = await hasAuthProviders();
+            const validationResult = validateOAuthConfig(providersConfigured);
+
+            if (validationResult.errors.length > 0) {
+                console.error(`[Auth] OAuth configuration errors: ${validationResult.errors.join('; ')}`);
+                if (authMode === 'oauth') {
+                    throw new Error(`OAuth configuration invalid: ${validationResult.errors.join('; ')}`);
+                }
+            }
+
+            if (validationResult.warnings.length > 0) {
+                for (const warning of validationResult.warnings) {
+                    console.warn(`[Auth] ${warning}`);
+                }
+            }
+
+            effectiveAuthMode = validationResult.effectiveMode;
+
+            // Get provider names for logging
+            if (providersConfigured) {
+                try {
+                    const { AuthProviderFactory } = await import('@memberjunction/server');
+                    const factory = AuthProviderFactory.getInstance();
+                    configuredProviderNames = factory.getAllProviders().map((p: { name: string }) => p.name);
+                } catch {
+                    // Ignore errors getting provider names - just for logging
+                }
+            }
+        }
+
+        // Log auth configuration
+        logAuthConfig(effectiveAuthMode, configuredProviderNames);
+
         // Create Express app for SSE transport
         const app = express();
 
@@ -697,15 +950,206 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             }
         });
 
+        // =====================================================================
+        // OAUTH PROXY AUTHORIZATION SERVER (RFC 7591, RFC 8414)
+        // =====================================================================
+        // When enabled, the MCP Server acts as an OAuth Authorization Server
+        // that supports dynamic client registration and proxies auth to upstream.
+        const oauthProxyEnabled = _config.mcpServerSettings?.auth?.proxy?.enabled ?? false;
+        let oauthProxyBaseUrl: string | undefined;
+
+        if (isOAuthEnabled() && oauthProxyEnabled) {
+            try {
+                // Get the upstream provider configuration
+                const { AuthProviderFactory } = await import('@memberjunction/server');
+                const factory = AuthProviderFactory.getInstance();
+                const providers = factory.getAllProviders();
+
+                if (providers.length === 0) {
+                    console.warn('[OAuth Proxy] No auth providers configured - OAuth proxy disabled');
+                } else {
+                    // Find the upstream provider (use configured name or first available)
+                    const upstreamProviderName = _config.mcpServerSettings?.auth?.proxy?.upstreamProvider;
+                    const upstreamProvider = upstreamProviderName
+                        ? providers.find((p: { name: string }) => p.name === upstreamProviderName)
+                        : providers[0];
+
+                    if (!upstreamProvider) {
+                        console.error(`[OAuth Proxy] Upstream provider '${upstreamProviderName}' not found`);
+                    } else {
+                        // Build OAuth proxy configuration
+                        oauthProxyBaseUrl = getResourceIdentifier();
+
+                        // Detect Azure AD v2.0 endpoints from issuer
+                        // Azure AD issuer: https://login.microsoftonline.com/{tenant}/v2.0
+                        // Cast to access provider properties (IAuthProvider interface)
+                        const provider = upstreamProvider as {
+                            issuer: string;
+                            audience: string;
+                            name: string;
+                            clientId?: string;
+                        };
+                        const issuer = provider.issuer;
+                        const isAzureAD = issuer?.includes('microsoftonline.com') || issuer?.includes('sts.windows.net');
+
+                        let authorizationEndpoint: string;
+                        let tokenEndpoint: string;
+
+                        if (isAzureAD) {
+                            // Azure AD v2.0 endpoints
+                            const baseUrl = issuer.replace(/\/v2\.0\/?$/, '');
+                            authorizationEndpoint = `${baseUrl}/oauth2/v2.0/authorize`;
+                            tokenEndpoint = `${baseUrl}/oauth2/v2.0/token`;
+                        } else {
+                            // Generic OIDC - assume standard paths (Auth0, Okta, etc.)
+                            // Most providers use /.well-known/openid-configuration but we need direct endpoints
+                            // Strip trailing slash from issuer to avoid double slashes in URL
+                            const issuerBase = issuer.replace(/\/+$/, '');
+                            authorizationEndpoint = `${issuerBase}/authorize`;
+                            tokenEndpoint = `${issuerBase}/oauth/token`;
+                        }
+
+                        // Build scopes for upstream - use standard OIDC scopes only
+                        // Note: We don't include api://.../.default because that would cause
+                        // AADSTS90009 "app requesting token for itself" when using a single app registration.
+                        // The OAuth proxy only needs to authenticate the user, not access an API resource.
+                        const upstreamScopes: string[] = ['openid', 'profile', 'email'];
+                        if (!isAzureAD) {
+                            // For non-Azure providers, we might need additional scopes
+                            // (Azure AD doesn't need offline_access for refresh tokens in v2.0)
+                            upstreamScopes.push('offline_access');
+                        }
+
+                        // For OAuth proxy, we need client ID from environment or config
+                        // Priority: provider.clientId → WEB_CLIENT_ID env var → audience (Azure AD uses audience as clientId)
+                        // NOTE: Provider-specific clientId takes priority because WEB_CLIENT_ID may be for a different provider
+                        // Client secret is OPTIONAL - the proxy uses PKCE for upstream token exchange
+                        // (same technique as MJExplorer SPA), so no secret is required
+                        const upstreamClientId = provider.clientId || process.env.WEB_CLIENT_ID || provider.audience || '';
+                        const upstreamClientSecret = process.env.WEB_CLIENT_SECRET || undefined;
+
+                        // Log warning if no valid client_id found
+                        if (!upstreamClientId) {
+                            console.error('[OAuth Proxy] ERROR: No upstream client_id configured!');
+                            console.error('[OAuth Proxy] Set WEB_CLIENT_ID env var or add clientId to your auth provider config');
+                        } else {
+                            console.log(`[OAuth Proxy] Upstream client_id: ${upstreamClientId}`);
+                        }
+
+                        // Note: clientSecret is optional - proxy uses PKCE for upstream auth
+                        if (upstreamClientSecret) {
+                            console.log('[OAuth Proxy] Using client secret for upstream authentication');
+                        } else {
+                            console.log('[OAuth Proxy] Using PKCE-only for upstream authentication (no client secret)');
+                        }
+
+                        // Build JWT config from proxy settings
+                        // Falls back to MCP_JWT_SECRET env var if not configured in mj.config.cjs
+                        const proxySettings = _config.mcpServerSettings?.auth?.proxy;
+                        const jwtSigningSecret = proxySettings?.jwtSigningSecret ?? process.env.MCP_JWT_SECRET;
+                        const jwtConfig = jwtSigningSecret ? {
+                            signingSecret: jwtSigningSecret,
+                            expiresIn: proxySettings?.jwtExpiresIn ?? '1h',
+                            issuer: proxySettings?.jwtIssuer ?? 'urn:mj:mcp-server',
+                        } : undefined;
+
+                        const proxyConfig: OAuthProxyConfig = {
+                            baseUrl: oauthProxyBaseUrl,
+                            upstream: {
+                                authorizationEndpoint,
+                                tokenEndpoint,
+                                clientId: upstreamClientId,
+                                clientSecret: upstreamClientSecret,
+                                scopes: upstreamScopes,
+                                providerName: provider.name,
+                            },
+                            enableDynamicRegistration: true,
+                            stateTtlMs: proxySettings?.stateTtlMs,
+                            jwt: jwtConfig,
+                            enableConsentScreen: proxySettings?.enableConsentScreen ?? false,
+                        };
+
+                        // Create and mount OAuth proxy router
+                        const oauthProxyRouter = createOAuthProxyRouter(proxyConfig);
+                        app.use(oauthProxyRouter);
+
+                        console.log(`[OAuth Proxy] Enabled with upstream provider: ${provider.name}`);
+                        console.log(`[OAuth Proxy] Authorization endpoint: ${authorizationEndpoint}`);
+                        console.log(`[OAuth Proxy] Token endpoint: ${tokenEndpoint}`);
+                        console.log(`[OAuth Proxy] Base URL: ${oauthProxyBaseUrl}`);
+                        if (jwtConfig) {
+                            console.log(`[OAuth Proxy] JWT signing enabled (issuer: ${jwtConfig.issuer})`);
+                            // Configure TokenValidator to accept proxy-signed JWTs
+                            setProxyTokenConfig({
+                                signingSecret: jwtConfig.signingSecret,
+                                issuer: jwtConfig.issuer,
+                                audience: oauthProxyBaseUrl,
+                            });
+                        } else {
+                            console.log('[OAuth Proxy] JWT signing disabled - passing through upstream tokens');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('[OAuth Proxy] Failed to initialize:', error);
+            }
+        }
+
+        // =====================================================================
+        // PROTECTED RESOURCE METADATA ENDPOINT (RFC 9728)
+        // =====================================================================
+        // This endpoint allows MCP clients to discover how to authenticate.
+        // It's required by the MCP Authorization specification when OAuth is enabled.
+        if (isOAuthEnabled()) {
+            app.get('/.well-known/oauth-protected-resource', async (_req: Request, res: Response) => {
+                try {
+                    // Dynamically import AuthProviderFactory to get configured providers
+                    const { AuthProviderFactory } = await import('@memberjunction/server');
+                    const factory = AuthProviderFactory.getInstance();
+                    const providers = factory.getAllProviders();
+
+                    // Extract issuer URLs from configured auth providers
+                    const authorizationServers = extractAuthorizationServers(
+                        providers.map((p: { issuer: string }) => ({ issuer: p.issuer }))
+                    );
+
+                    if (authorizationServers.length === 0 && !oauthProxyBaseUrl) {
+                        console.warn('[OAuth] No authorization servers configured - metadata endpoint returning empty list');
+                    }
+
+                    const metadata: ProtectedResourceMetadata = buildProtectedResourceMetadata({
+                        authorizationServers,
+                        resourceName: 'MemberJunction MCP Server',
+                        providers, // Pass providers for automatic scope generation
+                        // When OAuth proxy is enabled, point to ourselves as the authorization server
+                        useOAuthProxy: oauthProxyEnabled && !!oauthProxyBaseUrl,
+                        oauthProxyBaseUrl,
+                    });
+
+                    res.json(metadata);
+                } catch (error) {
+                    console.error('[OAuth] Error building Protected Resource Metadata:', error);
+                    res.status(500).json({
+                        error: 'internal_error',
+                        message: 'Failed to generate protected resource metadata',
+                    });
+                }
+            });
+            console.log('[OAuth] Protected Resource Metadata endpoint registered at /.well-known/oauth-protected-resource');
+        }
+
         // SSE endpoint for establishing MCP connections
         app.get('/mcp/sse', async (req: Request, res: Response) => {
-            console.log('[SSE] New connection request');
+            // Authenticate the request with full result for proper error handling
+            const authResult = await authenticateRequestWithResult(req);
+            if (!authResult.authenticated) {
+                sendAuthErrorResponse(res, authResult);
+                return;
+            }
+
+            const sessionContext = toSessionContext(authResult);
 
             try {
-                // Authenticate the request
-                const sessionContext = await authenticateRequest(req);
-                console.log(`[SSE] Authenticated user: ${sessionContext.user.Email}`);
-
                 // Create a new MCP server for this connection
                 const mcpServer = new McpServer({
                     name: "MemberJunction",
@@ -714,7 +1158,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
                 // Register all tools with user-scoped context
                 await registerAllTools(mcpServer, sessionContext, systemUser);
-                console.log(`[SSE] Tools registered for user: ${sessionContext.user.Email}`);
 
                 // Create SSE transport for this connection
                 const transport = new SSEServerTransport('/mcp/messages', res);
@@ -722,93 +1165,89 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 // Store transport for message routing
                 const sessionId = transport.sessionId;
                 transports.set(sessionId, transport);
-                console.log(`[SSE] Transport created with session ID: ${sessionId}`);
+                console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId}`);
 
                 // Set up keepalive ping to prevent connection timeout (every 15 seconds)
                 const keepaliveInterval = setInterval(() => {
                     if (!res.writableEnded) {
                         // SSE comment line (starts with colon) - keeps connection alive
                         res.write(':ping\n\n');
-                        console.log(`[SSE] Keepalive ping sent for session: ${sessionId}`);
                     }
                 }, 15000);
 
                 // Clean up on connection close
                 res.on('close', () => {
-                    console.log(`[SSE] Session ended: ${sessionId}`);
                     clearInterval(keepaliveInterval);
                     transports.delete(sessionId);
                 });
 
                 res.on('error', (err: NodeJS.ErrnoException) => {
                     // ECONNRESET is normal when client disconnects - don't log as error
-                    if (err.code === 'ECONNRESET') {
-                        console.log(`[SSE] Client disconnected for session: ${sessionId}`);
-                    } else {
-                        console.error(`[SSE] Connection error for session: ${sessionId}`, err);
+                    if (err.code !== 'ECONNRESET') {
+                        console.error(`[SSE] Connection error for session ${sessionId}:`, err);
                     }
                 });
 
                 req.on('error', (err: NodeJS.ErrnoException) => {
                     // ECONNRESET is normal when client disconnects - don't log as error
-                    if (err.code === 'ECONNRESET') {
-                        // Already logged above, skip duplicate
-                    } else {
-                        console.error(`[SSE] Request error for session: ${sessionId}`, err);
+                    if (err.code !== 'ECONNRESET') {
+                        console.error(`[SSE] Request error for session ${sessionId}:`, err);
                     }
                 });
 
                 // Connect the server to the transport
                 await mcpServer.connect(transport);
-                console.log(`[SSE] MCP server connected for session: ${sessionId}`);
 
             } catch (error) {
-                console.error('[SSE] Authentication or connection error:', error);
+                console.error('[SSE] Connection error:', error);
                 if (!res.headersSent) {
-                    res.status(401).json({
-                        error: error instanceof Error ? error.message : 'Authentication failed'
+                    res.status(500).json({
+                        error: 'internal_error',
+                        message: error instanceof Error ? error.message : 'Connection failed'
                     });
                 }
             }
         });
 
         // Message endpoint for receiving MCP messages from clients
+        // Note: Authentication happens when establishing the SSE connection (/mcp/sse).
+        // This endpoint routes messages to existing authenticated sessions.
+        // The sessionId acts as a session token - clients must first authenticate via SSE.
         app.post('/mcp/messages', async (req: Request, res: Response) => {
             const sessionId = req.query.sessionId as string;
-            console.log(`[Messages] Received POST for session: ${sessionId}`);
 
             if (!sessionId) {
-                console.log('[Messages] Error: Missing sessionId');
-                res.status(400).json({ error: 'Missing sessionId query parameter' });
+                // Protocol error - client didn't follow MCP protocol
+                res.status(400).json({
+                    error: 'invalid_request',
+                    message: 'Missing sessionId query parameter. Establish a session via /mcp/sse first.'
+                });
                 return;
             }
 
             const transport = transports.get(sessionId);
             if (!transport) {
-                console.log(`[Messages] Error: Session not found: ${sessionId}`);
-                res.status(404).json({ error: 'Session not found' });
+                // Session expired or invalid - client needs to re-authenticate
+                // When OAuth is enabled, include WWW-Authenticate header to guide client
+                if (isOAuthEnabled()) {
+                    send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
+                        errorDescription: 'Session not found - establish a new authenticated session'
+                    });
+                } else {
+                    res.status(401).json({
+                        error: 'session_expired',
+                        message: 'Session not found. Please re-establish connection via /mcp/sse endpoint.'
+                    });
+                }
                 return;
             }
 
-            // Buffer the body for logging, then pass to transport
+            // Buffer the body then pass to transport
             const chunks: Buffer[] = [];
             for await (const chunk of req) {
-                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
             }
             const bodyBuffer = Buffer.concat(chunks);
-            const bodyString = bodyBuffer.toString('utf8');
-
-            // Log the request
-            try {
-                const parsed = JSON.parse(bodyString);
-                console.log(`[Messages] Request: method=${parsed.method || 'N/A'}, id=${parsed.id || 'N/A'}`);
-                if (parsed.params) {
-                    const paramsStr = JSON.stringify(parsed.params);
-                    console.log(`[Messages] Params: ${paramsStr.substring(0, 500)}${paramsStr.length > 500 ? '...' : ''}`);
-                }
-            } catch {
-                console.log(`[Messages] Raw body: ${bodyString.substring(0, 500)}`);
-            }
 
             // Create a new readable stream from the buffered body for the transport
             const { Readable } = await import('stream');
@@ -829,7 +1268,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
             try {
                 await transport.handlePostMessage(mockReq as unknown as Request, res);
-                console.log(`[Messages] Response sent for session: ${sessionId}`);
             } catch (error) {
                 console.error('[Messages] Error handling message:', error);
                 if (!res.headersSent) {
@@ -855,20 +1293,17 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         // Streamable HTTP endpoint - handles both GET (SSE stream) and POST (messages)
         // This is the newer, recommended MCP transport
         app.all('/mcp', async (req: Request, res: Response) => {
-            console.log(`[StreamableHTTP] ${req.method} request received`);
-
             // Get or validate session ID from header
             const sessionId = req.headers['mcp-session-id'] as string | undefined;
-            console.log(`[StreamableHTTP] Session ID from header: ${sessionId || 'none'}`);
 
             // For existing sessions, route to the existing transport
             if (sessionId && streamableTransports.has(sessionId)) {
                 const transport = streamableTransports.get(sessionId)!;
-                console.log(`[StreamableHTTP] Routing to existing session: ${sessionId}`);
                 try {
-                    await transport.handleRequest(req, res);
+                    // Pass parsed body to handleRequest - required for SDK to properly parse the message
+                    await transport.handleRequest(req, res, req.body);
                 } catch (error) {
-                    console.error(`[StreamableHTTP] Error handling request:`, error);
+                    console.error(`[StreamableHTTP] Error on session ${sessionId}:`, error);
                     if (!res.headersSent) {
                         res.status(500).json({ error: 'Internal server error' });
                     }
@@ -878,10 +1313,15 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
             // For new sessions (no session ID or unknown session ID with initialization request)
             // We need to authenticate and create a new transport
-            try {
-                const sessionContext = await authenticateRequest(req);
-                console.log(`[StreamableHTTP] Authenticated user: ${sessionContext.user.Email}`);
+            const authResult = await authenticateRequestWithResult(req);
+            if (!authResult.authenticated) {
+                sendAuthErrorResponse(res, authResult);
+                return;
+            }
 
+            const sessionContext = toSessionContext(authResult);
+
+            try {
                 // Create a new MCP server for this session
                 const mcpServer = new McpServer({
                     name: "MemberJunction",
@@ -890,7 +1330,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
                 // Register all tools with user-scoped context
                 await registerAllTools(mcpServer, sessionContext, systemUser);
-                console.log(`[StreamableHTTP] Tools registered for user: ${sessionContext.user.Email}`);
 
                 // Create Streamable HTTP transport with session ID generation
                 const transport = new StreamableHTTPServerTransport({
@@ -904,26 +1343,27 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 transport.onclose = () => {
                     const sid = transport.sessionId;
                     if (sid) {
-                        console.log(`[StreamableHTTP] Session closed: ${sid}`);
                         streamableTransports.delete(sid);
                     }
                 };
 
                 // Handle the current request
-                await transport.handleRequest(req, res);
+                // Pass the parsed body to help the SDK recognize the initialize request
+                await transport.handleRequest(req, res, req.body);
 
                 // Store the transport after successful request handling
                 const newSessionId = transport.sessionId;
                 if (newSessionId) {
                     streamableTransports.set(newSessionId, transport);
-                    console.log(`[StreamableHTTP] New session created: ${newSessionId}`);
+                    console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
                 }
 
             } catch (error) {
-                console.error('[StreamableHTTP] Authentication or connection error:', error);
+                console.error('[StreamableHTTP] Connection error:', error);
                 if (!res.headersSent) {
-                    res.status(401).json({
-                        error: error instanceof Error ? error.message : 'Authentication failed'
+                    res.status(500).json({
+                        error: 'internal_error',
+                        message: error instanceof Error ? error.message : 'Connection failed'
                     });
                 }
             }
@@ -935,6 +1375,11 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             console.log(`SSE endpoint: http://localhost:${mcpServerPort}/mcp/sse`);
             console.log(`Messages endpoint: http://localhost:${mcpServerPort}/mcp/messages`);
             console.log(`Streamable HTTP endpoint: http://localhost:${mcpServerPort}/mcp`);
+
+            // Log OAuth-specific endpoints if enabled
+            if (isOAuthEnabled()) {
+                console.log(`Protected Resource Metadata: http://localhost:${mcpServerPort}/.well-known/oauth-protected-resource`);
+            }
         });
 
     } catch (error) {
@@ -982,7 +1427,7 @@ async function loadActionTools(
                     pattern: z.string().optional().describe("Name pattern to match actions (supports wildcards: *, *Action, Action*, *Action*)"),
                     category: z.string().optional().describe("Category name to filter actions")
                 }),
-                scopeInfo: { scopePath: 'metadata:actions:read', resource: '*' },
+                scopeInfo: { scopePath: 'action:read', resource: '*' },
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const actions = await discoverActions(props.pattern as string || '*', props.category as string | undefined, sessionUser);
@@ -1086,7 +1531,7 @@ async function loadActionTools(
                     actionName: z.string().optional().describe("Name of the action"),
                     actionId: z.string().optional().describe("ID of the action")
                 }),
-                scopeInfo: (props) => ({ scopePath: 'metadata:actions:read', resource: (props.actionName as string) || (props.actionId as string) || '*' }),
+                scopeInfo: (props) => ({ scopePath: 'action:read', resource: (props.actionName as string) || (props.actionId as string) || '*' }),
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const actionEngine = ActionEngineServer.Instance;
@@ -1299,7 +1744,7 @@ async function loadAgentTools(
                 parameters: z.object({
                     pattern: z.string().describe("Name pattern to match agents (supports wildcards: *, *Agent, Agent*, *Agent*)")
                 }),
-                scopeInfo: { scopePath: 'metadata:agents:read', resource: '*' },
+                scopeInfo: { scopePath: 'agent:read', resource: '*' },
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const agents = await discoverAgents(props.pattern as string, sessionUser);
@@ -1777,7 +2222,7 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 pattern: z.string().optional().describe("Name pattern to match queries (supports wildcards: *, *Query, Query*, *Query*)"),
                 category: z.string().optional().describe("Category name or path to filter queries (e.g., 'Reports', '/MJ/AI/')")
             }),
-            scopeInfo: { scopePath: 'metadata:queries:read', resource: '*' },
+            scopeInfo: { scopePath: 'query:read', resource: '*' },
             async execute(props) {
                 const sessionUser = sessionContext.user;
 
@@ -1891,7 +2336,7 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 schemaFilter: z.string().optional().describe("Filter by schema name (e.g., 'dbo', '__mj')"),
                 entityFilter: z.string().optional().describe("Filter by entity name pattern")
             }),
-            scopeInfo: { scopePath: 'metadata:entities:read', resource: '*' },
+            scopeInfo: { scopePath: 'entity:read', resource: '*' },
             async execute(props) {
                 const md = new Metadata();
                 let entities = md.Entities;
@@ -1985,7 +2430,7 @@ async function loadPromptTools(
                     pattern: z.string().optional().describe("Name pattern to match prompts (supports wildcards)"),
                     category: z.string().optional().describe("Category name to filter prompts")
                 }),
-                scopeInfo: { scopePath: 'metadata:prompts:read', resource: '*' },
+                scopeInfo: { scopePath: 'prompt:read', resource: '*' },
                 async execute(props) {
                     const sessionUser = sessionContext.user;
 
@@ -2153,7 +2598,7 @@ function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MC
             name: "Get_Communication_Providers",
             description: "List available communication providers configured in the system",
             parameters: z.object({}),
-            scopeInfo: { scopePath: 'metadata:communication:read', resource: '*' },
+            scopeInfo: { scopePath: 'communication:read', resource: '*' },
             async execute() {
                 const sessionUser = sessionContext.user;
                 const rv = new RunView();
@@ -2272,7 +2717,7 @@ function addAgentExecuteTool(
                         runId: result.agentRun?.ID,
                         errorMessage: result.agentRun?.ErrorMessage,
                         finalStep: result.agentRun?.FinalStep,
-                        payload: result.payload || result.agentRun?.FinalPayload, 
+                        payload: result.payload || result.agentRun?.FinalPayload,
                         message: result.agentRun?.Message,
                         responseForm: result.responseForm
                     });

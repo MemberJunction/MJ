@@ -197,30 +197,63 @@ export class BoxFileStorage extends FileStorageBase {
 
   /**
    * Checks if Box provider is properly configured.
-   * Returns true if client credentials are present.
+   * Returns true if client credentials or access token are present.
+   * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
-    return !!((this._clientId && this._clientSecret) || this._accessToken);
+    const hasClientCredentials = !!(this._clientId && this._clientSecret);
+    const hasAccessToken = !!this._accessToken;
+
+    const isConfigured = hasClientCredentials || hasAccessToken;
+
+    if (!isConfigured) {
+      console.error(
+        `❌ Box provider not configured. Missing: Client ID & Client Secret (or Access Token)\n\n` +
+        `Configuration Options:\n\n` +
+        `Option 1: Environment Variables (JWT Authentication)\n` +
+        `  export STORAGE_BOX_CLIENT_ID="..."\n` +
+        `  export STORAGE_BOX_CLIENT_SECRET="..."\n` +
+        `  export STORAGE_BOX_ENTERPRISE_ID="..."\n` +
+        `  export STORAGE_BOX_JWT_KEY_ID="..."\n` +
+        `  export STORAGE_BOX_PRIVATE_KEY="..." # base64 encoded\n` +
+        `  const storage = new BoxFileStorage();\n` +
+        `  await storage.initialize(); // No config needed\n\n` +
+        `Option 2: Database Credentials (Multi-Tenant)\n` +
+        `  const storage = new BoxFileStorage();\n` +
+        `  await storage.initialize({\n` +
+        `    accountId: "...",\n` +
+        `    clientID: "...",\n` +
+        `    clientSecret: "...",\n` +
+        `    enterpriseID: "..."\n` +
+        `  });\n`
+      );
+    }
+
+    return isConfigured;
   }
 
   /**
-   * Initializes the Box storage driver
+   * Initialize Box storage provider.
    *
-   * This method must be called after creating a BoxFileStorage instance.
-   * It initializes the Box SDK and creates the client for API calls.
+   * **Always call this method** after creating an instance.
    *
-   * Can optionally accept a config object with OAuth credentials, which is used
-   * for per-user OAuth authentication where credentials come from the database.
+   * @example Simple Deployment (Environment Variables)
+   * const storage = new BoxFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/');
    *
-   * @param config - Optional configuration object containing OAuth2 credentials
-   * @returns A Promise that resolves when initialization is complete
-   *
-   * @example
-   * ```typescript
+   * @example Multi-Tenant (Database Credentials)
    * const storage = new BoxFileStorage();
-   * await storage.initialize();
-   * // Now the storage provider is ready to use
-   * ```
+   * await storage.initialize({
+   *   accountId: '12345',
+   *   accountName: 'Box Account',
+   *   clientID: '...',
+   *   clientSecret: '...',
+   *   refreshToken: '...',
+   *   rootFolderID: '0'
+   * });
+   *
+   * @param config - Optional. Omit to use env vars, provide to override with database creds.
    */
   public async initialize(config?: BoxConfig): Promise<void> {
     // Always call super to store accountId and accountName

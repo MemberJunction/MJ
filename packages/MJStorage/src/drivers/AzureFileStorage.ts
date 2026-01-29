@@ -24,6 +24,7 @@ import {
   GetObjectMetadataParams,
   StorageListResult,
   StorageObjectMetadata,
+  StorageProviderConfig,
 } from '../generic/FileStorageBase';
 import { getProviderConfig } from '../config';
 
@@ -100,11 +101,89 @@ export class AzureFileStorage extends FileStorageBase {
   }
 
   /**
+   * Initialize Azure Blob Storage provider.
+   *
+   * **Always call this method** after creating an instance.
+   *
+   * @example Simple Deployment (Environment Variables)
+   * const storage = new AzureFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/');
+   *
+   * @example Multi-Tenant (Database Credentials)
+   * const storage = new AzureFileStorage();
+   * await storage.initialize({
+   *   accountId: '12345',
+   *   accountName: 'Azure Account',
+   *   accountName: 'myaccount',
+   *   accountKey: '...',
+   *   defaultContainer: 'my-container'
+   * });
+   *
+   * @param config - Optional. Omit to use env vars, provide to override with database creds.
+   */
+  public async initialize(config?: StorageProviderConfig): Promise<void> {
+    await super.initialize(config);
+
+    if (!config) {
+      return; // Constructor already handled config from env/file
+    }
+
+    // Override with provided values
+    const azureConfig = config as any;
+    if (azureConfig.defaultContainer) {
+      this._container = azureConfig.defaultContainer;
+    }
+    if (azureConfig.accountName) {
+      this._azureAccountName = azureConfig.accountName;
+    }
+    if (azureConfig.accountKey) {
+      this._sharedKeyCredential = new StorageSharedKeyCredential(this._azureAccountName, azureConfig.accountKey);
+      const blobServiceUrl = `https://${this._azureAccountName}.blob.core.windows.net`;
+      this._blobServiceClient = new BlobServiceClient(blobServiceUrl, this._sharedKeyCredential);
+      this._containerClient = this._blobServiceClient.getContainerClient(this._container);
+    }
+  }
+
+  /**
    * Checks if Azure Blob provider is properly configured.
-   * Returns true if account name and container name are present.
+   * Returns true if account name, account key, and container name are present.
+   * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
-    return !!(this._azureAccountName && this._container);
+    const hasAccountName = !!this._azureAccountName;
+    const hasContainer = !!this._container;
+    const hasCredential = !!this._sharedKeyCredential;
+
+    const isConfigured = hasAccountName && hasContainer && hasCredential;
+
+    if (!isConfigured) {
+      const missing: string[] = [];
+      if (!hasAccountName) missing.push('Account Name');
+      if (!hasContainer) missing.push('Container');
+      if (!hasCredential) missing.push('Account Key');
+
+      console.error(
+        `❌ Azure Blob Storage provider not configured. Missing: ${missing.join(', ')}\n\n` +
+        `Configuration Options:\n\n` +
+        `Option 1: Environment Variables\n` +
+        `  export STORAGE_AZURE_ACCOUNT_NAME="myaccount"\n` +
+        `  export STORAGE_AZURE_ACCOUNT_KEY="..."\n` +
+        `  export STORAGE_AZURE_CONTAINER="my-container"\n` +
+        `  const storage = new AzureFileStorage();\n` +
+        `  await storage.initialize(); // No config needed\n\n` +
+        `Option 2: Database Credentials (Multi-Tenant)\n` +
+        `  const storage = new AzureFileStorage();\n` +
+        `  await storage.initialize({\n` +
+        `    accountId: "...",\n` +
+        `    accountName: "myaccount",\n` +
+        `    accountKey: "...",\n` +
+        `    defaultContainer: "my-container"\n` +
+        `  });\n`
+      );
+    }
+
+    return isConfigured;
   }
 
   /**

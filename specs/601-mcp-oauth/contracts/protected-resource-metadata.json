@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://memberjunction.org/schemas/mcp-oauth/protected-resource-metadata.json",
+  "title": "OAuth 2.0 Protected Resource Metadata",
+  "description": "Schema for the Protected Resource Metadata response per RFC 9728, tailored for MemberJunction MCP Server",
+  "type": "object",
+  "required": ["resource", "authorization_servers"],
+  "properties": {
+    "resource": {
+      "type": "string",
+      "format": "uri",
+      "description": "Protected resource identifier. MUST be the resource's URL and MUST match the 'aud' claim expected in tokens.",
+      "examples": [
+        "https://mcp.example.com",
+        "http://localhost:3100"
+      ]
+    },
+    "authorization_servers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "minItems": 1,
+      "description": "Array of authorization server issuer URLs that can issue tokens for this resource. Populated from configured authProviders.",
+      "examples": [
+        ["https://login.microsoftonline.com/tenant-id/v2.0"],
+        ["https://your-tenant.auth0.com"],
+        ["https://your-domain.okta.com/oauth2/default"]
+      ]
+    },
+    "scopes_supported": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "OAuth 2.0 scopes supported by this resource. MCP Server uses standard OIDC scopes.",
+      "default": ["openid", "profile", "email"]
+    },
+    "bearer_methods_supported": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["header", "body", "query"]
+      },
+      "description": "Token delivery methods supported. MCP Server only supports Authorization header.",
+      "default": ["header"]
+    },
+    "resource_name": {
+      "type": "string",
+      "description": "Human-readable name for the protected resource.",
+      "default": "MemberJunction MCP Server"
+    },
+    "resource_documentation": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to resource documentation.",
+      "examples": [
+        "https://docs.memberjunction.org/mcp"
+      ]
+    }
+  },
+  "additionalProperties": true,
+  "examples": [
+    {
+      "resource": "https://mcp.example.com",
+      "authorization_servers": [
+        "https://login.microsoftonline.com/tenant-id/v2.0"
+      ],
+      "scopes_supported": ["openid", "profile", "email"],
+      "bearer_methods_supported": ["header"],
+      "resource_name": "MemberJunction MCP Server",
+      "resource_documentation": "https://docs.memberjunction.org/mcp"
+    },
+    {
+      "resource": "http://localhost:3100",
+      "authorization_servers": [
+        "https://your-tenant.auth0.com"
+      ],
+      "scopes_supported": ["openid", "profile", "email"],
+      "bearer_methods_supported": ["header"],
+      "resource_name": "MemberJunction MCP Server (Development)"
+    }
+  ]
+}
