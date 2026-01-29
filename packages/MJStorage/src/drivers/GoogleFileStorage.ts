@@ -11,6 +11,7 @@ import {
   GetObjectMetadataParams,
   StorageListResult,
   StorageObjectMetadata,
+  StorageProviderConfig,
 } from '../generic/FileStorageBase';
 import { getProviderConfig } from '../config';
 
@@ -89,11 +90,97 @@ export class GoogleFileStorage extends FileStorageBase {
   }
 
   /**
+   * Initialize Google Cloud Storage provider.
+   *
+   * **Always call this method** after creating an instance.
+   *
+   * @example Simple Deployment (Environment Variables)
+   * const storage = new GoogleFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/');
+   *
+   * @example Multi-Tenant (Database Credentials)
+   * const storage = new GoogleFileStorage();
+   * await storage.initialize({
+   *   accountId: '12345',
+   *   accountName: 'GCS Account',
+   *   keyJSON: '{"type":"service_account",...}',
+   *   projectID: 'my-project',
+   *   defaultBucket: 'my-bucket'
+   * });
+   *
+   * @param config - Optional. Omit to use env vars, provide to override with database creds.
+   */
+  public async initialize(config?: StorageProviderConfig): Promise<void> {
+    await super.initialize(config);
+
+    if (!config) {
+      return; // Constructor already handled config from env/file
+    }
+
+    // Override with provided values
+    const gcsConfig = config as any;
+    let credentials;
+
+    if (gcsConfig.keyJSON) {
+      credentials = typeof gcsConfig.keyJSON === 'string' ? JSON.parse(gcsConfig.keyJSON) : gcsConfig.keyJSON;
+    } else if (gcsConfig.keyFilename) {
+      this._client = new Storage({ keyFilename: gcsConfig.keyFilename });
+      if (gcsConfig.defaultBucket) {
+        this._bucket = gcsConfig.defaultBucket;
+      }
+      return;
+    }
+
+    if (credentials) {
+      const storageOptions: { credentials?: object; projectId?: string } = { credentials };
+      if (gcsConfig.projectID) {
+        storageOptions.projectId = gcsConfig.projectID;
+      }
+      this._client = new Storage(storageOptions);
+    }
+
+    if (gcsConfig.defaultBucket) {
+      this._bucket = gcsConfig.defaultBucket;
+    }
+  }
+
+  /**
    * Checks if Google Cloud Storage provider is properly configured.
    * Returns true if service account credentials and bucket name are present.
+   * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
-    return !!(this._client && this._bucket);
+    const hasClient = !!this._client;
+    const hasBucket = !!this._bucket;
+
+    const isConfigured = hasClient && hasBucket;
+
+    if (!isConfigured) {
+      const missing: string[] = [];
+      if (!hasClient) missing.push('Service Account Credentials');
+      if (!hasBucket) missing.push('Bucket Name');
+
+      console.error(
+        `❌ Google Cloud Storage provider not configured. Missing: ${missing.join(', ')}\n\n` +
+        `Configuration Options:\n\n` +
+        `Option 1: Environment Variables\n` +
+        `  export STORAGE_GOOGLE_KEY_JSON='{"type":"service_account",...}'\n` +
+        `  export STORAGE_GOOGLE_BUCKET_NAME="my-bucket"\n` +
+        `  const storage = new GoogleFileStorage();\n` +
+        `  await storage.initialize(); // No config needed\n\n` +
+        `Option 2: Database Credentials (Multi-Tenant)\n` +
+        `  const storage = new GoogleFileStorage();\n` +
+        `  await storage.initialize({\n` +
+        `    accountId: "...",\n` +
+        `    keyJSON: '{"type":"service_account",...}',\n` +
+        `    projectID: "my-project",\n` +
+        `    defaultBucket: "my-bucket"\n` +
+        `  });\n`
+      );
+    }
+
+    return isConfigured;
   }
 
   /**
