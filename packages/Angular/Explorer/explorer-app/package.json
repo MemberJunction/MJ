@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "npm run clean && ngc && npm run copy-assets",
-    "copy-assets": "cpy src/lib/styles dist --parents && cpy src/lib/assets dist --parents && cpy src/lib/styles.scss dist",
+    "copy-assets": "cpy 'src/lib/styles/**' dist/styles --flat && cpy 'src/lib/assets/**' dist/assets && cpy src/lib/styles.scss dist --flat",
     "watch": "ngc --watch",
     "clean": "rimraf dist"
   },
