@@ -17,6 +17,7 @@
 import * as ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
+import { glob } from 'glob';
 
 // ============================================================================
 // Public Types
@@ -742,7 +743,7 @@ export async function generateClassRegistrationsManifest(
     // Scan each dependency for @RegisterClass decorators
     let packagesWithDecorators = 0;
     for (const [depName, depDir] of Array.from(depTree.entries())) {
-        const sourceFiles = findSourceFiles(depDir, excludePatterns);
+        const sourceFiles = await findSourceFiles(depDir, excludePatterns);
         if (sourceFiles.length === 0) continue;
 
         let foundInPackage = false;
