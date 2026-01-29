@@ -14,6 +14,9 @@ import {
     CredentialEntity,
     CredentialTypeEntity
 } from "@memberjunction/core-entities";
+
+import Ajv, { ValidateFunction, ErrorObject } from 'ajv';
+import addFormats from 'ajv-formats';
 import {
     CredentialResolutionOptions,
     ResolvedCredential,
@@ -67,6 +70,24 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
 
     // Cached entity ID for audit logging
     private _credentialsEntityId: string | null = null;
+
+    // Ajv JSON Schema validator
+    private _ajv: Ajv;
+    private _schemaValidators: Map<string, ValidateFunction> = new Map();
+
+    constructor() {
+        super();
+
+        // Initialize Ajv with options
+        this._ajv = new Ajv({
+            allErrors: true,      // Collect all errors, not just first
+            strict: false,        // Allow additional properties not in schema
+            coerceTypes: false    // Don't auto-convert types
+        });
+
+        // Add format validation (uri, email, date, etc.)
+        addFormats(this._ajv);
+    }
 
     /**
      * Configures the engine by loading credential metadata from the database.
@@ -301,8 +322,11 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             throw new Error(`Credential type not found: ${credentialTypeName}`);
         }
 
-        // Validate against FieldSchema
-        this.validateValues(values, credType.FieldSchema);
+        // Apply default and const values from schema
+        const valuesWithDefaults = this.applySchemaDefaults(values, credType.FieldSchema);
+
+        // Validate against FieldSchema using Ajv
+        this.validateValues(valuesWithDefaults, credType.FieldSchema, credType.ID);
 
         // Create credential entity via metadata
         const md = new Metadata();
@@ -311,7 +335,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         credEntity.CredentialTypeID = credType.ID;
         credEntity.Name = name;
         credEntity.Description = options.description || null;
-        credEntity.Values = JSON.stringify(values); // Encryption happens on save
+        credEntity.Values = JSON.stringify(valuesWithDefaults); // Encryption happens on save
         credEntity.IsDefault = options.isDefault ?? false;
         credEntity.IsActive = true;
         credEntity.CategoryID = options.categoryId || null;
@@ -363,10 +387,19 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         // Get credential type for validation
         const credType = this._credentialTypes.find(t => t.ID === credEntity.CredentialTypeID);
         if (credType) {
-            this.validateValues(values, credType.FieldSchema);
+            // Apply default and const values from schema
+            const valuesWithDefaults = this.applySchemaDefaults(values, credType.FieldSchema);
+
+            // Validate against FieldSchema using Ajv
+            this.validateValues(valuesWithDefaults, credType.FieldSchema, credType.ID);
+
+            // Use values with defaults applied
+            credEntity.Values = JSON.stringify(valuesWithDefaults); // Encryption happens on save
+        } else {
+            // No credential type found, just use provided values
+            credEntity.Values = JSON.stringify(values);
         }
 
-        credEntity.Values = JSON.stringify(values); // Encryption happens on save
         const saved = await credEntity.Save();
         if (!saved) {
             throw new Error('Failed to update credential');
@@ -490,28 +523,123 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     }
 
     /**
-     * Validates credential values against a JSON Schema.
+     * Gets or compiles a JSON Schema validator for a credential type.
+     * Validators are cached for performance.
      */
-    private validateValues(values: Record<string, string>, fieldSchemaJson: string): void {
+    private getValidator(credentialTypeId: string, schemaJson: string): ValidateFunction {
+        if (!this._schemaValidators.has(credentialTypeId)) {
+            const schema = JSON.parse(schemaJson);
+            const validator = this._ajv.compile(schema);
+            this._schemaValidators.set(credentialTypeId, validator);
+        }
+        return this._schemaValidators.get(credentialTypeId)!;
+    }
+
+    /**
+     * Validates credential values against a JSON Schema using Ajv.
+     * Supports all JSON Schema Draft 7 constraints including:
+     * - required fields
+     * - const (fixed values)
+     * - enum (allowed values)
+     * - format (uri, email, date, etc.)
+     * - pattern (regex)
+     * - minLength/maxLength
+     * - minimum/maximum
+     */
+    private validateValues(values: Record<string, string>, fieldSchemaJson: string, credentialTypeId?: string): void {
         if (!fieldSchemaJson) return;
 
         try {
-            const schema = JSON.parse(fieldSchemaJson);
-            const required = schema.required || [];
+            const validator = credentialTypeId
+                ? this.getValidator(credentialTypeId, fieldSchemaJson)
+                : this._ajv.compile(JSON.parse(fieldSchemaJson));
 
-            for (const field of required) {
-                if (!values[field]) {
-                    throw new Error(`Required field missing: ${field}`);
-                }
+            const valid = validator(values);
+
+            if (!valid) {
+                const errors = this.formatValidationErrors(validator.errors || []);
+                throw new Error(`Credential validation failed:\n${errors.join('\n')}`);
             }
-
-            // Additional validation could be added here using a JSON Schema validator
         } catch (e) {
             if (e instanceof SyntaxError) {
                 LogError(`Invalid FieldSchema JSON: ${e}`);
-            } else {
-                throw e;
+                throw new Error('Invalid credential type schema');
             }
+            throw e;
+        }
+    }
+
+    /**
+     * Formats Ajv validation errors into user-friendly messages.
+     */
+    private formatValidationErrors(errors: ErrorObject[]): string[] {
+        return errors.map(error => {
+            const field = error.instancePath.replace(/^\//, '') || 'credential';
+
+            switch (error.keyword) {
+                case 'required':
+                    return `Missing required field: ${error.params.missingProperty}`;
+
+                case 'const':
+                    return `Field "${field}" must be "${error.params.allowedValue}"`;
+
+                case 'enum':
+                    const allowed = error.params.allowedValues.join(', ');
+                    return `Field "${field}" must be one of: ${allowed}`;
+
+                case 'format':
+                    return `Field "${field}" must be a valid ${error.params.format}`;
+
+                case 'pattern':
+                    return `Field "${field}" does not match required pattern`;
+
+                case 'minLength':
+                    return `Field "${field}" must be at least ${error.params.limit} characters`;
+
+                case 'maxLength':
+                    return `Field "${field}" must be no more than ${error.params.limit} characters`;
+
+                case 'minimum':
+                    return `Field "${field}" must be at least ${error.params.limit}`;
+
+                case 'maximum':
+                    return `Field "${field}" must be no more than ${error.params.limit}`;
+
+                default:
+                    return `Field "${field}": ${error.message}`;
+            }
+        });
+    }
+
+    /**
+     * Applies default and const values from JSON Schema to credential values.
+     * This ensures fields with default or const constraints are auto-populated.
+     */
+    private applySchemaDefaults(values: Record<string, string>, fieldSchemaJson: string): Record<string, string> {
+        if (!fieldSchemaJson) return values;
+
+        try {
+            const schema = JSON.parse(fieldSchemaJson);
+            const properties = schema.properties || {};
+            const result = { ...values };
+
+            for (const [fieldName, fieldSchema] of Object.entries(properties)) {
+                const propSchema = fieldSchema as Record<string, unknown>;
+
+                // Apply const if field is missing (const takes priority)
+                if (!(fieldName in result) && 'const' in propSchema) {
+                    result[fieldName] = String(propSchema.const);
+                }
+                // Apply default if field is missing and no const
+                else if (!(fieldName in result) && 'default' in propSchema) {
+                    result[fieldName] = String(propSchema.default);
+                }
+            }
+
+            return result;
+        } catch (e) {
+            LogError(`Failed to apply schema defaults: ${e}`);
+            return values;
         }
     }
 

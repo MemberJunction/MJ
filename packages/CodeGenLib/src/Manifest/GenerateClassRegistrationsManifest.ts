@@ -203,61 +203,32 @@ function walkDependencyTree(
  * Finds all TypeScript source files in a package directory.
  * Looks in the src/ folder by default.
  */
-function findSourceFiles(packageDir: string, excludePatterns: string[]): string[] {
-    const srcDir = path.join(packageDir, 'src');
-    if (!fs.existsSync(srcDir)) return [];
+  async function findSourceFiles(packageDir: string, excludePatterns: string[]): Promise<string[]>
+  {
+      const srcDir = path.join(packageDir, 'src');
+      if (!fs.existsSync(srcDir)) return [];
 
-    const files: string[] = [];
-    const defaultExcludes = new Set([
-        'node_modules',
-        'dist',
-        'build',
-        '.git',
-        '__tests__'
-    ]);
+      const defaultExcludes = [
+          '**/node_modules/**',
+          '**/dist/**',
+          '**/build/**',
+          '**/.git/**',
+          '**/__tests__/**',
+          '**/*.d.ts',
+          '**/*.spec.ts',
+          '**/*.test.ts',
+          ...excludePatterns.map(p => `**/${p}/**`)
+      ];
 
-    for (const pattern of excludePatterns) {
-        defaultExcludes.add(pattern);
-    }
+      const files = await glob('**/*.ts', {
+          cwd: srcDir,
+          absolute: true,
+          ignore: defaultExcludes,
+          nodir: true
+      });
 
-    function shouldExclude(filePath: string): boolean {
-        const parts = filePath.split(path.sep);
-        for (const part of parts) {
-            if (defaultExcludes.has(part)) return true;
-        }
-        return false;
-    }
-
-    function scan(dir: string): void {
-        let entries: fs.Dirent[];
-        try {
-            entries = fs.readdirSync(dir, { withFileTypes: true });
-        } catch {
-            return;
-        }
-
-        for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-
-            if (shouldExclude(fullPath)) continue;
-
-            if (entry.isDirectory()) {
-                scan(fullPath);
-            } else if (
-                entry.isFile() &&
-                entry.name.endsWith('.ts') &&
-                !entry.name.endsWith('.d.ts') &&
-                !entry.name.endsWith('.spec.ts') &&
-                !entry.name.endsWith('.test.ts')
-            ) {
-                files.push(fullPath);
-            }
-        }
-    }
-
-    scan(srcDir);
-    return files;
-}
+      return files;
+  }
 
 /**
  * Parses a TypeScript file and extracts @RegisterClass decorator information

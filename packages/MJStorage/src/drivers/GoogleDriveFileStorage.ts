@@ -148,16 +148,66 @@ export class GoogleDriveFileStorage extends FileStorageBase {
   /**
    * Checks if Google Drive provider is properly configured.
    * Returns true if all required OAuth credentials are present.
+   * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
-    return !!(this._clientID && this._clientSecret && this._refreshToken);
+    const hasClientID = !!this._clientID;
+    const hasClientSecret = !!this._clientSecret;
+    const hasRefreshToken = !!this._refreshToken;
+
+    const isConfigured = hasClientID && hasClientSecret && hasRefreshToken;
+
+    if (!isConfigured) {
+      const missing: string[] = [];
+      if (!hasClientID) missing.push('Client ID');
+      if (!hasClientSecret) missing.push('Client Secret');
+      if (!hasRefreshToken) missing.push('Refresh Token');
+
+      console.error(
+        `❌ Google Drive provider not configured. Missing: ${missing.join(', ')}\n\n` +
+        `Configuration Options:\n\n` +
+        `Option 1: Environment Variables\n` +
+        `  export STORAGE_GDRIVE_CLIENT_ID="..."\n` +
+        `  export STORAGE_GDRIVE_CLIENT_SECRET="..."\n` +
+        `  export STORAGE_GDRIVE_REFRESH_TOKEN="..."\n` +
+        `  const storage = new GoogleDriveFileStorage();\n` +
+        `  await storage.initialize(); // No config needed\n\n` +
+        `Option 2: Database Credentials (Multi-Tenant)\n` +
+        `  const storage = new GoogleDriveFileStorage();\n` +
+        `  await storage.initialize({\n` +
+        `    accountId: "...",\n` +
+        `    clientID: "...",\n` +
+        `    clientSecret: "...",\n` +
+        `    refreshToken: "..."\n` +
+        `  });\n`
+      );
+    }
+
+    return isConfigured;
   }
 
   /**
-   * Initializes the Google Drive storage provider with configuration from the database.
-   * This method is called by the FileStorageProviderEngine when loading provider configurations.
+   * Initialize Google Drive storage provider.
    *
-   * @param config - Configuration object containing OAuth2 credentials
+   * **Always call this method** after creating an instance.
+   *
+   * @example Simple Deployment (Environment Variables)
+   * const storage = new GoogleDriveFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/');
+   *
+   * @example Multi-Tenant (Database Credentials)
+   * const storage = new GoogleDriveFileStorage();
+   * await storage.initialize({
+   *   accountId: '12345',
+   *   accountName: 'Google Drive Account',
+   *   clientID: '...',
+   *   clientSecret: '...',
+   *   refreshToken: '...',
+   *   rootFolderID: 'optional-folder-id'
+   * });
+   *
+   * @param config - Optional. Omit to use env vars, provide to override with database creds.
    */
   public async initialize(config?: GoogleDriveConfig): Promise<void> {
     // Always call super to store accountId and accountName
