@@ -1172,3 +1172,12 @@
     flex-shrink: 0;
     margin-left: 8px;
 }
+
+/* Search Highlight */
+:host ::ng-deep .search-highlight,
+.search-highlight {
+    background-color: #fef08a;
+    padding: 1px 2px;
+    border-radius: 2px;
+    font-weight: inherit;
+}

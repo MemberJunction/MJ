@@ -649,23 +649,10 @@
     }
 </div>
 
-<!-- Action Test Harness -->
-@if (showTestHarness) {
-    <kendo-window 
-        [width]="1200" 
-        [height]="800" 
-        [minWidth]="800"
-        [minHeight]="600"
-        [draggable]="true"
-        [resizable]="true"
-        [state]="'default'"
-        (close)="onTestHarnessVisibilityChanged(false)"
-        title="Run Action - {{ record.Name || 'Untitled' }}">
-        <mj-action-test-harness
-            [action]="record"
-            [actionParams]="actionParams"
-            [isVisible]="showTestHarness"
-            (visibilityChange)="onTestHarnessVisibilityChanged($event)">
-        </mj-action-test-harness>
-    </kendo-window>
-}
+<!-- Action Test Harness Dialog -->
+<mj-action-test-harness-dialog
+    [Action]="record"
+    [ActionParams]="actionParams"
+    [IsOpen]="showTestHarness"
+    (Close)="onTestHarnessVisibilityChanged(false)">
+</mj-action-test-harness-dialog>

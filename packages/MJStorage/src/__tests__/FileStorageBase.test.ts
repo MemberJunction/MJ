@@ -27,11 +27,11 @@ class TestableFileStorageDriver extends FileStorageBase {
   private _isConfigured = false;
   public configPassedToInitialize: StorageProviderConfig | null = null;
 
-  public async initialize(config: StorageProviderConfig): Promise<void> {
+  public async initialize(config?: StorageProviderConfig): Promise<void> {
     // Call the base implementation
     await super.initialize(config);
     // Store the config for test verification
-    this.configPassedToInitialize = config;
+    this.configPassedToInitialize = config || null;
     this._isConfigured = true;
   }
 
@@ -237,13 +237,16 @@ describe('FileStorageBase', () => {
 });
 
 describe('StorageProviderConfig interface', () => {
-  it('should require accountId property', () => {
+  it('should allow accountId to be optional', () => {
     // This is a compile-time check - if the type is wrong, TypeScript will error
-    const validConfig: StorageProviderConfig = {
-      accountId: 'required-account-id',
+    const validConfigWithAccount: StorageProviderConfig = {
+      accountId: 'optional-account-id',
     };
 
-    expect(validConfig.accountId).toBe('required-account-id');
+    const validConfigWithoutAccount: StorageProviderConfig = {};
+
+    expect(validConfigWithAccount.accountId).toBe('optional-account-id');
+    expect(validConfigWithoutAccount.accountId).toBeUndefined();
   });
 
   it('should allow optional accountName property', () => {
@@ -272,5 +275,79 @@ describe('StorageProviderConfig interface', () => {
 
     expect(s3Config.bucket).toBe('my-bucket');
     expect(s3Config.region).toBe('us-east-1');
+  });
+});
+
+describe('Unified Initialize Pattern', () => {
+  let driver: TestableFileStorageDriver;
+
+  beforeEach(() => {
+    driver = new TestableFileStorageDriver();
+  });
+
+  describe('Simple Deployment (No Config)', () => {
+    it('should initialize with no config (uses env vars)', async () => {
+      // Simulate environment variable setup by calling initialize with no config
+      await driver.initialize({});
+
+      expect(driver.IsConfigured).toBe(true);
+      expect(driver.AccountId).toBeUndefined(); // No accountId provided
+      expect(driver.AccountName).toBeUndefined();
+    });
+
+    it('should allow initialize to be called without any config object', async () => {
+      // Even calling with undefined should work
+      await driver.initialize(undefined as unknown as StorageProviderConfig);
+
+      // The driver should still be in some state (depends on implementation)
+      // Implementation stores config || null, so undefined becomes null
+      expect(driver.configPassedToInitialize).toBeNull();
+    });
+  });
+
+  describe('Multi-Tenant (With Config)', () => {
+    it('should initialize with full config', async () => {
+      const config: StorageProviderConfig = {
+        accountId: '12345-67890',
+        accountName: 'Test Account',
+        bucket: 'runtime-bucket',
+        region: 'us-west-2',
+        accessKeyId: 'runtime-key',
+      };
+
+      await driver.initialize(config);
+
+      expect(driver.IsConfigured).toBe(true);
+      expect(driver.AccountId).toBe('12345-67890');
+      expect(driver.AccountName).toBe('Test Account');
+      expect(driver.configPassedToInitialize).toEqual(config);
+    });
+
+    it('should allow partial config (accountId only)', async () => {
+      const config: StorageProviderConfig = {
+        accountId: 'account-123',
+      };
+
+      await driver.initialize(config);
+
+      expect(driver.AccountId).toBe('account-123');
+      expect(driver.AccountName).toBeUndefined();
+    });
+  });
+
+  describe('Override Behavior', () => {
+    it('should override with runtime config when both env and config provided', async () => {
+      // Simulate: constructor loaded env vars, then initialize() called with config
+      const runtimeConfig: StorageProviderConfig = {
+        accountId: 'override-account',
+        accountName: 'Override Account',
+        bucket: 'override-bucket',
+      };
+
+      await driver.initialize(runtimeConfig);
+
+      expect(driver.AccountId).toBe('override-account');
+      expect(driver.AccountName).toBe('Override Account');
+    });
   });
 });

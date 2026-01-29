@@ -25,6 +25,9 @@ LoadCoreGeneratedForms(); // prevent tree shaking - dynamic loaded components do
 LoadCoreCustomForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
 
+// Import class registrations manifest to prevent tree-shaking of @RegisterClass decorated classes
+import './generated/class-registrations-manifest';
+
 //***********************************************************
 //MSAL
 //***********************************************************

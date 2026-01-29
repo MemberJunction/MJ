@@ -37,7 +37,9 @@ import {
   LoadActionsScheduleResource,
   LoadActionsCodeResource,
   LoadActionsEntitiesResource,
-  LoadActionsSecurityResource
+  LoadActionsSecurityResource,
+  LoadActionExplorerResource,
+  LoadActionExplorerComponents
 } from './Actions';
 import { LoadCommunicationMonitorResource } from './Communication/communication-monitor-resource.component';
 import { LoadCommunicationLogsResource } from './Communication/communication-logs-resource.component';
@@ -100,7 +102,20 @@ export {
   EntityIntegrationComponent,
   LoadActionsEntitiesResource,
   SecurityPermissionsComponent,
-  LoadActionsSecurityResource
+  LoadActionsSecurityResource,
+  // Action Explorer components
+  ActionExplorerComponent,
+  ActionTreePanelComponent,
+  ActionToolbarComponent,
+  ActionBreadcrumbComponent,
+  ActionCardComponent,
+  ActionListItemComponent,
+  NewCategoryPanelComponent,
+  NewActionPanelComponent,
+  LoadActionExplorerResource,
+  LoadActionExplorerComponents,
+  // State service
+  ActionExplorerStateService
 } from './Actions';
 
 // Re-export Actions ExecutionMonitoringComponent with alias to avoid conflict with AI version
@@ -202,6 +217,9 @@ LoadActionsScheduleResource();
 LoadActionsCodeResource();
 LoadActionsEntitiesResource();
 LoadActionsSecurityResource();
+// Action Explorer loaders
+LoadActionExplorerResource();
+LoadActionExplorerComponents();
 
 // Scheduling resource loaders
 LoadSchedulingMonitorResource();

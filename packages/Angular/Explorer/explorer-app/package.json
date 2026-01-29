@@ -6,9 +6,9 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "npm run clean && ngc && npm run copy-assets",
-    "copy-assets": "cp -r src/lib/styles dist/ && cp -r src/lib/assets dist/ && cp src/lib/styles.scss dist/",
+    "copy-assets": "cpy src/lib/styles dist --parents && cpy src/lib/assets dist --parents && cpy src/lib/styles.scss dist",
     "watch": "ngc --watch",
-    "clean": "rm -rf dist"
+    "clean": "rimraf dist"
   },
   "keywords": [
     "memberjunction",

@@ -111,7 +111,7 @@ export default class Migrate extends Command {
             'migrate'
           ];
 
-          const migrateResult = spawnSync(flywayExePath, migrateArgs, { encoding: 'utf8' });
+          const migrateResult = spawnSync(flywayExePath, migrateArgs, { encoding: 'utf8', shell: true });
           const migrateOutput = migrateResult.stderr || migrateResult.stdout || '';
 
           // Check if output contains error messages even if exit code is 0

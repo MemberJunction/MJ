@@ -7,6 +7,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { parseBooleanEnv } from '@memberjunction/config';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as sql from 'mssql';
@@ -50,8 +51,7 @@ export async function initializeDatabase(): Promise<void> {
     options: {
       encrypt: true,
       enableArithAbort: true,
-      trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true' ||
-                              process.env.DB_TRUST_SERVER_CERTIFICATE === '1',
+      trustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE),
     },
   };
 

@@ -3,7 +3,7 @@
     "fields": {
       "Name": "MCP",
       "Description": "Model Context Protocol (MCP) server tools exposed as Actions",
-      "ParentID": "@lookup:Action Categories.Name=AI&Parent=System",
+      "ParentID": "@lookup:Action Categories.Name=System&ParentID=null",
       "Status": "Active"
     },
     "primaryKey": {

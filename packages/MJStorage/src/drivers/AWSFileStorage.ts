@@ -122,10 +122,32 @@ export class AWSFileStorage extends FileStorageBase {
   }
 
   /**
-   * Initialize the AWS S3 client with configuration from database or other runtime source.
-   * This allows configuration to be passed after construction, overriding environment variables.
+   * Initialize AWS S3 storage provider.
    *
-   * @param config - Optional configuration object with AWS credentials and settings
+   * **Always call this method** after creating an instance.
+   *
+   * @example Simple Deployment (Environment Variables)
+   * ```typescript
+   * const storage = new AWSFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/');
+   * ```
+   *
+   * @example Multi-Tenant (Database Credentials)
+   * ```typescript
+   * const storage = new AWSFileStorage();
+   * await storage.initialize({
+   *   accountId: '12345',
+   *   accountName: 'AWS Account',
+   *   accessKeyID: '...',     // From database
+   *   secretAccessKey: '...',
+   *   region: 'us-east-1',
+   *   defaultBucket: 'bucket'
+   * });
+   * await storage.ListObjects('/');
+   * ```
+   *
+   * @param config - Optional. Omit to use env vars, provide to override with database creds.
    */
   public async initialize(config?: AWSS3Config): Promise<void> {
     // Always call super to store accountId and accountName
@@ -158,9 +180,46 @@ export class AWSFileStorage extends FileStorageBase {
   /**
    * Checks if AWS S3 provider is properly configured.
    * Returns true if access credentials and bucket name are present.
+   * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
-    return !!(this._accessKeyId && this._secretAccessKey && this._bucketName);
+    const hasAccessKey = !!this._accessKeyId;
+    const hasSecretKey = !!this._secretAccessKey;
+    const hasBucket = !!this._bucketName;
+    const hasRegion = !!this._client?.config?.region;
+
+    const isConfigured = hasAccessKey && hasSecretKey && hasBucket && hasRegion;
+
+    if (!isConfigured) {
+      const missing: string[] = [];
+      if (!hasAccessKey) missing.push('Access Key ID');
+      if (!hasSecretKey) missing.push('Secret Access Key');
+      if (!hasBucket) missing.push('Bucket Name');
+      if (!hasRegion) missing.push('Region');
+
+      console.error(
+        `❌ AWS S3 provider not configured. Missing: ${missing.join(', ')}\n\n` +
+        `Configuration Options:\n\n` +
+        `Option 1: Environment Variables\n` +
+        `  export STORAGE_AWS_ACCESS_KEY_ID="AKIA..."\n` +
+        `  export STORAGE_AWS_SECRET_ACCESS_KEY="..."\n` +
+        `  export STORAGE_AWS_BUCKET_NAME="my-bucket"\n` +
+        `  export STORAGE_AWS_REGION="us-east-1"\n` +
+        `  const storage = new AWSFileStorage();\n` +
+        `  await storage.initialize(); // No config needed\n\n` +
+        `Option 2: Database Credentials (Multi-Tenant)\n` +
+        `  const storage = new AWSFileStorage();\n` +
+        `  await storage.initialize({\n` +
+        `    accountId: "...",\n` +
+        `    accessKeyID: "...",\n` +
+        `    secretAccessKey: "...",\n` +
+        `    region: "us-east-1",\n` +
+        `    defaultBucket: "my-bucket"\n` +
+        `  });\n`
+      );
+    }
+
+    return isConfigured;
   }
 
   /**

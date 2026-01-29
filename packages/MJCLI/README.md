@@ -114,6 +114,34 @@ mj codegen [--skipdb]
 Options:
 - `--skipdb`: Skip database migration before running code generation
 
+#### `mj codegen manifest`
+
+Generates a class registrations manifest to prevent tree-shaking of `@RegisterClass` decorated classes. The tool walks the app's transitive dependency tree and produces a tailored import manifest.
+
+```bash
+mj codegen manifest [--output <path>] [--appDir <path>] [--filter <class>] [--quiet]
+```
+
+Options:
+- `--output, -o <path>`: Output manifest file path (default: `./src/generated/class-registrations-manifest.ts`)
+- `--appDir, -a <path>`: App directory containing `package.json` (default: current directory)
+- `--filter, -f <class>`: Only include classes with this base class (can be repeated)
+- `--quiet, -q`: Suppress progress output
+
+Examples:
+```bash
+# Generate manifest for the current app
+mj codegen manifest --output ./src/generated/class-registrations-manifest.ts
+
+# Generate for a specific app directory
+mj codegen manifest --appDir ./packages/MJAPI --output ./packages/MJAPI/src/generated/class-registrations-manifest.ts
+
+# Only include engine and action classes
+mj codegen manifest --filter BaseEngine --filter BaseAction
+```
+
+The generated manifest imports all packages in the app's dependency tree that contain `@RegisterClass` decorators, ensuring the class factory system works correctly even with aggressive tree-shaking. See the [CodeGenLib README](../CodeGenLib/README.md) for programmatic usage.
+
 #### `mj migrate`
 
 Applies database migrations to update your MemberJunction schema to the latest version.
