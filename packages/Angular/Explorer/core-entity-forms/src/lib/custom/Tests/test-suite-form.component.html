@@ -1,6 +1,23 @@
 <div class="test-suite-form" kendoDialogContainer>
   <!-- Header Section -->
   <div class="suite-header">
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li>
+          <a href="javascript:void(0)" (click)="navigateToTestingDashboard()">
+            <i class="fas fa-vial"></i>
+            <span class="breadcrumb-text">Testing</span>
+          </a>
+        </li>
+        <li class="current">
+          <i class="fas fa-chevron-right separator"></i>
+          <i class="fas fa-layer-group"></i>
+          <span>{{ record.Name }}</span>
+        </li>
+      </ol>
+    </nav>
+
     <div class="header-content">
       <div class="header-left">
         <div class="suite-icon" [style.background-color]="getStatusColor()">

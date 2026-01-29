@@ -1,25 +1,17 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
 /**
- * Tree-shaking prevention function
+ * Testing Dashboard Tab Resource - displays the main dashboard overview
  */
-export function LoadTestingOverviewResource() {
-  // Force inclusion in production builds
-}
-
-/**
- * Testing Overview Resource - displays test management dashboard overview
- */
-@RegisterClass(BaseResourceComponent, 'TestingOverviewResource')
+@RegisterClass(BaseResourceComponent, 'TestingDashboardTabResource')
 @Component({
-  selector: 'mj-testing-overview-resource',
+  selector: 'mj-testing-dashboard-tab-resource',
   template: `
     <div class="resource-container">
-      <app-testing-overview></app-testing-overview>
+      <app-testing-dashboard-tab></app-testing-dashboard-tab>
     </div>
   `,
   styles: [`
@@ -30,15 +22,13 @@ export function LoadTestingOverviewResource() {
     }
   `]
 })
-export class TestingOverviewResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class TestingDashboardTabResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
-    // Notify that loading is complete
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
-    // Cleanup if needed
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
@@ -46,6 +36,6 @@ export class TestingOverviewResourceComponent extends BaseResourceComponent impl
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {
-    return 'fa-solid fa-chart-line';
+    return 'fa-solid fa-gauge-high';
   }
 }

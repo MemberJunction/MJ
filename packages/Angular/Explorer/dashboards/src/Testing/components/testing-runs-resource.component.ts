@@ -1,25 +1,17 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
 /**
- * Tree-shaking prevention function
+ * Testing Runs Resource - displays test execution history and monitoring
  */
-export function LoadTestingExecutionResource() {
-  // Force inclusion in production builds
-}
-
-/**
- * Testing Execution Resource - displays test execution monitoring
- */
-@RegisterClass(BaseResourceComponent, 'TestingExecutionResource')
+@RegisterClass(BaseResourceComponent, 'TestingRunsResource')
 @Component({
-  selector: 'mj-testing-execution-resource',
+  selector: 'mj-testing-runs-resource',
   template: `
     <div class="resource-container">
-      <app-testing-execution></app-testing-execution>
+      <app-testing-runs></app-testing-runs>
     </div>
   `,
   styles: [`
@@ -30,19 +22,17 @@ export function LoadTestingExecutionResource() {
     }
   `]
 })
-export class TestingExecutionResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class TestingRunsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
-    // Notify that loading is complete
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
-    // Cleanup if needed
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'Execution';
+    return 'Runs';
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {

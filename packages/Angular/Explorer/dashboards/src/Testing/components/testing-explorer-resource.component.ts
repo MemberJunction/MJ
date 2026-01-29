@@ -1,25 +1,17 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
 /**
- * Tree-shaking prevention function
+ * Testing Explorer Resource - displays interactive test and suite browser
  */
-export function LoadTestingVersionResource() {
-  // Force inclusion in production builds
-}
-
-/**
- * Testing Version Resource - displays version comparison and analysis
- */
-@RegisterClass(BaseResourceComponent, 'TestingVersionResource')
+@RegisterClass(BaseResourceComponent, 'TestingExplorerResource')
 @Component({
-  selector: 'mj-testing-version-resource',
+  selector: 'mj-testing-explorer-resource',
   template: `
     <div class="resource-container">
-      <app-testing-version-comparison></app-testing-version-comparison>
+      <app-testing-explorer></app-testing-explorer>
     </div>
   `,
   styles: [`
@@ -30,22 +22,20 @@ export function LoadTestingVersionResource() {
     }
   `]
 })
-export class TestingVersionResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class TestingExplorerResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
-    // Notify that loading is complete
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
-    // Cleanup if needed
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'Version';
+    return 'Explorer';
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {
-    return 'fa-solid fa-code-compare';
+    return 'fa-solid fa-compass';
   }
 }

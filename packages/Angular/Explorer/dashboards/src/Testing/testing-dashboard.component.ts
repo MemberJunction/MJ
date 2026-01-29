@@ -7,11 +7,10 @@ import { ResourceData } from '@memberjunction/core-entities';
 
 interface TestingDashboardState {
   activeTab: string;
-  overviewState: any;
-  executionState: any;
-  analyticsState: any;
-  versionState: any;
-  feedbackState: any;
+  dashboardState: Record<string, unknown>;
+  runsState: Record<string, unknown>;
+  analyticsState: Record<string, unknown>;
+  reviewState: Record<string, unknown>;
 }
 
 @Component({
@@ -24,28 +23,26 @@ interface TestingDashboardState {
 export class TestingDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
 
   public isLoading = false;
-  public activeTab = 'overview';
+  public activeTab = 'dashboard';
   public selectedIndex = 0;
 
   // Component states
-  public overviewState: any = null;
-  public executionState: any = null;
-  public analyticsState: any = null;
-  public versionState: any = null;
-  public feedbackState: any = null;
+  public dashboardState: Record<string, unknown> | null = null;
+  public runsState: Record<string, unknown> | null = null;
+  public analyticsState: Record<string, unknown> | null = null;
+  public reviewState: Record<string, unknown> | null = null;
 
   // Track visited tabs for lazy loading
   private visitedTabs = new Set<string>();
 
   // Navigation items
-  public navigationItems: string[] = ['overview', 'execution', 'analytics', 'version', 'feedback'];
+  public navigationItems: string[] = ['dashboard', 'runs', 'analytics', 'review'];
 
   public navigationConfig = [
-    { text: 'Overview', icon: 'fa-solid fa-chart-line', selected: false },
-    { text: 'Execution', icon: 'fa-solid fa-play-circle', selected: false },
+    { text: 'Dashboard', icon: 'fa-solid fa-gauge-high', selected: false },
+    { text: 'Runs', icon: 'fa-solid fa-play-circle', selected: false },
     { text: 'Analytics', icon: 'fa-solid fa-chart-bar', selected: false },
-    { text: 'Version', icon: 'fa-solid fa-code-compare', selected: false },
-    { text: 'Feedback', icon: 'fa-solid fa-clipboard-check', selected: false }
+    { text: 'Review', icon: 'fa-solid fa-clipboard-check', selected: false }
   ];
 
   private stateChangeSubject = new Subject<TestingDashboardState>();
@@ -56,9 +53,8 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.updateNavigationSelection();
   }
 
-
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return "Testing"
+    return 'Testing';
   }
 
   ngAfterViewInit(): void {
@@ -97,38 +93,32 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   private emitStateChange(): void {
     const state: TestingDashboardState = {
       activeTab: this.activeTab,
-      overviewState: this.overviewState || {},
-      executionState: this.executionState || {},
-      analyticsState: this.analyticsState || {},
-      versionState: this.versionState || {},
-      feedbackState: this.feedbackState || {}
+      dashboardState: (this.dashboardState || {}) as Record<string, unknown>,
+      runsState: (this.runsState || {}) as Record<string, unknown>,
+      analyticsState: (this.analyticsState || {}) as Record<string, unknown>,
+      reviewState: (this.reviewState || {}) as Record<string, unknown>
     };
 
     this.stateChangeSubject.next(state);
   }
 
-  public onOverviewStateChange(state: any): void {
-    this.overviewState = state;
+  public onDashboardStateChange(state: Record<string, unknown>): void {
+    this.dashboardState = state;
     this.emitStateChange();
   }
 
-  public onExecutionStateChange(state: any): void {
-    this.executionState = state;
+  public onRunsStateChange(state: Record<string, unknown>): void {
+    this.runsState = state;
     this.emitStateChange();
   }
 
-  public onAnalyticsStateChange(state: any): void {
+  public onAnalyticsStateChange(state: Record<string, unknown>): void {
     this.analyticsState = state;
     this.emitStateChange();
   }
 
-  public onVersionStateChange(state: any): void {
-    this.versionState = state;
-    this.emitStateChange();
-  }
-
-  public onFeedbackStateChange(state: any): void {
-    this.feedbackState = state;
+  public onReviewStateChange(state: Record<string, unknown>): void {
+    this.reviewState = state;
     this.emitStateChange();
   }
 
@@ -141,11 +131,10 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
       this.updateNavigationSelection();
     }
 
-    if (state.overviewState) this.overviewState = state.overviewState;
-    if (state.executionState) this.executionState = state.executionState;
+    if (state.dashboardState) this.dashboardState = state.dashboardState;
+    if (state.runsState) this.runsState = state.runsState;
     if (state.analyticsState) this.analyticsState = state.analyticsState;
-    if (state.versionState) this.versionState = state.versionState;
-    if (state.feedbackState) this.feedbackState = state.feedbackState;
+    if (state.reviewState) this.reviewState = state.reviewState;
 
     this.cdr.markForCheck();
   }
@@ -170,13 +159,12 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
       }, 0);
     }
 
-    this.NotifyLoadComplete();    
+    this.NotifyLoadComplete();
   }
 
   public getCurrentTabLabel(): string {
     const tabIndex = this.navigationItems.indexOf(this.activeTab);
-    const labels = ['Overview', 'Execution', 'Analytics', 'Version', 'Feedback'];
-    return tabIndex >= 0 ? labels[tabIndex] : 'Testing Dashboard';
+    return tabIndex >= 0 ? this.navigationConfig[tabIndex].text : 'Testing Dashboard';
   }
 
   private updateNavigationSelection(): void {
