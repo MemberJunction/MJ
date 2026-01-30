@@ -74,7 +74,7 @@
             "ID": "2EA2BFFC-3EFB-4D23-9985-055C2FF18620"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.625Z",
+            "lastModified": "2026-01-30T03:11:20.197Z",
             "checksum": "e7141858b4b5010a713c44843266e23af2498a6a7a710892d52ece71eb008281"
           }
         }
@@ -808,6 +808,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "244BA6D0-1F48-42BD-83BF-FDBF48D44CC6"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:20.316Z",
+            "checksum": "e3aeda4d900cc743cf995313ee545a090b8d66eeaafb2c705715f7eea05260ac"
           }
         },
         {
@@ -824,6 +831,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3568882B-8D36-4914-A411-A81007E3893F"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:20.327Z",
+            "checksum": "d223247897aa59930e1433311f0fe08a719eb31854b8a9ad11233f9eb4245e2a"
           }
         }
       ],
@@ -841,6 +855,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Qwen 3 235B pricing on Fireworks.ai as of January 2026. Largest Qwen 3 series model with 128K context."
+          },
+          "primaryKey": {
+            "ID": "328D471F-91B1-4BAB-AA09-EB13FB08CCA4"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:20.402Z",
+            "checksum": "06ec7aa95fbf4bedc0a7875a59133086be7b8ec20c800b06bf545b28a36e7f78"
           }
         }
       ]
@@ -879,7 +900,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "D1DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "44BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.436Z",
@@ -923,7 +944,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "D5DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "48BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.441Z",
@@ -1245,7 +1266,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "B7DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "2ABC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.395Z",
@@ -1264,7 +1285,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "521A7289-2324-4CDC-A4CF-9B93FC4B619C"
+            "ID": "C4914308-7205-4759-80F6-FBD37A52E9E6"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.564Z",
@@ -1305,7 +1326,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "B6DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "29BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.393Z",
@@ -1324,7 +1345,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "235E28EF-8880-4BAE-994D-EA474172DC97"
+            "ID": "3F991378-3405-48A4-A784-0E194AA78816"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.564Z",
@@ -1365,7 +1386,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "B5DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "28BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.392Z",
@@ -1384,7 +1405,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "C02D5149-CF51-42FE-8060-6EAD6709DA58"
+            "ID": "301F7584-6896-41C6-954F-1CDD1567A18A"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.563Z",
@@ -1423,7 +1444,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "C5DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "38BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.394Z",
@@ -1442,7 +1463,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "964231DA-2406-42AB-A807-E113FA57A536"
+            "ID": "9FE54133-B690-4A85-BDD7-801FC5DCCB1E"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.565Z",
@@ -1482,7 +1503,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "B8DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "2BBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.396Z",
@@ -1501,7 +1522,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "1FDDC876-A76D-4984-BA50-F6C49555A9A0"
+            "ID": "B71229D3-38A9-48A9-996F-4577B2B6AB88"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.565Z",
@@ -1541,7 +1562,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "B9DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "2CBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.397Z",
@@ -1560,7 +1581,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "4BB11D99-DA89-4C39-9DE4-0F39B03FBC47"
+            "ID": "967D7904-DCDA-4586-9775-F3887B59D061"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.565Z",
@@ -1600,7 +1621,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "CADE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "3DBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.398Z",
@@ -1619,7 +1640,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "11BB9911-A8D6-4CAE-B3C3-7FA35D97C3A1"
+            "ID": "B18112D0-6394-47CD-8D0C-E311878167F9"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.566Z",
@@ -1662,7 +1683,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "DFDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "52BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.399Z",
@@ -1681,7 +1702,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "B831C226-9E5C-420A-BA75-7D3644A1E506"
+            "ID": "A9372BC5-7BC4-4CE8-A56A-709799ADFC49"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.567Z",
@@ -1723,7 +1744,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "C7DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "3ABC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.401Z",
@@ -1742,7 +1763,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "9F0536B8-D761-4B8F-8286-FF7D7D6042AF"
+            "ID": "0C5F36F9-B4FD-4F6C-A867-11C8708DECFE"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.569Z",
@@ -1785,7 +1806,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "B2DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "25BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.403Z",
@@ -1804,7 +1825,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "20D45BC2-89DB-42B4-A44B-D0C54C423CC0"
+            "ID": "267E3BB8-28A4-4FC2-AD39-E708785E17F9"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.570Z",
@@ -1847,7 +1868,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "B3DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "26BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.403Z",
@@ -1866,7 +1887,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "8C55DA6B-76AE-4265-A277-FF35D5856A4B"
+            "ID": "D16FF9A1-62BE-45E9-8BCD-9F5BCBF4AB34"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.570Z",
@@ -1931,7 +1952,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "D6DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "49BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.572Z",
@@ -1974,7 +1995,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "BBDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "2EBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.418Z",
@@ -1993,7 +2014,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "49DE2587-328A-4A76-ACAB-AAF40B640BDE"
+            "ID": "2D8B828A-AB4A-46AC-93DB-5B873C149F50"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.578Z",
@@ -2036,7 +2057,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "BCDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "2FBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.419Z",
@@ -2055,7 +2076,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "E3BAF1F9-25BA-441B-9B29-BF3200149D80"
+            "ID": "6D81ECCB-9BDC-4BD1-9D0B-BB1AE860C051"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.580Z",
@@ -2098,7 +2119,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "C0DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "33BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.422Z",
@@ -2117,7 +2138,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "5A752962-0F00-436F-8F9E-CA2106E33A94"
+            "ID": "BCDB7A90-0510-4A6A-8EFA-8DDD1FE0785B"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.581Z",
@@ -2162,7 +2183,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "B4DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "27BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.423Z",
@@ -2181,7 +2202,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "555F5634-112F-4954-8241-BC35DBE61D88"
+            "ID": "F9B7B02D-8C92-4FE8-AFC2-ADA52D102272"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.582Z",
@@ -2548,7 +2569,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "D2DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "45BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.398Z",
@@ -2575,7 +2596,7 @@
             "ID": "1A7D0E0C-A604-424B-97DE-086E9D649584"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.735Z",
+            "lastModified": "2026-01-30T03:11:21.059Z",
             "checksum": "382e3c4a1405c84f606d546f327c3728d812462706c18e8364ab5506e691372a"
           }
         }
@@ -2615,7 +2636,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "D3DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "46BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.440Z",
@@ -2642,7 +2663,7 @@
             "ID": "E75F641A-5BF8-411C-95F3-06B26EBBD96E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.760Z",
+            "lastModified": "2026-01-30T03:11:21.072Z",
             "checksum": "b50cf60dc4f48254032a47ff3d4a4682ac695ec321dacb76696ec0f4343d3906"
           }
         }
@@ -2682,7 +2703,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "D7DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "4ABC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.445Z",
@@ -2709,7 +2730,7 @@
             "ID": "4F83F994-D8F3-4062-B883-8775DDE73E0A"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.765Z",
+            "lastModified": "2026-01-30T03:11:21.085Z",
             "checksum": "29294f2ed4259bbb64eb107e13d6ed49351a9df12a8765478dcd060dae2987c4"
           }
         }
@@ -2748,7 +2769,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "C6DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "39BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.400Z",
@@ -2767,7 +2788,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "9EA2598E-5EED-4AF0-9DE9-F7D91EEA6226"
+            "ID": "82948154-09C1-4357-935D-B04C78F968C9"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.568Z",
@@ -2794,7 +2815,7 @@
             "ID": "E05C90B8-6CD1-470E-AD11-FD592CF93AFB"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.818Z",
+            "lastModified": "2026-01-30T03:11:21.097Z",
             "checksum": "e34da7bce7708a4a1eaf6bf33bef8d3dd8067b060f770d82192023895cd1b1f4"
           }
         }
@@ -2883,7 +2904,7 @@
             "ID": "F3A9A104-89AF-4703-90B9-191BBDA801F9"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.821Z",
+            "lastModified": "2026-01-30T03:11:21.263Z",
             "checksum": "28bd601cf3708a06b2091308d009bf931fb90104a19c4dc3fbab02d6a2e04d8c"
           }
         }
@@ -2923,7 +2944,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "C3DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "36BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.408Z",
@@ -2942,7 +2963,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "BA7A4DF1-75A1-4055-8A7B-7AF005E4D282"
+            "ID": "0DBE6EA7-49B2-48AD-936D-8E7DE2832545"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.573Z",
@@ -2969,7 +2990,7 @@
             "ID": "096C8D65-C5A7-4BB6-B146-7DFAA947B14A"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.821Z",
+            "lastModified": "2026-01-30T03:11:21.275Z",
             "checksum": "60ff02db453bf9d5c13d874eb9cd838f5bdf572ea5e66b7ac9e44c370aeda093"
           }
         }
@@ -3098,7 +3119,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "C1DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "34BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.410Z",
@@ -3117,7 +3138,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "ED57D1A1-F76D-4230-A3F6-D5E73F83B180"
+            "ID": "A0463A20-7129-47B0-A2B2-A82D71A925C1"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.574Z",
@@ -3144,7 +3165,7 @@
             "ID": "92F3C25B-AFD7-4C6D-8656-9B085396BCE8"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.823Z",
+            "lastModified": "2026-01-30T03:11:21.433Z",
             "checksum": "c43de2cb09c9f5cb7793821165e9b1d6d21d3444152414cd61b55b7e6fcade82"
           }
         }
@@ -3541,7 +3562,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "C2DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "35BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.416Z",
@@ -3560,7 +3581,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "5353C5BF-4764-49A7-B394-CCB0E2549B34"
+            "ID": "4FFD9B81-992B-4297-93E1-A1A417ED7DAD"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.579Z",
@@ -3587,7 +3608,7 @@
             "ID": "1BCF9014-50C4-4129-9E28-0CB286017C3C"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.828Z",
+            "lastModified": "2026-01-30T03:11:21.586Z",
             "checksum": "e0ced8c8f0c81f90059b3b9f03ce03aa6d299e7d960fc27478b41b232b72e77d"
           }
         }
@@ -3627,7 +3648,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "BADE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "2DBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.417Z",
@@ -3646,7 +3667,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "457C7F19-AF77-4CC5-8E8E-A1F16F79DFCE"
+            "ID": "02C4BE8F-6511-47CE-8707-0B463FE0A39B"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.578Z",
@@ -3673,7 +3694,7 @@
             "ID": "0122F53D-E449-4BB7-A11A-410181753AFF"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.828Z",
+            "lastModified": "2026-01-30T03:11:21.597Z",
             "checksum": "1169dbeaf765b43f4d6050513f45229a73dca1f8a81bee1cb157a13d17ac784b"
           }
         }
@@ -3713,7 +3734,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "BDDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "30BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.420Z",
@@ -3732,7 +3753,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "0DC103A3-E0F2-477A-B8F8-3100F4E0700C"
+            "ID": "02F8D94E-1879-4DF4-B3C6-414887633FC6"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.580Z",
@@ -3759,7 +3780,7 @@
             "ID": "E9CC9B7B-799A-4069-9E54-4D3DFF334E12"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.829Z",
+            "lastModified": "2026-01-30T03:11:21.842Z",
             "checksum": "fc5c51f02fdfe6f228d6de34d79c16870e3aa3ab61a8db9fe2440b58148fe135"
           }
         }
@@ -3800,7 +3821,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "C4DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "37BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.424Z",
@@ -3819,7 +3840,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "57ABAEC1-D1F5-4856-945D-56BD078F2F72"
+            "ID": "8DAC1346-BE07-423C-A0D6-74A7170A6A67"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.582Z",
@@ -3846,7 +3867,7 @@
             "ID": "1C4C94B7-3D9E-4FDB-BE0C-6FAD82A4ECBE"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.830Z",
+            "lastModified": "2026-01-30T03:11:21.855Z",
             "checksum": "dc87ab1d9e7208f983eea5da8db5aa4933921753b0b4ec64408e531600c95f41"
           }
         }
@@ -3886,7 +3907,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "BEDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "31BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.420Z",
@@ -3905,7 +3926,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "C5F6C66C-0580-4D57-AEDB-04D97BF68446"
+            "ID": "C65B6682-C50C-4427-B383-3F086105EED3"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.582Z",
@@ -3932,7 +3953,7 @@
             "ID": "68EE9D5D-7183-4F2A-B211-4AFCC0B01587"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.830Z",
+            "lastModified": "2026-01-30T03:11:21.865Z",
             "checksum": "d14fe96db13727b32cb777319837ccf6f72845bc0d1e05ba0918d808ae3ac271"
           }
         }
@@ -3972,7 +3993,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "BFDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "32BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.421Z",
@@ -3991,7 +4012,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "5DA00F18-A33F-4668-A9C3-CFF6DA98EAF5"
+            "ID": "9F939D0B-A051-4E60-94BD-7C90E34B3FB7"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.580Z",
@@ -4018,7 +4039,7 @@
             "ID": "9FCE61BE-C582-46A9-B59D-81F73450C0E6"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.831Z",
+            "lastModified": "2026-01-30T03:11:22.177Z",
             "checksum": "60fcf847c874833743ff20d8af36169503998725a7772415ce77fa82edafc1b5"
           }
         }
@@ -4058,7 +4079,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "C8DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "3BBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.427Z",
@@ -4077,7 +4098,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "DDAA5C9B-4FD3-40DB-8388-396B33205DFA"
+            "ID": "99E4013E-A0C0-41E8-9A9C-C61DC4F247BF"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.584Z",
@@ -4104,7 +4125,7 @@
             "ID": "6AB0AE41-58CF-44B9-9214-B165B2108100"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.832Z",
+            "lastModified": "2026-01-30T03:11:22.190Z",
             "checksum": "c66c7873443df15ad4387695466248e36d94f649160db5378581704b3c7517eb"
           }
         }
@@ -4144,7 +4165,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "C9DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "3CBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.428Z",
@@ -4163,7 +4184,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "B7D6692E-E9E5-4DBA-BB40-739611D00DB7"
+            "ID": "9C09E19C-FD30-47FC-9345-D99059EB7C22"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.584Z",
@@ -4190,7 +4211,7 @@
             "ID": "7C026453-4873-454F-B861-3E6CDBAB944F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.833Z",
+            "lastModified": "2026-01-30T03:11:22.199Z",
             "checksum": "4aa33c399a00cb6203f7924341b38833759b2995f2f8ef6a315438058c532fd3"
           }
         }
@@ -4498,7 +4519,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "CCDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "3FBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.434Z",
@@ -4517,7 +4538,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "8E861B63-671D-4108-8324-694474476316"
+            "ID": "D0EF9890-EFC0-4CFC-9980-14A305EF942B"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.588Z",
@@ -4544,7 +4565,7 @@
             "ID": "4BE324BB-70A8-420B-BE87-0CDA6ECE336D"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.835Z",
+            "lastModified": "2026-01-30T03:11:22.347Z",
             "checksum": "f5bbf60c001aada2da8ebd616100ab8401532ee80c5ed0eb1c1531ccdc12f60f"
           }
         }
@@ -4763,7 +4784,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "CDDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "40BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.435Z",
@@ -4782,7 +4803,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "21DF4819-670C-45E3-BF82-2617A18DE83D"
+            "ID": "F5C1AA79-B028-41E5-80DC-98E6D0E8E92B"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.589Z",
@@ -4809,7 +4830,7 @@
             "ID": "675E5E06-184C-4503-A457-3594B9946C25"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.836Z",
+            "lastModified": "2026-01-30T03:11:22.489Z",
             "checksum": "9bbe4488b45cb7fc9eaa6e3ae8a811a8e88d092f977d1d05f6c986ac23de57d5"
           }
         }
@@ -4849,7 +4870,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "CBDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "3EBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.436Z",
@@ -4868,7 +4889,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "B3F39DCC-B604-4EC2-802F-1A4C362E7D17"
+            "ID": "F37A4548-19B0-4105-B926-B48960258AE1"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.590Z",
@@ -4895,7 +4916,7 @@
             "ID": "F95A5535-5A03-468C-89B4-FFDDFA7EFAC0"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.837Z",
+            "lastModified": "2026-01-30T03:11:22.649Z",
             "checksum": "81cf58fa0b257783ac4d2da0eceba61b0367c12775421bb068ad2d237ef46814"
           }
         }
@@ -4978,6 +4999,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F7C9E178-287A-49FC-B501-B1A55858D1E3"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:22.608Z",
+            "checksum": "23a49490e11a2c8851aad641f33b9318679a2eb337190ad4291a248e8b88cd41"
           }
         }
       ],
@@ -5000,7 +5028,7 @@
             "ID": "A261A9EC-A7E1-412B-86E2-BEEAD4B4F999"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.838Z",
+            "lastModified": "2026-01-30T03:11:22.661Z",
             "checksum": "eaec0db2983fa706aa21022a60f8a7ee693509a399e0850d1bb37e3d9916045e"
           }
         },
@@ -5012,11 +5040,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.60,
-            "OutputPricePerUnit": 2.50,
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 2.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Kimi K2 Instruct/Thinking pricing on Fireworks.ai as of January 2026"
+          },
+          "primaryKey": {
+            "ID": "57C8F70E-100B-4BF2-A30B-C91D104D4692"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:22.630Z",
+            "checksum": "9a9080bea7aa87d34921fc0bb9f3ecbaf06f9ed58901246cdce49933ea94cd4d"
           }
         }
       ]
@@ -5078,7 +5113,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "CEDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "41BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.589Z",
@@ -5105,7 +5140,7 @@
             "ID": "7D562C72-384E-463E-8C9A-6511F35CD4C5"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.839Z",
+            "lastModified": "2026-01-30T03:11:22.675Z",
             "checksum": "3f7ba3f66dfcd7c028cbba24038e0119576f3ab34f7d96abb3dde5873b85da2e"
           }
         }
@@ -5167,7 +5202,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "D4DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "47BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.593Z",
@@ -5194,7 +5229,7 @@
             "ID": "1C25C80A-8952-4EDF-8AB4-428E7D296525"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.843Z",
+            "lastModified": "2026-01-30T03:11:22.825Z",
             "checksum": "62eaa6f765c791febfc6516176a70e9d03d5b72a2231852cb6fa8714b6563492"
           }
         }
@@ -5548,7 +5583,7 @@
             "ID": "C3A9BE47-B186-4FA3-E4D8-8FEF2A9BDB01"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.849Z",
+            "lastModified": "2026-01-30T03:11:22.973Z",
             "checksum": "bf9171a3ca9b99686e46d9382f2ca524578ddbdd310267e4a039b02df8132dc3"
           }
         }
@@ -5637,7 +5672,7 @@
             "ID": "166A7DAA-3BDE-40CF-9363-A63FBE9798F2"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.850Z",
+            "lastModified": "2026-01-30T03:11:22.982Z",
             "checksum": "2529b4f31968e897d180116e17447fad916ce058f08742ac1b160e6bcf68ae6d"
           }
         }
@@ -5815,7 +5850,7 @@
             "ID": "F2B8AD36-A075-4E92-D3C7-7EDE1A8BCB90"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.850Z",
+            "lastModified": "2026-01-30T03:11:23.125Z",
             "checksum": "27a1c78bf719eda71887eda29f5eff70daae283943db42e5ffb405ad39516dbf"
           }
         }
@@ -5856,7 +5891,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "D0DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "43BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.439Z",
@@ -5883,7 +5918,7 @@
             "ID": "CCA0A4DC-497D-4E11-BEBB-392E0074A7CA"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.759Z",
+            "lastModified": "2026-01-30T03:11:23.137Z",
             "checksum": "368b74020f7805bc3be76f60ef024723a9a9a4e5387bcb1b61faded500850aaa"
           }
         },
@@ -5902,10 +5937,10 @@
             "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025"
           },
           "primaryKey": {
-            "ID": "8C917BF3-1B35-49C3-941B-397EFFD0E7F4"
+            "ID": "CCA0A4DC-497D-4E11-BEBB-392E0074A7CA"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.857Z",
+            "lastModified": "2026-01-30T03:11:23.147Z",
             "checksum": "73619cec0c2e97847c211954e9fd84056d979b3f040be8f0120dabc1aba23a60"
           }
         }
@@ -6016,7 +6051,7 @@
             "ID": "D1F6F522-20DD-4D86-9DEB-A4F2A3549CC6"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.887Z",
+            "lastModified": "2026-01-30T03:11:23.300Z",
             "checksum": "634551ac25ca631b82fb3b087a0fe99120c7bfb11b47d81b37bcc8eaef095fd6"
           }
         }
@@ -6122,6 +6157,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C0B6D02F-7FA7-45F1-82DA-B9198A63DC7B"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:23.262Z",
+            "checksum": "7ee64b090358648497adb061cbff3bd80234f6e7bc8afed4884761afdd159a6e"
           }
         }
       ],
@@ -6144,7 +6186,7 @@
             "ID": "36E2223B-4D16-46CB-BF74-DFF7679DCF59"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.895Z",
+            "lastModified": "2026-01-30T03:11:23.314Z",
             "checksum": "af86a2b957951b676fcfb35a525f4a0900d94fc3d62ec980ba8c456042a271d7"
           }
         },
@@ -6157,10 +6199,17 @@
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.45,
-            "OutputPricePerUnit": 1.80,
+            "OutputPricePerUnit": 1.8,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Qwen 3 Coder 480B pricing on Fireworks.ai as of January 2026. Large code generation model with 128K context."
+          },
+          "primaryKey": {
+            "ID": "F44A0219-0E52-401E-A49E-9E75F6461939"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:23.281Z",
+            "checksum": "ca627830caec6f203529209eb1d958b1d3eedfeff5bde658b8b909dd1a208c5a"
           }
         }
       ]
@@ -6220,7 +6269,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "EFEE2135-7D52-45A0-A230-5E31E99C7E60"
+            "ID": "C4B7E200-B06D-4477-9A6A-8A04F759C92D"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.584Z",
@@ -6247,7 +6296,7 @@
             "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.832Z",
+            "lastModified": "2026-01-30T03:11:23.326Z",
             "checksum": "04ae96db93ac0497b640bffbfc227f5340422a1fc9543532aab4ddfaee23d8d2"
           }
         },
@@ -6266,10 +6315,10 @@
             "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025"
           },
           "primaryKey": {
-            "ID": "5DDA609E-8445-467E-BE78-EE31BCC385B7"
+            "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.895Z",
+            "lastModified": "2026-01-30T03:11:23.451Z",
             "checksum": "b5b869576b542870b6b1952b2190917ef2d0c142be353772f19461647e064564"
           }
         }
@@ -6330,7 +6379,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "59B0F8EC-0AA7-4115-8C13-38537BA8F109"
+            "ID": "876F0B2C-CD34-40E5-B17F-3C4FF0B9F290"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.583Z",
@@ -6357,7 +6406,7 @@
             "ID": "A727C77A-6F00-4990-9E1D-67B95F49CCF5"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.831Z",
+            "lastModified": "2026-01-30T03:11:23.463Z",
             "checksum": "5f5d34c08142f80365c56b7b515fe527282dd5c43484d092f8fa9ed3742bee7d"
           }
         },
@@ -6376,10 +6425,10 @@
             "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025"
           },
           "primaryKey": {
-            "ID": "F6C1FDB8-7BEF-4946-B3F8-B194B474543A"
+            "ID": "A727C77A-6F00-4990-9E1D-67B95F49CCF5"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.896Z",
+            "lastModified": "2026-01-30T03:11:23.476Z",
             "checksum": "2a55ce83c01609580fa11e4259df84294e94471477d02983e573fc0d2fdee7bd"
           }
         }
@@ -6442,7 +6491,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "CFDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "42BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.590Z",
@@ -6469,7 +6518,7 @@
             "ID": "DA3A0E18-83DD-4329-AC87-0D8E9D563F01"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.838Z",
+            "lastModified": "2026-01-30T03:11:23.489Z",
             "checksum": "373474215aa3b5592bf21d932a80a24172d61a2b3f1d77465965052e5915f856"
           }
         },
@@ -6488,10 +6537,10 @@
             "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025"
           },
           "primaryKey": {
-            "ID": "C0780A29-BC07-430C-B1B8-EB182183F820"
+            "ID": "DA3A0E18-83DD-4329-AC87-0D8E9D563F01"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.896Z",
+            "lastModified": "2026-01-30T03:11:23.500Z",
             "checksum": "205e47ff8c1f9f5c1b3b56f88de1d17d530071305f56757f5404779e10106702"
           }
         }
@@ -6601,6 +6650,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "9F4FC4A5-FBB3-4480-B5E8-1818E21EDED8"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:23.628Z",
+            "checksum": "ed828168ecbcb62552cdd55f20be717895ec5e817663a07681ed244c1402c15c"
           }
         },
         {
@@ -6642,7 +6698,7 @@
             "ID": "42B213D6-BC91-4B4B-88D7-2C7ADCF0D789"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.908Z",
+            "lastModified": "2026-01-30T03:11:23.664Z",
             "checksum": "a7c72b1dcb89ef89cc776658a4fa732d89fe30156bc01f3f4edc3de041cf7f69"
           }
         },
@@ -6655,10 +6711,17 @@
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.07,
-            "OutputPricePerUnit": 0.30,
+            "OutputPricePerUnit": 0.3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-OSS-20B pricing on Fireworks.ai as of January 2026. OpenAI's open-weight model with 21B parameters optimized for local use."
+          },
+          "primaryKey": {
+            "ID": "6DF64770-2EA3-4804-A1F1-FD3B8542B4E0"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:23.649Z",
+            "checksum": "e2501d2c56460e098851d68e07c53e54bb272be4daef9ad9f55519c4a10461d7"
           }
         }
       ]
@@ -6696,7 +6759,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "DBDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "4EBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.402Z",
@@ -6715,7 +6778,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "7315C43F-EEF0-4321-9647-2472A4A6DC7E"
+            "ID": "AB488BCF-45F2-4644-A525-F67E0AAC07BE"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.569Z",
@@ -6822,7 +6885,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "DEDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "51BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.447Z",
@@ -6860,7 +6923,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "2D07B3E1-A494-4ED2-8303-BAD3FFDB0263"
+            "ID": "4DE17363-CFB8-4056-8134-CA93309908C8"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.761Z",
@@ -6948,7 +7011,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "DCDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "4FBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.446Z",
@@ -7007,7 +7070,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "CF698686-8ED4-4324-A448-C28AB23E82F0"
+            "ID": "7011159D-E90B-47FA-974B-B681552035F8"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.840Z",
@@ -7075,7 +7138,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "D8DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "4BBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.448Z",
@@ -7115,7 +7178,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "13BB7F46-A428-4C8E-B164-66FFE153B6A4"
+            "ID": "3E4C7A0D-614C-447F-BF29-BD51BB8A4138"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.762Z",
@@ -7202,7 +7265,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "D9DE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "4CBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.449Z",
@@ -7221,7 +7284,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "05C8F651-60BC-43A2-990F-53D9F725360D"
+            "ID": "1FEAF5C3-A32D-49AF-B992-1E579F64E5EE"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.596Z",
@@ -7328,7 +7391,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "DDDE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "50BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.446Z",
@@ -7368,7 +7431,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "8D7DEA3E-AA01-4BFE-98A5-58DF15BB0FB4"
+            "ID": "95627ACA-EC57-4A77-A60A-9EE356C3169D"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.763Z",
@@ -7454,7 +7517,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "DADE443E-F36B-1410-8565-00D9FFED5EBA"
+            "ID": "4DBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.450Z",
@@ -7473,7 +7536,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "56F9BFBB-F0CE-43AB-B942-63909B42B524"
+            "ID": "ED968A4E-AC72-4350-81CF-49C66B757456"
           },
           "sync": {
             "lastModified": "2026-01-28T22:07:14.597Z",
@@ -7646,6 +7709,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "20F0D92D-7164-46D1-BAD3-0573A394AEE0"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:24.185Z",
+            "checksum": "7edba04b17f4b445758e9d638cae237cb3a7833013fbde562b73e4c9c93b0390"
           }
         }
       ],
@@ -7707,6 +7777,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GLM 4.6 pricing on Fireworks.ai as of January 2026. 355B parameter MoE model (32B active) with 200K context window."
+          },
+          "primaryKey": {
+            "ID": "E9D52260-1AE0-4685-8C19-991BA7C4DDC3"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:24.206Z",
+            "checksum": "22d44dde2ed6f20dad6817af2e8a622f1e71e3a353fa28dc35262a830f7011ca"
           }
         }
       ]
@@ -7817,7 +7894,7 @@
             "ID": "866EF5E1-67BF-4090-840F-0C51C88228BA"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.880Z",
+            "lastModified": "2026-01-30T03:11:24.370Z",
             "checksum": "54f4121ce9bd283b85971983b4f55929bd3160f91d8d4ba82133fa6b4b4d0e99"
           }
         },
@@ -7839,7 +7916,7 @@
             "ID": "4D4CB947-AA09-48E6-9FF3-43C6AA75D58E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.917Z",
+            "lastModified": "2026-01-30T03:11:24.382Z",
             "checksum": "0839c603df128d0b7c80e513f67ca0722b23f7609cddabe45f03a06d721fadf9"
           }
         }
@@ -7951,7 +8028,7 @@
             "ID": "32256481-17B2-4D99-BA39-99C969462459"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.882Z",
+            "lastModified": "2026-01-30T03:11:24.394Z",
             "checksum": "a01e22a58be227896fbf1917d3332585e593f768ae36e1fd2dc9e34a55c55344"
           }
         },
@@ -7973,7 +8050,7 @@
             "ID": "5F8BC862-CFAF-4DD9-BEB0-C723C8447597"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.917Z",
+            "lastModified": "2026-01-30T03:11:24.404Z",
             "checksum": "29f1ca753cfc9b0919f5a532895e6628ab530d751626f76726601e81d0b8cf8b"
           }
         }
@@ -8085,7 +8162,7 @@
             "ID": "BA60D6EF-093A-4D25-8B25-8E45CF7B6310"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.883Z",
+            "lastModified": "2026-01-30T03:11:24.554Z",
             "checksum": "1b743d94d2f8f1a717cc85e03b8e1d3fb2edc3a95b7bd31a3115ee92fb23f98a"
           }
         },
@@ -8107,7 +8184,7 @@
             "ID": "6BC32706-CA3A-4F04-9B85-FC28AA9ADED0"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.918Z",
+            "lastModified": "2026-01-30T03:11:24.567Z",
             "checksum": "f838da3a402cf4b048880c7f0fe96dd98087c6846ff3c3940ccf5735bb1e50a1"
           }
         }
@@ -8219,7 +8296,7 @@
             "ID": "060C9269-CCA4-41A0-99DC-55A95D17A3E0"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.881Z",
+            "lastModified": "2026-01-30T03:11:24.580Z",
             "checksum": "29b9cca77683a1b23b1c2f0b314713bef5aad4620c1bf1efb45f8ee650e6ec44"
           }
         },
@@ -8241,7 +8318,7 @@
             "ID": "1A383960-A7D7-457F-81CC-A40DB36F0098"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.919Z",
+            "lastModified": "2026-01-30T03:11:24.592Z",
             "checksum": "b90826981de2fc05b17fa1c78897d95f676b7e539877c77fd5c4f09a57685e2a"
           }
         }
@@ -8353,7 +8430,7 @@
             "ID": "64186C02-8782-41C1-B347-415D149133FC"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.892Z",
+            "lastModified": "2026-01-30T03:11:24.768Z",
             "checksum": "e53f1cb5a4277254e55ee2744f34302a6b67d24059b634f729d048dba9cee017"
           }
         },
@@ -8375,7 +8452,7 @@
             "ID": "28C400E6-4DAC-4DE2-915C-8525D77FE92C"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.920Z",
+            "lastModified": "2026-01-30T03:11:24.781Z",
             "checksum": "08f8989b7d64dbfa813b522c8ecc02fee17b4f8c77c165681639fd62836e6c5c"
           }
         }
@@ -8482,6 +8559,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B9F9FE1A-8989-4E13-9A60-B915A5204A9B"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:25.308Z",
+            "checksum": "824b819e27871e6ad8bbf4f4eb0d609f3667d11769daae00708e37dd33a921ec"
           }
         }
       ],
@@ -8516,18 +8600,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.6,
-            "OutputPricePerUnit": 2,
+            "InputPricePerUnit": 2.25,
+            "OutputPricePerUnit": 2.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Cerebras inference pricing for GLM-4.7 as of January 2026. Delivers 1,000-1,700 tokens/second with ~10x better price-performance than Claude Sonnet 4.5. Pay-as-you-go tier starts at $10 with generous rate limits (24M tokens/day)."
+            "Comments": "Cerebras inference pricing for GLM-4.7 as of January 2026. Preview model for evaluation purposes. Delivers ~1,000 tokens/second. Pay-as-you-go tier starts at $10 with generous rate limits (24M tokens/day)."
           },
           "primaryKey": {
             "ID": "BC44A754-7CAC-4A46-A72C-C0B439D3EE07"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.921Z",
-            "checksum": "e25d1dc35aee23bd416e4e79c6558835badf6d62a1399b02d073b769213603d7"
+            "lastModified": "2026-01-30T03:11:25.343Z",
+            "checksum": "261157f688df0803a8d064eb0e6daf612116ab1239575d616f159ca218ec7dec"
           }
         },
         {
@@ -8538,11 +8622,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.60,
-            "OutputPricePerUnit": 2.20,
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 2.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GLM 4.7 pricing on Fireworks.ai as of January 2026. 355B parameter MoE model with 200K context and up to 128K output."
+          },
+          "primaryKey": {
+            "ID": "430DE5A5-46D7-4E90-A091-D40E752D8DF2"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:25.326Z",
+            "checksum": "384d80529990a90bf25280dccf8180ec76ddf53becccbfa15b9e9cd113a8a3db"
           }
         }
       ]
@@ -8660,18 +8751,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.3,
-            "OutputPricePerUnit": 2.5,
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.5 Flash-Lite pricing on Vertex AI as of January 2025 (same as 2.5 Flash)"
+            "Comments": "Gemini 2.5 Flash-Lite pricing on Vertex AI as of January 2026"
           },
           "primaryKey": {
             "ID": "F16A2D71-B4B5-4FE5-B9AC-22BED68BFC40"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.912Z",
-            "checksum": "1181c2601e751f2acaa6566d8e66f6790ff2cbc615a6773cc56740ce1fd53d53"
+            "lastModified": "2026-01-30T03:11:24.794Z",
+            "checksum": "f30e6cff6eb3dafca5c94e3adc86ef735357b2bbe056f1a63a16ec7a55ee53a2"
           }
         },
         {
@@ -8692,7 +8783,7 @@
             "ID": "CA9801E9-2A63-4F8A-9357-800A4ADE9330"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.924Z",
+            "lastModified": "2026-01-30T03:11:24.803Z",
             "checksum": "20353b83a6aa511a60ebd4030e760563fddec3af66b16c388e053017451ed098"
           }
         }
@@ -8821,7 +8912,7 @@
             "ID": "8548F400-4BE2-4D13-A67D-6C73ABE47D9E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.915Z",
+            "lastModified": "2026-01-30T03:11:24.950Z",
             "checksum": "e8d8677ed4781449ee938e40634f33bd1451598aa08d0fe5501b92064b580315"
           }
         },
@@ -8833,18 +8924,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.3,
-            "OutputPricePerUnit": 2.5,
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.5 Flash pricing on Vertex AI as of January 2025"
+            "Comments": "Gemini 2.5 Flash pricing on Vertex AI as of January 2026"
           },
           "primaryKey": {
             "ID": "BEF6C6CC-BED3-4AF6-AC9E-A20615C5C48E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.924Z",
-            "checksum": "1c6b25251b4386de4529620d2d20fa3b84cbc14737988f0d4dcc42a7133a5e3d"
+            "lastModified": "2026-01-30T03:11:24.962Z",
+            "checksum": "222988d0981916bc7d324cf9f5ff0b4c59c2f90de2f7522b9dc4a7af71620388"
           }
         }
       ]
@@ -8994,7 +9085,7 @@
             "ID": "A50024D8-76BF-46B3-9209-8F53993F4550"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.925Z",
+            "lastModified": "2026-01-30T03:11:25.112Z",
             "checksum": "b031b5c22800a6e5a8d734882600d1265c130325362f3ecc61635a609d176e0b"
           }
         }
@@ -9146,6 +9237,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "5AB10EDC-3A5B-402E-B40F-A13431AC00C5"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:25.083Z",
+            "checksum": "6038044dc2d2b71f288382313d482932351f985b63f57e0361a877a69543af58"
           }
         }
       ],
@@ -9168,7 +9266,7 @@
             "ID": "37F35DF1-C29A-4ECA-BE52-0A8691842527"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.922Z",
+            "lastModified": "2026-01-30T03:11:25.125Z",
             "checksum": "44728eb7aa528c02b6790931c04b22c556d0ee9fb3151f09c702beb699469271"
           }
         },
@@ -9190,7 +9288,7 @@
             "ID": "E6FD1FF0-B83B-4A6A-A5A0-944F73209188"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.927Z",
+            "lastModified": "2026-01-30T03:11:25.136Z",
             "checksum": "fd86a327789862d6217b844d19c571897d3b8e2f2269fc0cb64f57a5dccc50ad"
           }
         },
@@ -9203,10 +9301,17 @@
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.15,
-            "OutputPricePerUnit": 0.60,
+            "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-OSS-120B pricing on Fireworks.ai as of January 2026. OpenAI's open-weight model with 117B parameters and configurable reasoning."
+          },
+          "primaryKey": {
+            "ID": "A568E672-C350-4791-AF97-410C3AD45067"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:25.207Z",
+            "checksum": "e91bca74b29ccd315607e650ebf335be2e8706ade444d4d9eb2ff80bdc20e812"
           }
         }
       ]
@@ -9242,6 +9347,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "44F72D5A-B0B4-4E86-9FD7-31758DE39AE9"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:25.168Z",
+            "checksum": "62a7006899577671c2699ec45f4d26be96261be35dfa4edd9a22216b174c723e"
           }
         },
         {
@@ -9258,6 +9370,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8A53AAB5-C966-4771-A033-0EB88C3A5CC6"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:25.182Z",
+            "checksum": "8a5ce01481b9ef4d3f1ca85fe2926138dd407d905ef81c28387d2ac386ba38db"
           }
         },
         {
@@ -9274,6 +9393,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "BFC3AD52-3A3A-4EF0-AF7B-1B22B029BED5"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:25.192Z",
+            "checksum": "9775876e87d659101072374b99935312e8f280b55f16e850c0fd274fb240d1fc"
           }
         }
       ],
@@ -9286,11 +9412,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.60,
-            "OutputPricePerUnit": 3.00,
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Kimi K2.5 pricing on Moonshot AI as of January 2026. API access via Kimi official API. Released January 27, 2026 as 1T parameter native multimodal model with 256K context window and reasoning capabilities."
+          },
+          "primaryKey": {
+            "ID": "0DF125E9-8921-47B5-AA73-68DEF35DCFF1"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:25.217Z",
+            "checksum": "2bbb9d13ab14584e19e016554d6174f406291a258c2cc54823bed360632e2ab3"
           }
         },
         {
@@ -9301,14 +9434,28 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.60,
-            "OutputPricePerUnit": 3.00,
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Kimi K2.5 pricing on Fireworks.ai as of January 2026. Cached input tokens available at $0.10/1M. Features 256K context window and reasoning capabilities."
+          },
+          "primaryKey": {
+            "ID": "2E80CF95-0BD8-4673-BB84-8BFD23BF03A7"
+          },
+          "sync": {
+            "lastModified": "2026-01-30T03:11:25.227Z",
+            "checksum": "e45512d64096a5a764eaee409434749f48aef732c1a381ca67f7725c7da52d7f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "1C7F940F-436D-49D2-B258-162FD535DD49"
+    },
+    "sync": {
+      "lastModified": "2026-01-30T03:11:20.114Z",
+      "checksum": "4be2942ad204b42dba7e62d05fc9f54136b1b248b5938ec2cf4142cfc1c5cbc5"
     }
   }
 ]
