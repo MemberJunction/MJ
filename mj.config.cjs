@@ -260,8 +260,9 @@ module.exports = {
    * are all handled by DEFAULT_SERVER_CONFIG.
    */
 
-  // Public URL for OAuth callbacks (ngrok URL or production URL)
-  // This is where the OAuth authorization server will redirect after user consent
-  // OAuth routes are registered at /oauth/callback (independent of REST API)
-  publicUrl: process.env.MJAPI_PUBLIC_URL || 'http://localhost:4000',
+  // Override example: To set a custom publicUrl for OAuth callbacks, uncomment:
+  // publicUrl: 'https://your-custom-url.com',
+  //
+  // Note: If MJAPI_PUBLIC_URL env var is set, it will be used automatically.
+  // If neither is set, the server constructs it from baseUrl + port + path.
 };

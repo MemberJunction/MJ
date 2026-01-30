@@ -2,6 +2,7 @@
 
 **Feature**: 001-mcp-oauth-dcr
 **Date**: 2026-01-29
+**Status**: ✅ Implemented
 
 ## Entity Overview
 
@@ -366,7 +367,9 @@ All OAuth operations should be logged to the existing audit system:
 
 ## Migration File Structure
 
-**File**: `migrations/v2/V202601291200__v2.x_mcp_oauth_entities.sql`
+**File**: `migrations/v3/V202601291200__v3.4.x_MCP_OAuth_Entities.sql`
+
+**Note**: The actual migration differs slightly from the reference SQL below. See the actual migration file for the implemented schema, which includes an `OAuthToken` table instead of using CredentialEngine directly.
 
 ```sql
 -- =============================================

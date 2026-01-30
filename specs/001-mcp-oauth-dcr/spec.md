@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-mcp-oauth-dcr`
 **Created**: 2026-01-29
-**Status**: Draft
+**Status**: Implemented (Core Flow)
 **Input**: User description: "MCP OAuth with Dynamic Client Registration - Transparent OAuth authentication for MCP connections"
 
 ## User Scenarios & Testing *(mandatory)*
@@ -139,7 +139,7 @@ Administrators can revoke OAuth access for specific users at the MJ level and vi
 
 #### Token Management
 
-- **FR-010**: System MUST store access tokens, refresh tokens, and expiration metadata using the existing CredentialEngine with encryption.
+- **FR-010**: System MUST store access tokens, refresh tokens, and expiration metadata in a dedicated OAuth Token entity with field-level encryption via CredentialEngine.
 
 - **FR-011**: System MUST automatically refresh tokens when the access token is within a configurable threshold of expiration (default: 5 minutes before expiry).
 
@@ -175,13 +175,15 @@ Administrators can revoke OAuth access for specific users at the MJ level and vi
 
 ### Key Entities
 
-- **OAuth Client Registration**: Represents a DCR-obtained client registration for a specific MCP connection. Contains client_id, client_secret (optional), registration metadata, and creation timestamp. Linked to a specific MCP Server Connection.
+The following MJ entities are created to support OAuth (table names in parentheses):
 
-- **OAuth Token Set**: Represents the current token state for an OAuth connection. Contains access_token, refresh_token (optional), token_type, expires_at, and scope. Stored encrypted via CredentialEngine.
+- **OAuth Client Registration** (`OAuthClientRegistration`): Represents a DCR-obtained client registration for a specific MCP connection. Contains client_id, client_secret (optional, encrypted), registration metadata, and creation timestamp. Linked to a specific MCP Server Connection.
 
-- **OAuth Authorization State**: Temporary state during an in-progress authorization flow. Contains state parameter, code_verifier (for PKCE), redirect_uri, timestamp, and expiration. Used to validate callbacks and complete token exchange.
+- **OAuth Token** (`OAuthToken`): Represents the current token state for an OAuth connection. Contains access_token (encrypted), refresh_token (encrypted, optional), token_type, expires_at, and scope. One token record per connection.
 
-- **Authorization Server Metadata Cache**: Cached metadata from RFC 8414 discovery. Contains issuer, authorization_endpoint, token_endpoint, registration_endpoint, supported scopes, grant types, and cache expiration.
+- **OAuth Authorization State** (`OAuthAuthorizationState`): Temporary state during an in-progress authorization flow. Contains state parameter, code_verifier (for PKCE), redirect_uri, timestamp, and expiration. Used to validate callbacks and complete token exchange.
+
+- **OAuth Auth Server Metadata Cache** (`OAuthAuthServerMetadataCache`): Cached metadata from RFC 8414 discovery. Contains issuer, authorization_endpoint, token_endpoint, registration_endpoint, supported scopes, grant types, and cache expiration.
 
 ## Success Criteria *(mandatory)*
 

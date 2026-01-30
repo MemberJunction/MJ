@@ -7,8 +7,11 @@ info:
     These endpoints support the authorization code flow with PKCE for MCP server authentication.
 
 servers:
-  - url: /api/v1
-    description: MemberJunction API v1
+  - url: /
+    description: |
+      OAuth endpoints are mounted at the root path (not under /api/v1) because
+      the callback endpoint must be unauthenticated to receive redirects from
+      external authorization servers.
 
 paths:
   /oauth/callback:

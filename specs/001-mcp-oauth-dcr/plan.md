@@ -89,11 +89,13 @@ packages/MJServer/
 │   └── ...existing files
 └── package.json
 
-migrations/v2/
-└── V202601291200__v2.x_mcp_oauth_entities.sql # NEW: OAuth entity tables
+migrations/v3/
+└── V202601291200__v3.4.x_MCP_OAuth_Entities.sql # NEW: OAuth entity tables
 ```
 
 **Structure Decision**: Extends existing packages rather than creating new ones. OAuth logic encapsulated in `packages/AI/MCPClient/src/oauth/` module. REST callback handler added to MJServer.
+
+**Note**: Migration is in v3 folder following the baseline migration approach introduced in MJ v3.0.
 
 ## Complexity Tracking
 
@@ -155,7 +157,7 @@ User                    MJAPI                  Auth Server
 
 3. **Authorization state stored in database**: `MJ: O Auth Authorization States` entity tracks in-progress authorizations for callback validation.
 
-4. **Callback endpoint at `/api/v1/oauth/callback`**: Single endpoint for all OAuth callbacks, state parameter identifies the specific authorization.
+4. **Callback endpoint at `/oauth/callback`**: Single endpoint for all OAuth callbacks (mounted at root, not under `/api/v1`, since callback must be unauthenticated). State parameter identifies the specific authorization.
 
 5. **Proactive token refresh**: Tokens are refreshed when within 5 minutes of expiry, not on failure. This prevents user-facing errors.
 
@@ -193,13 +195,41 @@ User                    MJAPI                  Auth Server
 | GraphQL Schema      | `specs/001-mcp-oauth-dcr/contracts/graphql-mutations.graphql` | GraphQL types and mutations           |
 | Developer Guide     | `specs/001-mcp-oauth-dcr/quickstart.md`                       | Implementation and usage guide        |
 
+## Known Issues & Required Fixes
+
+### Issue 1: MCP Entity Delete Not Working
+**Symptom**: Deleting MCP Servers, Connections, or Tools from the dashboard doesn't send GraphQL mutations.
+**Location**: `packages/Angular/Explorer/dashboards/src/MCP/mcp-dashboard.component.ts` (lines 821-882)
+**Root Cause**: TBD - `entity.Delete()` may not be triggering properly.
+
+### Issue 2: OAuth Fields Missing from Server Dialog
+**Symptom**: No UI to set `OAuthIssuerURL` when creating/editing OAuth2 MCP Servers.
+**Location**: `packages/Angular/Explorer/dashboards/src/MCP/components/mcp-server-dialog.component.ts`
+**Fix**: Add OAuth configuration section to the dialog (OAuthIssuerURL, OAuthScopes, OAuthClientID, etc.) that shows when `DefaultAuthType === 'OAuth2'`.
+
+### Issue 3: Poor OAuth UX (Copy/Paste Auth URL)
+**Symptom**: User must manually copy authorization URL and paste into browser.
+**Fix**: Implement proper redirect flow:
+1. Store frontend return URL in authorization state
+2. Redirect browser directly to OAuth provider
+3. OAuth callback redirects back to MJAPI `/oauth/callback`
+4. MJAPI redirects to frontend URL with state parameter
+5. Frontend polls for completion or receives notification
+
+### Issue 4: No Live UI Updates on Entity Mutations
+**Symptom**: Changes to MCP Servers/Connections/Tools don't update dashboard in real-time.
+**Fix**: Implement GraphQL subscriptions or event-based updates to refresh relevant data when entities change.
+
 ## Next Steps
 
-1. **Run `/speckit.tasks`** to generate the detailed task breakdown from this plan
-2. **Review generated tasks** with stakeholders for any scope adjustments
-3. **Create database migration** using the SQL from data-model.md
-4. **Run CodeGen** to generate entity classes after migration
-5. **Implement OAuth module** following the structure in this plan
-6. **Add REST callback endpoint** to MJServer
-7. **Extend MCPResolver** with GraphQL mutations
-8. **Integration testing** against Auth0/Cognito test tenants
+1. ~~**Run `/speckit.tasks`** to generate the detailed task breakdown from this plan~~ ✅ Done
+2. ~~**Create database migration** using the SQL from data-model.md~~ ✅ Done
+3. ~~**Run CodeGen** to generate entity classes after migration~~ ✅ Done
+4. ~~**Implement OAuth module** following the structure in this plan~~ ✅ Core flow done
+5. ~~**Add REST callback endpoint** to MJServer~~ ✅ Done
+6. **Fix MCP entity delete functionality** (bug)
+7. **Add OAuth fields to MCPServerDialog** (critical UX)
+8. **Implement OAuth redirect flow** (UX improvement)
+9. **Add live UI updates for MCP entities** (UX improvement)
+10. **Extend MCPResolver** with GraphQL mutations/subscriptions
+11. **Integration testing** against Auth0/Cognito test tenants

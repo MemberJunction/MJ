@@ -2,10 +2,32 @@
 
 **Input**: Design documents from `/specs/001-mcp-oauth-dcr/`
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/
+**Last Updated**: 2026-01-29
 
 **Tests**: Tests are not explicitly requested in this specification. Tasks focus on implementation.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+
+## Implementation Status Summary
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1: Setup | ✅ Complete | Module structure created |
+| Phase 2: Foundational | ✅ Complete | Migration, CodeGen, entities all done |
+| Phase 3: US1 (First-Time Connection) | ✅ Complete | Core OAuth flow working |
+| Phase 4: US2 (Token Refresh) | ✅ Complete | Automatic refresh implemented |
+| Phase 5: US3 (Re-Auth on Failure) | ✅ Complete | Error handling implemented |
+| Phase 6: US4 (Admin Config) | 🔶 Partial | DB fields done, GraphQL mutations pending |
+| Phase 7: US5 (Revocation & Audit) | 🔶 Partial | Revocation done, audit logging pending |
+| Phase 8: Bug Fixes & Critical UX | ⬜ **BLOCKING** | Delete bug, OAuth UI fields missing |
+| Phase 9: Live UI Updates | ⬜ Not Started | Event emissions, subscriptions |
+| Phase 10: Final Polish | ⬜ Not Started | Cleanup, testing |
+
+**Current State**: Core OAuth flow (US1-US3) is functional but has poor UX:
+- ❌ Delete functionality broken (no GraphQL mutation sent)
+- ❌ No UI to configure OAuth settings in server dialog
+- ❌ User must copy/paste auth URL (should redirect)
+- ❌ No live updates when entities change
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -16,7 +38,7 @@
 ## Path Conventions
 
 - **Monorepo packages**: `packages/{PackageName}/src/`
-- **Migrations**: `migrations/v2/`
+- **Migrations**: `migrations/v3/` (v3 baseline migration approach)
 - **OAuth module**: `packages/AI/MCPClient/src/oauth/`
 - **REST handlers**: `packages/MJServer/src/rest/`
 
@@ -38,13 +60,13 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [X] T004 Create database migration for OAuth entities at migrations/v2/V202601291200__v2.120.x_MCP_OAuth_Entities.sql
-- [ ] T005 Run Flyway migration to create OAuth tables in database
-- [ ] T006 Run CodeGen to generate TypeScript entity classes for new OAuth entities
-- [ ] T007 Verify generated entity classes exist in packages/MJCoreEntities/src/generated/entity_subclasses.ts
+- [X] T004 Create database migration for OAuth entities at migrations/v3/V202601291200__v3.4.x_MCP_OAuth_Entities.sql
+- [X] T005 Run Flyway migration to create OAuth tables in database
+- [X] T006 Run CodeGen to generate TypeScript entity classes for new OAuth entities
+- [X] T007 Verify generated entity classes exist in packages/MJCoreEntities/src/generated/entity_subclasses.ts
 - [X] T008 [P] Create OAuth-specific TypeScript interfaces at packages/AI/MCPClient/src/oauth/types.ts
 - [X] T009 [P] Create PKCE generator utility at packages/AI/MCPClient/src/oauth/PKCEGenerator.ts
-- [ ] T010 Add 'OAuth2' to DefaultAuthType value list in MCP Servers entity (if not already present)
+- [X] T010 Add 'OAuth2' to DefaultAuthType value list in MCP Servers entity (added via CodeGen)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -69,7 +91,7 @@
 - [X] T019 [US1] Implement authorization state tracking using MJ: O Auth Authorization States entity in OAuthManager
 - [X] T020 [US1] Implement OAuthCallbackHandler for REST callback at packages/MJServer/src/rest/OAuthCallbackHandler.ts
 - [X] T021 [US1] Implement code-to-token exchange in OAuthCallbackHandler
-- [X] T022 [US1] Register OAuth callback route at /api/v1/oauth/callback in packages/MJServer/src/rest/setupRESTEndpoints.ts
+- [X] T022 [US1] Register OAuth callback route at /oauth/callback (unauthenticated) in packages/MJServer/src/rest/setupRESTEndpoints.ts
 - [X] T023 [US1] Implement getAccessToken() in OAuthManager to check for valid tokens before connection
 - [X] T024 [US1] Integrate OAuthManager into MCPClientManager.getCredentials() at packages/AI/MCPClient/src/MCPClientManager.ts
 - [X] T025 [US1] Add OAuth2 authentication type handling in MCPClientManager.connect() flow
@@ -130,13 +152,13 @@
 
 ### Implementation for User Story 4
 
-- [ ] T038 [US4] Add OAuthIssuerURL, OAuthScopes, OAuthMetadataCacheTTLMinutes fields to MCPServerEntity type definitions
-- [ ] T039 [US4] Add OAuthClientID, OAuthClientSecretEncrypted fields for pre-configured client support
-- [ ] T040 [US4] Implement validateOAuthConfiguration() in OAuthManager to verify issuer URL on save
+- [X] T038 [US4] Add OAuthIssuerURL, OAuthScopes, OAuthMetadataCacheTTLMinutes fields to MCPServer (via migration + CodeGen)
+- [X] T039 [US4] Add OAuthClientID, OAuthClientSecretEncrypted fields for pre-configured client support (via migration + CodeGen)
+- [X] T040 [US4] Implement validateOAuthConfiguration() in OAuthManager to verify issuer URL on save
 - [ ] T041 [US4] Add metadata pre-fetch on MCP Server save when OAuth is configured
 - [ ] T042 [US4] Add GraphQL query getMCPOAuthConnectionStatus to MCPResolver at packages/MJServer/src/resolvers/MCPResolver.ts
 - [ ] T043 [US4] Add GraphQL mutation initiateMCPOAuth to MCPResolver
-- [ ] T044 [US4] Add REST endpoint POST /api/v1/oauth/initiate in OAuthCallbackHandler
+- [X] T044 [US4] Add REST endpoint POST /oauth/initiate in OAuthCallbackHandler (implemented)
 
 **Checkpoint**: At this point, User Story 4 should be fully functional - admins can configure OAuth servers
 
@@ -160,27 +182,79 @@
 - [ ] T050 [US5] Implement audit logging for OAuth token refresh failed event
 - [ ] T051 [US5] Implement audit logging for OAuth credentials revoked event
 - [ ] T052 [US5] Add GraphQL mutation refreshMCPOAuthToken for manual token refresh
-- [ ] T053 [US5] Add REST endpoint GET /api/v1/oauth/status/{stateParameter} in OAuthCallbackHandler
+- [X] T053 [US5] Add REST endpoint GET /oauth/status/{stateParameter} in OAuthCallbackHandler (implemented)
 
 **Checkpoint**: At this point, User Story 5 should be fully functional - credential revocation and audit working
 
 ---
 
-## Phase 8: Polish & Cross-Cutting Concerns
+## Phase 8: Bug Fixes & Critical UX
 
-**Purpose**: Event integration, subscriptions, and final refinements
+**Purpose**: Fix blocking issues discovered during implementation
 
-- [ ] T054 [P] Add 'authorizationRequired' event emission to MCPClientManager
-- [ ] T055 [P] Add 'authorizationCompleted' event emission to MCPClientManager
-- [ ] T056 [P] Add 'tokenRefreshed' event emission to MCPClientManager
-- [ ] T057 [P] Add 'tokenRefreshFailed' event emission to MCPClientManager
-- [ ] T058 Implement GraphQL subscription onMCPOAuthCompleted in MCPResolver
-- [ ] T059 Implement GraphQL subscription onMCPOAuthEvent in MCPResolver
-- [ ] T060 Add cleanup job for expired OAuth Authorization States (older than 24 hours)
-- [ ] T061 Add OAuth status indicator integration points in MCPClientManager for UI reactivity
-- [ ] T062 Verify all error paths return user-friendly messages per ErrorMessages.ts
-- [ ] T063 Run quickstart.md validation scenarios against Auth0 test tenant
-- [ ] T064 Run quickstart.md validation scenarios against Cognito test tenant
+### Bug: MCP Entity Delete Not Working (CRITICAL)
+
+- [ ] T054 [BUG] Debug why entity.Delete() doesn't send GraphQL mutation in mcp-dashboard.component.ts
+- [ ] T055 [BUG] Fix deleteServer() method at packages/Angular/Explorer/dashboards/src/MCP/mcp-dashboard.component.ts:821
+- [ ] T056 [BUG] Fix deleteConnection() method at packages/Angular/Explorer/dashboards/src/MCP/mcp-dashboard.component.ts:865
+- [ ] T057 [BUG] Fix deleteTool() method if it exists, or verify tool deletion works
+
+### Missing UI: OAuth Fields in Server Dialog (CRITICAL)
+
+- [ ] T058 [UI] Add OAuthIssuerURL field to mcp-server-dialog.component.html (show when DefaultAuthType='OAuth2')
+- [ ] T059 [UI] Add OAuthScopes field to mcp-server-dialog.component.html
+- [ ] T060 [UI] Add OAuthClientID and OAuthClientSecretEncrypted fields for pre-configured client mode
+- [ ] T061 [UI] Add OAuthMetadataCacheTTLMinutes field with sensible default (1440 min = 24 hours)
+- [ ] T062 [UI] Update mcp-server-dialog.component.ts validators to require OAuthIssuerURL when auth type is OAuth2
+- [ ] T063 [UI] Add metadata discovery test button to verify OAuth issuer URL is valid
+
+### UX: OAuth Redirect Flow (Instead of Copy/Paste)
+
+- [ ] T064 [UX] Add FrontendReturnURL field to OAuthAuthorizationState entity (migration)
+- [ ] T065 [UX] Update initiateAuthorizationFlow() to accept and store frontend return URL
+- [ ] T066 [UX] Update REST POST /oauth/initiate to accept frontendReturnUrl parameter
+- [ ] T067 [UX] Update OAuth callback success handler to redirect to frontend URL instead of showing HTML page
+- [ ] T068 [UX] Create frontend OAuth completion page/component in MJExplorer
+- [ ] T069 [UX] Update MCPServerDialog to open OAuth URL in new window/redirect and poll for completion
+- [ ] T070 [UX] Handle OAuth completion notification in frontend (close dialog, refresh data)
+
+---
+
+## Phase 9: Live UI Updates & Event Integration
+
+**Purpose**: Real-time UI updates when MCP entities change
+
+### MCPClientManager Event Emissions
+
+- [ ] T071 [P] Add 'authorizationRequired' event emission to MCPClientManager
+- [ ] T072 [P] Add 'authorizationCompleted' event emission to MCPClientManager
+- [ ] T073 [P] Add 'tokenRefreshed' event emission to MCPClientManager
+- [ ] T074 [P] Add 'tokenRefreshFailed' event emission to MCPClientManager
+
+### GraphQL Subscriptions for MCP Entities
+
+- [ ] T075 Implement GraphQL subscription onMCPServerChanged in MCPResolver
+- [ ] T076 Implement GraphQL subscription onMCPConnectionChanged in MCPResolver
+- [ ] T077 Implement GraphQL subscription onMCPToolChanged in MCPResolver
+- [ ] T078 Implement GraphQL subscription onMCPOAuthCompleted in MCPResolver
+
+### Frontend Subscription Integration
+
+- [ ] T079 [UI] Subscribe to MCP entity changes in mcp-dashboard.component.ts
+- [ ] T080 [UI] Update dashboard data reactively when subscriptions fire
+- [ ] T081 [UI] Show real-time status updates for OAuth flows in progress
+
+---
+
+## Phase 10: Final Polish
+
+**Purpose**: Cleanup, testing, and validation
+
+- [ ] T082 Add cleanup job for expired OAuth Authorization States (older than 24 hours)
+- [ ] T083 Add OAuth status indicator integration points in MCPClientManager for UI reactivity
+- [ ] T084 Verify all error paths return user-friendly messages per ErrorMessages.ts
+- [ ] T085 Run quickstart.md validation scenarios against Auth0 test tenant
+- [ ] T086 Run quickstart.md validation scenarios against Cognito test tenant
 
 ---
 
@@ -188,14 +262,18 @@
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
-- **User Stories (Phase 3-7)**: All depend on Foundational phase completion
-  - US1 and US4 can proceed in parallel after Foundational
-  - US2 depends on US1 (TokenManager foundation)
-  - US3 depends on US1 and US2 (refresh flow exists)
-  - US5 can proceed after US1 (token storage exists)
-- **Polish (Phase 8)**: Depends on all user stories being complete
+- **Setup (Phase 1)**: ✅ Complete
+- **Foundational (Phase 2)**: ✅ Complete
+- **User Stories (Phase 3-7)**: ✅ Core implementation complete
+  - US1-US3: ✅ Complete (core OAuth flow)
+  - US4: 🔶 Partial (DB fields done, UI/GraphQL pending)
+  - US5: 🔶 Partial (revocation done, audit pending)
+- **Bug Fixes & Critical UX (Phase 8)**: ⬜ **PRIORITY** - Blocks usability
+  - Delete bug fix: Independent, can start immediately
+  - OAuth UI fields: Independent, can start immediately
+  - OAuth redirect flow: Depends on frontend changes
+- **Live UI Updates (Phase 9)**: Depends on Phase 8 completion
+- **Final Polish (Phase 10)**: Depends on Phase 9 completion
 
 ### User Story Dependencies
 
@@ -274,6 +352,8 @@ With multiple developers:
 
 ## File Summary
 
+### Existing OAuth Implementation Files
+
 | File                                                       | Tasks                                 | Purpose                     |
 | ---------------------------------------------------------- | ------------------------------------- | --------------------------- |
 | `packages/AI/MCPClient/src/oauth/index.ts`                 | T002                                  | Module barrel export        |
@@ -284,11 +364,21 @@ With multiple developers:
 | `packages/AI/MCPClient/src/oauth/TokenManager.ts`          | T015-T016, T026-T031, T045            | Token storage and refresh   |
 | `packages/AI/MCPClient/src/oauth/OAuthManager.ts`          | T017-T019, T023, T033-T036, T040-T041 | OAuth orchestration         |
 | `packages/AI/MCPClient/src/oauth/ErrorMessages.ts`         | T032                                  | User-friendly error mapping |
-| `packages/AI/MCPClient/src/MCPClientManager.ts`            | T024-T025, T37, T054-T57              | Integration and events      |
-| `packages/MJServer/src/rest/OAuthCallbackHandler.ts`       | T020-T021, T44, T53                   | REST callback handling      |
+| `packages/AI/MCPClient/src/MCPClientManager.ts`            | T024-T025, T037, T071-T074            | Integration and events      |
+| `packages/MJServer/src/rest/OAuthCallbackHandler.ts`       | T020-T021, T044, T053, T067           | REST callback handling      |
 | `packages/MJServer/src/rest/setupRESTEndpoints.ts`         | T022                                  | Route registration          |
-| `packages/MJServer/src/resolvers/MCPResolver.ts`           | T042-T043, T046, T052, T58-T59        | GraphQL mutations/queries   |
-| `migrations/v2/V202601291200__v2.x_mcp_oauth_entities.sql` | T004                                  | Database migration          |
+| `packages/MJServer/src/resolvers/MCPResolver.ts`           | T042-T043, T046, T052, T075-T078      | GraphQL mutations/queries   |
+| `migrations/v3/V202601291200__v3.4.x_MCP_OAuth_Entities.sql` | T004                                  | Database migration          |
+
+### New Files for Bug Fixes & UX (Phase 8-9)
+
+| File                                                       | Tasks                                 | Purpose                     |
+| ---------------------------------------------------------- | ------------------------------------- | --------------------------- |
+| `packages/Angular/Explorer/dashboards/src/MCP/mcp-dashboard.component.ts` | T054-T057, T079-T081 | Fix delete, add subscriptions |
+| `packages/Angular/Explorer/dashboards/src/MCP/components/mcp-server-dialog.component.ts` | T058-T063 | Add OAuth configuration fields |
+| `packages/Angular/Explorer/dashboards/src/MCP/components/mcp-server-dialog.component.html` | T058-T061 | OAuth field templates |
+| `packages/Angular/Explorer/dashboards/src/MCP/components/mcp-connection-dialog.component.ts` | T069-T070 | OAuth redirect handling |
+| TBD: OAuth completion page component | T068 | Frontend OAuth completion UI |
 
 ---
 
