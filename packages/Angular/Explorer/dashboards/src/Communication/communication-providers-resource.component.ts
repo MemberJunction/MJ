@@ -1,8 +1,17 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData } from '@memberjunction/core-entities';
+import { ResourceData, CommunicationProviderEntity, CommunicationLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+
+interface ProviderCardData {
+    Entity: CommunicationProviderEntity;
+    SentCount: number;
+    SuccessRate: number;
+    FailedCount: number;
+    IconClass: string;
+    LogoClass: string;
+}
 
 /**
  * Tree-shaking prevention function
@@ -15,286 +24,251 @@ export function LoadCommunicationProvidersResource() {
 @Component({
     selector: 'mj-communication-providers-resource',
     template: `
-    <div class="providers-container">
-        <header class="providers-header">
-            <div class="title-area">
-                <h1>Communication Providers</h1>
-                <p>Manage your messaging integrations and services</p>
+    <div class="providers-wrapper">
+        <div class="providers-header">
+            <div>
+                <h2>Communication Providers</h2>
+                <p>Manage your messaging service integrations</p>
             </div>
-            <div class="header-actions">
-                <button class="add-btn" (click)="addNewProvider()">
-                    <i class="fa-solid fa-plus"></i>
-                    <span>Add Provider</span>
-                </button>
-            </div>
-        </header>
+            <button class="tb-btn primary" (click)="addNewProvider()">
+                <i class="fa-solid fa-plus"></i> Add Provider
+            </button>
+        </div>
 
-        <div *ngIf="isLoading" class="loader-container">
-            <div class="spinner"></div>
-            <p>Loading providers...</p>
+        <div *ngIf="isLoading" class="loading-state">
+            <mj-loading text="Loading providers..."></mj-loading>
         </div>
 
         <div *ngIf="!isLoading" class="providers-grid">
-            <div *ngFor="let provider of providers" class="provider-card" [class.disabled]="provider.Status === 'Disabled'">
-                <div class="card-header">
-                    <div class="provider-logo">
-                        <i [class]="getProviderIcon(provider.Name)"></i>
+            <div *ngFor="let card of providerCards" class="provider-card" [class.disabled]="card.Entity.Status === 'Disabled'">
+                <div class="provider-card-header">
+                    <div class="provider-card-logo" [ngClass]="card.LogoClass">
+                        <i [class]="card.IconClass"></i>
                     </div>
-                    <div class="status-badge" [class]="provider.Status.toLowerCase()">
-                        {{provider.Status}}
+                    <div class="provider-card-title">
+                        <div class="provider-card-name">{{card.Entity.Name}}</div>
+                        <div class="provider-card-desc">{{card.Entity.Description || 'No description'}}</div>
+                    </div>
+                    <span class="provider-card-status" [ngClass]="card.Entity.Status.toLowerCase()">
+                        {{card.Entity.Status}}
+                    </span>
+                </div>
+                <div class="provider-card-body">
+                    <div class="provider-capabilities">
+                        <span class="capability-chip" [class.supported]="card.Entity.SupportsSending" [class.unsupported]="!card.Entity.SupportsSending">
+                            <i [class]="card.Entity.SupportsSending ? 'fa-solid fa-check' : 'fa-solid fa-xmark'"></i> Sending
+                        </span>
+                        <span class="capability-chip" [class.supported]="card.Entity.SupportsReceiving" [class.unsupported]="!card.Entity.SupportsReceiving">
+                            <i [class]="card.Entity.SupportsReceiving ? 'fa-solid fa-check' : 'fa-solid fa-xmark'"></i> Receiving
+                        </span>
+                        <span *ngIf="card.Entity.SupportsScheduledSending" class="capability-chip supported">
+                            <i class="fa-solid fa-check"></i> Scheduled
+                        </span>
+                        <span *ngIf="card.Entity.SupportsDrafts" class="capability-chip supported">
+                            <i class="fa-solid fa-check"></i> Drafts
+                        </span>
+                        <span *ngIf="card.Entity.SupportsForwarding" class="capability-chip supported">
+                            <i class="fa-solid fa-check"></i> Forward
+                        </span>
+                        <span *ngIf="card.Entity.SupportsReplying" class="capability-chip supported">
+                            <i class="fa-solid fa-check"></i> Reply
+                        </span>
+                    </div>
+                    <div class="provider-card-stats">
+                        <div class="provider-stat">
+                            <div class="provider-stat-value">{{card.SentCount}}</div>
+                            <div class="provider-stat-label">Sent (24h)</div>
+                        </div>
+                        <div class="provider-stat">
+                            <div class="provider-stat-value">{{card.SuccessRate}}%</div>
+                            <div class="provider-stat-label">Success</div>
+                        </div>
+                        <div class="provider-stat">
+                            <div class="provider-stat-value">{{card.FailedCount}}</div>
+                            <div class="provider-stat-label">Failed</div>
+                        </div>
                     </div>
                 </div>
-                <div class="card-body">
-                    <h3>{{provider.Name}}</h3>
-                    <p>{{provider.Description || 'No description provided.'}}</p>
-                    
-                    <div class="capabilities">
-                        <span class="cap" [class.active]="provider.SupportsSending">
-                            <i class="fa-solid fa-paper-plane"></i> Sending
-                        </span>
-                        <span class="cap" [class.active]="provider.SupportsReceiving">
-                            <i class="fa-solid fa-inbox"></i> Receiving
-                        </span>
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <button class="config-btn" (click)="configureProvider(provider)">
+                <div class="provider-card-footer">
+                    <button (click)="configureProvider(card.Entity)">
                         <i class="fa-solid fa-gear"></i> Configure
                     </button>
-                    <button class="view-logs-btn" (click)="viewProviderLogs(provider)">
-                        Logs
+                    <button (click)="viewProviderLogs(card.Entity)">
+                        <i class="fa-solid fa-chart-line"></i> Analytics
                     </button>
                 </div>
-            </div>
-
-            <div class="add-card" (click)="addNewProvider()">
-                <i class="fa-solid fa-circle-plus"></i>
-                <span>Connect New Service</span>
             </div>
         </div>
     </div>
   `,
     styles: [`
-    .providers-container {
-        padding: 32px;
-        background-color: #f8fafc;
-        min-height: 100%;
-        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    .providers-wrapper {
+        height: 100%;
+        padding: 24px;
+        overflow-y: auto;
+        background: var(--mat-sys-surface-container);
     }
     .providers-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: 32px;
-    }
-    .title-area h1 {
-        margin: 0;
-        font-size: 1.875rem;
-        font-weight: 800;
-        color: #0f172a;
-    }
-    .title-area p {
-        margin: 4px 0 0;
-        color: #64748b;
-        font-size: 1rem;
-    }
-    .add-btn {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 24px;
-        background: #3b82f6;
-        border: none;
-        border-radius: 10px;
-        color: white;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s;
-        box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2);
-    }
-    .add-btn:hover {
-        background: #2563eb;
-        transform: translateY(-1px);
-        box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
-    }
-
-    .loader-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 100px 0;
-        color: #64748b;
-    }
-    .spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid #e2e8f0;
-        border-top-color: #3b82f6;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin-bottom: 16px;
-    }
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-
-    .providers-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-        gap: 24px;
-    }
-    .provider-card {
-        background: white;
-        border-radius: 20px;
-        border: 1px solid #f1f5f9;
-        padding: 24px;
-        display: flex;
-        flex-direction: column;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .provider-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
-    }
-    .provider-card.disabled {
-        opacity: 0.7;
-        background: #fcfcfc;
-    }
-
-    .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
         margin-bottom: 20px;
     }
-    .provider-logo {
-        width: 56px;
-        height: 56px;
-        background: #f8fafc;
-        border-radius: 14px;
+    .providers-header h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--mat-sys-on-surface);
+    }
+    .providers-header p {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: var(--mat-sys-on-surface-variant);
+    }
+
+    .tb-btn {
+        display: inline-flex; align-items: center;
+        gap: 6px; padding: 8px 16px;
+        border: 1px solid var(--mat-sys-outline-variant);
+        border-radius: var(--mat-sys-corner-extra-small, 4px);
+        background: var(--mat-sys-surface-container-lowest);
+        color: var(--mat-sys-on-surface-variant);
+        font-size: 12px; font-weight: 600;
+        cursor: pointer; transition: all 0.15s ease;
+        font-family: inherit;
+    }
+    .tb-btn.primary {
+        background: var(--mat-sys-primary);
+        color: var(--mat-sys-on-primary, #fff);
+        border-color: var(--mat-sys-primary);
+    }
+    .tb-btn.primary:hover { filter: brightness(1.1); }
+
+    .loading-state {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.75rem;
-        color: #334155;
-        border: 1px solid #f1f5f9;
-    }
-    .status-badge {
-        font-size: 0.75rem;
-        font-weight: 700;
-        padding: 4px 12px;
-        border-radius: 20px;
-        text-transform: uppercase;
-        letter-spacing: 0.025em;
-    }
-    .status-badge.active { background: #dcfce7; color: #166534; }
-    .status-badge.disabled { background: #f1f5f9; color: #475569; }
-
-    .card-body h3 {
-        margin: 0 0 8px;
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: #0f172a;
-    }
-    .card-body p {
-        margin: 0 0 20px;
-        font-size: 0.9375rem;
-        color: #64748b;
-        line-height: 1.5;
-        height: 45px;
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
+        padding: 80px 0;
     }
 
-    .capabilities {
-        display: flex;
-        gap: 12px;
-        margin-bottom: 24px;
-    }
-    .cap {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #94a3b8;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .cap.active {
-        color: #3b82f6;
-    }
-
-    .card-footer {
-        display: flex;
-        gap: 12px;
-        margin-top: auto;
-    }
-    .config-btn {
-        flex: 1;
-        padding: 10px;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        color: #475569;
-        font-weight: 600;
-        font-size: 0.875rem;
-        cursor: pointer;
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-    }
-    .config-btn:hover {
-        background: #f1f5f9;
-        border-color: #cbd5e1;
-        color: #1e293b;
-    }
-    .view-logs-btn {
-        padding: 10px 16px;
-        background: transparent;
-        border: 1px solid transparent;
-        color: #64748b;
-        font-weight: 600;
-        font-size: 0.875rem;
-        cursor: pointer;
-    }
-    .view-logs-btn:hover {
-        color: #3b82f6;
-    }
-
-    .add-card {
-        border: 2px dashed #e2e8f0;
-        border-radius: 20px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
+    /* GRID */
+    .providers-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
         gap: 16px;
-        color: #94a3b8;
-        cursor: pointer;
-        transition: all 0.2s;
-        min-height: 240px;
     }
-    .add-card:hover {
-        border-color: #3b82f6;
-        background: #eff6ff;
-        color: #3b82f6;
+    .provider-card {
+        background: var(--mat-sys-surface-container-lowest);
+        border: 1px solid var(--mat-sys-outline-variant);
+        border-radius: var(--mat-sys-corner-medium, 12px);
+        overflow: hidden;
+        transition: all 0.15s ease;
     }
-    .add-card i {
-        font-size: 3rem;
+    .provider-card:hover {
+        box-shadow: 0 2px 6px 2px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+        border-color: var(--mat-sys-outline);
     }
-    .add-card span {
-        font-weight: 600;
+    .provider-card.disabled { opacity: 0.65; }
+
+    .provider-card-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 20px 20px 16px;
+    }
+    .provider-card-logo {
+        width: 48px; height: 48px;
+        border-radius: var(--mat-sys-corner-medium, 12px);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 22px; flex-shrink: 0;
+        background: var(--mat-sys-surface-container);
+    }
+    .provider-card-logo.sendgrid { background: #E8F4FD; color: #1A82E2; }
+    .provider-card-logo.twilio { background: #FEECEE; color: #F22F46; }
+    .provider-card-logo.gmail { background: #FEECED; color: #EA4335; }
+    .provider-card-logo.msgraph { background: #E6F0FA; color: #0078D4; }
+
+    .provider-card-title { flex: 1; min-width: 0; }
+    .provider-card-name {
+        font-size: 15px; font-weight: 700;
+        color: var(--mat-sys-on-surface);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .provider-card-desc {
+        font-size: 12px;
+        color: var(--mat-sys-on-surface-variant);
+        margin-top: 2px;
+    }
+    .provider-card-status {
+        font-size: 10px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        padding: 3px 10px; border-radius: 10px;
+        flex-shrink: 0;
+    }
+    .provider-card-status.active { background: #d4f8e0; color: #1b873f; }
+    .provider-card-status.disabled { background: var(--mat-sys-surface-container-high); color: var(--mat-sys-on-surface-variant); }
+
+    .provider-card-body { padding: 0 20px 16px; }
+
+    .provider-capabilities {
+        display: flex; flex-wrap: wrap;
+        gap: 6px; margin-bottom: 16px;
+    }
+    .capability-chip {
+        display: inline-flex; align-items: center;
+        gap: 4px; padding: 4px 10px;
+        border-radius: 12px; font-size: 11px; font-weight: 500;
+    }
+    .capability-chip.supported { background: #d4f8e0; color: #1b873f; }
+    .capability-chip.unsupported {
+        background: var(--mat-sys-surface-container);
+        color: var(--mat-sys-outline);
+        text-decoration: line-through;
+    }
+
+    .provider-card-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px; padding: 12px;
+        background: var(--mat-sys-surface-container-low);
+        border-radius: var(--mat-sys-corner-small, 8px);
+    }
+    .provider-stat { text-align: center; }
+    .provider-stat-value {
+        font-size: 16px; font-weight: 800;
+        color: var(--mat-sys-on-surface);
+    }
+    .provider-stat-label {
+        font-size: 10px;
+        color: var(--mat-sys-on-surface-variant);
+        text-transform: uppercase; letter-spacing: 0.3px;
+    }
+
+    .provider-card-footer {
+        display: flex;
+        border-top: 1px solid var(--mat-sys-outline-variant);
+    }
+    .provider-card-footer button {
+        flex: 1; padding: 12px;
+        border: none; background: transparent;
+        font-size: 12px; font-weight: 600;
+        color: var(--mat-sys-primary);
+        cursor: pointer; transition: background 0.15s;
+        font-family: inherit;
+        display: flex; align-items: center;
+        justify-content: center; gap: 6px;
+    }
+    .provider-card-footer button:hover {
+        background: var(--mat-sys-surface-container-low);
+    }
+    .provider-card-footer button + button {
+        border-left: 1px solid var(--mat-sys-outline-variant);
     }
   `]
 })
 export class CommunicationProvidersResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     public isLoading = false;
-    public providers: any[] = [];
+    public providerCards: ProviderCardData[] = [];
 
     constructor(private cdr: ChangeDetectorRef, private navService: NavigationService) {
         super();
@@ -313,14 +287,26 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
             this.cdr.detectChanges();
 
             const rv = new RunView();
-            const result = await rv.RunView({
-                EntityName: 'Communication Providers',
-                OrderBy: 'Name ASC',
-                ResultType: 'entity_object'
-            });
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayIso = yesterday.toISOString();
 
-            if (result.Success) {
-                this.providers = result.Results;
+            const [providersResult, logsResult] = await Promise.all([
+                rv.RunView<CommunicationProviderEntity>({
+                    EntityName: 'Communication Providers',
+                    OrderBy: 'Name ASC',
+                    ResultType: 'entity_object'
+                }),
+                rv.RunView<CommunicationLogEntity>({
+                    EntityName: 'Communication Logs',
+                    ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
+                    ResultType: 'entity_object'
+                })
+            ]);
+
+            if (providersResult.Success) {
+                const logs = logsResult.Success ? logsResult.Results : [];
+                this.providerCards = providersResult.Results.map(p => this.buildProviderCard(p, logs));
             }
         } catch (error) {
             console.error('Error loading providers:', error);
@@ -330,26 +316,50 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
         }
     }
 
-    public getProviderIcon(name: string): string {
+    private buildProviderCard(provider: CommunicationProviderEntity, logs: CommunicationLogEntity[]): ProviderCardData {
+        const providerLogs = logs.filter(l => l.CommunicationProvider === provider.Name);
+        const sent = providerLogs.length;
+        const failed = providerLogs.filter(l => l.Status === 'Failed').length;
+        const rate = sent > 0 ? parseFloat(((sent - failed) / sent * 100).toFixed(1)) : 100;
+
+        return {
+            Entity: provider,
+            SentCount: sent,
+            SuccessRate: rate,
+            FailedCount: failed,
+            IconClass: this.getProviderIcon(provider.Name),
+            LogoClass: this.getProviderLogoClass(provider.Name)
+        };
+    }
+
+    private getProviderIcon(name: string): string {
         const n = name.toLowerCase();
         if (n.includes('sendgrid')) return 'fa-solid fa-envelope';
         if (n.includes('twilio')) return 'fa-solid fa-comment-sms';
+        if (n.includes('gmail') || n.includes('google')) return 'fa-brands fa-google';
+        if (n.includes('microsoft') || n.includes('graph') || n.includes('outlook')) return 'fa-brands fa-microsoft';
         if (n.includes('aws') || n.includes('ses')) return 'fa-brands fa-aws';
         if (n.includes('slack')) return 'fa-brands fa-slack';
-        if (n.includes('teams')) return 'fa-solid fa-users-rectangle';
         return 'fa-solid fa-server';
     }
 
-    public configureProvider(provider: any): void {
+    private getProviderLogoClass(name: string): string {
+        const n = name.toLowerCase();
+        if (n.includes('sendgrid')) return 'sendgrid';
+        if (n.includes('twilio')) return 'twilio';
+        if (n.includes('gmail') || n.includes('google')) return 'gmail';
+        if (n.includes('microsoft') || n.includes('graph') || n.includes('outlook')) return 'msgraph';
+        return '';
+    }
+
+    public configureProvider(provider: CommunicationProviderEntity): void {
         const pk = new CompositeKey();
         pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'Communication Providers')!, provider);
         this.navService.OpenEntityRecord('Communication Providers', pk);
     }
 
-    public viewProviderLogs(provider: any): void {
-        // Navigate to logs with filter
-        // For now just open the logs tab (this would need a more complex navigation or shared state)
-        console.log('View logs for provider:', provider.Name);
+    public viewProviderLogs(provider: CommunicationProviderEntity): void {
+        console.log('View analytics for provider:', provider.Name);
     }
 
     public addNewProvider(): void {

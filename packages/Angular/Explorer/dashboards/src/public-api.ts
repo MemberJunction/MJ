@@ -45,6 +45,7 @@ import { LoadCommunicationMonitorResource } from './Communication/communication-
 import { LoadCommunicationLogsResource } from './Communication/communication-logs-resource.component';
 import { LoadCommunicationProvidersResource } from './Communication/communication-providers-resource.component';
 import { LoadCommunicationRunsResource } from './Communication/communication-runs-resource.component';
+import { LoadCommunicationTemplatesResource } from './Communication/communication-templates-resource.component';
 
 
 import {
@@ -140,6 +141,10 @@ export {
   CommunicationRunsResourceComponent,
   LoadCommunicationRunsResource
 } from './Communication/communication-runs-resource.component';
+export {
+  CommunicationTemplatesResourceComponent,
+  LoadCommunicationTemplatesResource
+} from './Communication/communication-templates-resource.component';
 
 
 // Export Testing components as resources (BaseResourceComponent-based)
@@ -221,6 +226,7 @@ LoadCommunicationMonitorResource();
 LoadCommunicationLogsResource();
 LoadCommunicationProvidersResource();
 LoadCommunicationRunsResource();
+LoadCommunicationTemplatesResource();
 
 // Credentials Dashboard loader
 LoadCredentialsDashboard();

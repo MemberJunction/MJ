@@ -72,6 +72,7 @@ import { RequirementsEditorComponent } from './ComponentStudio/components/editor
 import { DataRequirementsEditorComponent } from './ComponentStudio/components/editors/data-requirements-editor.component';
 import { AIAssistantPanelComponent } from './ComponentStudio/components/ai-assistant/ai-assistant-panel.component';
 import { NewComponentDialogComponent } from './ComponentStudio/components/new-component-dialog/new-component-dialog.component';
+import { SaveVersionDialogComponent } from './ComponentStudio/components/save-version-dialog/save-version-dialog.component';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { MJReactModule } from '@memberjunction/ng-react';
@@ -124,6 +125,7 @@ import { CommunicationMonitorResourceComponent } from './Communication/communica
 import { CommunicationLogsResourceComponent } from './Communication/communication-logs-resource.component';
 import { CommunicationProvidersResourceComponent } from './Communication/communication-providers-resource.component';
 import { CommunicationRunsResourceComponent } from './Communication/communication-runs-resource.component';
+import { CommunicationTemplatesResourceComponent } from './Communication/communication-templates-resource.component';
 // Credentials Dashboard Components
 import { CredentialsDashboardComponent } from './Credentials/credentials-dashboard.component';
 import { CredentialsOverviewResourceComponent } from './Credentials/components/credentials-overview-resource.component';
@@ -221,6 +223,7 @@ import { ActionsModule } from '@memberjunction/ng-actions';
     DataRequirementsEditorComponent,
     AIAssistantPanelComponent,
     NewComponentDialogComponent,
+    SaveVersionDialogComponent,
     // Scheduling Dashboard Components
     SchedulingDashboardComponent,
     SchedulingOverviewComponent,
@@ -261,6 +264,7 @@ import { ActionsModule } from '@memberjunction/ng-actions';
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
     CommunicationRunsResourceComponent,
+    CommunicationTemplatesResourceComponent,
     // Credentials Dashboard Components (panels now come from CredentialsModule)
     CredentialsDashboardComponent,
     CredentialsOverviewResourceComponent,
@@ -389,6 +393,7 @@ import { ActionsModule } from '@memberjunction/ng-actions';
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
     CommunicationRunsResourceComponent,
+    CommunicationTemplatesResourceComponent,
     // Export Credentials Dashboard (panels re-exported via CredentialsModule)
     CredentialsDashboardComponent,
     CredentialsOverviewResourceComponent,
