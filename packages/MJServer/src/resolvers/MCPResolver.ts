@@ -8,11 +8,18 @@
 import { Resolver, Mutation, Arg, Ctx, Field, ObjectType, InputType, PubSub } from 'type-graphql';
 import { PubSubEngine } from 'type-graphql';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { MCPClientManager, MCPSyncToolsResult, MCPToolCallResult } from '@memberjunction/ai-mcp-client';
+import {
+    MCPClientManager,
+    MCPSyncToolsResult,
+    MCPToolCallResult,
+    OAuthAuthorizationRequiredError,
+    OAuthReauthorizationRequiredError
+} from '@memberjunction/ai-mcp-client';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
+import { configInfo } from '../config.js';
 
 /**
  * Input type for syncing MCP tools
@@ -84,6 +91,36 @@ export class SyncMCPToolsResult {
      */
     @Field({ nullable: true })
     ConnectionName?: string;
+
+    /**
+     * Whether OAuth authorization is required before connecting
+     */
+    @Field({ nullable: true })
+    RequiresOAuth?: boolean;
+
+    /**
+     * OAuth authorization URL if authorization is required
+     */
+    @Field({ nullable: true })
+    AuthorizationUrl?: string;
+
+    /**
+     * OAuth state parameter for tracking the authorization flow
+     */
+    @Field({ nullable: true })
+    StateParameter?: string;
+
+    /**
+     * Whether OAuth re-authorization is required
+     */
+    @Field({ nullable: true })
+    RequiresReauthorization?: boolean;
+
+    /**
+     * Reason for re-authorization if required
+     */
+    @Field({ nullable: true })
+    ReauthorizationReason?: string;
 }
 
 /**
@@ -203,7 +240,8 @@ export class MCPResolver extends ResolverBase {
 
             // Get the MCP client manager instance and ensure it's initialized
             const manager = MCPClientManager.Instance;
-            await manager.initialize(user);
+            const publicUrl = this.getPublicUrl();
+            await manager.initialize(user, { publicUrl });
 
             // Publish initial progress
             this.publishProgress(pubSub, sessionId, ConnectionID, 'connecting', 'Connecting to MCP server...');
@@ -215,6 +253,19 @@ export class MCPResolver extends ResolverBase {
                 try {
                     await manager.connect(ConnectionID, { contextUser: user });
                 } catch (connectError) {
+                    // Check for OAuth authorization required
+                    if (connectError instanceof OAuthAuthorizationRequiredError) {
+                        const authError = connectError as OAuthAuthorizationRequiredError;
+                        this.publishProgress(pubSub, sessionId, ConnectionID, 'error',
+                            `OAuth authorization required. Please authorize at: ${authError.authorizationUrl}`);
+                        return this.createOAuthRequiredResult(authError.authorizationUrl, authError.stateParameter);
+                    }
+                    if (connectError instanceof OAuthReauthorizationRequiredError) {
+                        const reAuthError = connectError as OAuthReauthorizationRequiredError;
+                        this.publishProgress(pubSub, sessionId, ConnectionID, 'error',
+                            `OAuth re-authorization required: ${reAuthError.reason}`);
+                        return this.createOAuthReauthorizationResult(reAuthError.reason, reAuthError.authorizationUrl, reAuthError.stateParameter);
+                    }
                     const connectErrorMsg = connectError instanceof Error ? connectError.message : String(connectError);
                     this.publishProgress(pubSub, sessionId, ConnectionID, 'error', `Connection failed: ${connectErrorMsg}`);
                     return this.createErrorResult(`Failed to connect to MCP server: ${connectErrorMsg}`);
@@ -322,7 +373,8 @@ export class MCPResolver extends ResolverBase {
             // Get the MCP client manager instance and ensure it's initialized
             LogStatus(`MCPResolver: [${ToolName}] Step 2 - Initializing MCP client manager...`);
             const manager = MCPClientManager.Instance;
-            await manager.initialize(user);
+            const publicUrl = this.getPublicUrl();
+            await manager.initialize(user, { publicUrl });
             LogStatus(`MCPResolver: [${ToolName}] Step 2 complete - Manager initialized (${Date.now() - startTime}ms)`);
 
             // Connect if not already connected
@@ -334,6 +386,34 @@ export class MCPResolver extends ResolverBase {
                     await manager.connect(ConnectionID, { contextUser: user });
                     LogStatus(`MCPResolver: [${ToolName}] Step 3 complete - Connected (${Date.now() - startTime}ms)`);
                 } catch (connectError) {
+                    // Check for OAuth authorization required
+                    if (connectError instanceof OAuthAuthorizationRequiredError) {
+                        const authError = connectError as OAuthAuthorizationRequiredError;
+                        LogError(`MCPResolver: [${ToolName}] OAuth authorization required`);
+                        return {
+                            Success: false,
+                            ErrorMessage: `OAuth authorization required. Please authorize at: ${authError.authorizationUrl}`,
+                            Result: {
+                                requiresOAuth: true,
+                                authorizationUrl: authError.authorizationUrl,
+                                stateParameter: authError.stateParameter
+                            }
+                        };
+                    }
+                    if (connectError instanceof OAuthReauthorizationRequiredError) {
+                        const reAuthError = connectError as OAuthReauthorizationRequiredError;
+                        LogError(`MCPResolver: [${ToolName}] OAuth re-authorization required: ${reAuthError.reason}`);
+                        return {
+                            Success: false,
+                            ErrorMessage: `OAuth re-authorization required: ${reAuthError.reason}`,
+                            Result: {
+                                requiresReauthorization: true,
+                                reason: reAuthError.reason,
+                                authorizationUrl: reAuthError.authorizationUrl,
+                                stateParameter: reAuthError.stateParameter
+                            }
+                        };
+                    }
                     const connectErrorMsg = connectError instanceof Error ? connectError.message : String(connectError);
                     LogError(`MCPResolver: [${ToolName}] Connection failed: ${connectErrorMsg}`);
                     return {
@@ -469,6 +549,68 @@ export class MCPResolver extends ResolverBase {
             Deprecated: 0,
             Total: 0
         };
+    }
+
+    /**
+     * Creates a result indicating OAuth authorization is required
+     */
+    private createOAuthRequiredResult(authorizationUrl: string, stateParameter: string): SyncMCPToolsResult {
+        return {
+            Success: false,
+            ErrorMessage: 'OAuth authorization required',
+            Added: 0,
+            Updated: 0,
+            Deprecated: 0,
+            Total: 0,
+            RequiresOAuth: true,
+            AuthorizationUrl: authorizationUrl,
+            StateParameter: stateParameter
+        };
+    }
+
+    /**
+     * Creates a result indicating OAuth re-authorization is required
+     */
+    private createOAuthReauthorizationResult(
+        reason: string,
+        authorizationUrl?: string,
+        stateParameter?: string
+    ): SyncMCPToolsResult {
+        return {
+            Success: false,
+            ErrorMessage: `OAuth re-authorization required: ${reason}`,
+            Added: 0,
+            Updated: 0,
+            Deprecated: 0,
+            Total: 0,
+            RequiresReauthorization: true,
+            ReauthorizationReason: reason,
+            AuthorizationUrl: authorizationUrl,
+            StateParameter: stateParameter
+        };
+    }
+
+    /**
+     * Gets the public URL for OAuth callbacks
+     */
+    private getPublicUrl(): string {
+        // Use publicUrl from config, falling back to constructed URL
+        if (configInfo.publicUrl) {
+            return configInfo.publicUrl;
+        }
+
+        // Construct from baseUrl and graphqlPort
+        const baseUrl = configInfo.baseUrl || 'http://localhost';
+        const port = configInfo.graphqlPort || 4000;
+        const rootPath = configInfo.graphqlRootPath || '/';
+
+        // Construct full URL
+        let url = `${baseUrl}:${port}`;
+        if (rootPath && rootPath !== '/') {
+            url += rootPath;
+        }
+
+        return url;
     }
 }
 

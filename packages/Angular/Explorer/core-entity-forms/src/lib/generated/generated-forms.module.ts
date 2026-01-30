@@ -211,6 +211,10 @@ import { MCPServerConnectionFormComponent, LoadMCPServerConnectionFormComponent 
 import { MCPServerToolFormComponent, LoadMCPServerToolFormComponent } from "./Entities/MCPServerTool/mcpservertool.form.component";
 import { MCPServerFormComponent, LoadMCPServerFormComponent } from "./Entities/MCPServer/mcpserver.form.component";
 import { MCPToolExecutionLogFormComponent, LoadMCPToolExecutionLogFormComponent } from "./Entities/MCPToolExecutionLog/mcptoolexecutionlog.form.component";
+import { OAuthAuthServerMetadataCacheFormComponent, LoadOAuthAuthServerMetadataCacheFormComponent } from "./Entities/OAuthAuthServerMetadataCache/oauthauthservermetadatacache.form.component";
+import { OAuthAuthorizationStateFormComponent, LoadOAuthAuthorizationStateFormComponent } from "./Entities/OAuthAuthorizationState/oauthauthorizationstate.form.component";
+import { OAuthClientRegistrationFormComponent, LoadOAuthClientRegistrationFormComponent } from "./Entities/OAuthClientRegistration/oauthclientregistration.form.component";
+import { OAuthTokenFormComponent, LoadOAuthTokenFormComponent } from "./Entities/OAuthToken/oauthtoken.form.component";
 import { ProjectFormComponent, LoadProjectFormComponent } from "./Entities/Project/project.form.component";
 import { PublicLinkFormComponent, LoadPublicLinkFormComponent } from "./Entities/PublicLink/publiclink.form.component";
 import { QueryParameterFormComponent, LoadQueryParameterFormComponent } from "./Entities/QueryParameter/queryparameter.form.component";
@@ -706,6 +710,10 @@ declarations: [
     MCPServerToolFormComponent,
     MCPServerFormComponent,
     MCPToolExecutionLogFormComponent,
+    OAuthAuthServerMetadataCacheFormComponent,
+    OAuthAuthorizationStateFormComponent,
+    OAuthClientRegistrationFormComponent,
+    OAuthTokenFormComponent,
     ProjectFormComponent,
     PublicLinkFormComponent,
     QueryParameterFormComponent,
@@ -716,11 +724,7 @@ declarations: [
     ScheduledJobTypeFormComponent,
     ScheduledJobFormComponent,
     TaskDependencyFormComponent,
-    TaskTypeFormComponent,
-    TaskFormComponent,
-    TestRubricFormComponent,
-    TestRunFeedbackFormComponent,
-    TestRunFormComponent],
+    TaskTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -746,6 +750,10 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    TaskFormComponent,
+    TestRubricFormComponent,
+    TestRunFeedbackFormComponent,
+    TestRunFormComponent,
     TestSuiteRunFormComponent,
     TestSuiteTestFormComponent,
     TestSuiteFormComponent,
@@ -761,11 +769,7 @@ declarations: [
     QueryCategoryFormComponent,
     QueryEntityFormComponent,
     QueryFieldFormComponent,
-    QueryPermissionFormComponent,
-    QueueTaskFormComponent,
-    QueueTypeFormComponent,
-    QueueFormComponent,
-    RecommendationItemFormComponent],
+    QueryPermissionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -791,6 +795,10 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    QueueTaskFormComponent,
+    QueueTypeFormComponent,
+    QueueFormComponent,
+    RecommendationItemFormComponent,
     RecommendationProviderFormComponent,
     RecommendationRunFormComponent,
     RecommendationFormComponent,
@@ -806,11 +814,7 @@ declarations: [
     ResourceTypeFormComponent,
     RoleFormComponent,
     RowLevelSecurityFilterFormComponent,
-    ScheduledActionParamFormComponent,
-    ScheduledActionFormComponent,
-    SchemaInfoFormComponent,
-    SkillFormComponent,
-    TaggedItemFormComponent],
+    ScheduledActionParamFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -836,6 +840,10 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    ScheduledActionFormComponent,
+    SchemaInfoFormComponent,
+    SkillFormComponent,
+    TaggedItemFormComponent,
     TagFormComponent,
     TemplateCategoryFormComponent,
     TemplateContentTypeFormComponent,
@@ -851,11 +859,7 @@ declarations: [
     UserViewCategoryFormComponent,
     UserViewRunDetailFormComponent,
     UserViewRunFormComponent,
-    UserViewFormComponent,
-    UserFormComponent,
-    VectorDatabaseFormComponent,
-    VectorIndexFormComponent,
-    VersionInstallationFormComponent],
+    UserViewFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -881,6 +885,10 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    UserFormComponent,
+    VectorDatabaseFormComponent,
+    VectorIndexFormComponent,
+    VersionInstallationFormComponent,
     WorkflowEngineFormComponent,
     WorkflowRunFormComponent,
     WorkflowFormComponent,
@@ -1122,6 +1130,10 @@ export function LoadCoreGeneratedForms() {
     LoadMCPServerToolFormComponent();
     LoadMCPServerFormComponent();
     LoadMCPToolExecutionLogFormComponent();
+    LoadOAuthAuthServerMetadataCacheFormComponent();
+    LoadOAuthAuthorizationStateFormComponent();
+    LoadOAuthClientRegistrationFormComponent();
+    LoadOAuthTokenFormComponent();
     LoadProjectFormComponent();
     LoadPublicLinkFormComponent();
     LoadQueryParameterFormComponent();

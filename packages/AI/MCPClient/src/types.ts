@@ -66,6 +66,20 @@ export interface MCPServerConfig {
     ConnectionTimeoutMs?: number;
     /** Request timeout in milliseconds */
     RequestTimeoutMs?: number;
+
+    // OAuth2 configuration fields
+    /** OAuth2 issuer URL for authorization server discovery */
+    OAuthIssuerURL?: string;
+    /** OAuth2 scopes to request (space-delimited) */
+    OAuthScopes?: string;
+    /** Metadata cache TTL in minutes (default: 60) */
+    OAuthMetadataCacheTTLMinutes?: number;
+    /** Pre-configured OAuth client ID (if DCR not used) */
+    OAuthClientID?: string;
+    /** Pre-configured OAuth client secret (encrypted) */
+    OAuthClientSecretEncrypted?: string;
+    /** Require PKCE for OAuth2 (default: true) */
+    OAuthRequirePKCE?: boolean;
 }
 
 /**

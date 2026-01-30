@@ -30,6 +30,9 @@ import {
 
 import { RateLimiterRegistry, RateLimiter } from './RateLimiter.js';
 import { ExecutionLogger } from './ExecutionLogger.js';
+import { OAuthManager } from './oauth/OAuthManager.js';
+import { OAuthAuthorizationRequiredError, OAuthReauthorizationRequiredError } from './oauth/types.js';
+import type { MCPServerOAuthConfig } from './oauth/types.js';
 import type {
     MCPServerConfig,
     MCPConnectionConfig,
@@ -103,8 +106,14 @@ export class MCPClientManager {
     /** Event listeners */
     private readonly eventListeners: Map<MCPClientEventType, Set<MCPClientEventListener>> = new Map();
 
+    /** OAuth manager for OAuth2 authentication */
+    private readonly oauthManager: OAuthManager = new OAuthManager();
+
     /** Whether the manager has been initialized */
     private initialized = false;
+
+    /** Public URL for OAuth callbacks (set during initialization) */
+    private publicUrl: string = '';
 
     /** Client name for MCP handshake */
     private static readonly CLIENT_NAME = 'MemberJunction';
@@ -153,8 +162,12 @@ export class MCPClientManager {
      * Initializes the manager. Should be called once at application startup.
      *
      * @param contextUser - User context for initialization
+     * @param options - Optional initialization options
      */
-    public async initialize(contextUser: UserInfo): Promise<void> {
+    public async initialize(
+        contextUser: UserInfo,
+        options?: { publicUrl?: string }
+    ): Promise<void> {
         if (this.initialized) {
             return;
         }
@@ -162,12 +175,27 @@ export class MCPClientManager {
         try {
             // Ensure CredentialEngine is configured
             await CredentialEngine.Instance.Config(false, contextUser);
+
+            // Store public URL for OAuth callbacks
+            if (options?.publicUrl) {
+                this.publicUrl = options.publicUrl;
+            }
+
             this.initialized = true;
             LogStatus('[MCPClient] Manager initialized');
         } catch (error) {
             LogError(`[MCPClient] Failed to initialize: ${error}`);
             throw error;
         }
+    }
+
+    /**
+     * Sets the public URL for OAuth callbacks.
+     *
+     * @param publicUrl - The public URL (e.g., https://api.example.com)
+     */
+    public setPublicUrl(publicUrl: string): void {
+        this.publicUrl = publicUrl;
     }
 
     /**
@@ -239,7 +267,12 @@ export class MCPClientManager {
 
             // Get credentials if needed
             let credentials: MCPCredentialData | undefined;
-            if (connectionConfig.CredentialID && serverConfig.DefaultAuthType !== 'None') {
+            const authType = serverConfig.DefaultAuthType as MCPAuthType;
+
+            if (authType === 'OAuth2') {
+                // Handle OAuth2 authentication
+                credentials = await this.getOAuth2Credentials(connectionId, serverConfig, contextUser);
+            } else if (connectionConfig.CredentialID && authType !== 'None') {
                 try {
                     credentials = await this.getCredentials(connectionConfig.CredentialID, contextUser);
                 } catch (error) {
@@ -1573,6 +1606,108 @@ export class MCPClientManager {
         } catch (error) {
             LogError(`[MCPClient] Failed to get credentials: ${error}`);
             throw error;
+        }
+    }
+
+    /**
+     * Gets OAuth2 access token for an MCP server connection.
+     *
+     * Uses OAuthManager to get a valid access token, refreshing if needed.
+     * If authorization is required, throws OAuthAuthorizationRequiredError.
+     *
+     * @param connectionId - MCP Server Connection ID
+     * @param serverConfig - Server configuration with OAuth settings
+     * @param contextUser - User context
+     * @returns Credential data with the access token
+     * @throws OAuthAuthorizationRequiredError if user authorization is needed
+     * @throws OAuthReauthorizationRequiredError if re-authorization is needed
+     */
+    private async getOAuth2Credentials(
+        connectionId: string,
+        serverConfig: MCPServerConfig,
+        contextUser: UserInfo
+    ): Promise<MCPCredentialData> {
+        if (!this.publicUrl) {
+            throw new Error(
+                'Public URL not configured. Call MCPClientManager.Instance.setPublicUrl() or ' +
+                'initialize with publicUrl option before using OAuth2 authentication.'
+            );
+        }
+
+        // Build OAuth config from server settings
+        const oauthConfig: MCPServerOAuthConfig = {
+            OAuthIssuerURL: serverConfig.OAuthIssuerURL,
+            OAuthScopes: serverConfig.OAuthScopes,
+            OAuthMetadataCacheTTLMinutes: serverConfig.OAuthMetadataCacheTTLMinutes,
+            OAuthClientID: serverConfig.OAuthClientID,
+            OAuthClientSecretEncrypted: serverConfig.OAuthClientSecretEncrypted,
+            OAuthRequirePKCE: serverConfig.OAuthRequirePKCE
+        };
+
+        // Get a valid access token (may throw OAuthAuthorizationRequiredError)
+        const accessToken = await this.oauthManager.getAccessToken(
+            connectionId,
+            serverConfig.ID,
+            oauthConfig,
+            this.publicUrl,
+            contextUser
+        );
+
+        // Return credentials in the expected format
+        return {
+            apiKey: accessToken  // OAuth2 uses Bearer token in Authorization header
+        };
+    }
+
+    /**
+     * Gets the OAuth connection status for a connection.
+     *
+     * @param connectionId - MCP Server Connection ID
+     * @param contextUser - User context
+     * @returns OAuth connection status or null if not an OAuth2 connection
+     */
+    public async getOAuthConnectionStatus(
+        connectionId: string,
+        contextUser: UserInfo
+    ): Promise<{
+        isOAuthEnabled: boolean;
+        hasValidTokens: boolean;
+        requiresReauthorization: boolean;
+        reauthorizationReason?: string;
+        tokenExpiresAt?: Date;
+    } | null> {
+        try {
+            // Load connection and server config
+            const connectionConfig = await this.loadConnectionConfig(connectionId, contextUser);
+            if (!connectionConfig) {
+                return null;
+            }
+
+            const serverConfig = await this.loadServerConfig(connectionConfig.MCPServerID, contextUser);
+            if (!serverConfig || serverConfig.DefaultAuthType !== 'OAuth2') {
+                return { isOAuthEnabled: false, hasValidTokens: false, requiresReauthorization: false };
+            }
+
+            const oauthConfig: MCPServerOAuthConfig = {
+                OAuthIssuerURL: serverConfig.OAuthIssuerURL,
+                OAuthScopes: serverConfig.OAuthScopes,
+                OAuthMetadataCacheTTLMinutes: serverConfig.OAuthMetadataCacheTTLMinutes,
+                OAuthClientID: serverConfig.OAuthClientID,
+                OAuthClientSecretEncrypted: serverConfig.OAuthClientSecretEncrypted,
+                OAuthRequirePKCE: serverConfig.OAuthRequirePKCE
+            };
+
+            const status = await this.oauthManager.getConnectionStatus(connectionId, oauthConfig, contextUser);
+            return {
+                isOAuthEnabled: status.isOAuthEnabled,
+                hasValidTokens: status.hasValidTokens,
+                requiresReauthorization: status.requiresReauthorization,
+                reauthorizationReason: status.reauthorizationReason,
+                tokenExpiresAt: status.tokenExpiresAt
+            };
+        } catch (error) {
+            LogError(`[MCPClient] Failed to get OAuth status: ${error}`);
+            return null;
         }
     }
 

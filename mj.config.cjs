@@ -97,12 +97,12 @@ module.exports = {
       args: ['run', 'build'],
       when: 'after',
     },
-    {
-      workingDirectory: './packages/MJAPI',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
-    },
+    // {
+    //   workingDirectory: './packages/MJAPI',
+    //   command: 'npm',
+    //   args: ['run', 'build'],
+    //   when: 'after',
+    // },
   ],
 
   /**
@@ -259,4 +259,9 @@ module.exports = {
    * Environment variables (DB_HOST, DB_DATABASE, GRAPHQL_PORT, TENANT_ID, etc.)
    * are all handled by DEFAULT_SERVER_CONFIG.
    */
+
+  // Public URL for OAuth callbacks (ngrok URL or production URL)
+  // This is where the OAuth authorization server will redirect after user consent
+  // OAuth routes are registered at /oauth/callback (independent of REST API)
+  publicUrl: process.env.MJAPI_PUBLIC_URL || 'http://localhost:4000',
 };

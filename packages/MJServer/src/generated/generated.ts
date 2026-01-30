@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ActionAuthorizationEntity, ActionCategoryEntity, ActionContextTypeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, ActionEntity, AIActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentNoteEntity, AIAgentRequestEntity, AIAgentEntity, AIModelActionEntity, AIModelTypeEntity, AIModelEntity, AIPromptCategoryEntity, AIPromptTypeEntity, AIPromptEntity, AIResultCacheEntity, ApplicationEntityEntity, ApplicationSettingEntity, ApplicationEntity, AuditLogTypeEntity, AuditLogEntity, AuthorizationRoleEntity, AuthorizationEntity, CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationProviderEntity, CommunicationRunEntity, CompanyEntity, CompanyIntegrationRecordMapEntity, CompanyIntegrationRunAPILogEntity, CompanyIntegrationRunDetailEntity, CompanyIntegrationRunEntity, CompanyIntegrationEntity, ContentFileTypeEntity, ContentItemAttributeEntity, ContentItemTagEntity, ContentItemEntity, ContentProcessRunEntity, ContentSourceParamEntity, ContentSourceTypeParamEntity, ContentSourceTypeEntity, ContentSourceEntity, ContentTypeAttributeEntity, ContentTypeEntity, ConversationDetailEntity, ConversationEntity, DashboardCategoryEntity, DashboardEntity, DataContextItemEntity, DataContextEntity, DatasetItemEntity, DatasetEntity, DuplicateRunDetailMatchEntity, DuplicateRunDetailEntity, DuplicateRunEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, EmployeeEntity, EntityEntity, EntityActionFilterEntity, EntityActionInvocationTypeEntity, EntityActionInvocationEntity, EntityActionParamEntity, EntityActionEntity, EntityAIActionEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity, EntityDocumentRunEntity, EntityDocumentSettingEntity, EntityDocumentTypeEntity, EntityDocumentEntity, EntityFieldValueEntity, EntityFieldEntity, EntityPermissionEntity, EntityRecordDocumentEntity, EntityRelationshipDisplayComponentEntity, EntityRelationshipEntity, EntitySettingEntity, ErrorLogEntity, ExplorerNavigationItemEntity, FileCategoryEntity, FileEntityRecordLinkEntity, FileStorageProviderEntity, FileEntity, GeneratedCodeCategoryEntity, GeneratedCodeEntity, IntegrationURLFormatEntity, IntegrationEntity, LibraryEntity, LibraryItemEntity, ListCategoryEntity, ListDetailEntity, ListEntity, AccessControlRuleEntity, AIAgentArtifactTypeEntity, AIAgentConfigurationEntity, AIAgentDataSourceEntity, AIAgentExampleEntity, AIAgentModalityEntity, AIAgentPermissionEntity, AIAgentPromptEntity, AIAgentRelationshipEntity, AIAgentRunMediaEntity, AIAgentRunStepEntity, AIAgentRunEntity, AIAgentStepPathEntity, AIAgentStepEntity, AIAgentTypeEntity, AIArchitectureEntity, AIConfigurationParamEntity, AIConfigurationEntity, AICredentialBindingEntity, AIModalityEntity, AIModelArchitectureEntity, AIModelCostEntity, AIModelModalityEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity, AIModelVendorEntity, AIPromptModelEntity, AIPromptRunMediaEntity, AIPromptRunEntity, AIVendorTypeDefinitionEntity, AIVendorTypeEntity, AIVendorEntity, APIApplicationScopeEntity, APIApplicationEntity, APIKeyApplicationEntity, APIKeyScopeEntity, APIKeyUsageLogEntity, APIKeyEntity, APIScopeEntity, ArtifactPermissionEntity, ArtifactTypeEntity, ArtifactUseEntity, ArtifactVersionAttributeEntity, ArtifactVersionEntity, ArtifactEntity, CollectionArtifactEntity, CollectionPermissionEntity, CollectionEntity, ComponentDependencyEntity, ComponentLibraryEntity, ComponentLibraryLinkEntity, ComponentRegistryEntity, ComponentEntity, ConversationArtifactPermissionEntity, ConversationArtifactVersionEntity, ConversationArtifactEntity, ConversationDetailArtifactEntity, ConversationDetailAttachmentEntity, ConversationDetailRatingEntity, CredentialCategoryEntity, CredentialTypeEntity, CredentialEntity, DashboardCategoryLinkEntity, DashboardCategoryPermissionEntity, DashboardPartTypeEntity, DashboardPermissionEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, EncryptionAlgorithmEntity, EncryptionKeySourceEntity, EncryptionKeyEntity, EnvironmentEntity, FileStorageAccountEntity, ListInvitationEntity, ListShareEntity, MCPServerConnectionPermissionEntity, MCPServerConnectionToolEntity, MCPServerConnectionEntity, MCPServerToolEntity, MCPServerEntity, MCPToolExecutionLogEntity, ProjectEntity, PublicLinkEntity, QueryParameterEntity, RecordLinkEntity, ReportUserStateEntity, ReportVersionEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity, ScheduledJobEntity, TaskDependencyEntity, TaskTypeEntity, TaskEntity, TestRubricEntity, TestRunFeedbackEntity, TestRunEntity, TestSuiteRunEntity, TestSuiteTestEntity, TestSuiteEntity, TestTypeEntity, TestEntity, UserNotificationPreferenceEntity, UserNotificationTypeEntity, UserSettingEntity, OutputDeliveryTypeEntity, OutputFormatTypeEntity, OutputTriggerTypeEntity, QueryEntity, QueryCategoryEntity, QueryEntityEntity, QueryFieldEntity, QueryPermissionEntity, QueueTaskEntity, QueueTypeEntity, QueueEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationEntity, RecordChangeReplayRunEntity, RecordChangeEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, ReportCategoryEntity, ReportSnapshotEntity, ReportEntity, ResourceLinkEntity, ResourcePermissionEntity, ResourceTypeEntity, RoleEntity, RowLevelSecurityFilterEntity, ScheduledActionParamEntity, ScheduledActionEntity, SchemaInfoEntity, SkillEntity, TaggedItemEntity, TagEntity, TemplateCategoryEntity, TemplateContentTypeEntity, TemplateContentEntity, TemplateParamEntity, TemplateEntity, UserApplicationEntityEntity, UserApplicationEntity, UserFavoriteEntity, UserNotificationEntity, UserRecordLogEntity, UserRoleEntity, UserViewCategoryEntity, UserViewRunDetailEntity, UserViewRunEntity, UserViewEntity, UserEntity, VectorDatabaseEntity, VectorIndexEntity, VersionInstallationEntity, WorkflowEngineEntity, WorkflowRunEntity, WorkflowEntity, WorkspaceItemEntity, WorkspaceEntity } from '@memberjunction/core-entities';
+import { ActionAuthorizationEntity, ActionCategoryEntity, ActionContextTypeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, ActionEntity, AIActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentNoteEntity, AIAgentRequestEntity, AIAgentEntity, AIModelActionEntity, AIModelTypeEntity, AIModelEntity, AIPromptCategoryEntity, AIPromptTypeEntity, AIPromptEntity, AIResultCacheEntity, ApplicationEntityEntity, ApplicationSettingEntity, ApplicationEntity, AuditLogTypeEntity, AuditLogEntity, AuthorizationRoleEntity, AuthorizationEntity, CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationProviderEntity, CommunicationRunEntity, CompanyEntity, CompanyIntegrationRecordMapEntity, CompanyIntegrationRunAPILogEntity, CompanyIntegrationRunDetailEntity, CompanyIntegrationRunEntity, CompanyIntegrationEntity, ContentFileTypeEntity, ContentItemAttributeEntity, ContentItemTagEntity, ContentItemEntity, ContentProcessRunEntity, ContentSourceParamEntity, ContentSourceTypeParamEntity, ContentSourceTypeEntity, ContentSourceEntity, ContentTypeAttributeEntity, ContentTypeEntity, ConversationDetailEntity, ConversationEntity, DashboardCategoryEntity, DashboardEntity, DataContextItemEntity, DataContextEntity, DatasetItemEntity, DatasetEntity, DuplicateRunDetailMatchEntity, DuplicateRunDetailEntity, DuplicateRunEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, EmployeeEntity, EntityEntity, EntityActionFilterEntity, EntityActionInvocationTypeEntity, EntityActionInvocationEntity, EntityActionParamEntity, EntityActionEntity, EntityAIActionEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity, EntityDocumentRunEntity, EntityDocumentSettingEntity, EntityDocumentTypeEntity, EntityDocumentEntity, EntityFieldValueEntity, EntityFieldEntity, EntityPermissionEntity, EntityRecordDocumentEntity, EntityRelationshipDisplayComponentEntity, EntityRelationshipEntity, EntitySettingEntity, ErrorLogEntity, ExplorerNavigationItemEntity, FileCategoryEntity, FileEntityRecordLinkEntity, FileStorageProviderEntity, FileEntity, GeneratedCodeCategoryEntity, GeneratedCodeEntity, IntegrationURLFormatEntity, IntegrationEntity, LibraryEntity, LibraryItemEntity, ListCategoryEntity, ListDetailEntity, ListEntity, AccessControlRuleEntity, AIAgentArtifactTypeEntity, AIAgentConfigurationEntity, AIAgentDataSourceEntity, AIAgentExampleEntity, AIAgentModalityEntity, AIAgentPermissionEntity, AIAgentPromptEntity, AIAgentRelationshipEntity, AIAgentRunMediaEntity, AIAgentRunStepEntity, AIAgentRunEntity, AIAgentStepPathEntity, AIAgentStepEntity, AIAgentTypeEntity, AIArchitectureEntity, AIConfigurationParamEntity, AIConfigurationEntity, AICredentialBindingEntity, AIModalityEntity, AIModelArchitectureEntity, AIModelCostEntity, AIModelModalityEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity, AIModelVendorEntity, AIPromptModelEntity, AIPromptRunMediaEntity, AIPromptRunEntity, AIVendorTypeDefinitionEntity, AIVendorTypeEntity, AIVendorEntity, APIApplicationScopeEntity, APIApplicationEntity, APIKeyApplicationEntity, APIKeyScopeEntity, APIKeyUsageLogEntity, APIKeyEntity, APIScopeEntity, ArtifactPermissionEntity, ArtifactTypeEntity, ArtifactUseEntity, ArtifactVersionAttributeEntity, ArtifactVersionEntity, ArtifactEntity, CollectionArtifactEntity, CollectionPermissionEntity, CollectionEntity, ComponentDependencyEntity, ComponentLibraryEntity, ComponentLibraryLinkEntity, ComponentRegistryEntity, ComponentEntity, ConversationArtifactPermissionEntity, ConversationArtifactVersionEntity, ConversationArtifactEntity, ConversationDetailArtifactEntity, ConversationDetailAttachmentEntity, ConversationDetailRatingEntity, CredentialCategoryEntity, CredentialTypeEntity, CredentialEntity, DashboardCategoryLinkEntity, DashboardCategoryPermissionEntity, DashboardPartTypeEntity, DashboardPermissionEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, EncryptionAlgorithmEntity, EncryptionKeySourceEntity, EncryptionKeyEntity, EnvironmentEntity, FileStorageAccountEntity, ListInvitationEntity, ListShareEntity, MCPServerConnectionPermissionEntity, MCPServerConnectionToolEntity, MCPServerConnectionEntity, MCPServerToolEntity, MCPServerEntity, MCPToolExecutionLogEntity, OAuthAuthServerMetadataCacheEntity, OAuthAuthorizationStateEntity, OAuthClientRegistrationEntity, OAuthTokenEntity, ProjectEntity, PublicLinkEntity, QueryParameterEntity, RecordLinkEntity, ReportUserStateEntity, ReportVersionEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity, ScheduledJobEntity, TaskDependencyEntity, TaskTypeEntity, TaskEntity, TestRubricEntity, TestRunFeedbackEntity, TestRunEntity, TestSuiteRunEntity, TestSuiteTestEntity, TestSuiteEntity, TestTypeEntity, TestEntity, UserNotificationPreferenceEntity, UserNotificationTypeEntity, UserSettingEntity, OutputDeliveryTypeEntity, OutputFormatTypeEntity, OutputTriggerTypeEntity, QueryEntity, QueryCategoryEntity, QueryEntityEntity, QueryFieldEntity, QueryPermissionEntity, QueueTaskEntity, QueueTypeEntity, QueueEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationEntity, RecordChangeReplayRunEntity, RecordChangeEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, ReportCategoryEntity, ReportSnapshotEntity, ReportEntity, ResourceLinkEntity, ResourcePermissionEntity, ResourceTypeEntity, RoleEntity, RowLevelSecurityFilterEntity, ScheduledActionParamEntity, ScheduledActionEntity, SchemaInfoEntity, SkillEntity, TaggedItemEntity, TagEntity, TemplateCategoryEntity, TemplateContentTypeEntity, TemplateContentEntity, TemplateParamEntity, TemplateEntity, UserApplicationEntityEntity, UserApplicationEntity, UserFavoriteEntity, UserNotificationEntity, UserRecordLogEntity, UserRoleEntity, UserViewCategoryEntity, UserViewRunDetailEntity, UserViewRunEntity, UserViewEntity, UserEntity, VectorDatabaseEntity, VectorIndexEntity, VersionInstallationEntity, WorkflowEngineEntity, WorkflowRunEntity, WorkflowEntity, WorkspaceItemEntity, WorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -21026,6 +21026,15 @@ export class MJEntityField_ {
     @Field(() => Boolean, {description: `When AllowDecryptInAPI is false: if true, send encrypted ciphertext (e.g., $ENC$...); if false (default), send sentinel value, usually "[!ENCRYPTED$]", indicating a value exists but is protected. Most secure option is false.`}) 
     SendEncryptedValue: boolean;
         
+    @Field(() => Boolean, {description: `When 1, indicates IsPrimaryKey was set via metadata (not a database constraint). Protects IsPrimaryKey from being cleared by schema sync.`}) 
+    IsSoftPrimaryKey: boolean;
+        
+    @Field(() => Boolean, {description: `When 1, indicates RelatedEntityID/RelatedEntityFieldName were set via metadata (not a database constraint). Protects these fields from being cleared by schema sync.`}) 
+    IsSoftForeignKey: boolean;
+        
+    @Field({nullable: true, description: `JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`}) 
+    RelatedEntityJoinFields?: string;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -21202,6 +21211,15 @@ export class CreateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     SendEncryptedValue?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSoftPrimaryKey?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSoftForeignKey?: boolean;
+
+    @Field({ nullable: true })
+    RelatedEntityJoinFields: string | null;
 }
     
 
@@ -21329,6 +21347,15 @@ export class UpdateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     SendEncryptedValue?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSoftPrimaryKey?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSoftForeignKey?: boolean;
+
+    @Field({ nullable: true })
+    RelatedEntityJoinFields?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -41215,6 +41242,9 @@ export class MJCredential_ {
     @MaxLength(200)
     Category?: string;
         
+    @Field(() => [MJOAuthToken_])
+    MJ_OAuthTokens_CredentialIDArray: MJOAuthToken_[]; // Link to MJ_OAuthTokens
+    
     @Field(() => [MJFileStorageAccount_])
     MJ_FileStorageAccounts_CredentialIDArray: MJFileStorageAccount_[]; // Link to MJ_FileStorageAccounts
     
@@ -41372,6 +41402,17 @@ export class MJCredentialResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJOAuthToken_])
+    async MJ_OAuthTokens_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: O Auth Tokens', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthTokens] WHERE [CredentialID]='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Tokens', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Tokens', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJFileStorageAccount_])
     async MJ_FileStorageAccounts_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: File Storage Accounts', userPayload);
@@ -44554,8 +44595,17 @@ export class MJMCPServerConnection_ {
     @Field(() => [MJMCPServerConnectionTool_])
     MJ_MCPServerConnectionTools_MCPServerConnectionIDArray: MJMCPServerConnectionTool_[]; // Link to MJ_MCPServerConnectionTools
     
+    @Field(() => [MJOAuthToken_])
+    MJ_OAuthTokens_MCPServerConnectionIDArray: MJOAuthToken_[]; // Link to MJ_OAuthTokens
+    
     @Field(() => [MJMCPToolExecutionLog_])
     MJ_MCPToolExecutionLogs_MCPServerConnectionIDArray: MJMCPToolExecutionLog_[]; // Link to MJ_MCPToolExecutionLogs
+    
+    @Field(() => [MJOAuthAuthorizationState_])
+    MJ_OAuthAuthorizationStates_MCPServerConnectionIDArray: MJOAuthAuthorizationState_[]; // Link to MJ_OAuthAuthorizationStates
+    
+    @Field(() => [MJOAuthClientRegistration_])
+    MJ_OAuthClientRegistrations_MCPServerConnectionIDArray: MJOAuthClientRegistration_[]; // Link to MJ_OAuthClientRegistrations
     
     @Field(() => [MJMCPServerConnectionPermission_])
     MJ_MCPServerConnectionPermissions_MCPServerConnectionIDArray: MJMCPServerConnectionPermission_[]; // Link to MJ_MCPServerConnectionPermissions
@@ -44749,6 +44799,17 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJOAuthToken_])
+    async MJ_OAuthTokens_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: O Auth Tokens', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthTokens] WHERE [MCPServerConnectionID]='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Tokens', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Tokens', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJMCPToolExecutionLog_])
     async MJ_MCPToolExecutionLogs_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Tool Execution Logs', userPayload);
@@ -44757,6 +44818,28 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPToolExecutionLogs] WHERE [MCPServerConnectionID]='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Execution Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOAuthAuthorizationState_])
+    async MJ_OAuthAuthorizationStates_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: O Auth Authorization States', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthAuthorizationStates] WHERE [MCPServerConnectionID]='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Authorization States', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Authorization States', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOAuthClientRegistration_])
+    async MJ_OAuthClientRegistrations_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: O Auth Client Registrations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthClientRegistrations] WHERE [MCPServerConnectionID]='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Client Registrations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Client Registrations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -45160,14 +45243,38 @@ export class MJMCPServer_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
+    @MaxLength(2000)
+    OAuthIssuerURL?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(1000)
+    OAuthScopes?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    OAuthMetadataCacheTTLMinutes?: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    OAuthClientID?: string;
+        
+    @Field({nullable: true}) 
+    OAuthClientSecretEncrypted?: string;
+        
+    @Field(() => Boolean) 
+    OAuthRequirePKCE: boolean;
+        
+    @Field({nullable: true}) 
     @MaxLength(200)
     CredentialType?: string;
         
-    @Field(() => [MJMCPServerConnection_])
-    MJ_MCPServerConnections_MCPServerIDArray: MJMCPServerConnection_[]; // Link to MJ_MCPServerConnections
+    @Field(() => [MJOAuthClientRegistration_])
+    MJ_OAuthClientRegistrations_MCPServerIDArray: MJOAuthClientRegistration_[]; // Link to MJ_OAuthClientRegistrations
     
     @Field(() => [MJMCPServerTool_])
     MJ_MCPServerTools_MCPServerIDArray: MJMCPServerTool_[]; // Link to MJ_MCPServerTools
+    
+    @Field(() => [MJMCPServerConnection_])
+    MJ_MCPServerConnections_MCPServerIDArray: MJMCPServerConnection_[]; // Link to MJ_MCPServerConnections
     
 }
 
@@ -45226,6 +45333,24 @@ export class CreateMJMCPServerInput {
 
     @Field({ nullable: true })
     IconClass: string | null;
+
+    @Field({ nullable: true })
+    OAuthIssuerURL: string | null;
+
+    @Field({ nullable: true })
+    OAuthScopes: string | null;
+
+    @Field(() => Int, { nullable: true })
+    OAuthMetadataCacheTTLMinutes?: number | null;
+
+    @Field({ nullable: true })
+    OAuthClientID: string | null;
+
+    @Field({ nullable: true })
+    OAuthClientSecretEncrypted: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OAuthRequirePKCE?: boolean;
 }
     
 
@@ -45284,6 +45409,24 @@ export class UpdateMJMCPServerInput {
 
     @Field({ nullable: true })
     IconClass?: string | null;
+
+    @Field({ nullable: true })
+    OAuthIssuerURL?: string | null;
+
+    @Field({ nullable: true })
+    OAuthScopes?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    OAuthMetadataCacheTTLMinutes?: number | null;
+
+    @Field({ nullable: true })
+    OAuthClientID?: string | null;
+
+    @Field({ nullable: true })
+    OAuthClientSecretEncrypted?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OAuthRequirePKCE?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -45347,14 +45490,14 @@ export class MJMCPServerResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJMCPServerConnection_])
-    async MJ_MCPServerConnections_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
+    @FieldResolver(() => [MJOAuthClientRegistration_])
+    async MJ_OAuthClientRegistrations_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: O Auth Client Registrations', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnections] WHERE [MCPServerID]='${mjmcpserver_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connections', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthClientRegistrations] WHERE [MCPServerID]='${mjmcpserver_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Client Registrations', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connections', rows, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Client Registrations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -45366,6 +45509,17 @@ export class MJMCPServerResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerTools] WHERE [MCPServerID]='${mjmcpserver_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Tools', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Tools', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPServerConnection_])
+    async MJ_MCPServerConnections_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnections] WHERE [MCPServerID]='${mjmcpserver_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connections', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connections', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -45648,6 +45802,1037 @@ export class MJMCPToolExecutionLogResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: MCP Tool Execution Logs', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: O Auth Auth Server Metadata Caches
+//****************************************************************************
+@ObjectType({ description: `Caches OAuth 2.0 Authorization Server Metadata (RFC 8414) to reduce discovery requests.` })
+export class MJOAuthAuthServerMetadataCache_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Authorization server issuer identifier URL.`}) 
+    @MaxLength(2000)
+    IssuerURL: string;
+        
+    @Field({description: `URL of the authorization endpoint.`}) 
+    @MaxLength(2000)
+    AuthorizationEndpoint: string;
+        
+    @Field({description: `URL of the token endpoint.`}) 
+    @MaxLength(2000)
+    TokenEndpoint: string;
+        
+    @Field({nullable: true, description: `URL of the dynamic client registration endpoint (RFC 7591).`}) 
+    @MaxLength(2000)
+    RegistrationEndpoint?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(2000)
+    RevocationEndpoint?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(2000)
+    JwksURI?: string;
+        
+    @Field({nullable: true}) 
+    ScopesSupported?: string;
+        
+    @Field() 
+    ResponseTypesSupported: string;
+        
+    @Field({nullable: true}) 
+    GrantTypesSupported?: string;
+        
+    @Field({nullable: true}) 
+    TokenEndpointAuthMethods?: string;
+        
+    @Field({nullable: true}) 
+    CodeChallengeMethodsSupported?: string;
+        
+    @Field({description: `Full authorization server metadata JSON for debugging and extensibility.`}) 
+    MetadataJSON: string;
+        
+    @Field() 
+    @MaxLength(10)
+    CachedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    ExpiresAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: O Auth Auth Server Metadata Caches
+//****************************************************************************
+@InputType()
+export class CreateMJOAuthAuthServerMetadataCacheInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    IssuerURL?: string;
+
+    @Field({ nullable: true })
+    AuthorizationEndpoint?: string;
+
+    @Field({ nullable: true })
+    TokenEndpoint?: string;
+
+    @Field({ nullable: true })
+    RegistrationEndpoint: string | null;
+
+    @Field({ nullable: true })
+    RevocationEndpoint: string | null;
+
+    @Field({ nullable: true })
+    JwksURI: string | null;
+
+    @Field({ nullable: true })
+    ScopesSupported: string | null;
+
+    @Field({ nullable: true })
+    ResponseTypesSupported?: string;
+
+    @Field({ nullable: true })
+    GrantTypesSupported: string | null;
+
+    @Field({ nullable: true })
+    TokenEndpointAuthMethods: string | null;
+
+    @Field({ nullable: true })
+    CodeChallengeMethodsSupported: string | null;
+
+    @Field({ nullable: true })
+    MetadataJSON?: string;
+
+    @Field({ nullable: true })
+    CachedAt?: Date;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: O Auth Auth Server Metadata Caches
+//****************************************************************************
+@InputType()
+export class UpdateMJOAuthAuthServerMetadataCacheInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    IssuerURL?: string;
+
+    @Field({ nullable: true })
+    AuthorizationEndpoint?: string;
+
+    @Field({ nullable: true })
+    TokenEndpoint?: string;
+
+    @Field({ nullable: true })
+    RegistrationEndpoint?: string | null;
+
+    @Field({ nullable: true })
+    RevocationEndpoint?: string | null;
+
+    @Field({ nullable: true })
+    JwksURI?: string | null;
+
+    @Field({ nullable: true })
+    ScopesSupported?: string | null;
+
+    @Field({ nullable: true })
+    ResponseTypesSupported?: string;
+
+    @Field({ nullable: true })
+    GrantTypesSupported?: string | null;
+
+    @Field({ nullable: true })
+    TokenEndpointAuthMethods?: string | null;
+
+    @Field({ nullable: true })
+    CodeChallengeMethodsSupported?: string | null;
+
+    @Field({ nullable: true })
+    MetadataJSON?: string;
+
+    @Field({ nullable: true })
+    CachedAt?: Date;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: O Auth Auth Server Metadata Caches
+//****************************************************************************
+@ObjectType()
+export class RunMJOAuthAuthServerMetadataCacheViewResult {
+    @Field(() => [MJOAuthAuthServerMetadataCache_])
+    Results: MJOAuthAuthServerMetadataCache_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJOAuthAuthServerMetadataCache_)
+export class MJOAuthAuthServerMetadataCacheResolver extends ResolverBase {
+    @Query(() => RunMJOAuthAuthServerMetadataCacheViewResult)
+    async RunMJOAuthAuthServerMetadataCacheViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOAuthAuthServerMetadataCacheViewResult)
+    async RunMJOAuthAuthServerMetadataCacheViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOAuthAuthServerMetadataCacheViewResult)
+    async RunMJOAuthAuthServerMetadataCacheDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: O Auth Auth Server Metadata Caches';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJOAuthAuthServerMetadataCache_, { nullable: true })
+    async MJOAuthAuthServerMetadataCache(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJOAuthAuthServerMetadataCache_ | null> {
+        this.CheckUserReadPermissions('MJ: O Auth Auth Server Metadata Caches', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthAuthServerMetadataCaches] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Auth Server Metadata Caches', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: O Auth Auth Server Metadata Caches', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJOAuthAuthServerMetadataCache_)
+    async CreateMJOAuthAuthServerMetadataCache(
+        @Arg('input', () => CreateMJOAuthAuthServerMetadataCacheInput) input: CreateMJOAuthAuthServerMetadataCacheInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: O Auth Auth Server Metadata Caches', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJOAuthAuthServerMetadataCache_)
+    async UpdateMJOAuthAuthServerMetadataCache(
+        @Arg('input', () => UpdateMJOAuthAuthServerMetadataCacheInput) input: UpdateMJOAuthAuthServerMetadataCacheInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: O Auth Auth Server Metadata Caches', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJOAuthAuthServerMetadataCache_)
+    async DeleteMJOAuthAuthServerMetadataCache(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: O Auth Auth Server Metadata Caches', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: O Auth Authorization States
+//****************************************************************************
+@ObjectType({ description: `Tracks in-progress OAuth authorization flows with PKCE data for security.` })
+export class MJOAuthAuthorizationState_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    MCPServerConnectionID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    UserID: string;
+        
+    @Field({description: `Cryptographic state parameter for CSRF protection.`}) 
+    @MaxLength(256)
+    StateParameter: string;
+        
+    @Field({description: `PKCE code verifier for token exchange (stored securely, never sent to auth server).`}) 
+    @MaxLength(256)
+    CodeVerifier: string;
+        
+    @Field({description: `PKCE code challenge sent to authorization server.`}) 
+    @MaxLength(256)
+    CodeChallenge: string;
+        
+    @Field() 
+    @MaxLength(2000)
+    RedirectURI: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(1000)
+    RequestedScopes?: string;
+        
+    @Field({description: `Flow status: Pending, Completed, Failed, or Expired.`}) 
+    @MaxLength(100)
+    Status: string;
+        
+    @Field() 
+    AuthorizationURL: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ErrorCode?: string;
+        
+    @Field({nullable: true}) 
+    ErrorDescription?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    InitiatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    ExpiresAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    CompletedAt?: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    MCPServerConnection: string;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: O Auth Authorization States
+//****************************************************************************
+@InputType()
+export class CreateMJOAuthAuthorizationStateInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    StateParameter?: string;
+
+    @Field({ nullable: true })
+    CodeVerifier?: string;
+
+    @Field({ nullable: true })
+    CodeChallenge?: string;
+
+    @Field({ nullable: true })
+    RedirectURI?: string;
+
+    @Field({ nullable: true })
+    RequestedScopes: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AuthorizationURL?: string;
+
+    @Field({ nullable: true })
+    ErrorCode: string | null;
+
+    @Field({ nullable: true })
+    ErrorDescription: string | null;
+
+    @Field({ nullable: true })
+    InitiatedAt?: Date;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    CompletedAt: Date | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: O Auth Authorization States
+//****************************************************************************
+@InputType()
+export class UpdateMJOAuthAuthorizationStateInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    StateParameter?: string;
+
+    @Field({ nullable: true })
+    CodeVerifier?: string;
+
+    @Field({ nullable: true })
+    CodeChallenge?: string;
+
+    @Field({ nullable: true })
+    RedirectURI?: string;
+
+    @Field({ nullable: true })
+    RequestedScopes?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AuthorizationURL?: string;
+
+    @Field({ nullable: true })
+    ErrorCode?: string | null;
+
+    @Field({ nullable: true })
+    ErrorDescription?: string | null;
+
+    @Field({ nullable: true })
+    InitiatedAt?: Date;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    CompletedAt?: Date | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: O Auth Authorization States
+//****************************************************************************
+@ObjectType()
+export class RunMJOAuthAuthorizationStateViewResult {
+    @Field(() => [MJOAuthAuthorizationState_])
+    Results: MJOAuthAuthorizationState_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJOAuthAuthorizationState_)
+export class MJOAuthAuthorizationStateResolver extends ResolverBase {
+    @Query(() => RunMJOAuthAuthorizationStateViewResult)
+    async RunMJOAuthAuthorizationStateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOAuthAuthorizationStateViewResult)
+    async RunMJOAuthAuthorizationStateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOAuthAuthorizationStateViewResult)
+    async RunMJOAuthAuthorizationStateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: O Auth Authorization States';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJOAuthAuthorizationState_, { nullable: true })
+    async MJOAuthAuthorizationState(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJOAuthAuthorizationState_ | null> {
+        this.CheckUserReadPermissions('MJ: O Auth Authorization States', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthAuthorizationStates] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Authorization States', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: O Auth Authorization States', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJOAuthAuthorizationState_)
+    async CreateMJOAuthAuthorizationState(
+        @Arg('input', () => CreateMJOAuthAuthorizationStateInput) input: CreateMJOAuthAuthorizationStateInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: O Auth Authorization States', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJOAuthAuthorizationState_)
+    async UpdateMJOAuthAuthorizationState(
+        @Arg('input', () => UpdateMJOAuthAuthorizationStateInput) input: UpdateMJOAuthAuthorizationStateInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: O Auth Authorization States', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJOAuthAuthorizationState_)
+    async DeleteMJOAuthAuthorizationState(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: O Auth Authorization States', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: O Auth Client Registrations
+//****************************************************************************
+@ObjectType({ description: `Stores OAuth Dynamic Client Registration (DCR) results per RFC 7591.` })
+export class MJOAuthClientRegistration_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `The MCP Server Connection this registration belongs to.`}) 
+    @MaxLength(16)
+    MCPServerConnectionID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    MCPServerID: string;
+        
+    @Field() 
+    @MaxLength(2000)
+    IssuerURL: string;
+        
+    @Field({description: `OAuth client ID assigned by the authorization server.`}) 
+    @MaxLength(1000)
+    ClientID: string;
+        
+    @Field({nullable: true, description: `OAuth client secret (encrypted at rest) for confidential clients.`}) 
+    ClientSecretEncrypted?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    ClientIDIssuedAt?: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    ClientSecretExpiresAt?: Date;
+        
+    @Field({nullable: true}) 
+    RegistrationAccessToken?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(2000)
+    RegistrationClientURI?: string;
+        
+    @Field() 
+    RedirectURIs: string;
+        
+    @Field() 
+    GrantTypes: string;
+        
+    @Field() 
+    ResponseTypes: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(1000)
+    Scope?: string;
+        
+    @Field({description: `Registration status: Active, Expired, or Revoked.`}) 
+    @MaxLength(100)
+    Status: string;
+        
+    @Field({description: `Full DCR response JSON for debugging and extensibility.`}) 
+    RegistrationResponse: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    MCPServerConnection: string;
+        
+    @Field() 
+    @MaxLength(510)
+    MCPServer: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: O Auth Client Registrations
+//****************************************************************************
+@InputType()
+export class CreateMJOAuthClientRegistrationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    MCPServerID?: string;
+
+    @Field({ nullable: true })
+    IssuerURL?: string;
+
+    @Field({ nullable: true })
+    ClientID?: string;
+
+    @Field({ nullable: true })
+    ClientSecretEncrypted: string | null;
+
+    @Field({ nullable: true })
+    ClientIDIssuedAt: Date | null;
+
+    @Field({ nullable: true })
+    ClientSecretExpiresAt: Date | null;
+
+    @Field({ nullable: true })
+    RegistrationAccessToken: string | null;
+
+    @Field({ nullable: true })
+    RegistrationClientURI: string | null;
+
+    @Field({ nullable: true })
+    RedirectURIs?: string;
+
+    @Field({ nullable: true })
+    GrantTypes?: string;
+
+    @Field({ nullable: true })
+    ResponseTypes?: string;
+
+    @Field({ nullable: true })
+    Scope: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    RegistrationResponse?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: O Auth Client Registrations
+//****************************************************************************
+@InputType()
+export class UpdateMJOAuthClientRegistrationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    MCPServerID?: string;
+
+    @Field({ nullable: true })
+    IssuerURL?: string;
+
+    @Field({ nullable: true })
+    ClientID?: string;
+
+    @Field({ nullable: true })
+    ClientSecretEncrypted?: string | null;
+
+    @Field({ nullable: true })
+    ClientIDIssuedAt?: Date | null;
+
+    @Field({ nullable: true })
+    ClientSecretExpiresAt?: Date | null;
+
+    @Field({ nullable: true })
+    RegistrationAccessToken?: string | null;
+
+    @Field({ nullable: true })
+    RegistrationClientURI?: string | null;
+
+    @Field({ nullable: true })
+    RedirectURIs?: string;
+
+    @Field({ nullable: true })
+    GrantTypes?: string;
+
+    @Field({ nullable: true })
+    ResponseTypes?: string;
+
+    @Field({ nullable: true })
+    Scope?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    RegistrationResponse?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: O Auth Client Registrations
+//****************************************************************************
+@ObjectType()
+export class RunMJOAuthClientRegistrationViewResult {
+    @Field(() => [MJOAuthClientRegistration_])
+    Results: MJOAuthClientRegistration_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJOAuthClientRegistration_)
+export class MJOAuthClientRegistrationResolver extends ResolverBase {
+    @Query(() => RunMJOAuthClientRegistrationViewResult)
+    async RunMJOAuthClientRegistrationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOAuthClientRegistrationViewResult)
+    async RunMJOAuthClientRegistrationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOAuthClientRegistrationViewResult)
+    async RunMJOAuthClientRegistrationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: O Auth Client Registrations';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJOAuthClientRegistration_, { nullable: true })
+    async MJOAuthClientRegistration(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJOAuthClientRegistration_ | null> {
+        this.CheckUserReadPermissions('MJ: O Auth Client Registrations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthClientRegistrations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Client Registrations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: O Auth Client Registrations', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJOAuthClientRegistration_)
+    async CreateMJOAuthClientRegistration(
+        @Arg('input', () => CreateMJOAuthClientRegistrationInput) input: CreateMJOAuthClientRegistrationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: O Auth Client Registrations', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJOAuthClientRegistration_)
+    async UpdateMJOAuthClientRegistration(
+        @Arg('input', () => UpdateMJOAuthClientRegistrationInput) input: UpdateMJOAuthClientRegistrationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: O Auth Client Registrations', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJOAuthClientRegistration_)
+    async DeleteMJOAuthClientRegistration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: O Auth Client Registrations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: O Auth Tokens
+//****************************************************************************
+@ObjectType({ description: `Stores OAuth token metadata for MCP server connections. Actual tokens are stored via CredentialEngine for consistent encryption and audit logging.` })
+export class MJOAuthToken_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    MCPServerConnectionID: string;
+        
+    @Field() 
+    @MaxLength(100)
+    TokenType: string;
+        
+    @Field({description: `When the access token expires.`}) 
+    @MaxLength(10)
+    ExpiresAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(1000)
+    Scope?: string;
+        
+    @Field() 
+    @MaxLength(2000)
+    IssuerURL: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    LastRefreshAt?: Date;
+        
+    @Field(() => Int, {description: `Number of times the token has been refreshed.`}) 
+    RefreshCount: number;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true, description: `Foreign key to Credential table where the OAuth tokens (access and refresh) are stored securely via CredentialEngine.`}) 
+    @MaxLength(16)
+    CredentialID?: string;
+        
+    @Field() 
+    @MaxLength(510)
+    MCPServerConnection: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(400)
+    Credential?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: O Auth Tokens
+//****************************************************************************
+@InputType()
+export class CreateMJOAuthTokenInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    TokenType?: string;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    Scope: string | null;
+
+    @Field({ nullable: true })
+    IssuerURL?: string;
+
+    @Field({ nullable: true })
+    LastRefreshAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    RefreshCount?: number;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: O Auth Tokens
+//****************************************************************************
+@InputType()
+export class UpdateMJOAuthTokenInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MCPServerConnectionID?: string;
+
+    @Field({ nullable: true })
+    TokenType?: string;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    Scope?: string | null;
+
+    @Field({ nullable: true })
+    IssuerURL?: string;
+
+    @Field({ nullable: true })
+    LastRefreshAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    RefreshCount?: number;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: O Auth Tokens
+//****************************************************************************
+@ObjectType()
+export class RunMJOAuthTokenViewResult {
+    @Field(() => [MJOAuthToken_])
+    Results: MJOAuthToken_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJOAuthToken_)
+export class MJOAuthTokenResolver extends ResolverBase {
+    @Query(() => RunMJOAuthTokenViewResult)
+    async RunMJOAuthTokenViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOAuthTokenViewResult)
+    async RunMJOAuthTokenViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJOAuthTokenViewResult)
+    async RunMJOAuthTokenDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: O Auth Tokens';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJOAuthToken_, { nullable: true })
+    async MJOAuthToken(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJOAuthToken_ | null> {
+        this.CheckUserReadPermissions('MJ: O Auth Tokens', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthTokens] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Tokens', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: O Auth Tokens', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJOAuthToken_)
+    async CreateMJOAuthToken(
+        @Arg('input', () => CreateMJOAuthTokenInput) input: CreateMJOAuthTokenInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: O Auth Tokens', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJOAuthToken_)
+    async UpdateMJOAuthToken(
+        @Arg('input', () => UpdateMJOAuthTokenInput) input: UpdateMJOAuthTokenInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: O Auth Tokens', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJOAuthToken_)
+    async DeleteMJOAuthToken(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: O Auth Tokens', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -61841,11 +63026,11 @@ export class MJUser_ {
     @Field(() => [MJListInvitation_])
     MJ_ListInvitations_CreatedByUserIDArray: MJListInvitation_[]; // Link to MJ_ListInvitations
     
-    @Field(() => [MJDashboardCategoryLink_])
-    MJ_DashboardCategoryLinks_UserIDArray: MJDashboardCategoryLink_[]; // Link to MJ_DashboardCategoryLinks
-    
     @Field(() => [MJDashboardCategoryPermission_])
     MJ_DashboardCategoryPermissions_UserIDArray: MJDashboardCategoryPermission_[]; // Link to MJ_DashboardCategoryPermissions
+    
+    @Field(() => [MJDashboardCategoryLink_])
+    MJ_DashboardCategoryLinks_UserIDArray: MJDashboardCategoryLink_[]; // Link to MJ_DashboardCategoryLinks
     
     @Field(() => [MJDashboardPermission_])
     MJ_DashboardPermissions_SharedByUserIDArray: MJDashboardPermission_[]; // Link to MJ_DashboardPermissions
@@ -61858,6 +63043,9 @@ export class MJUser_ {
     
     @Field(() => [MJMCPToolExecutionLog_])
     MJ_MCPToolExecutionLogs_UserIDArray: MJMCPToolExecutionLog_[]; // Link to MJ_MCPToolExecutionLogs
+    
+    @Field(() => [MJOAuthAuthorizationState_])
+    MJ_OAuthAuthorizationStates_UserIDArray: MJOAuthAuthorizationState_[]; // Link to MJ_OAuthAuthorizationStates
     
     @Field(() => [MJResourcePermission_])
     ResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to ResourcePermissions
@@ -62640,17 +63828,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJDashboardCategoryLink_])
-    async MJ_DashboardCategoryLinks_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Dashboard Category Links', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategoryLinks] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard Category Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard Category Links', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJDashboardCategoryPermission_])
     async MJ_DashboardCategoryPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard Category Permissions', userPayload);
@@ -62659,6 +63836,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategoryPermissions] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard Category Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard Category Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJDashboardCategoryLink_])
+    async MJ_DashboardCategoryLinks_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard Category Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategoryLinks] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard Category Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard Category Links', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -62703,6 +63891,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPToolExecutionLogs] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Execution Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOAuthAuthorizationState_])
+    async MJ_OAuthAuthorizationStates_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: O Auth Authorization States', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOAuthAuthorizationStates] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Authorization States', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Authorization States', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
