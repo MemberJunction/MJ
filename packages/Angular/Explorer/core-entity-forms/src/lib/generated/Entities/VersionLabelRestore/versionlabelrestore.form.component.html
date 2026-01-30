@@ -3,30 +3,22 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Record Context Section -->
+    <!-- Restore Context Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="recordContext"
-        sectionName="Record Context"
-        icon="fa fa-link"
+        sectionKey="restoreContext"
+        sectionName="Restore Context"
+        icon="fa fa-history"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EntityID"
+            FieldName="VersionLabelID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
             LinkType="Record"
             LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RecordID"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -41,7 +33,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ReplayRunID"
+            FieldName="PreRestoreLabelID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -51,25 +43,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="IntegrationID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Comments"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Entity"
+            FieldName="VersionLabel"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -85,7 +59,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Integration"
+            FieldName="PreRestoreLabel"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -93,17 +67,17 @@
 
     </mj-collapsible-panel>
 
-    <!-- Change Summary Section -->
+    <!-- Execution Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="changeSummary"
-        sectionName="Change Summary"
-        icon="fa fa-clipboard"
+        sectionKey="executionDetails"
+        sectionName="Execution Details"
+        icon="fa fa-cogs"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Type"
+            FieldName="Status"
             Type="dropdownlist"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -111,15 +85,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Source"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ChangedAt"
+            FieldName="StartedAt"
             Type="datepicker"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -127,8 +93,8 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
+            FieldName="EndedAt"
+            Type="datepicker"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -143,52 +109,34 @@
 
     </mj-collapsible-panel>
 
-    <!-- Change Content Section -->
+    <!-- Progress Metrics Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="changeContent"
-        sectionName="Change Content"
-        icon="fa fa-file-code"
+        sectionKey="progressMetrics"
+        sectionName="Progress Metrics"
+        icon="fa fa-chart-line"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ChangesJSON"
-            Type="textarea"
+            FieldName="TotalItems"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ChangesDescription"
-            Type="textarea"
+            FieldName="CompletedItems"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="FullRecordJSON"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Details Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="false"
-            FieldName="ReplayRun"
-            Type="textbox"
+            FieldName="FailedItems"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -205,7 +153,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CreatedAt"
+            FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -213,37 +161,12 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="UpdatedAt"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
 
-    </mj-collapsible-panel>
-    <!-- ========================================
-         RELATED ENTITY PANELS - AFTER
-         ======================================== -->
-
-    <!-- MJ: Version Label Items Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJVersionLabelItems"
-        sectionName="MJ: Version Label Items"
-        icon="fa fa-code-branch"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJVersionLabelItems')"
-        [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Items','RecordChangeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
-                [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
     </mj-collapsible-panel>
 </mj-record-form-container>
         

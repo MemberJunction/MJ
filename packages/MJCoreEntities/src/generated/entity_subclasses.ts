@@ -17304,6 +17304,249 @@ export const UserSettingSchema = z.object({
 export type UserSettingEntityType = z.infer<typeof UserSettingSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Version Label Items
+ */
+export const VersionLabelItemSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: Item ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    VersionLabelID: z.string().describe(`
+        * * Field Name: VersionLabelID
+        * * Display Name: Version Label
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+        * * Description: The version label this item belongs to`),
+    RecordChangeID: z.string().describe(`
+        * * Field Name: RecordChangeID
+        * * Display Name: Record Change
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Record Changes (vwRecordChanges.ID)
+        * * Description: The specific RecordChange entry representing the record state at label creation time`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Denormalized entity reference for query performance`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Denormalized record primary key for query performance`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    VersionLabel: z.string().describe(`
+        * * Field Name: VersionLabel
+        * * Display Name: Version Label Name
+        * * SQL Data Type: nvarchar(200)`),
+    RecordChange: z.string().describe(`
+        * * Field Name: RecordChange
+        * * Display Name: Record Change Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type VersionLabelItemEntityType = z.infer<typeof VersionLabelItemSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Version Label Restores
+ */
+export const VersionLabelRestoreSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    VersionLabelID: z.string().describe(`
+        * * Field Name: VersionLabelID
+        * * Display Name: Version Label
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+        * * Description: The version label being restored to`),
+    Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('In Progress'), z.literal('Partial'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Error
+    *   * In Progress
+    *   * Partial
+    *   * Pending
+        * * Description: Current status of the restore operation`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: When the restore operation began`),
+    EndedAt: z.date().nullable().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the restore operation completed or failed`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who initiated the restore`),
+    TotalItems: z.number().describe(`
+        * * Field Name: TotalItems
+        * * Display Name: Total Items
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total number of records to restore`),
+    CompletedItems: z.number().describe(`
+        * * Field Name: CompletedItems
+        * * Display Name: Completed Items
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records successfully restored so far`),
+    FailedItems: z.number().describe(`
+        * * Field Name: FailedItems
+        * * Display Name: Failed Items
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records that failed to restore`),
+    ErrorLog: z.string().nullable().describe(`
+        * * Field Name: ErrorLog
+        * * Display Name: Error Log
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed error information for failed restore items`),
+    PreRestoreLabelID: z.string().nullable().describe(`
+        * * Field Name: PreRestoreLabelID
+        * * Display Name: Pre-Restore Label
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+        * * Description: Reference to the automatically created safety-net label that captured state before the restore began`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    VersionLabel: z.string().describe(`
+        * * Field Name: VersionLabel
+        * * Display Name: Version Label Name
+        * * SQL Data Type: nvarchar(200)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    PreRestoreLabel: z.string().nullable().describe(`
+        * * Field Name: PreRestoreLabel
+        * * Display Name: Pre-Restore Label Name
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type VersionLabelRestoreEntityType = z.infer<typeof VersionLabelRestoreSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Version Labels
+ */
+export const VersionLabelSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Human-readable label name, e.g. Release 2.5, Pre-Refactor Snapshot`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional longer description of what this label represents`),
+    Scope: z.union([z.literal('Entity'), z.literal('Record'), z.literal('System')]).describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: System
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Entity
+    *   * Record
+    *   * System
+        * * Description: Breadth of the label: System (all entities), Entity (one entity type), or Record (one record and its dependency graph)`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: When Scope is Entity or Record, identifies the target entity. NULL for System scope.`),
+    RecordID: z.string().nullable().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: When Scope is Record, identifies the specific record. NULL for System and Entity scopes.`),
+    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Restored')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+    *   * Restored
+        * * Description: Lifecycle state: Active (current), Archived (historical reference only), Restored (this label was used in a restore operation)`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who created this version label`),
+    ExternalSystemID: z.string().nullable().describe(`
+        * * Field Name: ExternalSystemID
+        * * Display Name: External System ID
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Optional reference to an external system identifier such as a git SHA, release tag, or deployment ID`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    CreatedByUser: z.string().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type VersionLabelEntityType = z.infer<typeof VersionLabelSchema>;
+
+/**
  * zod schema definition for the entity Output Delivery Types
  */
 export const OutputDeliveryTypeSchema = z.object({
@@ -18316,7 +18559,7 @@ export const RecordChangeSchema = z.object({
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    Type: z.union([z.literal('Create'), z.literal('Delete'), z.literal('Update')]).describe(`
+    Type: z.union([z.literal('Create'), z.literal('Delete'), z.literal('Snapshot'), z.literal('Update')]).describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
@@ -18325,6 +18568,7 @@ export const RecordChangeSchema = z.object({
     * * Possible Values 
     *   * Create
     *   * Delete
+    *   * Snapshot
     *   * Update
         * * Description: Create, Update, or Delete`),
     Source: z.union([z.literal('External'), z.literal('Internal')]).describe(`
@@ -66021,6 +66265,591 @@ export class UserSettingEntity extends BaseEntity<UserSettingEntityType> {
 
 
 /**
+ * MJ: Version Label Items - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: VersionLabelItem
+ * * Base View: vwVersionLabelItems
+ * * @description Links a Version Label to the specific RecordChange snapshot for each record captured by that label. Denormalizes EntityID and RecordID for efficient querying.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Version Label Items')
+export class VersionLabelItemEntity extends BaseEntity<VersionLabelItemEntityType> {
+    /**
+    * Loads the MJ: Version Label Items record from the database
+    * @param ID: string - primary key value to load the MJ: Version Label Items record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof VersionLabelItemEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: Item ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: VersionLabelID
+    * * Display Name: Version Label
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+    * * Description: The version label this item belongs to
+    */
+    get VersionLabelID(): string {
+        return this.Get('VersionLabelID');
+    }
+    set VersionLabelID(value: string) {
+        this.Set('VersionLabelID', value);
+    }
+
+    /**
+    * * Field Name: RecordChangeID
+    * * Display Name: Record Change
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Record Changes (vwRecordChanges.ID)
+    * * Description: The specific RecordChange entry representing the record state at label creation time
+    */
+    get RecordChangeID(): string {
+        return this.Get('RecordChangeID');
+    }
+    set RecordChangeID(value: string) {
+        this.Set('RecordChangeID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Denormalized entity reference for query performance
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Denormalized record primary key for query performance
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: VersionLabel
+    * * Display Name: Version Label Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get VersionLabel(): string {
+        return this.Get('VersionLabel');
+    }
+
+    /**
+    * * Field Name: RecordChange
+    * * Display Name: Record Change Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get RecordChange(): string {
+        return this.Get('RecordChange');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Version Label Restores - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: VersionLabelRestore
+ * * Base View: vwVersionLabelRestores
+ * * @description Audit trail for restore operations performed against version labels. Tracks progress, success/failure counts, and links to the safety-net pre-restore label.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Version Label Restores')
+export class VersionLabelRestoreEntity extends BaseEntity<VersionLabelRestoreEntityType> {
+    /**
+    * Loads the MJ: Version Label Restores record from the database
+    * @param ID: string - primary key value to load the MJ: Version Label Restores record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof VersionLabelRestoreEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: VersionLabelID
+    * * Display Name: Version Label
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+    * * Description: The version label being restored to
+    */
+    get VersionLabelID(): string {
+        return this.Get('VersionLabelID');
+    }
+    set VersionLabelID(value: string) {
+        this.Set('VersionLabelID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Error
+    *   * In Progress
+    *   * Partial
+    *   * Pending
+    * * Description: Current status of the restore operation
+    */
+    get Status(): 'Complete' | 'Error' | 'In Progress' | 'Partial' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Complete' | 'Error' | 'In Progress' | 'Partial' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: When the restore operation began
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the restore operation completed or failed
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who initiated the restore
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: TotalItems
+    * * Display Name: Total Items
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total number of records to restore
+    */
+    get TotalItems(): number {
+        return this.Get('TotalItems');
+    }
+    set TotalItems(value: number) {
+        this.Set('TotalItems', value);
+    }
+
+    /**
+    * * Field Name: CompletedItems
+    * * Display Name: Completed Items
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records successfully restored so far
+    */
+    get CompletedItems(): number {
+        return this.Get('CompletedItems');
+    }
+    set CompletedItems(value: number) {
+        this.Set('CompletedItems', value);
+    }
+
+    /**
+    * * Field Name: FailedItems
+    * * Display Name: Failed Items
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records that failed to restore
+    */
+    get FailedItems(): number {
+        return this.Get('FailedItems');
+    }
+    set FailedItems(value: number) {
+        this.Set('FailedItems', value);
+    }
+
+    /**
+    * * Field Name: ErrorLog
+    * * Display Name: Error Log
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed error information for failed restore items
+    */
+    get ErrorLog(): string | null {
+        return this.Get('ErrorLog');
+    }
+    set ErrorLog(value: string | null) {
+        this.Set('ErrorLog', value);
+    }
+
+    /**
+    * * Field Name: PreRestoreLabelID
+    * * Display Name: Pre-Restore Label
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+    * * Description: Reference to the automatically created safety-net label that captured state before the restore began
+    */
+    get PreRestoreLabelID(): string | null {
+        return this.Get('PreRestoreLabelID');
+    }
+    set PreRestoreLabelID(value: string | null) {
+        this.Set('PreRestoreLabelID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: VersionLabel
+    * * Display Name: Version Label Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get VersionLabel(): string {
+        return this.Get('VersionLabel');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: PreRestoreLabel
+    * * Display Name: Pre-Restore Label Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get PreRestoreLabel(): string | null {
+        return this.Get('PreRestoreLabel');
+    }
+}
+
+
+/**
+ * MJ: Version Labels - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: VersionLabel
+ * * Base View: vwVersionLabels
+ * * @description A named point-in-time bookmark into the RecordChange history, used for versioning, diffing, and restoration.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Version Labels')
+export class VersionLabelEntity extends BaseEntity<VersionLabelEntityType> {
+    /**
+    * Loads the MJ: Version Labels record from the database
+    * @param ID: string - primary key value to load the MJ: Version Labels record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof VersionLabelEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Human-readable label name, e.g. Release 2.5, Pre-Refactor Snapshot
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional longer description of what this label represents
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: System
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Entity
+    *   * Record
+    *   * System
+    * * Description: Breadth of the label: System (all entities), Entity (one entity type), or Record (one record and its dependency graph)
+    */
+    get Scope(): 'Entity' | 'Record' | 'System' {
+        return this.Get('Scope');
+    }
+    set Scope(value: 'Entity' | 'Record' | 'System') {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: When Scope is Entity or Record, identifies the target entity. NULL for System scope.
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: When Scope is Record, identifies the specific record. NULL for System and Entity scopes.
+    */
+    get RecordID(): string | null {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string | null) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+    *   * Restored
+    * * Description: Lifecycle state: Active (current), Archived (historical reference only), Restored (this label was used in a restore operation)
+    */
+    get Status(): 'Active' | 'Archived' | 'Restored' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Archived' | 'Restored') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who created this version label
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ExternalSystemID
+    * * Display Name: External System ID
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Optional reference to an external system identifier such as a git SHA, release tag, or deployment ID
+    */
+    get ExternalSystemID(): string | null {
+        return this.Get('ExternalSystemID');
+    }
+    set ExternalSystemID(value: string | null) {
+        this.Set('ExternalSystemID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string {
+        return this.Get('CreatedByUser');
+    }
+}
+
+
+/**
  * Output Delivery Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: OutputDeliveryType
@@ -68761,13 +69590,14 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * Possible Values 
     *   * Create
     *   * Delete
+    *   * Snapshot
     *   * Update
     * * Description: Create, Update, or Delete
     */
-    get Type(): 'Create' | 'Delete' | 'Update' {
+    get Type(): 'Create' | 'Delete' | 'Snapshot' | 'Update' {
         return this.Get('Type');
     }
-    set Type(value: 'Create' | 'Delete' | 'Update') {
+    set Type(value: 'Create' | 'Delete' | 'Snapshot' | 'Update') {
         this.Set('Type', value);
     }
 

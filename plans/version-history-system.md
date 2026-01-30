@@ -49,16 +49,16 @@ While `RecordChange` tracks every mutation, there is no way to:
 │         VersionLabel         │
 ├──────────────────────────────┤
 │ ID (PK, UNIQUEIDENTIFIER)   │
-│ Name (NVARCHAR 255)         │
+│ Name (NVARCHAR 200)         │
 │ Description (NVARCHAR MAX)  │
 │ Scope (System|Entity|Record) │
 │ Status (Active|Archived|     │
 │         Restored)            │
 │ EntityID (FK → Entity, NULL) │
 │ RecordID (NVARCHAR 750,NULL) │
-│ UserID (FK → User)           │
-│ CreatedAt (DATETIMEOFFSET)   │
-│ UpdatedAt (DATETIMEOFFSET)   │
+│ CreatedByUserID (FK → User)  │
+│ ExternalSystemID (NVARCHAR   │
+│   200, NULL)                 │
 └──────────┬───────────────────┘
            │ 1:N
            │
@@ -68,7 +68,8 @@ While `RecordChange` tracks every mutation, there is no way to:
 │ ID (PK, UNIQUEIDENTIFIER)   │   N:1  │ ID (PK)                     │
 │ VersionLabelID (FK)         ├───────►│ EntityID                    │
 │ RecordChangeID (FK)         │        │ RecordID                    │
-│ EntityID (NVARCHAR 16, denorm)│       │ Type (Create|Update|Delete| │
+│ EntityID (UNIQUEIDENTIFIER,   │
+│   FK → Entity, denorm)       │       │ Type (Create|Update|Delete| │
 │ RecordID (NVARCHAR 750,denorm)│       │       Snapshot)             │
 │ UNIQUE(LabelID+EntityID+     │        │ FullRecordJSON              │
 │        RecordID)             │        │ ChangesJSON                 │
@@ -80,17 +81,16 @@ While `RecordChange` tracks every mutation, there is no way to:
 │ ID (PK, UNIQUEIDENTIFIER)   │
 │ VersionLabelID (FK)         │
 │ UserID (FK → User)           │
-│ Status (Pending|InProgress|  │
-│         Completed|Failed|    │
-│         PartiallyCompleted)  │
+│ Status (Pending|In Progress| │
+│         Complete|Error|      │
+│         Partial)             │
 │ StartedAt (DATETIMEOFFSET)   │
-│ CompletedAt (DATETIMEOFFSET) │
+│ EndedAt (DATETIMEOFFSET)     │
 │ TotalItems (INT)             │
-│ ProcessedItems (INT)         │
+│ CompletedItems (INT)         │
 │ FailedItems (INT)            │
-│ PreRestoreLabelID (FK, NULL) │
-│ DryRun (BIT)                 │
 │ ErrorLog (NVARCHAR MAX, NULL)│
+│ PreRestoreLabelID (FK, NULL) │
 └──────────────────────────────┘
 ```
 

@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { RecordChangeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Record Changes') // Tell MemberJunction about this class
 @Component({
@@ -18,7 +19,8 @@ export class RecordChangeFormComponent extends BaseFormComponent {
             { sectionKey: 'changeSummary', sectionName: 'Change Summary', isExpanded: true },
             { sectionKey: 'changeContent', sectionName: 'Change Content', isExpanded: false },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJVersionLabelItems', sectionName: 'MJ: Version Label Items', isExpanded: false }
         ]);
     }
 }
