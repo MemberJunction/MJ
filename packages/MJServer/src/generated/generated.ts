@@ -34992,11 +34992,11 @@ export class MJAPIApplication_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => [MJAPIApplicationScope_])
-    MJ_APIApplicationScopes_ApplicationIDArray: MJAPIApplicationScope_[]; // Link to MJ_APIApplicationScopes
-    
     @Field(() => [MJAPIKeyUsageLog_])
     MJ_APIKeyUsageLogs_ApplicationIDArray: MJAPIKeyUsageLog_[]; // Link to MJ_APIKeyUsageLogs
+    
+    @Field(() => [MJAPIApplicationScope_])
+    MJ_APIApplicationScopes_ApplicationIDArray: MJAPIApplicationScope_[]; // Link to MJ_APIApplicationScopes
     
     @Field(() => [MJAPIKeyApplication_])
     MJ_APIKeyApplications_ApplicationIDArray: MJAPIKeyApplication_[]; // Link to MJ_APIKeyApplications
@@ -35101,17 +35101,6 @@ export class MJAPIApplicationResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJAPIApplicationScope_])
-    async MJ_APIApplicationScopes_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIApplicationScopes] WHERE [ApplicationID]='${mjapiapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Application Scopes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Application Scopes', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJAPIKeyUsageLog_])
     async MJ_APIKeyUsageLogs_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: API Key Usage Logs', userPayload);
@@ -35120,6 +35109,17 @@ export class MJAPIApplicationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIKeyUsageLogs] WHERE [ApplicationID]='${mjapiapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Key Usage Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Key Usage Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAPIApplicationScope_])
+    async MJ_APIApplicationScopes_ApplicationIDArray(@Root() mjapiapplication_: MJAPIApplication_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAPIApplicationScopes] WHERE [ApplicationID]='${mjapiapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Application Scopes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Application Scopes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -46058,6 +46058,10 @@ export class MJOAuthAuthorizationState_ {
     @MaxLength(10)
     CompletedAt?: Date;
         
+    @Field({nullable: true, description: `URL to redirect the user to after OAuth completion. If set, the OAuth callback will redirect here instead of showing a static HTML page.`}) 
+    @MaxLength(2000)
+    FrontendReturnURL?: string;
+        
     @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
@@ -46125,6 +46129,9 @@ export class CreateMJOAuthAuthorizationStateInput {
 
     @Field({ nullable: true })
     CompletedAt: Date | null;
+
+    @Field({ nullable: true })
+    FrontendReturnURL: string | null;
 }
     
 
@@ -46177,6 +46184,9 @@ export class UpdateMJOAuthAuthorizationStateInput {
 
     @Field({ nullable: true })
     CompletedAt?: Date | null;
+
+    @Field({ nullable: true })
+    FrontendReturnURL?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -14,10 +14,7 @@ export class OAuthAuthServerMetadataCacheFormComponent extends BaseFormComponent
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'metadataCache', sectionName: 'Metadata Cache', isExpanded: false },
-            { sectionKey: 'discoveryEndpoints', sectionName: 'Discovery Endpoints', isExpanded: true },
-            { sectionKey: 'supportedCapabilities', sectionName: 'Supported Capabilities', isExpanded: false },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
         ]);
     }
 }

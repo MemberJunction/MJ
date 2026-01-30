@@ -16,6 +16,7 @@ import type {
     OAuthClientRegistration
 } from './types.js';
 import { OAuthErrorMessages } from './ErrorMessages.js';
+import { getOAuthAuditLogger } from './OAuthAuditLogger.js';
 
 /** Entity name for OAuth tokens */
 const ENTITY_OAUTH_TOKENS = 'MJ: O Auth Tokens';
@@ -434,6 +435,15 @@ export class TokenManager {
 
                 LogStatus(`[OAuth] Successfully refreshed tokens for ${connectionId}`);
 
+                // Audit log: Token refreshed (T049)
+                const auditLogger = getOAuthAuditLogger();
+                await auditLogger.logTokenRefreshed({
+                    connectionId,
+                    issuerUrl: currentTokens.issuer,
+                    newExpiresAt: new Date(refreshedTokens.expiresAt * 1000),
+                    refreshCount: refreshedTokens.refreshCount
+                }, contextUser);
+
                 return {
                     success: true,
                     requiresReauthorization: false,
@@ -446,6 +456,15 @@ export class TokenManager {
 
                 // Check if error is retryable
                 if (!OAuthErrorMessages.isRetryable(errorMessage)) {
+                    // Audit log: Token refresh failed (T050)
+                    const auditLogger = getOAuthAuditLogger();
+                    await auditLogger.logTokenRefreshFailed({
+                        connectionId,
+                        issuerUrl: currentTokens.issuer,
+                        errorMessage: OAuthErrorMessages.getUserMessage(errorMessage),
+                        requiresReauthorization: OAuthErrorMessages.requiresReauthorization(errorMessage)
+                    }, contextUser);
+
                     return {
                         success: false,
                         errorMessage: OAuthErrorMessages.getUserMessage(errorMessage),
@@ -460,6 +479,15 @@ export class TokenManager {
                 }
             }
         }
+
+        // Audit log: Token refresh failed after all retries (T050)
+        const auditLogger = getOAuthAuditLogger();
+        await auditLogger.logTokenRefreshFailed({
+            connectionId,
+            issuerUrl: currentTokens.issuer,
+            errorMessage: 'Token refresh failed after multiple attempts',
+            requiresReauthorization: true
+        }, contextUser);
 
         return {
             success: false,
@@ -586,6 +614,13 @@ export class TokenManager {
             this.tokenCache.delete(connectionId);
 
             LogStatus(`[OAuth] Revoked credentials for connection ${connectionId}`);
+
+            // Audit log: Credentials revoked (T051)
+            const auditLogger = getOAuthAuditLogger();
+            await auditLogger.logCredentialsRevoked({
+                connectionId,
+                revokedBy: contextUser.ID
+            }, contextUser);
         } catch (error) {
             LogError(`[OAuth] Failed to revoke credentials: ${error}`);
             throw error;

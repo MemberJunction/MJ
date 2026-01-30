@@ -176,6 +176,8 @@ export interface OAuthAuthorizationState {
     expiresAt: Date;
     /** When flow completed */
     completedAt?: Date;
+    /** URL to redirect to after OAuth completion (for frontend integration) */
+    frontendReturnUrl?: string;
 }
 
 /**

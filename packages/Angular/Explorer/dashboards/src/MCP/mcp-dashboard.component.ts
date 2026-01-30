@@ -15,7 +15,7 @@ import { Subject, BehaviorSubject, Subscription } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, MCPServerEntity, MCPServerConnectionEntity, MCPToolExecutionLogEntity, MCPEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MCPServerEntity, MCPServerConnectionEntity, MCPServerToolEntity, MCPToolExecutionLogEntity, MCPEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
 
@@ -529,17 +529,20 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Loads all dashboard data using MCPEngine for cached entities
      * and RunView for execution logs (historical data loaded on-demand)
+     * @param forceRefresh - If true, forces MCPEngine to reload from database (use after sync operations)
      */
-    public async loadAllData(): Promise<void> {
+    public async loadAllData(forceRefresh: boolean = false): Promise<void> {
         this.IsLoading = true;
         this.ErrorMessage = null;
         this.cdr.detectChanges();
 
         try {
             // Initialize MCPEngine and load execution logs in parallel
+            // forceRefresh=true is needed after sync operations since backend changes
+            // won't trigger local BaseEntity events
             const rv = new RunView();
             const [, logsResult] = await Promise.all([
-                MCPEngine.Instance.Config(false),
+                MCPEngine.Instance.Config(forceRefresh),
                 rv.RunView<MCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
                     ExtraFilter: `StartedAt >= DATEADD(day, -7, GETUTCDATE())`,
@@ -833,8 +836,51 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     public async deleteServer(server: MCPServerData): Promise<void> {
-        if (!confirm(`Are you sure you want to delete server "${server.Name}"?`)) {
-            return;
+        // Check for related connections first
+        const relatedConnections = this.connections.filter((c: MCPConnectionData) => c.MCPServerID === server.ID);
+        const relatedTools = this.tools.filter((t: MCPToolData) => t.MCPServerID === server.ID);
+
+        if (relatedConnections.length > 0 || relatedTools.length > 0) {
+            const parts: string[] = [];
+            if (relatedConnections.length > 0) {
+                parts.push(`${relatedConnections.length} connection(s)`);
+            }
+            if (relatedTools.length > 0) {
+                parts.push(`${relatedTools.length} tool(s)`);
+            }
+
+            if (!confirm(
+                `Server "${server.Name}" has ${parts.join(' and ')}.\n\n` +
+                `All related records will be deleted. Are you sure you want to proceed?`
+            )) {
+                return;
+            }
+
+            // Delete related connections first (which will cascade to connection tools/permissions)
+            for (const conn of relatedConnections) {
+                try {
+                    await this.deleteConnectionInternal(conn.ID);
+                } catch (error) {
+                    this.ErrorMessage = `Failed to delete related connection "${conn.Name}": ${error instanceof Error ? error.message : String(error)}`;
+                    this.cdr.detectChanges();
+                    return;
+                }
+            }
+
+            // Delete related tools
+            for (const tool of relatedTools) {
+                try {
+                    await this.deleteToolInternal(tool.ID);
+                } catch (error) {
+                    this.ErrorMessage = `Failed to delete related tool "${tool.ToolName}": ${error instanceof Error ? error.message : String(error)}`;
+                    this.cdr.detectChanges();
+                    return;
+                }
+            }
+        } else {
+            if (!confirm(`Are you sure you want to delete server "${server.Name}"?`)) {
+                return;
+            }
         }
 
         try {
@@ -859,6 +905,61 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         } catch (error) {
             this.ErrorMessage = `Failed to delete server: ${error instanceof Error ? error.message : String(error)}`;
             this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Internal helper to delete a tool by ID without confirmation
+     */
+    private async deleteToolInternal(toolId: string): Promise<void> {
+        const md = new Metadata();
+        const entity = await md.GetEntityObject<MCPServerToolEntity>('MJ: MCP Server Tools');
+        const loaded = await entity.Load(toolId);
+        if (!loaded) {
+            throw new Error(`Tool not found`);
+        }
+        const deleted = await entity.Delete();
+        if (!deleted) {
+            const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Delete failed';
+            throw new Error(errorMsg);
+        }
+    }
+
+    /**
+     * Internal helper to delete a connection by ID without confirmation
+     */
+    private async deleteConnectionInternal(connectionId: string): Promise<void> {
+        // First delete execution logs for this connection
+        const rv = new RunView();
+        const logsResult = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: MCP Tool Execution Logs',
+            ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        });
+
+        if (logsResult.Success && logsResult.Results && logsResult.Results.length > 0) {
+            const md = new Metadata();
+            for (const log of logsResult.Results) {
+                const logEntity = await md.GetEntityObject<MCPToolExecutionLogEntity>('MJ: MCP Tool Execution Logs');
+                const loaded = await logEntity.Load(log.ID);
+                if (loaded) {
+                    await logEntity.Delete();
+                }
+            }
+        }
+
+        // Now delete the connection
+        const md = new Metadata();
+        const entity = await md.GetEntityObject<MCPServerConnectionEntity>('MJ: MCP Server Connections');
+        const loaded = await entity.Load(connectionId);
+        if (!loaded) {
+            throw new Error(`Connection not found`);
+        }
+        const deleted = await entity.Delete();
+        if (!deleted) {
+            const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Delete failed';
+            throw new Error(errorMsg);
         }
     }
 
@@ -888,28 +989,25 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     public async deleteConnection(connection: MCPConnectionData): Promise<void> {
-        if (!confirm(`Are you sure you want to delete connection "${connection.Name}"?`)) {
-            return;
+        // Check for related execution logs
+        const relatedLogs = this.executionLogs.filter(l => l.ConnectionID === connection.ID);
+
+        if (relatedLogs.length > 0) {
+            if (!confirm(
+                `Connection "${connection.Name}" has ${relatedLogs.length} execution log(s).\n\n` +
+                `All related logs will be deleted. Are you sure you want to proceed?`
+            )) {
+                return;
+            }
+        } else {
+            if (!confirm(`Are you sure you want to delete connection "${connection.Name}"?`)) {
+                return;
+            }
         }
 
         try {
-            const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerConnectionEntity>('MJ: MCP Server Connections');
-            const loaded = await entity.Load(connection.ID);
-            if (!loaded) {
-                this.ErrorMessage = `Connection not found: ${connection.Name}`;
-                this.cdr.detectChanges();
-                return;
-            }
-
-            const deleted = await entity.Delete();
-            if (!deleted) {
-                const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Unknown error';
-                this.ErrorMessage = `Failed to delete connection: ${errorMsg}`;
-                this.cdr.detectChanges();
-                return;
-            }
-
+            // Use the internal method which handles deleting related records
+            await this.deleteConnectionInternal(connection.ID);
             await this.loadAllData();
         } catch (error) {
             this.ErrorMessage = `Failed to delete connection: ${error instanceof Error ? error.message : String(error)}`;
@@ -1155,8 +1253,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             const result: MCPSyncResult = await this.mcpToolsService.syncTools(connectionId);
 
             if (result.Success) {
-                // Reload data to show updated tools
-                await this.loadAllData();
+                // Force refresh to show updated tools - backend changes don't trigger local events
+                await this.loadAllData(true);
             } else {
                 this.ErrorMessage = `Sync failed: ${result.ErrorMessage}`;
             }

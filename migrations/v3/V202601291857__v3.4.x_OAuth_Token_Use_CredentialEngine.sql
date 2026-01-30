@@ -28,7 +28,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'MCPServer',
     @level2type = N'COLUMN', @level2name = N'OAuthIssuerURL';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -36,7 +35,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'MCPServer',
     @level2type = N'COLUMN', @level2name = N'OAuthScopes';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -44,7 +42,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'MCPServer',
     @level2type = N'COLUMN', @level2name = N'OAuthMetadataCacheTTLMinutes';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -52,7 +49,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'MCPServer',
     @level2type = N'COLUMN', @level2name = N'OAuthClientID';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -60,7 +56,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'MCPServer',
     @level2type = N'COLUMN', @level2name = N'OAuthClientSecretEncrypted';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -101,7 +96,6 @@ EXEC sp_addextendedproperty
     @value = N'Caches OAuth 2.0 Authorization Server Metadata (RFC 8414) to reduce discovery requests.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthAuthServerMetadataCache';
-GO
 
 -- Add column descriptions
 EXEC sp_addextendedproperty
@@ -110,7 +104,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthAuthServerMetadataCache',
     @level2type = N'COLUMN', @level2name = N'IssuerURL';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -118,7 +111,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthAuthServerMetadataCache',
     @level2type = N'COLUMN', @level2name = N'AuthorizationEndpoint';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -126,7 +118,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthAuthServerMetadataCache',
     @level2type = N'COLUMN', @level2name = N'TokenEndpoint';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -134,7 +125,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthAuthServerMetadataCache',
     @level2type = N'COLUMN', @level2name = N'RegistrationEndpoint';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -181,7 +171,6 @@ EXEC sp_addextendedproperty
     @value = N'Stores OAuth Dynamic Client Registration (DCR) results per RFC 7591.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthClientRegistration';
-GO
 
 -- Add column descriptions
 EXEC sp_addextendedproperty
@@ -190,7 +179,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthClientRegistration',
     @level2type = N'COLUMN', @level2name = N'MCPServerConnectionID';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -198,7 +186,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthClientRegistration',
     @level2type = N'COLUMN', @level2name = N'ClientID';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -206,7 +193,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthClientRegistration',
     @level2type = N'COLUMN', @level2name = N'ClientSecretEncrypted';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -214,7 +200,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthClientRegistration',
     @level2type = N'COLUMN', @level2name = N'Status';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -244,6 +229,7 @@ CREATE TABLE [${flyway:defaultSchema}].[OAuthAuthorizationState] (
     InitiatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
     ExpiresAt DATETIMEOFFSET NOT NULL,
     CompletedAt DATETIMEOFFSET NULL,
+    FrontendReturnURL NVARCHAR(1000) NULL,
     CONSTRAINT PK_OAuthAuthorizationState PRIMARY KEY (ID),
     CONSTRAINT FK_OAuthAuthorizationState_Connection FOREIGN KEY (MCPServerConnectionID)
         REFERENCES [${flyway:defaultSchema}].[MCPServerConnection](ID),
@@ -261,7 +247,13 @@ EXEC sp_addextendedproperty
     @value = N'Tracks in-progress OAuth authorization flows with PKCE data for security.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthAuthorizationState';
-GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'URL to redirect the user to after OAuth completion. If set, the OAuth callback will redirect here instead of showing a static HTML page.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = N'OAuthAuthorizationState',
+    @level2type = N'COLUMN', @level2name = N'FrontendReturnURL';
 
 -- Add column descriptions
 EXEC sp_addextendedproperty
@@ -270,7 +262,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthAuthorizationState',
     @level2type = N'COLUMN', @level2name = N'StateParameter';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -278,7 +269,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthAuthorizationState',
     @level2type = N'COLUMN', @level2name = N'CodeVerifier';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -286,7 +276,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthAuthorizationState',
     @level2type = N'COLUMN', @level2name = N'CodeChallenge';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -327,7 +316,6 @@ EXEC sp_addextendedproperty
     @value = N'Stores OAuth token metadata for MCP server connections. Actual tokens are stored via CredentialEngine for consistent encryption and audit logging.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthToken';
-GO
 
 -- Add column descriptions
 EXEC sp_addextendedproperty
@@ -336,7 +324,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthToken',
     @level2type = N'COLUMN', @level2name = N'CredentialID';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -344,7 +331,6 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'OAuthToken',
     @level2type = N'COLUMN', @level2name = N'ExpiresAt';
-GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',

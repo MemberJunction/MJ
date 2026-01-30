@@ -36,6 +36,7 @@ export { ClientRegistration } from './ClientRegistration.js';
 export { TokenManager } from './TokenManager.js';
 export { OAuthManager } from './OAuthManager.js';
 export { OAuthErrorMessages } from './ErrorMessages.js';
+export { OAuthAuditLogger, getOAuthAuditLogger } from './OAuthAuditLogger.js';
 
 // Type definitions
 export type {
@@ -79,6 +80,16 @@ export type {
     // Configuration types
     MCPServerOAuthConfig
 } from './types.js';
+
+// Audit logging types
+export type {
+    AuthorizationInitiatedDetails,
+    AuthorizationCompletedDetails,
+    AuthorizationFailedDetails,
+    TokenRefreshDetails,
+    TokenRefreshFailedDetails,
+    CredentialsRevokedDetails
+} from './OAuthAuditLogger.js';
 
 // Error classes
 export {

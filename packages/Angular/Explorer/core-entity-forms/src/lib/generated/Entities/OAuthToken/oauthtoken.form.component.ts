@@ -14,9 +14,7 @@ export class OAuthTokenFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'connectionCredential', sectionName: 'Connection & Credential', isExpanded: true },
-            { sectionKey: 'tokenLifecycle', sectionName: 'Token Lifecycle', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
         ]);
     }
 }

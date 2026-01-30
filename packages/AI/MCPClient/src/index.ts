@@ -121,6 +121,8 @@ export {
     TokenManager,
     PKCEGenerator,
     OAuthErrorMessages,
+    OAuthAuditLogger,
+    getOAuthAuditLogger,
 
     // Error classes
     OAuthAuthorizationRequiredError,
@@ -149,7 +151,15 @@ export {
     type OAuthConnectionStatus,
     type OAuthEventType,
     type OAuthEventData,
-    type MCPServerOAuthConfig
+    type MCPServerOAuthConfig,
+
+    // Audit logging types
+    type AuthorizationInitiatedDetails,
+    type AuthorizationCompletedDetails,
+    type AuthorizationFailedDetails,
+    type TokenRefreshDetails,
+    type TokenRefreshFailedDetails,
+    type CredentialsRevokedDetails
 } from './oauth/index.js';
 
 /**

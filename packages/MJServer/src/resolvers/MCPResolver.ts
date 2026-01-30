@@ -5,7 +5,7 @@
  * including tool synchronization with progress streaming and OAuth management.
  */
 
-import { Resolver, Mutation, Query, Arg, Ctx, Field, ObjectType, InputType, PubSub, registerEnumType } from 'type-graphql';
+import { Resolver, Mutation, Query, Subscription, Arg, Ctx, Root, Field, ObjectType, InputType, PubSub, registerEnumType } from 'type-graphql';
 import { PubSubEngine } from 'type-graphql';
 import { LogError, LogStatus, UserInfo, Metadata, RunView } from '@memberjunction/core';
 import {
@@ -394,6 +394,62 @@ export class MCPOAuthConnectionStatus {
 
     @Field({ nullable: true })
     GrantedScopes?: string;
+}
+
+// ========================================
+// Subscription Topics and Types
+// ========================================
+
+/** PubSub topic for MCP OAuth events */
+export const MCP_OAUTH_EVENTS_TOPIC = 'MCP_OAUTH_EVENTS';
+
+/**
+ * OAuth event types for subscriptions
+ */
+export type MCPOAuthEventType =
+    | 'authorizationRequired'
+    | 'authorizationCompleted'
+    | 'tokenRefreshed'
+    | 'tokenRefreshFailed';
+
+/**
+ * Payload interface for OAuth subscription events
+ */
+export interface MCPOAuthEventPayload {
+    eventType: MCPOAuthEventType;
+    connectionId: string;
+    timestamp: string;
+    authorizationUrl?: string;
+    stateParameter?: string;
+    errorMessage?: string;
+    requiresReauthorization?: boolean;
+}
+
+/**
+ * Notification type for OAuth events
+ */
+@ObjectType()
+export class MCPOAuthEventNotification {
+    @Field()
+    EventType: string;
+
+    @Field()
+    ConnectionID: string;
+
+    @Field()
+    Timestamp: Date;
+
+    @Field({ nullable: true })
+    AuthorizationUrl?: string;
+
+    @Field({ nullable: true })
+    StateParameter?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field({ nullable: true })
+    RequiresReauthorization?: boolean;
 }
 
 /**
@@ -1070,6 +1126,37 @@ export class MCPResolver extends ResolverBase {
     }
 
     // ========================================================================
+    // Subscriptions
+    // ========================================================================
+
+    /**
+     * Subscribes to OAuth events for MCP connections.
+     *
+     * Clients can subscribe to receive real-time notifications when:
+     * - Authorization is required for a connection
+     * - Authorization completes successfully
+     * - Token is refreshed
+     * - Token refresh fails
+     *
+     * @param payload - The OAuth event payload
+     * @returns OAuth event notification
+     */
+    @Subscription(() => MCPOAuthEventNotification, { topics: MCP_OAUTH_EVENTS_TOPIC })
+    onMCPOAuthEvent(
+        @Root() payload: MCPOAuthEventPayload
+    ): MCPOAuthEventNotification {
+        return {
+            EventType: payload.eventType,
+            ConnectionID: payload.connectionId,
+            Timestamp: new Date(payload.timestamp),
+            AuthorizationUrl: payload.authorizationUrl,
+            StateParameter: payload.stateParameter,
+            ErrorMessage: payload.errorMessage,
+            RequiresReauthorization: payload.requiresReauthorization
+        };
+    }
+
+    // ========================================================================
     // Private Helper Methods
     // ========================================================================
 
@@ -1256,4 +1343,35 @@ export class MCPResolver extends ResolverBase {
  */
 export function LoadMCPResolver(): void {
     // Ensures the resolver is not tree-shaken
+}
+
+/**
+ * Publishes an OAuth event to the subscription topic.
+ * Can be called from other resolvers or handlers to notify clients of OAuth events.
+ *
+ * @param pubSub - PubSub engine
+ * @param event - OAuth event details
+ */
+export async function publishMCPOAuthEvent(
+    pubSub: PubSubEngine,
+    event: {
+        eventType: MCPOAuthEventType;
+        connectionId: string;
+        authorizationUrl?: string;
+        stateParameter?: string;
+        errorMessage?: string;
+        requiresReauthorization?: boolean;
+    }
+): Promise<void> {
+    const payload: MCPOAuthEventPayload = {
+        eventType: event.eventType,
+        connectionId: event.connectionId,
+        timestamp: new Date().toISOString(),
+        authorizationUrl: event.authorizationUrl,
+        stateParameter: event.stateParameter,
+        errorMessage: event.errorMessage,
+        requiresReauthorization: event.requiresReauthorization
+    };
+
+    await pubSub.publish(MCP_OAUTH_EVENTS_TOPIC, payload);
 }

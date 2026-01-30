@@ -18,18 +18,22 @@
 | Phase 4: US2 (Token Refresh) | ✅ Complete | Automatic refresh implemented |
 | Phase 5: US3 (Re-Auth on Failure) | ✅ Complete | Error handling implemented |
 | Phase 6: US4 (Admin Config) | ✅ Complete | DB fields, UI, GraphQL mutations all done |
-| Phase 7: US5 (Revocation & Audit) | 🔶 Partial | GraphQL done, audit logging pending (T047-T051) |
-| Phase 8: Bug Fixes & Critical UX | 🔶 In Progress | Delete bug fixed, OAuth UI done, redirect flow pending (T063-T070) |
-| Phase 9: Live UI Updates | ⬜ Not Started | Event emissions, subscriptions |
+| Phase 7: US5 (Revocation & Audit) | ✅ Complete | GraphQL and audit logging implemented |
+| Phase 8: Bug Fixes & Critical UX | 🔶 In Progress | Delete bug fixed, OAuth UI done, backend redirect done (T063, T068-T070 pending) |
+| Phase 9: Live UI Updates | 🔶 In Progress | Event emissions complete, subscriptions pending |
 | Phase 10: Final Polish | ⬜ Not Started | Cleanup, testing |
 
 **Current State**: Core OAuth flow (US1-US5 core) is functional with GraphQL API:
 - ✅ Delete functionality fixed (proper error checking added)
 - ✅ UI to configure OAuth settings in server dialog
 - ✅ GraphQL operations: GetMCPOAuthConnectionStatus, GetMCPOAuthStatus, InitiateMCPOAuth, RevokeMCPOAuth, RefreshMCPOAuthToken
-- ❌ User must copy/paste auth URL (should redirect) - T064-T070 pending
-- ❌ No live updates when entities change - Phase 9 pending
-- ❌ Audit logging for OAuth events - T047-T051 pending
+- ✅ Backend OAuth redirect flow complete (T064-T067) - frontend can pass returnUrl for redirect after OAuth
+- ✅ MCPClientManager OAuth event emissions (T071-T074)
+- ✅ GraphQL subscription for OAuth events (T078 - onMCPOAuthEvent)
+- ✅ Audit logging for OAuth events (OAuthAuditLogger class)
+- ❌ Frontend OAuth completion component (T068-T070) - pending
+- ❌ Entity change subscriptions (T075-T077) - pending
+- ❌ Frontend subscription integration (T079-T081) - pending
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -178,11 +182,11 @@
 
 - [X] T045 [US5] Implement revokeCredentials() method in TokenManager to delete stored tokens
 - [X] T046 [US5] Add GraphQL mutation revokeMCPOAuth to MCPResolver
-- [ ] T047 [US5] Implement audit logging for OAuth authorization initiated event
-- [ ] T048 [US5] Implement audit logging for OAuth authorization completed event
-- [ ] T049 [US5] Implement audit logging for OAuth token refreshed event
-- [ ] T050 [US5] Implement audit logging for OAuth token refresh failed event
-- [ ] T051 [US5] Implement audit logging for OAuth credentials revoked event
+- [X] T047 [US5] Implement audit logging for OAuth authorization initiated event
+- [X] T048 [US5] Implement audit logging for OAuth authorization completed event
+- [X] T049 [US5] Implement audit logging for OAuth token refreshed event
+- [X] T050 [US5] Implement audit logging for OAuth token refresh failed event
+- [X] T051 [US5] Implement audit logging for OAuth credentials revoked event
 - [X] T052 [US5] Add GraphQL mutation refreshMCPOAuthToken for manual token refresh
 - [X] T053 [US5] Add REST endpoint GET /oauth/status/{stateParameter} in OAuthCallbackHandler (implemented)
 
@@ -212,10 +216,10 @@
 
 ### UX: OAuth Redirect Flow (Instead of Copy/Paste)
 
-- [ ] T064 [UX] Add FrontendReturnURL field to OAuthAuthorizationState entity (migration)
-- [ ] T065 [UX] Update initiateAuthorizationFlow() to accept and store frontend return URL
-- [ ] T066 [UX] Update REST POST /oauth/initiate to accept frontendReturnUrl parameter
-- [ ] T067 [UX] Update OAuth callback success handler to redirect to frontend URL instead of showing HTML page
+- [X] T064 [UX] Add FrontendReturnURL field to OAuthAuthorizationState entity (migration)
+- [X] T065 [UX] Update initiateAuthorizationFlow() to accept and store frontend return URL
+- [X] T066 [UX] Update REST POST /oauth/initiate to accept frontendReturnUrl parameter
+- [X] T067 [UX] Update OAuth callback success handler to redirect to frontend URL instead of showing HTML page
 - [ ] T068 [UX] Create frontend OAuth completion page/component in MJExplorer
 - [ ] T069 [UX] Update MCPServerDialog to open OAuth URL in new window/redirect and poll for completion
 - [ ] T070 [UX] Handle OAuth completion notification in frontend (close dialog, refresh data)
@@ -228,17 +232,17 @@
 
 ### MCPClientManager Event Emissions
 
-- [ ] T071 [P] Add 'authorizationRequired' event emission to MCPClientManager
-- [ ] T072 [P] Add 'authorizationCompleted' event emission to MCPClientManager
-- [ ] T073 [P] Add 'tokenRefreshed' event emission to MCPClientManager
-- [ ] T074 [P] Add 'tokenRefreshFailed' event emission to MCPClientManager
+- [X] T071 [P] Add 'authorizationRequired' event emission to MCPClientManager
+- [X] T072 [P] Add 'authorizationCompleted' event emission to MCPClientManager
+- [X] T073 [P] Add 'tokenRefreshed' event emission to MCPClientManager (notification method added, events emitted via callback)
+- [X] T074 [P] Add 'tokenRefreshFailed' event emission to MCPClientManager
 
 ### GraphQL Subscriptions for MCP Entities
 
 - [ ] T075 Implement GraphQL subscription onMCPServerChanged in MCPResolver
 - [ ] T076 Implement GraphQL subscription onMCPConnectionChanged in MCPResolver
 - [ ] T077 Implement GraphQL subscription onMCPToolChanged in MCPResolver
-- [ ] T078 Implement GraphQL subscription onMCPOAuthCompleted in MCPResolver
+- [X] T078 Implement GraphQL subscription onMCPOAuthCompleted in MCPResolver (implemented as onMCPOAuthEvent for all OAuth events)
 
 ### Frontend Subscription Integration
 

@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Identifiers Section -->
+    <!-- Identifiers & Relationships Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="identifiers"
-        sectionName="Identifiers"
-        icon="fa fa-key"
+        sectionKey="identifiersRelationships"
+        sectionName="Identifiers & Relationships"
+        icon="fa fa-id-card"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -49,10 +49,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Authorization Details Section -->
+    <!-- Flow Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="authorizationDetails"
-        sectionName="Authorization Details"
+        sectionKey="flowDetails"
+        sectionName="Flow Details"
         icon="fa fa-lock"
         [form]="this"
         [formContext]="formContext">
@@ -87,6 +87,7 @@
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
+            LinkType="URL"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -99,29 +100,19 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="AuthorizationURL"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
             LinkType="URL"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Status & Errors Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="statusErrors"
-        sectionName="Status & Errors"
-        icon="fa fa-flag"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -139,16 +130,6 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Flow Timing Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="flowTiming"
-        sectionName="Flow Timing"
-        icon="fa fa-calendar"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -172,6 +153,15 @@
             Type="datepicker"
             [EditMode]="EditMode"
             [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FrontendReturnURL"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="URL"
         ></mj-form-field>
 
     </mj-collapsible-panel>

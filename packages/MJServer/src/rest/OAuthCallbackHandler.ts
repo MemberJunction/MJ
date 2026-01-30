@@ -15,7 +15,7 @@
 import express from 'express';
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { OAuthManager } from '@memberjunction/ai-mcp-client';
+import { OAuthManager, MCPClientManager } from '@memberjunction/ai-mcp-client';
 import type { MCPServerOAuthConfig } from '@memberjunction/ai-mcp-client';
 
 /** Entity name for MCP Server Connections */
@@ -203,7 +203,7 @@ export class OAuthCallbackHandler {
             const contextUser = UserCache.Users.find(u => u.ID === authState.userId);
             if (!contextUser) {
                 LogError(`[OAuth Callback] User ${authState.userId} not found in cache`);
-                this.redirectToError(res, 'server_error', 'User context not found');
+                this.redirectToError(res, 'server_error', 'User context not found', authState.frontendReturnUrl);
                 return;
             }
 
@@ -216,13 +216,13 @@ export class OAuthCallbackHandler {
                     errorMessage,
                     contextUser
                 );
-                this.redirectToError(res, String(error), errorMessage);
+                this.redirectToError(res, String(error), errorMessage, authState.frontendReturnUrl);
                 return;
             }
 
             // Validate authorization code is present
             if (!code || typeof code !== 'string') {
-                this.redirectToError(res, 'invalid_request', 'Missing authorization code');
+                this.redirectToError(res, 'invalid_request', 'Missing authorization code', authState.frontendReturnUrl);
                 return;
             }
 
@@ -231,13 +231,19 @@ export class OAuthCallbackHandler {
 
             if (result.success) {
                 LogStatus(`[OAuth Callback] Authorization completed for state ${state}`);
-                this.redirectToSuccess(res, state, authState.connectionId);
+                // Notify MCPClientManager that authorization has completed
+                MCPClientManager.Instance.notifyOAuthAuthorizationCompleted(authState.connectionId, {
+                    stateParameter: state,
+                    completedAt: new Date().toISOString()
+                });
+                this.redirectToSuccess(res, state, authState.connectionId, authState.frontendReturnUrl);
             } else {
                 LogError(`[OAuth Callback] Authorization failed: ${result.errorMessage}`);
                 this.redirectToError(
                     res,
                     result.errorCode ?? 'authorization_failed',
-                    result.errorMessage ?? 'Authorization failed'
+                    result.errorMessage ?? 'Authorization failed',
+                    authState.frontendReturnUrl
                 );
             }
 
@@ -338,7 +344,7 @@ export class OAuthCallbackHandler {
      * @param res - Express response
      */
     private async initiateFlow(req: express.Request, res: express.Response): Promise<void> {
-        const { connectionId, additionalScopes } = req.body;
+        const { connectionId, additionalScopes, frontendReturnUrl } = req.body;
         const contextUser = req['mjUser'] as UserInfo;
 
         if (!contextUser) {
@@ -391,13 +397,14 @@ export class OAuthCallbackHandler {
                 return;
             }
 
-            // Initiate the flow
+            // Initiate the flow with optional frontend return URL
             const result = await this.oauthManager.initiateAuthorizationFlow(
                 connectionId,
                 config.serverId,
                 oauthConfig,
                 this.options.publicUrl,
-                contextUser
+                contextUser,
+                frontendReturnUrl ? { frontendReturnUrl: String(frontendReturnUrl) } : undefined
             );
 
             if (result.success) {
@@ -456,6 +463,7 @@ export class OAuthCallbackHandler {
         errorDescription?: string;
         expiresAt: Date;
         completedAt?: Date;
+        frontendReturnUrl?: string;
     } | null> {
         try {
             const rv = new RunView();
@@ -467,10 +475,11 @@ export class OAuthCallbackHandler {
                 ErrorDescription: string | null;
                 ExpiresAt: Date;
                 CompletedAt: Date | null;
+                FrontendReturnURL: string | null;
             }>({
                 EntityName: ENTITY_OAUTH_AUTHORIZATION_STATES,
                 ExtraFilter: `StateParameter='${stateParameter.replace(/'/g, "''")}'`,
-                Fields: ['MCPServerConnectionID', 'UserID', 'Status', 'ErrorCode', 'ErrorDescription', 'ExpiresAt', 'CompletedAt'],
+                Fields: ['MCPServerConnectionID', 'UserID', 'Status', 'ErrorCode', 'ErrorDescription', 'ExpiresAt', 'CompletedAt', 'FrontendReturnURL'],
                 ResultType: 'simple'
             }, contextUser);
 
@@ -486,7 +495,8 @@ export class OAuthCallbackHandler {
                 errorCode: record.ErrorCode ?? undefined,
                 errorDescription: record.ErrorDescription ?? undefined,
                 expiresAt: new Date(record.ExpiresAt),
-                completedAt: record.CompletedAt ? new Date(record.CompletedAt) : undefined
+                completedAt: record.CompletedAt ? new Date(record.CompletedAt) : undefined,
+                frontendReturnUrl: record.FrontendReturnURL ?? undefined
             };
         } catch (error) {
             LogError(`[OAuth Callback] Failed to load authorization state: ${error}`);
@@ -566,8 +576,26 @@ export class OAuthCallbackHandler {
 
     /**
      * Redirects to success page with state info.
+     * If a frontend return URL is provided, redirects there instead of the default success page.
      */
-    private redirectToSuccess(res: express.Response, state: string, connectionId: string): void {
+    private redirectToSuccess(res: express.Response, state: string, connectionId: string, frontendReturnUrl?: string): void {
+        // If frontend return URL is provided, redirect there with success parameters
+        if (frontendReturnUrl) {
+            try {
+                const url = new URL(frontendReturnUrl);
+                url.searchParams.set('oauth', 'success');
+                url.searchParams.set('state', state);
+                url.searchParams.set('connectionId', connectionId);
+                LogStatus(`[OAuth Callback] Redirecting to frontend URL: ${url.toString()}`);
+                res.redirect(302, url.toString());
+                return;
+            } catch (error) {
+                LogError(`[OAuth Callback] Invalid frontend return URL '${frontendReturnUrl}', falling back to default`);
+                // Fall through to default redirect
+            }
+        }
+
+        // Default: redirect to built-in success page
         const url = new URL(this.options.successRedirectUrl!);
         url.searchParams.set('state', state);
         url.searchParams.set('connectionId', connectionId);
@@ -576,8 +604,26 @@ export class OAuthCallbackHandler {
 
     /**
      * Redirects to error page with error info.
+     * If a frontend return URL is provided, redirects there instead of the default error page.
      */
-    private redirectToError(res: express.Response, errorCode: string, errorMessage: string): void {
+    private redirectToError(res: express.Response, errorCode: string, errorMessage: string, frontendReturnUrl?: string): void {
+        // If frontend return URL is provided, redirect there with error parameters
+        if (frontendReturnUrl) {
+            try {
+                const url = new URL(frontendReturnUrl);
+                url.searchParams.set('oauth', 'error');
+                url.searchParams.set('error', errorCode);
+                url.searchParams.set('error_description', errorMessage);
+                LogStatus(`[OAuth Callback] Redirecting to frontend URL with error: ${url.toString()}`);
+                res.redirect(302, url.toString());
+                return;
+            } catch (error) {
+                LogError(`[OAuth Callback] Invalid frontend return URL '${frontendReturnUrl}', falling back to default`);
+                // Fall through to default redirect
+            }
+        }
+
+        // Default: redirect to built-in error page
         const url = new URL(this.options.errorRedirectUrl!);
         url.searchParams.set('error', errorCode);
         url.searchParams.set('error_description', errorMessage);

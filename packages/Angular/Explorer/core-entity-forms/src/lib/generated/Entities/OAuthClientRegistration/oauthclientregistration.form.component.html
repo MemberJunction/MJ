@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Server Connection Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="serverConnection"
-        sectionName="Server Connection"
-        icon="fa fa-plug"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -33,81 +33,11 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="MCPServerConnection"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="MCPServer"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- OAuth Configuration Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="oAuthConfiguration"
-        sectionName="OAuth Configuration"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="IssuerURL"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="URL"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RedirectURIs"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="URL"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="GrantTypes"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ResponseTypes"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Scope"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Client Credentials Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="clientCredentials"
-        sectionName="Client Credentials"
-        icon="fa fa-lock"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -155,18 +85,39 @@
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="URL"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Registration Status Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="registrationStatus"
-        sectionName="Registration Status"
-        icon="fa fa-flag-checkered"
-        [form]="this"
-        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RedirectURIs"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="GrantTypes"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ResponseTypes"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Scope"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -183,16 +134,6 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-database"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -205,6 +146,22 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MCPServerConnection"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MCPServer"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"

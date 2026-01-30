@@ -6564,13 +6564,13 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`),
     IsPrimaryKey: z.boolean().describe(`
         * * Field Name: IsPrimaryKey
-        * * Display Name: Primary Key
+        * * Display Name: Is Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)`),
     IsUnique: z.boolean().describe(`
         * * Field Name: IsUnique
-        * * Display Name: Unique
+        * * Display Name: Is Unique
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field must have unique values within the entity.`),
@@ -6724,13 +6724,13 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details`),
     IsVirtual: z.boolean().describe(`
         * * Field Name: IsVirtual
-        * * Display Name: Virtual
+        * * Display Name: Is Virtual
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: NULL`),
     IsNameField: z.boolean().describe(`
         * * Field Name: IsNameField
-        * * Display Name: Name Field
+        * * Display Name: Is Name Field
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.`),
@@ -6865,13 +6865,13 @@ export const EntityFieldSchema = z.object({
         * * Description: When AllowDecryptInAPI is false: if true, send encrypted ciphertext (e.g., $ENC$...); if false (default), send sentinel value, usually "[!ENCRYPTED$]", indicating a value exists but is protected. Most secure option is false.`),
     IsSoftPrimaryKey: z.boolean().describe(`
         * * Field Name: IsSoftPrimaryKey
-        * * Display Name: Soft Primary Key
+        * * Display Name: Is Soft Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, indicates IsPrimaryKey was set via metadata (not a database constraint). Protects IsPrimaryKey from being cleared by schema sync.`),
     IsSoftForeignKey: z.boolean().describe(`
         * * Field Name: IsSoftForeignKey
-        * * Display Name: Soft Foreign Key
+        * * Display Name: Is Soft Foreign Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, indicates RelatedEntityID/RelatedEntityFieldName were set via metadata (not a database constraint). Protects these fields from being cleared by schema sync.`),
@@ -11935,12 +11935,12 @@ export const APIKeyScopeSchema = z.object({
         * * Default Value: newsequentialid()`),
     APIKeyID: z.string().describe(`
         * * Field Name: APIKeyID
-        * * Display Name: API Key ID
+        * * Display Name: API Key
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)`),
     ScopeID: z.string().describe(`
         * * Field Name: ScopeID
-        * * Display Name: Scope ID
+        * * Display Name: Scope
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -12028,7 +12028,7 @@ export const APIKeyUsageLogSchema = z.object({
         * * Description: HTTP response status code returned to the client (e.g., 200 for success, 401 for unauthorized, 500 for server error).`),
     ResponseTimeMs: z.number().nullable().describe(`
         * * Field Name: ResponseTimeMs
-        * * Display Name: Response Time Ms
+        * * Display Name: Response Time (ms)
         * * SQL Data Type: int
         * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.`),
     IPAddress: z.string().nullable().describe(`
@@ -12053,7 +12053,7 @@ export const APIKeyUsageLogSchema = z.object({
         * * Default Value: getutcdate()`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
-        * * Display Name: Application ID
+        * * Display Name: Application
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
         * * Description: The application through which this request was made (MJAPI, MCPServer, etc.).`),
@@ -12085,11 +12085,11 @@ export const APIKeyUsageLogSchema = z.object({
         * * Description: When authorization is denied, explains why (e.g., app ceiling blocked, no matching key scope, explicit deny rule).`),
     APIKey: z.string().describe(`
         * * Field Name: APIKey
-        * * Display Name: API Key
+        * * Display Name: API Key Value
         * * SQL Data Type: nvarchar(255)`),
     Application: z.string().nullable().describe(`
         * * Field Name: Application
-        * * Display Name: Application
+        * * Display Name: Application Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -15122,7 +15122,7 @@ export const MCPServerSchema = z.object({
         * * Description: Transport type: StreamableHTTP, SSE, Stdio, or WebSocket`),
     DefaultAuthType: z.string().describe(`
         * * Field Name: DefaultAuthType
-        * * Display Name: Default Authentication Type
+        * * Display Name: Default Auth Type
         * * SQL Data Type: nvarchar(50)
         * * Description: Default auth type: None, Bearer, APIKey, OAuth2, Basic, or Custom`),
     CredentialTypeID: z.string().nullable().describe(`
@@ -15179,33 +15179,33 @@ export const MCPServerSchema = z.object({
         * * Default Value: getutcdate()`),
     OAuthIssuerURL: z.string().nullable().describe(`
         * * Field Name: OAuthIssuerURL
-        * * Display Name: OAuth Issuer URL
+        * * Display Name: O Auth Issuer URL
         * * SQL Data Type: nvarchar(1000)
         * * Description: Authorization server issuer URL for OAuth 2.1 authentication (e.g., https://auth.example.com).`),
     OAuthScopes: z.string().nullable().describe(`
         * * Field Name: OAuthScopes
-        * * Display Name: OAuth Scopes
+        * * Display Name: O Auth Scopes
         * * SQL Data Type: nvarchar(500)
         * * Description: Space-delimited OAuth scopes to request (e.g., "read write admin").`),
     OAuthMetadataCacheTTLMinutes: z.number().nullable().describe(`
         * * Field Name: OAuthMetadataCacheTTLMinutes
-        * * Display Name: OAuth Metadata Cache TTL (minutes)
+        * * Display Name: O Auth Metadata Cache TTL Minutes
         * * SQL Data Type: int
         * * Default Value: 1440
         * * Description: Cache TTL for authorization server metadata in minutes. Default 1440 (24 hours).`),
     OAuthClientID: z.string().nullable().describe(`
         * * Field Name: OAuthClientID
-        * * Display Name: OAuth Client ID
+        * * Display Name: O Auth Client ID
         * * SQL Data Type: nvarchar(255)
         * * Description: Pre-configured OAuth client ID (when DCR is not supported).`),
     OAuthClientSecretEncrypted: z.string().nullable().describe(`
         * * Field Name: OAuthClientSecretEncrypted
-        * * Display Name: OAuth Client Secret (Encrypted)
+        * * Display Name: O Auth Client Secret Encrypted
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Pre-configured OAuth client secret (encrypted at rest, when DCR is not supported).`),
     OAuthRequirePKCE: z.boolean().describe(`
         * * Field Name: OAuthRequirePKCE
-        * * Display Name: OAuth Require PKCE
+        * * Display Name: O Auth Require PKCE
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether to require PKCE for OAuth flows. Always true for OAuth 2.1 compliance.`),
@@ -15344,19 +15344,19 @@ export const OAuthAuthServerMetadataCacheSchema = z.object({
         * * SQL Data Type: nvarchar(1000)`),
     JwksURI: z.string().nullable().describe(`
         * * Field Name: JwksURI
-        * * Display Name: JWKS URI
+        * * Display Name: Jwks URI
         * * SQL Data Type: nvarchar(1000)`),
     ScopesSupported: z.string().nullable().describe(`
         * * Field Name: ScopesSupported
-        * * Display Name: Supported Scopes
+        * * Display Name: Scopes Supported
         * * SQL Data Type: nvarchar(MAX)`),
     ResponseTypesSupported: z.string().describe(`
         * * Field Name: ResponseTypesSupported
-        * * Display Name: Supported Response Types
+        * * Display Name: Response Types Supported
         * * SQL Data Type: nvarchar(MAX)`),
     GrantTypesSupported: z.string().nullable().describe(`
         * * Field Name: GrantTypesSupported
-        * * Display Name: Supported Grant Types
+        * * Display Name: Grant Types Supported
         * * SQL Data Type: nvarchar(MAX)`),
     TokenEndpointAuthMethods: z.string().nullable().describe(`
         * * Field Name: TokenEndpointAuthMethods
@@ -15364,7 +15364,7 @@ export const OAuthAuthServerMetadataCacheSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     CodeChallengeMethodsSupported: z.string().nullable().describe(`
         * * Field Name: CodeChallengeMethodsSupported
-        * * Display Name: Supported Code Challenge Methods
+        * * Display Name: Code Challenge Methods Supported
         * * SQL Data Type: nvarchar(MAX)`),
     MetadataJSON: z.string().describe(`
         * * Field Name: MetadataJSON
@@ -15473,6 +15473,11 @@ export const OAuthAuthorizationStateSchema = z.object({
         * * Field Name: CompletedAt
         * * Display Name: Completed At
         * * SQL Data Type: datetimeoffset`),
+    FrontendReturnURL: z.string().nullable().describe(`
+        * * Field Name: FrontendReturnURL
+        * * Display Name: Frontend Return URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL to redirect the user to after OAuth completion. If set, the OAuth callback will redirect here instead of showing a static HTML page.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -15485,11 +15490,11 @@ export const OAuthAuthorizationStateSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: MCP Server Connection
+        * * Display Name: MCP Server Connection Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -15526,7 +15531,7 @@ export const OAuthClientRegistrationSchema = z.object({
         * * Description: OAuth client ID assigned by the authorization server.`),
     ClientSecretEncrypted: z.string().nullable().describe(`
         * * Field Name: ClientSecretEncrypted
-        * * Display Name: Client Secret (Encrypted)
+        * * Display Name: Client Secret Encrypted
         * * SQL Data Type: nvarchar(MAX)
         * * Description: OAuth client secret (encrypted at rest) for confidential clients.`),
     ClientIDIssuedAt: z.date().nullable().describe(`
@@ -15547,7 +15552,7 @@ export const OAuthClientRegistrationSchema = z.object({
         * * SQL Data Type: nvarchar(1000)`),
     RedirectURIs: z.string().describe(`
         * * Field Name: RedirectURIs
-        * * Display Name: Redirect URIs
+        * * Display Name: Redirect UR Is
         * * SQL Data Type: nvarchar(MAX)`),
     GrantTypes: z.string().describe(`
         * * Field Name: GrantTypes
@@ -15610,12 +15615,12 @@ export const OAuthTokenSchema = z.object({
         * * Default Value: newsequentialid()`),
     MCPServerConnectionID: z.string().describe(`
         * * Field Name: MCPServerConnectionID
-        * * Display Name: MCP Server Connection
+        * * Display Name: MCP Server Connection ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
     CredentialID: z.string().nullable().describe(`
         * * Field Name: CredentialID
-        * * Display Name: Credential
+        * * Display Name: Credential ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
         * * Description: Foreign key to Credential table where the OAuth tokens (access and refresh) are stored securely via CredentialEngine.`),
@@ -38266,7 +38271,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsPrimaryKey
-    * * Display Name: Primary Key
+    * * Display Name: Is Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
@@ -38280,7 +38285,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsUnique
-    * * Display Name: Unique
+    * * Display Name: Is Unique
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field must have unique values within the entity.
@@ -38589,7 +38594,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsVirtual
-    * * Display Name: Virtual
+    * * Display Name: Is Virtual
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: NULL
@@ -38600,7 +38605,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsNameField
-    * * Display Name: Name Field
+    * * Display Name: Is Name Field
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
@@ -38905,7 +38910,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsSoftPrimaryKey
-    * * Display Name: Soft Primary Key
+    * * Display Name: Is Soft Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, indicates IsPrimaryKey was set via metadata (not a database constraint). Protects IsPrimaryKey from being cleared by schema sync.
@@ -38919,7 +38924,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsSoftForeignKey
-    * * Display Name: Soft Foreign Key
+    * * Display Name: Is Soft Foreign Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, indicates RelatedEntityID/RelatedEntityFieldName were set via metadata (not a database constraint). Protects these fields from being cleared by schema sync.
@@ -52411,7 +52416,7 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
 
     /**
     * * Field Name: APIKeyID
-    * * Display Name: API Key ID
+    * * Display Name: API Key
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)
     */
@@ -52424,7 +52429,7 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
 
     /**
     * * Field Name: ScopeID
-    * * Display Name: Scope ID
+    * * Display Name: Scope
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
     */
@@ -52644,7 +52649,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: ResponseTimeMs
-    * * Display Name: Response Time Ms
+    * * Display Name: Response Time (ms)
     * * SQL Data Type: int
     * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.
     */
@@ -52703,7 +52708,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: ApplicationID
-    * * Display Name: Application ID
+    * * Display Name: Application
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
     * * Description: The application through which this request was made (MJAPI, MCPServer, etc.).
@@ -52775,7 +52780,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: APIKey
-    * * Display Name: API Key
+    * * Display Name: API Key Value
     * * SQL Data Type: nvarchar(255)
     */
     get APIKey(): string {
@@ -52784,7 +52789,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: Application
-    * * Display Name: Application
+    * * Display Name: Application Name
     * * SQL Data Type: nvarchar(100)
     */
     get Application(): string | null {
@@ -60629,7 +60634,7 @@ export class MCPServerEntity extends BaseEntity<MCPServerEntityType> {
 
     /**
     * * Field Name: DefaultAuthType
-    * * Display Name: Default Authentication Type
+    * * Display Name: Default Auth Type
     * * SQL Data Type: nvarchar(50)
     * * Description: Default auth type: None, Bearer, APIKey, OAuth2, Basic, or Custom
     */
@@ -60776,7 +60781,7 @@ export class MCPServerEntity extends BaseEntity<MCPServerEntityType> {
 
     /**
     * * Field Name: OAuthIssuerURL
-    * * Display Name: OAuth Issuer URL
+    * * Display Name: O Auth Issuer URL
     * * SQL Data Type: nvarchar(1000)
     * * Description: Authorization server issuer URL for OAuth 2.1 authentication (e.g., https://auth.example.com).
     */
@@ -60789,7 +60794,7 @@ export class MCPServerEntity extends BaseEntity<MCPServerEntityType> {
 
     /**
     * * Field Name: OAuthScopes
-    * * Display Name: OAuth Scopes
+    * * Display Name: O Auth Scopes
     * * SQL Data Type: nvarchar(500)
     * * Description: Space-delimited OAuth scopes to request (e.g., "read write admin").
     */
@@ -60802,7 +60807,7 @@ export class MCPServerEntity extends BaseEntity<MCPServerEntityType> {
 
     /**
     * * Field Name: OAuthMetadataCacheTTLMinutes
-    * * Display Name: OAuth Metadata Cache TTL (minutes)
+    * * Display Name: O Auth Metadata Cache TTL Minutes
     * * SQL Data Type: int
     * * Default Value: 1440
     * * Description: Cache TTL for authorization server metadata in minutes. Default 1440 (24 hours).
@@ -60816,7 +60821,7 @@ export class MCPServerEntity extends BaseEntity<MCPServerEntityType> {
 
     /**
     * * Field Name: OAuthClientID
-    * * Display Name: OAuth Client ID
+    * * Display Name: O Auth Client ID
     * * SQL Data Type: nvarchar(255)
     * * Description: Pre-configured OAuth client ID (when DCR is not supported).
     */
@@ -60829,7 +60834,7 @@ export class MCPServerEntity extends BaseEntity<MCPServerEntityType> {
 
     /**
     * * Field Name: OAuthClientSecretEncrypted
-    * * Display Name: OAuth Client Secret (Encrypted)
+    * * Display Name: O Auth Client Secret Encrypted
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Pre-configured OAuth client secret (encrypted at rest, when DCR is not supported).
     */
@@ -60842,7 +60847,7 @@ export class MCPServerEntity extends BaseEntity<MCPServerEntityType> {
 
     /**
     * * Field Name: OAuthRequirePKCE
-    * * Display Name: OAuth Require PKCE
+    * * Display Name: O Auth Require PKCE
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether to require PKCE for OAuth flows. Always true for OAuth 2.1 compliance.
@@ -61213,7 +61218,7 @@ export class OAuthAuthServerMetadataCacheEntity extends BaseEntity<OAuthAuthServ
 
     /**
     * * Field Name: JwksURI
-    * * Display Name: JWKS URI
+    * * Display Name: Jwks URI
     * * SQL Data Type: nvarchar(1000)
     */
     get JwksURI(): string | null {
@@ -61225,7 +61230,7 @@ export class OAuthAuthServerMetadataCacheEntity extends BaseEntity<OAuthAuthServ
 
     /**
     * * Field Name: ScopesSupported
-    * * Display Name: Supported Scopes
+    * * Display Name: Scopes Supported
     * * SQL Data Type: nvarchar(MAX)
     */
     get ScopesSupported(): string | null {
@@ -61237,7 +61242,7 @@ export class OAuthAuthServerMetadataCacheEntity extends BaseEntity<OAuthAuthServ
 
     /**
     * * Field Name: ResponseTypesSupported
-    * * Display Name: Supported Response Types
+    * * Display Name: Response Types Supported
     * * SQL Data Type: nvarchar(MAX)
     */
     get ResponseTypesSupported(): string {
@@ -61249,7 +61254,7 @@ export class OAuthAuthServerMetadataCacheEntity extends BaseEntity<OAuthAuthServ
 
     /**
     * * Field Name: GrantTypesSupported
-    * * Display Name: Supported Grant Types
+    * * Display Name: Grant Types Supported
     * * SQL Data Type: nvarchar(MAX)
     */
     get GrantTypesSupported(): string | null {
@@ -61273,7 +61278,7 @@ export class OAuthAuthServerMetadataCacheEntity extends BaseEntity<OAuthAuthServ
 
     /**
     * * Field Name: CodeChallengeMethodsSupported
-    * * Display Name: Supported Code Challenge Methods
+    * * Display Name: Code Challenge Methods Supported
     * * SQL Data Type: nvarchar(MAX)
     */
     get CodeChallengeMethodsSupported(): string | null {
@@ -61569,6 +61574,19 @@ export class OAuthAuthorizationStateEntity extends BaseEntity<OAuthAuthorization
     }
 
     /**
+    * * Field Name: FrontendReturnURL
+    * * Display Name: Frontend Return URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL to redirect the user to after OAuth completion. If set, the OAuth callback will redirect here instead of showing a static HTML page.
+    */
+    get FrontendReturnURL(): string | null {
+        return this.Get('FrontendReturnURL');
+    }
+    set FrontendReturnURL(value: string | null) {
+        this.Set('FrontendReturnURL', value);
+    }
+
+    /**
     * * Field Name: __mj_CreatedAt
     * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
@@ -61590,7 +61608,7 @@ export class OAuthAuthorizationStateEntity extends BaseEntity<OAuthAuthorization
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: MCP Server Connection
+    * * Display Name: MCP Server Connection Name
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -61599,7 +61617,7 @@ export class OAuthAuthorizationStateEntity extends BaseEntity<OAuthAuthorization
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -61705,7 +61723,7 @@ export class OAuthClientRegistrationEntity extends BaseEntity<OAuthClientRegistr
 
     /**
     * * Field Name: ClientSecretEncrypted
-    * * Display Name: Client Secret (Encrypted)
+    * * Display Name: Client Secret Encrypted
     * * SQL Data Type: nvarchar(MAX)
     * * Description: OAuth client secret (encrypted at rest) for confidential clients.
     */
@@ -61766,7 +61784,7 @@ export class OAuthClientRegistrationEntity extends BaseEntity<OAuthClientRegistr
 
     /**
     * * Field Name: RedirectURIs
-    * * Display Name: Redirect URIs
+    * * Display Name: Redirect UR Is
     * * SQL Data Type: nvarchar(MAX)
     */
     get RedirectURIs(): string {
@@ -61929,7 +61947,7 @@ export class OAuthTokenEntity extends BaseEntity<OAuthTokenEntityType> {
 
     /**
     * * Field Name: MCPServerConnectionID
-    * * Display Name: MCP Server Connection
+    * * Display Name: MCP Server Connection ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
     */
@@ -61942,7 +61960,7 @@ export class OAuthTokenEntity extends BaseEntity<OAuthTokenEntityType> {
 
     /**
     * * Field Name: CredentialID
-    * * Display Name: Credential
+    * * Display Name: Credential ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
     * * Description: Foreign key to Credential table where the OAuth tokens (access and refresh) are stored securely via CredentialEngine.

@@ -527,7 +527,11 @@ export type MCPClientEventType =
     | 'toolCallCompleted'
     | 'toolsSynced'
     | 'connectionError'
-    | 'rateLimitExceeded';
+    | 'rateLimitExceeded'
+    | 'authorizationRequired'
+    | 'authorizationCompleted'
+    | 'tokenRefreshed'
+    | 'tokenRefreshFailed';
 
 /**
  * Event data for MCPClientManager events

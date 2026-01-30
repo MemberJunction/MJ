@@ -346,7 +346,41 @@ export class MCPClientManager {
             return activeConnection;
 
         } catch (error) {
-            // Update connection status to Error
+            // Check for OAuth-specific errors and emit appropriate events
+            if (error instanceof OAuthAuthorizationRequiredError) {
+                // Emit authorizationRequired event before re-throwing
+                this.emitEvent({
+                    type: 'authorizationRequired',
+                    connectionId,
+                    timestamp: new Date(),
+                    data: {
+                        authorizationUrl: error.authorizationUrl,
+                        stateParameter: error.stateParameter,
+                        expiresAt: error.expiresAt.toISOString()
+                    }
+                });
+                // Don't update connection status to Error for auth required - it's expected flow
+                throw error;
+            }
+
+            if (error instanceof OAuthReauthorizationRequiredError) {
+                // Emit tokenRefreshFailed event when re-authorization is needed
+                this.emitEvent({
+                    type: 'tokenRefreshFailed',
+                    connectionId,
+                    timestamp: new Date(),
+                    data: {
+                        reason: error.reason,
+                        requiresReauthorization: true,
+                        authorizationUrl: error.authorizationUrl,
+                        stateParameter: error.stateParameter
+                    }
+                });
+                // Don't update connection status to Error for reauth required - it's expected flow
+                throw error;
+            }
+
+            // Update connection status to Error for other errors
             await this.updateConnectionStatus(connectionId, 'Error', contextUser, error);
 
             // Emit error event
@@ -1487,6 +1521,63 @@ export class MCPClientManager {
             connectionName: connection.connectionConfig.Name,
             connectedAt: connection.connectedAt
         };
+    }
+
+    // ========================================
+    // OAuth Event Notification Methods
+    // ========================================
+
+    /**
+     * Notifies listeners that OAuth authorization has completed successfully.
+     * Called by OAuth callback handler after code exchange succeeds.
+     *
+     * @param connectionId - The connection ID that was authorized
+     * @param data - Optional additional data (token info, etc.)
+     */
+    public notifyOAuthAuthorizationCompleted(connectionId: string, data?: Record<string, unknown>): void {
+        this.emitEvent({
+            type: 'authorizationCompleted',
+            connectionId,
+            timestamp: new Date(),
+            data
+        });
+    }
+
+    /**
+     * Notifies listeners that an OAuth token was successfully refreshed.
+     * Called by TokenManager after successful token refresh.
+     *
+     * @param connectionId - The connection ID whose token was refreshed
+     * @param data - Optional additional data (new expiration, etc.)
+     */
+    public notifyOAuthTokenRefreshed(connectionId: string, data?: Record<string, unknown>): void {
+        this.emitEvent({
+            type: 'tokenRefreshed',
+            connectionId,
+            timestamp: new Date(),
+            data
+        });
+    }
+
+    /**
+     * Notifies listeners that OAuth token refresh failed.
+     * Called by TokenManager when refresh fails.
+     *
+     * @param connectionId - The connection ID whose token refresh failed
+     * @param data - Error details and whether re-authorization is required
+     */
+    public notifyOAuthTokenRefreshFailed(connectionId: string, data: {
+        error: string;
+        requiresReauthorization: boolean;
+        authorizationUrl?: string;
+        stateParameter?: string;
+    }): void {
+        this.emitEvent({
+            type: 'tokenRefreshFailed',
+            connectionId,
+            timestamp: new Date(),
+            data
+        });
     }
 
     // ========================================

@@ -28,6 +28,7 @@ import {
     OAuthAuthorizationRequiredError,
     OAuthReauthorizationRequiredError
 } from './types.js';
+import { getOAuthAuditLogger } from './OAuthAuditLogger.js';
 
 /** Entity name for OAuth authorization states */
 const ENTITY_OAUTH_AUTHORIZATION_STATES = 'MJ: O Auth Authorization States';
@@ -208,6 +209,8 @@ export class OAuthManager {
      * @param oauthConfig - OAuth configuration
      * @param publicUrl - MJAPI public URL for callbacks
      * @param contextUser - User context
+     * @param options - Additional options
+     * @param options.frontendReturnUrl - URL to redirect to after OAuth completion
      * @returns Authorization initiation result with URL
      */
     public async initiateAuthorizationFlow(
@@ -215,7 +218,8 @@ export class OAuthManager {
         serverId: string,
         oauthConfig: MCPServerOAuthConfig,
         publicUrl: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: { frontendReturnUrl?: string }
     ): Promise<InitiateAuthorizationResult> {
         try {
             if (!oauthConfig.OAuthIssuerURL) {
@@ -283,12 +287,24 @@ export class OAuthManager {
                 status: 'Pending',
                 authorizationUrl,
                 initiatedAt: now,
-                expiresAt
+                expiresAt,
+                frontendReturnUrl: options?.frontendReturnUrl
             };
 
             await this.saveAuthorizationState(state, contextUser);
 
             LogStatus(`[OAuth] Initiated authorization flow for connection ${connectionId}`);
+
+            // Audit log: Authorization initiated (T047)
+            const auditLogger = getOAuthAuditLogger();
+            await auditLogger.logAuthorizationInitiated({
+                connectionId,
+                serverId,
+                issuerUrl: oauthConfig.OAuthIssuerURL!,
+                requestedScopes: oauthConfig.OAuthScopes,
+                usedDynamicRegistration: !oauthConfig.OAuthClientID,
+                stateParameter
+            }, contextUser);
 
             return {
                 success: true,
@@ -403,6 +419,16 @@ export class OAuthManager {
 
             LogStatus(`[OAuth] Completed authorization flow for connection ${state.connectionId}`);
 
+            // Audit log: Authorization completed (T048)
+            const auditLogger = getOAuthAuditLogger();
+            await auditLogger.logAuthorizationCompleted({
+                connectionId: state.connectionId,
+                issuerUrl: serverConfig.OAuthIssuerURL!,
+                grantedScopes: tokens.scope,
+                tokenExpiresAt: new Date(tokens.expiresAt * 1000),
+                hasRefreshToken: !!tokens.refreshToken
+            }, contextUser);
+
             return {
                 success: true,
                 isRetryable: false,
@@ -414,6 +440,19 @@ export class OAuthManager {
             const mapped = OAuthErrorMessages.mapError(errorMessage);
 
             LogError(`[OAuth] Failed to complete authorization: ${errorMessage}`);
+
+            // Audit log: Authorization failed (part of T048)
+            try {
+                const auditLogger = getOAuthAuditLogger();
+                await auditLogger.logAuthorizationFailed({
+                    connectionId: stateParameter, // Use state param as connection ID may not be available
+                    errorCode: errorMessage,
+                    errorDescription: mapped.userMessage,
+                    isRetryable: mapped.isRetryable
+                }, contextUser);
+            } catch {
+                // Ignore audit logging errors
+            }
 
             return {
                 success: false,
@@ -720,6 +759,7 @@ export class OAuthManager {
             entity.Set('AuthorizationURL', state.authorizationUrl);
             entity.Set('InitiatedAt', state.initiatedAt);
             entity.Set('ExpiresAt', state.expiresAt);
+            entity.Set('FrontendReturnURL', state.frontendReturnUrl ?? null);
 
             await entity.Save();
             state.id = entity.Get('ID');
@@ -754,6 +794,7 @@ export class OAuthManager {
                 InitiatedAt: Date;
                 ExpiresAt: Date;
                 CompletedAt: Date | null;
+                FrontendReturnURL: string | null;
             }>({
                 EntityName: ENTITY_OAUTH_AUTHORIZATION_STATES,
                 ExtraFilter: `StateParameter='${stateParameter.replace(/'/g, "''")}'`,
@@ -783,7 +824,8 @@ export class OAuthManager {
                 errorDescription: record.ErrorDescription ?? undefined,
                 initiatedAt: new Date(record.InitiatedAt),
                 expiresAt: new Date(record.ExpiresAt),
-                completedAt: record.CompletedAt ? new Date(record.CompletedAt) : undefined
+                completedAt: record.CompletedAt ? new Date(record.CompletedAt) : undefined,
+                frontendReturnUrl: record.FrontendReturnURL ?? undefined
             };
         } catch (error) {
             LogError(`[OAuth] Failed to load authorization state: ${error}`);

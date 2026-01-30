@@ -19,6 +19,7 @@ export class MCPServerFormComponent extends BaseFormComponent {
             { sectionKey: 'connectionSettings', sectionName: 'Connection Settings', isExpanded: true },
             { sectionKey: 'authenticationCredentials', sectionName: 'Authentication & Credentials', isExpanded: false },
             { sectionKey: 'performanceLimits', sectionName: 'Performance & Limits', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJOAuthClientRegistrations', sectionName: 'MJ: O Auth Client Registrations', isExpanded: false },
             { sectionKey: 'mJMCPServerConnections', sectionName: 'MJ: MCP Server Connections', isExpanded: false },

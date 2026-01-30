@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Metadata Cache Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="metadataCache"
-        sectionName="Metadata Cache"
-        icon="fa fa-database"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -17,51 +17,7 @@
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="URL"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="JwksURI"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="URL"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="MetadataJSON"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CachedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ExpiresAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Discovery Endpoints Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="discoveryEndpoints"
-        sectionName="Discovery Endpoints"
-        icon="fa fa-link"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -69,7 +25,6 @@
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="URL"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -78,7 +33,6 @@
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="URL"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -87,7 +41,6 @@
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="URL"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -96,18 +49,15 @@
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="URL"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Supported Capabilities Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="supportedCapabilities"
-        sectionName="Supported Capabilities"
-        icon="fa fa-cogs"
-        [form]="this"
-        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="JwksURI"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -148,16 +98,30 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="systemMetadata"
-        sectionName="System Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MetadataJSON"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CachedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ExpiresAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
