@@ -10,7 +10,6 @@ import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { EntityFormComponentExtended, LoadEntityFormComponentExtended } from "./Entities/entity-form.component";
@@ -141,7 +140,6 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         ButtonModule,
         SplitButtonModule,
         DateInputsModule,
-        UserViewGridModule,
         LinkDirectivesModule,
         JoinGridModule,
         BaseFormsModule,

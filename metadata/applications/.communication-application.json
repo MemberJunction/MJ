@@ -2,7 +2,7 @@
   "fields": {
     "Name": "Communication",
     "Description": "Manage and monitor system communications, providers, and logs",
-    "Icon": "fa-solid fa-comments",
+    "Icon": "fa-solid fa-satellite-dish",
     "DefaultForNewUser": false,
     "Color": "#00bcd4",
     "DefaultSequence": 1004,
@@ -27,8 +27,14 @@
         "DriverClass": "CommunicationProvidersResource"
       },
       {
+        "Label": "Templates",
+        "Icon": "fa-solid fa-file-lines",
+        "ResourceType": "Custom",
+        "DriverClass": "CommunicationTemplatesResource"
+      },
+      {
         "Label": "Runs",
-        "Icon": "fa-solid fa-play",
+        "Icon": "fa-solid fa-play-circle",
         "ResourceType": "Custom",
         "DriverClass": "CommunicationRunsResource"
       }
@@ -41,7 +47,7 @@
     "ID": "6B351216-A44E-4BBE-9461-FC70BE858506"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.113Z",
-    "checksum": "8e3ada958135b2d6e31749851fcff3cd1fcd7c454df80712461df716d6de5a17"
+    "lastModified": "2026-01-30T03:06:04.089Z",
+    "checksum": "b951d857ea9f5c9ee4bae6315347b190b05fd87903d7e4e4cd1416c56d912784"
   }
 }

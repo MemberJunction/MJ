@@ -1,3 +1,14 @@
+/* Override shared form-styles to enable flex layout */
+:host {
+    display: block;
+    height: 100%;
+}
+
+/* Override the shared record-form min-height so flex layout works properly */
+.record-form {
+    min-height: 0 !important;
+}
+
 .sql-editor-container {
     height: 100%;
     display: flex;

@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData } from '@memberjunction/core-entities';
+import { ResourceData, CommunicationLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
@@ -15,214 +15,265 @@ export function LoadCommunicationLogsResource() {
 @Component({
     selector: 'mj-communication-logs-resource',
     template: `
-    <div class="logs-container">
-        <header class="logs-header">
-            <div class="title-area">
-                <h1>Communication Logs</h1>
-                <p>Full audit trail of all messages</p>
-            </div>
-            <div class="header-actions">
-                <div class="search-box">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                    <input type="text" placeholder="Search logs..." (input)="onSearch($event)">
+    <div class="logs-wrapper">
+        <div class="card">
+            <div class="logs-toolbar">
+                <div class="search-input-wrapper">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" placeholder="Search messages, providers, recipients..." (input)="onSearch($event)">
                 </div>
+                <div class="filter-chip" [class.active]="statusFilter === ''"
+                    (click)="onStatusFilter('')">
+                    <i class="fa-solid fa-filter"></i> All
+                </div>
+                <div class="filter-chip" [class.active]="statusFilter === 'Complete'"
+                    (click)="onStatusFilter('Complete')">
+                    <i class="fa-solid fa-check-circle"></i> Sent
+                </div>
+                <div class="filter-chip" [class.active]="statusFilter === 'Failed'"
+                    (click)="onStatusFilter('Failed')">
+                    <i class="fa-solid fa-times-circle"></i> Failed
+                </div>
+                <div class="filter-chip" [class.active]="statusFilter === 'Pending'"
+                    (click)="onStatusFilter('Pending')">
+                    <i class="fa-solid fa-clock"></i> Pending
+                </div>
+                <div class="toolbar-spacer"></div>
+                <button class="tb-btn" (click)="loadData()">
+                    <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
+                </button>
             </div>
-        </header>
-
-        <div class="grid-wrapper">
-            <div *ngIf="isLoading" class="loading-overlay">
-                <div class="spinner"></div>
+            <div class="table-wrapper">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Direction</th>
+                            <th>Provider</th>
+                            <th>Type</th>
+                            <th>Date</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let log of filteredLogs">
+                            <td>
+                                <span class="log-status-badge" [ngClass]="getStatusClass(log.Status)">
+                                    <i [class]="getStatusIcon(log.Status)"></i>
+                                    {{log.Status}}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="log-direction" [ngClass]="log.Direction.toLowerCase()">
+                                    <i [class]="log.Direction === 'Sending' ? 'fa-solid fa-arrow-up-right' : 'fa-solid fa-arrow-down-left'"></i>
+                                    {{log.Direction}}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="log-provider-badge">
+                                    <i [class]="getProviderIcon(log.CommunicationProvider)" [style.color]="getProviderColor(log.CommunicationProvider)"></i>
+                                    {{log.CommunicationProvider}}
+                                </span>
+                            </td>
+                            <td>{{log.CommunicationProviderMessageType}}</td>
+                            <td>{{log.MessageDate | date:'medium'}}</td>
+                            <td>
+                                <span *ngIf="log.ErrorMessage" class="log-error-text" [title]="log.ErrorMessage">
+                                    {{log.ErrorMessage}}
+                                </span>
+                                <span *ngIf="!log.ErrorMessage" class="no-error">&mdash;</span>
+                            </td>
+                        </tr>
+                        <tr *ngIf="filteredLogs.length === 0 && !isLoading">
+                            <td colspan="6" class="no-data">
+                                <div class="empty-state">
+                                    <i class="fa-solid fa-inbox"></i>
+                                    <p>No logs found matching your criteria</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-
-            <table class="custom-grid">
-                <thead>
-                    <tr>
-                        <th>Status</th>
-                        <th>Direction</th>
-                        <th>Provider</th>
-                        <th>Type</th>
-                        <th>Date</th>
-                        <th>Error Message</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr *ngFor="let log of filteredLogs">
-                        <td>
-                            <span class="status-pill" [class]="log.Status.toLowerCase()">
-                                {{log.Status}}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="direction-icon" [class]="log.Direction.toLowerCase()">
-                                <i [class]="log.Direction === 'Sending' ? 'fa-solid fa-arrow-up' : 'fa-solid fa-arrow-down'"></i>
-                                {{log.Direction}}
-                            </span>
-                        </td>
-                        <td>{{log.CommunicationProvider}}</td>
-                        <td>{{log.CommunicationProviderMessageType}}</td>
-                        <td>{{log.MessageDate | date:'medium'}}</td>
-                        <td class="error-cell" [title]="log.ErrorMessage">{{log.ErrorMessage || '-'}}</td>
-                    </tr>
-                    <tr *ngIf="filteredLogs.length === 0 && !isLoading">
-                        <td colspan="6" class="no-data">No logs found matching your criteria</td>
-                    </tr>
-                </tbody>
-            </table>
         </div>
     </div>
   `,
     styles: [`
-    .logs-container {
+    .logs-wrapper {
+        height: 100%;
+        padding: 24px;
+        background: var(--mat-sys-surface-container);
+    }
+    .card {
+        background: var(--mat-sys-surface-container-lowest);
+        border: 1px solid var(--mat-sys-outline-variant);
+        border-radius: var(--mat-sys-corner-medium, 12px);
+        overflow: hidden;
         display: flex;
         flex-direction: column;
         height: 100%;
-        background-color: #f8fafc;
-        font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    }
-    .logs-header {
-        padding: 24px 32px;
-        background: white;
-        border-bottom: 1px solid #e2e8f0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .title-area h1 {
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: #0f172a;
-    }
-    .title-area p {
-        margin: 4px 0 0;
-        color: #64748b;
-        font-size: 0.875rem;
-    }
-    .search-box {
-        position: relative;
-        width: 300px;
-    }
-    .search-box i {
-        position: absolute;
-        left: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #94a3b8;
-    }
-    .search-box input {
-        width: 100%;
-        padding: 10px 12px 10px 40px;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        font-size: 0.875rem;
-        transition: all 0.2s;
-    }
-    .search-box input:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
 
-    .grid-wrapper {
-        flex: 1;
-        padding: 24px 32px;
-        overflow-y: auto;
-        position: relative;
-    }
-
-    .custom-grid {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-        background: white;
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        border: 1px solid #e2e8f0;
-    }
-    .custom-grid th {
-        background: #f8fafc;
-        padding: 16px;
-        text-align: left;
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: #64748b;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        border-bottom: 1px solid #e2e8f0;
-    }
-    .custom-grid td {
-        padding: 16px;
-        font-size: 0.875rem;
-        color: #1e293b;
-        border-bottom: 1px solid #f1f5f9;
-    }
-    .custom-grid tr:last-child td {
-        border-bottom: none;
-    }
-    .custom-grid tr:hover td {
-        background: #f8fafc;
-    }
-
-    .status-pill {
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-    }
-    .status-pill.complete { background: #dcfce7; color: #166534; }
-    .status-pill.failed { background: #fee2e2; color: #991b1b; }
-    .status-pill.pending { background: #fef3c7; color: #92400e; }
-
-    .direction-icon {
+    /* TOOLBAR */
+    .logs-toolbar {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-weight: 500;
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--mat-sys-outline-variant);
+        background: var(--mat-sys-surface-container-low);
+        flex-shrink: 0;
     }
-    .direction-icon.sending { color: #3b82f6; }
-    .direction-icon.receiving { color: #8b5cf6; }
-
-    .error-cell {
-        color: #ef4444;
-        max-width: 200px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .no-data {
-        text-align: center;
-        padding: 48px !important;
-        color: #94a3b8;
-        font-style: italic;
-    }
-
-    .loading-overlay {
-        position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(255,255,255,0.7);
+    .search-input-wrapper {
         display: flex;
         align-items: center;
-        justify-content: center;
-        z-index: 10;
+        gap: 8px;
+        flex: 1;
+        max-width: 400px;
+        padding: 6px 12px;
+        border: 1px solid var(--mat-sys-outline-variant);
+        border-radius: var(--mat-sys-corner-small, 8px);
+        background: var(--mat-sys-surface-container-lowest);
+        transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .spinner {
-        width: 32px;
-        height: 32px;
-        border: 3px solid #e2e8f0;
-        border-top-color: #3b82f6;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
+    .search-input-wrapper:focus-within {
+        border-color: var(--mat-sys-primary);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .search-input-wrapper i { color: var(--mat-sys-on-surface-variant); font-size: 12px; }
+    .search-input-wrapper input {
+        flex: 1; border: none; outline: none;
+        background: transparent; font-size: 12px;
+        font-family: inherit; color: var(--mat-sys-on-surface);
+    }
+    .search-input-wrapper input::placeholder { color: var(--mat-sys-on-surface-variant); }
+
+    .filter-chip {
+        display: inline-flex; align-items: center;
+        gap: 4px; padding: 4px 10px;
+        border: 1px solid var(--mat-sys-outline-variant);
+        border-radius: 16px;
+        background: var(--mat-sys-surface-container-lowest);
+        font-size: 11px; font-weight: 500;
+        color: var(--mat-sys-on-surface-variant);
+        cursor: pointer; transition: all 0.15s;
+    }
+    .filter-chip:hover {
+        border-color: var(--mat-sys-outline);
+        background: var(--mat-sys-surface-container);
+    }
+    .filter-chip.active {
+        border-color: var(--mat-sys-primary);
+        background: var(--mat-sys-primary-container);
+        color: var(--mat-sys-on-primary-container);
+    }
+    .filter-chip i { font-size: 10px; }
+
+    .toolbar-spacer { flex: 1; }
+
+    .tb-btn {
+        display: inline-flex; align-items: center;
+        gap: 6px; padding: 6px 12px;
+        border: 1px solid var(--mat-sys-outline-variant);
+        border-radius: var(--mat-sys-corner-extra-small, 4px);
+        background: var(--mat-sys-surface-container-lowest);
+        color: var(--mat-sys-on-surface-variant);
+        font-size: 12px; font-weight: 500;
+        cursor: pointer; transition: all 0.15s ease;
+        font-family: inherit;
+    }
+    .tb-btn:hover {
+        background: var(--mat-sys-surface-container-high);
+        border-color: var(--mat-sys-outline);
+        color: var(--mat-sys-on-surface);
+    }
+    .tb-btn i { font-size: 12px; }
+
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .spinning { animation: spin 1s linear infinite; }
+
+    /* TABLE */
+    .table-wrapper { flex: 1; overflow-y: auto; }
+
+    .log-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    .log-table thead {
+        background: var(--mat-sys-surface-container-low);
+        position: sticky; top: 0; z-index: 1;
+    }
+    .log-table th {
+        padding: 10px 16px;
+        text-align: left;
+        font-weight: 700; font-size: 10px;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        color: var(--mat-sys-on-surface-variant);
+        border-bottom: 1px solid var(--mat-sys-outline-variant);
+        white-space: nowrap;
+    }
+    .log-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--mat-sys-surface-container);
+        color: var(--mat-sys-on-surface);
+        vertical-align: middle;
+    }
+    .log-table tbody tr { transition: background 0.15s; }
+    .log-table tbody tr:hover { background: var(--mat-sys-surface-container-low); }
+
+    .log-status-badge {
+        display: inline-flex; align-items: center;
+        gap: 4px; font-size: 11px; font-weight: 600;
+        padding: 3px 10px;
+        border-radius: var(--mat-sys-corner-extra-small, 4px);
+    }
+    .log-status-badge.complete { background: #d4f8e0; color: #1b873f; }
+    .log-status-badge.failed { background: #ffdce0; color: #cf222e; }
+    .log-status-badge.pending { background: #fff0c7; color: #9a6700; }
+    .log-status-badge.in-progress { background: #ddf4ff; color: #0969da; }
+
+    .log-direction {
+        display: flex; align-items: center;
+        gap: 4px; font-size: 11px;
+        color: var(--mat-sys-on-surface-variant);
+    }
+    .log-direction i { font-size: 10px; }
+    .log-direction.sending i { color: var(--mat-sys-primary); }
+    .log-direction.receiving i { color: #1b873f; }
+
+    .log-provider-badge {
+        display: inline-flex; align-items: center;
+        gap: 6px; padding: 3px 10px;
+        border-radius: var(--mat-sys-corner-extra-small, 4px);
+        background: var(--mat-sys-surface-container);
+        font-weight: 500;
+    }
+
+    .log-error-text {
+        color: #cf222e;
+        max-width: 200px;
+        overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; font-size: 11px;
+        display: block;
+    }
+    .no-error { color: var(--mat-sys-on-surface-variant); }
+
+    .no-data { padding: 0 !important; }
+    .empty-state {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        padding: 48px 0; color: var(--mat-sys-on-surface-variant);
+    }
+    .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
+    .empty-state p { margin: 0; font-size: 13px; }
   `]
 })
 export class CommunicationLogsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-    public logs: any[] = [];
-    public filteredLogs: any[] = [];
+    public logs: CommunicationLogEntity[] = [];
+    public filteredLogs: CommunicationLogEntity[] = [];
     public isLoading = false;
+    public statusFilter = '';
     private searchTerm = '';
 
     constructor(private cdr: ChangeDetectorRef) {
@@ -242,10 +293,10 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
             this.cdr.detectChanges();
 
             const rv = new RunView();
-            const result = await rv.RunView({
+            const result = await rv.RunView<CommunicationLogEntity>({
                 EntityName: 'Communication Logs',
                 OrderBy: 'MessageDate DESC',
-                MaxRows: 100,
+                MaxRows: 200,
                 ResultType: 'entity_object'
             });
 
@@ -261,27 +312,76 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
         }
     }
 
-    public onSearch(event: any): void {
-        this.searchTerm = event.target.value.toLowerCase();
+    public onSearch(event: Event): void {
+        this.searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
         this.applyFilter();
     }
 
+    public onStatusFilter(status: string): void {
+        this.statusFilter = status;
+        this.applyFilter();
+    }
+
+    public getStatusClass(status: string): string {
+        const s = (status || '').toLowerCase();
+        if (s === 'complete') return 'complete';
+        if (s === 'failed') return 'failed';
+        if (s === 'pending') return 'pending';
+        if (s === 'in-progress') return 'in-progress';
+        return '';
+    }
+
+    public getStatusIcon(status: string): string {
+        const s = (status || '').toLowerCase();
+        if (s === 'complete') return 'fa-solid fa-check';
+        if (s === 'failed') return 'fa-solid fa-xmark';
+        if (s === 'pending') return 'fa-solid fa-clock';
+        if (s === 'in-progress') return 'fa-solid fa-spinner';
+        return 'fa-solid fa-circle';
+    }
+
+    public getProviderIcon(name: string): string {
+        if (!name) return 'fa-solid fa-server';
+        const n = name.toLowerCase();
+        if (n.includes('sendgrid')) return 'fa-solid fa-envelope';
+        if (n.includes('twilio')) return 'fa-solid fa-comment-sms';
+        if (n.includes('gmail') || n.includes('google')) return 'fa-brands fa-google';
+        if (n.includes('microsoft') || n.includes('graph')) return 'fa-brands fa-microsoft';
+        return 'fa-solid fa-server';
+    }
+
+    public getProviderColor(name: string): string {
+        if (!name) return 'inherit';
+        const n = name.toLowerCase();
+        if (n.includes('sendgrid')) return '#1A82E2';
+        if (n.includes('twilio')) return '#F22F46';
+        if (n.includes('gmail') || n.includes('google')) return '#EA4335';
+        if (n.includes('microsoft') || n.includes('graph')) return '#0078D4';
+        return 'inherit';
+    }
+
     private applyFilter(): void {
-        if (!this.searchTerm) {
-            this.filteredLogs = this.logs;
-        } else {
-            this.filteredLogs = this.logs.filter(l =>
+        let filtered = this.logs;
+
+        if (this.statusFilter) {
+            filtered = filtered.filter(l => l.Status === this.statusFilter);
+        }
+
+        if (this.searchTerm) {
+            filtered = filtered.filter(l =>
                 l.CommunicationProvider?.toLowerCase().includes(this.searchTerm) ||
                 l.CommunicationProviderMessageType?.toLowerCase().includes(this.searchTerm) ||
                 l.Status?.toLowerCase().includes(this.searchTerm) ||
                 l.ErrorMessage?.toLowerCase().includes(this.searchTerm)
             );
         }
+
+        this.filteredLogs = filtered;
         this.cdr.detectChanges();
     }
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
-        return 'Logs';
+        return 'Message Logs';
     }
 
     async GetResourceIconClass(data: ResourceData): Promise<string> {

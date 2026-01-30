@@ -9,7 +9,6 @@ import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { SimpleRecordListModule } from '@memberjunction/ng-simple-record-list';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { JoinGridModule } from '@memberjunction/ng-join-grid';
@@ -81,7 +80,6 @@ import { ApplicationDialogComponent } from './application-management/application
     EntityPermissionsModule,
     MJTabStripModule,
     EntityFormDialogModule,
-    UserViewGridModule,
     SimpleRecordListModule,
     JoinGridModule,
     CodeEditorModule,
