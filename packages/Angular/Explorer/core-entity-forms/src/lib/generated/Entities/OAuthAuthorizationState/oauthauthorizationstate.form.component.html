@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Connection & User Section -->
+    <!-- Identifiers Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="connectionUser"
-        sectionName="Connection & User"
-        icon="fa fa-user"
+        sectionKey="identifiers"
+        sectionName="Identifiers"
+        icon="fa fa-key"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -49,10 +49,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- PKCE & Redirect Section -->
+    <!-- Authorization Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="pKCERedirect"
-        sectionName="PKCE & Redirect"
+        sectionKey="authorizationDetails"
+        sectionName="Authorization Details"
         icon="fa fa-lock"
         [form]="this"
         [formContext]="formContext">
@@ -87,18 +87,7 @@
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="URL"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Authorization Outcome Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="authorizationOutcome"
-        sectionName="Authorization Outcome"
-        icon="fa fa-flag"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -110,19 +99,29 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="AuthorizationURL"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
             LinkType="URL"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Status & Errors Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="statusErrors"
+        sectionName="Status & Errors"
+        icon="fa fa-flag"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -147,7 +146,7 @@
     <mj-collapsible-panel slot="field-panels"
         sectionKey="flowTiming"
         sectionName="Flow Timing"
-        icon="fa fa-calendar-alt"
+        icon="fa fa-calendar"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 

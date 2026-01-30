@@ -242,28 +242,6 @@
         </div>
     </mj-collapsible-panel>
 
-    <!-- MJ: O Auth Tokens Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJOAuthTokens"
-        sectionName="MJ: O Auth Tokens"
-        icon="fa fa-key"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJOAuthTokens')"
-        [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Tokens','MCPServerConnectionID')"
-                [NewRecordValues]="NewRecordValues('MJ: O Auth Tokens')"
-                [AllowLoad]="IsSectionExpanded('mJOAuthTokens')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJOAuthTokens', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-    </mj-collapsible-panel>
-
     <!-- MJ: MCP Tool Execution Logs Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJMCPToolExecutionLogs"
@@ -290,7 +268,7 @@
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJOAuthAuthorizationStates"
         sectionName="MJ: O Auth Authorization States"
-        icon="fa fa-key"
+        icon="fa fa-shield-alt"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
@@ -325,6 +303,28 @@
                 [AllowLoad]="IsSectionExpanded('mJOAuthClientRegistrations')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJOAuthClientRegistrations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: O Auth Tokens Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJOAuthTokens"
+        sectionName="MJ: O Auth Tokens"
+        icon="fa fa-key"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJOAuthTokens')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Tokens','MCPServerConnectionID')"
+                [NewRecordValues]="NewRecordValues('MJ: O Auth Tokens')"
+                [AllowLoad]="IsSectionExpanded('mJOAuthTokens')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJOAuthTokens', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

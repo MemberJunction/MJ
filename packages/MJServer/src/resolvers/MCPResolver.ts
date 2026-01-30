@@ -2,18 +2,20 @@
  * @fileoverview MCP GraphQL Resolver
  *
  * Provides GraphQL mutations for MCP (Model Context Protocol) operations
- * including tool synchronization with progress streaming.
+ * including tool synchronization with progress streaming and OAuth management.
  */
 
-import { Resolver, Mutation, Arg, Ctx, Field, ObjectType, InputType, PubSub } from 'type-graphql';
+import { Resolver, Mutation, Query, Arg, Ctx, Field, ObjectType, InputType, PubSub, registerEnumType } from 'type-graphql';
 import { PubSubEngine } from 'type-graphql';
-import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo, Metadata, RunView } from '@memberjunction/core';
 import {
     MCPClientManager,
     MCPSyncToolsResult,
     MCPToolCallResult,
     OAuthAuthorizationRequiredError,
-    OAuthReauthorizationRequiredError
+    OAuthReauthorizationRequiredError,
+    OAuthManager,
+    TokenManager
 } from '@memberjunction/ai-mcp-client';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -204,6 +206,194 @@ interface SyncProgressMessage {
         deprecated: number;
         total: number;
     };
+}
+
+// ============================================================================
+// OAuth GraphQL Types
+// ============================================================================
+
+/**
+ * OAuth authorization status enum
+ */
+enum MCPOAuthStatus {
+    PENDING = 'PENDING',
+    COMPLETED = 'COMPLETED',
+    FAILED = 'FAILED',
+    EXPIRED = 'EXPIRED'
+}
+
+// Register the enum with TypeGraphQL
+registerEnumType(MCPOAuthStatus, {
+    name: 'MCPOAuthStatus',
+    description: 'Status of an OAuth authorization flow'
+});
+
+/**
+ * Input for initiating OAuth authorization
+ */
+@InputType()
+export class InitiateMCPOAuthInput {
+    @Field()
+    ConnectionID: string;
+
+    @Field({ nullable: true })
+    AdditionalScopes?: string;
+}
+
+/**
+ * Input for checking OAuth status
+ */
+@InputType()
+export class GetMCPOAuthStatusInput {
+    @Field()
+    StateParameter: string;
+}
+
+/**
+ * Input for revoking OAuth credentials
+ */
+@InputType()
+export class RevokeMCPOAuthInput {
+    @Field()
+    ConnectionID: string;
+
+    @Field({ nullable: true })
+    Reason?: string;
+}
+
+/**
+ * Input for refreshing OAuth tokens
+ */
+@InputType()
+export class RefreshMCPOAuthTokenInput {
+    @Field()
+    ConnectionID: string;
+}
+
+/**
+ * Result from initiating OAuth authorization
+ */
+@ObjectType()
+export class InitiateMCPOAuthResult {
+    @Field()
+    Success: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field({ nullable: true })
+    AuthorizationUrl?: string;
+
+    @Field({ nullable: true })
+    StateParameter?: string;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    UsedDynamicRegistration?: boolean;
+}
+
+/**
+ * Result from checking OAuth status
+ */
+@ObjectType()
+export class MCPOAuthStatusResult {
+    @Field()
+    Success: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field(() => MCPOAuthStatus, { nullable: true })
+    Status?: MCPOAuthStatus;
+
+    @Field({ nullable: true })
+    ConnectionID?: string;
+
+    @Field({ nullable: true })
+    InitiatedAt?: Date;
+
+    @Field({ nullable: true })
+    CompletedAt?: Date;
+
+    @Field({ nullable: true })
+    AuthErrorCode?: string;
+
+    @Field({ nullable: true })
+    AuthErrorDescription?: string;
+
+    @Field({ nullable: true })
+    IsRetryable?: boolean;
+}
+
+/**
+ * Result from revoking OAuth credentials
+ */
+@ObjectType()
+export class RevokeMCPOAuthResult {
+    @Field()
+    Success: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field({ nullable: true })
+    ConnectionID?: string;
+}
+
+/**
+ * Result from refreshing OAuth tokens
+ */
+@ObjectType()
+export class RefreshMCPOAuthTokenResult {
+    @Field()
+    Success: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    RequiresReauthorization?: boolean;
+}
+
+/**
+ * OAuth connection status information
+ */
+@ObjectType()
+export class MCPOAuthConnectionStatus {
+    @Field()
+    ConnectionID: string;
+
+    @Field()
+    IsOAuthEnabled: boolean;
+
+    @Field()
+    HasValidTokens: boolean;
+
+    @Field({ nullable: true })
+    IsAccessTokenExpired?: boolean;
+
+    @Field({ nullable: true })
+    TokenExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    HasRefreshToken?: boolean;
+
+    @Field()
+    RequiresReauthorization: boolean;
+
+    @Field({ nullable: true })
+    ReauthorizationReason?: string;
+
+    @Field({ nullable: true })
+    IssuerUrl?: string;
+
+    @Field({ nullable: true })
+    GrantedScopes?: string;
 }
 
 /**
@@ -507,6 +697,453 @@ export class MCPResolver extends ResolverBase {
                 Success: false,
                 ErrorMessage: errorMsg
             };
+        }
+    }
+
+    // ========================================================================
+    // OAuth Operations
+    // ========================================================================
+
+    /**
+     * Gets OAuth connection status for an MCP connection.
+     *
+     * @param connectionId - The MCP Server Connection ID
+     * @param ctx - GraphQL context
+     * @returns OAuth connection status
+     */
+    @Query(() => MCPOAuthConnectionStatus)
+    async GetMCPOAuthConnectionStatus(
+        @Arg('ConnectionID') connectionId: string,
+        @Ctx() ctx: AppContext
+    ): Promise<MCPOAuthConnectionStatus> {
+        const user = ctx.userPayload.userRecord;
+        if (!user) {
+            return {
+                ConnectionID: connectionId,
+                IsOAuthEnabled: false,
+                HasValidTokens: false,
+                RequiresReauthorization: false,
+                ReauthorizationReason: 'User is not authenticated'
+            };
+        }
+
+        try {
+            // Load connection and server config
+            const config = await this.loadConnectionOAuthConfig(connectionId, user);
+
+            if (!config) {
+                return {
+                    ConnectionID: connectionId,
+                    IsOAuthEnabled: false,
+                    HasValidTokens: false,
+                    RequiresReauthorization: false,
+                    ReauthorizationReason: 'Connection not found'
+                };
+            }
+
+            if (!config.OAuthIssuerURL) {
+                return {
+                    ConnectionID: connectionId,
+                    IsOAuthEnabled: false,
+                    HasValidTokens: false,
+                    RequiresReauthorization: false
+                };
+            }
+
+            // Get status from OAuthManager
+            const oauthManager = new OAuthManager();
+            const status = await oauthManager.getConnectionStatus(connectionId, config, user);
+
+            return {
+                ConnectionID: status.connectionId,
+                IsOAuthEnabled: status.isOAuthEnabled,
+                HasValidTokens: status.hasValidTokens,
+                IsAccessTokenExpired: status.isAccessTokenExpired,
+                TokenExpiresAt: status.tokenExpiresAt,
+                HasRefreshToken: status.hasRefreshToken,
+                RequiresReauthorization: status.requiresReauthorization,
+                ReauthorizationReason: status.reauthorizationReason,
+                IssuerUrl: status.issuerUrl,
+                GrantedScopes: status.grantedScopes
+            };
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(`MCPResolver: GetMCPOAuthConnectionStatus failed: ${errorMsg}`);
+            return {
+                ConnectionID: connectionId,
+                IsOAuthEnabled: false,
+                HasValidTokens: false,
+                RequiresReauthorization: true,
+                ReauthorizationReason: errorMsg
+            };
+        }
+    }
+
+    /**
+     * Gets OAuth authorization flow status by state parameter.
+     *
+     * @param input - Input containing state parameter
+     * @param ctx - GraphQL context
+     * @returns OAuth status result
+     */
+    @Query(() => MCPOAuthStatusResult)
+    async GetMCPOAuthStatus(
+        @Arg('input') input: GetMCPOAuthStatusInput,
+        @Ctx() ctx: AppContext
+    ): Promise<MCPOAuthStatusResult> {
+        const user = ctx.userPayload.userRecord;
+        if (!user) {
+            return {
+                Success: false,
+                ErrorMessage: 'User is not authenticated'
+            };
+        }
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<{
+                ID: string;
+                MCPServerConnectionID: string;
+                Status: string;
+                InitiatedAt: Date;
+                CompletedAt: Date | null;
+                ErrorCode: string | null;
+                ErrorDescription: string | null;
+            }>({
+                EntityName: 'MJ: O Auth Authorization States',
+                ExtraFilter: `StateParameter='${input.StateParameter.replace(/'/g, "''")}'`,
+                ResultType: 'simple'
+            }, user);
+
+            if (!result.Success || !result.Results || result.Results.length === 0) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Authorization state not found',
+                    IsRetryable: true
+                };
+            }
+
+            const state = result.Results[0];
+            const statusMap: Record<string, MCPOAuthStatus> = {
+                'Pending': MCPOAuthStatus.PENDING,
+                'Completed': MCPOAuthStatus.COMPLETED,
+                'Failed': MCPOAuthStatus.FAILED,
+                'Expired': MCPOAuthStatus.EXPIRED
+            };
+
+            return {
+                Success: true,
+                Status: statusMap[state.Status] ?? MCPOAuthStatus.PENDING,
+                ConnectionID: state.MCPServerConnectionID,
+                InitiatedAt: new Date(state.InitiatedAt),
+                CompletedAt: state.CompletedAt ? new Date(state.CompletedAt) : undefined,
+                AuthErrorCode: state.ErrorCode ?? undefined,
+                AuthErrorDescription: state.ErrorDescription ?? undefined,
+                IsRetryable: state.Status === 'Failed' || state.Status === 'Expired'
+            };
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(`MCPResolver: GetMCPOAuthStatus failed: ${errorMsg}`);
+            return {
+                Success: false,
+                ErrorMessage: errorMsg
+            };
+        }
+    }
+
+    /**
+     * Initiates an OAuth authorization flow for an MCP connection.
+     *
+     * @param input - Input containing connection ID and optional scopes
+     * @param ctx - GraphQL context
+     * @returns Initiation result with authorization URL
+     */
+    @Mutation(() => InitiateMCPOAuthResult)
+    async InitiateMCPOAuth(
+        @Arg('input') input: InitiateMCPOAuthInput,
+        @Ctx() ctx: AppContext
+    ): Promise<InitiateMCPOAuthResult> {
+        const user = ctx.userPayload.userRecord;
+        if (!user) {
+            return {
+                Success: false,
+                ErrorMessage: 'User is not authenticated'
+            };
+        }
+
+        try {
+            // Check API key scope authorization
+            await this.CheckAPIKeyScopeAuthorization('mcp:oauth', input.ConnectionID, ctx.userPayload);
+
+            // Load connection and server config
+            const config = await this.loadConnectionOAuthConfig(input.ConnectionID, user);
+
+            if (!config) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Connection not found'
+                };
+            }
+
+            if (!config.OAuthIssuerURL) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'OAuth is not configured for this connection'
+                };
+            }
+
+            // Merge additional scopes if provided
+            let scopes = config.OAuthScopes;
+            if (input.AdditionalScopes) {
+                scopes = scopes
+                    ? `${scopes} ${input.AdditionalScopes}`
+                    : input.AdditionalScopes;
+            }
+
+            const oauthConfig = {
+                ...config,
+                OAuthScopes: scopes
+            };
+
+            // Initiate the OAuth flow
+            const oauthManager = new OAuthManager();
+            const publicUrl = this.getPublicUrl();
+            const result = await oauthManager.initiateAuthorizationFlow(
+                input.ConnectionID,
+                config.MCPServerID,
+                oauthConfig,
+                publicUrl,
+                user
+            );
+
+            LogStatus(`MCPResolver: Initiated OAuth flow for connection ${input.ConnectionID}`);
+
+            return {
+                Success: result.success,
+                ErrorMessage: result.errorMessage,
+                AuthorizationUrl: result.authorizationUrl,
+                StateParameter: result.stateParameter,
+                ExpiresAt: result.expiresAt,
+                UsedDynamicRegistration: result.usedDynamicRegistration
+            };
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(`MCPResolver: InitiateMCPOAuth failed: ${errorMsg}`);
+            return {
+                Success: false,
+                ErrorMessage: errorMsg
+            };
+        }
+    }
+
+    /**
+     * Revokes OAuth credentials for an MCP connection.
+     *
+     * @param input - Input containing connection ID and optional reason
+     * @param ctx - GraphQL context
+     * @returns Revocation result
+     */
+    @Mutation(() => RevokeMCPOAuthResult)
+    async RevokeMCPOAuth(
+        @Arg('input') input: RevokeMCPOAuthInput,
+        @Ctx() ctx: AppContext
+    ): Promise<RevokeMCPOAuthResult> {
+        const user = ctx.userPayload.userRecord;
+        if (!user) {
+            return {
+                Success: false,
+                ErrorMessage: 'User is not authenticated'
+            };
+        }
+
+        try {
+            // Check API key scope authorization
+            await this.CheckAPIKeyScopeAuthorization('mcp:oauth', input.ConnectionID, ctx.userPayload);
+
+            // Revoke the credentials
+            const tokenManager = new TokenManager();
+            await tokenManager.revokeCredentials(input.ConnectionID, user);
+
+            LogStatus(`MCPResolver: Revoked OAuth credentials for connection ${input.ConnectionID}${input.Reason ? ` (reason: ${input.Reason})` : ''}`);
+
+            return {
+                Success: true,
+                ConnectionID: input.ConnectionID
+            };
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(`MCPResolver: RevokeMCPOAuth failed: ${errorMsg}`);
+            return {
+                Success: false,
+                ErrorMessage: errorMsg,
+                ConnectionID: input.ConnectionID
+            };
+        }
+    }
+
+    /**
+     * Manually refreshes OAuth tokens for an MCP connection.
+     *
+     * @param input - Input containing connection ID
+     * @param ctx - GraphQL context
+     * @returns Refresh result
+     */
+    @Mutation(() => RefreshMCPOAuthTokenResult)
+    async RefreshMCPOAuthToken(
+        @Arg('input') input: RefreshMCPOAuthTokenInput,
+        @Ctx() ctx: AppContext
+    ): Promise<RefreshMCPOAuthTokenResult> {
+        const user = ctx.userPayload.userRecord;
+        if (!user) {
+            return {
+                Success: false,
+                ErrorMessage: 'User is not authenticated'
+            };
+        }
+
+        try {
+            // Check API key scope authorization
+            await this.CheckAPIKeyScopeAuthorization('mcp:oauth', input.ConnectionID, ctx.userPayload);
+
+            // Load connection config
+            const config = await this.loadConnectionOAuthConfig(input.ConnectionID, user);
+
+            if (!config) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Connection not found'
+                };
+            }
+
+            if (!config.OAuthIssuerURL) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'OAuth is not configured for this connection'
+                };
+            }
+
+            // Get the MCP client manager instance
+            const manager = MCPClientManager.Instance;
+            const publicUrl = this.getPublicUrl();
+            await manager.initialize(user, { publicUrl });
+
+            // Try to get access token (will refresh if needed)
+            const oauthManager = new OAuthManager();
+            try {
+                await oauthManager.getAccessToken(
+                    input.ConnectionID,
+                    config.MCPServerID,
+                    config,
+                    publicUrl,
+                    user
+                );
+
+                // Get updated status
+                const status = await oauthManager.getConnectionStatus(input.ConnectionID, config, user);
+
+                LogStatus(`MCPResolver: Refreshed OAuth tokens for connection ${input.ConnectionID}`);
+
+                return {
+                    Success: true,
+                    ExpiresAt: status.tokenExpiresAt,
+                    RequiresReauthorization: false
+                };
+            } catch (error) {
+                if (error instanceof OAuthAuthorizationRequiredError ||
+                    error instanceof OAuthReauthorizationRequiredError) {
+                    return {
+                        Success: false,
+                        ErrorMessage: error.message,
+                        RequiresReauthorization: true
+                    };
+                }
+                throw error;
+            }
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(`MCPResolver: RefreshMCPOAuthToken failed: ${errorMsg}`);
+            return {
+                Success: false,
+                ErrorMessage: errorMsg
+            };
+        }
+    }
+
+    // ========================================================================
+    // Private Helper Methods
+    // ========================================================================
+
+    /**
+     * Loads OAuth configuration for a connection
+     */
+    private async loadConnectionOAuthConfig(
+        connectionId: string,
+        contextUser: UserInfo
+    ): Promise<{
+        MCPServerID: string;
+        OAuthIssuerURL?: string;
+        OAuthScopes?: string;
+        OAuthMetadataCacheTTLMinutes?: number;
+        OAuthClientID?: string;
+        OAuthClientSecretEncrypted?: string;
+        OAuthRequirePKCE?: boolean;
+    } | null> {
+        try {
+            const rv = new RunView();
+
+            // First get connection to get server ID
+            const connResult = await rv.RunView<{ MCPServerID: string }>({
+                EntityName: 'MJ: MCP Server Connections',
+                ExtraFilter: `ID='${connectionId}'`,
+                Fields: ['MCPServerID'],
+                ResultType: 'simple'
+            }, contextUser);
+
+            if (!connResult.Success || !connResult.Results || connResult.Results.length === 0) {
+                return null;
+            }
+
+            const serverId = connResult.Results[0].MCPServerID;
+
+            // Then get server OAuth config
+            const serverResult = await rv.RunView<{
+                OAuthIssuerURL: string | null;
+                OAuthScopes: string | null;
+                OAuthMetadataCacheTTLMinutes: number | null;
+                OAuthClientID: string | null;
+                OAuthClientSecretEncrypted: string | null;
+                OAuthRequirePKCE: boolean | null;
+            }>({
+                EntityName: 'MJ: MCP Servers',
+                ExtraFilter: `ID='${serverId}'`,
+                Fields: [
+                    'OAuthIssuerURL',
+                    'OAuthScopes',
+                    'OAuthMetadataCacheTTLMinutes',
+                    'OAuthClientID',
+                    'OAuthClientSecretEncrypted',
+                    'OAuthRequirePKCE'
+                ],
+                ResultType: 'simple'
+            }, contextUser);
+
+            if (!serverResult.Success || !serverResult.Results || serverResult.Results.length === 0) {
+                return null;
+            }
+
+            const server = serverResult.Results[0];
+            return {
+                MCPServerID: serverId,
+                OAuthIssuerURL: server.OAuthIssuerURL ?? undefined,
+                OAuthScopes: server.OAuthScopes ?? undefined,
+                OAuthMetadataCacheTTLMinutes: server.OAuthMetadataCacheTTLMinutes ?? undefined,
+                OAuthClientID: server.OAuthClientID ?? undefined,
+                OAuthClientSecretEncrypted: server.OAuthClientSecretEncrypted ?? undefined,
+                OAuthRequirePKCE: server.OAuthRequirePKCE ?? undefined
+            };
+        } catch (error) {
+            LogError(`MCPResolver: Failed to load connection OAuth config: ${error}`);
+            return null;
         }
     }
 

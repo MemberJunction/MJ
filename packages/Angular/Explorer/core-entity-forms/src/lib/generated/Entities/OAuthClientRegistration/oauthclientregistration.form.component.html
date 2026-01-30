@@ -3,37 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Registration Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="registrationMetadata"
-        sectionName="Registration Metadata"
-        icon="fa fa-info-circle"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RegistrationResponse"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
     <!-- Server Connection Section -->
     <mj-collapsible-panel slot="field-panels"
         sectionKey="serverConnection"
         sectionName="Server Connection"
-        icon="fa fa-server"
+        icon="fa fa-plug"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -75,10 +49,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- OAuth Settings Section -->
+    <!-- OAuth Configuration Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="oAuthSettings"
-        sectionName="OAuth Settings"
+        sectionKey="oAuthConfiguration"
+        sectionName="OAuth Configuration"
         icon="fa fa-cog"
         [form]="this"
         [formContext]="formContext">
@@ -131,7 +105,7 @@
     <mj-collapsible-panel slot="field-panels"
         sectionKey="clientCredentials"
         sectionName="Client Credentials"
-        icon="fa fa-key"
+        icon="fa fa-lock"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -186,11 +160,37 @@
 
     </mj-collapsible-panel>
 
+    <!-- Registration Status Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="registrationStatus"
+        sectionName="Registration Status"
+        icon="fa fa-flag-checkered"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RegistrationResponse"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel slot="field-panels"
         sectionKey="systemMetadata"
         sectionName="System Metadata"
-        icon="fa fa-cog"
+        icon="fa fa-database"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 

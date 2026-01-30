@@ -14,9 +14,9 @@ export class OAuthAuthorizationStateFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'connectionUser', sectionName: 'Connection & User', isExpanded: true },
-            { sectionKey: 'pKCERedirect', sectionName: 'PKCE & Redirect', isExpanded: true },
-            { sectionKey: 'authorizationOutcome', sectionName: 'Authorization Outcome', isExpanded: false },
+            { sectionKey: 'identifiers', sectionName: 'Identifiers', isExpanded: true },
+            { sectionKey: 'authorizationDetails', sectionName: 'Authorization Details', isExpanded: true },
+            { sectionKey: 'statusErrors', sectionName: 'Status & Errors', isExpanded: false },
             { sectionKey: 'flowTiming', sectionName: 'Flow Timing', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);

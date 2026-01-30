@@ -14,10 +14,10 @@ export class OAuthClientRegistrationFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'registrationMetadata', sectionName: 'Registration Metadata', isExpanded: false },
             { sectionKey: 'serverConnection', sectionName: 'Server Connection', isExpanded: true },
-            { sectionKey: 'oAuthSettings', sectionName: 'OAuth Settings', isExpanded: false },
+            { sectionKey: 'oAuthConfiguration', sectionName: 'OAuth Configuration', isExpanded: true },
             { sectionKey: 'clientCredentials', sectionName: 'Client Credentials', isExpanded: false },
+            { sectionKey: 'registrationStatus', sectionName: 'Registration Status', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

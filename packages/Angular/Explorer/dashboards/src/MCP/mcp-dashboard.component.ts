@@ -52,6 +52,13 @@ export interface MCPServerData {
     LastSyncAt: Date | null;
     ConnectionCount?: number;
     ToolCount?: number;
+    // OAuth configuration fields
+    OAuthIssuerURL?: string | null;
+    OAuthScopes?: string | null;
+    OAuthMetadataCacheTTLMinutes?: number | null;
+    OAuthClientID?: string | null;
+    OAuthClientSecretEncrypted?: string | null;
+    OAuthRequirePKCE?: boolean;
 }
 
 /**
@@ -554,7 +561,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 Status: s.Status,
                 RateLimitPerMinute: s.RateLimitPerMinute,
                 RateLimitPerHour: s.RateLimitPerHour,
-                LastSyncAt: s.LastSyncAt
+                LastSyncAt: s.LastSyncAt,
+                // OAuth configuration fields
+                OAuthIssuerURL: s.OAuthIssuerURL,
+                OAuthScopes: s.OAuthScopes,
+                OAuthMetadataCacheTTLMinutes: s.OAuthMetadataCacheTTLMinutes,
+                OAuthClientID: s.OAuthClientID,
+                OAuthClientSecretEncrypted: s.OAuthClientSecretEncrypted,
+                OAuthRequirePKCE: s.OAuthRequirePKCE
             }));
 
             this.connections = MCPEngine.Instance.Connections.map(c => ({
@@ -826,11 +840,22 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         try {
             const md = new Metadata();
             const entity = await md.GetEntityObject<MCPServerEntity>('MJ: MCP Servers');
-            const loaded = await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: server.ID }]));
-            if (loaded) {
-                await entity.Delete();
-                await this.loadAllData();
+            const loaded = await entity.Load(server.ID);
+            if (!loaded) {
+                this.ErrorMessage = `Server not found: ${server.Name}`;
+                this.cdr.detectChanges();
+                return;
             }
+
+            const deleted = await entity.Delete();
+            if (!deleted) {
+                const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Unknown error';
+                this.ErrorMessage = `Failed to delete server: ${errorMsg}`;
+                this.cdr.detectChanges();
+                return;
+            }
+
+            await this.loadAllData();
         } catch (error) {
             this.ErrorMessage = `Failed to delete server: ${error instanceof Error ? error.message : String(error)}`;
             this.cdr.detectChanges();
@@ -870,11 +895,22 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         try {
             const md = new Metadata();
             const entity = await md.GetEntityObject<MCPServerConnectionEntity>('MJ: MCP Server Connections');
-            const loaded = await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: connection.ID }]));
-            if (loaded) {
-                await entity.Delete();
-                await this.loadAllData();
+            const loaded = await entity.Load(connection.ID);
+            if (!loaded) {
+                this.ErrorMessage = `Connection not found: ${connection.Name}`;
+                this.cdr.detectChanges();
+                return;
             }
+
+            const deleted = await entity.Delete();
+            if (!deleted) {
+                const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Unknown error';
+                this.ErrorMessage = `Failed to delete connection: ${errorMsg}`;
+                this.cdr.detectChanges();
+                return;
+            }
+
+            await this.loadAllData();
         } catch (error) {
             this.ErrorMessage = `Failed to delete connection: ${error instanceof Error ? error.message : String(error)}`;
             this.cdr.detectChanges();
