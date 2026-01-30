@@ -25,6 +25,7 @@
     "@memberjunction/ai-cerebras": "3.3.0",
     "@memberjunction/ai-cohere": "3.3.0",
     "@memberjunction/ai-elevenlabs": "3.3.0",
+    "@memberjunction/ai-fireworks": "3.3.0",
     "@memberjunction/ai-gemini": "3.3.0",
     "@memberjunction/ai-groq": "3.3.0",
     "@memberjunction/ai-heygen": "3.3.0",
