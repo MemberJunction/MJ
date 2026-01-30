@@ -16,7 +16,9 @@
             "outputPath": "dist/MJExplorer",
             "index": "src/index.html",
             "browser": "src/main.ts",
-            "polyfills": ["zone.js"],
+            "polyfills": [
+              "zone.js"
+            ],
             "tsConfig": "tsconfig.app.json",
             "assets": [
               "src/favicon.ico",
@@ -29,7 +31,9 @@
                 "output": "/assets"
               }
             ],
-            "styles": ["src/styles.scss"],
+            "styles": [
+              "src/styles.scss"
+            ],
             "scripts": []
           },
           "configurations": {
@@ -121,7 +125,10 @@
         "test": {
           "builder": "@angular-devkit/build-angular:karma",
           "options": {
-            "polyfills": ["zone.js", "zone.js/testing"],
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ],
             "tsConfig": "tsconfig.spec.json",
             "assets": [
               "src/favicon.ico",
@@ -133,8 +140,34 @@
                 "output": "/assets"
               }
             ],
-            "styles": ["src/styles/main.scss"],
+            "styles": [
+              "src/styles/main.scss"
+            ],
             "scripts": []
+          }
+        },
+        "storybook": {
+          "builder": "@storybook/angular:start-storybook",
+          "options": {
+            "configDir": ".storybook",
+            "browserTarget": "MJExplorer:build",
+            "compodoc": false,
+            "port": 6006,
+            "styles": [
+              "src/styles.scss"
+            ]
+          }
+        },
+        "build-storybook": {
+          "builder": "@storybook/angular:build-storybook",
+          "options": {
+            "configDir": ".storybook",
+            "browserTarget": "MJExplorer:build",
+            "compodoc": false,
+            "outputDir": "storybook-static",
+            "styles": [
+              "src/styles.scss"
+            ]
           }
         }
       }

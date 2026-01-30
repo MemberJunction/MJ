@@ -4,14 +4,14 @@
   "version": "1.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "NODE_OPTIONS=--max-old-space-size=8192 ng serve --port 4201",
-    "start:stage": "NODE_OPTIONS=--max-old-space-size=8192 ng serve --configuration staging",
-    "prestart": "mj codegen manifest --output ./src/app/generated/class-registrations-manifest.ts",
-    "prebuild": "mj codegen manifest --output ./src/app/generated/class-registrations-manifest.ts",
-    "build": "NODE_OPTIONS=--max-old-space-size=8192 ng build",
-    "build:stage": "NODE_OPTIONS=--max-old-space-size=8192 ng build --configuration staging",
-    "watch": "NODE_OPTIONS=--max-old-space-size=8192 ng build --watch --configuration development",
-    "test": "ng test"
+    "start": "cross-env NODE_OPTIONS=--max-old-space-size=8192 ng serve --port 4201",
+    "start:stage": "cross-env NODE_OPTIONS=--max-old-space-size=8192 ng serve --configuration staging",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 ng build",
+    "build:stage": "cross-env NODE_OPTIONS=--max-old-space-size=8192 ng build --configuration staging",
+    "watch": "cross-env NODE_OPTIONS=--max-old-space-size=8192 ng build --watch --configuration development",
+    "test": "ng test",
+    "storybook": "ng run MJExplorer:storybook",
+    "build-storybook": "ng run MJExplorer:build-storybook"
   },
   "private": true,
   "dependencies": {
@@ -87,6 +87,7 @@
     "zone.js": "^0.14.0"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "@angular-devkit/build-angular": "18.2.14",
     "@angular/cli": "18.2.14",
     "@angular/compiler-cli": "18.2.14",
@@ -98,7 +99,13 @@
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
     "typed-assert": "^1.0.9",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "@storybook/angular": "^8.4.7",
+    "@storybook/addon-essentials": "^8.4.7",
+    "@storybook/addon-interactions": "^8.4.7",
+    "@storybook/addon-links": "^8.4.7",
+    "@storybook/blocks": "^8.4.7",
+    "storybook": "^8.4.7"
   },
   "optionalDependencies": {
     "@lmdb/lmdb-darwin-arm64": "3.0.8",

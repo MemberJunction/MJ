@@ -1,0 +1,12 @@
+ {
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+      "emitDecoratorMetadata": true,
+      "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true,
+      "skipLibCheck": true,
+      "types": ["node"]
+    },
+    "exclude": ["../src/test.ts", "../src/**/*.spec.ts"],
+    "include": ["../src/stories/**/*", "./preview.ts", "./main.ts"]
+  }

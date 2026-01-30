@@ -1,0 +1,191 @@
+import { Meta, ColorPalette, ColorItem, Typeset } from '@storybook/blocks';
+
+<Meta title="Design System/Design Tokens" />
+
+# MemberJunction Design Tokens
+
+Design tokens are the visual design atoms of the MemberJunction design system. They are the smallest pieces of the design system that can be reused across components.
+
+## Colors
+
+### Primary Colors
+
+The primary color palette is used for interactive elements, links, and primary actions.
+
+<ColorPalette>
+  <ColorItem
+    title="Primary"
+    subtitle="--mj-primary"
+    colors={{
+      'Primary': '#0066cc',
+      'Primary Hover': '#0052a3',
+      'Primary Light': '#e6f0fa',
+    }}
+  />
+</ColorPalette>
+
+### Status Colors
+
+Status colors communicate meaning and feedback to users.
+
+<ColorPalette>
+  <ColorItem
+    title="Success"
+    subtitle="--mj-success"
+    colors={{ 'Success': '#28a745' }}
+  />
+  <ColorItem
+    title="Warning"
+    subtitle="--mj-warning"
+    colors={{ 'Warning': '#ffc107' }}
+  />
+  <ColorItem
+    title="Error"
+    subtitle="--mj-error"
+    colors={{ 'Error': '#dc3545' }}
+  />
+  <ColorItem
+    title="Info"
+    subtitle="--mj-info"
+    colors={{ 'Info': '#17a2b8' }}
+  />
+</ColorPalette>
+
+### Neutral Colors (Gray Scale)
+
+Neutral colors are used for text, backgrounds, borders, and other UI elements.
+
+<ColorPalette>
+  <ColorItem
+    title="Grays"
+    subtitle="--mj-gray-*"
+    colors={{
+      'Gray 100': '#f8f9fa',
+      'Gray 200': '#e9ecef',
+      'Gray 300': '#dee2e6',
+      'Gray 400': '#ced4da',
+      'Gray 500': '#adb5bd',
+      'Gray 600': '#6c757d',
+      'Gray 700': '#495057',
+      'Gray 800': '#343a40',
+      'Gray 900': '#212529',
+    }}
+  />
+</ColorPalette>
+
+### MJ Brand Colors
+
+The MemberJunction brand color used in the logo.
+
+<ColorPalette>
+  <ColorItem
+    title="MJ Blue"
+    subtitle="Logo color"
+    colors={{ 'MJ Blue': '#264FAF' }}
+  />
+</ColorPalette>
+
+## Typography
+
+### Font Families
+
+MemberJunction uses two font families:
+
+- **Primary (Inter)**: Used for body text, headings, and UI elements
+- **Monospace (JetBrains Mono)**: Used for code, technical data, and numeric values
+
+<Typeset
+  fontFamily="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+  fontSizes={[12, 14, 16, 18, 20, 24, 32]}
+  fontWeight={400}
+  sampleText="The quick brown fox jumps over the lazy dog"
+/>
+
+### Monospace Font
+
+<Typeset
+  fontFamily="'JetBrains Mono', 'Fira Code', Consolas, monospace"
+  fontSizes={[12, 14, 16]}
+  fontWeight={400}
+  sampleText="const data = { id: 123, name: 'Example' };"
+/>
+
+### Font Weights
+
+| Weight | Value | Usage |
+|--------|-------|-------|
+| Regular | 400 | Body text |
+| Medium | 500 | Emphasis, labels |
+| Semi-bold | 600 | Subheadings |
+| Bold | 700 | Headings, important text |
+
+## Spacing
+
+MemberJunction uses a consistent spacing scale based on 4px increments.
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--mj-spacing-xs` | 4px | Tight spacing, inline elements |
+| `--mj-spacing-sm` | 8px | Small gaps, compact layouts |
+| `--mj-spacing-md` | 16px | Standard spacing, padding |
+| `--mj-spacing-lg` | 24px | Section gaps, larger padding |
+| `--mj-spacing-xl` | 32px | Major sections, page margins |
+
+## Border Radius
+
+Consistent border radius values for rounded corners.
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--mj-radius-sm` | 4px | Small elements, badges |
+| `--mj-radius-md` | 8px | Buttons, inputs, cards |
+| `--mj-radius-lg` | 12px | Modals, large cards |
+| `--mj-radius-full` | 9999px | Pills, circular elements |
+
+## Shadows
+
+Standard shadow values for elevation.
+
+```css
+/* Subtle shadow */
+box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+
+/* Small shadow */
+box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+/* Medium shadow */
+box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+
+/* Large shadow */
+box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+```
+
+## CSS Variables Reference
+
+Include these design tokens in your styles using CSS custom properties:
+
+```css
+.my-component {
+  /* Colors */
+  color: var(--mj-gray-800);
+  background: var(--mj-primary-light);
+  border-color: var(--mj-gray-300);
+
+  /* Typography */
+  font-family: var(--mj-font-primary);
+
+  /* Spacing */
+  padding: var(--mj-spacing-md);
+  margin-bottom: var(--mj-spacing-lg);
+
+  /* Border radius */
+  border-radius: var(--mj-radius-md);
+}
+```
+
+## Usage Guidelines
+
+1. **Always use design tokens** instead of hardcoded values for colors, spacing, and typography
+2. **Maintain consistency** by using the same tokens for similar elements
+3. **Follow the established patterns** - primary colors for actions, grays for text and borders
+4. **Use semantic status colors** appropriately - success for positive, error for negative, etc.
