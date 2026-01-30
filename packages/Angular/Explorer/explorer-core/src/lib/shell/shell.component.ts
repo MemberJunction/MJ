@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
 import { Subscription, combineLatest, Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
@@ -26,6 +26,7 @@ import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } fro
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
 import { UserEntity } from '@memberjunction/core-entities';
+import { CommandPaletteService } from '../command-palette/command-palette.service';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -132,7 +133,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private settingsDialogService: SettingsDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
-    public developerModeService: DeveloperModeService
+    public developerModeService: DeveloperModeService,
+    private commandPaletteService: CommandPaletteService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -1842,6 +1844,30 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.authBase.logout();
     localStorage.removeItem('auth');
     localStorage.removeItem('claims');
+  }
+
+  /**
+   * Global keyboard shortcut handler
+   * Cmd+/ (Mac) or Ctrl+/ (Windows) opens the command palette
+   */
+  @HostListener('document:keydown', ['$event'])
+  handleGlobalKeyboardShortcuts(event: KeyboardEvent): void {
+    // Skip if user is typing in an input/textarea
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return;
+    }
+
+    // Platform detection
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
+
+    // Cmd+/ or Ctrl+/ opens command palette
+    if (isCtrlOrCmd && event.key === '/') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.commandPaletteService.Open();
+    }
   }
 
   /**
