@@ -65,6 +65,7 @@
     "@memberjunction/skip-types": "3.3.0",
     "@memberjunction/templates-base-types": "3.3.0",
     "@memberjunction/testing-engine-base": "3.3.0",
+    "@memberjunction/ng-markdown": "3.3.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dateinputs": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
