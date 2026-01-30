@@ -546,7 +546,9 @@ export class ComponentStudioStateService {
       return;
     }
 
-    const spec = this.GetComponentSpec(this._selectedComponent);
+    // Use the in-memory spec (which may be the resolved version from the React bridge)
+    // rather than re-parsing from the entity's raw Specification field.
+    const spec = this._componentSpec || this.GetComponentSpec(this._selectedComponent);
     const sections: CodeSection[] = [];
 
     const mainCode = spec.code || '// No code available';
@@ -664,6 +666,15 @@ export class ComponentStudioStateService {
     if (!current || current === resolvedSpec) return;
 
     this._componentSpec = resolvedSpec;
+
+    // Update editable spec JSON so Spec/Requirements/Design/Data tabs reflect resolved data
+    const parseOptions: ParseJSONOptions = {
+      extractInlineJson: true,
+      maxDepth: 100,
+      debug: false
+    };
+    const parsed = ParseJSONRecursive(resolvedSpec, parseOptions);
+    this._editableSpec = JSON.stringify(parsed, null, 2);
 
     // Update editable code with the resolved main code
     this._editableCode = resolvedSpec.code || '// No code available';
