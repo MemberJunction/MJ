@@ -31,6 +31,8 @@
     "@angular/platform-browser": "18.2.14",
     "@codemirror/language-data": "^6.5.1",
     "@codemirror/merge": "^6.6.3",
+    "@codemirror/state": "^6.5.4",
+    "@codemirror/view": "^6.39.11",
     "@memberjunction/actions-base": "3.3.0",
     "@memberjunction/ai-engine-base": "3.3.0",
     "@memberjunction/api-keys-base": "3.3.0",
