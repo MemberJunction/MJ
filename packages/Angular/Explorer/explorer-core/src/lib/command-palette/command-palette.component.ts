@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
@@ -8,62 +8,57 @@ import { CommandPaletteService } from './command-palette.service';
  * Command Palette Component
  *
  * Provides a Notion-style command palette for quickly searching and navigating to applications.
- * Triggered by Cmd+K (Mac) or Ctrl+K (Windows/Linux).
+ * Triggered by Cmd+/ (Mac) or Ctrl+/ (Windows/Linux).
  *
  * Features:
  * - Fuzzy search with relevance scoring
  * - Keyboard navigation (arrow keys, enter, escape)
- * - Recent apps tracking (top 3)
  * - Loading state during navigation
  * - Empty state with helpful message
  */
 @Component({
   selector: 'mj-command-palette',
   templateUrl: './command-palette.component.html',
-  styleUrls: ['./command-palette.component.css']
+  styleUrls: ['./command-palette.component.css'],
 })
 export class CommandPaletteComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   @ViewChild('searchInput') SearchInput!: ElementRef<HTMLInputElement>;
+  @Output() AppSelected = new EventEmitter<string>();
 
   IsOpen = false;
   SearchQuery = '';
   AllApps: BaseApplication[] = [];
   FilteredApps: BaseApplication[] = [];
-  RecentApps: BaseApplication[] = [];
   SelectedIndex = 0;
   IsNavigating = false;
 
   constructor(
     private service: CommandPaletteService,
     private appManager: ApplicationManager,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit(): void {
     // Subscribe to service's open/close state
-    this.service.IsOpen
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(isOpen => {
-        this.IsOpen = isOpen;
+    this.service.IsOpen.pipe(takeUntil(this.destroy$)).subscribe((isOpen) => {
+      this.IsOpen = isOpen;
 
-        if (isOpen) {
-          this.onOpen();
-        } else {
-          this.onClose();
-        }
+      if (isOpen) {
+        this.onOpen();
+      } else {
+        this.onClose();
+      }
 
-        this.cdr.detectChanges();
-      });
+      this.cdr.detectChanges();
+    });
 
     // Subscribe to application changes
-    this.appManager.Applications
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(apps => {
-        this.AllApps = apps;
-        this.filterAndSortApps();
-      });
+    this.appManager.Applications.pipe(takeUntil(this.destroy$)).subscribe((apps) => {
+      this.AllApps = apps;
+      this.filterAndSortApps();
+    });
   }
 
   ngOnDestroy(): void {
@@ -74,14 +69,11 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   /**
    * Called when command palette opens
    */
-  private async onOpen(): Promise<void> {
+  private onOpen(): void {
     // Reset state
     this.SearchQuery = '';
     this.SelectedIndex = 0;
     this.IsNavigating = false;
-
-    // Load recent apps
-    await this.loadRecentApps();
 
     // Filter apps (will show all initially)
     this.filterAndSortApps();
@@ -104,22 +96,11 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load recent apps from service and resolve to BaseApplication objects
-   */
-  private async loadRecentApps(): Promise<void> {
-    const recentAppIds = await this.service.GetRecentApps();
-
-    this.RecentApps = recentAppIds
-      .map(id => this.AllApps.find(app => app.ID === id))
-      .filter(app => app != null) as BaseApplication[];
-  }
-
-  /**
    * Handle search query change
    */
   OnSearchChange(): void {
     this.filterAndSortApps();
-    this.SelectedIndex = 0; // Reset selection
+    this.SelectedIndex = 0; // Reset selection when search changes
   }
 
   /**
@@ -135,19 +116,19 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     }
 
     // Score all apps
-    const scored = this.AllApps.map(app => ({
+    const scored = this.AllApps.map((app) => ({
       app,
-      score: this.calculateMatchScore(app, query)
+      score: this.calculateMatchScore(app, query),
     }));
 
     // Filter to only matches (score > 0)
-    const matches = scored.filter(item => item.score > 0);
+    const matches = scored.filter((item) => item.score > 0);
 
     // Sort by score (descending)
     matches.sort((a, b) => b.score - a.score);
 
     // Extract apps
-    this.FilteredApps = matches.map(item => item.app);
+    this.FilteredApps = matches.map((item) => item.app);
   }
 
   /**
@@ -179,7 +160,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     // Fuzzy match - initials (e.g., "de" matches "Data Explorer")
     const initials = name
       .split(' ')
-      .map(word => word[0] || '')
+      .map((word) => word[0] || '')
       .join('')
       .toLowerCase();
     if (initials.includes(query)) return 25;
@@ -188,28 +169,16 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Select an application and navigate to it
+   * Select an application and emit event for shell to handle navigation
    */
-  async SelectApp(app: BaseApplication): Promise<void> {
+  SelectApp(app: BaseApplication): void {
     if (this.IsNavigating) return;
 
-    this.IsNavigating = true;
-    this.cdr.detectChanges();
+    // Close the palette first
+    this.service.Close();
 
-    try {
-      // Navigate to app
-      await this.appManager.SetActiveApp(app.ID);
-
-      // Track recent app access
-      await this.service.TrackAppAccess(app.ID);
-
-      // Close the palette
-      this.service.Close();
-    } catch (error) {
-      console.error('Failed to navigate to app:', error);
-      this.IsNavigating = false;
-      this.cdr.detectChanges();
-    }
+    // Emit event for shell to handle navigation (same pattern as app-switcher)
+    this.AppSelected.emit(app.ID);
   }
 
   /**
@@ -226,19 +195,17 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   HandleKeyDown(event: KeyboardEvent): void {
     if (!this.IsOpen) return;
 
-    // Skip if user is typing in input (except for Escape and Enter)
+    // Skip if user is typing in input (except for navigation keys)
     const target = event.target as HTMLElement;
-    if (target.tagName === 'INPUT' && event.key !== 'Escape' && event.key !== 'Enter') {
+    const navigationKeys = ['Escape', 'Enter', 'ArrowUp', 'ArrowDown'];
+    if (target.tagName === 'INPUT' && !navigationKeys.includes(event.key)) {
       return;
     }
 
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        this.SelectedIndex = Math.min(
-          this.SelectedIndex + 1,
-          this.FilteredApps.length - 1
-        );
+        this.SelectedIndex = Math.min(this.SelectedIndex + 1, this.FilteredApps.length - 1);
         this.scrollToSelected();
         break;
 

@@ -30,44 +30,22 @@
 
   <!-- Results List -->
   <div class="results-list" role="listbox" aria-label="Application results">
-    <!-- Recent Apps Section (when no search query) -->
-    <ng-container *ngIf="!SearchQuery && RecentApps.length > 0">
-      <div class="section-header">Recent</div>
-      <div *ngFor="let app of RecentApps; let i = index"
-           class="result-item"
-           [class.selected]="i === SelectedIndex"
-           (click)="SelectApp(app)"
-           role="option"
-           [attr.aria-selected]="i === SelectedIndex">
-        <i [class]="app.Icon"
-           [style.color]="app.GetColor()"
-           class="result-icon"
-           aria-hidden="true"></i>
-        <div class="result-info">
-          <div class="result-name">{{ app.Name }}</div>
-          <div class="result-description" *ngIf="app.Description">{{ app.Description }}</div>
-        </div>
+    <!-- All Apps -->
+    <div *ngFor="let app of FilteredApps; let i = index"
+         class="result-item"
+         [class.selected]="i === SelectedIndex"
+         (click)="SelectApp(app)"
+         role="option"
+         [attr.aria-selected]="i === SelectedIndex">
+      <i [class]="app.Icon"
+         [style.color]="app.GetColor()"
+         class="result-icon"
+         aria-hidden="true"></i>
+      <div class="result-info">
+        <div class="result-name">{{ app.Name }}</div>
+        <div class="result-description" *ngIf="app.Description">{{ app.Description }}</div>
       </div>
-    </ng-container>
-
-    <!-- Search Results -->
-    <ng-container *ngIf="SearchQuery || RecentApps.length === 0">
-      <div *ngFor="let app of FilteredApps; let i = index"
-           class="result-item"
-           [class.selected]="i === SelectedIndex"
-           (click)="SelectApp(app)"
-           role="option"
-           [attr.aria-selected]="i === SelectedIndex">
-        <i [class]="app.Icon"
-           [style.color]="app.GetColor()"
-           class="result-icon"
-           aria-hidden="true"></i>
-        <div class="result-info">
-          <div class="result-name">{{ app.Name }}</div>
-          <div class="result-description" *ngIf="app.Description">{{ app.Description }}</div>
-        </div>
-      </div>
-    </ng-container>
+    </div>
 
     <!-- Empty State -->
     <div class="empty-state"
