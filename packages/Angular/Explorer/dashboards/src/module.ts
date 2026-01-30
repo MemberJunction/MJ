@@ -1,6 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
@@ -29,7 +29,19 @@ import { SecurityPermissionsComponent } from './Actions/components/security-perm
 import { ActionsListViewComponent } from './Actions/components/actions-list-view.component';
 import { ExecutionsListViewComponent } from './Actions/components/executions-list-view.component';
 import { CategoriesListViewComponent } from './Actions/components/categories-list-view.component';
+// Action Explorer Components
+import {
+  ActionExplorerComponent,
+  ActionTreePanelComponent,
+  ActionToolbarComponent,
+  ActionBreadcrumbComponent,
+  ActionCardComponent,
+  ActionListItemComponent,
+  NewCategoryPanelComponent,
+  NewActionPanelComponent
+} from './Actions/components/explorer';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { NavigationModule } from '@progress/kendo-angular-navigation';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
@@ -51,41 +63,47 @@ import { ComponentStudioDashboardComponent } from './ComponentStudio/component-s
 import { TextImportDialogComponent } from './ComponentStudio/components/text-import-dialog.component';
 import { ArtifactSelectionDialogComponent } from './ComponentStudio/components/artifact-selection-dialog.component';
 import { ArtifactLoadDialogComponent } from './ComponentStudio/components/artifact-load-dialog.component';
+import { ComponentBrowserComponent } from './ComponentStudio/components/browser/component-browser.component';
+import { ComponentPreviewComponent } from './ComponentStudio/components/workspace/component-preview.component';
+import { EditorTabsComponent } from './ComponentStudio/components/workspace/editor-tabs.component';
+import { SpecEditorComponent } from './ComponentStudio/components/editors/spec-editor.component';
+import { CodeEditorPanelComponent } from './ComponentStudio/components/editors/code-editor-panel.component';
+import { RequirementsEditorComponent } from './ComponentStudio/components/editors/requirements-editor.component';
+import { DataRequirementsEditorComponent } from './ComponentStudio/components/editors/data-requirements-editor.component';
+import { AIAssistantPanelComponent } from './ComponentStudio/components/ai-assistant/ai-assistant-panel.component';
+import { NewComponentDialogComponent } from './ComponentStudio/components/new-component-dialog/new-component-dialog.component';
+import { SaveVersionDialogComponent } from './ComponentStudio/components/save-version-dialog/save-version-dialog.component';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { SplitterModule } from '@progress/kendo-angular-layout';
 // Scheduling Dashboard Components
 import { SchedulingDashboardComponent } from './Scheduling/scheduling-dashboard.component';
-import { SchedulingMonitoringComponent } from './Scheduling/components/scheduling-monitoring.component';
+import { SchedulingOverviewComponent } from './Scheduling/components/scheduling-overview.component';
 import { SchedulingJobsComponent } from './Scheduling/components/scheduling-jobs.component';
-import { SchedulingHistoryComponent } from './Scheduling/components/scheduling-history.component';
-import { SchedulingTypesComponent } from './Scheduling/components/scheduling-types.component';
-import { SchedulingHealthComponent } from './Scheduling/components/scheduling-health.component';
-import { SchedulingMonitorResourceComponent } from './Scheduling/components/scheduling-monitor-resource.component';
+import { SchedulingActivityComponent } from './Scheduling/components/scheduling-activity.component';
+import { JobSlideoutComponent } from './Scheduling/components/job-slideout.component';
+import { SchedulingOverviewResourceComponent } from './Scheduling/components/scheduling-overview-resource.component';
 import { SchedulingJobsResourceComponent } from './Scheduling/components/scheduling-jobs-resource.component';
-import { SchedulingHistoryResourceComponent } from './Scheduling/components/scheduling-history-resource.component';
-import { SchedulingTypesResourceComponent } from './Scheduling/components/scheduling-types-resource.component';
-import { SchedulingHealthResourceComponent } from './Scheduling/components/scheduling-health-resource.component';
+import { SchedulingActivityResourceComponent } from './Scheduling/components/scheduling-activity-resource.component';
 import { SchedulingInstrumentationService } from './Scheduling/services/scheduling-instrumentation.service';
 // Testing Dashboard Components
 import { TestingDashboardComponent } from './Testing/testing-dashboard.component';
-import { TestingOverviewComponent } from './Testing/components/testing-overview.component';
-import { TestingExecutionComponent } from './Testing/components/testing-execution.component';
+import { TestingDashboardTabComponent } from './Testing/components/testing-dashboard-tab.component';
+import { TestingRunsComponent } from './Testing/components/testing-runs.component';
 import { TestingAnalyticsComponent } from './Testing/components/testing-analytics.component';
-import { TestingVersionComparisonComponent } from './Testing/components/testing-version-comparison.component';
-import { TestingFeedbackComponent } from './Testing/components/testing-feedback.component';
-import { TestingOverviewResourceComponent } from './Testing/components/testing-overview-resource.component';
-import { TestingExecutionResourceComponent } from './Testing/components/testing-execution-resource.component';
+import { TestingReviewComponent } from './Testing/components/testing-review.component';
+import { TestingDashboardTabResourceComponent } from './Testing/components/testing-dashboard-tab-resource.component';
+import { TestingRunsResourceComponent } from './Testing/components/testing-runs-resource.component';
 import { TestingAnalyticsResourceComponent } from './Testing/components/testing-analytics-resource.component';
-import { TestingVersionResourceComponent } from './Testing/components/testing-version-resource.component';
-import { TestingFeedbackResourceComponent } from './Testing/components/testing-feedback-resource.component';
+import { TestingReviewResourceComponent } from './Testing/components/testing-review-resource.component';
+import { TestingExplorerComponent } from './Testing/components/testing-explorer.component';
+import { TestingExplorerResourceComponent } from './Testing/components/testing-explorer-resource.component';
 import { SuiteTreeComponent, SuiteTreeNodeComponent } from './Testing/components/widgets/suite-tree.component';
 import { OracleBreakdownTableComponent } from './Testing/components/widgets/oracle-breakdown-table.component';
 import { TestRunDetailPanelComponent } from './Testing/components/widgets/test-run-detail-panel.component';
 import { TestingInstrumentationService } from './Testing/services/testing-instrumentation.service';
 import { TestingModule } from '@memberjunction/ng-testing';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 // Data Explorer Dashboard Components
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
@@ -107,6 +125,7 @@ import { CommunicationMonitorResourceComponent } from './Communication/communica
 import { CommunicationLogsResourceComponent } from './Communication/communication-logs-resource.component';
 import { CommunicationProvidersResourceComponent } from './Communication/communication-providers-resource.component';
 import { CommunicationRunsResourceComponent } from './Communication/communication-runs-resource.component';
+import { CommunicationTemplatesResourceComponent } from './Communication/communication-templates-resource.component';
 // Credentials Dashboard Components
 import { CredentialsDashboardComponent } from './Credentials/credentials-dashboard.component';
 import { CredentialsOverviewResourceComponent } from './Credentials/components/credentials-overview-resource.component';
@@ -143,8 +162,12 @@ import { APIKeyListComponent } from './APIKeys/api-key-list.component';
 import { APIApplicationsPanelComponent } from './APIKeys/api-applications-panel.component';
 import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
 import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
+// Shared Pipes Module
+import { SharedPipesModule } from './shared/shared-pipes.module';
 // MCP Dashboard Module
 import { MCPModule } from './MCP';
+// Actions Module (test harness, dialogs)
+import { ActionsModule } from '@memberjunction/ng-actions';
 
 
 
@@ -170,6 +193,15 @@ import { MCPModule } from './MCP';
     ActionsListViewComponent,
     ExecutionsListViewComponent,
     CategoriesListViewComponent,
+    // Action Explorer Components
+    ActionExplorerComponent,
+    ActionTreePanelComponent,
+    ActionToolbarComponent,
+    ActionBreadcrumbComponent,
+    ActionCardComponent,
+    ActionListItemComponent,
+    NewCategoryPanelComponent,
+    NewActionPanelComponent,
     ModelPromptPriorityMatrixComponent,
     PromptVersionControlComponent,
     // AI Instrumentation Components
@@ -182,30 +214,37 @@ import { MCPModule } from './MCP';
     TextImportDialogComponent,
     ArtifactSelectionDialogComponent,
     ArtifactLoadDialogComponent,
+    ComponentBrowserComponent,
+    ComponentPreviewComponent,
+    EditorTabsComponent,
+    SpecEditorComponent,
+    CodeEditorPanelComponent,
+    RequirementsEditorComponent,
+    DataRequirementsEditorComponent,
+    AIAssistantPanelComponent,
+    NewComponentDialogComponent,
+    SaveVersionDialogComponent,
     // Scheduling Dashboard Components
     SchedulingDashboardComponent,
-    SchedulingMonitoringComponent,
+    SchedulingOverviewComponent,
     SchedulingJobsComponent,
-    SchedulingHistoryComponent,
-    SchedulingTypesComponent,
-    SchedulingHealthComponent,
-    SchedulingMonitorResourceComponent,
+    SchedulingActivityComponent,
+    JobSlideoutComponent,
+    SchedulingOverviewResourceComponent,
     SchedulingJobsResourceComponent,
-    SchedulingHistoryResourceComponent,
-    SchedulingTypesResourceComponent,
-    SchedulingHealthResourceComponent,
+    SchedulingActivityResourceComponent,
     // Testing Dashboard Components
     TestingDashboardComponent,
-    TestingOverviewComponent,
-    TestingExecutionComponent,
+    TestingDashboardTabComponent,
+    TestingRunsComponent,
     TestingAnalyticsComponent,
-    TestingVersionComparisonComponent,
-    TestingFeedbackComponent,
-    TestingOverviewResourceComponent,
-    TestingExecutionResourceComponent,
+    TestingReviewComponent,
+    TestingDashboardTabResourceComponent,
+    TestingRunsResourceComponent,
     TestingAnalyticsResourceComponent,
-    TestingVersionResourceComponent,
-    TestingFeedbackResourceComponent,
+    TestingReviewResourceComponent,
+    TestingExplorerComponent,
+    TestingExplorerResourceComponent,
     SuiteTreeComponent,
     SuiteTreeNodeComponent,
     OracleBreakdownTableComponent,
@@ -225,6 +264,7 @@ import { MCPModule } from './MCP';
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
     CommunicationRunsResourceComponent,
+    CommunicationTemplatesResourceComponent,
     // Credentials Dashboard Components (panels now come from CredentialsModule)
     CredentialsDashboardComponent,
     CredentialsOverviewResourceComponent,
@@ -258,6 +298,7 @@ import { MCPModule } from './MCP';
   imports: [
     CommonModule,
     FormsModule,
+    ReactiveFormsModule,
     IndicatorsModule,
     DropDownsModule,
     InputsModule,
@@ -281,7 +322,6 @@ import { MCPModule } from './MCP';
     PanelBarModule,
     MJNotificationsModule,
     TestingModule,
-    UserViewGridModule,
     EntityViewerModule,
     ExplorerSettingsModule,
     SharedGenericModule,
@@ -292,7 +332,10 @@ import { MCPModule } from './MCP';
     QueryViewerModule,
     DashboardViewerModule,
     MCPModule,
-    CredentialsModule
+    CredentialsModule,
+    SharedPipesModule,
+    ActionsModule,
+    MarkdownModule
   ],
   providers: [
     AIInstrumentationService,
@@ -319,18 +362,26 @@ import { MCPModule } from './MCP';
     CodeManagementComponent,
     EntityIntegrationComponent,
     SecurityPermissionsComponent,
+    // Export Action Explorer components
+    ActionExplorerComponent,
+    ActionTreePanelComponent,
+    ActionToolbarComponent,
+    ActionBreadcrumbComponent,
+    ActionCardComponent,
+    ActionListItemComponent,
+    NewCategoryPanelComponent,
+    NewActionPanelComponent,
     // Export Scheduling resource components
-    SchedulingMonitorResourceComponent,
+    SchedulingOverviewResourceComponent,
     SchedulingJobsResourceComponent,
-    SchedulingHistoryResourceComponent,
-    SchedulingTypesResourceComponent,
-    SchedulingHealthResourceComponent,
+    SchedulingActivityResourceComponent,
     // Export Testing resource components
-    TestingOverviewResourceComponent,
-    TestingExecutionResourceComponent,
+    TestingDashboardTabResourceComponent,
+    TestingRunsResourceComponent,
     TestingAnalyticsResourceComponent,
-    TestingVersionResourceComponent,
-    TestingFeedbackResourceComponent,
+    TestingReviewResourceComponent,
+    TestingExplorerComponent,
+    TestingExplorerResourceComponent,
     // Export Data Explorer Dashboard and Resource
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
@@ -342,6 +393,7 @@ import { MCPModule } from './MCP';
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
     CommunicationRunsResourceComponent,
+    CommunicationTemplatesResourceComponent,
     // Export Credentials Dashboard (panels re-exported via CredentialsModule)
     CredentialsDashboardComponent,
     CredentialsOverviewResourceComponent,
@@ -350,6 +402,7 @@ import { MCPModule } from './MCP';
     CredentialsCategoriesResourceComponent,
     CredentialsAuditResourceComponent,
     GroupByPipe,
+    SharedPipesModule,
     CredentialsModule,
     // System Diagnostics Components
     SystemDiagnosticsComponent,

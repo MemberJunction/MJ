@@ -1,15 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadTestingAnalyticsResource() {
-  // Force inclusion in production builds
-}
 
 /**
  * Testing Analytics Resource - displays test analytics and metrics

@@ -535,26 +535,25 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   }
 
   /**
-   * Determines the indentation level at a given position in the SQL for formatting
+   * Returns fixed indentation for SQL continuation lines.
    *
-   * @param sql - The SQL string
-   * @param position - Position to check
-   * @returns Indentation string (spaces/tabs) for continuation lines
+   * Uses a simple 4-space indent instead of dynamic calculation to avoid
+   * accumulating massive whitespace in large SQL statements. The previous
+   * dynamic calculation could accumulate hundreds of thousands of spaces
+   * when processing large SQL files, causing data corruption in NVARCHAR(MAX)
+   * and VARCHAR(MAX) fields.
+   *
+   * Fixed indent is simpler, safer, and sufficient for migration SQL correctness.
+   *
+   * @param _sql - The SQL string (unused, kept for signature compatibility)
+   * @param _position - Position to check (unused, kept for signature compatibility)
+   * @returns Fixed indentation string (4 spaces)
    */
-  private _getIndentForPosition(sql: string, position: number): string {
-    // Find the start of the current line
-    let lineStart = position;
-    while (lineStart > 0 && sql[lineStart - 1] !== '\n') {
-      lineStart--;
-    }
-
-    // Count leading whitespace on current line
-    let indent = '';
-    for (let i = lineStart; i < position && /\s/.test(sql[i]); i++) {
-      indent += sql[i];
-    }
-
-    // Add extra indentation for continuation (4 spaces)
-    return indent + '    ';
+  private _getIndentForPosition(_sql: string, _position: number): string {
+    // Fixed 4-space indent for continuation lines
+    // This prevents the bug where we would accumulate all whitespace from
+    // line start to position, which could be hundreds of thousands of spaces
+    // in large SQL statements
+    return '    ';
   }
 }

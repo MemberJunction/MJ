@@ -1,13 +1,12 @@
 // Export all Testing resource components
-export * from './testing-overview-resource.component';
-export * from './testing-execution-resource.component';
+export * from './testing-dashboard-tab-resource.component';
+export * from './testing-runs-resource.component';
 export * from './testing-analytics-resource.component';
-export * from './testing-version-resource.component';
-export * from './testing-feedback-resource.component';
+export * from './testing-review-resource.component';
+export * from './testing-explorer-resource.component';
 
-// Export existing child components for internal use
-export * from './testing-overview.component';
-export * from './testing-execution.component';
+// Export tab components for internal use
+export * from './testing-dashboard-tab.component';
+export * from './testing-runs.component';
 export * from './testing-analytics.component';
-export * from './testing-version-comparison.component';
-export * from './testing-feedback.component';
+export * from './testing-review.component';

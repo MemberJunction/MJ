@@ -436,19 +436,76 @@ export class SharePointFileStorage extends FileStorageBase {
   /**
    * Checks if SharePoint provider is properly configured.
    * Returns true if the Graph client is initialized and has required IDs.
+   * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
-    return !!(this._client && this._driveId);
+    const hasClient = !!this._client;
+    const hasDriveId = !!this._driveId;
+
+    const isConfigured = hasClient && hasDriveId;
+
+    if (!isConfigured) {
+      const missing: string[] = [];
+      if (!hasClient) missing.push('Graph Client (credentials)');
+      if (!hasDriveId) missing.push('Drive ID');
+
+      console.error(
+        `❌ SharePoint provider not configured. Missing: ${missing.join(', ')}\n\n` +
+        `Configuration Options:\n\n` +
+        `Option 1: Environment Variables\n` +
+        `  export STORAGE_SHAREPOINT_TENANT_ID="..."\n` +
+        `  export STORAGE_SHAREPOINT_CLIENT_ID="..."\n` +
+        `  export STORAGE_SHAREPOINT_CLIENT_SECRET="..."\n` +
+        `  export STORAGE_SHAREPOINT_SITE_URL="https://tenant.sharepoint.com/sites/sitename"\n` +
+        `  const storage = new SharePointFileStorage();\n` +
+        `  await storage.initialize(); // No config needed\n\n` +
+        `Option 2: Database Credentials (Multi-Tenant)\n` +
+        `  const storage = new SharePointFileStorage();\n` +
+        `  await storage.initialize({\n` +
+        `    accountId: "...",\n` +
+        `    tenantID: "...",\n` +
+        `    clientID: "...",\n` +
+        `    clientSecret: "...",\n` +
+        `    siteUrl: "https://tenant.sharepoint.com/sites/sitename"\n` +
+        `  });\n`
+      );
+    }
+
+    return isConfigured;
   }
 
   /**
-   * Initializes the SharePoint storage provider with OAuth configuration from the database.
-   * This method is called by the FileStorageProviderEngine when loading per-user provider configurations.
+   * Initialize SharePoint storage provider with optional configuration.
    *
-   * For per-user OAuth, this sets up the RefreshTokenAuthProvider which uses the user's
-   * refresh token to obtain access tokens for their OneDrive/SharePoint files.
+   * ## Standard Usage Pattern
    *
-   * @param config - Configuration object containing OAuth2 credentials
+   * **ALWAYS call this method** after creating a provider instance.
+   *
+   * ### Simple Deployment (Environment Variables)
+   * Constructor loads credentials from environment variables, then call
+   * initialize() with no config to complete setup:
+   *
+   * @example
+   * ```typescript
+   * const storage = new SharePointFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/'); // Ready to use
+   * ```
+   *
+   * ### Multi-Tenant Enterprise (Database)
+   * Use infrastructure utility which handles credential decryption automatically:
+   *
+   * @example
+   * ```typescript
+   * const storage = await initializeDriverWithAccountCredentials({
+   *   accountEntity: accountWithProvider.account,
+   *   providerEntity: accountWithProvider.provider,
+   *   contextUser
+   * });
+   * await storage.ListObjects('/'); // Credentials already decrypted and initialized
+   * ```
+   *
+   * @param config - Configuration object containing OAuth2 credentials from database
    */
   public async initialize(config?: SharePointOAuthConfig): Promise<void> {
     // Always call super to store accountId and accountName

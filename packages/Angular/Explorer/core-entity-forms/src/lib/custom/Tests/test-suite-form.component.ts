@@ -8,6 +8,7 @@ import { TestSuiteEntity, TestSuiteTestEntity, TestSuiteRunEntity, TestRunEntity
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { TestSuiteFormComponent } from '../../generated/Entities/TestSuite/testsuite.form.component';
 import {
   TestingDialogService,
@@ -101,7 +102,8 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     protected cdr: ChangeDetectorRef,
     private testingDialogService: TestingDialogService,
     private evalPrefsService: EvaluationPreferencesService,
-    private viewContainerRef: ViewContainerRef
+    private viewContainerRef: ViewContainerRef,
+    private appManager: ApplicationManager
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -301,6 +303,13 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
   openSuiteRun(runId: string) {
     SharedService.Instance.OpenEntityRecord('MJ: Test Suite Runs', CompositeKey.FromID(runId));
+  }
+
+  navigateToTestingDashboard(): void {
+    const testingApp = this.appManager.GetAppByName('Testing');
+    if (testingApp) {
+      this.navigationService.SwitchToApp(testingApp.ID);
+    }
   }
 
   async runSuite() {

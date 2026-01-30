@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIVendorEntity, AIModelTypeEntity, ResourceData } from '@memberjunction/core-entities';
+import { AIVendorEntity, AIModelTypeEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -15,6 +15,20 @@ interface ModelDisplayData extends AIModelEntityExtended {
   PowerRankDisplay?: string;
   SpeedRankDisplay?: string;
   CostRankDisplay?: string;
+}
+
+/**
+ * User preferences for the Model Management dashboard
+ */
+interface ModelManagementUserPreferences {
+  viewMode: 'grid' | 'list';
+  showFilters: boolean;
+  searchTerm: string;
+  selectedVendor: string;
+  selectedType: string;
+  selectedStatus: string;
+  sortBy: string;
+  sortDirection: 'asc' | 'desc';
 }
 
 /**
@@ -35,6 +49,11 @@ export function LoadAIModelsResource() {
   styleUrls: ['./model-management.component.css']
 })
 export class ModelManagementComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+
+  // Settings persistence
+  private readonly USER_SETTINGS_KEY = 'AI.Models.UserPreferences';
+  private settingsPersistSubject = new Subject<void>();
+  private settingsLoaded = false;
 
   // View state
   public viewMode: 'grid' | 'list' = 'grid';
@@ -99,13 +118,25 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     private navigationService: NavigationService
   ) {
     super();
+
+    // Set up debounced settings persistence
+    this.settingsPersistSubject.pipe(
+      debounceTime(500),
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.persistUserPreferences();
+    });
   }
 
   ngOnInit(): void {
+    // Load saved user preferences first
+    this.loadUserPreferences();
+
     this.setupSearchListener();
     this.startLoadingMessages();
     this.loadInitialData();
 
+    // Apply initial state from resource configuration if provided (overrides saved prefs)
     if (this.Data?.Configuration) {
       this.applyInitialState(this.Data.Configuration);
     }
@@ -127,7 +158,95 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     ).subscribe(searchTerm => {
       this.searchTerm = searchTerm;
       this.applyFilters();
+      this.saveUserPreferencesDebounced();
     });
+  }
+
+  // ========================================
+  // User Settings Persistence
+  // ========================================
+
+  /**
+   * Load saved user preferences from the UserInfoEngine
+   */
+  private loadUserPreferences(): void {
+    try {
+      const savedPrefs = UserInfoEngine.Instance.GetSetting(this.USER_SETTINGS_KEY);
+      if (savedPrefs) {
+        const prefs = JSON.parse(savedPrefs) as ModelManagementUserPreferences;
+        this.applyUserPreferencesFromStorage(prefs);
+      }
+    } catch (error) {
+      console.warn('[ModelManagement] Failed to load user preferences:', error);
+    } finally {
+      this.settingsLoaded = true;
+    }
+  }
+
+  /**
+   * Apply loaded preferences to component state
+   */
+  private applyUserPreferencesFromStorage(prefs: ModelManagementUserPreferences): void {
+    if (prefs.viewMode) {
+      this.viewMode = prefs.viewMode;
+    }
+    if (prefs.showFilters !== undefined) {
+      this.showFilters = prefs.showFilters;
+    }
+    if (prefs.searchTerm) {
+      this.searchTerm = prefs.searchTerm;
+    }
+    if (prefs.selectedVendor) {
+      this.selectedVendor = prefs.selectedVendor;
+    }
+    if (prefs.selectedType) {
+      this.selectedType = prefs.selectedType;
+    }
+    if (prefs.selectedStatus) {
+      this.selectedStatus = prefs.selectedStatus;
+    }
+    if (prefs.sortBy) {
+      this.sortBy = prefs.sortBy;
+    }
+    if (prefs.sortDirection) {
+      this.sortDirection = prefs.sortDirection;
+    }
+  }
+
+  /**
+   * Get current preferences as an object for saving
+   */
+  private getCurrentPreferences(): ModelManagementUserPreferences {
+    return {
+      viewMode: this.viewMode,
+      showFilters: this.showFilters,
+      searchTerm: this.searchTerm,
+      selectedVendor: this.selectedVendor,
+      selectedType: this.selectedType,
+      selectedStatus: this.selectedStatus,
+      sortBy: this.sortBy,
+      sortDirection: this.sortDirection
+    };
+  }
+
+  /**
+   * Persist user preferences to storage (debounced)
+   */
+  private saveUserPreferencesDebounced(): void {
+    if (!this.settingsLoaded) return; // Don't save during initial load
+    this.settingsPersistSubject.next();
+  }
+
+  /**
+   * Actually persist user preferences to the UserInfoEngine
+   */
+  private async persistUserPreferences(): Promise<void> {
+    try {
+      const prefs = this.getCurrentPreferences();
+      await UserInfoEngine.Instance.SetSetting(this.USER_SETTINGS_KEY, JSON.stringify(prefs));
+    } catch (error) {
+      console.warn('[ModelManagement] Failed to persist user preferences:', error);
+    }
   }
 
   private startLoadingMessages(): void {
@@ -233,15 +352,18 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   public toggleFilters(): void {
     this.showFilters = !this.showFilters;
+    this.saveUserPreferencesDebounced();
   }
 
   public toggleFilterPanel(): void {
     this.showFilters = !this.showFilters;
+    this.saveUserPreferencesDebounced();
   }
 
   public setViewMode(mode: 'grid' | 'list'): void {
     this.viewMode = mode;
     this.expandedModelId = null;
+    this.saveUserPreferencesDebounced();
   }
 
   public toggleModelExpansion(modelId: string): void {
@@ -339,16 +461,19 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public onVendorChange(vendorId: string): void {
     this.selectedVendor = vendorId;
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public onTypeChange(typeId: string): void {
     this.selectedType = typeId;
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public onStatusChange(status: string): void {
     this.selectedStatus = status;
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public onSortChange(sortBy: string): void {
@@ -361,6 +486,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
       this.sortDirection = 'asc';
     }
     this.sortModels();
+    this.saveUserPreferencesDebounced();
   }
 
   public async toggleModelStatus(model: ModelDisplayData, event: Event): Promise<void> {
@@ -504,6 +630,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     this.costRankRange = { min: 0, max: this.maxCostRank };
     this.searchSubject.next('');
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public formatTokenLimit(limit: number): string {

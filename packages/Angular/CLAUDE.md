@@ -1,5 +1,24 @@
 # Angular Development Guidelines
 
+## 📚 Dashboard Development Guide
+
+**IMPORTANT**: When building dashboards in MemberJunction, always refer to the comprehensive guide at **[/guides/DASHBOARD_BEST_PRACTICES.md](/guides/DASHBOARD_BEST_PRACTICES.md)**.
+
+This guide covers:
+- Architecture patterns (no Angular data services - use MJ Engine classes)
+- Naming conventions (PascalCase for public, camelCase for private)
+- Navigation patterns within dashboards (left panel, not top nav)
+- Getter/setter state management pattern
+- User preferences via UserInfoEngine
+- Data loading patterns with RunView and local caching
+- Layout patterns using CSS Flexbox/Grid
+- Permission checking patterns
+- Creating new Engine classes for domain logic
+
+**Read this guide before starting any dashboard work** to ensure consistency with established patterns.
+
+---
+
 ## 🚨 CRITICAL: NO STANDALONE COMPONENTS 🚨
 - **NEVER create standalone Angular components** - ALL components MUST be part of NgModules
 - **ALWAYS** use `@NgModule` with `declarations`, `imports`, and `exports`

@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "clean": "rm -rf dist",
+    "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\""
   },

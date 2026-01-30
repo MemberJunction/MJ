@@ -1,5 +1,5 @@
 import * as sql from 'mssql';
-import { configInfo, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
+import { configInfo, currentWorkingDirectory, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { ApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
@@ -63,6 +63,41 @@ export class ManageMetadataBase {
     */
    public static get generatedValidators(): ValidatorResult[] {
       return this._generatedValidators;
+   }
+
+   private static _softPKFKConfigCache: any = null;
+   private static _softPKFKConfigPath: string = '';
+   /**
+    * Loads and caches the soft PK/FK configuration from the additionalSchemaInfo file.
+    * The file is only loaded once per session to avoid repeated I/O.
+    */
+   private static getSoftPKFKConfig(): any {
+      // Return cached config if path hasn't changed
+      const configPath = configInfo.additionalSchemaInfo
+         ? path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo)
+         : '';
+
+      if (this._softPKFKConfigCache !== null && this._softPKFKConfigPath === configPath) {
+         return this._softPKFKConfigCache;
+      }
+
+      // Cache miss or path changed - reload from disk
+      if (!configPath || !fs.existsSync(configPath)) {
+         this._softPKFKConfigCache = null;
+         this._softPKFKConfigPath = configPath;
+         return null;
+      }
+
+      try {
+         const configContent = fs.readFileSync(configPath, 'utf-8');
+         this._softPKFKConfigCache = JSON.parse(configContent);
+         this._softPKFKConfigPath = configPath;
+         return this._softPKFKConfigCache;
+      } catch (e) {
+         this._softPKFKConfigCache = null;
+         this._softPKFKConfigPath = configPath;
+         return null;
+      }
    }
 
    /**
@@ -551,6 +586,13 @@ export class ManageMetadataBase {
       }
       logStatus(`      Updated existing entity fields from schema in ${(new Date().getTime() - step3StartTime.getTime()) / 1000} seconds`);
 
+      // Apply soft PK/FK configuration if config file exists
+      const stepConfigStartTime: Date = new Date();
+      if (! await this.applySoftPKFKConfig(pool)) {
+         logError('Error applying soft PK/FK configuration');
+      }
+      logStatus(`      Applied soft PK/FK configuration in ${(new Date().getTime() - stepConfigStartTime.getTime()) / 1000} seconds`);
+
       const step4StartTime: Date = new Date();
       if (! await this.setDefaultColumnWidthWhereNeeded(pool, excludeSchemas)) {
          logError ('Error setting default column width where needed')
@@ -632,6 +674,102 @@ export class ManageMetadataBase {
       }
       catch (e) {
          logError(e as string);
+         return false;
+      }
+   }
+
+   /**
+    * Applies soft PK/FK configuration from a JSON file specified in mj.config.cjs (additionalSchemaInfo property).
+    * For soft PKs: Sets BOTH IsPrimaryKey=1 AND IsSoftPrimaryKey=1 (IsPrimaryKey is source of truth, IsSoftPrimaryKey protects from schema sync).
+    * For soft FKs: Sets RelatedEntityID/RelatedEntityFieldName + IsSoftForeignKey=1 (RelatedEntityID is source of truth, IsSoftForeignKey protects from schema sync).
+    * All UPDATE statements are logged to migration files via LogSQLAndExecute() for CI/CD traceability.
+    */
+   protected async applySoftPKFKConfig(pool: sql.ConnectionPool): Promise<boolean> {
+      // Check if additionalSchemaInfo is configured in mj.config.cjs
+      if (!configInfo.additionalSchemaInfo) {
+         // No additional schema info configured - this is fine, it's optional
+         return true;
+      }
+
+      const configPath = path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo);
+
+      if (!fs.existsSync(configPath)) {
+         logStatus(`         ⚠️  additionalSchemaInfo configured but file not found: ${configPath}`);
+         return true;
+      }
+
+      try {
+         logStatus(`         Found ${configInfo.additionalSchemaInfo}, applying soft PK/FK configuration...`);
+         const config = ManageMetadataBase.getSoftPKFKConfig();
+
+         let totalPKs = 0;
+         let totalFKs = 0;
+         const schema = mj_core_schema();
+
+         for (const table of config.tables || []) {
+            // Look up entity ID (SELECT query - no need to log to migration file)
+            const entityLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${table.schemaName}' AND BaseTable = '${table.tableName}'`;
+            const entityResult = await pool.request().query(entityLookupSQL);
+
+            if (entityResult.recordset.length === 0) {
+               logStatus(`         ⚠️  Entity not found for ${table.schemaName}.${table.tableName} - skipping`);
+               continue;
+            }
+
+            const entityId = entityResult.recordset[0].ID;
+
+            // Process primary keys - set BOTH IsPrimaryKey = 1 AND IsSoftPrimaryKey = 1
+            // IsPrimaryKey is the source of truth, IsSoftPrimaryKey protects it from schema sync
+            if (table.primaryKeys && table.primaryKeys.length > 0) {
+               for (const pk of table.primaryKeys) {
+                  const sSQL = `UPDATE [${schema}].[EntityField]
+                                SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(),
+                                    [IsPrimaryKey] = 1,
+                                    [IsSoftPrimaryKey] = 1
+                                WHERE [EntityID] = '${entityId}' AND [Name] = '${pk.fieldName}'`;
+                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft PK for ${table.schemaName}.${table.tableName}.${pk.fieldName}`);
+
+                  if (result !== null) {
+                     logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${table.tableName}.${pk.fieldName}`);
+                     totalPKs++;
+                  }
+               }
+            }
+
+            // Process foreign keys - set RelatedEntityID, RelatedEntityFieldName, and IsSoftForeignKey = 1
+            if (table.foreignKeys && table.foreignKeys.length > 0) {
+               for (const fk of table.foreignKeys) {
+                  // Look up related entity ID (SELECT query - no need to log to migration file)
+                  const relatedLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${fk.relatedSchema}' AND BaseTable = '${fk.relatedTable}'`;
+                  const relatedEntityResult = await pool.request().query(relatedLookupSQL);
+
+                  if (relatedEntityResult.recordset.length === 0) {
+                     logStatus(`         ⚠️  Related entity not found for ${fk.relatedSchema}.${fk.relatedTable} - skipping FK ${fk.fieldName}`);
+                     continue;
+                  }
+
+                  const relatedEntityId = relatedEntityResult.recordset[0].ID;
+
+                  const sSQL = `UPDATE [${schema}].[EntityField]
+                                SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(),
+                                    [RelatedEntityID] = '${relatedEntityId}',
+                                    [RelatedEntityFieldName] = '${fk.relatedField}',
+                                    [IsSoftForeignKey] = 1
+                                WHERE [EntityID] = '${entityId}' AND [Name] = '${fk.fieldName}'`;
+                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${table.schemaName}.${table.tableName}.${fk.fieldName} → ${fk.relatedTable}.${fk.relatedField}`);
+
+                  if (result !== null) {
+                     logStatus(`         ✓ Set soft FK for ${table.tableName}.${fk.fieldName} → ${fk.relatedTable}.${fk.relatedField}`);
+                     totalFKs++;
+                  }
+               }
+            }
+         }
+
+         logStatus(`         Applied ${totalPKs} soft PK(s) and ${totalFKs} soft FK(s) from configuration`);
+         return true;
+      } catch (e) {
+         logError(`Error applying soft PK/FK configuration: ${e}`);
          return false;
       }
    }
@@ -1677,6 +1815,11 @@ NumberedRows AS (
           const resultResult = await ds.request().query(query);
       const result = resultResult.recordset;
           if (result.length === 0) {
+              // No database PK constraint found - check if there's a soft PK defined in config
+              if (this.hasSoftPrimaryKeyInConfig(newEntity.SchemaName, newEntity.TableName)) {
+                 logStatus(`         ✓ No database PK for ${newEntity.SchemaName}.${newEntity.TableName}, but soft PK found in config - allowing entity creation`);
+                 return { shouldCreate: true, validationMessage: '' };
+              }
               return { shouldCreate: false, validationMessage: "No primary key found" };
           }
 
@@ -1686,6 +1829,43 @@ NumberedRows AS (
          const errorMsg = 'Error validating new entity for table:' + newEntity?.TableName;
          console.error(errorMsg, error);
          return { shouldCreate: false, validationMessage: errorMsg };
+      }
+   }
+
+   /**
+    * Checks if a table has a soft primary key defined in the additionalSchemaInfo JSON file (configured in mj.config.cjs)
+    */
+   protected hasSoftPrimaryKeyInConfig(schemaName: string, tableName: string): boolean {
+      // Check if additionalSchemaInfo is configured
+      if (!configInfo.additionalSchemaInfo) {
+         return false;
+      }
+
+      const configPath = path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo);
+      if (!fs.existsSync(configPath)) {
+         logStatus(`         [Soft PK Check] Config file not found at: ${configPath}`);
+         return false;
+      }
+
+      try {
+         const config = ManageMetadataBase.getSoftPKFKConfig();
+         if (!config || !config.tables) {
+            logStatus(`         [Soft PK Check] Config file found but no tables array`);
+            return false;
+         }
+         const tableConfig = config.tables.find(
+            (t: { schemaName?: string; tableName?: string }) =>
+               t.schemaName?.toLowerCase() === schemaName?.toLowerCase() &&
+               t.tableName?.toLowerCase() === tableName?.toLowerCase()
+         );
+         const found = Boolean(tableConfig?.primaryKeys && tableConfig.primaryKeys.length > 0);
+         if (!found) {
+            logStatus(`         [Soft PK Check] No config found for ${schemaName}.${tableName} (config has ${config.tables.length} tables)`);
+         }
+         return found;
+      } catch (e) {
+         logStatus(`         [Soft PK Check] Error reading config: ${e}`);
+         return false;
       }
    }
 
@@ -1884,40 +2064,34 @@ NumberedRows AS (
    }
 
    /**
-    * Creates a new application using the entity framework.
-    * This ensures the server-side entity extension is used, which handles:
-    * - Auto-generation of Path from Name (via ApplicationEntityServerEntity)
-    * - Any other server-side business logic
+    * Creates a new application using direct SQL INSERT to ensure it's captured in SQL logging.
+    * The Path field is auto-generated from Name using the same slug logic as ApplicationEntityServerEntity.
     *
-    * @param pool SQL connection pool (unused but kept for signature compatibility)
+    * @param pool SQL connection pool
     * @param appID Pre-generated UUID for the application
     * @param appName Name of the application
     * @param schemaName Schema name for SchemaAutoAddNewEntities
-    * @param currentUser Current user for entity operations
+    * @param currentUser Current user for entity operations (unused but kept for signature compatibility)
     * @returns The application ID if successful, null otherwise
     */
    protected async createNewApplication(pool: sql.ConnectionPool, appID: string, appName: string, schemaName: string, currentUser: UserInfo): Promise<string | null>{
       try {
-         const md = new Metadata();
-         const app = await md.GetEntityObject<ApplicationEntity>('Applications', currentUser);
+         // Generate Path from Name using slug conversion:
+         // 1. Convert to lowercase
+         // 2. Replace spaces with hyphens
+         // 3. Remove special characters (keep only alphanumeric and hyphens)
+         const path = appName
+            .toLowerCase()
+            .replace(/\s+/g, '-')           // spaces to hyphens
+            .replace(/[^a-z0-9-]/g, '')     // remove special chars
+            .replace(/-+/g, '-')            // collapse multiple hyphens
+            .replace(/^-|-$/g, '');         // trim hyphens from start/end
 
-         app.NewRecord();
-         app.ID = appID;
-         app.Name = appName;
-         app.Description = 'Generated for schema';
-         app.SchemaAutoAddNewEntities = schemaName;
-         // Path and AutoUpdatePath will be handled by the server-side entity extension
-         // which auto-generates Path from Name when AutoUpdatePath is true (default)
-
-         const saved = await app.Save();
-         if (saved) {
-            LogStatus(`Created new application ${appName} with Path: ${app.Path}`);
-            return appID;
-         } else {
-            const errorMsg = app.LatestResult ? JSON.stringify(app.LatestResult) : 'Unknown error';
-            LogError(`Failed to save new application ${appName}: ${errorMsg}`);
-            return null;
-         }
+         const sSQL = `INSERT INTO [${mj_core_schema()}].Application (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
+                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', 1)`;
+         await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
+         LogStatus(`Created new application ${appName} with Path: ${path}`);
+         return appID;
       }
       catch (e) {
          LogError(`Failed to create new application ${appName} for schema ${schemaName}`, null, e);

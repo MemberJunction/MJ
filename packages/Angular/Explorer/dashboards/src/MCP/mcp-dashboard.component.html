@@ -198,7 +198,7 @@
                                             <div class="card-title">
                                                 <i class="fa-solid fa-chevron-right expand-arrow" [class.rotated]="isServerExpanded(server)"></i>
                                                 <i [class]="getTransportIcon(server.TransportType)"></i>
-                                                <span class="name">{{ server.Name }}</span>
+                                                <span class="name" [innerHTML]="server.Name | highlightSearch:(filters$ | async)?.searchTerm"></span>
                                                 <span class="status-badge" [ngClass]="getStatusClass(server.Status)">
                                                     {{ server.Status }}
                                                 </span>
@@ -214,7 +214,7 @@
                                         </div>
                                         <div class="card-body">
                                             @if (server.Description) {
-                                                <p class="description">{{ server.Description }}</p>
+                                                <p class="description" [innerHTML]="server.Description | highlightSearch:(filters$ | async)?.searchTerm"></p>
                                             }
                                             <div class="details-grid">
                                                 <div class="detail">
@@ -311,7 +311,7 @@
                                             <div class="card-title">
                                                 <i class="fa-solid fa-chevron-right expand-arrow" [class.rotated]="isConnectionExpanded(conn)"></i>
                                                 <i class="fa-solid fa-link"></i>
-                                                <span class="name">{{ conn.Name }}</span>
+                                                <span class="name" [innerHTML]="conn.Name | highlightSearch:(filters$ | async)?.searchTerm"></span>
                                                 <span class="status-badge" [ngClass]="getStatusClass(conn.Status)">
                                                     {{ conn.Status }}
                                                 </span>
@@ -362,7 +362,7 @@
                                         }
                                         <div class="card-body">
                                             @if (conn.Description) {
-                                                <p class="description">{{ conn.Description }}</p>
+                                                <p class="description" [innerHTML]="conn.Description | highlightSearch:(filters$ | async)?.searchTerm"></p>
                                             }
                                             <div class="details-grid">
                                                 <div class="detail">
@@ -472,7 +472,7 @@
                                                             <div class="tool-card-header" (click)="toggleToolExpand(tool)">
                                                                 <div class="tool-title">
                                                                     <i class="fa-solid fa-wrench"></i>
-                                                                    <span class="name">{{ tool.ToolTitle || tool.ToolName }}</span>
+                                                                    <span class="name" [innerHTML]="(tool.ToolTitle || tool.ToolName) | highlightSearch:(filters$ | async)?.searchTerm"></span>
                                                                 </div>
                                                                 <div class="tool-meta">
                                                                     <span class="param-badge" title="Parameters">
@@ -485,7 +485,7 @@
                                                                 </div>
                                                             </div>
                                                             @if (tool.ToolDescription) {
-                                                                <p class="tool-description">{{ tool.ToolDescription }}</p>
+                                                                <p class="tool-description" [innerHTML]="tool.ToolDescription | highlightSearch:(filters$ | async)?.searchTerm"></p>
                                                             }
                                                             <div class="tool-card-actions">
                                                                 <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test this tool">
@@ -549,14 +549,13 @@
                                                                     <td class="tool-name-cell">
                                                                         <i class="fa-solid fa-wrench"></i>
                                                                         <div class="tool-name-info">
-                                                                            <span class="tool-title">{{ tool.ToolTitle || tool.ToolName }}</span>
+                                                                            <span class="tool-title" [innerHTML]="(tool.ToolTitle || tool.ToolName) | highlightSearch:(filters$ | async)?.searchTerm"></span>
                                                                             @if (tool.ToolTitle) {
                                                                                 <span class="tool-code">{{ tool.ToolName }}</span>
                                                                             }
                                                                         </div>
                                                                     </td>
-                                                                    <td class="description-cell">
-                                                                        {{ tool.ToolDescription || '-' }}
+                                                                    <td class="description-cell" [innerHTML]="(tool.ToolDescription || '-') | highlightSearch:(filters$ | async)?.searchTerm">
                                                                     </td>
                                                                     <td>
                                                                         <span class="param-count">{{ getParamCount(tool) }}</span>

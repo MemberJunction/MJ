@@ -1,0 +1,208 @@
+<div class="action-toolbar">
+  <div class="toolbar-left">
+    <!-- Search -->
+    <div class="search-container">
+      <kendo-textbox
+        [placeholder]="'Search actions...'"
+        [value]="Filters.searchTerm"
+        (valueChange)="onSearchInput($event)">
+        <ng-template kendoTextBoxPrefixTemplate>
+          <i class="fa-solid fa-search"></i>
+        </ng-template>
+        @if (Filters.searchTerm) {
+          <ng-template kendoTextBoxSuffixTemplate>
+            <button kendoButton
+              [fillMode]="'flat'"
+              [size]="'small'"
+              (click)="clearSearch()">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </ng-template>
+        }
+      </kendo-textbox>
+    </div>
+
+    <!-- Filters Dropdown -->
+    <div class="dropdown-container" (clickOutside)="ShowFiltersDropdown = false">
+      <button kendoButton
+        [fillMode]="'outline'"
+        [class.active]="hasActiveFilters()"
+        (click)="toggleFiltersDropdown()">
+        <i class="fa-solid fa-filter"></i>
+        Filters
+        @if (getActiveFilterCount() > 0) {
+          <span class="filter-badge">{{ getActiveFilterCount() }}</span>
+        }
+        <i [class]="ShowFiltersDropdown ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+      </button>
+
+      @if (ShowFiltersDropdown) {
+        <div class="dropdown-menu filters-menu">
+          <div class="dropdown-section">
+            <div class="section-header">
+              <span>Status</span>
+              @if (Filters.statuses.length > 0) {
+                <button kendoButton
+                  [fillMode]="'flat'"
+                  [size]="'small'"
+                  (click)="StateService.setStatusFilter([])">
+                  Clear
+                </button>
+              }
+            </div>
+            <div class="filter-options">
+              @for (status of StatusOptions; track status.value) {
+                <label class="filter-option" [class.selected]="isStatusSelected(status.value)">
+                  <input type="checkbox"
+                    [checked]="isStatusSelected(status.value)"
+                    (change)="toggleStatus(status.value)">
+                  <span class="status-dot" [attr.data-status]="status.value"></span>
+                  {{ status.label }}
+                </label>
+              }
+            </div>
+          </div>
+
+          <div class="dropdown-section">
+            <div class="section-header">
+              <span>Type</span>
+              @if (Filters.types.length > 0) {
+                <button kendoButton
+                  [fillMode]="'flat'"
+                  [size]="'small'"
+                  (click)="StateService.setTypeFilter([])">
+                  Clear
+                </button>
+              }
+            </div>
+            <div class="filter-options">
+              @for (type of TypeOptions; track type.value) {
+                <label class="filter-option" [class.selected]="isTypeSelected(type.value)">
+                  <input type="checkbox"
+                    [checked]="isTypeSelected(type.value)"
+                    (change)="toggleType(type.value)">
+                  <i [class]="type.icon"></i>
+                  {{ type.label }}
+                </label>
+              }
+            </div>
+          </div>
+
+          @if (hasActiveFilters()) {
+            <div class="dropdown-footer">
+              <button kendoButton
+                [fillMode]="'flat'"
+                [themeColor]="'error'"
+                (click)="clearFilters()">
+                <i class="fa-solid fa-times"></i>
+                Clear All Filters
+              </button>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Active Filter Chips -->
+    @if (hasActiveFilters()) {
+      <div class="active-filters">
+        @for (status of Filters.statuses; track status) {
+          <kendo-chip
+            [removable]="true"
+            [size]="'small'"
+            (remove)="toggleStatus(status)">
+            Status: {{ status }}
+          </kendo-chip>
+        }
+        @for (type of Filters.types; track type) {
+          <kendo-chip
+            [removable]="true"
+            [size]="'small'"
+            (remove)="toggleType(type)">
+            Type: {{ type === 'Generated' ? 'AI Generated' : type }}
+          </kendo-chip>
+        }
+      </div>
+    }
+  </div>
+
+  <div class="toolbar-right">
+    <!-- Results Count -->
+    <div class="results-count">
+      <span class="count">{{ FilteredCount }}</span>
+      @if (FilteredCount !== TotalCount) {
+        <span class="of-total">of {{ TotalCount }}</span>
+      }
+      <span class="label">actions</span>
+    </div>
+
+    <!-- Sort Dropdown -->
+    <div class="dropdown-container" (clickOutside)="ShowSortDropdown = false">
+      <button kendoButton
+        [fillMode]="'outline'"
+        (click)="toggleSortDropdown()">
+        <i [class]="getSortIcon()"></i>
+        {{ getSortLabel() }}
+        <i [class]="ShowSortDropdown ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+      </button>
+
+      @if (ShowSortDropdown) {
+        <div class="dropdown-menu sort-menu">
+          @for (option of SortOptions; track option.field) {
+            <button class="sort-option"
+              [class.selected]="SortField === option.field"
+              (click)="setSortField(option.field)">
+              <i [class]="option.icon"></i>
+              {{ option.label }}
+              @if (SortField === option.field) {
+                <i [class]="SortDirection === 'asc' ? 'fa-solid fa-arrow-up' : 'fa-solid fa-arrow-down'" class="direction-icon"></i>
+              }
+            </button>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- View Mode Toggle -->
+    <div class="view-toggle">
+      <button kendoButton
+        [fillMode]="ViewMode === 'card' ? 'solid' : 'outline'"
+        [themeColor]="ViewMode === 'card' ? 'primary' : 'base'"
+        title="Card View"
+        (click)="setViewMode('card')">
+        <i class="fa-solid fa-grip"></i>
+      </button>
+      <button kendoButton
+        [fillMode]="ViewMode === 'list' ? 'solid' : 'outline'"
+        [themeColor]="ViewMode === 'list' ? 'primary' : 'base'"
+        title="List View"
+        (click)="setViewMode('list')">
+        <i class="fa-solid fa-list"></i>
+      </button>
+      <button kendoButton
+        [fillMode]="ViewMode === 'compact' ? 'solid' : 'outline'"
+        [themeColor]="ViewMode === 'compact' ? 'primary' : 'base'"
+        title="Compact View"
+        (click)="setViewMode('compact')">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+    </div>
+
+    <!-- Refresh Button -->
+    <button kendoButton
+      [fillMode]="'flat'"
+      title="Refresh"
+      (click)="onRefresh()">
+      <i class="fa-solid fa-refresh"></i>
+    </button>
+
+    <!-- New Action Button -->
+    <button kendoButton
+      [fillMode]="'solid'"
+      [themeColor]="'primary'"
+      (click)="onNewAction()">
+      <i class="fa-solid fa-plus"></i>
+      New Action
+    </button>
+  </div>
+</div>

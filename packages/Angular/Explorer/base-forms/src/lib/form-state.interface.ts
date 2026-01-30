@@ -4,8 +4,6 @@
 export interface FormSectionState {
     /** Whether the section is currently expanded */
     isExpanded: boolean;
-    /** Width mode for the section panel */
-    widthMode: 'normal' | 'full-width';
 }
 
 /**
@@ -16,6 +14,10 @@ export interface FormState {
     sections: Record<string, FormSectionState>;
     /** Whether to show fields with empty values */
     showEmptyFields: boolean;
+    /** Form width mode - 'centered' uses max-width constraint, 'full-width' uses all available space */
+    widthMode: 'centered' | 'full-width';
+    /** Custom section ordering - array of sectionKeys in user's preferred order */
+    sectionOrder?: string[];
 }
 
 /**
@@ -23,13 +25,13 @@ export interface FormState {
  */
 export const DEFAULT_FORM_STATE: FormState = {
     sections: {},
-    showEmptyFields: false
+    showEmptyFields: false,
+    widthMode: 'centered'
 };
 
 /**
  * Default state for a new section (when section not yet in saved state)
  */
 export const DEFAULT_SECTION_STATE: FormSectionState = {
-    isExpanded: true,
-    widthMode: 'normal'
+    isExpanded: true
 };

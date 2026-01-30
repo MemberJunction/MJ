@@ -37,26 +37,21 @@ import {
   LoadActionsScheduleResource,
   LoadActionsCodeResource,
   LoadActionsEntitiesResource,
-  LoadActionsSecurityResource
+  LoadActionsSecurityResource,
+  LoadActionExplorerResource,
+  LoadActionExplorerComponents
 } from './Actions';
 import { LoadCommunicationMonitorResource } from './Communication/communication-monitor-resource.component';
 import { LoadCommunicationLogsResource } from './Communication/communication-logs-resource.component';
 import { LoadCommunicationProvidersResource } from './Communication/communication-providers-resource.component';
 import { LoadCommunicationRunsResource } from './Communication/communication-runs-resource.component';
+import { LoadCommunicationTemplatesResource } from './Communication/communication-templates-resource.component';
+
 
 import {
-  LoadTestingOverviewResource,
-  LoadTestingExecutionResource,
-  LoadTestingAnalyticsResource,
-  LoadTestingVersionResource,
-  LoadTestingFeedbackResource
-} from './Testing/components';
-import {
-  LoadSchedulingMonitorResource,
+  LoadSchedulingDashboardResource,
   LoadSchedulingJobsResource,
-  LoadSchedulingHistoryResource,
-  LoadSchedulingTypesResource,
-  LoadSchedulingHealthResource
+  LoadSchedulingActivityResource
 } from './Scheduling/components';
 
 // Dashboards
@@ -100,7 +95,20 @@ export {
   EntityIntegrationComponent,
   LoadActionsEntitiesResource,
   SecurityPermissionsComponent,
-  LoadActionsSecurityResource
+  LoadActionsSecurityResource,
+  // Action Explorer components
+  ActionExplorerComponent,
+  ActionTreePanelComponent,
+  ActionToolbarComponent,
+  ActionBreadcrumbComponent,
+  ActionCardComponent,
+  ActionListItemComponent,
+  NewCategoryPanelComponent,
+  NewActionPanelComponent,
+  LoadActionExplorerResource,
+  LoadActionExplorerComponents,
+  // State service
+  ActionExplorerStateService
 } from './Actions';
 
 // Re-export Actions ExecutionMonitoringComponent with alias to avoid conflict with AI version
@@ -108,16 +116,12 @@ export { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } f
 
 // Export Scheduling components as resources (BaseResourceComponent-based)
 export {
-  SchedulingMonitorResourceComponent,
-  LoadSchedulingMonitorResource,
+  SchedulingOverviewResourceComponent,
+  LoadSchedulingDashboardResource,
   SchedulingJobsResourceComponent,
   LoadSchedulingJobsResource,
-  SchedulingHistoryResourceComponent,
-  LoadSchedulingHistoryResource,
-  SchedulingTypesResourceComponent,
-  LoadSchedulingTypesResource,
-  SchedulingHealthResourceComponent,
-  LoadSchedulingHealthResource
+  SchedulingActivityResourceComponent,
+  LoadSchedulingActivityResource
 } from './Scheduling/components';
 
 // Export Communication components as resources
@@ -137,20 +141,19 @@ export {
   CommunicationRunsResourceComponent,
   LoadCommunicationRunsResource
 } from './Communication/communication-runs-resource.component';
+export {
+  CommunicationTemplatesResourceComponent,
+  LoadCommunicationTemplatesResource
+} from './Communication/communication-templates-resource.component';
 
 
 // Export Testing components as resources (BaseResourceComponent-based)
 export {
-  TestingOverviewResourceComponent,
-  LoadTestingOverviewResource,
-  TestingExecutionResourceComponent,
-  LoadTestingExecutionResource,
+  TestingDashboardTabResourceComponent,
+  TestingRunsResourceComponent,
   TestingAnalyticsResourceComponent,
-  LoadTestingAnalyticsResource,
-  TestingVersionResourceComponent,
-  LoadTestingVersionResource,
-  TestingFeedbackResourceComponent,
-  LoadTestingFeedbackResource
+  TestingReviewResourceComponent,
+  TestingExplorerResourceComponent
 } from './Testing/components';
 
 // Query Browser
@@ -202,20 +205,14 @@ LoadActionsScheduleResource();
 LoadActionsCodeResource();
 LoadActionsEntitiesResource();
 LoadActionsSecurityResource();
+// Action Explorer loaders
+LoadActionExplorerResource();
+LoadActionExplorerComponents();
 
 // Scheduling resource loaders
-LoadSchedulingMonitorResource();
+LoadSchedulingDashboardResource();
 LoadSchedulingJobsResource();
-LoadSchedulingHistoryResource();
-LoadSchedulingTypesResource();
-LoadSchedulingHealthResource();
-
-// Testing resource loaders
-LoadTestingOverviewResource();
-LoadTestingExecutionResource();
-LoadTestingAnalyticsResource();
-LoadTestingVersionResource();
-LoadTestingFeedbackResource();
+LoadSchedulingActivityResource();
 
 // Data Explorer Dashboard and Resource loaders
 LoadDataExplorerDashboard();
@@ -229,6 +226,7 @@ LoadCommunicationMonitorResource();
 LoadCommunicationLogsResource();
 LoadCommunicationProvidersResource();
 LoadCommunicationRunsResource();
+LoadCommunicationTemplatesResource();
 
 // Credentials Dashboard loader
 LoadCredentialsDashboard();

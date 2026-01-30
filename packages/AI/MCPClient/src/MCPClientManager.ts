@@ -24,7 +24,8 @@ import {
     MCPServerToolEntity,
     ActionEntity,
     ActionCategoryEntity,
-    ActionParamEntity
+    ActionParamEntity,
+    ActionResultCodeEntity
 } from '@memberjunction/core-entities';
 
 import { RateLimiterRegistry, RateLimiter } from './RateLimiter.js';
@@ -709,7 +710,7 @@ export class MCPClientManager {
             // Update server LastSyncAt
             await this.updateServerLastSync(connection.serverConfig.ID, contextUser);
 
-            // Sync Actions for the tools (creates Actions in System/AI/MCP/{ServerName})
+            // Sync Actions for the tools (creates Actions in System/MCP/{ServerName})
             const actionsResult = await this.syncActionsForServer(connection.serverConfig.ID, contextUser);
             if (!actionsResult.success) {
                 LogError(`Warning: Tool sync succeeded but Actions sync failed: ${actionsResult.error}`);
@@ -745,7 +746,7 @@ export class MCPClientManager {
 
     /**
      * Syncs MCP Server Tools to MJ Actions.
-     * Creates the category hierarchy System/AI/MCP/{ServerName} and an Action for each tool.
+     * Creates the category hierarchy System/MCP/{ServerName} and an Action for each tool.
      *
      * @param serverId - The MCP Server ID to sync actions for
      * @param contextUser - The user context for database operations
@@ -779,7 +780,7 @@ export class MCPClientManager {
 
             const server = serverResult.Results[0];
 
-            // Get or create the server's category under System/AI/MCP/{ServerName}
+            // Get or create the server's category under System/MCP/{ServerName}
             const serverCategoryId = await this.getOrCreateServerCategory(server.Name, contextUser);
             if (!serverCategoryId) {
                 return {
@@ -858,7 +859,7 @@ export class MCPClientManager {
     }
 
     /**
-     * Gets or creates the category hierarchy: System/AI/MCP/{ServerName}
+     * Gets or creates the category hierarchy: System/MCP/{ServerName}
      *
      * @param serverName - The MCP Server name to create category for
      * @param contextUser - The user context
@@ -881,22 +882,10 @@ export class MCPClientManager {
                 return null;
             }
 
-            // Step 2: Find or create "AI" category under System
-            const aiCategoryId = await this.findOrCreateCategory(
-                'AI',
-                systemCategoryId,
-                'AI Actions',
-                contextUser
-            );
-            if (!aiCategoryId) {
-                LogError('Failed to find or create AI category');
-                return null;
-            }
-
-            // Step 3: Find or create "MCP" category under AI
+            // Step 2: Find or create "MCP" category under System
             const mcpCategoryId = await this.findOrCreateCategory(
                 'MCP',
-                aiCategoryId,
+                systemCategoryId,
                 'Model Context Protocol (MCP) server tools exposed as Actions',
                 contextUser
             );
@@ -905,7 +894,7 @@ export class MCPClientManager {
                 return null;
             }
 
-            // Step 4: Find or create server-specific category under MCP
+            // Step 3: Find or create server-specific category under MCP
             const serverCategoryId = await this.findOrCreateCategory(
                 serverName,
                 mcpCategoryId,
@@ -1044,13 +1033,19 @@ export class MCPClientManager {
             await toolEntity.Save();
         }
 
-        // Sync action params from tool's InputSchema
+        // Sync action params from tool's InputSchema (input params)
         const paramResult = await this.syncActionParamsFromSchema(action.ID, tool.InputSchema, contextUser);
+
+        // Sync standard output params for MCP tools
+        const outputParamResult = await this.syncMCPOutputParams(action.ID, contextUser);
+
+        // Sync standard result codes for MCP tools
+        await this.syncMCPResultCodes(action.ID, contextUser);
 
         return {
             created,
-            paramsCreated: paramResult.created,
-            paramsUpdated: paramResult.updated,
+            paramsCreated: paramResult.created + outputParamResult.created,
+            paramsUpdated: paramResult.updated + outputParamResult.updated,
             paramsDeleted: paramResult.deleted
         };
     }
@@ -1204,6 +1199,153 @@ export class MCPClientManager {
                 return 'Scalar';  // Array flag is set separately
             default:
                 return 'Other';
+        }
+    }
+
+    /**
+     * Standard output parameters for all MCP tool actions.
+     */
+    private static readonly MCP_OUTPUT_PARAMS = [
+        { Name: 'ToolOutput', ValueType: 'Other' as const, IsArray: false, Description: 'Raw output content from the MCP tool' },
+        { Name: 'StructuredOutput', ValueType: 'Simple Object' as const, IsArray: false, Description: 'Parsed/structured output if available' },
+        { Name: 'DurationMs', ValueType: 'Scalar' as const, IsArray: false, Description: 'Tool execution duration in milliseconds' },
+        { Name: 'IsToolError', ValueType: 'Scalar' as const, IsArray: false, Description: 'Whether the tool returned an error response' }
+    ];
+
+    /**
+     * Standard result codes for all MCP tool actions.
+     */
+    private static readonly MCP_RESULT_CODES = [
+        { ResultCode: 'SUCCESS', IsSuccess: true, Description: 'Tool executed successfully' },
+        { ResultCode: 'TOOL_NOT_FOUND', IsSuccess: false, Description: 'No MCP Server Tool linked to this action' },
+        { ResultCode: 'NO_CONNECTION', IsSuccess: false, Description: 'No active connection available for the MCP server' },
+        { ResultCode: 'TOOL_ERROR', IsSuccess: false, Description: 'Tool executed but returned an error response' },
+        { ResultCode: 'EXECUTION_FAILED', IsSuccess: false, Description: 'Protocol or transport error during tool execution' },
+        { ResultCode: 'UNEXPECTED_ERROR', IsSuccess: false, Description: 'Unhandled exception during action execution' }
+    ];
+
+    /**
+     * Syncs standard output parameters for MCP tool actions.
+     *
+     * @param actionId - The Action ID
+     * @param contextUser - User context
+     * @returns Counts of created and updated params
+     */
+    private async syncMCPOutputParams(
+        actionId: string,
+        contextUser: UserInfo
+    ): Promise<{ created: number; updated: number }> {
+        const md = new Metadata();
+        const rv = new RunView();
+
+        let created = 0;
+        let updated = 0;
+
+        // Get existing output params for this action
+        const existingResult = await rv.RunView<ActionParamEntity>({
+            EntityName: 'Action Params',
+            ExtraFilter: `ActionID='${actionId}' AND Type='Output'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        const existingParams = existingResult.Success ? existingResult.Results : [];
+        const existingParamMap = new Map(existingParams.map(p => [p.Name, p]));
+
+        // Process standard MCP output params
+        for (const paramDef of MCPClientManager.MCP_OUTPUT_PARAMS) {
+            const existing = existingParamMap.get(paramDef.Name);
+
+            if (existing) {
+                // Update existing param if needed
+                let dirty = false;
+                if (existing.Description !== paramDef.Description) {
+                    existing.Description = paramDef.Description;
+                    dirty = true;
+                }
+                if (existing.ValueType !== paramDef.ValueType) {
+                    existing.ValueType = paramDef.ValueType;
+                    dirty = true;
+                }
+                if (existing.IsArray !== paramDef.IsArray) {
+                    existing.IsArray = paramDef.IsArray;
+                    dirty = true;
+                }
+                if (dirty) {
+                    await existing.Save();
+                    updated++;
+                }
+            } else {
+                // Create new output param
+                const param = await md.GetEntityObject<ActionParamEntity>('Action Params', contextUser);
+                param.NewRecord();
+                param.ActionID = actionId;
+                param.Name = paramDef.Name;
+                param.Type = 'Output';
+                param.ValueType = paramDef.ValueType;
+                param.IsArray = paramDef.IsArray;
+                param.IsRequired = false;
+                param.Description = paramDef.Description;
+
+                await param.Save();
+                created++;
+            }
+        }
+
+        return { created, updated };
+    }
+
+    /**
+     * Syncs standard result codes for MCP tool actions.
+     *
+     * @param actionId - The Action ID
+     * @param contextUser - User context
+     */
+    private async syncMCPResultCodes(
+        actionId: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();
+        const rv = new RunView();
+
+        // Get existing result codes for this action
+        const existingResult = await rv.RunView<ActionResultCodeEntity>({
+            EntityName: 'Action Result Codes',
+            ExtraFilter: `ActionID='${actionId}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        const existingCodes = existingResult.Success ? existingResult.Results : [];
+        const existingCodeMap = new Map(existingCodes.map(c => [c.ResultCode, c]));
+
+        // Process standard MCP result codes
+        for (const codeDef of MCPClientManager.MCP_RESULT_CODES) {
+            const existing = existingCodeMap.get(codeDef.ResultCode);
+
+            if (existing) {
+                // Update existing code if needed
+                let dirty = false;
+                if (existing.IsSuccess !== codeDef.IsSuccess) {
+                    existing.IsSuccess = codeDef.IsSuccess;
+                    dirty = true;
+                }
+                if (existing.Description !== codeDef.Description) {
+                    existing.Description = codeDef.Description;
+                    dirty = true;
+                }
+                if (dirty) {
+                    await existing.Save();
+                }
+            } else {
+                // Create new result code
+                const code = await md.GetEntityObject<ActionResultCodeEntity>('Action Result Codes', contextUser);
+                code.NewRecord();
+                code.ActionID = actionId;
+                code.ResultCode = codeDef.ResultCode;
+                code.IsSuccess = codeDef.IsSuccess;
+                code.Description = codeDef.Description;
+
+                await code.Save();
+            }
         }
     }
 

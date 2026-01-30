@@ -1,0 +1,70 @@
+.action-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 20px;
+  background: var(--kendo-color-app-surface);
+  border-bottom: 1px solid var(--kendo-color-border);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--kendo-color-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+
+.breadcrumb-item:hover {
+  background: var(--kendo-color-primary-subtle);
+}
+
+.breadcrumb-item.current {
+  color: var(--kendo-color-on-app-surface);
+  font-weight: 600;
+  cursor: default;
+}
+
+.breadcrumb-item.current:hover {
+  background: transparent;
+}
+
+.breadcrumb-item i {
+  font-size: 12px;
+}
+
+.breadcrumb-item.current i {
+  color: var(--kendo-color-warning);
+}
+
+.breadcrumb-text {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breadcrumb-separator {
+  display: flex;
+  align-items: center;
+  color: var(--kendo-color-subtle);
+}
+
+.breadcrumb-separator i {
+  font-size: 10px;
+}
+
+/* Responsive - collapse middle items on small screens */
+@media (max-width: 640px) {
+  .breadcrumb-text {
+    max-width: 80px;
+  }
+}
