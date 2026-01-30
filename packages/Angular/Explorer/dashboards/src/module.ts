@@ -1,6 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
@@ -41,6 +41,7 @@ import {
   NewActionPanelComponent
 } from './Actions/components/explorer';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { NavigationModule } from '@progress/kendo-angular-navigation';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
@@ -70,6 +71,7 @@ import { CodeEditorPanelComponent } from './ComponentStudio/components/editors/c
 import { RequirementsEditorComponent } from './ComponentStudio/components/editors/requirements-editor.component';
 import { DataRequirementsEditorComponent } from './ComponentStudio/components/editors/data-requirements-editor.component';
 import { AIAssistantPanelComponent } from './ComponentStudio/components/ai-assistant/ai-assistant-panel.component';
+import { NewComponentDialogComponent } from './ComponentStudio/components/new-component-dialog/new-component-dialog.component';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { MJReactModule } from '@memberjunction/ng-react';
@@ -218,6 +220,7 @@ import { ActionsModule } from '@memberjunction/ng-actions';
     RequirementsEditorComponent,
     DataRequirementsEditorComponent,
     AIAssistantPanelComponent,
+    NewComponentDialogComponent,
     // Scheduling Dashboard Components
     SchedulingDashboardComponent,
     SchedulingOverviewComponent,
@@ -291,6 +294,7 @@ import { ActionsModule } from '@memberjunction/ng-actions';
   imports: [
     CommonModule,
     FormsModule,
+    ReactiveFormsModule,
     IndicatorsModule,
     DropDownsModule,
     InputsModule,
@@ -326,7 +330,8 @@ import { ActionsModule } from '@memberjunction/ng-actions';
     MCPModule,
     CredentialsModule,
     SharedPipesModule,
-    ActionsModule
+    ActionsModule,
+    MarkdownModule
   ],
   providers: [
     AIInstrumentationService,

@@ -8,7 +8,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f8f9fa;
+  background: var(--mat-sys-surface-container-low);
   overflow: hidden;
 }
 
@@ -21,8 +21,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;
-  background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--mat-sys-surface);
+  border-bottom: 1px solid var(--mat-sys-outline);
   min-height: 42px;
   gap: 12px;
   flex-shrink: 0;
@@ -54,10 +54,10 @@
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--mat-sys-outline);
   border-radius: 5px;
-  background: #ffffff;
-  color: #374151;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -66,7 +66,7 @@
 }
 
 .toolbar-btn:hover {
-  background: #f3f4f6;
+  background: var(--mat-sys-surface-variant);
   border-color: #9ca3af;
 }
 
@@ -112,7 +112,7 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--mat-sys-on-surface-variant);
   font-weight: 500;
   max-width: 200px;
   overflow: hidden;
@@ -137,10 +137,10 @@
 
 .viewport-selector {
   display: inline-flex;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: var(--mat-sys-corner-extra-small);
   overflow: hidden;
-  background: #f9fafb;
+  background: var(--mat-sys-surface-container-lowest);
 }
 
 .viewport-btn {
@@ -151,28 +151,28 @@
   height: 28px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--mat-sys-on-surface-variant);
   cursor: pointer;
   font-size: 13px;
   transition: all 0.15s ease;
 }
 
 .viewport-btn:not(:last-child) {
-  border-right: 1px solid #d1d5db;
+  border-right: 1px solid var(--mat-sys-outline);
 }
 
 .viewport-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
 }
 
 .viewport-btn.active {
-  background: #6366f1;
+  background: var(--mat-sys-primary);
   color: #ffffff;
 }
 
 .viewport-btn.active:hover {
-  background: #4f46e5;
+  background: var(--mat-sys-primary);
 }
 
 /* ============================================================
@@ -193,14 +193,14 @@
   margin: 0 auto;
   transition: max-width 0.3s ease;
   overflow: auto;
-  background: #ffffff;
+  background: var(--mat-sys-surface);
 }
 
 .preview-container.mobile,
 .preview-container.tablet {
-  border-left: 1px solid #e2e8f0;
-  border-right: 1px solid #e2e8f0;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+  border-left: 1px solid var(--mat-sys-outline);
+  border-right: 1px solid var(--mat-sys-outline);
+  box-shadow: var(--mat-sys-elevation-1);
 }
 
 .preview-container.desktop {
@@ -220,31 +220,31 @@
   width: 100%;
   text-align: center;
   padding: 40px 24px;
-  color: #94a3b8;
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .empty-state i {
   margin-bottom: 16px;
-  color: #cbd5e1;
+  color: var(--mat-sys-outline);
 }
 
 .empty-state h3 {
   margin: 0 0 8px 0;
   font-size: 18px;
   font-weight: 600;
-  color: #475569;
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .empty-state p {
   margin: 0;
   font-size: 14px;
-  color: #94a3b8;
+  color: var(--mat-sys-on-surface-variant);
   max-width: 320px;
   line-height: 1.5;
 }
 
 .run-state h3 {
-  color: #334155;
+  color: var(--mat-sys-on-surface);
 }
 
 .run-component-btn {
@@ -254,8 +254,8 @@
   margin-top: 20px;
   padding: 10px 24px;
   border: none;
-  border-radius: 8px;
-  background: #6366f1;
+  border-radius: var(--mat-sys-corner-small);
+  background: var(--mat-sys-primary);
   color: #ffffff;
   font-size: 14px;
   font-weight: 600;
@@ -264,7 +264,7 @@
 }
 
 .run-component-btn:hover {
-  background: #4f46e5;
+  background: var(--mat-sys-primary);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }

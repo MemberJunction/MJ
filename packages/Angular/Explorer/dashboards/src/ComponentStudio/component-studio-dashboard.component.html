@@ -1,37 +1,53 @@
-<div class="component-studio" kendoDialogContainer>
-  <!-- Compact Toolbar (no redundant title - the nav tab already says "Component Studio") -->
+<div class="component-studio" [class.resizing]="IsResizing" kendoDialogContainer>
+
+  <!-- ============================================================
+       TOOLBAR — Unified bar with integrated breadcrumb
+       Left: hamburger + breadcrumb context
+       Right: Save | Export | divider | AI | Keyboard | Refresh
+       ============================================================ -->
   <div class="studio-toolbar">
-    <div class="toolbar-left">
-      @if (state.SelectedComponent && state.IsRunning) {
-        <span class="component-name">
-          <i class="fa-solid fa-circle running-dot"></i>
-          {{ state.GetComponentName(state.SelectedComponent) }}
+    <div class="toolbar-context">
+      <!-- Toggle left panel -->
+      <button class="tb-btn icon-only" title="Toggle browser panel" (click)="ToggleLeftPanel()">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+
+      @if (state.SelectedComponent) {
+        <span class="breadcrumb-type">
+          <i class="fa-solid fa-cube"></i>
+          {{ state.GetComponentType(state.SelectedComponent) || 'Component' }}
         </span>
-      }
-      @if (state.SelectedComponent && state.HasUnsavedChanges) {
-        <span class="unsaved-indicator" title="Unsaved changes">
-          <i class="fa-solid fa-circle"></i>
-        </span>
+        <span class="breadcrumb-sep"><i class="fa-solid fa-chevron-right"></i></span>
+        <span class="component-label">{{ state.GetComponentName(state.SelectedComponent) }}</span>
+
+        @if (state.IsRunning) {
+          <span class="running-badge">
+            <span class="running-dot-small"></span>
+            Running
+          </span>
+        }
+        @if (state.HasUnsavedChanges) {
+          <span class="unsaved-dot" title="Unsaved changes"></span>
+        }
       }
     </div>
+
+    <div class="toolbar-spacer"></div>
+
     <div class="toolbar-actions">
       <!-- Save Version -->
       @if (state.SelectedComponent) {
-        <button kendoButton (click)="SaveVersion()" [themeColor]="'primary'"
-                [title]="'Save version (Ctrl+S)'" class="save-btn">
-          <span class="fa-solid fa-save"></span> Save Version
-          @if (state.HasUnsavedChanges) {
-            <span class="unsaved-dot"></span>
-          }
+        <button class="tb-btn primary" (click)="SaveVersion()" title="Save version (Ctrl+S)">
+          <i class="fa-solid fa-save"></i> Save
         </button>
       }
 
-      <!-- Export (only when running) -->
+      <!-- Export -->
       @if (state.SelectedComponent && state.IsRunning) {
         <div class="header-dropdown" [class.open]="exportDropdownOpen">
-          <button kendoButton (click)="ToggleExportDropdown()" [themeColor]="'base'">
-            <span class="fa-solid fa-file-export"></span> Export
-            <span class="fa-solid fa-chevron-down dropdown-chevron"></span>
+          <button class="tb-btn" (click)="ToggleExportDropdown()">
+            <i class="fa-solid fa-file-export"></i> Export
+            <i class="fa-solid fa-chevron-down dropdown-icon"></i>
           </button>
           @if (exportDropdownOpen) {
             <div class="dropdown-menu">
@@ -49,70 +65,119 @@
         </div>
       }
 
+      <span class="toolbar-divider"></span>
+
       <!-- AI Panel Toggle -->
-      <button kendoButton (click)="ToggleAIPanel()" [themeColor]="'base'"
+      <button class="tb-btn icon-only" [class.active-toggle]="!state.IsAIPanelCollapsed"
+              (click)="ToggleAIPanel()"
               [title]="state.IsAIPanelCollapsed ? 'Show AI Assistant' : 'Hide AI Assistant'">
-        <span class="fa-solid fa-robot"></span>
-        @if (state.IsAIPanelCollapsed) {
-          <span>AI</span>
-        }
+        <i class="fa-solid fa-robot"></i>
+      </button>
+
+      <!-- Keyboard Shortcuts -->
+      <button class="tb-btn icon-only" (click)="ShowKeyboardShortcuts = !ShowKeyboardShortcuts"
+              title="Keyboard shortcuts (?)">
+        <i class="fa-solid fa-keyboard"></i>
       </button>
 
       <!-- Refresh -->
-      <button kendoButton (click)="RefreshData()" [disabled]="state.IsLoading" [themeColor]="'base'">
-        <span class="fa-solid fa-sync"></span>
+      <button class="tb-btn icon-only" (click)="RefreshData()" [disabled]="state.IsLoading" title="Refresh data">
+        <i class="fa-solid fa-arrows-rotate"></i>
       </button>
     </div>
+
     <!-- Hidden file input -->
     <input #fileInput type="file" accept=".json" (change)="HandleFileSelect($event)" style="display: none;" />
   </div>
 
-  <!-- Three-Panel Layout -->
+  <!-- ============================================================
+       THREE-PANEL BODY
+       ============================================================ -->
   <div class="studio-body">
-    <!-- Left Panel: Component Browser -->
-    <div class="panel panel-left" [style.width.px]="leftPanelWidth">
-      <mj-component-browser
-        (NewComponent)="OnNewComponent()"
-        (ImportFile)="ImportFromFile()"
-        (ImportText)="ImportFromText()"
-        (ImportArtifact)="ImportFromArtifact()">
-      </mj-component-browser>
-    </div>
 
-    <!-- Resize Handle: Left ↔ Center -->
-    <div class="resize-handle" (mousedown)="OnLeftResizeStart($event)">
-      <div class="handle-grip"></div>
-    </div>
+    <!-- Left Panel: Component Browser (collapsible) -->
+    @if (!IsLeftPanelCollapsed) {
+      <div class="panel panel-left" [style.width.px]="leftPanelWidth">
+        <mj-component-browser
+          (NewComponent)="OnNewComponent()"
+          (ImportFile)="ImportFromFile()"
+          (ImportText)="ImportFromText()"
+          (ImportArtifact)="ImportFromArtifact()">
+        </mj-component-browser>
+      </div>
 
-    <!-- Center Panel: Workspace -->
+      <!-- Resize Handle: Left <-> Center -->
+      <div class="resize-handle" (mousedown)="OnLeftResizeStart($event)"></div>
+    }
+
+    <!-- Center Panel: Workspace (side-by-side: Preview LEFT, Editor RIGHT) -->
     <div class="panel panel-center">
       @if (state.SelectedComponent) {
-        <!-- Preview (top) -->
-        <div class="workspace-preview" [style.flex]="previewFlex">
-          <mj-component-preview
-            (AskAIToFix)="OnAskAIToFix($event)">
-          </mj-component-preview>
+        <!-- Preview (left side) -->
+        <div class="workspace-preview" [class.full-width]="IsEditorPanelCollapsed" [style.flex]="IsEditorPanelCollapsed ? '1 1 100%' : previewFlex">
+          <div class="preview-sub-header">
+            <div class="preview-sub-left">
+              <i class="fa-solid fa-eye"></i>
+              <span>Preview</span>
+            </div>
+            <div class="preview-sub-right">
+              <!-- Toggle editor panel -->
+              <button class="toggle-editors-btn" [class.active]="!IsEditorPanelCollapsed"
+                      (click)="ToggleEditorPanel()" title="Toggle editor panel">
+                <i class="fa-solid fa-columns"></i>
+              </button>
+            </div>
+          </div>
+          <div class="preview-body">
+            <mj-component-preview
+              (AskAIToFix)="OnAskAIToFix($event)">
+            </mj-component-preview>
+          </div>
         </div>
 
-        <!-- Resize Handle: Preview ↔ Editors -->
-        <div class="resize-handle horizontal" (mousedown)="OnVerticalResizeStart($event)">
-          <div class="handle-grip horizontal"></div>
-        </div>
+        <!-- Resize Handle: Preview <-> Editor (obvious center divider) -->
+        @if (!IsEditorPanelCollapsed) {
+          <div class="resize-handle center-divider" (mousedown)="OnCenterResizeStart($event)">
+            <div class="divider-grip"></div>
+          </div>
+        }
 
-        <!-- Editor Tabs (bottom) -->
-        <div class="workspace-editors" [style.flex]="editorFlex">
-          <mj-editor-tabs></mj-editor-tabs>
-        </div>
+        <!-- Editor Tabs (right side, collapsible) -->
+        @if (!IsEditorPanelCollapsed) {
+          <div class="workspace-editors" [style.flex]="editorFlex">
+            <mj-editor-tabs></mj-editor-tabs>
+          </div>
+        }
       } @else {
-        <!-- Empty State -->
+        <!-- Enhanced Empty State -->
         <div class="empty-state">
           <div class="empty-state-content">
-            <i class="fa-solid fa-rocket fa-4x"></i>
+            <div class="empty-state-icon">
+              <i class="fa-solid fa-rocket"></i>
+            </div>
             <h2>Ready to Build</h2>
             <p>Select a component from the browser or create a new one to get started</p>
             <div class="empty-state-actions">
               <button kendoButton [themeColor]="'primary'" (click)="OnNewComponent()">
                 <span class="fa-solid fa-plus"></span> New Component
+              </button>
+              <button kendoButton [themeColor]="'base'" (click)="ImportFromFile()">
+                <span class="fa-solid fa-file-import"></span> Import
+              </button>
+            </div>
+            <div class="quick-start-templates">
+              <span class="quick-start-label">Quick start:</span>
+              <button class="quick-start-btn" (click)="OnQuickStart('dashboard')">
+                <i class="fa-solid fa-chart-line"></i> Dashboard
+              </button>
+              <button class="quick-start-btn" (click)="OnQuickStart('report')">
+                <i class="fa-solid fa-file-alt"></i> Report
+              </button>
+              <button class="quick-start-btn" (click)="OnQuickStart('chart')">
+                <i class="fa-solid fa-chart-pie"></i> Chart
+              </button>
+              <button class="quick-start-btn" (click)="OnQuickStart('form')">
+                <i class="fa-solid fa-edit"></i> Form
               </button>
             </div>
           </div>
@@ -120,11 +185,9 @@
       }
     </div>
 
-    <!-- Resize Handle: Center ↔ Right -->
+    <!-- Resize Handle: Center <-> Right -->
     @if (!state.IsAIPanelCollapsed) {
-      <div class="resize-handle" (mousedown)="OnRightResizeStart($event)">
-        <div class="handle-grip"></div>
-      </div>
+      <div class="resize-handle" (mousedown)="OnRightResizeStart($event)"></div>
     }
 
     <!-- Right Panel: AI Assistant -->
@@ -134,4 +197,74 @@
       </div>
     }
   </div>
+
+  <!-- ============================================================
+       STATUS BAR
+       ============================================================ -->
+  <div class="status-bar">
+    <div class="status-left">
+      <span class="status-item">
+        <i class="fa-solid fa-cube"></i>
+        {{ state.FilteredComponents.length }} component{{ state.FilteredComponents.length !== 1 ? 's' : '' }}
+      </span>
+    </div>
+    <div class="status-right">
+      @if (LastSavedTime) {
+        <span class="status-item">
+          <i class="fa-solid fa-check-circle"></i>
+          Saved {{ LastSavedTime | date:'shortTime' }}
+        </span>
+      }
+      <span class="status-item shortcut-hint">
+        <kbd>?</kbd> Shortcuts
+      </span>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       KEYBOARD SHORTCUTS OVERLAY
+       ============================================================ -->
+  @if (ShowKeyboardShortcuts) {
+    <div class="shortcuts-overlay" (click)="ShowKeyboardShortcuts = false">
+      <div class="shortcuts-panel" (click)="$event.stopPropagation()">
+        <div class="shortcuts-header">
+          <h3>Keyboard Shortcuts</h3>
+          <button class="shortcuts-close" (click)="ShowKeyboardShortcuts = false">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="shortcuts-body">
+          <div class="shortcut-group">
+            <h4>General</h4>
+            <div class="shortcut-row">
+              <span class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>S</kbd></span>
+              <span class="shortcut-desc">Save version</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>N</kbd></span>
+              <span class="shortcut-desc">New component</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-keys"><kbd>?</kbd></span>
+              <span class="shortcut-desc">Toggle shortcuts</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-keys"><kbd>Esc</kbd></span>
+              <span class="shortcut-desc">Close overlay</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============================================================
+       NEW COMPONENT DIALOG
+       ============================================================ -->
+  @if (ShowNewComponentDialog) {
+    <mj-new-component-dialog
+      [Visible]="ShowNewComponentDialog"
+      (Close)="OnNewComponentDialogClose($event)">
+    </mj-new-component-dialog>
+  }
 </div>

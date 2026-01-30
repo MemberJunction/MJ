@@ -69,18 +69,18 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
       justify-content: space-between;
       align-items: center;
       padding: 8px 12px;
-      border-bottom: 1px solid #e0e0e0;
-      background: #fafafa;
+      border-bottom: 1px solid var(--mat-sys-outline-variant);
+      background: var(--mat-sys-surface-container-lowest);
       flex-shrink: 0;
     }
     .header-title {
       font-weight: 600;
       font-size: 13px;
-      color: #333;
+      color: var(--mat-sys-on-surface);
     }
     .header-title i {
       margin-right: 6px;
-      color: #666;
+      color: var(--mat-sys-on-surface-variant);
     }
     .action-buttons {
       display: flex;
@@ -90,10 +90,10 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
       display: flex;
       gap: 12px;
       padding: 6px 12px;
-      background: #F0F9FF;
-      border-bottom: 1px solid #BAE6FD;
+      background: var(--mat-sys-primary-container);
+      border-bottom: 1px solid var(--mat-sys-outline-variant);
       font-size: 12px;
-      color: #0369A1;
+      color: var(--mat-sys-on-primary-container);
       flex-shrink: 0;
     }
     .summary-item {
@@ -102,7 +102,8 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
       gap: 4px;
     }
     .mode-badge {
-      background: #DBEAFE;
+      background: var(--mat-sys-surface-container-high);
+      color: var(--mat-sys-on-surface);
       padding: 1px 8px;
       border-radius: 10px;
       font-weight: 600;
@@ -129,7 +130,7 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
       align-items: center;
       justify-content: center;
       padding: 40px 20px;
-      color: #999;
+      color: var(--mat-sys-on-surface-variant);
       flex: 1;
     }
     .empty-state i {

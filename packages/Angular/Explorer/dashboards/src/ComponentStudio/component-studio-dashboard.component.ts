@@ -5,7 +5,8 @@ import { Metadata } from '@memberjunction/core';
 import {
   ComponentEntityExtended,
   ArtifactVersionEntity,
-  ResourceData
+  ResourceData,
+  UserInfoEngine
 } from '@memberjunction/core-entities';
 import { Subject, takeUntil } from 'rxjs';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -19,6 +20,28 @@ import { ComponentStudioStateService, FileLoadedComponent, ComponentError } from
 import { ComponentVersionService } from './services/component-version.service';
 import { RunView } from '@memberjunction/core';
 
+/**
+ * User preferences persisted via UserInfoEngine.
+ */
+interface ComponentStudioPreferences {
+  leftPanelWidth: number;
+  rightPanelWidth: number;
+  previewFlexPercent: number;
+  isAIPanelCollapsed: boolean;
+  isLeftPanelCollapsed: boolean;
+  isEditorPanelCollapsed: boolean;
+}
+
+/**
+ * Result from the New Component dialog.
+ */
+export interface NewComponentResult {
+  name: string;
+  title: string;
+  description: string;
+  type: string;
+}
+
 @Component({
   selector: 'mj-component-studio-dashboard',
   templateUrl: './component-studio-dashboard.component.html',
@@ -28,20 +51,37 @@ import { RunView } from '@memberjunction/core';
 @RegisterClass(BaseDashboard, 'ComponentStudioDashboard')
 export class ComponentStudioDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
 
+  private static readonly USER_PREFS_KEY = 'ComponentStudio.UserPreferences';
+
   // --- Panel widths ---
   public leftPanelWidth = 340;
   public rightPanelWidth = 380;
   public previewFlex = '1 1 50%';
   public editorFlex = '1 1 50%';
+  private previewFlexPercent = 50;
 
   // --- Dropdown states ---
   public exportDropdownOpen = false;
 
   // --- Resize state ---
-  private resizeType: 'left' | 'right' | 'vertical' | null = null;
+  public IsResizing = false;
+  private resizeType: 'left' | 'right' | 'center' | null = null;
   private resizeStartX = 0;
-  private resizeStartY = 0;
   private resizeStartValue = 0;
+
+  // --- Collapsible panels ---
+  public IsLeftPanelCollapsed = false;
+  public IsEditorPanelCollapsed = false;
+
+  // --- Dialog states ---
+  public ShowNewComponentDialog = false;
+  public ShowKeyboardShortcuts = false;
+
+  // --- Status bar ---
+  public LastSavedTime: Date | null = null;
+
+  // --- Preferences ---
+  private prefsLoaded = false;
 
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
 
@@ -70,6 +110,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       this.cdr.detectChanges();
     });
 
+    this.loadUserPreferences();
     await this.state.LoadComponents();
     this.NotifyLoadComplete();
   }
@@ -88,16 +129,115 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   // ============================================================
+  // USER PREFERENCES
+  // ============================================================
+
+  private loadUserPreferences(): void {
+    try {
+      const saved = UserInfoEngine.Instance.GetSetting(ComponentStudioDashboardComponent.USER_PREFS_KEY);
+      if (saved) {
+        const prefs = JSON.parse(saved) as ComponentStudioPreferences;
+        this.applyPreferences(prefs);
+      }
+    } catch (error) {
+      console.warn('[ComponentStudio] Failed to load user preferences:', error);
+    } finally {
+      this.prefsLoaded = true;
+    }
+  }
+
+  private applyPreferences(prefs: ComponentStudioPreferences): void {
+    if (prefs.leftPanelWidth) this.leftPanelWidth = prefs.leftPanelWidth;
+    if (prefs.rightPanelWidth) this.rightPanelWidth = prefs.rightPanelWidth;
+    if (prefs.previewFlexPercent) {
+      this.previewFlexPercent = prefs.previewFlexPercent;
+      this.previewFlex = `1 1 ${prefs.previewFlexPercent}%`;
+      this.editorFlex = `1 1 ${100 - prefs.previewFlexPercent}%`;
+    }
+    if (prefs.isAIPanelCollapsed != null) {
+      this.state.IsAIPanelCollapsed = prefs.isAIPanelCollapsed;
+    }
+    if (prefs.isLeftPanelCollapsed != null) {
+      this.IsLeftPanelCollapsed = prefs.isLeftPanelCollapsed;
+    }
+    if (prefs.isEditorPanelCollapsed != null) {
+      this.IsEditorPanelCollapsed = prefs.isEditorPanelCollapsed;
+    }
+  }
+
+  private getCurrentPreferences(): ComponentStudioPreferences {
+    return {
+      leftPanelWidth: this.leftPanelWidth,
+      rightPanelWidth: this.rightPanelWidth,
+      previewFlexPercent: this.previewFlexPercent,
+      isAIPanelCollapsed: this.state.IsAIPanelCollapsed,
+      isLeftPanelCollapsed: this.IsLeftPanelCollapsed,
+      isEditorPanelCollapsed: this.IsEditorPanelCollapsed
+    };
+  }
+
+  private saveUserPreferences(): void {
+    if (!this.prefsLoaded) return;
+    try {
+      UserInfoEngine.Instance.SetSetting(
+        ComponentStudioDashboardComponent.USER_PREFS_KEY,
+        JSON.stringify(this.getCurrentPreferences())
+      );
+    } catch (error) {
+      console.warn('[ComponentStudio] Failed to save user preferences:', error);
+    }
+  }
+
+  private saveUserPreferencesDebounced(): void {
+    if (!this.prefsLoaded) return;
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(
+        ComponentStudioDashboardComponent.USER_PREFS_KEY,
+        JSON.stringify(this.getCurrentPreferences())
+      );
+    } catch (error) {
+      console.warn('[ComponentStudio] Failed to save user preferences:', error);
+    }
+  }
+
+  // ============================================================
   // KEYBOARD SHORTCUTS
   // ============================================================
 
   @HostListener('document:keydown', ['$event'])
   OnKeyDown(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement;
+    const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
     // Ctrl+S / Cmd+S = Save Version
     if ((event.ctrlKey || event.metaKey) && event.key === 's') {
       event.preventDefault();
       if (this.state.SelectedComponent) {
         this.SaveVersion();
+      }
+    }
+
+    // Ctrl+N / Cmd+N = New Component
+    if ((event.ctrlKey || event.metaKey) && event.key === 'n') {
+      event.preventDefault();
+      this.OnNewComponent();
+    }
+
+    // Ctrl+/ or ? = Toggle keyboard shortcuts
+    if ((event.ctrlKey || event.metaKey) && event.key === '/') {
+      event.preventDefault();
+      this.ShowKeyboardShortcuts = !this.ShowKeyboardShortcuts;
+      this.cdr.detectChanges();
+    } else if (event.key === '?' && !isInputFocused) {
+      this.ShowKeyboardShortcuts = !this.ShowKeyboardShortcuts;
+      this.cdr.detectChanges();
+    }
+
+    // Escape = Close overlays
+    if (event.key === 'Escape') {
+      if (this.ShowKeyboardShortcuts) {
+        this.ShowKeyboardShortcuts = false;
+        this.cdr.detectChanges();
       }
     }
   }
@@ -115,6 +255,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
     const success = await this.versionService.SaveVersion(comment || undefined);
     if (success) {
+      this.LastSavedTime = new Date();
       this.notificationService.CreateSimpleNotification(
         `Saved as v${this.versionService.CurrentVersionNumber}`,
         'success',
@@ -136,6 +277,19 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   ToggleAIPanel(): void {
     this.state.IsAIPanelCollapsed = !this.state.IsAIPanelCollapsed;
+    this.saveUserPreferences();
+    this.cdr.detectChanges();
+  }
+
+  ToggleLeftPanel(): void {
+    this.IsLeftPanelCollapsed = !this.IsLeftPanelCollapsed;
+    this.saveUserPreferences();
+    this.cdr.detectChanges();
+  }
+
+  ToggleEditorPanel(): void {
+    this.IsEditorPanelCollapsed = !this.IsEditorPanelCollapsed;
+    this.saveUserPreferences();
     this.cdr.detectChanges();
   }
 
@@ -154,27 +308,45 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // ============================================================
 
   OnNewComponent(): void {
-    const name = prompt('Component name:');
-    if (!name) return;
+    this.ShowNewComponentDialog = true;
+    this.cdr.detectChanges();
+  }
 
-    const newSpec: ComponentSpec = {
-      name,
-      title: name,
+  OnNewComponentDialogClose(result: NewComponentResult | null): void {
+    this.ShowNewComponentDialog = false;
+    if (!result) {
+      this.cdr.detectChanges();
+      return;
+    }
+    this.createComponentFromResult(result);
+    this.cdr.detectChanges();
+  }
+
+  OnQuickStart(type: string): void {
+    const typeNames: Record<string, string> = {
+      dashboard: 'Dashboard',
+      report: 'Report',
+      chart: 'Chart',
+      form: 'Form'
+    };
+    const typeName = typeNames[type] || 'Component';
+    this.createComponentFromResult({
+      name: `New ${typeName}`,
+      title: `New ${typeName}`,
       description: '',
-      type: 'dashboard',
+      type
+    });
+  }
+
+  private createComponentFromResult(result: NewComponentResult): void {
+    const newSpec: ComponentSpec = {
+      name: result.name,
+      title: result.title,
+      description: result.description,
+      type: result.type,
       location: 'embedded',
       exampleUsage: '',
-      code: `function Component({ utilities, settings }) {
-  const React = utilities.React;
-  const { useState } = React;
-
-  return React.createElement('div', {
-    style: { padding: '24px', fontFamily: 'system-ui' }
-  },
-    React.createElement('h2', null, '${name}'),
-    React.createElement('p', null, 'Start building your component here.')
-  );
-}`,
+      code: this.getTemplateCode(result.name, result.type),
       functionalRequirements: '',
       dataRequirements: { mode: 'views', entities: [], queries: [], description: '' },
       technicalDesign: ''
@@ -182,19 +354,33 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
     const fileComponent: FileLoadedComponent = {
       id: this.state.GenerateId(),
-      name,
-      description: '',
+      name: result.name,
+      description: result.description,
       specification: newSpec,
       filename: 'new-component.json',
       loadedAt: new Date(),
       isFileLoaded: true,
-      type: 'Dashboard',
+      type: result.type || 'Dashboard',
       status: 'New'
     };
 
     this.state.AddFileLoadedComponent(fileComponent);
     this.state.ExpandedComponent = fileComponent;
     this.state.RunComponent(fileComponent);
+  }
+
+  private getTemplateCode(name: string, type: string): string {
+    return `function Component({ utilities, settings }) {
+  const React = utilities.React;
+  const { useState } = React;
+
+  return React.createElement('div', {
+    style: { padding: '24px', fontFamily: 'system-ui' }
+  },
+    React.createElement('h2', null, '${name}'),
+    React.createElement('p', null, 'Start building your ${type || 'component'} here.')
+  );
+}`;
   }
 
   // ============================================================
@@ -439,19 +625,19 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.addResizeListeners();
   }
 
-  OnVerticalResizeStart(event: MouseEvent): void {
+  OnCenterResizeStart(event: MouseEvent): void {
     event.preventDefault();
-    this.resizeType = 'vertical';
-    this.resizeStartY = event.clientY;
-    // Store current flex ratio
-    this.resizeStartValue = 50; // default 50/50
+    this.resizeType = 'center';
+    this.resizeStartX = event.clientX;
+    this.resizeStartValue = this.previewFlexPercent;
     this.addResizeListeners();
   }
 
   private addResizeListeners(): void {
+    this.IsResizing = true;
     document.addEventListener('mousemove', this.onResizeMove);
     document.addEventListener('mouseup', this.onResizeEnd);
-    document.body.style.cursor = this.resizeType === 'vertical' ? 'row-resize' : 'col-resize';
+    document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   }
 
@@ -462,13 +648,13 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     } else if (this.resizeType === 'right') {
       const delta = this.resizeStartX - event.clientX;
       this.rightPanelWidth = Math.max(300, Math.min(600, this.resizeStartValue + delta));
-    } else if (this.resizeType === 'vertical') {
-      // Calculate percentage based on mouse position relative to the center panel
+    } else if (this.resizeType === 'center') {
       const centerPanel = document.querySelector('.panel-center') as HTMLElement;
       if (centerPanel) {
         const rect = centerPanel.getBoundingClientRect();
-        const relativeY = event.clientY - rect.top;
-        const percent = Math.max(20, Math.min(80, (relativeY / rect.height) * 100));
+        const relativeX = event.clientX - rect.left;
+        const percent = Math.max(20, Math.min(80, (relativeX / rect.width) * 100));
+        this.previewFlexPercent = percent;
         this.previewFlex = `1 1 ${percent}%`;
         this.editorFlex = `1 1 ${100 - percent}%`;
       }
@@ -477,11 +663,13 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   };
 
   private onResizeEnd = (): void => {
+    this.IsResizing = false;
     this.resizeType = null;
     document.removeEventListener('mousemove', this.onResizeMove);
     document.removeEventListener('mouseup', this.onResizeEnd);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+    this.saveUserPreferencesDebounced();
   };
 
   // ============================================================

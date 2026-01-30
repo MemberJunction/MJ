@@ -8,99 +8,195 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f0f2f5;
+  background: var(--mat-sys-surface-container);
   overflow: hidden;
 }
 
-/* TOOLBAR */
+/* ============================================================
+   TOOLBAR — unified bar with integrated breadcrumb
+   ============================================================ */
+
 .component-studio .studio-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
-  background: #fff;
-  border-bottom: 1px solid #e0e3e8;
+  padding: 0 8px;
+  background: var(--mat-sys-surface);
+  border-bottom: 1px solid var(--mat-sys-outline);
   flex-shrink: 0;
   z-index: 10;
-  min-height: 40px;
-}
-
-.component-studio .studio-toolbar .toolbar-left {
-  display: flex;
-  align-items: center;
+  min-height: 42px;
   gap: 8px;
 }
 
-.component-studio .studio-toolbar .toolbar-left .component-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
+/* Left: hamburger + breadcrumb context */
+.component-studio .toolbar-context {
   display: flex;
   align-items: center;
-  gap: 6px;
-  max-width: 300px;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 1;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.component-studio .toolbar-spacer {
+  flex: 1;
+}
+
+/* Right: action buttons */
+.component-studio .toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ---- Toolbar buttons ---- */
+.component-studio .tb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-extra-small, 4px);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.component-studio .tb-btn:hover {
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+  border-color: var(--mat-sys-outline);
+}
+
+.component-studio .tb-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.component-studio .tb-btn i {
+  font-size: 12px;
+}
+
+.component-studio .tb-btn.icon-only {
+  padding: 5px 7px;
+}
+
+.component-studio .tb-btn.primary {
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary, #fff);
+  border-color: var(--mat-sys-primary);
+}
+
+.component-studio .tb-btn.primary:hover {
+  opacity: 0.9;
+}
+
+.component-studio .tb-btn.active-toggle {
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+  border-color: var(--mat-sys-primary);
+}
+
+/* ---- Breadcrumb elements inside toolbar ---- */
+.component-studio .breadcrumb-type {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
   white-space: nowrap;
 }
 
-.component-studio .studio-toolbar .toolbar-left .component-name .running-dot {
-  font-size: 7px;
-  color: #22c55e;
-  animation: pulse 1.5s ease-in-out infinite;
+.component-studio .breadcrumb-type i {
+  font-size: 11px;
+  color: var(--mat-sys-primary);
 }
 
-.component-studio .studio-toolbar .toolbar-left .unsaved-indicator {
-  color: #f59e0b;
-  font-size: 8px;
-  animation: pulse 2s infinite;
+.component-studio .breadcrumb-sep {
+  font-size: 9px;
+  color: var(--mat-sys-outline);
 }
 
-.component-studio .studio-toolbar .toolbar-actions {
-  display: flex;
+.component-studio .component-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+.component-studio .running-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  padding: 2px 8px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  white-space: nowrap;
 }
 
-.component-studio .studio-toolbar .toolbar-actions .save-btn {
-  position: relative;
-}
-
-.component-studio .studio-toolbar .toolbar-actions .save-btn .unsaved-dot {
-  position: absolute;
-  top: 4px;
-  right: 4px;
+.component-studio .running-dot-small {
+  display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  background: #22c55e;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.component-studio .unsaved-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
   background: #f59e0b;
+  animation: pulse 2s infinite;
+  flex-shrink: 0;
 }
 
-.component-studio .studio-toolbar .toolbar-actions .dropdown-chevron {
+.component-studio .toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--mat-sys-outline-variant);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.component-studio .dropdown-icon {
   font-size: 9px;
-  margin-left: 4px;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
-/* Dropdown menus */
-.component-studio .studio-toolbar .header-dropdown {
+/* ---- Dropdown menus ---- */
+.component-studio .header-dropdown {
   position: relative;
 }
 
-.component-studio .studio-toolbar .header-dropdown .dropdown-menu {
+.component-studio .header-dropdown .dropdown-menu {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  background: #fff;
-  border: 1px solid #e0e3e8;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  background: var(--mat-sys-surface);
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: var(--mat-sys-corner-small);
+  box-shadow: var(--mat-sys-elevation-3);
   z-index: 100;
   min-width: 180px;
   overflow: hidden;
 }
 
-.component-studio .studio-toolbar .header-dropdown .dropdown-menu .dropdown-item {
+.component-studio .header-dropdown .dropdown-menu .dropdown-item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -111,26 +207,29 @@
   text-align: left;
   cursor: pointer;
   font-size: 13px;
-  color: #374151;
-  transition: background-color 0.15s;
+  color: var(--mat-sys-on-surface);
+  transition: background 0.15s ease;
 }
 
-.component-studio .studio-toolbar .header-dropdown .dropdown-menu .dropdown-item:hover {
-  background: #f3f4f6;
+.component-studio .header-dropdown .dropdown-menu .dropdown-item:hover {
+  background: var(--mat-sys-surface-container-high);
 }
 
-.component-studio .studio-toolbar .header-dropdown .dropdown-menu .dropdown-item:not(:last-child) {
-  border-bottom: 1px solid #f3f4f6;
+.component-studio .header-dropdown .dropdown-menu .dropdown-item:not(:last-child) {
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
 }
 
-.component-studio .studio-toolbar .header-dropdown .dropdown-menu .dropdown-item i {
+.component-studio .header-dropdown .dropdown-menu .dropdown-item i {
   width: 16px;
   text-align: center;
-  color: #6366f1;
+  color: var(--mat-sys-primary);
   font-size: 13px;
 }
 
-/* THREE-PANEL BODY */
+/* ============================================================
+   THREE-PANEL BODY
+   ============================================================ */
+
 .component-studio .studio-body {
   display: flex;
   flex: 1;
@@ -141,42 +240,117 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: var(--mat-sys-surface);
 }
 
 .component-studio .panel-left {
   flex-shrink: 0;
-  border-right: 1px solid #e0e3e8;
-  background: #fafbfc;
+  border-right: 1px solid var(--mat-sys-outline);
+  background: var(--mat-sys-surface-container-low);
 }
 
 .component-studio .panel-center {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   min-width: 400px;
 }
 
+/* Preview pane (left side of center) */
 .component-studio .panel-center .workspace-preview {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-bottom: 1px solid #e0e3e8;
+  border-right: 1px solid var(--mat-sys-outline-variant);
 }
 
+.component-studio .panel-center .workspace-preview.full-width {
+  border-right: none;
+}
+
+/* Preview sub-header */
+.component-studio .preview-sub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: var(--mat-sys-surface-container-lowest);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  flex-shrink: 0;
+  min-height: 32px;
+}
+
+.component-studio .preview-sub-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.component-studio .preview-sub-left i {
+  font-size: 11px;
+  color: var(--mat-sys-primary);
+}
+
+.component-studio .preview-sub-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.component-studio .toggle-editors-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-extra-small, 4px);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface-variant);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.component-studio .toggle-editors-btn:hover {
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+}
+
+.component-studio .toggle-editors-btn.active {
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+  border-color: var(--mat-sys-primary);
+}
+
+.component-studio .preview-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Editor pane (right side of center) */
 .component-studio .panel-center .workspace-editors {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
+/* Right panel: AI Assistant */
 .component-studio .panel-right {
   flex-shrink: 0;
-  border-left: 1px solid #e0e3e8;
-  background: #fafbfc;
+  border-left: 1px solid var(--mat-sys-outline);
+  background: var(--mat-sys-surface-container-low);
 }
 
-/* RESIZE HANDLES */
+/* ============================================================
+   RESIZE HANDLES
+   ============================================================ */
+
 .component-studio .resize-handle {
   flex-shrink: 0;
   width: 5px;
@@ -184,16 +358,26 @@
   background: transparent;
   position: relative;
   z-index: 5;
-  transition: background-color 0.15s;
+  transition: background 0.15s ease;
 }
 
 .component-studio .resize-handle:hover,
 .component-studio .resize-handle:active {
-  background: #6366f1;
-  opacity: 0.3;
+  background: color-mix(in srgb, var(--mat-sys-primary) 25%, transparent);
 }
 
-.component-studio .resize-handle .handle-grip {
+/* Center divider — more obvious separator between preview and editors */
+.component-studio .resize-handle.center-divider {
+  width: 7px;
+  background: var(--mat-sys-outline-variant);
+}
+
+.component-studio .resize-handle.center-divider:hover,
+.component-studio .resize-handle.center-divider:active {
+  background: color-mix(in srgb, var(--mat-sys-primary) 40%, transparent);
+}
+
+.component-studio .resize-handle .divider-grip {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -201,39 +385,193 @@
   width: 3px;
   height: 32px;
   border-radius: 2px;
-  background: #d1d5db;
+  background: var(--mat-sys-on-surface-variant);
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s ease;
 }
 
-.component-studio .resize-handle:hover .handle-grip {
-  opacity: 1;
-  background: #6366f1;
+.component-studio .resize-handle:hover .divider-grip {
+  opacity: 0.5;
 }
 
-.component-studio .resize-handle.horizontal {
-  width: auto;
-  height: 5px;
-  cursor: row-resize;
+/* SMOOTH RESIZE TRANSITIONS */
+.component-studio:not(.resizing) .panel {
+  transition: width 0.15s ease, flex 0.15s ease;
 }
 
-.component-studio .resize-handle.horizontal .handle-grip {
-  width: 32px;
-  height: 3px;
+.component-studio:not(.resizing) .workspace-preview,
+.component-studio:not(.resizing) .workspace-editors {
+  transition: flex 0.15s ease;
 }
 
-.component-studio .resize-handle.horizontal .handle-grip.horizontal {
-  width: 32px;
-  height: 3px;
+/* ============================================================
+   STATUS BAR
+   ============================================================ */
+
+.component-studio .status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 16px;
+  background: var(--mat-sys-surface-container);
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant);
+  flex-shrink: 0;
+  min-height: 24px;
 }
 
-/* EMPTY STATE */
+.component-studio .status-bar .status-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.component-studio .status-bar .status-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.component-studio .status-bar .status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.component-studio .status-bar kbd {
+  display: inline-block;
+  padding: 0 4px;
+  font-size: 10px;
+  font-family: inherit;
+  line-height: 16px;
+  color: var(--mat-sys-on-surface-variant);
+  background: var(--mat-sys-surface-container-high);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 3px;
+}
+
+.component-studio .status-bar .shortcut-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.8;
+}
+
+/* ============================================================
+   KEYBOARD SHORTCUTS OVERLAY
+   ============================================================ */
+
+.component-studio .shortcuts-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.component-studio .shortcuts-overlay .shortcuts-panel {
+  background: var(--mat-sys-surface);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-large, 16px);
+  box-shadow: var(--mat-sys-elevation-3);
+  width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.component-studio .shortcuts-overlay .shortcuts-panel .shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+.component-studio .shortcuts-overlay .shortcuts-panel .shortcuts-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+}
+
+.component-studio .shortcuts-overlay .shortcuts-panel .shortcuts-header button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 16px;
+  padding: 4px;
+  border-radius: var(--mat-sys-corner-small, 4px);
+  transition: background 0.15s ease;
+}
+
+.component-studio .shortcuts-overlay .shortcuts-panel .shortcuts-header button:hover {
+  background: var(--mat-sys-surface-container-high);
+}
+
+.component-studio .shortcuts-overlay .shortcuts-panel .shortcuts-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.component-studio .shortcuts-overlay .shortcuts-panel .shortcuts-body .shortcut-group h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.component-studio .shortcuts-overlay .shortcuts-panel .shortcuts-body .shortcut-group + .shortcut-group {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+}
+
+.component-studio .shortcuts-overlay .shortcuts-panel .shortcuts-body .shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--mat-sys-on-surface);
+}
+
+.component-studio .shortcuts-overlay .shortcuts-panel .shortcuts-body .shortcut-row kbd {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 20px;
+  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface-container-high);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 var(--mat-sys-outline-variant);
+  min-width: 24px;
+  text-align: center;
+}
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+
 .component-studio .empty-state {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8f9fb;
+  background: var(--mat-sys-surface-container-low);
 }
 
 .component-studio .empty-state .empty-state-content {
@@ -241,8 +579,24 @@
   max-width: 400px;
 }
 
+.component-studio .empty-state .empty-state-content .empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--mat-sys-primary-container), var(--mat-sys-tertiary-container, var(--mat-sys-primary-container)));
+  margin-bottom: 16px;
+}
+
+.component-studio .empty-state .empty-state-content .empty-state-icon i {
+  font-size: 28px;
+  color: var(--mat-sys-on-primary-container);
+}
+
 .component-studio .empty-state .empty-state-content i {
-  color: #c7d0dd;
+  color: var(--mat-sys-outline);
   margin-bottom: 16px;
 }
 
@@ -250,12 +604,12 @@
   margin: 0 0 8px;
   font-size: 22px;
   font-weight: 600;
-  color: #374151;
+  color: var(--mat-sys-on-surface);
 }
 
 .component-studio .empty-state .empty-state-content p {
   margin: 0 0 24px;
-  color: #6b7280;
+  color: var(--mat-sys-on-surface-variant);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -264,6 +618,47 @@
   display: flex;
   gap: 8px;
   justify-content: center;
+}
+
+.component-studio .empty-state .empty-state-content .quick-start-templates {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.component-studio .empty-state .empty-state-content .quick-start-templates .quick-start-label {
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+  margin-right: 4px;
+}
+
+.component-studio .empty-state .empty-state-content .quick-start-templates .quick-start-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+  background: var(--mat-sys-surface-container);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.component-studio .empty-state .empty-state-content .quick-start-templates .quick-start-btn:hover {
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+  border-color: var(--mat-sys-outline);
+}
+
+.component-studio .empty-state .empty-state-content .quick-start-templates .quick-start-btn i {
+  font-size: 11px;
+  color: var(--mat-sys-primary);
+  margin-bottom: 0;
 }
 
 @keyframes pulse {

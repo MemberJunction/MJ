@@ -6,108 +6,143 @@ import { ComponentStudioStateService } from '../../services/component-studio-sta
   selector: 'mj-editor-tabs',
   template: `
     <div class="editor-tabs-container">
-      <kendo-tabstrip (tabSelect)="OnTabSelect($event)">
-        <kendo-tabstrip-tab [title]="'Spec'" [selected]="state.ActiveTab === 0">
-          <ng-template kendoTabContent>
-            <div class="tab-content-wrapper">
-              <mj-spec-editor></mj-spec-editor>
-            </div>
-          </ng-template>
-        </kendo-tabstrip-tab>
-
-        <kendo-tabstrip-tab [title]="'Code'" [selected]="state.ActiveTab === 1">
-          <ng-template kendoTabContent>
-            <div class="tab-content-wrapper">
-              <mj-code-editor-panel></mj-code-editor-panel>
-            </div>
-          </ng-template>
-        </kendo-tabstrip-tab>
-
-        <kendo-tabstrip-tab [title]="'Requirements'" [selected]="state.ActiveTab === 2">
-          <ng-template kendoTabContent>
-            <div class="tab-content-wrapper">
-              <mj-requirements-editor [Field]="'functionalRequirements'" [Title]="'Functional Requirements'"></mj-requirements-editor>
-            </div>
-          </ng-template>
-        </kendo-tabstrip-tab>
-
-        <kendo-tabstrip-tab [title]="'Design'" [selected]="state.ActiveTab === 3">
-          <ng-template kendoTabContent>
-            <div class="tab-content-wrapper">
-              <mj-requirements-editor [Field]="'technicalDesign'" [Title]="'Technical Design'"></mj-requirements-editor>
-            </div>
-          </ng-template>
-        </kendo-tabstrip-tab>
-
-        <kendo-tabstrip-tab [title]="'Data'" [selected]="state.ActiveTab === 4">
-          <ng-template kendoTabContent>
-            <div class="tab-content-wrapper">
-              <mj-data-requirements-editor></mj-data-requirements-editor>
-            </div>
-          </ng-template>
-        </kendo-tabstrip-tab>
-      </kendo-tabstrip>
-
-      @if (state.IsRunning) {
-        <div class="refresh-button-container">
-          <button kendoButton (click)="OnRefreshComponent()" [look]="'flat'" title="Refresh running component">
-            <i class="fa-solid fa-sync-alt"></i> Refresh Component
+      <div class="tab-bar">
+        <button class="tab-pill" [class.active]="state.ActiveTab === 0" (click)="SelectTab(0)">
+          <i class="fa-solid fa-file-code"></i> Spec
+        </button>
+        <button class="tab-pill" [class.active]="state.ActiveTab === 1" (click)="SelectTab(1)">
+          <i class="fa-solid fa-code"></i> Code
+        </button>
+        <button class="tab-pill" [class.active]="state.ActiveTab === 2" (click)="SelectTab(2)">
+          <i class="fa-solid fa-clipboard-list"></i> Requirements
+        </button>
+        <button class="tab-pill" [class.active]="state.ActiveTab === 3" (click)="SelectTab(3)">
+          <i class="fa-solid fa-drafting-compass"></i> Design
+        </button>
+        <button class="tab-pill" [class.active]="state.ActiveTab === 4" (click)="SelectTab(4)">
+          <i class="fa-solid fa-database"></i> Data
+        </button>
+        <span class="tab-spacer"></span>
+        @if (state.IsRunning) {
+          <button class="refresh-btn" (click)="OnRefreshComponent()" title="Refresh running component">
+            <i class="fa-solid fa-arrows-rotate"></i>
           </button>
-        </div>
-      }
+        }
+      </div>
+
+      <div class="tab-content">
+        @switch (state.ActiveTab) {
+          @case (0) {
+            <mj-spec-editor></mj-spec-editor>
+          }
+          @case (1) {
+            <mj-code-editor-panel></mj-code-editor-panel>
+          }
+          @case (2) {
+            <mj-requirements-editor [Field]="'functionalRequirements'" [Title]="'Functional Requirements'"></mj-requirements-editor>
+          }
+          @case (3) {
+            <mj-requirements-editor [Field]="'technicalDesign'" [Title]="'Technical Design'"></mj-requirements-editor>
+          }
+          @case (4) {
+            <mj-data-requirements-editor></mj-data-requirements-editor>
+          }
+        }
+      </div>
     </div>
   `,
   styles: [`
-    .editor-tabs-container {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      overflow: hidden;
-      position: relative;
-    }
-
     :host {
       display: flex;
       flex: 1;
       overflow: hidden;
     }
 
-    :host ::ng-deep kendo-tabstrip {
-      flex: 1;
+    .editor-tabs-container {
       display: flex;
       flex-direction: column;
+      flex: 1;
       overflow: hidden;
     }
 
-    :host ::ng-deep kendo-tabstrip .k-content {
-      flex: 1;
-      overflow: auto;
-      padding: 0;
-    }
-
-    :host ::ng-deep kendo-tabstrip .k-tabstrip-items-wrapper {
+    .tab-bar {
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      height: 38px;
+      background: var(--mat-sys-surface-container-low);
+      border-bottom: 1px solid var(--mat-sys-outline-variant);
       flex-shrink: 0;
+      gap: 2px;
     }
 
-    .tab-content-wrapper {
-      height: 100%;
-      overflow: auto;
-      padding: 8px;
-    }
-
-    .refresh-button-container {
-      position: absolute;
-      top: 4px;
-      right: 8px;
-      z-index: 10;
-    }
-
-    .refresh-button-container button {
+    .tab-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--mat-sys-on-surface-variant);
       font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      font-family: inherit;
     }
 
-    .refresh-button-container i {
-      margin-right: 4px;
+    .tab-pill:hover {
+      background: var(--mat-sys-surface-container);
+      color: var(--mat-sys-on-surface);
+    }
+
+    .tab-pill.active {
+      background: var(--mat-sys-surface);
+      color: var(--mat-sys-primary);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .tab-pill i {
+      font-size: 11px;
+    }
+
+    .tab-spacer {
+      flex: 1;
+    }
+
+    .refresh-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--mat-sys-on-surface-variant);
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s ease;
+    }
+
+    .refresh-btn:hover {
+      background: var(--mat-sys-surface-container-high);
+      color: var(--mat-sys-on-surface);
+    }
+
+    .tab-content {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tab-content > * {
+      flex: 1;
+      overflow: hidden;
     }
   `]
 })
@@ -133,8 +168,9 @@ export class EditorTabsComponent implements OnInit, OnDestroy {
     }
   }
 
-  OnTabSelect(event: { index: number }): void {
-    this.state.ActiveTab = event.index;
+  SelectTab(index: number): void {
+    this.state.ActiveTab = index;
+    this.cdr.detectChanges();
   }
 
   OnRefreshComponent(): void {
