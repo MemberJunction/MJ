@@ -12,6 +12,8 @@ export interface SettingsTab {
   component?: unknown;
   badgeCount?: number;
   badgeColor?: 'primary' | 'danger' | 'warning' | 'success';
+  disabled?: boolean;
+  description?: string;
 }
 
 export interface SettingsComponentState {
@@ -40,7 +42,6 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
 
   // State management
   public activeTab = 'general';
-  public advancedActiveTab = 'sql-logging';
   public searchTerm$ = new BehaviorSubject<string>('');
   public isLoading = false;
   public error: string | null = null;
@@ -51,54 +52,36 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   public isSearching = false;
   public showSearchResults = false;
 
-  // Tab configuration
+  // Tab configuration - User-focused tabs only
   public tabs: SettingsTab[] = [
     {
       id: 'general',
       label: 'General',
-      icon: 'fa-solid fa-cog',
-      badgeCount: 0
-    },
-    {
-      id: 'users',
-      label: 'Users',
-      icon: 'fa-solid fa-users',
-      badgeCount: 0
-    },
-    {
-      id: 'roles',
-      label: 'Roles',
-      icon: 'fa-solid fa-shield-halved',
-      badgeCount: 0
-    },
-    {
-      id: 'applications',
-      label: 'Applications',
-      icon: 'fa-solid fa-th-large',
-      badgeCount: 0
-    },
-    {
-      id: 'permissions',
-      label: 'Permissions',
-      icon: 'fa-solid fa-lock',
-      badgeCount: 0
+      icon: 'fa-solid fa-user',
+      description: 'Profile and account information'
     },
     {
       id: 'notifications',
       label: 'Notifications',
       icon: 'fa-solid fa-bell',
-      badgeCount: 0
+      description: 'Notification preferences and delivery channels'
     },
     {
-      id: 'advanced',
-      label: 'Advanced',
-      icon: 'fa-solid fa-flask',
-      badgeCount: 1,
-      badgeColor: 'warning'
+      id: 'applications',
+      label: 'Applications',
+      icon: 'fa-solid fa-th-large',
+      description: 'Manage visible applications and ordering'
+    },
+    {
+      id: 'appearance',
+      label: 'Appearance',
+      icon: 'fa-solid fa-palette',
+      description: 'Theme and display settings',
+      disabled: true
     }
   ];
 
-  // Searchable content registry
+  // Searchable content registry - User settings only
   private searchableItems: SearchableItem[] = [
     // General tab
     {
@@ -110,84 +93,44 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       description: 'Manage your profile picture and account information'
     },
     {
-      id: 'preferences',
+      id: 'account',
       tabId: 'general',
-      sectionId: 'preferences',
-      label: 'Preferences',
-      keywords: ['preferences', 'settings', 'display', 'theme', 'appearance', 'layout'],
-      description: 'Customize your experience with display and behavior preferences'
+      sectionId: 'account',
+      label: 'Account Information',
+      keywords: ['account', 'email', 'role', 'login', 'status', 'type'],
+      description: 'View your account details and status'
     },
+    // Notifications tab
     {
       id: 'notifications',
       tabId: 'notifications',
       sectionId: 'notifications',
-      label: 'Notifications',
-      keywords: ['notifications', 'alerts', 'email', 'push', 'messages', 'inbox'],
+      label: 'Notification Preferences',
+      keywords: ['notifications', 'alerts', 'email', 'sms', 'in-app', 'messages'],
       description: 'Configure how and when you receive notifications'
-    },
-    // Users tab
-    {
-      id: 'users',
-      tabId: 'users',
-      label: 'User Management',
-      keywords: ['users', 'accounts', 'members', 'people', 'employees', 'team', 'manage users', 'add user', 'delete user'],
-      description: 'Manage user accounts, roles, and permissions'
-    },
-    // Roles tab
-    {
-      id: 'roles',
-      tabId: 'roles',
-      label: 'Role Management',
-      keywords: ['roles', 'permissions', 'security', 'access', 'groups', 'authorization', 'admin', 'moderator'],
-      description: 'Define and manage security roles'
     },
     // Applications tab
     {
       id: 'applications',
       tabId: 'applications',
-      label: 'Applications',
-      keywords: ['applications', 'apps', 'modules', 'entities', 'navigation', 'menu'],
-      description: 'Configure application settings and entity associations'
+      sectionId: 'applications',
+      label: 'Application Settings',
+      keywords: ['applications', 'apps', 'switcher', 'order', 'visibility', 'menu'],
+      description: 'Choose which applications appear in your app switcher'
     },
-    // Permissions tab
+    // Appearance tab
     {
-      id: 'permissions',
-      tabId: 'permissions',
-      label: 'Entity Permissions',
-      keywords: ['permissions', 'entities', 'access', 'crud', 'security', 'read', 'write', 'delete', 'create'],
-      description: 'Manage entity-level permissions and access control'
-    },
-    // Advanced tab - SQL Logging
-    {
-      id: 'sql-logging',
-      tabId: 'advanced',
-      sectionId: 'sql-logging',
-      label: 'SQL Logging',
-      keywords: ['sql', 'logging', 'database', 'queries', 'debug', 'performance', 'trace', 'monitor'],
-      description: 'Monitor and debug SQL queries'
-    },
-    // Advanced tab - Performance
-    {
-      id: 'performance',
-      tabId: 'advanced',
-      sectionId: 'performance',
-      label: 'Performance',
-      keywords: ['performance', 'speed', 'optimization', 'monitoring', 'metrics', 'cache'],
-      description: 'Performance monitoring and optimization tools'
-    },
-    // Advanced tab - Developer
-    {
-      id: 'developer',
-      tabId: 'advanced',
-      sectionId: 'developer',
-      label: 'Developer Tools',
-      keywords: ['developer', 'tools', 'debug', 'api', 'code', 'testing', 'console'],
-      description: 'Advanced developer options and debugging tools'
+      id: 'appearance',
+      tabId: 'appearance',
+      sectionId: 'appearance',
+      label: 'Appearance Settings',
+      keywords: ['appearance', 'theme', 'dark', 'light', 'display', 'font', 'density'],
+      description: 'Customize how the application looks'
     }
   ];
 
   // Section expansion state
-  public expandedSections: string[] = ['profile', 'preferences'];
+  public expandedSections: string[] = ['profile', 'account'];
 
   // Mobile state
   public isMobile = window.innerWidth < 768;
@@ -196,13 +139,11 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   private destroy$ = new Subject<void>();
 
   constructor(private location: Location) {
-    // Listen for window resize
     super();
     window.addEventListener('resize', this.handleResize.bind(this));
   }
 
   ngOnInit(): void {
-    // Initialize filtered tabs with all tabs
     this.filteredTabs = [...this.tabs];
     this.setupSearchFilter();
     this.loadInitialData();
@@ -230,7 +171,6 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   public async loadInitialData(): Promise<void> {
     try {
       this.isLoading = true;
-      // TODO: Load user settings, roles, applications data
       await this.simulateDataLoad();
       this.isLoading = false;
     } catch (error) {
@@ -240,10 +180,14 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   }
 
   private async simulateDataLoad(): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, 500));
+    return new Promise(resolve => setTimeout(resolve, 300));
   }
 
   public onTabChange(tabId: string): void {
+    const tab = this.tabs.find(t => t.id === tabId);
+    if (tab?.disabled) {
+      return; // Don't switch to disabled tabs
+    }
     this.activeTab = tabId;
     this.emitStateChange();
   }
@@ -267,13 +211,8 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     return this.expandedSections.includes(sectionId);
   }
 
-  public setAdvancedTab(tabId: string): void {
-    this.advancedActiveTab = tabId;
-  }
-
   /**
    * Filters searchable content based on search term
-   * Matches against labels, keywords, and descriptions
    */
   private filterContent(term: string): void {
     if (!term || term.trim() === '') {
@@ -304,22 +243,20 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
 
   /**
    * Navigates to a search result
-   * Switches to the correct tab and expands the relevant section
    */
   public navigateToSearchResult(result: SearchableItem): void {
+    const tab = this.tabs.find(t => t.id === result.tabId);
+    if (tab?.disabled) {
+      return; // Don't navigate to disabled tabs
+    }
+
     this.activeTab = result.tabId;
 
-    // If it's a section within a tab, expand it
+    // Expand the section if applicable
     if (result.sectionId && !this.expandedSections.includes(result.sectionId)) {
       this.expandedSections.push(result.sectionId);
     }
 
-    // If advanced tab, set the sub-tab
-    if (result.tabId === 'advanced' && result.sectionId) {
-      this.advancedActiveTab = result.sectionId;
-    }
-
-    // Clear search after navigation
     this.clearSearch();
     this.emitStateChange();
   }
@@ -335,7 +272,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   }
 
   /**
-   * Toggles the mobile navigation rail open/closed
+   * Toggles the mobile navigation rail
    */
   public toggleMobileNav(): void {
     this.isMobileNavOpen = !this.isMobileNavOpen;
@@ -356,7 +293,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   }
 
   /**
-   * Handles tab change on mobile and closes the nav rail
+   * Handles tab change on mobile
    */
   public onMobileTabChange(tabId: string): void {
     this.onTabChange(tabId);
@@ -365,7 +302,6 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
 
   private handleResize(): void {
     this.isMobile = window.innerWidth < 768;
-    // Close mobile nav on resize to desktop
     if (!this.isMobile) {
       this.isMobileNavOpen = false;
     }
@@ -392,22 +328,6 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     }
   }
 
-  /**
-   * Gets the icon for a tab by its ID
-   */
-  public getTabIconById(tabId: string): string {
-    const tab = this.tabs.find(t => t.id === tabId);
-    return tab?.icon || 'fa-solid fa-cog';
-  }
-
-  /**
-   * Gets the label for a tab by its ID
-   */
-  public getTabLabelById(tabId: string): string {
-    const tab = this.tabs.find(t => t.id === tabId);
-    return tab?.label || tabId;
-  }
-
   public getTabIcon(tab: SettingsTab): string {
     return tab.icon;
   }
@@ -417,9 +337,16 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     if (this.activeTab === tab.id) {
       classes.push('active');
     }
+    if (tab.disabled) {
+      classes.push('disabled');
+    }
     if (tab.badgeCount && tab.badgeCount > 0) {
       classes.push('has-badge');
     }
     return classes.join(' ');
+  }
+
+  public isTabDisabled(tab: SettingsTab): boolean {
+    return tab.disabled || false;
   }
 }
