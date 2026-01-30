@@ -18,6 +18,7 @@ import { ArtifactLoadDialogComponent, ArtifactLoadResult } from './components/ar
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentStudioStateService, FileLoadedComponent, ComponentError } from './services/component-studio-state.service';
 import { ComponentVersionService } from './services/component-version.service';
+import { SaveVersionResult } from './components/save-version-dialog/save-version-dialog.component';
 import { RunView } from '@memberjunction/core';
 
 /**
@@ -76,6 +77,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // --- Dialog states ---
   public ShowNewComponentDialog = false;
   public ShowKeyboardShortcuts = false;
+  public ShowSaveVersionDialog = false;
 
   // --- Status bar ---
   public LastSavedTime: Date | null = null;
@@ -90,7 +92,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   constructor(
     public state: ComponentStudioStateService,
-    private versionService: ComponentVersionService,
+    public versionService: ComponentVersionService,
     private cdr: ChangeDetectorRef,
     private dialogService: DialogService,
     private notificationService: MJNotificationService
@@ -246,14 +248,22 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // SAVE VERSION
   // ============================================================
 
-  async SaveVersion(): Promise<void> {
+  SaveVersion(): void {
     if (!this.state.SelectedComponent) return;
+    this.ShowSaveVersionDialog = true;
+    this.cdr.detectChanges();
+  }
 
-    // Prompt for version comment
-    const comment = prompt('Version comment (optional):');
-    if (comment === null) return; // User cancelled
+  async OnSaveVersionConfirm(result: SaveVersionResult): Promise<void> {
+    this.ShowSaveVersionDialog = false;
 
-    const success = await this.versionService.SaveVersion(comment || undefined);
+    let success: boolean;
+    if (result.Mode === 'update') {
+      success = await this.versionService.UpdateCurrentVersion(result.Comment || undefined);
+    } else {
+      success = await this.versionService.SaveVersion(result.Comment || undefined);
+    }
+
     if (success) {
       this.LastSavedTime = new Date();
       this.notificationService.CreateSimpleNotification(
@@ -262,13 +272,21 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
         3000
       );
       this.state.HasUnsavedChanges = false;
-      this.cdr.detectChanges();
     } else {
       this.notificationService.CreateSimpleNotification(
         'Failed to save version',
         'error'
       );
     }
+    this.cdr.detectChanges();
+  }
+
+  // ============================================================
+  // REFRESH COMPONENT
+  // ============================================================
+
+  RefreshComponent(): void {
+    this.state.RefreshComponent.emit();
   }
 
   // ============================================================

@@ -143,6 +143,20 @@ export class ComponentPreviewComponent implements OnInit, OnDestroy {
         technicalDetails: event.payload?.errorInfo || event.payload
       };
       this.cdr.detectChanges();
+    } else if (event.type === 'loaded') {
+      this.handleComponentLoaded();
+    }
+  }
+
+  /**
+   * After the React bridge finishes loading, grab the fully resolved spec
+   * (with all dependency code fetched from registries) and feed it back
+   * to the state service so code sections reflect the real code.
+   */
+  private handleComponentLoaded(): void {
+    const resolvedSpec = this.ReactComponentRef?.resolvedComponentSpec;
+    if (resolvedSpec) {
+      this.State.UpdateWithResolvedSpec(resolvedSpec);
     }
   }
 

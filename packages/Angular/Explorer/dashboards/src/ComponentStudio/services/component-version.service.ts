@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { RunView, Metadata } from '@memberjunction/core';
 import {
+  ConversationEntity,
   ConversationArtifactEntity,
   ConversationArtifactVersionEntity
 } from '@memberjunction/core-entities';
@@ -30,6 +31,7 @@ export class ComponentVersionService {
   private _currentVersionNumber = 0;
   private _versionHistory: VersionHistoryEntry[] = [];
   private _componentArtifactTypeID: string | null = null;
+  private _cachedConversationID: string | null = null;
 
   private metadata: Metadata = new Metadata();
 
@@ -81,6 +83,47 @@ export class ComponentVersionService {
       return false;
     } catch (error) {
       console.error('ComponentVersionService: Error saving version:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Update the current (latest) version in place instead of creating a new one.
+   * @param comment - optional updated comment
+   * @returns true if the version was updated successfully
+   */
+  async UpdateCurrentVersion(comment?: string): Promise<boolean> {
+    try {
+      if (!this._currentArtifactID || this._currentVersionNumber === 0) {
+        console.error('ComponentVersionService: No current version to update.');
+        return false;
+      }
+
+      const spec = this.stateService.GetCurrentSpec();
+      if (!spec) {
+        console.error('ComponentVersionService: No current spec available.');
+        return false;
+      }
+
+      const latestVersion = await this.findLatestVersionEntity(this._currentArtifactID);
+      if (!latestVersion) {
+        console.error('ComponentVersionService: Could not find latest version entity.');
+        return false;
+      }
+
+      latestVersion.Content = JSON.stringify(spec, null, 2);
+      if (comment) {
+        latestVersion.Comments = comment;
+      }
+
+      const saved = await latestVersion.Save();
+      if (saved) {
+        this._versionHistory = await this.fetchVersionHistory(this._currentArtifactID);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('ComponentVersionService: Error updating current version:', error);
       return false;
     }
   }
@@ -155,6 +198,7 @@ export class ComponentVersionService {
     this._currentArtifactID = null;
     this._currentVersionNumber = 0;
     this._versionHistory = [];
+    // Keep _cachedConversationID — it's user-level, not component-level
   }
 
   // ============================================================
@@ -184,7 +228,7 @@ export class ComponentVersionService {
         return null;
       }
 
-      const conversationId = this.resolveConversationID();
+      const conversationId = await this.resolveConversationID();
       if (!conversationId) {
         console.error('ComponentVersionService: No conversation ID available for artifact creation.');
         return null;
@@ -238,25 +282,47 @@ export class ComponentVersionService {
   }
 
   /**
-   * Resolves a conversation ID to associate with the artifact.
-   * Checks the current file-loaded component for a sourceArtifactID context,
-   * or falls back to the current user's default conversation context.
+   * Resolves or creates a Conversation record for Component Studio artifacts.
+   * Caches the result for subsequent saves within the same session.
    */
-  private resolveConversationID(): string | null {
-    const selected = this.stateService.SelectedComponent;
-    if (selected && this.stateService.IsFileLoadedComponent(selected) && selected.sourceArtifactID) {
-      // File-loaded components may carry a source artifact reference;
-      // the actual conversationID would need to be resolved from that artifact.
-      // For now, return null and let the caller handle this scenario.
+  private async resolveConversationID(): Promise<string | null> {
+    if (this._cachedConversationID) {
+      return this._cachedConversationID;
     }
 
-    // Use a deterministic fallback: the current user's ID as a pseudo-conversation reference.
-    // In a full implementation, this would be connected to a real conversation context.
     const currentUser = this.metadata.CurrentUser;
-    if (currentUser) {
-      return currentUser.ID;
+    if (!currentUser) {
+      return null;
     }
 
+    // Look for an existing Component Studio conversation for this user
+    const rv = new RunView();
+    const result = await rv.RunView<{ ID: string }>({
+      EntityName: 'Conversations',
+      ExtraFilter: `UserID='${currentUser.ID}' AND Name='Component Studio'`,
+      Fields: ['ID'],
+      MaxRows: 1,
+      ResultType: 'simple'
+    });
+
+    if (result.Success && result.Results.length > 0) {
+      this._cachedConversationID = result.Results[0].ID;
+      return this._cachedConversationID;
+    }
+
+    // Create a new conversation for Component Studio
+    const conversation = await this.metadata.GetEntityObject<ConversationEntity>('Conversations');
+    conversation.UserID = currentUser.ID;
+    conversation.Name = 'Component Studio';
+    conversation.Type = 'Skip';
+
+    const saved = await conversation.Save();
+    if (saved) {
+      this._cachedConversationID = conversation.ID;
+      return this._cachedConversationID;
+    }
+
+    console.error('ComponentVersionService: Failed to create Component Studio conversation.');
     return null;
   }
 
@@ -324,6 +390,25 @@ export class ComponentVersionService {
       console.error('ComponentVersionService: Error loading version entity:', error);
       return null;
     }
+  }
+
+  /**
+   * Finds the latest version entity for the given artifact.
+   */
+  private async findLatestVersionEntity(artifactId: string): Promise<ConversationArtifactVersionEntity | null> {
+    const rv = new RunView();
+    const result = await rv.RunView<ConversationArtifactVersionEntity>({
+      EntityName: 'MJ: Conversation Artifact Versions',
+      ExtraFilter: `ConversationArtifactID='${artifactId}'`,
+      OrderBy: 'Version DESC',
+      MaxRows: 1,
+      ResultType: 'entity_object'
+    });
+
+    if (result.Success && result.Results.length > 0) {
+      return result.Results[0];
+    }
+    return null;
   }
 
   /**

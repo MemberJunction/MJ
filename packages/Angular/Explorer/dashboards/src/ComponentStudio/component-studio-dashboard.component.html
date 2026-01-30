@@ -42,6 +42,13 @@
         </button>
       }
 
+      <!-- Refresh Component -->
+      @if (state.SelectedComponent && state.IsRunning) {
+        <button class="tb-btn" (click)="RefreshComponent()" title="Refresh component">
+          <i class="fa-solid fa-arrows-rotate"></i> Refresh
+        </button>
+      }
+
       <!-- Export -->
       @if (state.SelectedComponent && state.IsRunning) {
         <div class="header-dropdown" [class.open]="exportDropdownOpen">
@@ -100,9 +107,9 @@
       <div class="panel panel-left" [style.width.px]="leftPanelWidth">
         <mj-component-browser
           (NewComponent)="OnNewComponent()"
-          (ImportFile)="ImportFromFile()"
-          (ImportText)="ImportFromText()"
-          (ImportArtifact)="ImportFromArtifact()">
+          (ImportFromFile)="ImportFromFile()"
+          (ImportFromText)="ImportFromText()"
+          (ImportFromArtifact)="ImportFromArtifact()">
         </mj-component-browser>
       </div>
 
@@ -266,5 +273,14 @@
       [Visible]="ShowNewComponentDialog"
       (Close)="OnNewComponentDialogClose($event)">
     </mj-new-component-dialog>
+  }
+
+  @if (ShowSaveVersionDialog) {
+    <mj-save-version-dialog
+      [Visible]="ShowSaveVersionDialog"
+      [CurrentVersion]="versionService.CurrentVersionNumber"
+      (Save)="OnSaveVersionConfirm($event)"
+      (Cancel)="ShowSaveVersionDialog = false">
+    </mj-save-version-dialog>
   }
 </div>

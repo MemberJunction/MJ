@@ -46,13 +46,13 @@ export interface ComponentError {
 }
 
 /**
- * Code section for the code editor panel bar
+ * Code section for the code editor tabbed panel
  */
 export interface CodeSection {
   title: string;
   code: string;
-  expanded: boolean;
-  isDependency?: boolean;
+  originalCode: string;
+  isDependency: boolean;
   index?: number;
 }
 
@@ -549,19 +549,21 @@ export class ComponentStudioStateService {
     const spec = this.GetComponentSpec(this._selectedComponent);
     const sections: CodeSection[] = [];
 
+    const mainCode = spec.code || '// No code available';
     sections.push({
       title: spec.name || 'Main Component',
-      code: spec.code || '// No code available',
-      expanded: true,
+      code: mainCode,
+      originalCode: mainCode,
       isDependency: false
     });
 
     if (spec.dependencies && Array.isArray(spec.dependencies)) {
       spec.dependencies.forEach((dep: ComponentSpec, index: number) => {
+        const depCode = dep.code || '// No code available';
         sections.push({
           title: dep.name || `Dependency ${index + 1}`,
-          code: dep.code || '// No code available',
-          expanded: false,
+          code: depCode,
+          originalCode: depCode,
           isDependency: true,
           index
         });
@@ -646,6 +648,29 @@ export class ComponentStudioStateService {
       console.error('Error applying code changes:', error);
     }
     return false;
+  }
+
+  /**
+   * Update the internal spec with the fully resolved version returned by the
+   * React bridge after it loads the component hierarchy.  This replaces
+   * registry-reference stubs with real code so code sections show actual source.
+   * Does NOT mark the component as having unsaved changes or trigger a re-render.
+   */
+  UpdateWithResolvedSpec(resolvedSpec: ComponentSpec): void {
+    if (!this._selectedComponent) return;
+
+    // Only update if the resolved spec actually differs (has real code)
+    const current = this._componentSpec;
+    if (!current || current === resolvedSpec) return;
+
+    this._componentSpec = resolvedSpec;
+
+    // Update editable code with the resolved main code
+    this._editableCode = resolvedSpec.code || '// No code available';
+
+    // Rebuild code sections so the editor shows resolved dependency code
+    this.BuildCodeSections();
+    this.StateChanged.emit();
   }
 
   /**

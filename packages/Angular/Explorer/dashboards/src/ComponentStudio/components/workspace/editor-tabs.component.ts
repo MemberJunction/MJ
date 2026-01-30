@@ -23,11 +23,6 @@ import { ComponentStudioStateService } from '../../services/component-studio-sta
           <i class="fa-solid fa-database"></i> Data
         </button>
         <span class="tab-spacer"></span>
-        @if (state.IsRunning) {
-          <button class="refresh-btn" (click)="OnRefreshComponent()" title="Refresh running component">
-            <i class="fa-solid fa-arrows-rotate"></i>
-          </button>
-        }
       </div>
 
       <div class="tab-content">
@@ -113,26 +108,6 @@ import { ComponentStudioStateService } from '../../services/component-studio-sta
       flex: 1;
     }
 
-    .refresh-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      border: none;
-      border-radius: 6px;
-      background: transparent;
-      color: var(--mat-sys-on-surface-variant);
-      cursor: pointer;
-      font-size: 12px;
-      transition: all 0.15s ease;
-    }
-
-    .refresh-btn:hover {
-      background: var(--mat-sys-surface-container-high);
-      color: var(--mat-sys-on-surface);
-    }
-
     .tab-content {
       flex: 1;
       overflow: hidden;
@@ -173,7 +148,4 @@ export class EditorTabsComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  OnRefreshComponent(): void {
-    this.state.RefreshComponent.emit();
-  }
 }
