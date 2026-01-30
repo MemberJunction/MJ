@@ -248,5 +248,12 @@
       "lastModified": "2025-12-30T23:06:45.938Z",
       "checksum": "454eb74c4e6273c55cf8bcf8b655327d39f27b98ba099528e3bb3d9b36abb465"
     }
+  },
+  {
+    "fields": {
+      "Name": "Fireworks.ai",
+      "Description": "Fireworks.ai provides fast and cost-effective serverless inference for leading open-source and proprietary language models with competitive pricing and high performance",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    }
   }
 ]

@@ -797,6 +797,51 @@
             "lastModified": "2026-01-28T22:07:14.404Z",
             "checksum": "ecdef6fd55ad8a808ce9cf1eea0af393e408be20e9651b2b167bb27fcb53b25a"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 150,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "qwen-3-235b",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.22,
+            "OutputPricePerUnit": 0.88,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3 235B pricing on Fireworks.ai as of January 2026. Largest Qwen 3 series model with 128K context."
+          }
         }
       ]
     },
@@ -4918,6 +4963,22 @@
             "lastModified": "2026-01-28T22:07:14.590Z",
             "checksum": "a5027c3113a898e0e6076d614cfffe2a125525d91d12553389522228640eac4e"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 2,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "moonshotai/kimi-k2-instruct",
+            "MaxInputTokens": 131072,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -4941,6 +5002,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.838Z",
             "checksum": "eaec0db2983fa706aa21022a60f8a7ee693509a399e0850d1bb37e3d9916045e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.60,
+            "OutputPricePerUnit": 2.50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kimi K2 Instruct/Thinking pricing on Fireworks.ai as of January 2026"
           }
         }
       ]
@@ -6031,6 +6107,22 @@
             "lastModified": "2026-01-28T22:07:14.768Z",
             "checksum": "81368db45ac4d9689993b551bc56447bd037866c6697105b12e20df96db4cb20"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 150,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "qwen-3-coder-480b",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -6054,6 +6146,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.895Z",
             "checksum": "af86a2b957951b676fcfb35a525f4a0900d94fc3d62ec980ba8c456042a271d7"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.80,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3 Coder 480B pricing on Fireworks.ai as of January 2026. Large code generation model with 128K context."
           }
         }
       ]
@@ -6483,6 +6590,22 @@
         {
           "fields": {
             "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 150,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "gpt-oss-20b",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 32000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 0,
             "Status": "Active",
@@ -6521,6 +6644,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.908Z",
             "checksum": "a7c72b1dcb89ef89cc776658a4fa732d89fe30156bc01f3f4edc3de041cf7f69"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.07,
+            "OutputPricePerUnit": 0.30,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-OSS-20B pricing on Fireworks.ai as of January 2026. OpenAI's open-weight model with 21B parameters optimized for local use."
           }
         }
       ]
@@ -7493,6 +7631,22 @@
             "lastModified": "2026-01-28T22:07:14.738Z",
             "checksum": "e3d64d23dbf84c3942d4856bb06e58b35f0793e1ff82913b65bce3f1b333dc6d"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 150,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "z-ai/glm-4.6",
+            "MaxInputTokens": 202752,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -7538,6 +7692,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.917Z",
             "checksum": "cd339f6e3d4890e3ae69ac854f2fee05442356478735ead34c9dd12734f04910"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.55,
+            "OutputPricePerUnit": 2.19,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM 4.6 pricing on Fireworks.ai as of January 2026. 355B parameter MoE model (32B active) with 200K context window."
           }
         }
       ]
@@ -8298,6 +8467,22 @@
             "lastModified": "2026-01-28T22:07:14.768Z",
             "checksum": "d017ef0c9dc28b87901b34e48e28ece4059674bcfdaefbd7471844db28ce3b5b"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 150,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "z-ai/glm-4.7",
+            "MaxInputTokens": 202752,
+            "MaxOutputTokens": 65535,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -8343,6 +8528,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.921Z",
             "checksum": "e25d1dc35aee23bd416e4e79c6558835badf6d62a1399b02d073b769213603d7"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.60,
+            "OutputPricePerUnit": 2.20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM 4.7 pricing on Fireworks.ai as of January 2026. 355B parameter MoE model with 200K context and up to 128K output."
           }
         }
       ]
@@ -8931,6 +9131,22 @@
             "lastModified": "2026-01-28T22:07:14.885Z",
             "checksum": "bbd87c563bdd8a6cb4778e68651bf61dd16e70fd6b97b98b5420f6ac6378aa1f"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 150,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "gpt-oss-120b",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 32000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -8977,6 +9193,21 @@
             "lastModified": "2026-01-28T22:07:14.927Z",
             "checksum": "fd86a327789862d6217b844d19c571897d3b8e2f2269fc0cb64f57a5dccc50ad"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.60,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-OSS-120B pricing on Fireworks.ai as of January 2026. OpenAI's open-weight model with 117B parameters and configurable reasoning."
+          }
         }
       ]
     },
@@ -8986,6 +9217,98 @@
     "sync": {
       "lastModified": "2026-01-28T22:07:14.927Z",
       "checksum": "1d320d87757e1078b67d1dec01015fee7ac769f7de92a404a2534b4d2ab69e19"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kimi K2.5",
+      "PowerRank": 15,
+      "Description": "Moonshot AI's most powerful 1T parameter native multimodal model with Mixture-of-Experts architecture. Features 256K token context window and advanced reasoning capabilities with Thinking Mode and Instant Mode. Released January 27, 2026 with state-of-the-art performance on visual and text understanding tasks.",
+      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 6,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "KimiLLM",
+            "APIName": "moonshotai/Kimi-K2.5",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 2,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "moonshotai/Kimi-K2.5",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "StartedAt": "2026-01-27T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.60,
+            "OutputPricePerUnit": 3.00,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kimi K2.5 pricing on Moonshot AI as of January 2026. API access via Kimi official API. Released January 27, 2026 as 1T parameter native multimodal model with 256K context window and reasoning capabilities."
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-01-27T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.60,
+            "OutputPricePerUnit": 3.00,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kimi K2.5 pricing on Fireworks.ai as of January 2026. Cached input tokens available at $0.10/1M. Features 256K context window and reasoning capabilities."
+          }
+        }
+      ]
     }
   }
 ]
