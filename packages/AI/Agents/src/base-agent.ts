@@ -1190,6 +1190,42 @@ export class BaseAgent {
     private _injectedMemory: { notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] } = { notes: [], examples: [] };
 
     /**
+     * Determine the scope label for a note based on its scope fields.
+     * Used for memory attribution logging to help identify which scope level
+     * a note belongs to.
+     *
+     * @param note - The agent note entity
+     * @returns A human-readable scope label
+     */
+    private determineNoteScope(note: AIAgentNoteEntity): string {
+        const hasAgent = note.AgentID !== null;
+        const hasUser = note.UserID !== null;
+        const hasCompany = note.CompanyID !== null;
+        const hasPrimaryScope = note.PrimaryScopeEntityID !== null || note.PrimaryScopeRecordID !== null;
+
+        // Determine scope based on what fields are populated
+        if (!hasAgent && !hasUser && !hasCompany && !hasPrimaryScope) {
+            return 'global';
+        }
+        if (hasAgent && !hasUser && !hasCompany) {
+            return 'agent-only';
+        }
+        if (!hasAgent && hasUser && !hasCompany) {
+            return 'user-only';
+        }
+        if (!hasAgent && !hasUser && hasCompany) {
+            return 'company-only';
+        }
+        if (hasPrimaryScope && !hasUser) {
+            return 'organization';
+        }
+        if (hasPrimaryScope && hasUser) {
+            return 'contact';
+        }
+        return 'combined';
+    }
+
+    /**
      * Inject notes and examples into agent context memory.
      * Called automatically before agent execution if injection is enabled on the agent.
      * Injects memory context directly into conversation messages array.
@@ -5106,6 +5142,22 @@ The context is now within limits. Please retry your request with the recovered c
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {
                     payloadChangeResult: currentStepPayloadChangeResult
+                }),
+                // Include memory attribution for observability
+                // This tracks which notes/examples were injected and influenced this step
+                ...(this._injectedMemory && (this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0) && {
+                    memoryAttribution: {
+                        injectedNoteIds: this._injectedMemory.notes.map(n => n.ID),
+                        injectedNotes: this._injectedMemory.notes.map(n => ({
+                            id: n.ID,
+                            type: n.Type,
+                            content: n.Note?.substring(0, 100), // Preview only
+                            scope: this.determineNoteScope(n)
+                        })),
+                        injectedExampleIds: this._injectedMemory.examples.map(e => e.ID),
+                        noteCount: this._injectedMemory.notes.length,
+                        exampleCount: this._injectedMemory.examples.length
+                    }
                 })
             };
             

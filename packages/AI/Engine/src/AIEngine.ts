@@ -6,7 +6,7 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, LogError, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntity, LogError, Metadata, RunView, UserInfo, IMetadataProvider } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, ActionEntity,
          AIAgentActionEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity,
@@ -624,6 +624,39 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         } catch (error) {
             LogError(`AIEngine: Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    /**
+     * Lightweight refresh that reloads only agent notes and examples from the DB
+     * and rebuilds their vector services. Use this instead of Config(true) when
+     * only note/example data needs refreshing (e.g., after Memory Manager creates new records).
+     */
+    public async RefreshNoteAndExampleVectorServices(contextUser?: UserInfo): Promise<void> {
+        const rv = new RunView();
+        const [notesResult, examplesResult] = await rv.RunViews([
+            {
+                EntityName: 'AI Agent Notes',
+                ExtraFilter: '',
+                ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'MJ: AI Agent Examples',
+                ExtraFilter: '',
+                ResultType: 'entity_object'
+            }
+        ], contextUser);
+
+        if (notesResult?.Success) {
+            this.Base.SetAgentNotes(notesResult.Results as AIAgentNoteEntity[]);
+        }
+        if (examplesResult?.Success) {
+            this.Base.SetAgentExamples(examplesResult.Results as AIAgentExampleEntity[]);
+        }
+
+        await Promise.all([
+            this.loadNoteEmbeddings(contextUser),
+            this.loadExampleEmbeddings(contextUser)
+        ]);
     }
 
     /**
