@@ -30,6 +30,13 @@ import { LoadHomeDashboard } from './Home/home-dashboard.component';
 import { LoadAPIKeysResource } from './APIKeys/api-keys-resource.component';
 // MCP
 import { LoadMCPModule } from './MCP';
+// Version History
+import {
+  LoadVersionHistoryLabelsResource,
+  LoadVersionHistoryDiffResource,
+  LoadVersionHistoryRestoreResource,
+  LoadVersionHistoryGraphResource
+} from './VersionHistory';
 
 import {
   LoadActionsOverviewResource,
@@ -189,6 +196,18 @@ export { APIUsagePanelComponent, LoadAPIUsagePanel } from './APIKeys/api-usage-p
 // MCP (Model Context Protocol)
 export * from './MCP';
 
+// Version History Dashboard Components
+export {
+  VersionHistoryLabelsResourceComponent,
+  LoadVersionHistoryLabelsResource,
+  VersionHistoryDiffResourceComponent,
+  LoadVersionHistoryDiffResource,
+  VersionHistoryRestoreResourceComponent,
+  LoadVersionHistoryRestoreResource,
+  VersionHistoryGraphResourceComponent,
+  LoadVersionHistoryGraphResource
+} from './VersionHistory';
+
 // Module
 export * from './module';
 
@@ -271,3 +290,9 @@ LoadAPIUsagePanel();
 
 // MCP module loader
 LoadMCPModule();
+
+// Version History resource loaders
+LoadVersionHistoryLabelsResource();
+LoadVersionHistoryDiffResource();
+LoadVersionHistoryRestoreResource();
+LoadVersionHistoryGraphResource();

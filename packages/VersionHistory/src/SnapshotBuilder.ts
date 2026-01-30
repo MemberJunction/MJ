@@ -10,12 +10,13 @@ import {
 } from '@memberjunction/core';
 import { CaptureError, CaptureResult, DependencyNode, WalkOptions } from './types';
 import { DependencyGraphWalker } from './DependencyGraphWalker';
-
-/**
- * Entity name constants for the new versioning tables.
- */
-const ENTITY_VERSION_LABEL_ITEMS = 'MJ: Version Label Items';
-const ENTITY_RECORD_CHANGES = 'Record Changes';
+import {
+    ENTITY_VERSION_LABEL_ITEMS,
+    ENTITY_RECORD_CHANGES,
+    buildCompositeKeyFromRecord,
+    sqlEquals,
+    escapeSqlString,
+} from './constants';
 
 /**
  * Captures the current state of records into VersionLabelItem entries,
@@ -94,7 +95,7 @@ export class SnapshotBuilder {
         const md = new Metadata();
         const entityInfo = md.EntityByName(entityName);
         if (!entityInfo) {
-            return this.failResult(labelId, `Entity '${entityName}' not found`);
+            return this.failResult(labelId, `Entity '${escapeSqlString(entityName)}' not found`);
         }
 
         const rv = new RunView();
@@ -105,7 +106,7 @@ export class SnapshotBuilder {
         }, contextUser);
 
         if (!result.Success) {
-            return this.failResult(labelId, `Failed to load records for entity '${entityName}': ${result.ErrorMessage}`);
+            return this.failResult(labelId, `Failed to load records for entity '${escapeSqlString(entityName)}': ${result.ErrorMessage}`);
         }
 
         const errors: CaptureError[] = [];
@@ -113,7 +114,7 @@ export class SnapshotBuilder {
         let syntheticCount = 0;
 
         for (const record of result.Results) {
-            const key = this.buildKeyFromRecord(entityInfo, record);
+            const key = buildCompositeKeyFromRecord(entityInfo, record);
             const captureItemResult = await this.captureSingleRecord(labelId, entityName, key, contextUser, record);
             if (captureItemResult.success) {
                 itemsCaptured++;
@@ -127,7 +128,8 @@ export class SnapshotBuilder {
             }
         }
 
-        LogStatus(`VersionHistory: Captured ${itemsCaptured} records for entity '${entityName}' into label ${labelId}`);
+        const errorSuffix = errors.length > 0 ? ` (${errors.length} errors)` : '';
+        LogStatus(`VersionHistory: Captured ${itemsCaptured} records for entity '${entityName}' into label ${labelId}${errorSuffix}`);
         return {
             Success: errors.length === 0,
             LabelID: labelId,
@@ -265,9 +267,10 @@ export class SnapshotBuilder {
         contextUser: UserInfo
     ): Promise<BaseEntity | null> {
         const rv = new RunView();
+        const filter = `${sqlEquals('EntityID', entityId)} AND ${sqlEquals('RecordID', recordId)}`;
         const result = await rv.RunView<BaseEntity>({
             EntityName: ENTITY_RECORD_CHANGES,
-            ExtraFilter: `EntityID = '${entityId}' AND RecordID = '${recordId}'`,
+            ExtraFilter: filter,
             OrderBy: 'ChangedAt DESC',
             MaxRows: 1,
             ResultType: 'entity_object',
@@ -336,17 +339,6 @@ export class SnapshotBuilder {
             return null;
         }
         return result.Results[0];
-    }
-
-    /**
-     * Build a CompositeKey from entity metadata and a record data object.
-     */
-    private buildKeyFromRecord(entityInfo: EntityInfo, record: Record<string, unknown>): CompositeKey {
-        const pairs = entityInfo.PrimaryKeys.map(pk => ({
-            FieldName: pk.Name,
-            Value: record[pk.Name],
-        }));
-        return new CompositeKey(pairs);
     }
 
     /**

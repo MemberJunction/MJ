@@ -1,12 +1,11 @@
-import { BaseEntity, CompositeKey, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { BaseEntity, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { CreateLabelParams, LabelFilter, VersionLabelStatus } from './types';
-
-/**
- * Entity name constants. These entities are created by the version label
- * migration and will get CodeGen-generated subclasses in a future run.
- * Until then we work with BaseEntity generically.
- */
-const ENTITY_VERSION_LABELS = 'MJ: Version Labels';
+import {
+    ENTITY_VERSION_LABELS,
+    sqlEquals,
+    sqlContains,
+    loadEntityById,
+} from './constants';
 
 /**
  * Manages the lifecycle of version labels: creation, querying, archiving,
@@ -19,6 +18,8 @@ export class LabelManager {
      * items — the caller (VersionHistoryEngine) handles that separately.
      */
     public async CreateLabel(params: CreateLabelParams, contextUser: UserInfo): Promise<BaseEntity> {
+        this.validateCreateParams(params);
+
         const md = new Metadata();
         const label = await md.GetEntityObject<BaseEntity>(ENTITY_VERSION_LABELS, contextUser);
 
@@ -29,17 +30,8 @@ export class LabelManager {
         label.Set('ExternalSystemID', params.ExternalSystemID ?? null);
         label.Set('Status', 'Active');
 
-        if (params.EntityName && (params.Scope === 'Entity' || params.Scope === 'Record')) {
-            const entityInfo = md.EntityByName(params.EntityName);
-            if (!entityInfo) {
-                throw new Error(`Entity '${params.EntityName}' not found in metadata`);
-            }
-            label.Set('EntityID', entityInfo.ID);
-        }
-
-        if (params.RecordKey && params.Scope === 'Record') {
-            label.Set('RecordID', params.RecordKey.ToConcatenatedString());
-        }
+        this.applyEntityScope(label, params, md);
+        this.applyRecordScope(label, params);
 
         const saved = await label.Save();
         if (!saved) {
@@ -54,10 +46,8 @@ export class LabelManager {
      * Load a single version label by ID.
      */
     public async GetLabel(labelId: string, contextUser: UserInfo): Promise<BaseEntity> {
-        const md = new Metadata();
-        const label = await md.GetEntityObject<BaseEntity>(ENTITY_VERSION_LABELS, contextUser);
-        const loaded = await label.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: labelId }]));
-        if (!loaded) {
+        const label = await loadEntityById(ENTITY_VERSION_LABELS, labelId, contextUser);
+        if (!label) {
             throw new Error(`Version label '${labelId}' not found`);
         }
         return label;
@@ -103,9 +93,39 @@ export class LabelManager {
         return this.updateLabelStatus(labelId, 'Restored', contextUser);
     }
 
-    /**
-     * Update a label's status.
-     */
+    // -----------------------------------------------------------------------
+    // Private helpers
+    // -----------------------------------------------------------------------
+
+    private validateCreateParams(params: CreateLabelParams): void {
+        if (!params.Name || params.Name.trim().length === 0) {
+            throw new Error('Version label Name is required');
+        }
+        if (params.Scope === 'Entity' && !params.EntityName) {
+            throw new Error('Entity scope requires EntityName');
+        }
+        if (params.Scope === 'Record') {
+            if (!params.EntityName) throw new Error('Record scope requires EntityName');
+            if (!params.RecordKey) throw new Error('Record scope requires RecordKey');
+        }
+    }
+
+    private applyEntityScope(label: BaseEntity, params: CreateLabelParams, md: Metadata): void {
+        if (params.EntityName && (params.Scope === 'Entity' || params.Scope === 'Record')) {
+            const entityInfo = md.EntityByName(params.EntityName);
+            if (!entityInfo) {
+                throw new Error(`Entity '${params.EntityName}' not found in metadata`);
+            }
+            label.Set('EntityID', entityInfo.ID);
+        }
+    }
+
+    private applyRecordScope(label: BaseEntity, params: CreateLabelParams): void {
+        if (params.RecordKey && params.Scope === 'Record') {
+            label.Set('RecordID', params.RecordKey.ToConcatenatedString());
+        }
+    }
+
     private async updateLabelStatus(
         labelId: string,
         status: VersionLabelStatus,
@@ -123,32 +143,33 @@ export class LabelManager {
     }
 
     /**
-     * Build SQL filter clauses from a LabelFilter.
+     * Build safe SQL filter clauses from a LabelFilter.
+     * Uses escapeSqlString for all user-supplied values.
      */
     private buildFilterClauses(filter: LabelFilter): string[] {
         const clauses: string[] = [];
 
         if (filter.Scope) {
-            clauses.push(`Scope = '${filter.Scope}'`);
+            clauses.push(sqlEquals('Scope', filter.Scope));
         }
         if (filter.Status) {
-            clauses.push(`Status = '${filter.Status}'`);
+            clauses.push(sqlEquals('Status', filter.Status));
         }
         if (filter.EntityName) {
             const md = new Metadata();
             const entityInfo = md.EntityByName(filter.EntityName);
             if (entityInfo) {
-                clauses.push(`EntityID = '${entityInfo.ID}'`);
+                clauses.push(sqlEquals('EntityID', entityInfo.ID));
             }
         }
         if (filter.RecordID) {
-            clauses.push(`RecordID = '${filter.RecordID}'`);
+            clauses.push(sqlEquals('RecordID', filter.RecordID));
         }
         if (filter.CreatedByUserID) {
-            clauses.push(`CreatedByUserID = '${filter.CreatedByUserID}'`);
+            clauses.push(sqlEquals('CreatedByUserID', filter.CreatedByUserID));
         }
         if (filter.NameContains) {
-            clauses.push(`Name LIKE '%${filter.NameContains.replace(/'/g, "''")}%'`);
+            clauses.push(sqlContains('Name', filter.NameContains));
         }
 
         return clauses;

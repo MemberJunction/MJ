@@ -1,0 +1,154 @@
+<div class="diff-container">
+    <mj-loading *ngIf="IsLoading" text="Loading diff viewer..."></mj-loading>
+
+    <ng-container *ngIf="!IsLoading">
+        <!-- Header -->
+        <div class="page-header">
+            <div class="header-left">
+                <h2 class="page-title">Diff Viewer</h2>
+                <p class="page-subtitle">Compare states between version labels or against current data</p>
+            </div>
+        </div>
+
+        <!-- Diff Configuration Panel -->
+        <div class="config-panel">
+            <!-- Mode Selector -->
+            <div class="mode-selector">
+                <button class="mode-btn"
+                        [class.active]="DiffMode === 'label-to-current'"
+                        (click)="OnDiffModeChange('label-to-current')">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    Label vs Current
+                </button>
+                <button class="mode-btn"
+                        [class.active]="DiffMode === 'label-to-label'"
+                        (click)="OnDiffModeChange('label-to-label')">
+                    <i class="fa-solid fa-code-compare"></i>
+                    Label vs Label
+                </button>
+            </div>
+
+            <!-- Label Selectors -->
+            <div class="label-selectors">
+                <div class="selector-group">
+                    <label class="selector-label">
+                        {{DiffMode === 'label-to-current' ? 'Compare label' : 'From label'}}
+                    </label>
+                    <select class="selector-input"
+                            [(ngModel)]="FromLabelId">
+                        <option value="">Select a label...</option>
+                        <option *ngFor="let label of AvailableLabels"
+                                [value]="label.ID">
+                            {{FormatLabelOption(label)}}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="selector-arrow" *ngIf="DiffMode === 'label-to-label'">
+                    <i class="fa-solid fa-arrow-right"></i>
+                </div>
+                <div class="selector-arrow" *ngIf="DiffMode === 'label-to-current'">
+                    <i class="fa-solid fa-arrow-right"></i>
+                    <span class="current-state-badge">Current State</span>
+                </div>
+
+                <div class="selector-group" *ngIf="DiffMode === 'label-to-label'">
+                    <label class="selector-label">To label</label>
+                    <select class="selector-input"
+                            [(ngModel)]="ToLabelId">
+                        <option value="">Select a label...</option>
+                        <option *ngFor="let label of AvailableLabels"
+                                [value]="label.ID">
+                            {{FormatLabelOption(label)}}
+                        </option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Run Button -->
+            <button class="btn-primary"
+                    [disabled]="!CanRunDiff || IsDiffLoading"
+                    (click)="RunDiff()">
+                <i class="fa-solid fa-play" *ngIf="!IsDiffLoading"></i>
+                <i class="fa-solid fa-spinner fa-spin" *ngIf="IsDiffLoading"></i>
+                <span>{{IsDiffLoading ? 'Comparing...' : 'Compare'}}</span>
+            </button>
+        </div>
+
+        <!-- Diff Results -->
+        <ng-container *ngIf="HasDiffResult">
+            <!-- Summary Stats -->
+            <div class="diff-summary">
+                <div class="diff-stat change-added">
+                    <i class="fa-solid fa-plus"></i>
+                    <span class="diff-stat-value">{{TotalAdded}}</span>
+                    <span class="diff-stat-label">Added</span>
+                </div>
+                <div class="diff-stat change-removed">
+                    <i class="fa-solid fa-minus"></i>
+                    <span class="diff-stat-value">{{TotalRemoved}}</span>
+                    <span class="diff-stat-label">Removed</span>
+                </div>
+                <div class="diff-stat change-modified">
+                    <i class="fa-solid fa-pen"></i>
+                    <span class="diff-stat-value">{{TotalModified}}</span>
+                    <span class="diff-stat-label">Modified</span>
+                </div>
+                <div class="diff-stat change-unchanged">
+                    <i class="fa-solid fa-equals"></i>
+                    <span class="diff-stat-value">{{TotalUnchanged}}</span>
+                    <span class="diff-stat-label">Unchanged</span>
+                </div>
+            </div>
+
+            <!-- Entity Groups -->
+            <div class="entity-groups" *ngIf="EntityGroups.length > 0">
+                <div class="entity-group" *ngFor="let group of EntityGroups">
+                    <div class="entity-group-header" (click)="ToggleEntityGroup(group.EntityName)">
+                        <div class="entity-group-left">
+                            <i class="fa-solid"
+                               [ngClass]="IsEntityExpanded(group.EntityName) ? 'fa-chevron-down' : 'fa-chevron-right'">
+                            </i>
+                            <i class="fa-solid fa-table entity-icon"></i>
+                            <span class="entity-group-name">{{group.EntityName}}</span>
+                        </div>
+                        <div class="entity-group-badges">
+                            <span class="badge change-added" *ngIf="group.AddedCount > 0">
+                                +{{group.AddedCount}}
+                            </span>
+                            <span class="badge change-removed" *ngIf="group.RemovedCount > 0">
+                                -{{group.RemovedCount}}
+                            </span>
+                            <span class="badge change-modified" *ngIf="group.ModifiedCount > 0">
+                                ~{{group.ModifiedCount}}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="entity-group-items" *ngIf="IsEntityExpanded(group.EntityName)">
+                        <div class="diff-item" *ngFor="let item of group.Items"
+                             [ngClass]="GetChangeTypeClass(item.ChangeType)">
+                            <i [class]="GetChangeTypeIcon(item.ChangeType)" class="diff-item-icon"></i>
+                            <span class="diff-item-record">{{item.RecordID | slice:0:20}}</span>
+                            <span class="diff-item-type">{{item.ChangeType}}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- No changes -->
+            <div class="empty-state" *ngIf="EntityGroups.length === 0 && TotalChanges === 0">
+                <i class="fa-solid fa-check-circle empty-icon" style="color: #10b981;"></i>
+                <h3>No differences found</h3>
+                <p>The compared states are identical.</p>
+            </div>
+        </ng-container>
+
+        <!-- No results yet -->
+        <div class="empty-state" *ngIf="!HasDiffResult && !IsDiffLoading">
+            <i class="fa-solid fa-code-compare empty-icon"></i>
+            <h3>Select labels to compare</h3>
+            <p>Choose a diff mode and select labels above, then click Compare.</p>
+        </div>
+    </ng-container>
+</div>

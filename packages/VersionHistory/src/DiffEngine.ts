@@ -1,6 +1,5 @@
 import {
     BaseEntity,
-    CompositeKey,
     Metadata,
     RunView,
     UserInfo,
@@ -16,10 +15,15 @@ import {
     RecordDiffType,
     RecordSnapshot,
 } from './types';
-
-const ENTITY_VERSION_LABEL_ITEMS = 'MJ: Version Label Items';
-const ENTITY_VERSION_LABELS = 'MJ: Version Labels';
-const ENTITY_RECORD_CHANGES = 'Record Changes';
+import {
+    ENTITY_VERSION_LABEL_ITEMS,
+    ENTITY_VERSION_LABELS,
+    ENTITY_RECORD_CHANGES,
+    sqlEquals,
+    escapeSqlString,
+    loadRecordChangeSnapshot,
+    loadEntityById,
+} from './constants';
 
 /**
  * Map key: "entityId::recordId" → RecordChangeID
@@ -39,10 +43,26 @@ export class DiffEngine {
         toLabelId: string,
         contextUser: UserInfo
     ): Promise<DiffResult> {
+        // Short-circuit: identical labels produce an empty diff
+        if (fromLabelId === toLabelId) {
+            const label = await loadEntityById(ENTITY_VERSION_LABELS, fromLabelId, contextUser);
+            const labelName = label ? (label.Get('Name') as string) : fromLabelId;
+            return {
+                FromLabelID: fromLabelId,
+                FromLabelName: labelName,
+                ToLabelID: toLabelId,
+                ToLabelName: labelName,
+                Summary: { TotalRecordsChanged: 0, TotalRecordsAdded: 0, TotalRecordsModified: 0, TotalRecordsDeleted: 0, EntitiesAffected: 0 },
+                EntityDiffs: [],
+            };
+        }
+
         const [fromLabel, toLabel] = await Promise.all([
-            this.loadLabel(fromLabelId, contextUser),
-            this.loadLabel(toLabelId, contextUser),
+            loadEntityById(ENTITY_VERSION_LABELS, fromLabelId, contextUser),
+            loadEntityById(ENTITY_VERSION_LABELS, toLabelId, contextUser),
         ]);
+        if (!fromLabel) throw new Error(`Version label '${fromLabelId}' not found`);
+        if (!toLabel) throw new Error(`Version label '${toLabelId}' not found`);
 
         const [fromIndex, toIndex] = await Promise.all([
             this.buildSnapshotIndex(fromLabelId, contextUser),
@@ -74,7 +94,9 @@ export class DiffEngine {
         labelId: string,
         contextUser: UserInfo
     ): Promise<DiffResult> {
-        const label = await this.loadLabel(labelId, contextUser);
+        const label = await loadEntityById(ENTITY_VERSION_LABELS, labelId, contextUser);
+        if (!label) throw new Error(`Version label '${labelId}' not found`);
+
         const fromIndex = await this.buildSnapshotIndex(labelId, contextUser);
 
         // Build a "current" index: for each record in the from index, find
@@ -108,9 +130,15 @@ export class DiffEngine {
         if (!entityInfo) return null;
 
         const rv = new RunView();
+        const filter = [
+            sqlEquals('VersionLabelID', labelId),
+            sqlEquals('EntityID', entityInfo.ID),
+            sqlEquals('RecordID', recordId),
+        ].join(' AND ');
+
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: ENTITY_VERSION_LABEL_ITEMS,
-            ExtraFilter: `VersionLabelID = '${labelId}' AND EntityID = '${entityInfo.ID}' AND RecordID = '${recordId}'`,
+            ExtraFilter: filter,
             Fields: ['ID', 'RecordChangeID', 'EntityID', 'RecordID'],
             MaxRows: 1,
             ResultType: 'simple',
@@ -119,8 +147,9 @@ export class DiffEngine {
         if (!result.Success || result.Results.length === 0) return null;
 
         const item = result.Results[0];
-        return this.loadSnapshotFromRecordChange(
-            item['RecordChangeID'] as string,
+        const recordChangeId = item['RecordChangeID'] as string;
+        return this.buildSnapshotFromRecordChange(
+            recordChangeId,
             entityName,
             entityInfo.ID,
             recordId,
@@ -133,24 +162,13 @@ export class DiffEngine {
     // -----------------------------------------------------------------------
 
     /**
-     * Load a label entity by ID.
-     */
-    private async loadLabel(labelId: string, contextUser: UserInfo): Promise<BaseEntity> {
-        const md = new Metadata();
-        const label = await md.GetEntityObject<BaseEntity>(ENTITY_VERSION_LABELS, contextUser);
-        const loaded = await label.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: labelId }]));
-        if (!loaded) throw new Error(`Version label '${labelId}' not found`);
-        return label;
-    }
-
-    /**
      * Build an index from VersionLabelItems: key → RecordChangeID.
      */
     private async buildSnapshotIndex(labelId: string, contextUser: UserInfo): Promise<SnapshotIndex> {
         const rv = new RunView();
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: ENTITY_VERSION_LABEL_ITEMS,
-            ExtraFilter: `VersionLabelID = '${labelId}'`,
+            ExtraFilter: sqlEquals('VersionLabelID', labelId),
             Fields: ['ID', 'RecordChangeID', 'EntityID', 'RecordID'],
             ResultType: 'simple',
         }, contextUser);
@@ -180,33 +198,60 @@ export class DiffEngine {
         const rv = new RunView();
 
         // Group by entityId for efficient batch queries
-        const byEntity = new Map<string, string[]>();
-        for (const compositeKey of fromIndex.keys()) {
-            const [entityId, recordId] = compositeKey.split('::');
-            if (!byEntity.has(entityId)) byEntity.set(entityId, []);
-            byEntity.get(entityId)!.push(recordId);
-        }
+        const byEntity = this.groupKeysByEntity(fromIndex);
 
         for (const [entityId, recordIds] of byEntity) {
             for (const recordId of recordIds) {
-                const result = await rv.RunView<Record<string, unknown>>({
-                    EntityName: ENTITY_RECORD_CHANGES,
-                    ExtraFilter: `EntityID = '${entityId}' AND RecordID = '${recordId}'`,
-                    OrderBy: 'ChangedAt DESC',
-                    MaxRows: 1,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                }, contextUser);
-
-                if (result.Success && result.Results.length > 0) {
-                    const key = `${entityId}::${recordId}`;
-                    currentIndex.set(key, result.Results[0]['ID'] as string);
+                const latestId = await this.findLatestRecordChange(rv, entityId, recordId, contextUser);
+                if (latestId) {
+                    currentIndex.set(`${entityId}::${recordId}`, latestId);
                 }
-                // If no result, the record may have been deleted or never changed
             }
         }
 
         return currentIndex;
+    }
+
+    /**
+     * Group composite keys from a SnapshotIndex by entityId.
+     */
+    private groupKeysByEntity(index: SnapshotIndex): Map<string, string[]> {
+        const byEntity = new Map<string, string[]>();
+        for (const compositeKey of index.keys()) {
+            const [entityId, recordId] = compositeKey.split('::');
+            if (!byEntity.has(entityId)) byEntity.set(entityId, []);
+            byEntity.get(entityId)!.push(recordId);
+        }
+        return byEntity;
+    }
+
+    /**
+     * Find the latest RecordChange ID for a given entity + record.
+     */
+    private async findLatestRecordChange(
+        rv: RunView,
+        entityId: string,
+        recordId: string,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        const filter = [
+            sqlEquals('EntityID', entityId),
+            sqlEquals('RecordID', recordId),
+        ].join(' AND ');
+
+        const result = await rv.RunView<Record<string, unknown>>({
+            EntityName: ENTITY_RECORD_CHANGES,
+            ExtraFilter: filter,
+            OrderBy: 'ChangedAt DESC',
+            MaxRows: 1,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, contextUser);
+
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0]['ID'] as string;
+        }
+        return null;
     }
 
     /**
@@ -220,43 +265,54 @@ export class DiffEngine {
         const allKeys = new Set([...fromIndex.keys(), ...toIndex.keys()]);
         const md = new Metadata();
 
-        // Group by entity
+        // Group diffs by entity
         const entityGroups = new Map<string, { entityId: string; records: RecordDiff[] }>();
 
         for (const compositeKey of allKeys) {
             const [entityId, recordId] = compositeKey.split('::');
-            const fromChangeId = fromIndex.get(compositeKey);
-            const toChangeId = toIndex.get(compositeKey);
+            const fromChangeId = fromIndex.get(compositeKey) ?? null;
+            const toChangeId = toIndex.get(compositeKey) ?? null;
 
-            const entityInfo = md.Entities.find(e => e.ID === entityId);
-            const entityName = entityInfo?.Name ?? `Unknown(${entityId})`;
+            const entityName = this.resolveEntityName(md, entityId);
 
             if (!entityGroups.has(entityId)) {
                 entityGroups.set(entityId, { entityId, records: [] });
             }
-            const group = entityGroups.get(entityId)!;
 
             const diff = await this.diffSingleRecord(
-                entityName,
-                recordId,
-                fromChangeId ?? null,
-                toChangeId ?? null,
-                contextUser
+                entityName, recordId, fromChangeId, toChangeId, contextUser
             );
-            group.records.push(diff);
+            entityGroups.get(entityId)!.records.push(diff);
         }
 
-        // Convert to EntityDiffGroup array
-        const result: EntityDiffGroup[] = [];
-        for (const [entityId, group] of entityGroups) {
-            const entityInfo = md.Entities.find(e => e.ID === entityId);
-            const entityName = entityInfo?.Name ?? `Unknown(${entityId})`;
+        return this.buildEntityDiffGroups(entityGroups, md);
+    }
 
+    /**
+     * Resolve an entity name from metadata by ID, with fallback.
+     */
+    private resolveEntityName(md: Metadata, entityId: string): string {
+        const entityInfo = md.Entities.find(e => e.ID === entityId);
+        return entityInfo?.Name ?? `Unknown(${entityId})`;
+    }
+
+    /**
+     * Convert the grouped map into an array of EntityDiffGroup,
+     * filtering out groups with no actual changes.
+     */
+    private buildEntityDiffGroups(
+        entityGroups: Map<string, { entityId: string; records: RecordDiff[] }>,
+        md: Metadata
+    ): EntityDiffGroup[] {
+        const result: EntityDiffGroup[] = [];
+
+        for (const [entityId, group] of entityGroups) {
+            const entityName = this.resolveEntityName(md, entityId);
             const addedCount = group.records.filter(r => r.DiffType === 'Added').length;
             const modifiedCount = group.records.filter(r => r.DiffType === 'Modified').length;
             const deletedCount = group.records.filter(r => r.DiffType === 'Deleted').length;
 
-            // Skip unchanged-only groups
+            // Skip groups with no changes
             if (addedCount === 0 && modifiedCount === 0 && deletedCount === 0) continue;
 
             result.push({
@@ -284,46 +340,90 @@ export class DiffEngine {
     ): Promise<RecordDiff> {
         // Record exists only in "to" → Added
         if (!fromChangeId && toChangeId) {
-            const toSnapshot = await this.loadFullRecordJSON(toChangeId, contextUser);
-            return {
-                RecordID: recordId,
-                EntityName: entityName,
-                DiffType: 'Added',
-                FieldChanges: [],
-                FromSnapshot: null,
-                ToSnapshot: toSnapshot,
-            };
+            return this.buildAddedDiff(entityName, recordId, toChangeId, contextUser);
         }
 
         // Record exists only in "from" → Deleted
         if (fromChangeId && !toChangeId) {
-            const fromSnapshot = await this.loadFullRecordJSON(fromChangeId, contextUser);
-            return {
-                RecordID: recordId,
-                EntityName: entityName,
-                DiffType: 'Deleted',
-                FieldChanges: [],
-                FromSnapshot: fromSnapshot,
-                ToSnapshot: null,
-            };
+            return this.buildDeletedDiff(entityName, recordId, fromChangeId, contextUser);
         }
 
         // Same RecordChange ID → Unchanged
         if (fromChangeId === toChangeId) {
-            return {
-                RecordID: recordId,
-                EntityName: entityName,
-                DiffType: 'Unchanged',
-                FieldChanges: [],
-                FromSnapshot: null,
-                ToSnapshot: null,
-            };
+            return this.buildUnchangedDiff(entityName, recordId);
         }
 
         // Both exist but differ → compare field-by-field
+        return this.buildModifiedDiff(entityName, recordId, fromChangeId!, toChangeId!, contextUser);
+    }
+
+    /**
+     * Build a diff result for a record that was added.
+     */
+    private async buildAddedDiff(
+        entityName: string,
+        recordId: string,
+        toChangeId: string,
+        contextUser: UserInfo
+    ): Promise<RecordDiff> {
+        const toSnapshot = await loadRecordChangeSnapshot(toChangeId, contextUser);
+        return {
+            RecordID: recordId,
+            EntityName: entityName,
+            DiffType: 'Added',
+            FieldChanges: [],
+            FromSnapshot: null,
+            ToSnapshot: toSnapshot,
+        };
+    }
+
+    /**
+     * Build a diff result for a record that was deleted.
+     */
+    private async buildDeletedDiff(
+        entityName: string,
+        recordId: string,
+        fromChangeId: string,
+        contextUser: UserInfo
+    ): Promise<RecordDiff> {
+        const fromSnapshot = await loadRecordChangeSnapshot(fromChangeId, contextUser);
+        return {
+            RecordID: recordId,
+            EntityName: entityName,
+            DiffType: 'Deleted',
+            FieldChanges: [],
+            FromSnapshot: fromSnapshot,
+            ToSnapshot: null,
+        };
+    }
+
+    /**
+     * Build a diff result for an unchanged record.
+     */
+    private buildUnchangedDiff(entityName: string, recordId: string): RecordDiff {
+        return {
+            RecordID: recordId,
+            EntityName: entityName,
+            DiffType: 'Unchanged',
+            FieldChanges: [],
+            FromSnapshot: null,
+            ToSnapshot: null,
+        };
+    }
+
+    /**
+     * Build a diff result for a modified record by comparing snapshots field-by-field.
+     */
+    private async buildModifiedDiff(
+        entityName: string,
+        recordId: string,
+        fromChangeId: string,
+        toChangeId: string,
+        contextUser: UserInfo
+    ): Promise<RecordDiff> {
         const [fromSnapshot, toSnapshot] = await Promise.all([
-            this.loadFullRecordJSON(fromChangeId!, contextUser),
-            this.loadFullRecordJSON(toChangeId!, contextUser),
+            loadRecordChangeSnapshot(fromChangeId, contextUser),
+            loadRecordChangeSnapshot(toChangeId, contextUser),
         ]);
 
         const fieldChanges = this.compareSnapshots(fromSnapshot, toSnapshot);
@@ -340,36 +440,10 @@ export class DiffEngine {
     }
 
     /**
-     * Load the FullRecordJSON from a RecordChange entry and parse it.
+     * Build a RecordSnapshot from a RecordChange entry, using the shared
+     * loadRecordChangeSnapshot utility and wrapping the result.
      */
-    private async loadFullRecordJSON(
-        recordChangeId: string,
-        contextUser: UserInfo
-    ): Promise<Record<string, unknown> | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<Record<string, unknown>>({
-            EntityName: ENTITY_RECORD_CHANGES,
-            ExtraFilter: `ID = '${recordChangeId}'`,
-            Fields: ['ID', 'FullRecordJSON'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        }, contextUser);
-
-        if (!result.Success || result.Results.length === 0) return null;
-
-        const jsonStr = result.Results[0]['FullRecordJSON'] as string;
-        try {
-            return JSON.parse(jsonStr);
-        } catch {
-            LogError(`DiffEngine: Failed to parse FullRecordJSON for RecordChange ${recordChangeId}`);
-            return null;
-        }
-    }
-
-    /**
-     * Load a snapshot from a RecordChange entry.
-     */
-    private async loadSnapshotFromRecordChange(
+    private async buildSnapshotFromRecordChange(
         recordChangeId: string,
         entityName: string,
         entityId: string,
@@ -379,28 +453,26 @@ export class DiffEngine {
         const rv = new RunView();
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: ENTITY_RECORD_CHANGES,
-            ExtraFilter: `ID = '${recordChangeId}'`,
-            Fields: ['ID', 'FullRecordJSON', 'ChangedAt'],
+            ExtraFilter: sqlEquals('ID', recordChangeId),
+            Fields: ['ID', 'ChangedAt'],
             MaxRows: 1,
             ResultType: 'simple',
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return null;
 
-        const row = result.Results[0];
-        const jsonStr = row['FullRecordJSON'] as string;
-        try {
-            return {
-                EntityName: entityName,
-                EntityID: entityId,
-                RecordID: recordId,
-                RecordChangeID: recordChangeId,
-                ChangedAt: new Date(row['ChangedAt'] as string),
-                FullRecordJSON: JSON.parse(jsonStr),
-            };
-        } catch {
-            return null;
-        }
+        const changedAt = result.Results[0]['ChangedAt'] as string;
+        const parsed = await loadRecordChangeSnapshot(recordChangeId, contextUser);
+        if (!parsed) return null;
+
+        return {
+            EntityName: entityName,
+            EntityID: entityId,
+            RecordID: recordId,
+            RecordChangeID: recordChangeId,
+            ChangedAt: new Date(changedAt),
+            FullRecordJSON: parsed,
+        };
     }
 
     /**
@@ -424,43 +496,41 @@ export class DiffEngine {
 
             if (this.valuesEqual(oldVal, newVal)) continue;
 
-            if (oldVal === undefined || oldVal === null) {
-                changes.push({ FieldName: field, OldValue: oldVal, NewValue: newVal, ChangeType: 'Added' });
-            } else if (newVal === undefined || newVal === null) {
-                changes.push({ FieldName: field, OldValue: oldVal, NewValue: newVal, ChangeType: 'Removed' });
-            } else {
-                changes.push({ FieldName: field, OldValue: oldVal, NewValue: newVal, ChangeType: 'Modified' });
-            }
+            const changeType = this.classifyFieldChange(oldVal, newVal);
+            changes.push({ FieldName: field, OldValue: oldVal, NewValue: newVal, ChangeType: changeType });
         }
 
         return changes;
     }
 
     /**
-     * Deep equality check for field values.
+     * Classify a field change as Added, Removed, or Modified.
+     */
+    private classifyFieldChange(
+        oldVal: unknown,
+        newVal: unknown
+    ): 'Added' | 'Modified' | 'Removed' {
+        if (oldVal === undefined || oldVal === null) return 'Added';
+        if (newVal === undefined || newVal === null) return 'Removed';
+        return 'Modified';
+    }
+
+    /**
+     * Equality check for field values.
+     * Handles null, identity, Date instances, and falls back to string comparison.
      */
     private valuesEqual(a: unknown, b: unknown): boolean {
         if (a === b) return true;
         if (a == null && b == null) return true;
         if (a == null || b == null) return false;
 
-        // Normalize string representations
-        const strA = String(a);
-        const strB = String(b);
-        if (strA === strB) return true;
-
-        // Date comparison
+        // Date instance comparison
         if (a instanceof Date && b instanceof Date) {
             return a.getTime() === b.getTime();
         }
-        if (typeof a === 'string' && typeof b === 'string') {
-            // Try date parse for ISO strings
-            const dateA = Date.parse(a);
-            const dateB = Date.parse(b);
-            if (!isNaN(dateA) && !isNaN(dateB) && dateA === dateB) return true;
-        }
 
-        return false;
+        // String comparison fallback
+        return String(a) === String(b);
     }
 
     /**

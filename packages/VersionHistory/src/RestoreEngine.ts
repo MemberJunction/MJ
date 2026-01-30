@@ -13,13 +13,23 @@ import {
     RestoreOptions,
     RestoreResult,
     RestoreStatus,
+    VersionLabelScope,
 } from './types';
 import { LabelManager } from './LabelManager';
 import { SnapshotBuilder } from './SnapshotBuilder';
+import {
+    ENTITY_VERSION_LABEL_ITEMS,
+    ENTITY_VERSION_LABEL_RESTORES,
+    sqlEquals,
+    sqlNotIn,
+    loadRecordChangeSnapshot,
+    loadEntityById,
+    buildIdKey,
+    buildPrimaryKeyForLoad,
+} from './constants';
 
-const ENTITY_VERSION_LABEL_ITEMS = 'MJ: Version Label Items';
-const ENTITY_VERSION_LABEL_RESTORES = 'MJ: Version Label Restores';
-const ENTITY_RECORD_CHANGES = 'Record Changes';
+/** Batch size for progress update writes — only persist every N items. */
+const PROGRESS_UPDATE_INTERVAL = 10;
 
 /**
  * Restores records to the state captured by a version label.
@@ -48,6 +58,7 @@ export class RestoreEngine {
         // Load the target label
         const label = await this.LabelMgr.GetLabel(labelId, contextUser);
         const labelName = label.Get('Name') as string;
+        const labelScope = label.Get('Scope') as VersionLabelScope;
         LogStatus(`VersionHistory: Starting restore to label '${labelName}' (${labelId})`);
 
         // Load all label items to restore
@@ -60,7 +71,7 @@ export class RestoreEngine {
         // Create pre-restore safety label
         let preRestoreLabelId: string | null = null;
         if (resolvedOptions.CreatePreRestoreLabel && !resolvedOptions.DryRun) {
-            preRestoreLabelId = await this.createPreRestoreLabel(labelName, items, contextUser);
+            preRestoreLabelId = await this.createPreRestoreLabel(labelName, labelScope, items, contextUser);
         }
 
         // Create the restore audit record
@@ -74,41 +85,10 @@ export class RestoreEngine {
             );
         }
 
-        // Sort items by entity dependency order
+        // Sort items by entity dependency order and process them
         const sortedItems = this.sortByDependencyOrder(items);
-
-        // Restore each item
-        const details: RestoreItemResult[] = [];
-        let restoredCount = 0;
-        let failedCount = 0;
-        let skippedCount = 0;
-
-        for (const item of sortedItems) {
-            const result = await this.restoreSingleItem(item, resolvedOptions.DryRun, contextUser);
-            details.push(result);
-
-            switch (result.Status) {
-                case 'Restored':
-                    restoredCount++;
-                    break;
-                case 'Failed':
-                    failedCount++;
-                    break;
-                case 'Skipped':
-                    skippedCount++;
-                    break;
-            }
-
-            // Update audit record progress
-            if (restoreAuditId && !resolvedOptions.DryRun) {
-                await this.updateRestoreProgress(
-                    restoreAuditId,
-                    restoredCount,
-                    failedCount,
-                    contextUser
-                );
-            }
-        }
+        const { details, restoredCount, failedCount, skippedCount } =
+            await this.processRestoreItems(sortedItems, resolvedOptions.DryRun, restoreAuditId, contextUser);
 
         // Finalize the audit record
         const finalStatus = this.determineFinalStatus(restoredCount, failedCount, items.length);
@@ -139,6 +119,48 @@ export class RestoreEngine {
     // -----------------------------------------------------------------------
 
     /**
+     * Process all restore items in order, tracking progress and updating the
+     * audit record in batches.
+     */
+    private async processRestoreItems(
+        sortedItems: LabelItemRecord[],
+        dryRun: boolean,
+        restoreAuditId: string | null,
+        contextUser: UserInfo
+    ): Promise<RestoreProgressTotals> {
+        const details: RestoreItemResult[] = [];
+        let restoredCount = 0;
+        let failedCount = 0;
+        let skippedCount = 0;
+
+        for (let i = 0; i < sortedItems.length; i++) {
+            const result = await this.restoreSingleItem(sortedItems[i], dryRun, contextUser);
+            details.push(result);
+
+            switch (result.Status) {
+                case 'Restored':
+                    restoredCount++;
+                    break;
+                case 'Failed':
+                    failedCount++;
+                    break;
+                case 'Skipped':
+                    skippedCount++;
+                    break;
+            }
+
+            // Batch progress updates — only write every N items or on the last item
+            const isLastItem = i === sortedItems.length - 1;
+            const isBatchBoundary = (i + 1) % PROGRESS_UPDATE_INTERVAL === 0;
+            if (restoreAuditId && !dryRun && (isBatchBoundary || isLastItem)) {
+                await this.updateRestoreProgress(restoreAuditId, restoredCount, failedCount, contextUser);
+            }
+        }
+
+        return { details, restoredCount, failedCount, skippedCount };
+    }
+
+    /**
      * Load all VersionLabelItems for a label, optionally filtered.
      */
     private async loadLabelItems(
@@ -148,7 +170,7 @@ export class RestoreEngine {
     ): Promise<LabelItemRecord[]> {
         const rv = new RunView();
 
-        let extraFilter = `VersionLabelID = '${labelId}'`;
+        let extraFilter = sqlEquals('VersionLabelID', labelId);
 
         // Apply entity exclusion
         if (options.SkipEntities && options.SkipEntities.length > 0) {
@@ -157,8 +179,7 @@ export class RestoreEngine {
                 .map(name => md.EntityByName(name)?.ID)
                 .filter((id): id is string => id != null);
             if (excludeIds.length > 0) {
-                const idList = excludeIds.map(id => `'${id}'`).join(', ');
-                extraFilter += ` AND EntityID NOT IN (${idList})`;
+                extraFilter += ` AND ${sqlNotIn('EntityID', excludeIds)}`;
             }
         }
 
@@ -183,18 +204,28 @@ export class RestoreEngine {
 
         // Apply selected records filter
         if (options.Scope === 'Selected' && options.SelectedRecords && options.SelectedRecords.length > 0) {
-            const selectedSet = new Set(
-                options.SelectedRecords.map(s => `${s.EntityName}::${s.RecordID}`)
-            );
-            const md = new Metadata();
-            items = items.filter(item => {
-                const entityInfo = md.Entities.find(e => e.ID === item.EntityID);
-                const entityName = entityInfo?.Name ?? '';
-                return selectedSet.has(`${entityName}::${item.RecordID}`);
-            });
+            items = this.filterBySelectedRecords(items, options.SelectedRecords);
         }
 
         return items;
+    }
+
+    /**
+     * Filter label items to only include those matching a set of selected records.
+     */
+    private filterBySelectedRecords(
+        items: LabelItemRecord[],
+        selectedRecords: Array<{ EntityName: string; RecordID: string }>
+    ): LabelItemRecord[] {
+        const selectedSet = new Set(
+            selectedRecords.map(s => `${s.EntityName}::${s.RecordID}`)
+        );
+        const md = new Metadata();
+        return items.filter(item => {
+            const entityInfo = md.Entities.find(e => e.ID === item.EntityID);
+            const entityName = entityInfo?.Name ?? '';
+            return selectedSet.has(`${entityName}::${item.RecordID}`);
+        });
     }
 
     /**
@@ -204,11 +235,13 @@ export class RestoreEngine {
     private sortByDependencyOrder(items: LabelItemRecord[]): LabelItemRecord[] {
         const md = new Metadata();
 
-        // Build a map of entityId → dependency level
+        // Build a map of entityId -> dependency level
         const levelMap = new Map<string, number>();
-        const computeLevel = (entityId: string, visited: Set<string>): number => {
+        const visited = new Set<string>();
+
+        const computeLevel = (entityId: string): number => {
             if (levelMap.has(entityId)) return levelMap.get(entityId)!;
-            if (visited.has(entityId)) return 0; // Cycle — break it
+            if (visited.has(entityId)) return 0; // Cycle -- break it
             visited.add(entityId);
 
             const entityInfo = md.Entities.find(e => e.ID === entityId);
@@ -221,7 +254,7 @@ export class RestoreEngine {
             let maxParentLevel = -1;
             for (const field of entityInfo.Fields) {
                 if (field.RelatedEntityID && field.RelatedEntityID !== entityId) {
-                    const parentLevel = computeLevel(field.RelatedEntityID, visited);
+                    const parentLevel = computeLevel(field.RelatedEntityID);
                     maxParentLevel = Math.max(maxParentLevel, parentLevel);
                 }
             }
@@ -234,7 +267,7 @@ export class RestoreEngine {
         // Compute levels for all entities in the item set
         const entityIds = new Set(items.map(i => i.EntityID));
         for (const entityId of entityIds) {
-            computeLevel(entityId, new Set());
+            computeLevel(entityId);
         }
 
         // Sort: lower level (parents) first
@@ -253,110 +286,71 @@ export class RestoreEngine {
         dryRun: boolean,
         contextUser: UserInfo
     ): Promise<RestoreItemResult> {
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.ID === item.EntityID);
+        const entityInfo = this.resolveEntityInfo(item.EntityID);
         if (!entityInfo) {
-            return {
-                EntityName: `Unknown(${item.EntityID})`,
-                RecordID: item.RecordID,
-                Status: 'Failed',
-                ErrorMessage: `Entity with ID '${item.EntityID}' not found in metadata`,
-            };
+            return this.failedItemResult(`Unknown(${item.EntityID})`, item.RecordID,
+                `Entity with ID '${item.EntityID}' not found in metadata`);
         }
 
         try {
-            // Load the snapshot from the RecordChange
-            const snapshotData = await this.loadRecordChangeSnapshot(item.RecordChangeID, contextUser);
+            const snapshotData = await loadRecordChangeSnapshot(item.RecordChangeID, contextUser);
             if (!snapshotData) {
-                return {
-                    EntityName: entityInfo.Name,
-                    RecordID: item.RecordID,
-                    Status: 'Failed',
-                    ErrorMessage: 'Could not load snapshot from RecordChange',
-                };
+                return this.failedItemResult(entityInfo.Name, item.RecordID,
+                    'Could not load snapshot from RecordChange');
             }
 
             if (dryRun) {
-                return {
-                    EntityName: entityInfo.Name,
-                    RecordID: item.RecordID,
-                    Status: 'Restored', // Would be restored
-                };
+                return { EntityName: entityInfo.Name, RecordID: item.RecordID, Status: 'Restored' };
             }
 
-            // Load or create the target entity
-            const entity = await this.loadOrCreateEntity(entityInfo, item.RecordID, contextUser);
-            if (!entity) {
-                return {
-                    EntityName: entityInfo.Name,
-                    RecordID: item.RecordID,
-                    Status: 'Failed',
-                    ErrorMessage: 'Could not load entity for restore',
-                };
-            }
-
-            // Apply snapshot fields
-            const changed = this.applySnapshotToEntity(entity, snapshotData, entityInfo);
-            if (!changed) {
-                return {
-                    EntityName: entityInfo.Name,
-                    RecordID: item.RecordID,
-                    Status: 'Skipped',
-                };
-            }
-
-            // Save
-            const saved = await entity.Save();
-            if (!saved) {
-                return {
-                    EntityName: entityInfo.Name,
-                    RecordID: item.RecordID,
-                    Status: 'Failed',
-                    ErrorMessage: 'Save failed',
-                };
-            }
-
-            return {
-                EntityName: entityInfo.Name,
-                RecordID: item.RecordID,
-                Status: 'Restored',
-            };
+            return await this.applyRestore(entityInfo, item.RecordID, snapshotData, contextUser);
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             LogError(`RestoreEngine: Error restoring ${entityInfo.Name}/${item.RecordID}: ${msg}`);
-            return {
-                EntityName: entityInfo.Name,
-                RecordID: item.RecordID,
-                Status: 'Failed',
-                ErrorMessage: msg,
-            };
+            return this.failedItemResult(entityInfo.Name, item.RecordID, msg);
         }
     }
 
     /**
-     * Load the FullRecordJSON from a RecordChange and parse it.
+     * Resolve entity metadata by ID.
      */
-    private async loadRecordChangeSnapshot(
-        recordChangeId: string,
+    private resolveEntityInfo(entityId: string): EntityInfo | null {
+        const md = new Metadata();
+        return md.Entities.find(e => e.ID === entityId) ?? null;
+    }
+
+    /**
+     * Apply the snapshot data to an existing or new entity and save it.
+     */
+    private async applyRestore(
+        entityInfo: EntityInfo,
+        recordId: string,
+        snapshotData: Record<string, unknown>,
         contextUser: UserInfo
-    ): Promise<Record<string, unknown> | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<Record<string, unknown>>({
-            EntityName: ENTITY_RECORD_CHANGES,
-            ExtraFilter: `ID = '${recordChangeId}'`,
-            Fields: ['ID', 'FullRecordJSON'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        }, contextUser);
-
-        if (!result.Success || result.Results.length === 0) return null;
-
-        const jsonStr = result.Results[0]['FullRecordJSON'] as string;
-        try {
-            return JSON.parse(jsonStr);
-        } catch {
-            return null;
+    ): Promise<RestoreItemResult> {
+        const entity = await this.loadOrCreateEntity(entityInfo, recordId, contextUser);
+        if (!entity) {
+            return this.failedItemResult(entityInfo.Name, recordId, 'Could not load entity for restore');
         }
+
+        const changed = this.applySnapshotToEntity(entity, snapshotData, entityInfo);
+        if (!changed) {
+            return { EntityName: entityInfo.Name, RecordID: recordId, Status: 'Skipped' };
+        }
+
+        const saved = await entity.Save();
+        if (!saved) {
+            return this.failedItemResult(entityInfo.Name, recordId, 'Save failed');
+        }
+
+        return { EntityName: entityInfo.Name, RecordID: recordId, Status: 'Restored' };
+    }
+
+    /**
+     * Build a failed RestoreItemResult.
+     */
+    private failedItemResult(entityName: string, recordId: string, errorMessage: string): RestoreItemResult {
+        return { EntityName: entityName, RecordID: recordId, Status: 'Failed', ErrorMessage: errorMessage };
     }
 
     /**
@@ -370,9 +364,10 @@ export class RestoreEngine {
         const md = new Metadata();
         const entity = await md.GetEntityObject<BaseEntity>(entityInfo.Name, contextUser);
 
-        // Try to load existing record
+        // Try to load existing record using the entity's actual primary key
         try {
-            const loaded = await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: recordId }]));
+            const key = buildPrimaryKeyForLoad(entityInfo, recordId);
+            const loaded = await entity.InnerLoad(key);
             if (loaded) return entity;
         } catch {
             // Record doesn't exist — fall through to create
@@ -427,13 +422,14 @@ export class RestoreEngine {
      */
     private async createPreRestoreLabel(
         targetLabelName: string,
+        targetLabelScope: VersionLabelScope,
         items: LabelItemRecord[],
         contextUser: UserInfo
     ): Promise<string> {
         const label = await this.LabelMgr.CreateLabel({
             Name: `Pre-Restore: ${targetLabelName} (${new Date().toISOString()})`,
             Description: `Automatic safety snapshot created before restoring to label '${targetLabelName}'`,
-            Scope: 'System',
+            Scope: targetLabelScope,
         }, contextUser);
 
         const preRestoreLabelId = label.Get('ID') as string;
@@ -503,16 +499,16 @@ export class RestoreEngine {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const md = new Metadata();
-            const restore = await md.GetEntityObject<BaseEntity>(ENTITY_VERSION_LABEL_RESTORES, contextUser);
-            const loaded = await restore.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: restoreId }]));
-            if (!loaded) return;
+            const restore = await loadEntityById(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
+            if (!restore) return;
 
             restore.Set('CompletedItems', completedItems);
             restore.Set('FailedItems', failedItems);
             await restore.Save();
-        } catch {
+        } catch (e: unknown) {
             // Non-critical — progress update failure shouldn't stop the restore
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`RestoreEngine: Failed to update restore progress for ${restoreId}: ${msg}`);
         }
     }
 
@@ -527,10 +523,8 @@ export class RestoreEngine {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const md = new Metadata();
-            const restore = await md.GetEntityObject<BaseEntity>(ENTITY_VERSION_LABEL_RESTORES, contextUser);
-            const loaded = await restore.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: restoreId }]));
-            if (!loaded) return;
+            const restore = await loadEntityById(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
+            if (!restore) return;
 
             restore.Set('Status', status);
             restore.Set('EndedAt', new Date());
@@ -556,7 +550,7 @@ export class RestoreEngine {
     private determineFinalStatus(
         restored: number,
         failed: number,
-        total: number
+        _total: number
     ): RestoreStatus {
         if (failed === 0) return 'Complete';
         if (restored === 0) return 'Error';
@@ -601,4 +595,14 @@ interface LabelItemRecord {
     RecordChangeID: string;
     EntityID: string;
     RecordID: string;
+}
+
+/**
+ * Progress totals returned from the item-processing loop.
+ */
+interface RestoreProgressTotals {
+    details: RestoreItemResult[];
+    restoredCount: number;
+    failedCount: number;
+    skippedCount: number;
 }

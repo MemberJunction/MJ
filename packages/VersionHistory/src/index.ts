@@ -1,4 +1,5 @@
 export * from './types';
+export * from './constants';
 export * from './DependencyGraphWalker';
 export * from './LabelManager';
 export * from './SnapshotBuilder';

@@ -89,19 +89,18 @@ export class VersionHistoryEngine {
         // Capture the snapshot based on scope
         let captureResult: CaptureResult;
 
+        // Validation is handled by LabelManager.CreateLabel before persisting,
+        // so we can safely proceed to capture here.
         switch (scope) {
             case 'Record': {
-                if (!params.EntityName || !params.RecordKey) {
-                    throw new Error('Record scope requires EntityName and RecordKey');
-                }
                 const walkOptions: WalkOptions = {
                     MaxDepth: params.MaxDepth ?? 10,
                     ExcludeEntities: params.ExcludeEntities ?? [],
                 };
                 captureResult = await this.SnapshotBldr.CaptureRecord(
                     labelId,
-                    params.EntityName,
-                    params.RecordKey,
+                    params.EntityName!,
+                    params.RecordKey!,
                     params.IncludeDependencies ?? true,
                     walkOptions,
                     contextUser
@@ -109,12 +108,9 @@ export class VersionHistoryEngine {
                 break;
             }
             case 'Entity': {
-                if (!params.EntityName) {
-                    throw new Error('Entity scope requires EntityName');
-                }
                 captureResult = await this.SnapshotBldr.CaptureEntity(
                     labelId,
-                    params.EntityName,
+                    params.EntityName!,
                     contextUser
                 );
                 break;

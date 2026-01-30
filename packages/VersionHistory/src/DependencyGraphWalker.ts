@@ -1,5 +1,6 @@
 import { CompositeKey, EntityInfo, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
 import { DependencyNode, WalkOptions } from './types';
+import { buildCompositeKeyFromRecord, escapeSqlString } from './constants';
 
 /**
  * Walks entity relationship graphs to discover dependent records.
@@ -95,6 +96,8 @@ export class DependencyGraphWalker {
 
             const relatedEntityInfo = this.getRelatedEntityInfo(rel.RelatedEntityID);
             if (!relatedEntityInfo) {
+                LogError(`DependencyGraphWalker: Could not find related entity with ID '${rel.RelatedEntityID}' ` +
+                    `referenced by relationship on '${parentEntity.Name}'`);
                 continue;
             }
 
@@ -111,7 +114,7 @@ export class DependencyGraphWalker {
             );
 
             for (const childData of childRecords) {
-                const childKey = this.buildCompositeKey(relatedEntityInfo, childData);
+                const childKey = buildCompositeKeyFromRecord(relatedEntityInfo, childData);
                 const visitKey = `${relatedEntityInfo.Name}::${childKey.ToConcatenatedString()}`;
 
                 if (visited.has(visitKey)) {
@@ -152,7 +155,7 @@ export class DependencyGraphWalker {
             return [];
         }
 
-        let extraFilter = `${rel.RelatedEntityJoinField} = '${parentKeyValue}'`;
+        let extraFilter = `${rel.RelatedEntityJoinField} = '${escapeSqlString(String(parentKeyValue))}'`;
         if (!options.IncludeDeleted && this.hasSoftDeleteField(childEntityInfo)) {
             extraFilter += ` AND __mj_DeletedAt IS NULL`;
         }
@@ -196,6 +199,8 @@ export class DependencyGraphWalker {
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) {
+            LogError(`DependencyGraphWalker: loadRecordData returned empty for entity '${entityInfo.Name}' ` +
+                `with key ${key.ToConcatenatedString()}`);
             return {};
         }
 
@@ -216,20 +221,6 @@ export class DependencyGraphWalker {
             : parentNode.EntityInfo.FirstPrimaryKey.Name;
 
         return parentNode.RecordData[parentFieldName] ?? null;
-    }
-
-    /**
-     * Build a CompositeKey from a record's data using the entity's primary key fields.
-     */
-    private buildCompositeKey(
-        entityInfo: EntityInfo,
-        recordData: Record<string, unknown>
-    ): CompositeKey {
-        const pairs = entityInfo.PrimaryKeys.map(pk => ({
-            FieldName: pk.Name,
-            Value: recordData[pk.Name],
-        }));
-        return new CompositeKey(pairs);
     }
 
     /**

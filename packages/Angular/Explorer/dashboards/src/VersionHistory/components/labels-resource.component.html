@@ -1,0 +1,136 @@
+<div class="labels-container">
+    <mj-loading *ngIf="IsLoading" text="Loading version labels..."></mj-loading>
+
+    <ng-container *ngIf="!IsLoading">
+        <!-- Header -->
+        <div class="page-header">
+            <div class="header-left">
+                <h2 class="page-title">Version Labels</h2>
+                <p class="page-subtitle">Manage versioning snapshots across your system</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn-icon" (click)="Refresh()" title="Refresh">
+                    <i class="fa-solid fa-refresh"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+                    <i class="fa-solid fa-tags"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value">{{FormatNumber(TotalLabels)}}</div>
+                    <div class="kpi-label">Total Labels</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value">{{FormatNumber(ActiveLabels)}}</div>
+                    <div class="kpi-label">Active</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: rgba(107, 114, 128, 0.1); color: #6b7280;">
+                    <i class="fa-solid fa-box-archive"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value">{{FormatNumber(ArchivedLabels)}}</div>
+                    <div class="kpi-label">Archived</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value">{{FormatNumber(RestoredLabels)}}</div>
+                    <div class="kpi-label">Restored</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scope breakdown -->
+        <div class="scope-chips">
+            <button class="scope-chip"
+                    *ngFor="let stat of ScopeStats"
+                    [class.active]="ScopeFilter === stat.Scope"
+                    (click)="OnScopeFilterChange(stat.Scope)">
+                <i [class]="stat.Icon"></i>
+                <span>{{stat.Scope}}</span>
+                <span class="chip-count">{{stat.Count}}</span>
+            </button>
+            <button class="scope-chip"
+                    *ngFor="let stat of StatusStats"
+                    [class.active]="StatusFilter === stat.Status"
+                    [ngClass]="GetStatusClass(stat.Status)"
+                    (click)="OnStatusFilterChange(stat.Status)">
+                <span>{{stat.Status}}</span>
+                <span class="chip-count">{{stat.Count}}</span>
+            </button>
+        </div>
+
+        <!-- Search -->
+        <div class="search-bar">
+            <i class="fa-solid fa-search search-icon"></i>
+            <input type="text"
+                   class="search-input"
+                   placeholder="Search labels by name, description, or entity..."
+                   [ngModel]="SearchText"
+                   (ngModelChange)="OnSearchChange($event)" />
+            <button class="btn-clear" *ngIf="SearchText" (click)="OnSearchChange('')">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Labels list -->
+        <div class="labels-list" *ngIf="FilteredLabels.length > 0">
+            <div class="label-card" *ngFor="let label of FilteredLabels">
+                <div class="label-header">
+                    <div class="label-title-row">
+                        <i [class]="GetScopeIcon(label.Scope)" class="label-scope-icon"></i>
+                        <h3 class="label-name">{{label.Name}}</h3>
+                        <span class="label-status" [ngClass]="GetStatusClass(label.Status)">
+                            {{label.Status}}
+                        </span>
+                    </div>
+                    <div class="label-meta">
+                        <span class="meta-item" title="Scope">
+                            <i class="fa-solid fa-layer-group"></i> {{label.Scope}}
+                        </span>
+                        <span class="meta-item" *ngIf="label.EntityName" title="Entity">
+                            <i class="fa-solid fa-table"></i> {{label.EntityName}}
+                        </span>
+                        <span class="meta-item" *ngIf="label.RecordID" title="Record ID">
+                            <i class="fa-solid fa-fingerprint"></i> {{label.RecordID | slice:0:12}}...
+                        </span>
+                        <span class="meta-item" title="Items captured">
+                            <i class="fa-solid fa-camera"></i> {{label.ItemCount}} items
+                        </span>
+                        <span class="meta-item" title="Created">
+                            <i class="fa-regular fa-clock"></i> {{FormatDate(label.CreatedAt)}}
+                        </span>
+                    </div>
+                </div>
+                <p class="label-description" *ngIf="label.Description">{{label.Description}}</p>
+            </div>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty-state" *ngIf="FilteredLabels.length === 0 && !IsLoading">
+            <i class="fa-solid fa-tags empty-icon"></i>
+            <h3>No labels found</h3>
+            <p *ngIf="SearchText || ScopeFilter || StatusFilter">
+                Try adjusting your filters or search criteria.
+            </p>
+            <p *ngIf="!SearchText && !ScopeFilter && !StatusFilter">
+                No version labels have been created yet. Create one programmatically using the VersionHistoryEngine.
+            </p>
+        </div>
+    </ng-container>
+</div>

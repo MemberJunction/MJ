@@ -1,0 +1,40 @@
+{
+  "fields": {
+    "Name": "Version History",
+    "Description": "System-wide versioning, diffing, and restore management for MemberJunction records",
+    "Icon": "fa-solid fa-code-branch",
+    "DefaultForNewUser": false,
+    "Color": "#6366f1",
+    "DefaultSequence": 1010,
+    "DefaultNavItems": [
+      {
+        "Label": "Labels",
+        "Icon": "fa-solid fa-tags",
+        "ResourceType": "Custom",
+        "DriverClass": "VersionHistoryLabelsResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Diff Viewer",
+        "Icon": "fa-solid fa-code-compare",
+        "ResourceType": "Custom",
+        "DriverClass": "VersionHistoryDiffResource"
+      },
+      {
+        "Label": "Restore History",
+        "Icon": "fa-solid fa-clock-rotate-left",
+        "ResourceType": "Custom",
+        "DriverClass": "VersionHistoryRestoreResource"
+      },
+      {
+        "Label": "Dependency Graph",
+        "Icon": "fa-solid fa-diagram-project",
+        "ResourceType": "Custom",
+        "DriverClass": "VersionHistoryGraphResource"
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  }
+}
