@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Version Label Item Section -->
+    <!-- Version Mapping Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="versionLabelItem"
-        sectionName="Version Label Item"
-        icon="fa fa-tag"
+        sectionKey="versionMapping"
+        sectionName="Version Mapping"
+        icon="fa fa-link"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -20,24 +20,6 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="VersionLabel"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Record Snapshot Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="recordSnapshot"
-        sectionName="Record Snapshot"
-        icon="fa fa-history"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -63,6 +45,24 @@
             [ShowLabel]="true"
             FieldName="RecordID"
             Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Display Names Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="displayNames"
+        sectionName="Display Names"
+        icon="fa fa-tag"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="VersionLabel"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>

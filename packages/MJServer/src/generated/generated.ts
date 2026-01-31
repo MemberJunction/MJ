@@ -21054,6 +21054,15 @@ export class MJEntityField_ {
     @Field(() => Boolean, {description: `When AllowDecryptInAPI is false: if true, send encrypted ciphertext (e.g., $ENC$...); if false (default), send sentinel value, usually "[!ENCRYPTED$]", indicating a value exists but is protected. Most secure option is false.`}) 
     SendEncryptedValue: boolean;
         
+    @Field(() => Boolean, {description: `When 1, indicates IsPrimaryKey was set via metadata (not a database constraint). Protects IsPrimaryKey from being cleared by schema sync.`}) 
+    IsSoftPrimaryKey: boolean;
+        
+    @Field(() => Boolean, {description: `When 1, indicates RelatedEntityID/RelatedEntityFieldName were set via metadata (not a database constraint). Protects these fields from being cleared by schema sync.`}) 
+    IsSoftForeignKey: boolean;
+        
+    @Field({nullable: true, description: `JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`}) 
+    RelatedEntityJoinFields?: string;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -21230,6 +21239,15 @@ export class CreateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     SendEncryptedValue?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSoftPrimaryKey?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSoftForeignKey?: boolean;
+
+    @Field({ nullable: true })
+    RelatedEntityJoinFields: string | null;
 }
     
 
@@ -21357,6 +21375,15 @@ export class UpdateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     SendEncryptedValue?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSoftPrimaryKey?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSoftForeignKey?: boolean;
+
+    @Field({ nullable: true })
+    RelatedEntityJoinFields?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -45191,11 +45218,11 @@ export class MJMCPServer_ {
     @MaxLength(200)
     CredentialType?: string;
         
-    @Field(() => [MJMCPServerConnection_])
-    MJ_MCPServerConnections_MCPServerIDArray: MJMCPServerConnection_[]; // Link to MJ_MCPServerConnections
-    
     @Field(() => [MJMCPServerTool_])
     MJ_MCPServerTools_MCPServerIDArray: MJMCPServerTool_[]; // Link to MJ_MCPServerTools
+    
+    @Field(() => [MJMCPServerConnection_])
+    MJ_MCPServerConnections_MCPServerIDArray: MJMCPServerConnection_[]; // Link to MJ_MCPServerConnections
     
 }
 
@@ -45375,17 +45402,6 @@ export class MJMCPServerResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJMCPServerConnection_])
-    async MJ_MCPServerConnections_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnections] WHERE [MCPServerID]='${mjmcpserver_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connections', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connections', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJMCPServerTool_])
     async MJ_MCPServerTools_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: MCP Server Tools', userPayload);
@@ -45394,6 +45410,17 @@ export class MJMCPServerResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerTools] WHERE [MCPServerID]='${mjmcpserver_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Tools', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Tools', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPServerConnection_])
+    async MJ_MCPServerConnections_MCPServerIDArray(@Root() mjmcpserver_: MJMCPServer_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Server Connections', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwMCPServerConnections] WHERE [MCPServerID]='${mjmcpserver_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connections', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connections', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -51708,7 +51735,7 @@ export class MJVersionLabel_ {
     @Field({nullable: true, description: `Optional longer description of what this label represents`}) 
     Description?: string;
         
-    @Field({description: `Breadth of the label: System (all entities), Entity (one entity type), or Record (one record and its dependency graph)`}) 
+    @Field({description: `Breadth of the label: Record (one record and its dependency graph, the primary use case), Entity (one entity type), or System (all entities). Parent grouping labels may use any scope as a logical container.`}) 
     @MaxLength(100)
     Scope: string;
         
@@ -51719,6 +51746,10 @@ export class MJVersionLabel_ {
     @Field({nullable: true, description: `When Scope is Record, identifies the specific record. NULL for System and Entity scopes.`}) 
     @MaxLength(1500)
     RecordID?: string;
+        
+    @Field({nullable: true, description: `Self-referencing parent for grouping related labels. When a user labels multiple records of the same entity, a parent label is created as the container and each individual record label references it via ParentID.`}) 
+    @MaxLength(16)
+    ParentID?: string;
         
     @Field({description: `Lifecycle state: Active (current), Archived (historical reference only), Restored (this label was used in a restore operation)`}) 
     @MaxLength(100)
@@ -51732,6 +51763,12 @@ export class MJVersionLabel_ {
     @MaxLength(400)
     ExternalSystemID?: string;
         
+    @Field(() => Int, {description: `Total number of VersionLabelItem rows created for this label. Populated after label creation completes.`}) 
+    ItemCount: number;
+        
+    @Field(() => Int, {description: `Time in milliseconds taken to create this label and all its items. Used for estimation of future label creation operations.`}) 
+    CreationDurationMS: number;
+        
     @Field() 
     @MaxLength(10)
     _mj__CreatedAt: Date;
@@ -51744,15 +51781,26 @@ export class MJVersionLabel_ {
     @MaxLength(510)
     Entity?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(400)
+    Parent?: string;
+        
     @Field() 
     @MaxLength(200)
     CreatedByUser: string;
         
-    @Field(() => [MJVersionLabelRestore_])
-    MJ_VersionLabelRestores_VersionLabelIDArray: MJVersionLabelRestore_[]; // Link to MJ_VersionLabelRestores
-    
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [MJVersionLabelRestore_])
     MJ_VersionLabelRestores_PreRestoreLabelIDArray: MJVersionLabelRestore_[]; // Link to MJ_VersionLabelRestores
+    
+    @Field(() => [MJVersionLabel_])
+    MJ_VersionLabels_ParentIDArray: MJVersionLabel_[]; // Link to MJ_VersionLabels
+    
+    @Field(() => [MJVersionLabelRestore_])
+    MJ_VersionLabelRestores_VersionLabelIDArray: MJVersionLabelRestore_[]; // Link to MJ_VersionLabelRestores
     
     @Field(() => [MJVersionLabelItem_])
     MJ_VersionLabelItems_VersionLabelIDArray: MJVersionLabelItem_[]; // Link to MJ_VersionLabelItems
@@ -51783,6 +51831,9 @@ export class CreateMJVersionLabelInput {
     RecordID: string | null;
 
     @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
     Status?: string;
 
     @Field({ nullable: true })
@@ -51790,6 +51841,12 @@ export class CreateMJVersionLabelInput {
 
     @Field({ nullable: true })
     ExternalSystemID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ItemCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    CreationDurationMS?: number;
 }
     
 
@@ -51817,6 +51874,9 @@ export class UpdateMJVersionLabelInput {
     RecordID?: string | null;
 
     @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
     Status?: string;
 
     @Field({ nullable: true })
@@ -51824,6 +51884,12 @@ export class UpdateMJVersionLabelInput {
 
     @Field({ nullable: true })
     ExternalSystemID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ItemCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    CreationDurationMS?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -51888,22 +51954,33 @@ export class MJVersionLabelResolver extends ResolverBase {
     }
     
     @FieldResolver(() => [MJVersionLabelRestore_])
-    async MJ_VersionLabelRestores_VersionLabelIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Version Label Restores', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVersionLabelRestores] WHERE [VersionLabelID]='${mjversionlabel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Version Label Restores', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Version Label Restores', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJVersionLabelRestore_])
     async MJ_VersionLabelRestores_PreRestoreLabelIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Version Label Restores', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVersionLabelRestores] WHERE [PreRestoreLabelID]='${mjversionlabel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Version Label Restores', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Version Label Restores', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJVersionLabel_])
+    async MJ_VersionLabels_ParentIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Version Labels', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVersionLabels] WHERE [ParentID]='${mjversionlabel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Version Labels', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Version Labels', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJVersionLabelRestore_])
+    async MJ_VersionLabelRestores_VersionLabelIDArray(@Root() mjversionlabel_: MJVersionLabel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Version Label Restores', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVersionLabelRestores] WHERE [VersionLabelID]='${mjversionlabel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Version Label Restores', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Version Label Restores', rows, this.GetUserFromPayload(userPayload));
         return result;

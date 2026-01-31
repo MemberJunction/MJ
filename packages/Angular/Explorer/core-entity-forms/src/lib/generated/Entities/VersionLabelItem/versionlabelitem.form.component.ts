@@ -14,8 +14,8 @@ export class VersionLabelItemFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'versionLabelItem', sectionName: 'Version Label Item', isExpanded: true },
-            { sectionKey: 'recordSnapshot', sectionName: 'Record Snapshot', isExpanded: true },
+            { sectionKey: 'versionMapping', sectionName: 'Version Mapping', isExpanded: true },
+            { sectionKey: 'displayNames', sectionName: 'Display Names', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

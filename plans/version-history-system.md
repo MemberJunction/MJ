@@ -14,10 +14,11 @@ This document describes the design and implementation of a system-wide versionin
 MemberJunction already tracks all entity record changes via the `RecordChange` table (with `FullRecordJSON` snapshots and `ChangesJSON` diffs). Rather than duplicating this data, the version history system adds a **lightweight indexing layer** on top:
 
 1. **Labels are pointers, not copies** - A label indexes into existing `RecordChange` entries, avoiding data duplication
-2. **Dependency-aware** - Labels can capture not just a single record but its entire dependency graph (parent + children + grandchildren)
-3. **Scope flexibility** - Labels can be scoped to a single record, an entity type, or the entire system
-4. **Non-destructive** - Restore operations automatically create pre-restore safety labels as an undo mechanism
-5. **Leverage existing infrastructure** - Built on top of `RecordChange`, `EntityInfo`, and `EntityRelationshipInfo`
+2. **Dependency-aware** - Labels capture not just a single record but its entire dependency graph (parent + children + grandchildren) via the `DependencyGraphWalker`
+3. **Record-scope first** - The primary use case is labeling individual records with their dependency graphs (e.g., "Agent v2.0"). Broader scopes (Entity, System) exist but Record scope is the default and most common operation
+4. **Parent grouping for multi-record labels** - When labeling multiple records (e.g., 3 agents for a release), a parent label acts as a container with child labels per record. Infrastructure stays simple (each child is Record-scope), UI orchestrates the grouping
+5. **Non-destructive** - Restore operations automatically create pre-restore safety labels as an undo mechanism
+6. **Leverage existing infrastructure** - Built on top of `RecordChange`, `EntityInfo`, and `EntityRelationshipInfo`
 
 ## Problem Statement
 
@@ -32,11 +33,13 @@ While `RecordChange` tracks every mutation, there is no way to:
 
 | Scenario | Current State | With Version History |
 |----------|--------------|---------------------|
-| Pre-deployment snapshot | Manual DB backups | `CreateLabel('Pre-deploy v2.4', { Scope: 'System' })` |
-| Compare config changes | Manual SQL queries | `DiffLabels(labelA, labelB)` with grouped results |
-| Rollback bad migration | Restore from backup | `RestoreToLabel(labelId)` with dependency ordering |
+| Version an AI Agent | No versioning | Label the agent record → captures agent + prompts, actions, sub-agents, config |
+| Release multiple agents | Manual tracking | Select agents in UI → parent label groups individual agent labels |
+| Compare agent versions | Manual SQL queries | `DiffLabels(labelA, labelB)` with grouped field-level results |
+| Rollback bad agent change | Restore from backup | `RestoreToLabel(labelId)` with dependency ordering |
 | Audit entity changes | Browse RecordChange rows | Labels + diff viewer with field-level changes |
 | Template version control | Custom versioning code | Labels scoped to individual template records |
+| Pre-deployment snapshot | Manual DB backups | System-scope label captures all entities (future enhancement) |
 
 ---
 
@@ -52,13 +55,16 @@ While `RecordChange` tracks every mutation, there is no way to:
 │ Name (NVARCHAR 200)         │
 │ Description (NVARCHAR MAX)  │
 │ Scope (System|Entity|Record) │
-│ Status (Active|Archived|     │
-│         Restored)            │
 │ EntityID (FK → Entity, NULL) │
 │ RecordID (NVARCHAR 750,NULL) │
+│ ParentID (FK → self, NULL)   │◄─┐
+│ Status (Active|Archived|     │  │ self-ref
+│         Restored)            │──┘
 │ CreatedByUserID (FK → User)  │
 │ ExternalSystemID (NVARCHAR   │
 │   200, NULL)                 │
+│ ItemCount (INT)              │
+│ CreationDurationMS (INT)     │
 └──────────┬───────────────────┘
            │ 1:N
            │
@@ -68,8 +74,8 @@ While `RecordChange` tracks every mutation, there is no way to:
 │ ID (PK, UNIQUEIDENTIFIER)   │   N:1  │ ID (PK)                     │
 │ VersionLabelID (FK)         ├───────►│ EntityID                    │
 │ RecordChangeID (FK)         │        │ RecordID                    │
-│ EntityID (UNIQUEIDENTIFIER,   │
-│   FK → Entity, denorm)       │       │ Type (Create|Update|Delete| │
+│ EntityID (UNIQUEIDENTIFIER,  │
+│   FK → Entity, denorm)      │        │ Type (Create|Update|Delete| │
 │ RecordID (NVARCHAR 750,denorm)│       │       Snapshot)             │
 │ UNIQUE(LabelID+EntityID+     │        │ FullRecordJSON              │
 │        RecordID)             │        │ ChangesJSON                 │
@@ -96,13 +102,17 @@ While `RecordChange` tracks every mutation, there is no way to:
 
 ### Key Design Decisions
 
-1. **Denormalized EntityID/RecordID on VersionLabelItem**: Enables fast queries for "all items in this label for entity X" without joining through RecordChange. The unique constraint prevents duplicate entries.
+1. **Record-scope-first approach**: The primary use case is labeling a single record and its dependency graph (e.g., "AI Agent v2.0" captures the agent + its prompts, actions, sub-agents, etc.). Entity and System scopes exist for broader use cases but Record scope is the default.
 
-2. **RecordChange.Type extended with 'Snapshot'**: When a record exists but has no RecordChange entry (predates change tracking), the system creates a synthetic `Type='Snapshot'` entry capturing its current state. This fills gaps in the history.
+2. **Parent grouping via self-referencing ParentID**: When a user wants to label multiple records of the same entity (e.g., 3 agents as "Release 3.1"), the system creates a parent label as a container (no EntityID/RecordID, just organizational) and child labels that each snapshot one record's dependency graph. This keeps the infrastructure simple — every label with actual data is Record-scope — while the parent provides logical grouping.
 
-3. **VersionLabelRestore as audit log**: Every restore operation is fully audited with progress tracking, pre-restore label references, and error logs.
+3. **Denormalized EntityID/RecordID on VersionLabelItem**: Enables fast queries for "all items in this label for entity X" without joining through RecordChange. The unique constraint prevents duplicate entries.
 
-4. **Scope enum**: `System` captures everything, `Entity` captures all records of one entity type, `Record` captures one record plus its dependency graph.
+4. **RecordChange.Type extended with 'Snapshot'**: When a record exists but has no RecordChange entry (predates change tracking), the system creates a synthetic `Type='Snapshot'` entry capturing its current state. This fills gaps in the history.
+
+5. **VersionLabelRestore as audit log**: Every restore operation is fully audited with progress tracking, pre-restore label references, and error logs.
+
+6. **Creation metrics (ItemCount, CreationDurationMS)**: Tracked on each label to enable estimation of future label creation operations. Before committing a label, the UI can query existing labels with similar scope to estimate row count and duration.
 
 ---
 
@@ -144,13 +154,36 @@ The main entry point that composes the specialized engines:
 ```typescript
 const engine = new VersionHistoryEngine();
 
-// Create a label
+// Create a Record-scope label (primary use case)
+// Captures the agent record + all dependents (prompts, actions, sub-agents, etc.)
 const label = await engine.CreateLabel({
-    Name: 'Pre-deploy v2.4',
-    Description: 'Baseline before deployment',
-    Scope: 'System',
+    Name: 'Customer Support Agent v2.0',
+    Description: 'Stable release with new escalation logic',
+    Scope: 'Record',
+    EntityID: agentEntityId,
+    RecordID: agentRecordId,
     UserID: currentUser.ID
 }, contextUser);
+// label.ItemCount = 47, label.CreationDurationMS = 1200
+
+// Create grouped labels for multiple records (UI orchestrates this)
+const parentLabel = await engine.CreateLabel({
+    Name: 'Release 3.1',
+    Description: 'Q1 agent release',
+    Scope: 'Record',    // Parent is organizational, no EntityID/RecordID
+    UserID: currentUser.ID
+}, contextUser);
+
+for (const agentId of selectedAgentIds) {
+    await engine.CreateLabel({
+        Name: `Release 3.1 — ${agentName}`,
+        Scope: 'Record',
+        EntityID: agentEntityId,
+        RecordID: agentId,
+        ParentID: parentLabel.ID,
+        UserID: currentUser.ID
+    }, contextUser);
+}
 
 // Compare two labels
 const diff = await engine.DiffLabels(labelA.ID, labelB.ID, contextUser);

@@ -30,6 +30,14 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityAction"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -61,14 +69,6 @@
             [ShowLabel]="true"
             FieldName="Comments"
             Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EntityAction"
-            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>

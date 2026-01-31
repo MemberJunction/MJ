@@ -14,9 +14,8 @@ export class VersionLabelRestoreFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'restoreContext', sectionName: 'Restore Context', isExpanded: true },
-            { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
-            { sectionKey: 'progressMetrics', sectionName: 'Progress Metrics', isExpanded: false },
+            { sectionKey: 'restoreOverview', sectionName: 'Restore Overview', isExpanded: true },
+            { sectionKey: 'progressMetrics', sectionName: 'Progress Metrics', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
