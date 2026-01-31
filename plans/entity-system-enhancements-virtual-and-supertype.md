@@ -4,18 +4,20 @@
 1. [Executive Summary](#executive-summary)
 2. [Terminology](#terminology)
 3. [Enhancement 1: Virtual Entities — Tightening the System](#enhancement-1-virtual-entities)
-4. [Enhancement 2: Parent/Child Type (IS-A) Relationships](#enhancement-2-parentchild-type-is-a-relationships)
-5. [Metadata Schema Changes (ERD)](#metadata-schema-changes-erd)
-6. [Example Domain: Product / Meeting / Publication / Webinar](#example-domain)
-7. [ORM Composition Architecture](#orm-composition-architecture)
-8. [Client/Server Save Orchestration](#clientserver-save-orchestration)
-9. [Transaction Scoping](#transaction-scoping)
-10. [Record Changes](#record-changes)
-11. [Operation Flow Diagrams](#operation-flow-diagrams)
-12. [CodeGen Changes](#codegen-changes)
-13. [UI Integration](#ui-integration)
-14. [Migration Plan](#migration-plan)
-15. [Open Questions & Future Work](#open-questions--future-work)
+4. [Config-Driven Virtual Entity Creation](#config-driven-virtual-entity-creation)
+5. [LLM-Assisted Virtual Entity Field Decoration](#llm-assisted-virtual-entity-field-decoration)
+6. [Enhancement 2: Parent/Child Type (IS-A) Relationships](#enhancement-2-parentchild-type-is-a-relationships)
+7. [Metadata Schema Changes (ERD)](#metadata-schema-changes-erd)
+8. [Example Domain: Product / Meeting / Publication / Webinar](#example-domain)
+9. [ORM Composition Architecture](#orm-composition-architecture)
+10. [Client/Server Save Orchestration](#clientserver-save-orchestration)
+11. [Transaction Scoping](#transaction-scoping)
+12. [Record Changes](#record-changes)
+13. [Operation Flow Diagrams](#operation-flow-diagrams)
+14. [CodeGen Changes](#codegen-changes)
+15. [UI Integration](#ui-integration)
+16. [Migration Plan](#migration-plan)
+17. [Open Questions & Future Work](#open-questions--future-work)
 
 ---
 
@@ -23,7 +25,7 @@
 
 This plan covers two related enhancements to MemberJunction's entity system:
 
-1. **Virtual Entities** — Entities backed only by a SQL view with no physical table. The infrastructure mostly exists (`VirtualEntity=1`, `spCreateVirtualEntity`, `manageVirtualEntities()` in CodeGen). This enhancement tightens the system so virtual entities are first-class citizens with proper read-only enforcement, composite PK support, and UI awareness.
+1. **Virtual Entities** — Entities backed only by a SQL view with no physical table. The infrastructure mostly exists (`VirtualEntity=1`, `spCreateVirtualEntity`, `manageVirtualEntities()` in CodeGen). This enhancement tightens the system so virtual entities are first-class citizens with proper read-only enforcement, composite PK support, UI awareness, **declarative config-driven creation** (replacing manual SP calls), and **LLM-assisted field decoration** that auto-identifies PKs, FKs, and source field mappings from view SQL.
 
 2. **Parent/Child Type Modeling (IS-A Relationships)** — First-class support for IS-A relationships using the existing `ParentID` column on the Entity table (e.g., Meeting IS-A Product). Combined with shared primary keys, ORM-layer composition, and provider-aware save orchestration, this enables unified views, full subclass validation chains, transactional saves, and cascade-aware deletes across the type hierarchy.
 
@@ -122,27 +124,392 @@ This enforces read-only semantics regardless of how the entity is accessed (API,
 
 #### 1D. Virtual Entity Flow
 
+Two creation paths converge in CodeGen:
+
 ```mermaid
 flowchart TD
-    A[DBA creates SQL View] --> B[Call spCreateVirtualEntity]
-    B --> C[Entity record created<br/>VirtualEntity=1<br/>BaseTable=BaseView=ViewName<br/>All API CUD flags=0]
-    C --> D[Placeholder PK EntityField created]
-    D --> E[CodeGen runs]
-    E --> F{VirtualEntity=1?}
-    F -->|Yes| G[manageVirtualEntities]
-    F -->|No| H[Normal entity processing]
-    G --> I[Query sys.columns for view]
-    I --> J[Sync EntityField rows to match view columns]
-    J --> K[Apply soft PK/FK config if defined]
-    K --> L[Skip SP generation<br/>Skip base view generation]
-    L --> M[Generate view permissions only]
-    M --> N[Entity available for read operations]
+    A1[DBA creates SQL View] --> B1[Option A: Call spCreateVirtualEntity]
+    A1 --> B2[Option B: Add to VirtualEntities<br/>section in additionalSchemaInfo config]
 
-    N --> O{User attempts CUD?}
-    O -->|API Layer| P[CheckPermissions blocks:<br/>AllowCreateAPI=0]
-    O -->|Server Code| Q[CheckPermissions blocks:<br/>VirtualEntity=true guard]
-    O -->|Read| R[RunView / Load works normally<br/>via BaseView]
+    B1 --> C[Entity record exists<br/>VirtualEntity=1<br/>BaseTable=BaseView=ViewName<br/>All API CUD flags=0]
+    B2 --> C2[CodeGen creates Entity record<br/>from config if not exists]
+    C2 --> C
+
+    C --> E[CodeGen runs manageVirtualEntities]
+    E --> I[Query sys.columns for view<br/>Sync EntityField rows]
+
+    I --> J{LLM available &<br/>VirtualEntityDecoration enabled?}
+    J -->|Yes| K[LLM analyzes view SQL:<br/>auto-identify PKs, FKs,<br/>source field mappings,<br/>computed field descriptions]
+    J -->|No| L[Skip LLM decoration]
+
+    K --> M[Apply soft PK/FK config<br/>Config always wins over LLM]
+    L --> M
+
+    M --> N[Skip SP generation<br/>Skip base view generation]
+    N --> O[Generate view permissions only]
+    O --> P[Entity available for read operations]
+
+    P --> Q{User attempts CUD?}
+    Q -->|API Layer| R[CheckPermissions blocks:<br/>AllowCreateAPI=0]
+    Q -->|Server Code| S[CheckPermissions blocks:<br/>VirtualEntity=true guard]
+    Q -->|Read| T[RunView / Load works normally<br/>via BaseView]
 ```
+
+---
+
+## Config-Driven Virtual Entity Creation
+
+### Problem: Manual SP Calls Are Fragile
+
+Currently, creating a virtual entity requires calling `spCreateVirtualEntity` with parameters. This is a manual, one-off operation that doesn't fit into a declarative, repeatable workflow. A DBA has to:
+
+1. Create the SQL view
+2. Call `spCreateVirtualEntity` with the right parameters
+3. Wait for CodeGen to sync fields from `sys.columns`
+4. Manually configure soft PKs/FKs via `additionalSchemaInfo` config
+
+Steps 2-4 should be automated via the same config file that already handles soft PK/FK declarations.
+
+### Solution: Extend `additionalSchemaInfo` Config
+
+The existing `database-metadata-config.json` (configured via `additionalSchemaInfo` in `mj.config.cjs`) already supports declaring soft PKs and FKs per table using PascalCase property names. We extend this same file to support a `VirtualEntities` section.
+
+#### Config File Format
+
+```json
+{
+    "$schema": "./database-metadata-config.schema.json",
+    "version": "1.0",
+
+    "dbo": [
+        {
+            "TableName": "Orders",
+            "PrimaryKey": [{ "FieldName": "OrderID" }],
+            "ForeignKeys": [
+                { "FieldName": "CustomerID", "SchemaName": "dbo", "RelatedTable": "Customers", "RelatedField": "ID" }
+            ]
+        }
+    ],
+
+    "VirtualEntities": [
+        {
+            "SchemaName": "dbo",
+            "ViewName": "vwCustomerOrdersSummary",
+            "EntityName": "Customer Orders Summary",
+            "Description": "Aggregated view of customer order history",
+            "PrimaryKey": [
+                { "FieldName": "CustomerID" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "CustomerID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Customer",
+                    "RelatedField": "ID"
+                }
+            ]
+        },
+        {
+            "SchemaName": "analytics",
+            "ViewName": "vwSalesByRegion",
+            "EntityName": "Sales By Region",
+            "Description": "Regional sales aggregation",
+            "PrimaryKey": [
+                { "FieldName": "RegionID" },
+                { "FieldName": "Year" }
+            ]
+        }
+    ]
+}
+```
+
+#### Config Properties
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `SchemaName` | Yes | Schema of the SQL view |
+| `ViewName` | Yes | Name of the SQL view |
+| `EntityName` | No | Display name for the entity. If omitted, CodeGen derives it from the view name (strip `vw` prefix, add spaces). |
+| `Description` | No | Entity description. If omitted and LLM is available, auto-generated. |
+| `PrimaryKey` | No | Array of PK fields. If omitted and LLM is available, auto-identified. |
+| `ForeignKeys` | No | Array of FK relationships. If omitted and LLM is available, auto-identified. |
+
+#### CodeGen Processing Flow
+
+```mermaid
+flowchart TD
+    A[CodeGen runs] --> B[Load additionalSchemaInfo config]
+    B --> C{VirtualEntities section exists?}
+    C -->|No| D[Skip — normal processing]
+    C -->|Yes| E[For each virtual entity in config]
+
+    E --> F{Entity already exists in DB?}
+    F -->|No| G[Create Entity record<br/>VirtualEntity=1<br/>BaseTable=BaseView=ViewName<br/>All CUD APIs=0]
+    F -->|Yes| H[Use existing entity]
+
+    G --> I[manageSingleVirtualEntity<br/>Sync fields from sys.columns]
+    H --> I
+
+    I --> J{LLM available &<br/>VirtualEntityDecoration<br/>feature enabled?}
+    J -->|Yes| K[LLM decorates fields<br/>Auto-identify PKs, FKs,<br/>source field mappings]
+    J -->|No| L[Skip LLM decoration]
+
+    K --> M[Apply config PK/FK overrides<br/>Config always wins over LLM]
+    L --> M
+
+    M --> N[Virtual entity ready<br/>with enriched metadata]
+```
+
+#### Key Design Decisions
+
+1. **Config PK/FK overrides LLM**: If the config explicitly defines `PrimaryKey` or `ForeignKeys`, those are applied after LLM decoration and take precedence. The `IsSoftPrimaryKey`/`IsSoftForeignKey` flags protect these from subsequent schema sync.
+
+2. **Entity creation is idempotent**: If the entity already exists (from a prior CodeGen run or manual `spCreateVirtualEntity` call), the config only updates PK/FK settings — it doesn't recreate the entity.
+
+3. **Same PascalCase conventions**: The `VirtualEntities` section uses the same PascalCase property names (`SchemaName`, `ViewName`, `FieldName`, `RelatedTable`, etc.) as the soft PK/FK sections.
+
+4. **Schema-as-key format for tables, flat array for virtual entities**: Tables use the schema name as a JSON key (e.g., `"dbo": [...]`) for conciseness since most tables share a schema. Virtual entities use a flat array with explicit `SchemaName` per entry since they may span multiple schemas.
+
+---
+
+## LLM-Assisted Virtual Entity Field Decoration
+
+### Problem: sys.columns Gives Minimal Metadata
+
+When CodeGen syncs virtual entity fields from `sys.columns`, it gets column names, data types, lengths, nullability — but **nothing semantic**:
+
+- No primary key identification (views don't have PK constraints)
+- No foreign key relationships
+- No `RelatedEntityID`/`RelatedEntityFieldName` mappings
+- Type info is only what SQL Server infers from the view output (imprecise for computed columns)
+- No field descriptions
+
+Currently the DBA must manually configure all of this via `additionalSchemaInfo` or through the UI.
+
+### Solution: LLM Analyzes View SQL
+
+A new AdvancedGeneration feature called `VirtualEntityDecoration` uses an LLM to analyze the **view SQL definition** along with **existing entity metadata context** to intelligently decorate virtual entity fields.
+
+### Feature Configuration
+
+```javascript
+// in mj.config.cjs
+advancedGeneration: {
+    enableAdvancedGeneration: true,
+    features: [
+        { name: 'VirtualEntityDecoration', enabled: true },
+        // ... other features
+    ]
+}
+```
+
+### New Prompt: `CodeGen: Virtual Entity Field Decoration`
+
+**Template:** `metadata/prompts/templates/codegen/virtual-entity-field-decoration.template.md`
+
+The prompt follows the same pattern as existing CodeGen prompts (`Smart Field Identification`, `Transitive Join Intelligence`, etc.), using Nunjucks templating and structured JSON output.
+
+#### Input Data
+
+```typescript
+{
+    entityName: string;                // e.g. "Customer Orders Summary"
+    entityDescription: string | null;
+    viewName: string;                  // e.g. "vwCustomerOrdersSummary"
+    schemaName: string;                // e.g. "dbo"
+    viewDefinition: string;            // Full SQL from OBJECT_DEFINITION()
+
+    // Fields as currently known from sys.columns
+    fields: Array<{
+        Name: string;
+        Type: string;
+        Length: number;
+        Precision: number;
+        Scale: number;
+        AllowsNull: boolean;
+        IsPrimaryKey: boolean;
+        IsSoftPrimaryKey: boolean;
+        RelatedEntityID: string | null;
+        RelatedEntityFieldName: string | null;
+        IsSoftForeignKey: boolean;
+    }>;
+
+    // Available entities for FK matching — compact summary
+    availableEntities: Array<{
+        Name: string;
+        SchemaName: string;
+        BaseTable: string;
+        PrimaryKeyFields: string[];
+        KeyFields: Array<{ Name: string; Type: string; IsPrimaryKey: boolean }>;
+    }>;
+}
+```
+
+The `viewDefinition` is obtained via `SELECT OBJECT_DEFINITION(OBJECT_ID('schema.viewName'))` — a single lightweight query against SQL Server system catalog.
+
+The `availableEntities` list is pre-filtered to relevant schemas (same schema as the view, plus `dbo` and the MJ core schema) to keep token usage manageable. Only PK fields and a few key identifying fields per entity are included.
+
+#### Expected Output
+
+```typescript
+type VirtualEntityDecorationResult = {
+    primaryKeyFields: Array<{
+        fieldName: string;
+        reason: string;
+    }>;
+
+    foreignKeyFields: Array<{
+        fieldName: string;
+        relatedEntityName: string;    // must match an entity in availableEntities
+        relatedFieldName: string;     // PK field on the related entity
+        reason: string;
+    }>;
+
+    sourceFieldMappings: Array<{
+        fieldName: string;
+        sourceEntityName: string;     // which entity this field originates from
+        sourceFieldName: string;      // which field on that entity
+        confidence: 'high' | 'medium' | 'low';
+    }>;
+
+    computedFields: Array<{
+        fieldName: string;
+        computationType: 'aggregate' | 'expression' | 'case' | 'conversion' | 'other';
+        description: string;
+    }>;
+
+    confidence: 'high' | 'medium' | 'low';
+    reasoning: string;
+}
+```
+
+#### Prompt Template Structure
+
+The prompt instructs the LLM to:
+
+1. **Identify Primary Keys** — Look for GROUP BY columns, columns sourced from a base table's PK, GUID columns named "ID", or UNIQUE source columns. The driving/main table's PK is preferred.
+
+2. **Identify Foreign Keys** — Trace columns back to source tables and match against available entities. Only columns in the SELECT list that reference another entity's PK qualify.
+
+3. **Map Source Fields** — For each SELECT column, trace back to the originating table and column. This enables copying richer metadata (descriptions, extended types, value lists) from the source entity's field.
+
+4. **Flag Computed Fields** — Recognize `COUNT()`, `SUM()`, `CASE WHEN`, `CAST()`, string concatenation, etc. These are not mapped to source fields and get a descriptive label instead.
+
+5. **Skip Already-Decorated Fields** — Fields with `IsSoftPrimaryKey=1` or `IsSoftForeignKey=1` are never touched (user config overrides).
+
+### Integration in CodeGen Pipeline
+
+The LLM decoration runs **inside `manageSingleVirtualEntity()`**, after field sync from `sys.columns` but before `applySoftPKFKConfig()`:
+
+```
+manageMetadata()
+  ...
+  manageVirtualEntities()
+    for each virtual entity:
+      manageSingleVirtualEntity()          // Step 1: sync fields from sys.columns
+        decorateVirtualEntityWithLLM()     // Step 2: LLM enrichment (if enabled)
+      ...
+  applySoftPKFKConfig()                   // Step 3: config overrides (always wins)
+  ...
+```
+
+### New Method on AdvancedGeneration
+
+```typescript
+public async decorateVirtualEntityFields(
+    virtualEntity: EntityInfo,
+    viewDefinition: string,
+    fields: VirtualEntityFieldInfo[],
+    availableEntities: EntitySummary[],
+    contextUser: UserInfo
+): Promise<VirtualEntityDecorationResult | null> {
+    if (!this.featureEnabled('VirtualEntityDecoration')) {
+        return null;
+    }
+
+    const prompt = await this.getPromptEntity(
+        'CodeGen: Virtual Entity Field Decoration', contextUser
+    );
+
+    const params = new AIPromptParams();
+    params.prompt = prompt;
+    params.data = {
+        entityName: virtualEntity.Name,
+        entityDescription: virtualEntity.Description,
+        viewName: virtualEntity.BaseView,
+        schemaName: virtualEntity.SchemaName,
+        viewDefinition,
+        fields,
+        availableEntities
+    };
+    params.contextUser = contextUser;
+
+    const result = await this.executePrompt<VirtualEntityDecorationResult>(params);
+
+    if (result.success && result.result) {
+        return result.result;
+    }
+    return null;  // Graceful fallback — entity works with basic sys.columns metadata
+}
+```
+
+### Applying LLM Results in manage-metadata.ts
+
+After `decorateVirtualEntityFields()` returns successfully:
+
+1. **Primary Keys**: For each `primaryKeyFields` entry, if the field's `IsSoftPrimaryKey` is NOT already set:
+   ```sql
+   UPDATE EntityField SET IsPrimaryKey=1
+   WHERE EntityID=@entityId AND Name=@fieldName AND IsSoftPrimaryKey=0
+   ```
+
+2. **Foreign Keys**: For each `foreignKeyFields` entry, if the field's `IsSoftForeignKey` is NOT already set:
+   - Look up `relatedEntityName` → get its Entity ID
+   - Set `RelatedEntityID` and `RelatedEntityFieldName`
+
+3. **Source Field Mappings** (high confidence only): Copy `Description`, `ExtendedType`, and value list info from the source entity field to the virtual entity field — but only if the virtual entity field doesn't already have those set.
+
+4. **Computed Fields**: Set `Description` on computed fields using the LLM's description text — but only if no description exists yet.
+
+5. All updates go through `LogSQLAndExecute()` for migration traceability.
+
+### Precedence Chain
+
+```
+sys.columns          → basic type info (always applied)
+    ↓
+LLM decoration       → PKs, FKs, source mappings, computed flags (if enabled)
+    ↓
+additionalSchemaInfo → explicit PK/FK overrides (always wins, protected by IsSoft* flags)
+```
+
+### Example
+
+Given a view:
+```sql
+CREATE VIEW dbo.vwCustomerOrdersSummary AS
+SELECT
+    c.ID AS CustomerID, c.Name AS CustomerName,
+    COUNT(o.ID) AS OrderCount, SUM(o.Total) AS TotalSpent,
+    MAX(o.OrderDate) AS LastOrderDate
+FROM dbo.Customer c
+LEFT JOIN dbo.Orders o ON o.CustomerID = c.ID
+GROUP BY c.ID, c.Name
+```
+
+The LLM identifies:
+- **PK**: `CustomerID` (GROUP BY column from Customer.ID)
+- **FK**: `CustomerID` → Customers entity, field `ID`
+- **Source mappings**: `CustomerID` ← Customer.ID (high), `CustomerName` ← Customer.Name (high)
+- **Computed**: `OrderCount` (aggregate/COUNT), `TotalSpent` (aggregate/SUM), `LastOrderDate` (aggregate/MAX)
+
+After LLM decoration, the EntityField table for this virtual entity has proper PK/FK metadata, descriptions copied from Customer entity fields, and computed field descriptions — all without any manual configuration.
+
+### Idempotency and Graceful Fallback
+
+- **Idempotent**: If fields already have PK/FK decoration (from a prior run or soft config), the LLM call is skipped. The check is: "do any non-soft fields still lack PK/FK information?"
+- **Graceful fallback**: If the LLM is unavailable, returns errors, or the feature is disabled, the virtual entity still works with basic `sys.columns` metadata — identical to current behavior.
+- **Token efficiency**: `availableEntities` is filtered to relevant schemas only, with just PK and key identifying fields per entity. The view SQL itself is typically 10-100 lines.
 
 ---
 
@@ -1237,6 +1604,24 @@ Entities
 3. Add UI awareness (badges, hide CUD buttons)
 4. Update EntityInfo with `VirtualEntity`-aware computed properties
 
+### Phase 1B: Config-Driven Virtual Entity Creation
+1. Extend `additionalSchemaInfo` config format with `VirtualEntities` array (PascalCase property names)
+2. Add `processVirtualEntityConfig()` method in `manage-metadata.ts` — creates Entity records from config
+3. Ensure idempotent: skip entity creation if entity already exists for the view
+4. Integrate into CodeGen pipeline before `manageVirtualEntities()` — so newly created entities are immediately synced
+5. Update `database-metadata-config.template.json` with virtual entity examples
+6. Create JSON schema validation for the extended config format
+
+### Phase 1C: LLM-Assisted Virtual Entity Field Decoration
+1. Create prompt template: `metadata/prompts/templates/codegen/virtual-entity-field-decoration.template.md`
+2. Create prompt metadata file: `metadata/prompts/.codegen-virtual-entity-field-decoration.json`
+3. Add `VirtualEntityDecorationResult` type and `decorateVirtualEntityFields()` method to `AdvancedGeneration` class
+4. Add `decorateVirtualEntityWithLLM()` integration method in `manage-metadata.ts`
+5. Fetch view SQL via `OBJECT_DEFINITION()` for LLM context
+6. Apply LLM results: set `IsPrimaryKey`, `RelatedEntityID`/`RelatedEntityFieldName`, copy source field descriptions
+7. Respect precedence chain: sys.columns → LLM → config overrides (soft flags protect config values)
+8. Ensure graceful fallback when LLM is unavailable
+
 ### Phase 2: Parent/Child Type Metadata
 1. `Entity.ParentID` already exists — no column migration needed
 2. `vwEntities` already computes `ParentEntity`, `ParentBaseTable`, `ParentBaseView` — no view changes needed
@@ -1283,6 +1668,11 @@ Entities
 - **Transactions**: Stub methods on BaseEntity — no-op on client, real SQL transactions on server
 - **Record Changes**: Natural per-level tracking — each entity's Save() generates its own record changes
 - **N-level depth**: Fully supported (practical limit ~3-4 levels)
+- **Virtual entity creation**: Declarative config-driven via `VirtualEntities` section in `additionalSchemaInfo` (replaces manual `spCreateVirtualEntity` calls)
+- **Config property naming**: PascalCase throughout (`FieldName`, `SchemaName`, `RelatedTable`, etc.) matching MJ naming conventions
+- **Config format**: Schema-as-key for table configs (e.g., `"dbo": [...]`), flat array for virtual entities (`"VirtualEntities": [...]`)
+- **LLM field decoration**: New `VirtualEntityDecoration` feature in AdvancedGeneration — auto-identifies PKs, FKs, source field mappings from view SQL
+- **Precedence chain**: sys.columns → LLM decoration → config overrides (soft PK/FK flags protect config values)
 
 ### Future Options
 1. **Overlapping subtypes**: Allow a parent record to be multiple child types simultaneously. Would require removing disjoint enforcement and handling ambiguity in leaf resolution. Configurable per parent entity.
@@ -1295,3 +1685,5 @@ Entities
 1. **Entity.ParentID description**: Update the field description from "Reserved for future use" to document its IS-A type inheritance semantics
 2. **EntityEntity generated class**: Update JSDoc comments for `ParentID`, `ParentEntity`, `ParentBaseTable`, `ParentBaseView` to reflect IS-A meaning
 3. **Existing ParentID on other entities**: Ensure no confusion with `ParentID` fields on Action, ActionCategory, QueryCategory etc. (those are intra-entity hierarchy, unrelated to cross-entity IS-A)
+4. **JSON schema for config file**: Create `database-metadata-config.schema.json` to validate the extended config format (soft PKs/FKs + virtual entities)
+5. **LLM prompt model configuration**: Configure appropriate AI models for the `CodeGen: Virtual Entity Field Decoration` prompt in the `MJ: AI Prompt Models` relationship table
