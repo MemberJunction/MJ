@@ -816,8 +816,9 @@ ON
 LEFT OUTER JOIN
 	sys.all_objects v
 ON
-	e.BaseView = v.name AND 
-	v.type = 'V' 
+	e.BaseView = v.name AND
+	v.type = 'V' AND
+	v.schema_id = s.schema_id  -- Ensure view is in same schema as table
 LEFT OUTER JOIN
     sys.schemas s_v
 ON   

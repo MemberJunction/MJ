@@ -60,24 +60,10 @@ export class Metadata {
      * Helper method to find an entity by name in a case insensitive manner.  
      * @param entityName 
      */
-     public EntityByName(entityName: string): EntityInfo {
+    public EntityByName(entityName: string): EntityInfo {
         if (!entityName || typeof entityName !== 'string' || entityName.trim().length === 0) {
             throw new Error('EntityByName: entityName must be a non-empty string');
         }
-
-        // Check if schema-qualified (e.g., "Committees.Artifact")
-        if (entityName.includes('.')) {
-            const parts = entityName.split('.');
-            if (parts.length === 2) {
-                const [schema, name] = parts;
-                return this.Entities.find(e =>
-                    e.SchemaName.toLowerCase().trim() === schema.toLowerCase().trim() &&
-                    e.Name.toLowerCase().trim() === name.toLowerCase().trim()
-                );
-            }
-        }
-
-        // Legacy behavior: search by name only (backwards compatible)
         return this.Entities.find(e => e.Name.toLowerCase().trim() === entityName.toLowerCase().trim());
     }
     /**
