@@ -824,7 +824,7 @@
             "Priority": 150,
             "Status": "Active",
             "DriverClass": "FireworksLLM",
-            "APIName": "qwen-3-235b",
+            "APIName": "accounts/fireworks/models/qwen3-235b-a22b",
             "MaxInputTokens": 128000,
             "MaxOutputTokens": 16384,
             "SupportedResponseFormats": "Any, JSON",
@@ -836,8 +836,8 @@
             "ID": "3568882B-8D36-4914-A411-A81007E3893F"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:20.327Z",
-            "checksum": "d223247897aa59930e1433311f0fe08a719eb31854b8a9ad11233f9eb4245e2a"
+            "lastModified": "2026-01-31T01:55:16.830Z",
+            "checksum": "95dd12f6384eeee5a2f3c84ed1f7a880e51ecfddd303e8fee45f3d2f47464bea"
           }
         }
       ],
@@ -4992,7 +4992,7 @@
             "Priority": 2,
             "Status": "Active",
             "DriverClass": "FireworksLLM",
-            "APIName": "moonshotai/kimi-k2-instruct",
+            "APIName": "accounts/fireworks/models/kimi-k2-instruct",
             "MaxInputTokens": 131072,
             "MaxOutputTokens": 16384,
             "SupportedResponseFormats": "Any, JSON",
@@ -5004,8 +5004,8 @@
             "ID": "F7C9E178-287A-49FC-B501-B1A55858D1E3"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:22.608Z",
-            "checksum": "23a49490e11a2c8851aad641f33b9318679a2eb337190ad4291a248e8b88cd41"
+            "lastModified": "2026-01-31T01:55:18.918Z",
+            "checksum": "3d96c67e41e3883ec9e16565255f41ba7e753abbc0219f538a627e7bdbdd7d22"
           }
         }
       ],
@@ -5918,7 +5918,7 @@
             "ID": "CCA0A4DC-497D-4E11-BEBB-392E0074A7CA"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:23.137Z",
+            "lastModified": "2026-01-31T01:55:19.369Z",
             "checksum": "368b74020f7805bc3be76f60ef024723a9a9a4e5387bcb1b61faded500850aaa"
           }
         },
@@ -6150,7 +6150,7 @@
             "Priority": 150,
             "Status": "Active",
             "DriverClass": "FireworksLLM",
-            "APIName": "qwen-3-coder-480b",
+            "APIName": "accounts/fireworks/models/qwen3-coder-480b-a35b-instruct",
             "MaxInputTokens": 128000,
             "MaxOutputTokens": 16384,
             "SupportedResponseFormats": "Any, JSON",
@@ -6162,8 +6162,8 @@
             "ID": "C0B6D02F-7FA7-45F1-82DA-B9198A63DC7B"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:23.262Z",
-            "checksum": "7ee64b090358648497adb061cbff3bd80234f6e7bc8afed4884761afdd159a6e"
+            "lastModified": "2026-01-31T01:55:19.533Z",
+            "checksum": "d3ca01aa48545ac7148cebd840285e15858eeeb2797cefbe9299006d2543a35b"
           }
         }
       ],
@@ -6296,7 +6296,7 @@
             "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:23.326Z",
+            "lastModified": "2026-01-31T01:55:19.555Z",
             "checksum": "04ae96db93ac0497b640bffbfc227f5340422a1fc9543532aab4ddfaee23d8d2"
           }
         },
@@ -6318,7 +6318,7 @@
             "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:23.451Z",
+            "lastModified": "2026-01-31T01:55:19.698Z",
             "checksum": "b5b869576b542870b6b1952b2190917ef2d0c142be353772f19461647e064564"
           }
         }
@@ -6406,7 +6406,7 @@
             "ID": "A727C77A-6F00-4990-9E1D-67B95F49CCF5"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:23.463Z",
+            "lastModified": "2026-01-31T01:55:19.711Z",
             "checksum": "5f5d34c08142f80365c56b7b515fe527282dd5c43484d092f8fa9ed3742bee7d"
           }
         },
@@ -6518,7 +6518,7 @@
             "ID": "DA3A0E18-83DD-4329-AC87-0D8E9D563F01"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:23.489Z",
+            "lastModified": "2026-01-31T01:55:19.722Z",
             "checksum": "373474215aa3b5592bf21d932a80a24172d61a2b3f1d77465965052e5915f856"
           }
         },
@@ -6643,7 +6643,7 @@
             "Priority": 150,
             "Status": "Active",
             "DriverClass": "FireworksLLM",
-            "APIName": "gpt-oss-20b",
+            "APIName": "accounts/fireworks/models/gpt-oss-20b",
             "MaxInputTokens": 128000,
             "MaxOutputTokens": 32000,
             "SupportedResponseFormats": "Any, JSON",
@@ -6655,8 +6655,8 @@
             "ID": "9F4FC4A5-FBB3-4480-B5E8-1818E21EDED8"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:23.628Z",
-            "checksum": "ed828168ecbcb62552cdd55f20be717895ec5e817663a07681ed244c1402c15c"
+            "lastModified": "2026-01-31T01:55:19.884Z",
+            "checksum": "76a39f46ef11200138dc44bb9afac4788d24cdc5c90dd478fe2a2956422ecdec"
           }
         },
         {
@@ -7702,7 +7702,7 @@
             "Priority": 150,
             "Status": "Active",
             "DriverClass": "FireworksLLM",
-            "APIName": "z-ai/glm-4.6",
+            "APIName": "accounts/fireworks/models/glm-4p6",
             "MaxInputTokens": 202752,
             "MaxOutputTokens": 65536,
             "SupportedResponseFormats": "Any, JSON",
@@ -7714,8 +7714,8 @@
             "ID": "20F0D92D-7164-46D1-BAD3-0573A394AEE0"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:24.185Z",
-            "checksum": "7edba04b17f4b445758e9d638cae237cb3a7833013fbde562b73e4c9c93b0390"
+            "lastModified": "2026-01-31T01:55:20.480Z",
+            "checksum": "2d112fbe6e5dd04357c8b61aa019ab59b9bf6c04a7fdd1b33aa83f74dfffa9de"
           }
         }
       ],
@@ -8552,7 +8552,7 @@
             "Priority": 150,
             "Status": "Active",
             "DriverClass": "FireworksLLM",
-            "APIName": "z-ai/glm-4.7",
+            "APIName": "accounts/fireworks/models/glm-4p7",
             "MaxInputTokens": 202752,
             "MaxOutputTokens": 65535,
             "SupportedResponseFormats": "Any, JSON",
@@ -8564,8 +8564,8 @@
             "ID": "B9F9FE1A-8989-4E13-9A60-B915A5204A9B"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:25.308Z",
-            "checksum": "824b819e27871e6ad8bbf4f4eb0d609f3667d11769daae00708e37dd33a921ec"
+            "lastModified": "2026-01-31T01:55:21.532Z",
+            "checksum": "608a0126d24c0af5cc3f91345d089da3e08d55ca33de88d370a312f6aebcdeb7"
           }
         }
       ],
@@ -9230,7 +9230,7 @@
             "Priority": 150,
             "Status": "Active",
             "DriverClass": "FireworksLLM",
-            "APIName": "gpt-oss-120b",
+            "APIName": "accounts/fireworks/models/gpt-oss-120b",
             "MaxInputTokens": 128000,
             "MaxOutputTokens": 32000,
             "SupportedResponseFormats": "Any, JSON",
@@ -9242,8 +9242,8 @@
             "ID": "5AB10EDC-3A5B-402E-B40F-A13431AC00C5"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:25.083Z",
-            "checksum": "6038044dc2d2b71f288382313d482932351f985b63f57e0361a877a69543af58"
+            "lastModified": "2026-01-31T01:55:21.234Z",
+            "checksum": "5679cfe3e79c693add4f7c7a098f0ab542741289737eaa6af7405925bdd2a5e2"
           }
         }
       ],
@@ -9386,7 +9386,7 @@
             "Priority": 2,
             "Status": "Active",
             "DriverClass": "FireworksLLM",
-            "APIName": "moonshotai/Kimi-K2.5",
+            "APIName": "accounts/fireworks/models/kimi-k2p5",
             "MaxInputTokens": 262144,
             "MaxOutputTokens": 16384,
             "SupportedResponseFormats": "Any, JSON",
@@ -9398,8 +9398,8 @@
             "ID": "BFC3AD52-3A3A-4EF0-AF7B-1B22B029BED5"
           },
           "sync": {
-            "lastModified": "2026-01-30T03:11:25.192Z",
-            "checksum": "9775876e87d659101072374b99935312e8f280b55f16e850c0fd274fb240d1fc"
+            "lastModified": "2026-01-31T01:55:21.422Z",
+            "checksum": "4a431916f19c49be637527e0096fb63ad26d784c17f519ca7477a16d95a740ac"
           }
         }
       ],
