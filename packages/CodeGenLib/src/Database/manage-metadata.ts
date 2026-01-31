@@ -34,6 +34,39 @@ export class ValidatorResult {
 }
 
 /**
+ * Configuration for a soft primary key field in the additionalSchemaInfo config file.
+ * Uses PascalCase property names to match MemberJunction naming conventions.
+ */
+export interface SoftPKFieldConfig {
+   FieldName: string;
+   Description?: string;
+}
+
+/**
+ * Configuration for a soft foreign key field in the additionalSchemaInfo config file.
+ * Uses PascalCase property names to match MemberJunction naming conventions.
+ */
+export interface SoftFKFieldConfig {
+   FieldName: string;
+   SchemaName?: string;
+   RelatedTable: string;
+   RelatedField: string;
+   Description?: string;
+}
+
+/**
+ * Normalized table configuration extracted from the additionalSchemaInfo config file.
+ * Uses PascalCase property names to match MemberJunction naming conventions.
+ */
+export interface SoftPKFKTableConfig {
+   SchemaName: string;
+   TableName: string;
+   Description?: string;
+   PrimaryKey: SoftPKFieldConfig[];
+   ForeignKeys: SoftFKFieldConfig[];
+}
+
+/**
  * Base class for managing metadata within the CodeGen system. This class can be sub-classed to extend/override base class functionality. Make sure to use the RegisterClass decorator from the @memberjunction/global package
  * to properly register your subclass with a priority of 1+ to ensure it gets instantiated.
  */
@@ -98,6 +131,52 @@ export class ManageMetadataBase {
          this._softPKFKConfigPath = configPath;
          return null;
       }
+   }
+
+   /**
+    * Extracts a flat array of table configs from the config file, handling both formats:
+    *   1. Schema-as-key (template format): { "dbo": [{ "TableName": "Orders", ... }] }
+    *   2. Flat tables array (legacy format): { "Tables": [{ "SchemaName": "dbo", "TableName": "Orders", ... }] }
+    * Returns a normalized array where each entry has SchemaName, TableName, PrimaryKey[], and ForeignKeys[].
+    */
+   private extractTablesFromConfig(config: Record<string, unknown>): SoftPKFKTableConfig[] {
+      const results: SoftPKFKTableConfig[] = [];
+
+      // Check for flat "Tables" array format first
+      if (Array.isArray(config.Tables)) {
+         for (const table of config.Tables) {
+            const t = table as Record<string, unknown>;
+            results.push({
+               SchemaName: (t.SchemaName as string) || 'dbo',
+               TableName: t.TableName as string,
+               PrimaryKey: (t.PrimaryKey as SoftPKFieldConfig[]) || [],
+               ForeignKeys: (t.ForeignKeys as SoftFKFieldConfig[]) || [],
+            });
+         }
+         return results;
+      }
+
+      // Schema-as-key format: iterate over keys, skip metadata keys
+      const metadataKeys = new Set(['$schema', 'description', 'version']);
+      for (const key of Object.keys(config)) {
+         if (metadataKeys.has(key)) continue;
+
+         const schemaName = key;
+         const tables = config[key];
+         if (!Array.isArray(tables)) continue;
+
+         for (const table of tables) {
+            const t = table as Record<string, unknown>;
+            results.push({
+               SchemaName: schemaName,
+               TableName: t.TableName as string,
+               PrimaryKey: (t.PrimaryKey as SoftPKFieldConfig[]) || [],
+               ForeignKeys: (t.ForeignKeys as SoftFKFieldConfig[]) || [],
+            });
+         }
+      }
+
+      return results;
    }
 
    /**
@@ -706,13 +785,22 @@ export class ManageMetadataBase {
          let totalFKs = 0;
          const schema = mj_core_schema();
 
-         for (const table of config.tables || []) {
+         // Config supports two formats:
+         //   1. Schema-as-key (template format): { "dbo": [{ "TableName": "Orders", ... }] }
+         //   2. Flat tables array (legacy format): { "tables": [{ "SchemaName": "dbo", "TableName": "Orders", ... }] }
+         // Both use PascalCase property names.
+         const tables = this.extractTablesFromConfig(config);
+
+         for (const table of tables) {
+            const tableSchema = table.SchemaName;
+            const tableName = table.TableName;
+
             // Look up entity ID (SELECT query - no need to log to migration file)
-            const entityLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${table.schemaName}' AND BaseTable = '${table.tableName}'`;
+            const entityLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${tableSchema}' AND BaseTable = '${tableName}'`;
             const entityResult = await pool.request().query(entityLookupSQL);
 
             if (entityResult.recordset.length === 0) {
-               logStatus(`         ⚠️  Entity not found for ${table.schemaName}.${table.tableName} - skipping`);
+               logStatus(`         ⚠️  Entity not found for ${tableSchema}.${tableName} - skipping`);
                continue;
             }
 
@@ -720,31 +808,34 @@ export class ManageMetadataBase {
 
             // Process primary keys - set BOTH IsPrimaryKey = 1 AND IsSoftPrimaryKey = 1
             // IsPrimaryKey is the source of truth, IsSoftPrimaryKey protects it from schema sync
-            if (table.primaryKeys && table.primaryKeys.length > 0) {
-               for (const pk of table.primaryKeys) {
+            const primaryKeys = table.PrimaryKey || [];
+            if (primaryKeys.length > 0) {
+               for (const pk of primaryKeys) {
                   const sSQL = `UPDATE [${schema}].[EntityField]
                                 SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(),
                                     [IsPrimaryKey] = 1,
                                     [IsSoftPrimaryKey] = 1
-                                WHERE [EntityID] = '${entityId}' AND [Name] = '${pk.fieldName}'`;
-                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft PK for ${table.schemaName}.${table.tableName}.${pk.fieldName}`);
+                                WHERE [EntityID] = '${entityId}' AND [Name] = '${pk.FieldName}'`;
+                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft PK for ${tableSchema}.${tableName}.${pk.FieldName}`);
 
                   if (result !== null) {
-                     logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${table.tableName}.${pk.fieldName}`);
+                     logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${tableName}.${pk.FieldName}`);
                      totalPKs++;
                   }
                }
             }
 
             // Process foreign keys - set RelatedEntityID, RelatedEntityFieldName, and IsSoftForeignKey = 1
-            if (table.foreignKeys && table.foreignKeys.length > 0) {
-               for (const fk of table.foreignKeys) {
+            const foreignKeys = table.ForeignKeys || [];
+            if (foreignKeys.length > 0) {
+               for (const fk of foreignKeys) {
+                  const fkSchema = fk.SchemaName || tableSchema;
                   // Look up related entity ID (SELECT query - no need to log to migration file)
-                  const relatedLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${fk.relatedSchema}' AND BaseTable = '${fk.relatedTable}'`;
+                  const relatedLookupSQL = `SELECT ID FROM [${schema}].[Entity] WHERE SchemaName = '${fkSchema}' AND BaseTable = '${fk.RelatedTable}'`;
                   const relatedEntityResult = await pool.request().query(relatedLookupSQL);
 
                   if (relatedEntityResult.recordset.length === 0) {
-                     logStatus(`         ⚠️  Related entity not found for ${fk.relatedSchema}.${fk.relatedTable} - skipping FK ${fk.fieldName}`);
+                     logStatus(`         ⚠️  Related entity not found for ${fkSchema}.${fk.RelatedTable} - skipping FK ${fk.FieldName}`);
                      continue;
                   }
 
@@ -753,13 +844,13 @@ export class ManageMetadataBase {
                   const sSQL = `UPDATE [${schema}].[EntityField]
                                 SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(),
                                     [RelatedEntityID] = '${relatedEntityId}',
-                                    [RelatedEntityFieldName] = '${fk.relatedField}',
+                                    [RelatedEntityFieldName] = '${fk.RelatedField}',
                                     [IsSoftForeignKey] = 1
-                                WHERE [EntityID] = '${entityId}' AND [Name] = '${fk.fieldName}'`;
-                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${table.schemaName}.${table.tableName}.${fk.fieldName} → ${fk.relatedTable}.${fk.relatedField}`);
+                                WHERE [EntityID] = '${entityId}' AND [Name] = '${fk.FieldName}'`;
+                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${tableSchema}.${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
 
                   if (result !== null) {
-                     logStatus(`         ✓ Set soft FK for ${table.tableName}.${fk.fieldName} → ${fk.relatedTable}.${fk.relatedField}`);
+                     logStatus(`         ✓ Set soft FK for ${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
                      totalFKs++;
                   }
                }
