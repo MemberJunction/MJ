@@ -1,0 +1,200 @@
+/* ============================================================
+   Flow Agent Editor — MJ-specific flow editor wrapper
+   ============================================================ */
+
+.mj-agent-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  background: #f8fafc;
+  border-radius: 8px;
+  overflow: hidden;
+
+  &--fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    border-radius: 0;
+    min-height: unset;
+  }
+}
+
+/* ── Toolbar ───────────────────────────────────────────────── */
+
+.mj-agent-editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.mj-agent-editor-toolbar-left,
+.mj-agent-editor-toolbar-center,
+.mj-agent-editor-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mj-agent-editor-toolbar-right {
+  gap: 10px;
+}
+
+.mj-agent-editor-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+
+  i { font-size: 12px; }
+
+  &:hover:not(:disabled) { background: #f1f5f9; border-color: #cbd5e1; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  &--primary {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #ffffff;
+
+    &:hover:not(:disabled) { background: #2563eb; border-color: #2563eb; }
+  }
+}
+
+.mj-agent-editor-btn-divider {
+  width: 1px;
+  height: 22px;
+  background: #e2e8f0;
+  margin: 0 2px;
+}
+
+/* ── View Toggle ───────────────────────────────────────────── */
+
+.mj-agent-editor-view-toggle {
+  display: flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mj-agent-editor-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: none;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  i { font-size: 11px; }
+
+  &:not(:last-child) { border-right: 1px solid #e2e8f0; }
+
+  &--active {
+    background: #eff6ff;
+    color: #3b82f6;
+  }
+
+  &:hover:not(&--active) { background: #f8fafc; }
+}
+
+/* ── Status Indicators ─────────────────────────────────────── */
+
+.mj-agent-editor-status {
+  font-size: 12px;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  &--unsaved {
+    color: #f59e0b;
+    i { font-size: 6px; }
+  }
+}
+
+/* ── Loading ───────────────────────────────────────────────── */
+
+.mj-agent-editor-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  font-size: 14px;
+  color: #64748b;
+
+  i { font-size: 16px; }
+}
+
+/* ── Body ──────────────────────────────────────────────────── */
+
+.mj-agent-editor-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mj-agent-editor-diagram {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+
+  mj-flow-editor {
+    flex: 1;
+    display: flex;
+  }
+}
+
+.mj-agent-editor-list {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+
+  mj-agent-step-list {
+    flex: 1;
+    overflow-y: auto;
+  }
+}
+
+/* ── Properties Panel ──────────────────────────────────────── */
+
+.mj-agent-editor-properties {
+  width: 0;
+  overflow: hidden;
+  transition: width 0.2s ease;
+  flex-shrink: 0;
+
+  &--visible {
+    width: 320px;
+  }
+
+  mj-agent-properties-panel {
+    display: block;
+    width: 320px;
+    height: 100%;
+  }
+}

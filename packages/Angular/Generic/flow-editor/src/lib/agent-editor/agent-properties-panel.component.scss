@@ -1,0 +1,193 @@
+/* ============================================================
+   Agent Properties Panel — Step/Connection configuration
+   ============================================================ */
+
+.mj-agent-props {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #ffffff;
+  border-left: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.mj-agent-props-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+.mj-agent-props-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  i { font-size: 12px; color: #64748b; }
+}
+
+.mj-agent-props-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 12px;
+
+  &:hover { background: #f1f5f9; color: #475569; }
+}
+
+.mj-agent-props-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  flex: 1;
+
+  i { font-size: 28px; color: #cbd5e1; margin-bottom: 12px; }
+  p { font-size: 13px; color: #94a3b8; margin: 0; }
+}
+
+.mj-agent-props-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+/* ── Sections ──────────────────────────────────────────────── */
+
+.mj-agent-props-section {
+  padding: 12px 14px 0;
+  border-bottom: 1px solid #f1f5f9;
+
+  &:last-child { border-bottom: none; }
+}
+
+.mj-agent-props-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+/* ── Fields ────────────────────────────────────────────────── */
+
+.mj-agent-props-field {
+  margin-bottom: 12px;
+
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #475569;
+    margin-bottom: 4px;
+  }
+
+  &--row {
+    display: flex;
+    align-items: center;
+  }
+}
+
+.mj-agent-props-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1e293b;
+  background: #ffffff;
+  transition: border-color 0.15s ease;
+  outline: none;
+  font-family: inherit;
+
+  &:focus { border-color: #3b82f6; }
+  &:disabled { background: #f8fafc; color: #94a3b8; cursor: not-allowed; }
+}
+
+.mj-agent-props-textarea {
+  resize: vertical;
+  min-height: 48px;
+}
+
+.mj-agent-props-code {
+  font-family: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+  font-size: 12px;
+  tab-size: 2;
+}
+
+.mj-agent-props-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+
+  input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #3b82f6;
+    cursor: pointer;
+  }
+}
+
+.mj-agent-props-type-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 4px;
+  padding: 4px 10px;
+}
+
+.mj-agent-props-hint {
+  display: block;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 3px;
+}
+
+/* ── Danger Zone ───────────────────────────────────────────── */
+
+.mj-agent-props-danger {
+  padding-top: 16px;
+}
+
+.mj-agent-props-delete-btn {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  margin-bottom: 12px;
+
+  &:hover { background: #fee2e2; border-color: #fca5a5; }
+
+  i { font-size: 12px; }
+}

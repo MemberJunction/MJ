@@ -1,0 +1,139 @@
+<div class="mj-flow-editor" [class.mj-flow-editor--readonly]="ReadOnly" tabindex="0">
+
+  <!-- Canvas Toolbar -->
+  <div class="mj-flow-editor-toolbar-area" *ngIf="ShowToolbar">
+    <mj-flow-toolbar
+      [ZoomLevel]="zoomLevel"
+      [ShowGrid]="ShowGrid"
+      [ShowMinimap]="ShowMinimap"
+      [ReadOnly]="ReadOnly"
+      (ZoomInClicked)="ZoomIn()"
+      (ZoomOutClicked)="ZoomOut()"
+      (FitToScreenClicked)="ZoomToFit()"
+      (AutoLayoutClicked)="AutoArrange()"
+      (GridToggled)="onGridToggled($event)"
+      (MinimapToggled)="onMinimapToggled($event)">
+    </mj-flow-toolbar>
+  </div>
+
+  <!-- Main Canvas Area -->
+  <div class="mj-flow-editor-canvas-area">
+
+    <!-- Palette Sidebar -->
+    <mj-flow-palette
+      *ngIf="ShowPalette && !ReadOnly"
+      [NodeTypes]="NodeTypes">
+    </mj-flow-palette>
+
+    <!-- Foblex Canvas -->
+    <div class="mj-flow-editor-canvas">
+      <f-flow fDraggable
+              [fDraggableDisabled]="ReadOnly"
+              [vCellSize]="GridSize"
+              [hCellSize]="GridSize"
+              [fCellSizeWhileDragging]="ShowGrid"
+              (fLoaded)="onFlowLoaded()"
+              (fCreateConnection)="onCreateConnection($event)"
+              (fCreateNode)="onCreateNode($event)"
+              (fSelectionChange)="onSelectionChange($event)"
+              (fMoveNodes)="onNodesMoved($event)">
+
+        <f-canvas fZoom
+                  [fZoomMinimum]="0.15"
+                  [fZoomMaximum]="3"
+                  [fZoomStep]="0.1"
+                  [position]="canvasPosition"
+                  [scale]="canvasScale"
+                  (fCanvasChange)="onCanvasChange($event)">
+
+          <!-- Background grid -->
+          <f-background *ngIf="ShowGrid">
+            <f-circle-pattern></f-circle-pattern>
+          </f-background>
+
+          <!-- Alignment snap lines (edit mode only) -->
+          <f-line-alignment *ngIf="!ReadOnly" [fAlignThreshold]="10"></f-line-alignment>
+
+          <!-- Interactive connection drawing -->
+          <f-connection-for-create *ngIf="!ReadOnly"
+                                   fType="bezier"
+                                   [fRadius]="8"
+                                   [fOffset]="12">
+            <svg viewBox="0 0 10 10" fMarker type="end"
+                 orient="auto" [refX]="9" [refY]="5" [height]="10" [width]="10">
+              <path d="M0 0L10 5L0 10Z" fill="#94a3b8"/>
+            </svg>
+          </f-connection-for-create>
+
+          <!-- Rubber-band selection (edit mode only) -->
+          <f-selection-area *ngIf="!ReadOnly"></f-selection-area>
+
+          <!-- Connections -->
+          <f-connection *ngFor="let conn of Connections; trackBy: trackConnectionById"
+                        [fConnectionId]="conn.ID"
+                        [fOutputId]="conn.SourcePortID"
+                        [fInputId]="conn.TargetPortID"
+                        fType="bezier"
+                        fBehavior="fixed"
+                        [fRadius]="8"
+                        [fOffset]="12"
+                        [fSelectionDisabled]="ReadOnly"
+                        [fReassignDisabled]="ReadOnly"
+                        [style.--connection-color]="conn.Color || '#94a3b8'"
+                        [class.mj-flow-connection-colored]="!!conn.Color">
+            <!-- Arrow marker -->
+            <svg viewBox="0 0 10 10" fMarker type="end"
+                 orient="auto" [refX]="9" [refY]="5" [height]="10" [width]="10">
+              <path d="M0 0L10 5L0 10Z" [attr.fill]="conn.Color || '#94a3b8'"/>
+            </svg>
+            <!-- Connection label -->
+            <div *ngIf="conn.Label" fConnectionContent [position]="0.5"
+                 class="mj-flow-connection-label">
+              {{ conn.Label }}
+            </div>
+          </f-connection>
+
+          <!-- Nodes -->
+          <mj-flow-node *ngFor="let node of Nodes; trackBy: trackNodeById"
+                        fNode
+                        fDragHandle
+                        [fNodeId]="node.ID"
+                        [fNodePosition]="{ x: node.Position.X, y: node.Position.Y }"
+                        [fNodeDraggingDisabled]="ReadOnly || node.Locked === true"
+                        [fNodeSelectionDisabled]="ReadOnly"
+                        [fConnectOnNode]="!ReadOnly"
+                        [Node]="node"
+                        [TypeConfig]="GetTypeConfig(node.Type)"
+                        [ReadOnly]="ReadOnly">
+          </mj-flow-node>
+
+        </f-canvas>
+
+        <!-- Minimap -->
+        <div *ngIf="ShowMinimap" class="mj-flow-editor-minimap" fDragBlocker>
+          <f-minimap [fMinSize]="1500"></f-minimap>
+        </div>
+      </f-flow>
+
+      <!-- Empty state overlay -->
+      <div *ngIf="Nodes.length === 0" class="mj-flow-editor-empty">
+        <div class="mj-flow-editor-empty-content">
+          <i class="fa-solid fa-diagram-project mj-flow-editor-empty-icon"></i>
+          <p class="mj-flow-editor-empty-title" *ngIf="!ReadOnly">Drag steps from the palette to start building your flow</p>
+          <p class="mj-flow-editor-empty-title" *ngIf="ReadOnly">No steps defined for this flow</p>
+          <p class="mj-flow-editor-empty-subtitle" *ngIf="!ReadOnly">
+            Or use auto-layout after adding steps to arrange them automatically
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <mj-flow-status-bar *ngIf="ShowStatusBar"
+                       [NodeCount]="Nodes.length"
+                       [ConnectionCount]="Connections.length"
+                       [SelectedCount]="selectedCount"
+                       [ZoomLevel]="zoomLevel">
+  </mj-flow-status-bar>
+</div>

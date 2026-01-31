@@ -1,0 +1,137 @@
+<div class="mj-agent-editor" [class.mj-agent-editor--fullscreen]="FullScreen">
+
+  <!-- ── Top Toolbar ───────────────────────────────────────── -->
+  <div class="mj-agent-editor-toolbar">
+    <div class="mj-agent-editor-toolbar-left">
+      <!-- Save -->
+      <button *ngIf="EditMode" class="mj-agent-editor-btn mj-agent-editor-btn--primary"
+              [disabled]="isSaving || !hasUnsavedChanges" (click)="Save()">
+        <i class="fa-solid" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-floppy-disk'"></i>
+        {{ isSaving ? 'Saving...' : 'Save' }}
+      </button>
+
+      <div class="mj-agent-editor-btn-divider"></div>
+
+      <!-- Undo / Redo -->
+      <button *ngIf="EditMode" class="mj-agent-editor-btn"
+              [disabled]="!flowEditor?.CanUndo" (click)="flowEditor?.Undo()" title="Undo (Ctrl+Z)">
+        <i class="fa-solid fa-rotate-left"></i>
+      </button>
+      <button *ngIf="EditMode" class="mj-agent-editor-btn"
+              [disabled]="!flowEditor?.CanRedo" (click)="flowEditor?.Redo()" title="Redo (Ctrl+Y)">
+        <i class="fa-solid fa-rotate-right"></i>
+      </button>
+    </div>
+
+    <div class="mj-agent-editor-toolbar-center">
+      <!-- View Mode Toggle -->
+      <div class="mj-agent-editor-view-toggle">
+        <button class="mj-agent-editor-view-btn"
+                [class.mj-agent-editor-view-btn--active]="viewMode === 'diagram'"
+                (click)="viewMode = 'diagram'">
+          <i class="fa-solid fa-diagram-project"></i> Diagram
+        </button>
+        <button class="mj-agent-editor-view-btn"
+                [class.mj-agent-editor-view-btn--active]="viewMode === 'list'"
+                (click)="viewMode = 'list'">
+          <i class="fa-solid fa-list"></i> List
+        </button>
+      </div>
+    </div>
+
+    <div class="mj-agent-editor-toolbar-right">
+      <!-- Status indicators -->
+      <span *ngIf="hasUnsavedChanges" class="mj-agent-editor-status mj-agent-editor-status--unsaved">
+        <i class="fa-solid fa-circle"></i> Unsaved
+      </span>
+      <span *ngIf="lastSaved" class="mj-agent-editor-status">
+        Saved {{ lastSaved | date:'shortTime' }}
+      </span>
+
+      <!-- Full Screen -->
+      <button class="mj-agent-editor-btn" (click)="toggleFullScreen()" [title]="FullScreen ? 'Exit Full Screen' : 'Full Screen'">
+        <i class="fa-solid" [ngClass]="FullScreen ? 'fa-compress' : 'fa-expand'"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Loading State ─────────────────────────────────────── -->
+  <div *ngIf="isLoading" class="mj-agent-editor-loading">
+    <i class="fa-solid fa-spinner fa-spin"></i>
+    <span>Loading flow...</span>
+  </div>
+
+  <!-- ── Main Content ──────────────────────────────────────── -->
+  <div *ngIf="!isLoading" class="mj-agent-editor-body">
+
+    <!-- Diagram View -->
+    <div *ngIf="viewMode === 'diagram'" class="mj-agent-editor-diagram">
+      <mj-flow-editor #flowEditor
+                       [Nodes]="nodes"
+                       [Connections]="connections"
+                       [NodeTypes]="nodeTypes"
+                       [ReadOnly]="!EditMode"
+                       [ShowMinimap]="true"
+                       [ShowPalette]="EditMode"
+                       [ShowGrid]="true"
+                       [ShowStatusBar]="true"
+                       [ShowToolbar]="true"
+                       [AutoLayoutDirection]="'vertical'"
+                       (NodeSelected)="onNodeSelected($event)"
+                       (NodeAdded)="onNodeAdded($event)"
+                       (NodeRemoved)="onNodeRemoved($event)"
+                       (ConnectionCreated)="onConnectionCreated($event)"
+                       (ConnectionRemoved)="onConnectionRemoved($event)"
+                       (ConnectionSelected)="onConnectionSelected($event)"
+                       (NodesChanged)="onNodesChanged($event)"
+                       (ConnectionsChanged)="onConnectionsChanged($event)">
+      </mj-flow-editor>
+
+      <!-- Properties Panel -->
+      <div class="mj-agent-editor-properties"
+           [class.mj-agent-editor-properties--visible]="showPropertiesPanel">
+        <mj-agent-properties-panel
+          [Step]="selectedStep"
+          [SelectedConnection]="selectedConnection"
+          [PathEntity]="selectedPathEntity"
+          [ReadOnly]="!EditMode"
+          [Actions]="availableActions"
+          [Prompts]="availablePrompts"
+          [Agents]="availableAgents"
+          (StepChanged)="onStepChanged($event)"
+          (PathChanged)="onPathChanged($event)"
+          (DeleteStepRequested)="onDeleteStepRequested($event)"
+          (CloseRequested)="onCloseProperties()">
+        </mj-agent-properties-panel>
+      </div>
+    </div>
+
+    <!-- List View -->
+    <div *ngIf="viewMode === 'list'" class="mj-agent-editor-list">
+      <mj-agent-step-list
+        [Steps]="steps"
+        [Paths]="paths"
+        [SelectedStepID]="selectedStep?.ID || null"
+        (StepClicked)="onStepClickedInList($event)">
+      </mj-agent-step-list>
+
+      <!-- Properties Panel in list mode too -->
+      <div class="mj-agent-editor-properties"
+           [class.mj-agent-editor-properties--visible]="showPropertiesPanel">
+        <mj-agent-properties-panel
+          [Step]="selectedStep"
+          [SelectedConnection]="selectedConnection"
+          [PathEntity]="selectedPathEntity"
+          [ReadOnly]="!EditMode"
+          [Actions]="availableActions"
+          [Prompts]="availablePrompts"
+          [Agents]="availableAgents"
+          (StepChanged)="onStepChanged($event)"
+          (PathChanged)="onPathChanged($event)"
+          (DeleteStepRequested)="onDeleteStepRequested($event)"
+          (CloseRequested)="onCloseProperties()">
+        </mj-agent-properties-panel>
+      </div>
+    </div>
+  </div>
+</div>

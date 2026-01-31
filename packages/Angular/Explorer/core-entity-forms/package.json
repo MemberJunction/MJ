@@ -44,6 +44,7 @@
     "@memberjunction/ng-container-directives": "3.3.0",
     "@memberjunction/ng-deep-diff": "3.3.0",
     "@memberjunction/ng-entity-relationship-diagram": "3.3.0",
+    "@memberjunction/ng-flow-editor": "3.3.0",
     "@memberjunction/ng-entity-viewer": "3.3.0",
     "@memberjunction/ng-form-toolbar": "3.3.0",
     "@memberjunction/ng-join-grid": "3.3.0",

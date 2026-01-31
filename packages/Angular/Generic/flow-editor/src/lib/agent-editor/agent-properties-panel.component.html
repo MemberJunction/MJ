@@ -1,0 +1,220 @@
+<div class="mj-agent-props">
+  <!-- Header -->
+  <div class="mj-agent-props-header">
+    <h3 class="mj-agent-props-title">
+      <i class="fa-solid" [ngClass]="isConnectionSelected ? 'fa-link' : 'fa-cog'"></i>
+      {{ isConnectionSelected ? 'Connection' : 'Properties' }}
+    </h3>
+    <button class="mj-agent-props-close" (click)="CloseRequested.emit()" title="Close">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!isStepSelected && !isConnectionSelected" class="mj-agent-props-empty">
+    <i class="fa-solid fa-mouse-pointer"></i>
+    <p>Select a step or connection to view its properties</p>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- STEP PROPERTIES                              -->
+  <!-- ============================================ -->
+  <div *ngIf="isStepSelected" class="mj-agent-props-content">
+
+    <!-- General Section -->
+    <div class="mj-agent-props-section">
+      <div class="mj-agent-props-section-title">General</div>
+
+      <div class="mj-agent-props-field">
+        <label>Name</label>
+        <input type="text" [value]="Step!.Name" [disabled]="ReadOnly"
+               (input)="OnNameChange($any($event.target).value)"
+               placeholder="Step name..." class="mj-agent-props-input">
+      </div>
+
+      <div class="mj-agent-props-field">
+        <label>Description</label>
+        <textarea [value]="Step!.Description || ''" [disabled]="ReadOnly"
+                  (input)="OnDescriptionChange($any($event.target).value)"
+                  placeholder="Optional description..." rows="2"
+                  class="mj-agent-props-input mj-agent-props-textarea"></textarea>
+      </div>
+
+      <div class="mj-agent-props-field">
+        <label>Status</label>
+        <select [value]="Step!.Status" [disabled]="ReadOnly"
+                (change)="OnStatusChange($any($event.target).value)"
+                class="mj-agent-props-input">
+          <option value="Active">Active</option>
+          <option value="Disabled">Disabled</option>
+          <option value="Pending">Pending</option>
+        </select>
+      </div>
+
+      <div class="mj-agent-props-field mj-agent-props-field--row">
+        <label class="mj-agent-props-checkbox-label">
+          <input type="checkbox" [checked]="Step!.StartingStep" [disabled]="ReadOnly"
+                 (change)="OnStartingStepChange($any($event.target).checked)">
+          Starting Step
+        </label>
+      </div>
+
+      <div class="mj-agent-props-field">
+        <label>Type</label>
+        <div class="mj-agent-props-type-badge">
+          {{ stepTypeLabel }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Type-Specific Section -->
+    <div class="mj-agent-props-section">
+      <div class="mj-agent-props-section-title">Configuration</div>
+
+      <!-- Loop Body Type (ForEach / While) -->
+      <div *ngIf="showLoopConfig" class="mj-agent-props-field">
+        <label>Loop Body Type</label>
+        <select [value]="Step!.LoopBodyType || 'Action'" [disabled]="ReadOnly"
+                (change)="OnLoopBodyTypeChange($any($event.target).value)"
+                class="mj-agent-props-input">
+          <option value="Action">Action</option>
+          <option value="Prompt">Prompt</option>
+          <option value="Sub-Agent">Sub-Agent</option>
+        </select>
+      </div>
+
+      <!-- Action Picker -->
+      <div *ngIf="showActionPicker" class="mj-agent-props-field">
+        <label>Action</label>
+        <select [value]="Step!.ActionID || ''" [disabled]="ReadOnly"
+                (change)="OnActionChange($any($event.target).value)"
+                class="mj-agent-props-input">
+          <option value="">-- Select Action --</option>
+          <option *ngFor="let action of Actions" [value]="action.ID">{{ action.Name }}</option>
+        </select>
+      </div>
+
+      <!-- Prompt Picker -->
+      <div *ngIf="showPromptPicker" class="mj-agent-props-field">
+        <label>Prompt</label>
+        <select [value]="Step!.PromptID || ''" [disabled]="ReadOnly"
+                (change)="OnPromptChange($any($event.target).value)"
+                class="mj-agent-props-input">
+          <option value="">-- Select Prompt --</option>
+          <option *ngFor="let prompt of Prompts" [value]="prompt.ID">{{ prompt.Name }}</option>
+        </select>
+      </div>
+
+      <!-- Sub-Agent Picker -->
+      <div *ngIf="showAgentPicker" class="mj-agent-props-field">
+        <label>Sub-Agent</label>
+        <select [value]="Step!.SubAgentID || ''" [disabled]="ReadOnly"
+                (change)="OnSubAgentChange($any($event.target).value)"
+                class="mj-agent-props-input">
+          <option value="">-- Select Agent --</option>
+          <option *ngFor="let agent of Agents" [value]="agent.ID">{{ agent.Name }}</option>
+        </select>
+      </div>
+
+      <!-- Loop Configuration -->
+      <div *ngIf="showLoopConfig" class="mj-agent-props-field">
+        <label>Loop Configuration (JSON)</label>
+        <textarea [value]="Step!.Configuration || ''" [disabled]="ReadOnly"
+                  (input)="OnConfigurationChange($any($event.target).value)"
+                  placeholder='{"collectionPath": "payload.items", "maxIterations": 100}'
+                  rows="3" class="mj-agent-props-input mj-agent-props-textarea mj-agent-props-code"></textarea>
+      </div>
+    </div>
+
+    <!-- Data Mapping Section (Action steps) -->
+    <div *ngIf="Step!.StepType === 'Action' || showActionPicker" class="mj-agent-props-section">
+      <div class="mj-agent-props-section-title">Data Mapping</div>
+
+      <div class="mj-agent-props-field">
+        <label>Input Mapping (JSON)</label>
+        <textarea [value]="Step!.ActionInputMapping || ''" [disabled]="ReadOnly"
+                  (input)="OnInputMappingChange($any($event.target).value)"
+                  placeholder='{"param1": "payload.value"}'
+                  rows="3" class="mj-agent-props-input mj-agent-props-textarea mj-agent-props-code"></textarea>
+      </div>
+
+      <div class="mj-agent-props-field">
+        <label>Output Mapping (JSON)</label>
+        <textarea [value]="Step!.ActionOutputMapping || ''" [disabled]="ReadOnly"
+                  (input)="OnOutputMappingChange($any($event.target).value)"
+                  placeholder='{"outputParam": "payload.result"}'
+                  rows="3" class="mj-agent-props-input mj-agent-props-textarea mj-agent-props-code"></textarea>
+      </div>
+    </div>
+
+    <!-- Error Handling Section -->
+    <div class="mj-agent-props-section">
+      <div class="mj-agent-props-section-title">Error Handling</div>
+
+      <div class="mj-agent-props-field">
+        <label>On Error</label>
+        <select [value]="Step!.OnErrorBehavior" [disabled]="ReadOnly"
+                (change)="OnErrorBehaviorChange($any($event.target).value)"
+                class="mj-agent-props-input">
+          <option value="fail">Fail (stop flow)</option>
+          <option value="continue">Continue (ignore error)</option>
+          <option value="retry">Retry</option>
+        </select>
+      </div>
+
+      <div *ngIf="Step!.OnErrorBehavior === 'retry'" class="mj-agent-props-field">
+        <label>Retry Count</label>
+        <input type="number" [value]="Step!.RetryCount" [disabled]="ReadOnly" min="0" max="10"
+               (input)="OnRetryCountChange(+$any($event.target).value)"
+               class="mj-agent-props-input">
+      </div>
+
+      <div class="mj-agent-props-field">
+        <label>Timeout (seconds)</label>
+        <input type="number" [value]="Step!.TimeoutSeconds" [disabled]="ReadOnly" min="1"
+               (input)="OnTimeoutChange(+$any($event.target).value)"
+               class="mj-agent-props-input">
+      </div>
+    </div>
+
+    <!-- Delete button -->
+    <div *ngIf="!ReadOnly" class="mj-agent-props-section mj-agent-props-danger">
+      <button class="mj-agent-props-delete-btn" (click)="OnDeleteStep()">
+        <i class="fa-solid fa-trash-can"></i> Delete Step
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- CONNECTION PROPERTIES                        -->
+  <!-- ============================================ -->
+  <div *ngIf="isConnectionSelected" class="mj-agent-props-content">
+    <div class="mj-agent-props-section">
+      <div class="mj-agent-props-section-title">Path Properties</div>
+
+      <div class="mj-agent-props-field">
+        <label>Description</label>
+        <input type="text" [value]="PathEntity!.Description || ''" [disabled]="ReadOnly"
+               (input)="OnPathDescriptionChange($any($event.target).value)"
+               placeholder="Path label..." class="mj-agent-props-input">
+      </div>
+
+      <div class="mj-agent-props-field">
+        <label>Condition</label>
+        <textarea [value]="PathEntity!.Condition || ''" [disabled]="ReadOnly"
+                  (input)="OnPathConditionChange($any($event.target).value)"
+                  placeholder="e.g. payload.status === 'active'"
+                  rows="3" class="mj-agent-props-input mj-agent-props-textarea mj-agent-props-code"></textarea>
+        <span class="mj-agent-props-hint">Leave empty for unconditional (always taken)</span>
+      </div>
+
+      <div class="mj-agent-props-field">
+        <label>Priority</label>
+        <input type="number" [value]="PathEntity!.Priority" [disabled]="ReadOnly" min="-100" max="100"
+               (input)="OnPathPriorityChange(+$any($event.target).value)"
+               class="mj-agent-props-input">
+        <span class="mj-agent-props-hint">Higher priority paths are evaluated first</span>
+      </div>
+    </div>
+  </div>
+</div>

@@ -58,9 +58,7 @@ import { QueryFormExtendedComponent, LoadQueryFormExtendedComponent } from "./Qu
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
-import { StepInfoControlComponent } from "./AIAgents/FlowAgentType/step-info-control.component";
-import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-diagram.component";
-import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-integrated-flow-editor.component";
+import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
 import { TestRunFormComponentExtended, LoadTestRunFormComponentExtended } from "./Tests/test-run-form.component";
 import { TestFormComponentExtended, LoadTestFormComponentExtended } from "./Tests/test-form.component";
 import { TestSuiteRunFormComponentExtended, LoadTestSuiteRunFormComponentExtended } from "./Tests/test-suite-run-form.component";
@@ -104,8 +102,6 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         QueryRunDialogComponent,
         QueryCategoryDialogComponent,
         FlowAgentFormSectionComponent,
-        StepInfoControlComponent,
-        FlowAgentDiagramComponent,
         TestRunFormComponentExtended,
         TestFormComponentExtended,
         TestSuiteRunFormComponentExtended,
@@ -153,7 +149,7 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         AITestHarnessModule,
         ActionGalleryModule,
         TestingModule,
-        MJIntegratedFlowEditorComponent,
+        FlowEditorModule,
         SharedGenericModule,
         EntityRelationshipDiagramModule,
         ListManagementModule,
@@ -176,9 +172,6 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         AIAgentRunAnalyticsComponent,
         QueryFormExtendedComponent,
         FlowAgentFormSectionComponent,
-        StepInfoControlComponent,
-        FlowAgentDiagramComponent,
-        MJIntegratedFlowEditorComponent,
         TestRunFormComponentExtended,
         TestFormComponentExtended,
         TestSuiteRunFormComponentExtended,

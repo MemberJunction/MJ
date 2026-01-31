@@ -1,0 +1,70 @@
+<!-- Input Port -->
+<div *ngIf="inputPort"
+     class="mj-flow-node-port mj-flow-node-port--input"
+     [class]="'mj-flow-node-port--' + inputPort.Side"
+     fNodeInput
+     [fInputId]="inputPort.ID"
+     [fInputDisabled]="inputPort.Disabled"
+     [fInputMultiple]="inputPort.Multiple">
+</div>
+
+<!-- Node Body -->
+<div class="mj-flow-node-body"
+     [class.mj-flow-node-body--start]="Node.IsStartNode"
+     [class.mj-flow-node-body--disabled]="Node.Status === 'disabled'"
+     [class.mj-flow-node-body--pending]="Node.Status === 'pending'"
+     [class.mj-flow-node-body--running]="Node.Status === 'running'"
+     [class.mj-flow-node-body--error]="Node.Status === 'error'"
+     [class.mj-flow-node-body--success]="Node.Status === 'success'">
+
+  <!-- Color accent bar -->
+  <div class="mj-flow-node-accent" [style.backgroundColor]="headerColor"></div>
+
+  <!-- Header -->
+  <div class="mj-flow-node-header">
+    <div class="mj-flow-node-header-left">
+      <i class="fa-solid mj-flow-node-icon" [ngClass]="nodeIcon" [style.color]="headerColor"></i>
+      <span class="mj-flow-node-label">{{ Node.Label }}</span>
+    </div>
+    <div class="mj-flow-node-header-right">
+      <span *ngIf="Node.IsStartNode" class="mj-flow-node-start-badge">START</span>
+      <i *ngIf="hasStatus"
+         class="fa-solid mj-flow-node-status"
+         [ngClass]="statusIcon"
+         [class]="'mj-flow-node-status--' + statusClass"
+         [title]="Node.StatusMessage || ''"></i>
+    </div>
+  </div>
+
+  <!-- Subtitle / Configured Item -->
+  <div *ngIf="Node.Subtitle" class="mj-flow-node-subtitle">
+    {{ Node.Subtitle }}
+  </div>
+
+  <!-- Type badge -->
+  <div class="mj-flow-node-type-badge" [style.color]="headerColor">
+    {{ TypeConfig?.Label || Node.Type }}
+  </div>
+
+  <!-- Badges row -->
+  <div *ngIf="Node.Badges && Node.Badges.length > 0" class="mj-flow-node-badges">
+    <span *ngFor="let badge of Node.Badges"
+          class="mj-flow-node-badge"
+          [style.borderColor]="badge.Color || headerColor"
+          [title]="badge.Label">
+      <i *ngIf="badge.Icon" class="fa-solid" [ngClass]="badge.Icon"></i>
+      {{ badge.Value }}
+    </span>
+  </div>
+</div>
+
+<!-- Output Port -->
+<div *ngIf="outputPort"
+     class="mj-flow-node-port mj-flow-node-port--output"
+     [class]="'mj-flow-node-port--' + outputPort.Side"
+     fNodeOutput
+     [fOutputId]="outputPort.ID"
+     [fOutputDisabled]="outputPort.Disabled"
+     [fOutputMultiple]="outputPort.Multiple"
+     [isSelfConnectable]="false">
+</div>

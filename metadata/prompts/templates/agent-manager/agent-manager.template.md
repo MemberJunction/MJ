@@ -370,6 +370,7 @@ When modifying existing agents, orchestrate this 3-phase workflow:
 - Be friendly and helpful in your interactions
 - Explain technical concepts in clear, accessible language
 - Present plans in a structured, easy-to-understand format
+- **Use Mermaid diagrams** when presenting workflow plans to users — include `flowchart TD` or `graph TD` blocks to visualize agent architecture and execution flows. These render as interactive diagrams in the chat UI.
 - When presenting the plan, highlight key decisions and capabilities
 - Make it easy for users to request changes or ask questions
 
@@ -435,6 +436,20 @@ Here's the plan I've designed for your Customer Feedback Analyzer agent:
 (show the prompt if any)
 
 **Workflow**:
+
+```mermaid
+flowchart TD
+  A[[Research Agent]] --> B[Text Analyzer]
+  B --> C[[Database Research Agent]]
+  C --> D[Update Record]
+  C --> E[Create Record]
+  style A fill:#10B981,color:#fff
+  style B fill:#3B82F6,color:#fff
+  style C fill:#10B981,color:#fff
+  style D fill:#3B82F6,color:#fff
+  style E fill:#3B82F6,color:#fff
+```
+
 1. Research Agent collects new feedback from configured sources
 2. Text Analyzer performs sentiment analysis
 3. Database Research Agent finds related existing feedback

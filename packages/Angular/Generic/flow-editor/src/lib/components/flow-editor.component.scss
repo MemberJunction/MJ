@@ -1,0 +1,169 @@
+/* ============================================================
+   Flow Editor — Main container styles
+   ============================================================ */
+
+.mj-flow-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  outline: none;
+  position: relative;
+
+  &--readonly {
+    .mj-flow-node-port {
+      cursor: default;
+      pointer-events: none;
+    }
+  }
+}
+
+/* ── Toolbar Area ──────────────────────────────────────────── */
+
+.mj-flow-editor-toolbar-area {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+}
+
+/* ── Canvas Area ───────────────────────────────────────────── */
+
+.mj-flow-editor-canvas-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.mj-flow-editor-canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+
+  f-flow {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/* ── Minimap ───────────────────────────────────────────────── */
+
+.mj-flow-editor-minimap {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 160px;
+  height: 120px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  z-index: 15;
+
+  f-minimap {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/* ── Empty State ───────────────────────────────────────────── */
+
+.mj-flow-editor-empty {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.mj-flow-editor-empty-content {
+  text-align: center;
+  padding: 40px;
+}
+
+.mj-flow-editor-empty-icon {
+  font-size: 48px;
+  color: #cbd5e1;
+  margin-bottom: 16px;
+}
+
+.mj-flow-editor-empty-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #64748b;
+  margin: 0 0 8px;
+}
+
+.mj-flow-editor-empty-subtitle {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* ── Connection Labels ─────────────────────────────────────── */
+
+.mj-flow-connection-label {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #475569;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  pointer-events: none;
+}
+
+/* ── Foblex Overrides ──────────────────────────────────────── */
+
+/* Canvas background */
+f-canvas {
+  background: #ffffff;
+}
+
+/* Background pattern dots */
+f-circle-pattern {
+  --f-circle-pattern-color: #e2e8f0;
+}
+
+/* Selection area */
+f-selection-area {
+  --f-selection-area-background: rgba(59, 130, 246, 0.08);
+  --f-selection-area-border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Line alignment guides */
+f-line-alignment {
+  --f-line-alignment-color: #3b82f6;
+}
+
+/* Connection paths */
+.f-connection path {
+  stroke-width: 2;
+  fill: none;
+}
+
+.f-connection.f-selected path {
+  stroke-width: 3;
+}
+
+/* Connection for create (dragging) */
+.f-connection-for-create path {
+  stroke: #94a3b8;
+  stroke-dasharray: 6 3;
+  stroke-width: 2;
+}
