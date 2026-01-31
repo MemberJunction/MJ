@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
 
 /**
  * Type of app access issue
@@ -93,9 +93,9 @@ export class AppAccessDialogComponent implements OnDestroy {
 
     switch (this.config.type) {
       case 'not_installed':
-        return 'Install Application?';
+        return 'Add Application?';
       case 'disabled':
-        return 'Enable Application?';
+        return 'Add Application?';
       case 'no_access':
         return 'Access Denied';
       case 'not_found':
@@ -169,9 +169,8 @@ export class AppAccessDialogComponent implements OnDestroy {
 
     switch (this.config.type) {
       case 'not_installed':
-        return `You don't have "${appName}" installed yet. Would you like to add it to your applications?`;
       case 'disabled':
-        return `You have disabled "${appName}" in your app configuration. Would you like to enable it?`;
+        return `Would you like to add "${appName}" to your applications?`;
       case 'no_access':
         return `You don't have permission to access "${appName}".`;
       case 'not_found':
@@ -226,9 +225,8 @@ export class AppAccessDialogComponent implements OnDestroy {
 
     switch (this.config.type) {
       case 'not_installed':
-        return 'Install';
       case 'disabled':
-        return 'Enable';
+        return 'Add';
       default:
         return 'OK';
     }
@@ -322,5 +320,29 @@ export class AppAccessDialogComponent implements OnDestroy {
   completeProcessing(): void {
     this.isProcessing = false;
     this.hide();
+  }
+
+  /**
+   * Handle keyboard events for the dialog
+   * Enter key triggers primary action (Install/Enable)
+   * Escape key dismisses the dialog
+   */
+  @HostListener('document:keydown', ['$event'])
+  handleKeyDown(event: KeyboardEvent): void {
+    if (!this.visible || this.isProcessing) return;
+
+    if (event.key === 'Enter') {
+      // Enter triggers primary action if available
+      if (this.showPrimaryAction) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.onPrimaryAction();
+      }
+    } else if (event.key === 'Escape') {
+      // Escape dismisses the dialog
+      event.preventDefault();
+      event.stopPropagation();
+      this.onDismiss();
+    }
   }
 }

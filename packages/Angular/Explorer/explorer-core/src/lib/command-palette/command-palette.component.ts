@@ -54,8 +54,8 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
     });
 
-    // Subscribe to application changes
-    this.appManager.Applications.pipe(takeUntil(this.destroy$)).subscribe((apps) => {
+    // Subscribe to ALL application changes (not just user's installed apps)
+    this.appManager.AllApplications.pipe(takeUntil(this.destroy$)).subscribe((apps) => {
       this.AllApps = apps;
       this.filterAndSortApps();
     });

@@ -1459,7 +1459,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Handle app switch from app switcher
+   * Handle app switch from app switcher or command palette
    */
   async onAppSwitch(appId: string): Promise<void> {
     // Clear the system tab flag since we're switching to a real app
@@ -1470,12 +1470,31 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.cdr.detectChanges();
 
     try {
-      await this.appManager.SetActiveApp(appId);
-
+      // Check if app is in user's active installed apps
       const app = this.appManager.GetAppById(appId);
+
+      // If not in user's active apps, show "Add Application?" dialog
       if (!app) {
+        // Get app info from all system apps to show the name
+        const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
+        const appName = systemApp?.Name || 'this application';
+
+        // Clear loading indicator before showing dialog
+        this.loadingAppId = null;
+        this.cdr.detectChanges();
+
+        // Show "Add Application?" dialog
+        if (this.appAccessDialog) {
+          this.appAccessDialog.show({
+            type: 'not_installed',
+            appName: appName,
+            appId: appId
+          });
+        }
         return;
       }
+
+      await this.appManager.SetActiveApp(appId);
 
       // Get the default nav item for this app (if any)
       const navItems = app.GetNavItems();
@@ -2213,42 +2232,42 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       case 'redirect':
       case 'dismissed':
       default:
-        this.redirectToFirstApp(availableApps);
+        // Only redirect if there's no active app (e.g., during initial URL-based navigation)
+        // If user is already in an app (e.g., command palette cancel), just close dialog
+        if (!this.activeApp) {
+          this.redirectToFirstApp(availableApps);
+        }
         break;
     }
   }
 
   /**
-   * Install an app for the user and navigate to it
+   * Add an app to user's applications and navigate to it.
+   * InstallAppForUser handles both new apps and re-enabling disabled apps.
    */
   private async installAndNavigateToApp(appId: string): Promise<void> {
     // Clear pendingAppPath to allow fresh handling after installation
     this.pendingAppPath = null;
 
     try {
+      // InstallAppForUser handles both cases:
+      // - Creates new UserApplication record if not exists
+      // - Enables existing record if disabled (IsActive=false)
       const userApp = await this.appManager.InstallAppForUser(appId);
 
       if (userApp) {
-        // App installed successfully - navigate to it
-        const app = this.appManager.GetAppById(appId);
+        // Force refresh the app list to ensure the new app is in the observable
+        await this.appManager.ReloadUserApplications();
 
-        if (app) {
-          await this.navigateToApp(app);
-          this.appAccessDialog?.completeProcessing();
-        } else {
-          // Fallback - reload might be needed
-          console.warn(`[ShellComponent] App ${appId} not found after install, redirecting to first app`);
-          this.appAccessDialog?.completeProcessing();
-          this.redirectToFirstApp(this.appManager.GetAllApps());
-        }
+        // App added successfully - wait for observable to sync then navigate
+        await this.waitForAppAndNavigate(appId);
       } else {
-        // Installation failed
-        console.error('[ShellComponent] Installation failed');
+        console.error('[ShellComponent] Failed to add application');
         this.appAccessDialog?.completeProcessing();
         this.redirectToFirstApp(this.appManager.GetAllApps());
       }
     } catch (error) {
-      console.error('Error installing app:', error);
+      console.error('Error adding app:', error);
       this.appAccessDialog?.completeProcessing();
       this.redirectToFirstApp(this.appManager.GetAllApps());
     }
@@ -2262,21 +2281,46 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const success = await this.appManager.EnableAppForUser(appId);
 
       if (success) {
-        // App enabled successfully - navigate to it
-        const app = this.appManager.GetAppById(appId);
-        if (app) {
-          await this.navigateToApp(app);
-          this.appAccessDialog?.completeProcessing();
-        } else {
-          this.appAccessDialog?.completeProcessing();
-          this.redirectToFirstApp(this.appManager.GetAllApps());
-        }
+        // App enabled successfully - wait for observable to sync then navigate
+        await this.waitForAppAndNavigate(appId);
       } else {
         this.appAccessDialog?.completeProcessing();
         this.redirectToFirstApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error enabling app:', error);
+      this.appAccessDialog?.completeProcessing();
+      this.redirectToFirstApp(this.appManager.GetAllApps());
+    }
+  }
+
+  /**
+   * Wait for an app to appear in the applications observable and then navigate to it.
+   * This handles the async nature of observable updates after install/enable.
+   */
+  private async waitForAppAndNavigate(appId: string, maxWaitMs: number = 3000): Promise<void> {
+    const startTime = Date.now();
+    const pollInterval = 100;
+
+    // Poll for the app to appear in the observable
+    while (Date.now() - startTime < maxWaitMs) {
+      const app = this.appManager.GetAppById(appId);
+      if (app) {
+        await this.navigateToApp(app);
+        this.appAccessDialog?.completeProcessing();
+        return;
+      }
+      // Wait a bit before checking again
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    // Timeout - try to get from system apps as fallback
+    const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
+    if (systemApp) {
+      await this.navigateToApp(systemApp);
+      this.appAccessDialog?.completeProcessing();
+    } else {
+      console.warn(`[ShellComponent] App ${appId} not found after waiting, redirecting to first app`);
       this.appAccessDialog?.completeProcessing();
       this.redirectToFirstApp(this.appManager.GetAllApps());
     }
