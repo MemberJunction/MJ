@@ -1,5 +1,20 @@
 # @memberjunction/ng-explorer-modules
 
+## 3.4.0
+
+### Patch Changes
+
+- Updated dependencies [a7db1cc]
+- Updated dependencies [252794e]
+  - @memberjunction/ng-explorer-core@3.4.0
+  - @memberjunction/ng-explorer-settings@3.4.0
+  - @memberjunction/ng-workspace-initializer@3.4.0
+  - @memberjunction/ng-core-entity-forms@3.4.0
+  - @memberjunction/ng-shared@3.4.0
+  - @memberjunction/ng-link-directives@3.4.0
+  - @memberjunction/ng-container-directives@3.4.0
+  - @memberjunction/ng-kendo-modules@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

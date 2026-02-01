@@ -1,5 +1,11 @@
 # @memberjunction/scheduling-base-types
 
+## 3.4.0
+
+### Patch Changes
+
+- @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

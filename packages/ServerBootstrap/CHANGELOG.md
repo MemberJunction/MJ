@@ -1,5 +1,17 @@
 # @memberjunction/server-bootstrap
 
+## 3.4.0
+
+### Patch Changes
+
+- 3a71e4e: Fix large text field corruptions, cross-platform improvements, more robust environment variable parsing for boolean values
+- Updated dependencies [ef7acd8]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [e552e5f]
+- Updated dependencies [a3961d5]
+  - @memberjunction/server@3.4.0
+  - @memberjunction/core@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes
