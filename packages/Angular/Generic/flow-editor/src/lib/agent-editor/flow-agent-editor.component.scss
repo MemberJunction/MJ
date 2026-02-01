@@ -183,13 +183,17 @@
 /* ── Properties Panel ──────────────────────────────────────── */
 
 .mj-agent-editor-properties {
-  width: 0;
-  overflow: hidden;
-  transition: width 0.2s ease;
+  width: 320px;
   flex-shrink: 0;
+  overflow: hidden;
+  transform: translateX(320px);
+  margin-right: -320px;
+  transition: transform 0.2s ease, margin-right 0.2s ease;
+  border-left: 1px solid #e2e8f0;
 
   &--visible {
-    width: 320px;
+    transform: translateX(0);
+    margin-right: 0;
   }
 
   mj-agent-properties-panel {

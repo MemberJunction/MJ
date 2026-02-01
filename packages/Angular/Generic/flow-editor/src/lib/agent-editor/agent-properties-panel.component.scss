@@ -7,8 +7,12 @@
   flex-direction: column;
   height: 100%;
   background: #ffffff;
-  border-left: 1px solid #e2e8f0;
   overflow: hidden;
+  box-sizing: border-box;
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
 }
 
 .mj-agent-props-header {
@@ -117,7 +121,18 @@
   font-family: inherit;
 
   &:focus { border-color: #3b82f6; }
+  &:focus-visible { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15); }
   &:disabled { background: #f8fafc; color: #94a3b8; cursor: not-allowed; }
+}
+
+/* Select dropdown with consistent cross-browser styling */
+select.mj-agent-props-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+  cursor: pointer;
 }
 
 .mj-agent-props-textarea {

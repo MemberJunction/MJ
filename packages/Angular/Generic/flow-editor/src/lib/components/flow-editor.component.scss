@@ -14,6 +14,7 @@
   overflow: hidden;
   outline: none;
   position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 
   &--readonly {
     .mj-flow-node-port {
@@ -151,14 +152,32 @@ f-line-alignment {
   --f-line-alignment-color: #3b82f6;
 }
 
-/* Connection paths */
+/* Connection paths — default stroke color prevents invisible connections */
 .f-connection path {
+  stroke: #94a3b8;
   stroke-width: 2;
   fill: none;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.f-connection:hover path {
+  stroke-width: 3;
 }
 
 .f-connection.f-selected path {
+  stroke: #3b82f6;
   stroke-width: 3;
+}
+
+/* Colored connections use the --connection-color custom property */
+.mj-flow-connection-colored path {
+  stroke: var(--connection-color, #94a3b8);
+}
+
+.mj-flow-connection-colored.f-selected path {
+  stroke: var(--connection-color, #3b82f6);
+  stroke-width: 3;
+  filter: brightness(0.85);
 }
 
 /* Connection for create (dragging) */
@@ -166,4 +185,21 @@ f-line-alignment {
   stroke: #94a3b8;
   stroke-dasharray: 6 3;
   stroke-width: 2;
+}
+
+/* ── Focus Indicators (Accessibility) ────────────────────── */
+
+.mj-flow-toolbar-btn:focus-visible,
+.mj-agent-editor-btn:focus-visible,
+.mj-agent-editor-view-btn:focus-visible,
+.mj-agent-props-close:focus-visible,
+.mj-agent-props-delete-btn:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.mj-flow-palette-item:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+  border-radius: 6px;
 }

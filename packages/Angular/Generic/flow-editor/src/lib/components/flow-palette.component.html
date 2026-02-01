@@ -12,7 +12,7 @@
            fExternalItem
            [fData]="nodeType.Type"
            [title]="nodeType.Label">
-        <div class="mj-flow-palette-item-icon" [style.backgroundColor]="nodeType.Color + '15'" [style.color]="nodeType.Color">
+        <div class="mj-flow-palette-item-icon" [style.backgroundColor]="GetBgColor(nodeType.Color, 0.08)" [style.color]="nodeType.Color">
           <i class="fa-solid" [ngClass]="nodeType.Icon"></i>
         </div>
         <span class="mj-flow-palette-item-label">{{ nodeType.Label }}</span>

@@ -20,7 +20,7 @@ import { Component, Input, ViewEncapsulation, ChangeDetectionStrategy } from '@a
         {{ SelectedCount }} selected
       </span>
       <span class="mj-flow-status-item mj-flow-status-item--right">
-        <i class="fa-solid fa-search"></i>
+        <i class="fa-solid fa-magnifying-glass"></i>
         {{ ZoomLevel }}%
       </span>
     </div>

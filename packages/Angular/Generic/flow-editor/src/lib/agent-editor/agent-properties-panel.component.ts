@@ -180,4 +180,21 @@ export class AgentPropertiesPanelComponent {
       this.DeleteStepRequested.emit(this.Step);
     }
   }
+
+  // ── Template Helpers ──────────────────────────────────────
+
+  /** Safely extract string value from an input/textarea/select change event */
+  protected InputValue(event: Event): string {
+    return (event.target as HTMLInputElement).value;
+  }
+
+  /** Safely extract checked state from a checkbox change event */
+  protected CheckedValue(event: Event): boolean {
+    return (event.target as HTMLInputElement).checked;
+  }
+
+  /** Safely extract numeric value from a number input event */
+  protected NumericValue(event: Event): number {
+    return +(event.target as HTMLInputElement).value;
+  }
 }

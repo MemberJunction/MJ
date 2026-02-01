@@ -28,14 +28,14 @@
       <div class="mj-agent-props-field">
         <label>Name</label>
         <input type="text" [value]="Step!.Name" [disabled]="ReadOnly"
-               (input)="OnNameChange($any($event.target).value)"
+               (input)="OnNameChange(InputValue($event))"
                placeholder="Step name..." class="mj-agent-props-input">
       </div>
 
       <div class="mj-agent-props-field">
         <label>Description</label>
         <textarea [value]="Step!.Description || ''" [disabled]="ReadOnly"
-                  (input)="OnDescriptionChange($any($event.target).value)"
+                  (input)="OnDescriptionChange(InputValue($event))"
                   placeholder="Optional description..." rows="2"
                   class="mj-agent-props-input mj-agent-props-textarea"></textarea>
       </div>
@@ -43,7 +43,7 @@
       <div class="mj-agent-props-field">
         <label>Status</label>
         <select [value]="Step!.Status" [disabled]="ReadOnly"
-                (change)="OnStatusChange($any($event.target).value)"
+                (change)="OnStatusChange(InputValue($event))"
                 class="mj-agent-props-input">
           <option value="Active">Active</option>
           <option value="Disabled">Disabled</option>
@@ -54,7 +54,7 @@
       <div class="mj-agent-props-field mj-agent-props-field--row">
         <label class="mj-agent-props-checkbox-label">
           <input type="checkbox" [checked]="Step!.StartingStep" [disabled]="ReadOnly"
-                 (change)="OnStartingStepChange($any($event.target).checked)">
+                 (change)="OnStartingStepChange(CheckedValue($event))">
           Starting Step
         </label>
       </div>
@@ -75,7 +75,7 @@
       <div *ngIf="showLoopConfig" class="mj-agent-props-field">
         <label>Loop Body Type</label>
         <select [value]="Step!.LoopBodyType || 'Action'" [disabled]="ReadOnly"
-                (change)="OnLoopBodyTypeChange($any($event.target).value)"
+                (change)="OnLoopBodyTypeChange(InputValue($event))"
                 class="mj-agent-props-input">
           <option value="Action">Action</option>
           <option value="Prompt">Prompt</option>
@@ -87,7 +87,7 @@
       <div *ngIf="showActionPicker" class="mj-agent-props-field">
         <label>Action</label>
         <select [value]="Step!.ActionID || ''" [disabled]="ReadOnly"
-                (change)="OnActionChange($any($event.target).value)"
+                (change)="OnActionChange(InputValue($event))"
                 class="mj-agent-props-input">
           <option value="">-- Select Action --</option>
           <option *ngFor="let action of Actions" [value]="action.ID">{{ action.Name }}</option>
@@ -98,7 +98,7 @@
       <div *ngIf="showPromptPicker" class="mj-agent-props-field">
         <label>Prompt</label>
         <select [value]="Step!.PromptID || ''" [disabled]="ReadOnly"
-                (change)="OnPromptChange($any($event.target).value)"
+                (change)="OnPromptChange(InputValue($event))"
                 class="mj-agent-props-input">
           <option value="">-- Select Prompt --</option>
           <option *ngFor="let prompt of Prompts" [value]="prompt.ID">{{ prompt.Name }}</option>
@@ -109,7 +109,7 @@
       <div *ngIf="showAgentPicker" class="mj-agent-props-field">
         <label>Sub-Agent</label>
         <select [value]="Step!.SubAgentID || ''" [disabled]="ReadOnly"
-                (change)="OnSubAgentChange($any($event.target).value)"
+                (change)="OnSubAgentChange(InputValue($event))"
                 class="mj-agent-props-input">
           <option value="">-- Select Agent --</option>
           <option *ngFor="let agent of Agents" [value]="agent.ID">{{ agent.Name }}</option>
@@ -120,7 +120,7 @@
       <div *ngIf="showLoopConfig" class="mj-agent-props-field">
         <label>Loop Configuration (JSON)</label>
         <textarea [value]="Step!.Configuration || ''" [disabled]="ReadOnly"
-                  (input)="OnConfigurationChange($any($event.target).value)"
+                  (input)="OnConfigurationChange(InputValue($event))"
                   placeholder='{"collectionPath": "payload.items", "maxIterations": 100}'
                   rows="3" class="mj-agent-props-input mj-agent-props-textarea mj-agent-props-code"></textarea>
       </div>
@@ -133,7 +133,7 @@
       <div class="mj-agent-props-field">
         <label>Input Mapping (JSON)</label>
         <textarea [value]="Step!.ActionInputMapping || ''" [disabled]="ReadOnly"
-                  (input)="OnInputMappingChange($any($event.target).value)"
+                  (input)="OnInputMappingChange(InputValue($event))"
                   placeholder='{"param1": "payload.value"}'
                   rows="3" class="mj-agent-props-input mj-agent-props-textarea mj-agent-props-code"></textarea>
       </div>
@@ -141,7 +141,7 @@
       <div class="mj-agent-props-field">
         <label>Output Mapping (JSON)</label>
         <textarea [value]="Step!.ActionOutputMapping || ''" [disabled]="ReadOnly"
-                  (input)="OnOutputMappingChange($any($event.target).value)"
+                  (input)="OnOutputMappingChange(InputValue($event))"
                   placeholder='{"outputParam": "payload.result"}'
                   rows="3" class="mj-agent-props-input mj-agent-props-textarea mj-agent-props-code"></textarea>
       </div>
@@ -154,7 +154,7 @@
       <div class="mj-agent-props-field">
         <label>On Error</label>
         <select [value]="Step!.OnErrorBehavior" [disabled]="ReadOnly"
-                (change)="OnErrorBehaviorChange($any($event.target).value)"
+                (change)="OnErrorBehaviorChange(InputValue($event))"
                 class="mj-agent-props-input">
           <option value="fail">Fail (stop flow)</option>
           <option value="continue">Continue (ignore error)</option>
@@ -165,14 +165,14 @@
       <div *ngIf="Step!.OnErrorBehavior === 'retry'" class="mj-agent-props-field">
         <label>Retry Count</label>
         <input type="number" [value]="Step!.RetryCount" [disabled]="ReadOnly" min="0" max="10"
-               (input)="OnRetryCountChange(+$any($event.target).value)"
+               (input)="OnRetryCountChange(NumericValue($event))"
                class="mj-agent-props-input">
       </div>
 
       <div class="mj-agent-props-field">
         <label>Timeout (seconds)</label>
         <input type="number" [value]="Step!.TimeoutSeconds" [disabled]="ReadOnly" min="1"
-               (input)="OnTimeoutChange(+$any($event.target).value)"
+               (input)="OnTimeoutChange(NumericValue($event))"
                class="mj-agent-props-input">
       </div>
     </div>
@@ -195,14 +195,14 @@
       <div class="mj-agent-props-field">
         <label>Description</label>
         <input type="text" [value]="PathEntity!.Description || ''" [disabled]="ReadOnly"
-               (input)="OnPathDescriptionChange($any($event.target).value)"
+               (input)="OnPathDescriptionChange(InputValue($event))"
                placeholder="Path label..." class="mj-agent-props-input">
       </div>
 
       <div class="mj-agent-props-field">
         <label>Condition</label>
         <textarea [value]="PathEntity!.Condition || ''" [disabled]="ReadOnly"
-                  (input)="OnPathConditionChange($any($event.target).value)"
+                  (input)="OnPathConditionChange(InputValue($event))"
                   placeholder="e.g. payload.status === 'active'"
                   rows="3" class="mj-agent-props-input mj-agent-props-textarea mj-agent-props-code"></textarea>
         <span class="mj-agent-props-hint">Leave empty for unconditional (always taken)</span>
@@ -211,7 +211,7 @@
       <div class="mj-agent-props-field">
         <label>Priority</label>
         <input type="number" [value]="PathEntity!.Priority" [disabled]="ReadOnly" min="-100" max="100"
-               (input)="OnPathPriorityChange(+$any($event.target).value)"
+               (input)="OnPathPriorityChange(NumericValue($event))"
                class="mj-agent-props-input">
         <span class="mj-agent-props-hint">Higher priority paths are evaluated first</span>
       </div>
