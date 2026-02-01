@@ -1,208 +1,219 @@
-<div #recordChangesWrapper>
-    <div class="k-overlay"></div>
-    <kendo-window 
-        class="kendo-window-custom"
-        [width]="800"
-        [height]="650"
-        [minHeight]="400"
-        [minWidth]="600"
-        [resizable]="true"
-        [top]="50"
-        [left]="50"
-        title="Record Changes History"
-        (close)="closePropertiesDialog()"
-    >
-        <mj-loading *ngIf="showloader" text="Loading history..." size="medium"></mj-loading>
-        @if (!showloader) {
-            <div class="record-changes-container" #dialogContainer>
-                <!-- Filter Panel -->
-                <div class="filter-panel">
-                    <div class="filter-controls">
-                        <input 
-                            type="text" 
-                            class="search-input"
-                            placeholder="Search changes..."
-                            [(ngModel)]="searchTerm"
-                            (input)="onSearchChange()"
-                            aria-label="Search record changes"
-                        />
-                        <select 
-                            class="filter-select"
-                            [(ngModel)]="selectedType"
-                            (change)="onFilterChange()"
-                            aria-label="Filter by change type"
-                        >
-                            <option value="">All Changes</option>
-                            <option value="Create">Created</option>
-                            <option value="Update">Updated</option>
-                            <option value="Delete">Deleted</option>
-                        </select>
-                        <select 
-                            class="filter-select"
-                            [(ngModel)]="selectedSource"
-                            (change)="onFilterChange()"
-                            aria-label="Filter by change source"
-                        >
-                            <option value="">All Sources</option>
-                            <option value="Internal">Internal</option>
-                            <option value="External">External</option>
-                        </select>
-                    </div>
-                    @if (filteredData.length !== viewData.length) {
-                        <div class="filter-results">
-                            Showing {{ filteredData.length }} of {{ viewData.length }} changes
-                        </div>
-                    }
-                </div>
+<mj-slide-panel
+    [Mode]="'slide'"
+    [Title]="'Record Changes History'"
+    [Visible]="IsVisible"
+    [Resizable]="true"
+    [MinWidthPx]="400"
+    [MaxWidthRatio]="0.6"
+    (Closed)="OnClose()">
 
-                <!-- Timeline Container -->
-                <div class="timeline-container" [attr.aria-label]="'Timeline of changes for ' + record.EntityInfo.Name + ' record'">
-                    @if (filteredData.length === 0) {
-                        <div class="no-changes-message">
-                            @if (viewData.length === 0) {
-                                <i class="fa-solid fa-info-circle"></i>
-                                No changes found for this record.
-                            } @else {
-                                <i class="fa-solid fa-search"></i>
-                                No changes match your current filters.
-                            }
-                        </div>
-                    } @else {
-                        <div class="timeline">
-                            @for (change of filteredData; track change.ID; let i = $index) {
-                                <div 
-                                    class="timeline-item"
-                                    [class.expanded]="expandedItems.has(change.ID)"
-                                    [attr.tabindex]="0"
-                                    [attr.aria-expanded]="expandedItems.has(change.ID)"
-                                    [attr.aria-label]="getTimelineItemLabel(change)"
-                                    (click)="toggleExpansion(change.ID)"
-                                    (keydown)="onTimelineItemKeydown($event, change.ID)"
-                                >
-                                    <div class="timeline-marker">
-                                        <div class="timeline-icon" [class]="getChangeTypeClass(change.Type)">
-                                            <i [class]="getChangeTypeIcon(change.Type)" [attr.aria-hidden]="true"></i>
-                                        </div>
-                                        @if (i < filteredData.length - 1) {
-                                            <div class="timeline-line"></div>
-                                        }
+    <mj-loading *ngIf="IsLoading" text="Loading history..." size="medium"></mj-loading>
+
+    @if (!IsLoading) {
+        <div class="record-changes-container">
+            @if (viewData.length === 0) {
+                <!-- Empty state — no changes ever recorded -->
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                    <h3 class="empty-state-title">No Change History</h3>
+                    <p class="empty-state-description">
+                        This record doesn't have any tracked changes yet.
+                        Changes will appear here automatically as edits are made.
+                    </p>
+                    <div class="empty-state-hint">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <span>Record change tracking is managed at the entity level</span>
+                    </div>
+                </div>
+            } @else {
+            <!-- Filter Panel -->
+            <div class="filter-panel">
+                <div class="filter-controls">
+                    <input
+                        type="text"
+                        class="search-input"
+                        placeholder="Search changes..."
+                        [(ngModel)]="searchTerm"
+                        (input)="onSearchChange()"
+                        aria-label="Search record changes"
+                    />
+                    <select
+                        class="filter-select"
+                        [(ngModel)]="selectedType"
+                        (change)="onFilterChange()"
+                        aria-label="Filter by change type"
+                    >
+                        <option value="">All Changes</option>
+                        <option value="Create">Created</option>
+                        <option value="Update">Updated</option>
+                        <option value="Delete">Deleted</option>
+                    </select>
+                    <select
+                        class="filter-select"
+                        [(ngModel)]="selectedSource"
+                        (change)="onFilterChange()"
+                        aria-label="Filter by change source"
+                    >
+                        <option value="">All Sources</option>
+                        <option value="Internal">Internal</option>
+                        <option value="External">External</option>
+                    </select>
+                </div>
+                @if (filteredData.length !== viewData.length) {
+                    <div class="filter-results">
+                        Showing {{ filteredData.length }} of {{ viewData.length }} changes
+                    </div>
+                }
+            </div>
+
+            <!-- Timeline Container -->
+            <div class="timeline-container" [attr.aria-label]="'Timeline of changes for ' + record.EntityInfo.Name + ' record'">
+                @if (filteredData.length === 0) {
+                    <div class="no-changes-message">
+                        <i class="fa-solid fa-filter"></i>
+                        <p>No changes match your current filters.</p>
+                        <button class="clear-filters-btn" (click)="ClearFilters()">
+                            <i class="fa-solid fa-xmark"></i> Clear Filters
+                        </button>
+                    </div>
+                } @else {
+                    <div class="timeline">
+                        @for (change of filteredData; track change.ID; let i = $index) {
+                            <div
+                                class="timeline-item"
+                                [class.expanded]="expandedItems.has(change.ID)"
+                                [attr.tabindex]="0"
+                                [attr.aria-expanded]="expandedItems.has(change.ID)"
+                                [attr.aria-label]="getTimelineItemLabel(change)"
+                                (click)="toggleExpansion(change.ID)"
+                                (keydown)="onTimelineItemKeydown($event, change.ID)"
+                            >
+                                <div class="timeline-marker">
+                                    <div class="timeline-icon" [class]="getChangeTypeClass(change.Type)">
+                                        <i [class]="getChangeTypeIcon(change.Type)" [attr.aria-hidden]="true"></i>
                                     </div>
-                                    
-                                    <div class="timeline-content">
-                                        <div class="change-header">
-                                            <div class="change-title">
-                                                <span class="change-type-badge" [class]="getChangeTypeBadgeClass(change.Type)">
-                                                    {{ change.Type }}
-                                                </span>
-                                                <span class="change-user">{{ change.User || 'Unknown User' }}</span>
-                                                <span class="change-source" [class]="getSourceClass(change.Source)">
-                                                    {{ change.Source }}
-                                                </span>
-                                            </div>
-                                            <div class="change-meta">
-                                                <span class="change-time" [title]="formatFullDateTime(change.ChangedAt)">
-                                                    {{ formatRelativeTime(change.ChangedAt) }}
-                                                </span>
-                                                <span class="change-status" [class]="getStatusClass(change.Status)">
-                                                    {{ change.Status }}
-                                                </span>
-                                                @if (change.Integration) {
-                                                    <span class="change-integration">
-                                                        via {{ change.Integration }}
-                                                    </span>
-                                                }
-                                            </div>
+                                    @if (i < filteredData.length - 1) {
+                                        <div class="timeline-line"></div>
+                                    }
+                                </div>
+
+                                <div class="timeline-content">
+                                    <div class="change-header">
+                                        <div class="change-title">
+                                            <span class="change-type-badge" [class]="getChangeTypeBadgeClass(change.Type)">
+                                                {{ change.Type }}
+                                            </span>
+                                            <span class="change-user">{{ change.User || 'Unknown User' }}</span>
+                                            <span class="change-source" [class]="getSourceClass(change.Source)">
+                                                {{ change.Source }}
+                                            </span>
                                         </div>
-                                        
-                                        @if (!expandedItems.has(change.ID)) {
-                                            <div class="change-summary">
-                                                {{ getChangeSummary(change) }}
+                                        <div class="change-meta">
+                                            <span class="change-time" [title]="formatFullDateTime(change.ChangedAt)">
+                                                {{ formatRelativeTime(change.ChangedAt) }}
+                                            </span>
+                                            <span class="change-status" [class]="getStatusClass(change.Status)">
+                                                {{ change.Status }}
+                                            </span>
+                                            @if (change.Integration) {
+                                                <span class="change-integration">
+                                                    via {{ change.Integration }}
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    @if (!expandedItems.has(change.ID)) {
+                                        <div class="change-summary">
+                                            {{ getChangeSummary(change) }}
+                                        </div>
+                                    }
+
+                                    @if (expandedItems.has(change.ID)) {
+                                        <div class="change-details">
+                                            <div class="change-timestamp">
+                                                <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                                                <strong>{{ formatFullDateTime(change.ChangedAt) }}</strong>
                                             </div>
-                                        }
-                                        
-                                        @if (expandedItems.has(change.ID)) {
-                                            <div class="change-details">
-                                                <div class="change-timestamp">
-                                                    <i class="fa-solid fa-clock" aria-hidden="true"></i>
-                                                    <strong>{{ formatFullDateTime(change.ChangedAt) }}</strong>
+                                            @if (change.Type === 'Create') {
+                                                <div class="creation-details">
+                                                    <h4><i class="fa-solid fa-plus"></i> Record Created</h4>
+                                                    @if (change.FullRecordJSON) {
+                                                        <div class="field-changes">
+                                                            @for (field of getCreatedFields(change); track field.name) {
+                                                                <div class="field-change created">
+                                                                    <span class="field-name">{{ field.displayName }}</span>
+                                                                    <span class="field-value new-value">{{ field.value }}</span>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
                                                 </div>
-                                                @if (change.Type === 'Create') {
-                                                    <div class="creation-details">
-                                                        <h4><i class="fa-solid fa-plus"></i> Record Created</h4>
-                                                        @if (change.FullRecordJSON) {
-                                                            <div class="field-changes">
-                                                                @for (field of getCreatedFields(change); track field.name) {
-                                                                    <div class="field-change created">
-                                                                        <span class="field-name">{{ field.displayName }}</span>
-                                                                        <span class="field-value new-value">{{ field.value }}</span>
+                                            } @else if (change.Type === 'Delete') {
+                                                <div class="deletion-details">
+                                                    <h4><i class="fa-solid fa-trash"></i> Record Deleted</h4>
+                                                    <p class="deletion-note">This record was permanently removed from the system.</p>
+                                                </div>
+                                            } @else {
+                                                <div class="update-details">
+                                                    <h4><i class="fa-solid fa-edit"></i> Fields Changed</h4>
+                                                    <div class="field-changes">
+                                                        @for (fieldChange of getFieldChanges(change); track fieldChange.field) {
+                                                            <div class="field-change">
+                                                                <div class="field-name">{{ fieldChange.displayName }}</div>
+                                                                @if (fieldChange.isBooleanField) {
+                                                                    <div class="boolean-change">
+                                                                        <span class="new-value">{{ fieldChange.newValue }}</span>
+                                                                    </div>
+                                                                } @else if (fieldChange.diffHtml) {
+                                                                    <div class="diff-view">
+                                                                        <div class="diff-content" [innerHTML]="fieldChange.diffHtml"></div>
+                                                                    </div>
+                                                                } @else {
+                                                                    <div class="value-diff">
+                                                                        <div class="old-value">
+                                                                            <span class="value-label">From:</span>
+                                                                            <span class="value">{{ fieldChange.oldValue || '(empty)' }}</span>
+                                                                        </div>
+                                                                        <div class="diff-arrow">
+                                                                            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                                                                        </div>
+                                                                        <div class="new-value">
+                                                                            <span class="value-label">To:</span>
+                                                                            <span class="value">{{ fieldChange.newValue || '(empty)' }}</span>
+                                                                        </div>
                                                                     </div>
                                                                 }
                                                             </div>
                                                         }
                                                     </div>
-                                                } @else if (change.Type === 'Delete') {
-                                                    <div class="deletion-details">
-                                                        <h4><i class="fa-solid fa-trash"></i> Record Deleted</h4>
-                                                        <p class="deletion-note">This record was permanently removed from the system.</p>
-                                                    </div>
-                                                } @else {
-                                                    <div class="update-details">
-                                                        <h4><i class="fa-solid fa-edit"></i> Fields Changed</h4>
-                                                        <div class="field-changes">
-                                                            @for (fieldChange of getFieldChanges(change); track fieldChange.field) {
-                                                                <div class="field-change">
-                                                                    <div class="field-name">{{ fieldChange.displayName }}</div>
-                                                                    @if (fieldChange.isBooleanField) {
-                                                                        <div class="boolean-change">
-                                                                            <span class="new-value">{{ fieldChange.newValue }}</span>
-                                                                        </div>
-                                                                    } @else if (fieldChange.diffHtml) {
-                                                                        <div class="diff-view">
-                                                                            <div class="diff-content" [innerHTML]="fieldChange.diffHtml"></div>
-                                                                        </div>
-                                                                    } @else {
-                                                                        <div class="value-diff">
-                                                                            <div class="old-value">
-                                                                                <span class="value-label">From:</span>
-                                                                                <span class="value">{{ fieldChange.oldValue || '(empty)' }}</span>
-                                                                            </div>
-                                                                            <div class="diff-arrow">
-                                                                                <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
-                                                                            </div>
-                                                                            <div class="new-value">
-                                                                                <span class="value-label">To:</span>
-                                                                                <span class="value">{{ fieldChange.newValue || '(empty)' }}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    }
-                                                                </div>
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                }
-                                                
-                                                @if (change.Comments) {
-                                                    <div class="change-comments">
-                                                        <h5><i class="fa-solid fa-comment"></i> Comments</h5>
-                                                        <p>{{ change.Comments }}</p>
-                                                    </div>
-                                                }
-                                                
-                                                @if (change.ErrorLog) {
-                                                    <div class="change-errors">
-                                                        <h5><i class="fa-solid fa-exclamation-triangle"></i> Errors</h5>
-                                                        <pre class="error-log">{{ change.ErrorLog }}</pre>
-                                                    </div>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
+                                                </div>
+                                            }
+
+                                            @if (change.Comments) {
+                                                <div class="change-comments">
+                                                    <h5><i class="fa-solid fa-comment"></i> Comments</h5>
+                                                    <p>{{ change.Comments }}</p>
+                                                </div>
+                                            }
+
+                                            @if (change.ErrorLog) {
+                                                <div class="change-errors">
+                                                    <h5><i class="fa-solid fa-exclamation-triangle"></i> Errors</h5>
+                                                    <pre class="error-log">{{ change.ErrorLog }}</pre>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                 </div>
-                            }
-                        </div>
-                    }
-                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
-        }
-    </kendo-window>
-</div>
+            }
+        </div>
+    }
+</mj-slide-panel>

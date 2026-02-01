@@ -55,6 +55,11 @@ export interface CreateLabelParams {
      * Only relevant when IncludeDependencies is true.
      */
     ExcludeEntities?: string[];
+    /**
+     * Optional callback invoked during label creation to report progress.
+     * Useful for long-running operations to display status in the UI.
+     */
+    OnProgress?: CreateLabelProgressCallback;
 }
 
 /**
@@ -230,6 +235,39 @@ export interface FieldChange {
     NewValue: unknown;
     ChangeType: 'Added' | 'Modified' | 'Removed';
 }
+
+// ---------------------------------------------------------------------------
+// Progress callback types
+// ---------------------------------------------------------------------------
+
+/**
+ * Step in the label creation lifecycle, reported via progress callbacks.
+ */
+export type CreateLabelStep = 'initializing' | 'walking_dependencies' | 'capturing_snapshots' | 'finalizing';
+
+/**
+ * Progress update emitted during label creation.
+ * Consumers can use this to display a progress bar and status messages.
+ */
+export interface CreateLabelProgressUpdate {
+    /** Current lifecycle step */
+    Step: CreateLabelStep;
+    /** Human-readable description of what's happening */
+    Message: string;
+    /** Estimated completion percentage (0–100) */
+    Percentage: number;
+    /** Number of records processed so far (only during capturing_snapshots) */
+    RecordsProcessed?: number;
+    /** Total records to process (only during capturing_snapshots) */
+    TotalRecords?: number;
+    /** Entity currently being processed (only during capturing_snapshots) */
+    CurrentEntity?: string;
+}
+
+/**
+ * Callback invoked during label creation to report progress.
+ */
+export type CreateLabelProgressCallback = (progress: CreateLabelProgressUpdate) => void;
 
 // ---------------------------------------------------------------------------
 // Restore types

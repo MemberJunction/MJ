@@ -33,7 +33,6 @@
     "@memberjunction/ng-base-application": "3.4.0",
     "@memberjunction/ng-base-forms": "3.4.0",
     "@memberjunction/ng-bootstrap": "3.4.0",
-    "@memberjunction/ng-compare-records": "3.4.0",
     "@memberjunction/ng-container-directives": "3.4.0",
     "@memberjunction/ng-core-entity-forms": "3.4.0",
     "@memberjunction/ng-dashboards": "3.4.0",

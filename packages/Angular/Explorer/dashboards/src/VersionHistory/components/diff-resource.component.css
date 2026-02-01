@@ -331,6 +331,143 @@
     max-width: 400px;
 }
 
+/* Swap Button */
+.swap-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 50%;
+    background: var(--card-background, #ffffff);
+    color: #6366f1;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.swap-btn:hover {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: #6366f1;
+    transform: rotate(180deg);
+}
+
+/* Diff Results Toolbar */
+.diff-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.diff-search {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+}
+
+.diff-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-tertiary, #9ca3af);
+    font-size: 13px;
+}
+
+.diff-search-input {
+    width: 100%;
+    padding: 8px 12px 8px 36px;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 8px;
+    font-size: 13px;
+    background: var(--card-background, #ffffff);
+    color: var(--text-primary, #1f2937);
+    box-sizing: border-box;
+}
+
+.diff-search-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.diff-filter-pills {
+    display: flex;
+    gap: 4px;
+}
+
+.filter-pill {
+    padding: 6px 14px;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 16px;
+    background: var(--card-background, #ffffff);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary, #6b7280);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.filter-pill:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+}
+
+.filter-pill.active {
+    background: #6366f1;
+    border-color: #6366f1;
+    color: #ffffff;
+}
+
+.filter-pill.change-added.active {
+    background: #059669;
+    border-color: #059669;
+}
+
+.filter-pill.change-removed.active {
+    background: #dc2626;
+    border-color: #dc2626;
+}
+
+.filter-pill.change-modified.active {
+    background: #d97706;
+    border-color: #d97706;
+}
+
+.diff-sort-toggle {
+    display: flex;
+    gap: 2px;
+}
+
+.toggle-btn-sm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 6px;
+    background: var(--card-background, #ffffff);
+    color: var(--text-tertiary, #9ca3af);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.toggle-btn-sm:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+}
+
+.toggle-btn-sm.active {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: #6366f1;
+    color: #6366f1;
+}
+
 @media (max-width: 768px) {
     .diff-summary {
         grid-template-columns: repeat(2, 1fr);

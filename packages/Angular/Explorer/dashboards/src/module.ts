@@ -173,8 +173,7 @@ import { VersionHistoryLabelsResourceComponent } from './VersionHistory/componen
 import { VersionHistoryDiffResourceComponent } from './VersionHistory/components/diff-resource.component';
 import { VersionHistoryRestoreResourceComponent } from './VersionHistory/components/restore-resource.component';
 import { VersionHistoryGraphResourceComponent } from './VersionHistory/components/graph-resource.component';
-import { LabelDetailPanelComponent } from './VersionHistory/components/label-detail-panel.component';
-import { RecordMicroViewComponent } from './VersionHistory/components/record-micro-view.component';
+import { VersionsModule } from '@memberjunction/ng-versions';
 
 
 
@@ -305,9 +304,7 @@ import { RecordMicroViewComponent } from './VersionHistory/components/record-mic
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryRestoreResourceComponent,
-    VersionHistoryGraphResourceComponent,
-    LabelDetailPanelComponent,
-    RecordMicroViewComponent
+    VersionHistoryGraphResourceComponent
   ],
   imports: [
     CommonModule,
@@ -349,7 +346,8 @@ import { RecordMicroViewComponent } from './VersionHistory/components/record-mic
     CredentialsModule,
     SharedPipesModule,
     ActionsModule,
-    MarkdownModule
+    MarkdownModule,
+    VersionsModule
   ],
   providers: [
     AIInstrumentationService,
@@ -445,9 +443,7 @@ import { RecordMicroViewComponent } from './VersionHistory/components/record-mic
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryRestoreResourceComponent,
-    VersionHistoryGraphResourceComponent,
-    LabelDetailPanelComponent,
-    RecordMicroViewComponent
+    VersionHistoryGraphResourceComponent
   ]
 })
 export class DashboardsModule { }

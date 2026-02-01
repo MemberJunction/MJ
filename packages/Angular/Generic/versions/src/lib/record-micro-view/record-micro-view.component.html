@@ -1,4 +1,4 @@
-<!-- Overlay mode (legacy) -->
+<!-- Overlay mode -->
 <ng-container *ngIf="!Inline">
     <div class="micro-backdrop" [class.visible]="IsVisible" (click)="OnClose()"></div>
     <div class="micro-panel" [class.visible]="IsVisible">
@@ -15,7 +15,7 @@
 
 <!-- Shared content template -->
 <ng-template #microContent>
-    <!-- Header -->
+    <!-- Header (overlay mode only) -->
     <div class="micro-header" *ngIf="!Inline">
         <div class="micro-header-info">
             <div class="micro-entity">
@@ -32,7 +32,7 @@
         </button>
     </div>
 
-    <!-- Inline header (simpler, entity + record info) -->
+    <!-- Inline header -->
     <div class="micro-inline-header" *ngIf="Inline">
         <div class="micro-entity">
             <i class="fa-solid fa-table micro-entity-icon"></i>

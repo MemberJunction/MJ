@@ -3,6 +3,7 @@ import { Subject } from 'rxjs';
 import { RunView, Metadata, EntityInfo, CompositeKey, UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { VersionLabelEntityType, VersionLabelItemEntityType, VersionLabelRestoreEntityType, VersionLabelEntity } from '@memberjunction/core-entities';
+import { MicroViewData, FieldChangeView } from '../types';
 
 // =========================================================================
 // Interfaces
@@ -42,28 +43,12 @@ interface ClientRecordDiff {
     FieldChanges: FieldChangeView[];
 }
 
-interface FieldChangeView {
-    FieldName: string;
-    OldValue: string;
-    NewValue: string;
-    ChangeType: 'Added' | 'Modified' | 'Removed';
-}
-
 interface DependencyEntityView {
     EntityName: string;
     RelationshipField: string;
     Children: DependencyEntityView[];
     Depth: number;
     IsExpanded: boolean;
-}
-
-export interface MicroViewData {
-    EntityName: string;
-    EntityID: string;
-    RecordID: string;
-    RecordChangeID: string;
-    FullRecordJSON: Record<string, unknown> | null;
-    FieldDiffs: FieldChangeView[] | null;
 }
 
 interface RecordChangeRow {
@@ -80,11 +65,11 @@ interface RecordChangeRow {
 
 @Component({
     selector: 'mj-label-detail-panel',
-    templateUrl: './label-detail-panel.component.html',
-    styleUrls: ['./label-detail-panel.component.css'],
+    templateUrl: './label-detail.component.html',
+    styleUrls: ['./label-detail.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class LabelDetailPanelComponent implements OnInit, OnDestroy {
+export class MjLabelDetailComponent implements OnInit, OnDestroy {
     @Input() Label!: VersionLabelEntityType;
     @Input() AllLabels: VersionLabelEntityType[] = [];
     @Input() ItemCountMap = new Map<string, number>();
@@ -111,6 +96,8 @@ export class LabelDetailPanelComponent implements OnInit, OnDestroy {
     public SnapshotGroups: SnapshotEntityGroup[] = [];
     public SnapshotViewMode: 'card' | 'list' = 'list';
     public SnapshotSearch = '';
+    public SnapshotSortBy: 'name' | 'count' = 'count';
+    public SnapshotSortDir: 'asc' | 'desc' = 'desc';
     public FilteredSnapshotGroups: SnapshotEntityGroup[] = [];
 
     // Changes tab (lazy)
@@ -299,10 +286,40 @@ export class LabelDetailPanelComponent implements OnInit, OnDestroy {
                 EntityID: items[0]?.RecordChangeID ? '' : '',
                 Items: items,
                 IsExpanded: false
-            }))
-            .sort((a, b) => b.Items.length - a.Items.length);
+            }));
 
-        this.FilteredSnapshotGroups = [...this.SnapshotGroups];
+        this.applySortAndFilter();
+    }
+
+    /** Apply current sort + search filter to snapshot groups. */
+    private applySortAndFilter(): void {
+        const sorted = [...this.SnapshotGroups].sort((a, b) => {
+            if (this.SnapshotSortBy === 'name') {
+                const cmp = a.EntityName.localeCompare(b.EntityName);
+                return this.SnapshotSortDir === 'asc' ? cmp : -cmp;
+            }
+            // sort by count
+            const cmp = a.Items.length - b.Items.length;
+            return this.SnapshotSortDir === 'asc' ? cmp : -cmp;
+        });
+
+        if (!this.SnapshotSearch) {
+            this.FilteredSnapshotGroups = sorted;
+            return;
+        }
+
+        const search = this.SnapshotSearch.toLowerCase();
+        this.FilteredSnapshotGroups = sorted
+            .filter(g => g.EntityName.toLowerCase().includes(search) ||
+                g.Items.some(i => i.RecordID.toLowerCase().includes(search) || i.DisplayName.toLowerCase().includes(search)))
+            .map(g => ({
+                ...g,
+                Items: g.Items.filter(i =>
+                    i.RecordID.toLowerCase().includes(search) ||
+                    i.DisplayName.toLowerCase().includes(search) ||
+                    g.EntityName.toLowerCase().includes(search)
+                )
+            }));
     }
 
     private loadTabData(tab: DetailTab): void {
@@ -504,7 +521,10 @@ export class LabelDetailPanelComponent implements OnInit, OnDestroy {
                 return;
             }
 
-            this.DependencyTree = this.buildDependencyTree(entityInfo, 0, new Set<string>());
+            // Build set of entity names that are actually in the snapshot
+            const snapshotEntityNames = this.buildSnapshotEntityNameSet();
+
+            this.DependencyTree = this.buildDependencyTree(entityInfo, 0, new Set<string>(), snapshotEntityNames);
             this.dependenciesLoaded = true;
         } catch (e) {
             console.error('Error loading dependency data:', e);
@@ -514,7 +534,33 @@ export class LabelDetailPanelComponent implements OnInit, OnDestroy {
         }
     }
 
-    private buildDependencyTree(entity: EntityInfo, depth: number, visited: Set<string>): DependencyEntityView[] {
+    /**
+     * Build a set of entity names that have at least one item in the snapshot.
+     * Used to filter the dependency tree to only show entities with captured records.
+     */
+    private buildSnapshotEntityNameSet(): Set<string> {
+        const names = new Set<string>();
+        for (const item of this.LabelItems) {
+            const entityName = this.resolveEntityName(item.EntityID ?? '');
+            if (entityName && entityName !== 'Unknown') {
+                names.add(entityName);
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Build the dependency tree, but only include entities that are in the
+     * actual snapshot (snapshotEntities). This prevents showing relationship
+     * paths that weren't captured (e.g., Conversation Details when there are
+     * no conversation records in the snapshot).
+     */
+    private buildDependencyTree(
+        entity: EntityInfo,
+        depth: number,
+        visited: Set<string>,
+        snapshotEntities: Set<string>
+    ): DependencyEntityView[] {
         if (depth > 3 || visited.has(entity.Name)) return [];
         visited.add(entity.Name);
 
@@ -527,9 +573,12 @@ export class LabelDetailPanelComponent implements OnInit, OnDestroy {
         );
 
         for (const rel of dependents) {
+            // Only include entities that are actually in the snapshot
+            if (!snapshotEntities.has(rel.RelatedEntity)) continue;
+
             const childEntity = this.metadata.Entities.find(e => e.Name === rel.RelatedEntity);
             const children = childEntity
-                ? this.buildDependencyTree(childEntity, depth + 1, new Set(visited))
+                ? this.buildDependencyTree(childEntity, depth + 1, new Set(visited), snapshotEntities)
                 : [];
 
             deps.push({
@@ -594,22 +643,19 @@ export class LabelDetailPanelComponent implements OnInit, OnDestroy {
 
     public OnSnapshotSearchChange(text: string): void {
         this.SnapshotSearch = text;
-        if (!text) {
-            this.FilteredSnapshotGroups = [...this.SnapshotGroups];
+        this.applySortAndFilter();
+        this.cdr.markForCheck();
+    }
+
+    public OnSnapshotSortChange(sortBy: 'name' | 'count'): void {
+        if (this.SnapshotSortBy === sortBy) {
+            // Toggle direction if clicking same sort
+            this.SnapshotSortDir = this.SnapshotSortDir === 'asc' ? 'desc' : 'asc';
         } else {
-            const search = text.toLowerCase();
-            this.FilteredSnapshotGroups = this.SnapshotGroups
-                .filter(g => g.EntityName.toLowerCase().includes(search) ||
-                    g.Items.some(i => i.RecordID.toLowerCase().includes(search) || i.DisplayName.toLowerCase().includes(search)))
-                .map(g => ({
-                    ...g,
-                    Items: g.Items.filter(i =>
-                        i.RecordID.toLowerCase().includes(search) ||
-                        i.DisplayName.toLowerCase().includes(search) ||
-                        g.EntityName.toLowerCase().includes(search)
-                    )
-                }));
+            this.SnapshotSortBy = sortBy;
+            this.SnapshotSortDir = sortBy === 'name' ? 'asc' : 'desc';
         }
+        this.applySortAndFilter();
         this.cdr.markForCheck();
     }
 
@@ -707,7 +753,7 @@ export class LabelDetailPanelComponent implements OnInit, OnDestroy {
         this.PanelWidthPx = Math.max(this.resizeMinWidth, Math.min(window.innerWidth * 0.65, 1000));
 
         try {
-            const raw = UserInfoEngine.Instance.GetSetting(LabelDetailPanelComponent.PREFS_KEY);
+            const raw = UserInfoEngine.Instance.GetSetting(MjLabelDetailComponent.PREFS_KEY);
             if (raw) {
                 const prefs = JSON.parse(raw) as { PanelWidthPx?: number };
                 if (prefs.PanelWidthPx && prefs.PanelWidthPx >= this.resizeMinWidth) {
@@ -722,7 +768,7 @@ export class LabelDetailPanelComponent implements OnInit, OnDestroy {
     private savePanelPreferences(): void {
         try {
             const prefs = JSON.stringify({ PanelWidthPx: Math.round(this.PanelWidthPx) });
-            UserInfoEngine.Instance.SetSettingDebounced(LabelDetailPanelComponent.PREFS_KEY, prefs);
+            UserInfoEngine.Instance.SetSettingDebounced(MjLabelDetailComponent.PREFS_KEY, prefs);
         } catch {
             // Ignore save errors
         }

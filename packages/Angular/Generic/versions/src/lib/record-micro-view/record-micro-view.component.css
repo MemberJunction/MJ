@@ -1,5 +1,5 @@
 /* ================================================================= */
-/* OVERLAY MODE (Backdrop + Fixed Panel) */
+/* OVERLAY MODE */
 /* ================================================================= */
 
 .micro-backdrop {
@@ -37,7 +37,7 @@
 }
 
 /* ================================================================= */
-/* INLINE MODE (embedded in parent panel) */
+/* INLINE MODE */
 /* ================================================================= */
 
 .micro-inline {
@@ -136,7 +136,6 @@
     padding: 16px 0;
 }
 
-/* Error */
 .micro-error {
     display: flex;
     align-items: center;
@@ -212,7 +211,6 @@
     border-left: 3px solid #ef4444;
 }
 
-/* When showing diffs, 3 columns */
 .micro-field-row:has(.mf-col-old) {
     grid-template-columns: 160px 1fr 1fr;
 }
@@ -275,7 +273,7 @@
 }
 
 /* ================================================================= */
-/* INLINE MODE - Responsive adjustments */
+/* INLINE MODE - Responsive */
 /* ================================================================= */
 
 .micro-inline .micro-field-header,

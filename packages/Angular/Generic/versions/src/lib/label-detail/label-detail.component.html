@@ -246,12 +246,26 @@
                            [ngModel]="SnapshotSearch"
                            (ngModelChange)="OnSnapshotSearchChange($event)" />
                 </div>
+                <div class="snapshot-sort-toggle">
+                    <button class="toggle-btn-sm" [class.active]="SnapshotSortBy === 'name'"
+                            (click)="OnSnapshotSortChange('name')" title="Sort by name">
+                        <i class="fa-solid fa-arrow-down-a-z" *ngIf="SnapshotSortBy === 'name' && SnapshotSortDir === 'asc'"></i>
+                        <i class="fa-solid fa-arrow-up-z-a" *ngIf="SnapshotSortBy === 'name' && SnapshotSortDir === 'desc'"></i>
+                        <i class="fa-solid fa-arrow-down-a-z" *ngIf="SnapshotSortBy !== 'name'"></i>
+                    </button>
+                    <button class="toggle-btn-sm" [class.active]="SnapshotSortBy === 'count'"
+                            (click)="OnSnapshotSortChange('count')" title="Sort by record count">
+                        <i class="fa-solid fa-arrow-down-9-1" *ngIf="SnapshotSortBy === 'count' && SnapshotSortDir === 'desc'"></i>
+                        <i class="fa-solid fa-arrow-up-1-9" *ngIf="SnapshotSortBy === 'count' && SnapshotSortDir === 'asc'"></i>
+                        <i class="fa-solid fa-arrow-down-9-1" *ngIf="SnapshotSortBy !== 'count'"></i>
+                    </button>
+                </div>
                 <div class="snapshot-view-toggle">
                     <button class="toggle-btn-sm" [class.active]="SnapshotViewMode === 'list'" (click)="SnapshotViewMode = 'list'">
                         <i class="fa-solid fa-list"></i>
                     </button>
                     <button class="toggle-btn-sm" [class.active]="SnapshotViewMode === 'card'" (click)="SnapshotViewMode = 'card'">
-                        <i class="fa-solid fa-grid-2"></i>
+                        <i class="fa-solid fa-grip"></i>
                     </button>
                 </div>
             </div>

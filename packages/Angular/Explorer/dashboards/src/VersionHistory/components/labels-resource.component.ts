@@ -2,9 +2,8 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrateg
 import { Subject } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { RunView, Metadata, EntityInfo } from '@memberjunction/core';
-import { ResourceData, VersionLabelEntityType, VersionLabelItemEntityType, VersionLabelEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { GraphQLDataProvider, GraphQLVersionHistoryClient, CreateVersionLabelResult } from '@memberjunction/graphql-dataprovider';
+import { RunView, Metadata } from '@memberjunction/core';
+import { ResourceData, VersionLabelEntityType, VersionLabelItemEntityType, UserInfoEngine } from '@memberjunction/core-entities';
 
 export function LoadVersionHistoryLabelsResource() {
     // Prevents tree-shaking
@@ -21,12 +20,6 @@ interface StatusStat {
     Status: string;
     Count: number;
     Color: string;
-}
-
-interface RecordOption {
-    ID: string;
-    DisplayName: string;
-    Selected: boolean;
 }
 
 interface VersionLabelPreferences {
@@ -84,22 +77,8 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
     // User preferences
     private preferencesLoaded = false;
 
-    // Create Label Dialog
-    public ShowCreateDialog = false;
-    public CreateStep: 'entity' | 'records' | 'details' | 'creating' | 'done' = 'entity';
-    public EntitySearchText = '';
-    public FilteredEntities: EntityInfo[] = [];
-    public SelectedEntity: EntityInfo | null = null;
-    public RecordSearchText = '';
-    public AvailableRecords: RecordOption[] = [];
-    public FilteredRecords: RecordOption[] = [];
-    public IsLoadingRecords = false;
-    public LabelName = '';
-    public LabelDescription = '';
-    public IsCreatingLabel = false;
-    public CreateError = '';
-    public CreatedLabelCount = 0;
-    public CreatedItemCount = 0;
+    // Create Label Wizard
+    public ShowCreateWizard = false;
 
     private metadata = new Metadata();
     private destroy$ = new Subject<void>();
@@ -418,270 +397,23 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
     }
 
     // =======================================================================
-    // Create Label Dialog
+    // Create Label Wizard
     // =======================================================================
 
     public OpenCreateDialog(): void {
-        this.resetCreateDialog();
-        this.ShowCreateDialog = true;
-        this.FilteredEntities = this.getTrackableEntities();
+        this.ShowCreateWizard = true;
         this.cdr.markForCheck();
     }
 
-    public CloseCreateDialog(): void {
-        this.ShowCreateDialog = false;
+    public OnLabelCreated(_event: { LabelCount: number; ItemCount: number }): void {
+        this.ShowCreateWizard = false;
         this.cdr.markForCheck();
-    }
-
-    public OnEntitySearchChange(text: string): void {
-        this.EntitySearchText = text;
-        const search = text.toLowerCase();
-        const all = this.getTrackableEntities();
-        this.FilteredEntities = search
-            ? all.filter(e => e.Name.toLowerCase().includes(search))
-            : all;
-        this.cdr.markForCheck();
-    }
-
-    public SelectEntity(entity: EntityInfo): void {
-        this.SelectedEntity = entity;
-        this.CreateStep = 'records';
-        this.loadEntityRecords(entity);
-    }
-
-    public OnRecordSearchChange(text: string): void {
-        this.RecordSearchText = text;
-        const search = text.toLowerCase();
-        this.FilteredRecords = search
-            ? this.AvailableRecords.filter(r => r.DisplayName.toLowerCase().includes(search))
-            : [...this.AvailableRecords];
-        this.cdr.markForCheck();
-    }
-
-    public ToggleRecordSelection(record: RecordOption): void {
-        record.Selected = !record.Selected;
-        this.cdr.markForCheck();
-    }
-
-    public SelectAllRecords(): void {
-        for (const r of this.FilteredRecords) {
-            r.Selected = true;
-        }
-        this.cdr.markForCheck();
-    }
-
-    public DeselectAllRecords(): void {
-        for (const r of this.AvailableRecords) {
-            r.Selected = false;
-        }
-        this.cdr.markForCheck();
-    }
-
-    public get SelectedRecordCount(): number {
-        return this.AvailableRecords.filter(r => r.Selected).length;
-    }
-
-    public GoToDetailsStep(): void {
-        if (this.SelectedRecordCount === 0) return;
-        this.CreateStep = 'details';
-        this.LabelName = this.suggestLabelName();
-        this.cdr.markForCheck();
-    }
-
-    public GoBackToRecords(): void {
-        this.CreateStep = 'records';
-        this.cdr.markForCheck();
-    }
-
-    public GoBackToEntity(): void {
-        this.CreateStep = 'entity';
-        this.SelectedEntity = null;
-        this.AvailableRecords = [];
-        this.FilteredRecords = [];
-        this.cdr.markForCheck();
-    }
-
-    public async CreateLabels(): Promise<void> {
-        if (!this.SelectedEntity || !this.LabelName.trim()) return;
-
-        this.IsCreatingLabel = true;
-        this.CreateStep = 'creating';
-        this.CreateError = '';
-        this.CreatedLabelCount = 0;
-        this.CreatedItemCount = 0;
-        this.cdr.markForCheck();
-
-        try {
-            const selected = this.AvailableRecords.filter(r => r.Selected);
-            const md = new Metadata();
-
-            if (selected.length === 1) {
-                await this.createSingleLabel(md, selected[0]);
-            } else {
-                await this.createGroupedLabels(md, selected);
-            }
-
-            this.CreateStep = 'done';
-        } catch (e: unknown) {
-            this.CreateError = e instanceof Error ? e.message : String(e);
-            this.CreateStep = 'done';
-        } finally {
-            this.IsCreatingLabel = false;
-            this.cdr.markForCheck();
-        }
-    }
-
-    public FinishCreate(): void {
-        this.CloseCreateDialog();
         this.LoadData();
     }
 
-    // =======================================================================
-    // Create helpers
-    // =======================================================================
-
-    private async createSingleLabel(md: Metadata, record: RecordOption): Promise<void> {
-        const vhClient = new GraphQLVersionHistoryClient(GraphQLDataProvider.Instance);
-        const result = await vhClient.CreateLabel({
-            Name: this.LabelName.trim(),
-            Description: this.LabelDescription.trim() || undefined,
-            Scope: 'Record',
-            EntityName: this.SelectedEntity!.Name,
-            RecordKeys: [{ Key: 'ID', Value: record.ID }],
-            IncludeDependencies: true,
-        });
-
-        if (!result.Success) {
-            throw new Error(result.Error ?? 'Failed to create version label');
-        }
-
-        this.CreatedLabelCount = 1;
-        this.CreatedItemCount = result.ItemsCaptured ?? 0;
-    }
-
-    private async createGroupedLabels(md: Metadata, records: RecordOption[]): Promise<void> {
-        const vhClient = new GraphQLVersionHistoryClient(GraphQLDataProvider.Instance);
-
-        // Create parent container label (no RecordKey → acts as a grouping label)
-        const parentResult = await vhClient.CreateLabel({
-            Name: this.LabelName.trim(),
-            Description: this.LabelDescription.trim() || undefined,
-            Scope: 'Entity',
-            EntityName: this.SelectedEntity!.Name,
-        });
-
-        if (!parentResult.Success) {
-            throw new Error(parentResult.Error ?? 'Failed to create parent version label');
-        }
-
-        this.CreatedLabelCount = 1;
-        this.CreatedItemCount = parentResult.ItemsCaptured ?? 0;
+    public OnCreateWizardCancel(): void {
+        this.ShowCreateWizard = false;
         this.cdr.markForCheck();
-
-        // Create child labels for each selected record
-        for (const record of records) {
-            const childResult = await vhClient.CreateLabel({
-                Name: `${this.LabelName.trim()} — ${record.DisplayName}`,
-                Description: this.LabelDescription.trim() || undefined,
-                Scope: 'Record',
-                EntityName: this.SelectedEntity!.Name,
-                RecordKeys: [{ Key: 'ID', Value: record.ID }],
-                ParentID: parentResult.LabelID,
-                IncludeDependencies: true,
-            });
-
-            if (!childResult.Success) {
-                console.error(`Failed to create child label for record ${record.ID}: ${childResult.Error}`);
-                continue;
-            }
-
-            this.CreatedLabelCount++;
-            this.CreatedItemCount += childResult.ItemsCaptured ?? 0;
-            this.cdr.markForCheck();
-        }
-    }
-
-    private async loadEntityRecords(entity: EntityInfo): Promise<void> {
-        this.IsLoadingRecords = true;
-        this.AvailableRecords = [];
-        this.FilteredRecords = [];
-        this.RecordSearchText = '';
-        this.cdr.markForCheck();
-
-        try {
-            const rv = new RunView();
-            const nameField = this.findNameField(entity);
-            const fields = nameField ? ['ID', nameField] : ['ID'];
-
-            const result = await rv.RunView<Record<string, unknown>>({
-                EntityName: entity.Name,
-                Fields: fields,
-                OrderBy: nameField ?? 'ID',
-                MaxRows: 500,
-                ResultType: 'simple'
-            });
-
-            if (result.Success) {
-                this.AvailableRecords = result.Results.map(r => ({
-                    ID: String(r['ID'] ?? ''),
-                    DisplayName: nameField
-                        ? String(r[nameField] ?? r['ID'] ?? '')
-                        : String(r['ID'] ?? ''),
-                    Selected: false
-                }));
-                this.FilteredRecords = [...this.AvailableRecords];
-            }
-        } catch (error) {
-            console.error('Error loading entity records:', error);
-        } finally {
-            this.IsLoadingRecords = false;
-            this.cdr.markForCheck();
-        }
-    }
-
-    private findNameField(entity: EntityInfo): string | null {
-        // Look for common display name fields in order of preference
-        const candidates = ['Name', 'Title', 'DisplayName', 'Label', 'Subject', 'Description'];
-        for (const name of candidates) {
-            const field = entity.Fields.find(f =>
-                f.Name.toLowerCase() === name.toLowerCase() && f.TSType === 'string'
-            );
-            if (field) return field.Name;
-        }
-        // Fall back to the entity's NameField if defined
-        return null;
-    }
-
-    private getTrackableEntities(): EntityInfo[] {
-        return this.metadata.Entities
-            .filter(e => e.TrackRecordChanges)
-            .sort((a, b) => a.Name.localeCompare(b.Name));
-    }
-
-    private suggestLabelName(): string {
-        const entityName = this.SelectedEntity?.Name ?? '';
-        const selected = this.AvailableRecords.filter(r => r.Selected);
-        if (selected.length === 1) {
-            return `${selected[0].DisplayName} v1.0`;
-        }
-        const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        return `${entityName} — ${date}`;
-    }
-
-    private resetCreateDialog(): void {
-        this.CreateStep = 'entity';
-        this.EntitySearchText = '';
-        this.SelectedEntity = null;
-        this.RecordSearchText = '';
-        this.AvailableRecords = [];
-        this.FilteredRecords = [];
-        this.IsLoadingRecords = false;
-        this.LabelName = '';
-        this.LabelDescription = '';
-        this.IsCreatingLabel = false;
-        this.CreateError = '';
-        this.CreatedLabelCount = 0;
-        this.CreatedItemCount = 0;
     }
 
     // =======================================================================

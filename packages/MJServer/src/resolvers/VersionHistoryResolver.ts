@@ -1,10 +1,11 @@
-import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Int, InputType } from 'type-graphql';
+import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Int, InputType, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { LogError, LogStatus, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { VersionHistoryEngine } from '@memberjunction/version-history';
-import { CreateLabelParams, VersionLabelScope } from '@memberjunction/version-history';
+import { CreateLabelParams, CreateLabelProgressUpdate, VersionLabelScope } from '@memberjunction/version-history';
 import { KeyValuePairInput } from '../generic/KeyValuePairInput.js';
+import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 
 // =========================================================================
 // GraphQL types
@@ -89,6 +90,8 @@ export class VersionHistoryResolver extends ResolverBase {
     @Mutation(() => CreateLabelResultOutput)
     async CreateVersionLabel(
         @Arg('input') input: CreateVersionLabelInput,
+        @Arg('sessionId', { nullable: true }) sessionId: string,
+        @PubSub() pubSub: PubSubEngine,
         @Ctx() context: AppContext
     ): Promise<CreateLabelResultOutput> {
         const contextUser = this.GetUserFromPayload(context.userPayload);
@@ -110,6 +113,10 @@ export class VersionHistoryResolver extends ResolverBase {
                 );
             }
 
+            // Build progress callback that publishes to PubSub
+            const resolvedSessionId = sessionId ?? context.userPayload.sessionId;
+            const onProgress = this.buildProgressCallback(pubSub, resolvedSessionId);
+
             const params: CreateLabelParams = {
                 Name: input.Name,
                 Description: input.Description,
@@ -121,6 +128,7 @@ export class VersionHistoryResolver extends ResolverBase {
                 IncludeDependencies: input.IncludeDependencies,
                 MaxDepth: input.MaxDepth,
                 ExcludeEntities: input.ExcludeEntities,
+                OnProgress: onProgress,
             };
 
             const result = await engine.CreateLabel(params, contextUser);
@@ -144,5 +152,26 @@ export class VersionHistoryResolver extends ResolverBase {
             LogError(`VersionHistory resolver: CreateLabel failed: ${msg}`);
             return { Success: false, Error: msg };
         }
+    }
+
+    /**
+     * Build a progress callback that publishes CreateLabelProgress messages
+     * to the PubSub system for real-time client consumption.
+     */
+    private buildProgressCallback(
+        pubSub: PubSubEngine,
+        sessionId: string
+    ): (progress: CreateLabelProgressUpdate) => void {
+        return (progress: CreateLabelProgressUpdate) => {
+            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+                message: JSON.stringify({
+                    resolver: 'VersionHistoryResolver',
+                    type: 'CreateLabelProgress',
+                    status: 'ok',
+                    data: progress,
+                }),
+                sessionId,
+            });
+        };
     }
 }

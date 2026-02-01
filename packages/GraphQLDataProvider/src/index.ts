@@ -37,6 +37,7 @@ export type {
 export { GraphQLVersionHistoryClient } from './graphQLVersionHistoryClient';
 export type {
     CreateVersionLabelParams,
+    CreateVersionLabelProgress,
     CreateVersionLabelResult
 } from './graphQLVersionHistoryClient';
 

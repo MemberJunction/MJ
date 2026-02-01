@@ -7,6 +7,24 @@ import { gql } from 'graphql-request';
 // =========================================================================
 
 /**
+ * Progress update received during label creation.
+ */
+export interface CreateVersionLabelProgress {
+    /** Current lifecycle step */
+    Step: 'initializing' | 'walking_dependencies' | 'capturing_snapshots' | 'finalizing';
+    /** Human-readable description of what's happening */
+    Message: string;
+    /** Estimated completion percentage (0–100) */
+    Percentage: number;
+    /** Number of records processed so far */
+    RecordsProcessed?: number;
+    /** Total records to process */
+    TotalRecords?: number;
+    /** Entity currently being processed */
+    CurrentEntity?: string;
+}
+
+/**
  * Parameters for creating a version label via the server-side VersionHistoryEngine.
  */
 export interface CreateVersionLabelParams {
@@ -30,6 +48,11 @@ export interface CreateVersionLabelParams {
     MaxDepth?: number;
     /** Entity names to exclude from dependency traversal */
     ExcludeEntities?: string[];
+    /**
+     * Optional callback invoked with progress updates during label creation.
+     * Requires an active PushStatusUpdates subscription (handled automatically).
+     */
+    OnProgress?: (progress: CreateVersionLabelProgress) => void;
 }
 
 /**
@@ -90,12 +113,35 @@ export class GraphQLVersionHistoryClient {
      * 1. Creates the VersionLabel record
      * 2. Captures snapshots (VersionLabelItems) based on scope
      * 3. Updates the label with item count and duration metrics
+     *
+     * If `params.OnProgress` is provided, subscribes to PushStatusUpdates
+     * for real-time progress during the operation.
      */
     public async CreateLabel(params: CreateVersionLabelParams): Promise<CreateVersionLabelResult> {
+        let subscription: { unsubscribe: () => void } | undefined;
+
         try {
+            // Subscribe to progress updates if callback provided
+            if (params.OnProgress) {
+                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
+                    .subscribe((message: string) => {
+                        try {
+                            const parsed = JSON.parse(message);
+                            if (parsed.resolver === 'VersionHistoryResolver' &&
+                                parsed.type === 'CreateLabelProgress' &&
+                                parsed.status === 'ok' &&
+                                parsed.data) {
+                                params.OnProgress!(parsed.data as CreateVersionLabelProgress);
+                            }
+                        } catch (_e) {
+                            // Ignore parse errors on progress messages
+                        }
+                    });
+            }
+
             const mutation = gql`
-                mutation CreateVersionLabel($input: CreateVersionLabelInput!) {
-                    CreateVersionLabel(input: $input) {
+                mutation CreateVersionLabel($input: CreateVersionLabelInput!, $sessionId: String) {
+                    CreateVersionLabel(input: $input, sessionId: $sessionId) {
                         Success
                         LabelID
                         LabelName
@@ -112,7 +158,8 @@ export class GraphQLVersionHistoryClient {
             `;
 
             const variables = {
-                input: this.buildInput(params)
+                input: this.buildInput(params),
+                sessionId: this._dataProvider.sessionId,
             };
 
             const result = await this._dataProvider.ExecuteGQL(mutation, variables);
@@ -121,6 +168,11 @@ export class GraphQLVersionHistoryClient {
             const msg = e instanceof Error ? e.message : String(e);
             LogError(`GraphQLVersionHistoryClient.CreateLabel error: ${msg}`);
             return { Success: false, Error: msg };
+        } finally {
+            // Always clean up subscription
+            if (subscription) {
+                subscription.unsubscribe();
+            }
         }
     }
 

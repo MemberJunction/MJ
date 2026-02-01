@@ -59,18 +59,68 @@
   font-style: italic;
 }
 
-/* Timeline Container */
-.timeline-container {
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 0.5rem;
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  min-height: 400px;
 }
 
+.empty-state-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e8edf2, #f0f4f8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.empty-state-icon i {
+  font-size: 2rem;
+  color: #94a3b8;
+}
+
+.empty-state-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 0.75rem 0;
+}
+
+.empty-state-description {
+  font-size: 0.95rem;
+  color: #64748b;
+  line-height: 1.6;
+  max-width: 320px;
+  margin: 0 0 1.5rem 0;
+}
+
+.empty-state-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #f1f5f9;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.empty-state-hint i {
+  color: #94a3b8;
+}
+
+/* No filtered results */
 .no-changes-message {
   text-align: center;
   padding: 3rem 1rem;
   color: #6c757d;
-  font-size: 1.1rem;
 }
 
 .no-changes-message i {
@@ -78,6 +128,37 @@
   font-size: 2rem;
   margin-bottom: 1rem;
   color: #adb5bd;
+}
+
+.no-changes-message p {
+  font-size: 1rem;
+  margin: 0 0 1rem 0;
+}
+
+.clear-filters-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  background: white;
+  color: #495057;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clear-filters-btn:hover {
+  background: #f8f9fa;
+  border-color: #adb5bd;
+}
+
+/* Timeline Container */
+.timeline-container {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 0.5rem;
 }
 
 /* Timeline */
@@ -444,133 +525,71 @@
   margin-bottom: 0;
 }
 
-/* Diff View Styles - Scoped to this component */
-mj-record-changes .diff-view,
-.record-changes-container .diff-view {
-  margin-top: 0.5rem !important;
+/* Diff View Styles */
+.diff-view {
+  margin-top: 0.5rem;
   border: 1px dashed #28a745;
   border-radius: 4px;
   padding: 0.25rem;
 }
 
-mj-record-changes .diff-content,
-.record-changes-container .diff-content {
-  background: #ffffff !important;
-  border: 2px solid #007bff !important;
+.diff-content {
+  background: #ffffff;
+  border: 2px solid #007bff;
   border-radius: 6px;
-  padding: 0.75rem !important;
-  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace !important;
-  font-size: 0.85rem !important;
-  line-height: 1.45 !important;
+  padding: 0.75rem;
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  font-size: 0.85rem;
+  line-height: 1.45;
   overflow-x: auto;
   min-height: 2rem;
 }
 
-mj-record-changes .diff-container,
-.record-changes-container .diff-container {
+.diff-container {
   word-wrap: break-word;
   white-space: pre-wrap;
 }
 
-mj-record-changes .diff-added,
-.record-changes-container .diff-added {
-  background-color: #d1f5d3 !important;
-  color: #22863a !important;
-  text-decoration: none !important;
+.diff-added {
+  background-color: #d1f5d3;
+  color: #22863a;
+  text-decoration: none;
   border-radius: 3px;
-  padding: 2px 4px !important;
-  font-weight: 600 !important;
+  padding: 2px 4px;
+  font-weight: 600;
   display: inline;
   border: 1px solid #28a745;
-}
-
-mj-record-changes .diff-removed,
-.record-changes-container .diff-removed {
-  background-color: #ffeef0 !important;
-  color: #d73a49 !important;
-  text-decoration: line-through !important;
-  border-radius: 3px;
-  padding: 2px 4px !important;
-  font-weight: 600 !important;
-  display: inline;
-  border: 1px solid #dc3545;
-}
-
-mj-record-changes .diff-unchanged,
-.record-changes-container .diff-unchanged {
-  color: #24292e !important;
-  display: inline;
-}
-
-/* Enhanced diff styling for better readability */
-mj-record-changes .diff-added:not(:empty)::before,
-.record-changes-container .diff-added:not(:empty)::before {
-  content: '';
-  background: #28a745;
-  width: 3px;
-  height: 100%;
-  position: absolute;
-  left: -1px;
-  border-radius: 1px;
-}
-
-mj-record-changes .diff-removed:not(:empty)::before,
-.record-changes-container .diff-removed:not(:empty)::before {
-  content: '';
-  background: #dc3545;
-  width: 3px;
-  height: 100%;
-  position: absolute;
-  left: -1px;
-  border-radius: 1px;
-}
-
-mj-record-changes .diff-added, 
-mj-record-changes .diff-removed,
-.record-changes-container .diff-added, 
-.record-changes-container .diff-removed {
   position: relative;
   margin: 0 1px;
+}
+
+.diff-removed {
+  background-color: #ffeef0;
+  color: #d73a49;
+  text-decoration: line-through;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-weight: 600;
+  display: inline;
+  border: 1px solid #dc3545;
+  position: relative;
+  margin: 0 1px;
+}
+
+.diff-unchanged {
+  color: #24292e;
   display: inline;
 }
 
 /* Hover effects for diff elements */
-mj-record-changes .diff-added:hover,
-.record-changes-container .diff-added:hover {
-  background-color: #c3f0c5 !important;
+.diff-added:hover {
+  background-color: #c3f0c5;
   box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.15);
 }
 
-mj-record-changes .diff-removed:hover,
-.record-changes-container .diff-removed:hover {
-  background-color: #ffd6dd !important;
+.diff-removed:hover {
+  background-color: #ffd6dd;
   box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.15);
-}
-
-/* Multi-line diff styling */
-mj-record-changes .diff-content .diff-added,
-mj-record-changes .diff-content .diff-removed,
-.record-changes-container .diff-content .diff-added,
-.record-changes-container .diff-content .diff-removed {
-  padding: 1px 3px;
-  border-radius: 3px;
-}
-
-mj-record-changes .diff-content .diff-added + .diff-added,
-mj-record-changes .diff-content .diff-removed + .diff-removed,
-.record-changes-container .diff-content .diff-added + .diff-added,
-.record-changes-container .diff-content .diff-removed + .diff-removed {
-  margin-left: 0;
-}
-
-/* Word diff specific styling */
-mj-record-changes .diff-container.word-diff .diff-added,
-mj-record-changes .diff-container.word-diff .diff-removed,
-.record-changes-container .diff-container.word-diff .diff-added,
-.record-changes-container .diff-container.word-diff .diff-removed {
-  padding: 2px 4px;
-  margin: 0 1px;
-  border-radius: 4px;
 }
 
 /* Comments and Errors */
@@ -608,52 +627,51 @@ mj-record-changes .diff-container.word-diff .diff-removed,
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .search-input, .filter-select {
     width: 100%;
   }
-  
+
   .change-header {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .change-meta {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.25rem;
   }
-  
+
   .value-diff {
     grid-template-columns: 1fr;
     gap: 0.5rem;
   }
-  
+
   .diff-arrow {
     justify-self: center;
     transform: rotate(90deg);
   }
-  
+
   .timeline {
     padding-left: 1.5rem;
   }
-  
+
   .timeline-marker {
     left: -1.5rem;
   }
-  
+
   .timeline-icon {
     width: 2rem;
     height: 2rem;
     font-size: 0.8rem;
   }
-  
-  /* Responsive diff view */
+
   .diff-content {
     font-size: 0.8rem;
     padding: 0.5rem;
   }
-  
+
   .diff-added, .diff-removed {
     padding: 1px 2px;
   }
@@ -663,11 +681,11 @@ mj-record-changes .diff-container.word-diff .diff-removed,
   .record-changes-container {
     padding: 0.5rem;
   }
-  
+
   .timeline-content {
     padding: 0.75rem;
   }
-  
+
   .field-change {
     padding: 0.5rem;
   }

@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
 import { RunView, Metadata, EntityInfo } from '@memberjunction/core';
-import { MicroViewData } from './label-detail-panel.component';
+import { MicroViewData } from '../types';
 
 interface FieldDisplay {
     Name: string;
@@ -21,7 +21,7 @@ interface RecordChangeSimple {
     styleUrls: ['./record-micro-view.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class RecordMicroViewComponent implements OnInit {
+export class MjRecordMicroViewComponent implements OnInit {
     @Input() Data!: MicroViewData;
     @Input() Inline = false;
     @Output() Close = new EventEmitter<void>();
@@ -37,7 +37,6 @@ export class RecordMicroViewComponent implements OnInit {
 
     ngOnInit(): void {
         if (this.Inline) {
-            // No animation needed for inline mode
             this.IsVisible = true;
         } else {
             Promise.resolve().then(() => {
@@ -50,7 +49,6 @@ export class RecordMicroViewComponent implements OnInit {
 
     @HostListener('document:keydown.escape')
     public OnEscapeKey(): void {
-        // Only handle escape in overlay mode; parent handles it in inline mode
         if (!this.Inline) {
             this.OnClose();
         }
@@ -58,7 +56,6 @@ export class RecordMicroViewComponent implements OnInit {
 
     public OnClose(): void {
         if (this.Inline) {
-            // Inline mode: emit immediately, no animation
             this.Close.emit();
         } else {
             this.IsVisible = false;
@@ -67,6 +64,27 @@ export class RecordMicroViewComponent implements OnInit {
         }
     }
 
+    public GetTypeIcon(type: string): string {
+        const icons: Record<string, string> = {
+            'uniqueidentifier': 'fa-solid fa-fingerprint',
+            'datetime': 'fa-solid fa-calendar',
+            'boolean': 'fa-solid fa-toggle-on',
+            'number': 'fa-solid fa-hashtag',
+            'string': 'fa-solid fa-font',
+            'object': 'fa-solid fa-brackets-curly',
+            'null': 'fa-solid fa-circle-xmark'
+        };
+        return icons[type.toLowerCase()] ?? 'fa-solid fa-font';
+    }
+
+    public get HasDiffs(): boolean {
+        return this.Data.FieldDiffs != null && this.Data.FieldDiffs.length > 0;
+    }
+
+    // =========================================================================
+    // Data loading
+    // =========================================================================
+
     private async loadRecordData(): Promise<void> {
         this.IsLoading = true;
         this.cdr.markForCheck();
@@ -74,7 +92,6 @@ export class RecordMicroViewComponent implements OnInit {
         try {
             let recordData = this.Data.FullRecordJSON;
 
-            // Load from RecordChange if not provided
             if (!recordData && this.Data.RecordChangeID) {
                 recordData = await this.loadRecordChangeJson(this.Data.RecordChangeID);
             }
@@ -110,13 +127,16 @@ export class RecordMicroViewComponent implements OnInit {
         return null;
     }
 
+    // =========================================================================
+    // Field building
+    // =========================================================================
+
     private buildFieldList(data: Record<string, unknown>): FieldDisplay[] {
         const entityInfo = this.findEntityInfo();
         const diffMap = this.buildDiffMap();
         const fields: FieldDisplay[] = [];
 
         for (const [key, value] of Object.entries(data)) {
-            // Skip MJ system fields
             if (key.startsWith('__mj_')) continue;
 
             const fieldMeta = entityInfo?.Fields.find(f => f.Name === key);
@@ -132,7 +152,6 @@ export class RecordMicroViewComponent implements OnInit {
             });
         }
 
-        // Sort: ID fields first, then alphabetically
         return fields.sort((a, b) => {
             if (a.Name === 'ID') return -1;
             if (b.Name === 'ID') return 1;
@@ -162,29 +181,24 @@ export class RecordMicroViewComponent implements OnInit {
         return map;
     }
 
+    // =========================================================================
+    // Formatting helpers
+    // =========================================================================
+
     private formatValue(value: unknown): string {
         if (value == null) return 'null';
         if (typeof value === 'boolean') return value ? 'true' : 'false';
         if (typeof value === 'number') return String(value);
         if (typeof value === 'string') {
-            // Check if it looks like a date
-            if (this.isDateString(value)) {
-                return this.formatDate(value);
-            }
-            // Truncate very long strings
-            if (value.length > 200) {
-                return value.substring(0, 200) + '...';
-            }
+            if (this.isDateString(value)) return this.formatDate(value);
+            if (value.length > 200) return value.substring(0, 200) + '...';
             return value;
         }
-        if (typeof value === 'object') {
-            return JSON.stringify(value, null, 2);
-        }
+        if (typeof value === 'object') return JSON.stringify(value, null, 2);
         return String(value);
     }
 
     private isDateString(value: string): boolean {
-        // ISO date pattern
         return /^\d{4}-\d{2}-\d{2}T/.test(value);
     }
 
@@ -210,22 +224,5 @@ export class RecordMicroViewComponent implements OnInit {
             return 'string';
         }
         return 'object';
-    }
-
-    public GetTypeIcon(type: string): string {
-        const icons: Record<string, string> = {
-            'uniqueidentifier': 'fa-solid fa-fingerprint',
-            'datetime': 'fa-solid fa-calendar',
-            'boolean': 'fa-solid fa-toggle-on',
-            'number': 'fa-solid fa-hashtag',
-            'string': 'fa-solid fa-font',
-            'object': 'fa-solid fa-brackets-curly',
-            'null': 'fa-solid fa-circle-xmark'
-        };
-        return icons[type.toLowerCase()] ?? 'fa-solid fa-font';
-    }
-
-    public get HasDiffs(): boolean {
-        return this.Data.FieldDiffs != null && this.Data.FieldDiffs.length > 0;
     }
 }

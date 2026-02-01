@@ -1,12 +1,14 @@
 import {
     CompositeKey,
     UserInfo,
+    LogError,
     LogStatus,
 } from '@memberjunction/core';
 import { VersionLabelEntity } from '@memberjunction/core-entities';
 import {
     CaptureResult,
     CreateLabelParams,
+    CreateLabelProgressCallback,
     DependencyNode,
     DiffResult,
     LabelFilter,
@@ -81,6 +83,15 @@ export class VersionHistoryEngine {
         params: CreateLabelParams,
         contextUser: UserInfo
     ): Promise<{ Label: VersionLabelEntity; CaptureResult: CaptureResult }> {
+        const onProgress = params.OnProgress;
+
+        // Step: Initializing
+        this.emitProgress(onProgress, {
+            Step: 'initializing',
+            Message: 'Creating version label...',
+            Percentage: 5,
+        });
+
         // Create the label record
         const label = await this.LabelMgr.CreateLabel(params, contextUser);
         const labelId = label.ID;
@@ -106,7 +117,8 @@ export class VersionHistoryEngine {
                     params.RecordKey!,
                     params.IncludeDependencies ?? true,
                     walkOptions,
-                    contextUser
+                    contextUser,
+                    onProgress
                 );
                 break;
             }
@@ -126,11 +138,25 @@ export class VersionHistoryEngine {
                 throw new Error(`Unknown scope: ${scope}`);
         }
 
+        // Step: Finalizing
+        this.emitProgress(onProgress, {
+            Step: 'finalizing',
+            Message: `Saving label metrics (${captureResult.ItemsCaptured} items)...`,
+            Percentage: 95,
+        });
+
         // Update label with metrics
         const durationMs = Date.now() - startTime;
         label.ItemCount = captureResult.ItemsCaptured;
         label.CreationDurationMS = durationMs;
         await label.Save();
+
+        // Step: Complete
+        this.emitProgress(onProgress, {
+            Step: 'finalizing',
+            Message: `Label created with ${captureResult.ItemsCaptured} items in ${durationMs}ms`,
+            Percentage: 100,
+        });
 
         LogStatus(
             `VersionHistory: Label '${params.Name}' created with ${captureResult.ItemsCaptured} items ` +
@@ -138,6 +164,21 @@ export class VersionHistoryEngine {
         );
 
         return { Label: label, CaptureResult: captureResult };
+    }
+
+    /** Safely invoke the progress callback if provided. */
+    private emitProgress(
+        callback: CreateLabelProgressCallback | undefined,
+        update: { Step: import('./types').CreateLabelStep; Message: string; Percentage: number; RecordsProcessed?: number; TotalRecords?: number; CurrentEntity?: string }
+    ): void {
+        if (callback) {
+            try {
+                callback(update);
+            } catch (e) {
+                // Never let a callback error break the engine
+                LogError(`VersionHistory: Progress callback error: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
     }
 
     /**

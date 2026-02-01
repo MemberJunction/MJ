@@ -54,10 +54,17 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
 
     // Diff results
     public EntityGroups: EntityGroupView[] = [];
+    public FilteredEntityGroups: EntityGroupView[] = [];
     public TotalAdded = 0;
     public TotalRemoved = 0;
     public TotalModified = 0;
     public TotalUnchanged = 0;
+
+    // Diff result filtering/sorting
+    public DiffSortBy: 'name' | 'count' = 'count';
+    public DiffSortDir: 'asc' | 'desc' = 'desc';
+    public DiffFilterType: 'all' | 'added' | 'removed' | 'modified' = 'all';
+    public DiffSearch = '';
 
     // UI state
     public ExpandedEntities = new Set<string>();
@@ -302,6 +309,8 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             };
         }).filter(g => g.Items.length > 0)
           .sort((a, b) => b.Items.length - a.Items.length);
+
+        this.applySortAndFilterDiff();
     }
 
     private resolveEntityName(entityId: string): string {
@@ -368,5 +377,96 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
 
     public get TotalChanges(): number {
         return this.TotalAdded + this.TotalRemoved + this.TotalModified;
+    }
+
+    // =========================================================================
+    // Label selection helpers
+    // =========================================================================
+
+    /** From dropdown excludes the currently selected To label. */
+    public get FilteredFromLabels(): VersionLabelEntityType[] {
+        if (!this.ToLabelId) return this.AvailableLabels;
+        return this.AvailableLabels.filter(l => l.ID !== this.ToLabelId);
+    }
+
+    /** To dropdown excludes the currently selected From label. */
+    public get FilteredToLabels(): VersionLabelEntityType[] {
+        if (!this.FromLabelId) return this.AvailableLabels;
+        return this.AvailableLabels.filter(l => l.ID !== this.FromLabelId);
+    }
+
+    /** Swap From and To label selections. */
+    public SwapLabels(): void {
+        const temp = this.FromLabelId;
+        this.FromLabelId = this.ToLabelId;
+        this.ToLabelId = temp;
+        this.cdr.markForCheck();
+    }
+
+    // =========================================================================
+    // Diff result sorting & filtering
+    // =========================================================================
+
+    public OnDiffSortChange(sortBy: 'name' | 'count'): void {
+        if (this.DiffSortBy === sortBy) {
+            this.DiffSortDir = this.DiffSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.DiffSortBy = sortBy;
+            this.DiffSortDir = sortBy === 'name' ? 'asc' : 'desc';
+        }
+        this.applySortAndFilterDiff();
+        this.cdr.markForCheck();
+    }
+
+    public OnDiffFilterChange(filterType: 'all' | 'added' | 'removed' | 'modified'): void {
+        this.DiffFilterType = filterType;
+        this.applySortAndFilterDiff();
+        this.cdr.markForCheck();
+    }
+
+    public OnDiffSearchChange(text: string): void {
+        this.DiffSearch = text;
+        this.applySortAndFilterDiff();
+        this.cdr.markForCheck();
+    }
+
+    private applySortAndFilterDiff(): void {
+        let groups = [...this.EntityGroups];
+
+        // Filter by change type
+        if (this.DiffFilterType !== 'all') {
+            groups = groups.map(g => ({
+                ...g,
+                Items: g.Items.filter(i => i.ChangeType.toLowerCase() === this.DiffFilterType)
+            })).filter(g => g.Items.length > 0);
+        }
+
+        // Filter by search text
+        if (this.DiffSearch) {
+            const search = this.DiffSearch.toLowerCase();
+            groups = groups
+                .filter(g => g.EntityName.toLowerCase().includes(search) ||
+                    g.Items.some(i => i.RecordID.toLowerCase().includes(search)))
+                .map(g => ({
+                    ...g,
+                    Items: g.Items.filter(i =>
+                        i.RecordID.toLowerCase().includes(search) ||
+                        g.EntityName.toLowerCase().includes(search)
+                    )
+                }))
+                .filter(g => g.Items.length > 0);
+        }
+
+        // Sort
+        groups.sort((a, b) => {
+            if (this.DiffSortBy === 'name') {
+                const cmp = a.EntityName.localeCompare(b.EntityName);
+                return this.DiffSortDir === 'asc' ? cmp : -cmp;
+            }
+            const cmp = a.Items.length - b.Items.length;
+            return this.DiffSortDir === 'asc' ? cmp : -cmp;
+        });
+
+        this.FilteredEntityGroups = groups;
     }
 }
