@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-workspace-initializer",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "MemberJunction: Workspace Initialization Service and Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -30,13 +30,13 @@
     "@angular/router": "18.2.14"
   },
   "dependencies": {
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/global": "3.3.0",
-    "@memberjunction/graphql-dataprovider": "3.3.0",
-    "@memberjunction/ng-auth-services": "3.3.0",
-    "@memberjunction/ng-explorer-core": "3.3.0",
-    "@memberjunction/ng-shared": "3.3.0",
-    "@memberjunction/ng-shared-generic": "3.3.0",
+    "@memberjunction/core": "3.4.0",
+    "@memberjunction/global": "3.4.0",
+    "@memberjunction/graphql-dataprovider": "3.4.0",
+    "@memberjunction/ng-auth-services": "3.4.0",
+    "@memberjunction/ng-explorer-core": "3.4.0",
+    "@memberjunction/ng-shared": "3.4.0",
+    "@memberjunction/ng-shared-generic": "3.4.0",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },

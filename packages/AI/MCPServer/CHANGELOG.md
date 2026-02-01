@@ -1,5 +1,42 @@
 # @memberjunction/ai-mcp-server
 
+## 3.4.0
+
+### Minor Changes
+
+- ef7acd8: migration
+- 4e62761: Add OAuth 2.1 proxy with scope-based authorization
+  - OAuth 2.1 authorization server with dynamic client registration (RFC 7591)
+  - Scope-based access control with hierarchical matching (parent scope grants all children)
+  - New API scopes: action:read, agent:read, query:read, prompt:read, communication:read
+  - Proxy-signed JWTs with consistent format across all upstream providers
+
+### Patch Changes
+
+- Updated dependencies [d596467]
+- Updated dependencies [ef7acd8]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [e552e5f]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ai-provider-bundle@3.4.0
+  - @memberjunction/ai-prompts@3.4.0
+  - @memberjunction/server@3.4.0
+  - @memberjunction/sqlserver-dataprovider@3.4.0
+  - @memberjunction/config@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ai-agents@3.4.0
+  - @memberjunction/actions@3.4.0
+  - @memberjunction/aiengine@3.4.0
+  - @memberjunction/ai-core-plus@3.4.0
+  - @memberjunction/api-keys@3.4.0
+  - @memberjunction/actions-base@3.4.0
+  - @memberjunction/credentials@3.4.0
+  - @memberjunction/encryption@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Minor Changes
