@@ -1,0 +1,38 @@
+@if (IsOpen) {
+    <div class="dialog-backdrop" (click)="OnBackdropClick($event)">
+        <div class="dialog-container">
+            <div class="dialog-header">
+                <div class="dialog-title">
+                    <i class="fa-solid fa-flask"></i>
+                    @if (Action) {
+                        Action Test Harness - {{ Action.Name }}
+                    } @else {
+                        Action Test Harness
+                    }
+                </div>
+                <button class="dialog-close-btn" (click)="OnClose()" title="Close">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <div class="dialog-content">
+                @if (Action) {
+                    <mj-action-test-harness
+                        [Action]="Action"
+                        [ActionParams]="ActionParams"
+                        (ExecutionComplete)="OnExecutionComplete($event)">
+                    </mj-action-test-harness>
+                } @else {
+                    <div class="loading-state">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        Loading...
+                    </div>
+                }
+            </div>
+
+            <div class="dialog-footer">
+                <button class="btn btn-outline" (click)="OnClose()">Close</button>
+            </div>
+        </div>
+    </div>
+}

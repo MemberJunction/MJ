@@ -365,6 +365,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return relatedEntityName;
   }
 
+  /**
+   * Returns whether the current entity has any related entities defined.
+   * Useful for conditionally showing/hiding related entity sections.
+   */
+  public get HasRelatedEntities(): boolean {
+    if (this.record) {
+      const relatedEntities = (<BaseEntity>this.record).EntityInfo.RelatedEntities;
+      return relatedEntities && relatedEntities.length > 0;
+    }
+    return false;
+  }
+
   protected ValidatePendingRecords(): ValidationResult[] {
     const results: ValidationResult[] = [];
     for (let i = 0; i < this._pendingRecords.length; i++) {
@@ -876,48 +888,103 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   /**
-   * Gets the width mode for a section from persisted state.
-   * @param sectionKey The section key
-   * @returns Width mode ('normal' or 'full-width')
+   * Gets the form width mode from persisted state.
+   * @returns Width mode ('centered' or 'full-width')
    */
-  public getSectionWidthMode(sectionKey: string): 'normal' | 'full-width' {
+  public getFormWidthMode(): 'centered' | 'full-width' {
     const entityName = this.getEntityName();
     if (entityName) {
-      return this.formStateService.getSectionWidthMode(entityName, sectionKey);
+      return this.formStateService.getWidthMode(entityName);
     }
-    return 'normal';
+    return 'centered';
   }
 
   /**
-   * Sets the width mode for a section.
+   * Sets the form width mode.
    * Persists to User Settings via FormStateService.
-   * @param sectionKey The section key
    * @param widthMode The width mode
    */
-  public setSectionWidthMode(sectionKey: string, widthMode: 'normal' | 'full-width'): void {
+  public setFormWidthMode(widthMode: 'centered' | 'full-width'): void {
     const entityName = this.getEntityName();
     if (entityName) {
-      this.formStateService.setSectionWidthMode(entityName, sectionKey, widthMode);
+      this.formStateService.setWidthMode(entityName, widthMode);
     }
   }
 
   /**
-   * Resets all panel width modes to normal for the current entity.
+   * Toggles form width mode between centered and full-width.
    * Persists to User Settings via FormStateService.
    */
-  public resetAllPanelWidths(): void {
+  public toggleFormWidthMode(): void {
     const entityName = this.getEntityName();
-    if (!entityName) return;
-
-    this.formStateService.resetAllPanelWidths(entityName);
-
-    // Trigger re-render if we have collapsible panels
-    if (this.collapsiblePanels) {
-      this.collapsiblePanels.forEach(panel => {
-        panel.widthMode = 'normal';
-        panel['cdr'].markForCheck();
-      });
+    if (entityName) {
+      this.formStateService.toggleWidthMode(entityName);
     }
+  }
+
+  // #endregion
+
+  // #region Section Ordering
+
+  /**
+   * Gets the current section order. Returns custom order if set, otherwise returns default order.
+   * @returns Array of section keys in display order
+   */
+  public getSectionOrder(): string[] {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      const customOrder = this.formStateService.getSectionOrder(entityName);
+      if (customOrder && customOrder.length > 0) {
+        return customOrder;
+      }
+    }
+    // Return default order (order defined in sections array)
+    return this.sections.map(s => s.sectionKey);
+  }
+
+  /**
+   * Sets a custom section order.
+   * @param sectionOrder Array of section keys in the desired order
+   */
+  public setSectionOrder(sectionOrder: string[]): void {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setSectionOrder(entityName, sectionOrder);
+    }
+  }
+
+  /**
+   * Resets section order to the default.
+   */
+  public resetSectionOrder(): void {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.resetSectionOrder(entityName);
+    }
+  }
+
+  /**
+   * Checks if a custom section order is set.
+   * @returns True if custom order exists
+   */
+  public hasCustomSectionOrder(): boolean {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      return this.formStateService.hasCustomSectionOrder(entityName);
+    }
+    return false;
+  }
+
+  /**
+   * Gets the CSS order value for a section.
+   * Used by CollapsiblePanelComponent to set the order style property.
+   * @param sectionKey The section key
+   * @returns The order value (0-based index)
+   */
+  public getSectionDisplayOrder(sectionKey: string): number {
+    const order = this.getSectionOrder();
+    const index = order.indexOf(sectionKey);
+    return index >= 0 ? index : this.sections.length; // Put unknown sections at the end
   }
 
   // #endregion

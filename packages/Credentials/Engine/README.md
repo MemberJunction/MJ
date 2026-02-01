@@ -171,6 +171,136 @@ Audit log entry includes:
 - Success/failure status
 - Duration in milliseconds
 
+## JSON Schema Validation
+
+The CredentialEngine uses [Ajv JSON Schema validator](https://ajv.js.org/) to validate credential values against the `FieldSchema` defined in each Credential Type. This ensures data integrity and security by enforcing constraints at save time.
+
+### Supported Constraints
+
+All JSON Schema Draft 7 validation keywords are supported:
+
+| Constraint | Description | Example Use Case |
+|-----------|-------------|------------------|
+| `required` | Mandatory fields | API keys must include `apiKey` field |
+| `const` | Fixed immutable values | OAuth token URLs that must never change |
+| `enum` | Limited set of allowed values | Region selection, account types |
+| `format` | Value format validation | `uri`, `email`, `date`, `uuid` |
+| `pattern` | Regex pattern matching | API key format validation |
+| `minLength`/`maxLength` | String length bounds | Password length requirements |
+| `minimum`/`maximum` | Numeric range validation | Port numbers, timeout values |
+| `default` | Auto-populated values | Default regions, endpoints |
+
+### Schema Validation Flow
+
+1. **Create/Update**: When `storeCredential()` or `updateCredential()` is called
+2. **Apply Defaults**: Fields with `default` or `const` values are auto-populated
+3. **Validate**: The complete credential values are validated against the schema
+4. **Throw on Error**: If validation fails, a clear error message is thrown listing all violations
+
+```typescript
+// This credential type schema
+{
+  "type": "object",
+  "properties": {
+    "apiKey": {
+      "type": "string",
+      "pattern": "^sk-[a-zA-Z0-9]{32}$",
+      "description": "OpenAI API key"
+    },
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "default": "https://api.openai.com/v1"
+    }
+  },
+  "required": ["apiKey"]
+}
+
+// Will reject this (invalid pattern)
+await engine.storeCredential('OpenAI', 'Production', {
+    apiKey: 'invalid-format'  // ❌ Fails pattern validation
+}, {}, contextUser);
+// Error: Field "apiKey" does not match required pattern
+
+// Will reject this (invalid URI format)
+await engine.storeCredential('OpenAI', 'Production', {
+    apiKey: 'sk-abcdefghijklmnopqrstuvwxyz123456',
+    endpoint: 'not-a-url'  // ❌ Fails format validation
+}, {}, contextUser);
+// Error: Field "endpoint" must be a valid uri
+
+// Will accept and auto-populate default
+await engine.storeCredential('OpenAI', 'Production', {
+    apiKey: 'sk-abcdefghijklmnopqrstuvwxyz123456'
+    // endpoint auto-populated with default: https://api.openai.com/v1
+}, {}, contextUser);
+// ✅ Success
+```
+
+### Error Messages
+
+Validation errors are formatted for clarity:
+
+- **Required**: `Missing required field: apiKey`
+- **Const**: `Field "tokenUrl" must be "https://api.box.com/oauth2/token"`
+- **Enum**: `Field "region" must be one of: us-east-1, us-west-2, eu-west-1`
+- **Format**: `Field "endpoint" must be a valid uri`
+- **Pattern**: `Field "apiKey" does not match required pattern`
+- **Length**: `Field "password" must be at least 8 characters`
+- **Range**: `Field "port" must be at least 1024`
+
+### Const Fields for Security
+
+Use `const` in schemas to enforce fixed values that must never change:
+
+```json
+{
+  "tokenUrl": {
+    "type": "string",
+    "const": "https://api.box.com/oauth2/token",
+    "description": "Box.com OAuth token endpoint"
+  }
+}
+```
+
+This prevents:
+- Users from accidentally changing critical endpoints
+- Malicious redirection of credentials to external servers
+- Configuration drift across environments
+
+Const values are:
+- **Auto-populated** when creating credentials (users don't need to enter them)
+- **Immutable** - validation rejects any attempt to change them
+- **Visible** in UI as read-only fields
+
+### Format Validation
+
+The `format` keyword validates common data types:
+
+- **uri** / **url** - Valid HTTP/HTTPS URLs
+- **email** - Valid email addresses
+- **date** - ISO 8601 dates
+- **date-time** - ISO 8601 timestamps
+- **uuid** - RFC 4122 UUIDs
+- **ipv4** / **ipv6** - IP addresses
+- **hostname** - Valid DNS hostnames
+
+### Default Values
+
+Use `default` to pre-populate fields with sensible values:
+
+```json
+{
+  "region": {
+    "type": "string",
+    "default": "us-east-1",
+    "enum": ["us-east-1", "us-west-2", "eu-west-1"]
+  }
+}
+```
+
+Users can override defaults, but they provide good starting points and reduce configuration errors.
+
 ## Credential Validation
 
 Validate credentials against provider endpoints:

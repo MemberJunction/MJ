@@ -9,16 +9,23 @@
     "DefaultNavItems": [
       {
         "Label": "Overview",
-        "Icon": "fa-solid fa-chart-line",
+        "Icon": "fa-solid fa-gauge-high",
         "ResourceType": "Custom",
-        "DriverClass": "TestingOverviewResource",
+        "DriverClass": "TestingDashboardTabResource",
         "isDefault": true
       },
       {
-        "Label": "Execution",
+        "Label": "Explorer",
+        "Icon": "fa-solid fa-compass",
+        "ResourceType": "Custom",
+        "DriverClass": "TestingExplorerResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Runs",
         "Icon": "fa-solid fa-play-circle",
         "ResourceType": "Custom",
-        "DriverClass": "TestingExecutionResource",
+        "DriverClass": "TestingRunsResource",
         "isDefault": false
       },
       {
@@ -29,18 +36,10 @@
         "isDefault": false
       },
       {
-        "Label": "Version",
-        "Icon": "fa-solid fa-code-compare",
-        "ResourceType": "Custom",
-        "DriverClass": "TestingVersionResource",
-        "isDefault": false,
-        "Status": "Pending"
-      },
-      {
-        "Label": "Feedback",
+        "Label": "Review",
         "Icon": "fa-solid fa-clipboard-check",
         "ResourceType": "Custom",
-        "DriverClass": "TestingFeedbackResource",
+        "DriverClass": "TestingReviewResource",
         "isDefault": false
       }
     ]
@@ -173,7 +172,7 @@
     "ID": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
   },
   "sync": {
-    "lastModified": "2026-01-06T15:18:04.175Z",
-    "checksum": "f150fafe7fcaa7f04eafb3e1a573b416b0601aec5ba6331b5fbfd6fac1605e0c"
+    "lastModified": "2026-02-01T00:27:54.295Z",
+    "checksum": "a25f7dab9ad59332ae24c0d8d18bed43a215424a9f42ad4985616334858fa67d"
   }
 }

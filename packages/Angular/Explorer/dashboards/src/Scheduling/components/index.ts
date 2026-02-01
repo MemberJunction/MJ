@@ -1,13 +1,10 @@
 // Export all Scheduling resource components
-export * from './scheduling-monitor-resource.component';
+export * from './scheduling-overview-resource.component';
 export * from './scheduling-jobs-resource.component';
-export * from './scheduling-history-resource.component';
-export * from './scheduling-types-resource.component';
-export * from './scheduling-health-resource.component';
+export * from './scheduling-activity-resource.component';
 
-// Export existing child components for internal use
-export * from './scheduling-monitoring.component';
+// Export child components for internal use
+export * from './scheduling-overview.component';
 export * from './scheduling-jobs.component';
-export * from './scheduling-history.component';
-export * from './scheduling-types.component';
-export * from './scheduling-health.component';
+export * from './scheduling-activity.component';
+export * from './job-slideout.component';

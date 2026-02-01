@@ -734,16 +734,39 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             const agentOperations = ['discoverAgents', 'executeAgent', 'getAgentRunStatus', 'cancelAgentRun'];
 
             if (agentOperations.includes(operation)) {
-                // Authorize agent operation if authContext is provided
-                if (authContext && operation === 'executeAgent') {
-                    const agentName = (parameters.agentName as string) || (parameters.agentId as string) || '*';
-                    const authResult = await authorizeOperation(authContext, 'agent:execute', agentName);
-                    if (!authResult.allowed) {
-                        operationResult = {
-                            success: false,
-                            errorMessage: `Authorization denied: ${authResult.error}`
-                        };
-                        throw new Error(operationResult.errorMessage);
+                // Authorize agent operations if authContext is provided
+                if (authContext) {
+                    let scopePath: string | undefined;
+                    let resource: string = '*';
+
+                    switch (operation) {
+                        case 'discoverAgents':
+                            scopePath = 'metadata:agents:read';
+                            resource = (parameters.pattern as string) || '*';
+                            break;
+                        case 'executeAgent':
+                            scopePath = 'agent:execute';
+                            resource = (parameters.agentName as string) || (parameters.agentId as string) || '*';
+                            break;
+                        case 'getAgentRunStatus':
+                            scopePath = 'agent:monitor';
+                            resource = (parameters.runId as string) || '*';
+                            break;
+                        case 'cancelAgentRun':
+                            scopePath = 'agent:cancel';
+                            resource = (parameters.runId as string) || '*';
+                            break;
+                    }
+
+                    if (scopePath) {
+                        const authResult = await authorizeOperation(authContext, scopePath, resource);
+                        if (!authResult.allowed) {
+                            operationResult = {
+                                success: false,
+                                errorMessage: `Authorization denied: ${authResult.error}`
+                            };
+                            throw new Error(operationResult.errorMessage);
+                        }
                     }
                 }
 

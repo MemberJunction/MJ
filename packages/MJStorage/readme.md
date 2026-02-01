@@ -53,18 +53,70 @@ This package depends on:
 
 ## Usage
 
-### Basic Setup
+### Standard Usage Pattern
 
-First, configure the environment variables required for your chosen storage provider(s). You can implement multiple providers simultaneously and switch between them based on your application requirements.
+**CRITICAL**: Always follow these steps when using storage providers:
 
-Refer to the documentation for each storage provider for detailed configuration requirements (see the "Storage Provider Configuration" section below).
+1. Create provider instance
+2. **Call `initialize()`** (with or without config)
+3. Use provider
 
-#### Azure Blob Storage Example
+The `initialize()` method is smart enough to handle both simple deployments (environment variables) and multi-tenant deployments (database credentials).
+
+### Basic Setup - Simple Deployment (Environment Variables)
+
+For single-tenant applications, development, testing, or simple production deployments:
+
 ```bash
-STORAGE_AZURE_CONTAINER=your-container-name
-STORAGE_AZURE_ACCOUNT_NAME=your-account-name
-STORAGE_AZURE_ACCOUNT_KEY=your-account-key
+# Example: Azure Blob Storage
+export STORAGE_AZURE_CONTAINER=your-container-name
+export STORAGE_AZURE_ACCOUNT_NAME=your-account-name
+export STORAGE_AZURE_ACCOUNT_KEY=your-account-key
 ```
+
+```typescript
+import { AzureFileStorage } from '@memberjunction/storage';
+
+// Constructor loads environment variables
+const storage = new AzureFileStorage();
+
+// ALWAYS call initialize() - no config needed for env var deployments
+await storage.initialize();
+
+// Provider is now ready to use
+await storage.ListObjects('/');
+```
+
+### Multi-Tenant Enterprise (Database Credentials)
+
+For enterprise applications managing multiple storage accounts:
+
+```typescript
+import { FileStorageEngine } from '@memberjunction/core-entities';
+import { initializeDriverWithAccountCredentials } from '@memberjunction/storage/util';
+
+// Load account from database
+const engine = FileStorageEngine.Instance;
+await engine.Config(false, contextUser);
+
+const accountWithProvider = engine.GetAccountWithProvider(accountId);
+
+// Infrastructure utility handles credential decryption and initialization
+const storage = await initializeDriverWithAccountCredentials({
+  accountEntity: accountWithProvider.account,
+  providerEntity: accountWithProvider.provider,
+  contextUser
+});
+
+// Provider is ready - credentials were automatically decrypted and initialized
+await storage.ListObjects('/');
+```
+
+**Key Advantage**: The `initializeDriverWithAccountCredentials()` utility:
+- Automatically retrieves the credential by ID
+- Decrypts it using CredentialEngine
+- Calls `initialize()` with the decrypted values
+- Returns a fully configured provider instance
 
 ### Using Utility Functions (Recommended)
 
@@ -119,27 +171,41 @@ async function fileOperationsExample() {
 
 ### Direct Provider Usage
 
-You can also work directly with a storage provider by instantiating it using the MemberJunction class factory:
+You can work directly with a storage provider by instantiating it:
 
 ```typescript
 import { FileStorageBase } from '@memberjunction/storage';
 import { MJGlobal } from '@memberjunction/global';
 
 async function directProviderExample() {
-  // Create storage instance using the class factory (recommended)
-  const storage = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-    FileStorageBase, 
+  // Method 1: Direct instantiation (simple deployment with env vars)
+  const storage = new AzureFileStorage(); // Constructor loads env vars
+  await storage.initialize(); // ALWAYS call initialize()
+
+  // Method 2: Using class factory (dynamic provider selection)
+  const storage2 = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
+    FileStorageBase,
     'Azure Blob Storage'
   );
-  
-  // Initialize the storage provider if needed
-  await storage.initialize();
-  
+  await storage2.initialize(); // ALWAYS call initialize()
+
+  // Method 3: Multi-tenant with manual initialization
+  const storage3 = new AzureFileStorage();
+  await storage3.initialize({
+    accountId: '12345',
+    accountName: 'Azure Account',
+    accountName: 'myaccount',
+    accountKey: '...',
+    defaultContainer: 'my-container'
+  });
+
+  // Now you can use any of the storage methods:
+
   // List all files in a directory
   const result = await storage.ListObjects('documents/');
   console.log('Files:', result.objects);
   console.log('Directories:', result.prefixes);
-  
+
   // Display detailed metadata for each file
   for (const file of result.objects) {
     console.log(`\nFile: ${file.name}`);
@@ -150,53 +216,60 @@ async function directProviderExample() {
     console.log(`  Modified: ${file.lastModified}`);
     console.log(`  Is Directory: ${file.isDirectory}`);
   }
-  
+
   // Create a directory
   const dirCreated = await storage.CreateDirectory('documents/reports/');
   console.log(`Directory created: ${dirCreated}`);
-  
+
   // Upload a file directly with metadata
   const content = Buffer.from('Hello, World!');
   const uploaded = await storage.PutObject(
-    'documents/reports/hello.txt', 
-    content, 
+    'documents/reports/hello.txt',
+    content,
     'text/plain',
-    { 
+    {
       author: 'John Doe',
       department: 'Engineering',
-      version: '1.0' 
+      version: '1.0'
     }
   );
   console.log(`File uploaded: ${uploaded}`);
-  
+
   // Get file metadata without downloading content
   const metadata = await storage.GetObjectMetadata('documents/reports/hello.txt');
   console.log('File metadata:', metadata);
-  
+
   // Download file content
   const fileContent = await storage.GetObject('documents/reports/hello.txt');
   console.log('File content:', fileContent.toString('utf8'));
-  
+
   // Copy a file
   const copied = await storage.CopyObject(
-    'documents/reports/hello.txt', 
+    'documents/reports/hello.txt',
     'documents/archive/hello-backup.txt'
   );
   console.log(`File copied: ${copied}`);
-  
+
   // Check if a file exists
   const exists = await storage.ObjectExists('documents/reports/hello.txt');
   console.log(`File exists: ${exists}`);
-  
+
   // Check if a directory exists
   const dirExists = await storage.DirectoryExists('documents/reports/');
   console.log(`Directory exists: ${dirExists}`);
-  
+
   // Delete a directory and all its contents
   const dirDeleted = await storage.DeleteDirectory('documents/reports/', true);
   console.log(`Directory deleted: ${dirDeleted}`);
 }
 ```
+
+### Key Principle
+
+**Always call `initialize()`** after creating a provider instance. It's smart enough to:
+- Use environment variables when called with no config
+- Override with database credentials when called with config
+- Handle both simple and multi-tenant deployments seamlessly
 
 ### Searching Files
 
@@ -345,6 +418,7 @@ type FileSearchResultSet = {
 
 All storage providers implement these methods:
 
+- **`initialize(config?: StorageProviderConfig): Promise<void>`** - **REQUIRED**: Always call after creating instance. Omit config for env vars, provide config for multi-tenant.
 - `CreatePreAuthUploadUrl(objectName: string): Promise<CreatePreAuthUploadUrlPayload>`
 - `CreatePreAuthDownloadUrl(objectName: string): Promise<string>`
 - `MoveObject(oldObjectName: string, newObjectName: string): Promise<boolean>`
@@ -359,7 +433,6 @@ All storage providers implement these methods:
 - `ObjectExists(objectName: string): Promise<boolean>`
 - `DirectoryExists(directoryPath: string): Promise<boolean>`
 - `SearchFiles(query: string, options?: FileSearchOptions): Promise<FileSearchResultSet>` (throws `UnsupportedOperationError` for providers without native search)
-- `initialize(): Promise<void>` (optional, for async initialization)
 
 ### Utility Functions
 

@@ -142,6 +142,15 @@
                 <i class="fa-solid fa-lightbulb"></i>
                 <span>Tip: Use wildcards like <code>entities:*</code> for broad access within a category</span>
             </div>
+
+            <!-- No Scopes Warning -->
+            <div class="no-scopes-warning" *ngIf="!IsLoadingScopes && getSelectedScopeCount() === 0">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <div>
+                    <strong>Warning: No permissions selected</strong>
+                    <p>API keys without any assigned scopes will have <strong>no permissions</strong> and cannot perform any operations. This key will be rejected by all API endpoints until scopes are assigned.</p>
+                </div>
+            </div>
         </div>
 
         <!-- Success Step -->

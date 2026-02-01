@@ -62,6 +62,21 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 
 ---
 
+## 📚 Development Guides
+
+The `/guides/` folder contains comprehensive best practices guides for specific development tasks. **Always consult these guides when working on related features:**
+
+- **[Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md)**: Comprehensive patterns for building MJ dashboards including:
+  - Architecture and naming conventions
+  - State management with getter/setters
+  - Engine class patterns (no Angular services for data)
+  - User preferences and local caching
+  - Layout patterns, permission checking, and more
+
+When building dashboards, creating new Angular applications, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
+
+---
+
 **VERY IMPORTANT** We want you to be a high performance agent. Therefore whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization
 
 ## IMPORTANT
@@ -1201,3 +1216,12 @@ Each nav item with `ResourceType: "Custom"` requires a corresponding component:
 3. Add a tree-shaking prevention function: `export function LoadYourResource() {}`
 4. Call the load function from the module's `public-api.ts`
 5. Register the component in the module's declarations and exports
+
+## Active Technologies
+- TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk` (601-mcp-oauth)
+- N/A (token validation only, no new persistent state) (601-mcp-oauth)
+- TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `@modelcontextprotocol/sdk`, `express`, `jsonwebtoken`, `jwks-rsa` (601-mcp-oauth)
+- SQL Server (MemberJunction database) for `APIScope`, `APIKeyScope` entities; In-memory for OAuth proxy state (601-mcp-oauth)
+
+## Recent Changes
+- 601-mcp-oauth: Added TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk`

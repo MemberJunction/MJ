@@ -9,7 +9,7 @@ import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import { logStatus } from '../Misc/status_logging';
 import { LogError } from '@memberjunction/core';
-import { mergeConfigs } from '@memberjunction/config';
+import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 
 /** Global configuration explorer for finding MJ config files */
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
@@ -294,6 +294,21 @@ const sqlOutputConfigSchema = z.object({
    * If true, scripts that are being emitted via SQL logging that are marked by CodeGen as recurring will be SKIPPED. Defaults to false
    */
   omitRecurringScriptsFromLog: z.boolean().default(false),
+  /**
+   * Optional array of schema-to-placeholder mappings for Flyway migrations.
+   * Each mapping specifies a database schema name and its corresponding Flyway placeholder.
+   * If not provided, defaults to replacing the MJ core schema with ${flyway:defaultSchema}.
+   *
+   * Example:
+   * [
+   *   { schema: '__mj', placeholder: '${mjSchema}' },
+   *   { schema: '__BCSaaS', placeholder: '${flyway:defaultSchema}' }
+   * ]
+   */
+  schemaPlaceholders: z.array(z.object({
+    schema: z.string(),
+    placeholder: z.string()
+  })).optional(),
 });
 
 export type NewSchemaDefaults = z.infer<typeof newSchemaDefaultsSchema>;
@@ -418,6 +433,8 @@ const configInfoSchema = z.object({
     { workingDirectory: '../MJServer', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, when: 'after' },
   ]),
+  /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
+  additionalSchemaInfo: z.string().optional(),
   logging: logInfoSchema,
   newEntityDefaults: newEntityDefaultsSchema,
   newSchemaDefaults: newSchemaDefaultsSchema,
@@ -439,6 +456,7 @@ const configInfoSchema = z.object({
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
+  entityPackageName: z.string().default('mj_generatedentities'),
 
   verboseOutput: z.boolean().optional().default(false),
 });
@@ -457,7 +475,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
   dbInstanceName: process.env.DB_INSTANCE_NAME,
-  dbTrustServerCertificate: ['true', '1', 'Y', 'y'].includes(process.env.DB_TRUST_SERVER_CERTIFICATE ?? '') ? 'Y' : 'N',
+  dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE) ? 'Y' : 'N',
   mjCoreSchema: '__mj',
   graphqlPort: 4000,
   verboseOutput: false,

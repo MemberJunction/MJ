@@ -122,22 +122,16 @@
                             }
                           </div>
                           <div class="agent-details">
-                            <h4 class="agent-name">{{ agent.Name }}</h4>
+                            <h4 class="agent-name" [innerHTML]="agent.Name | highlightSearch:currentFilters.searchTerm"></h4>
                             <div class="agent-meta">
-                              <span class="meta-item">
-                                <i class="fa-solid fa-microchip"></i>
-                                {{ agent.ExecutionMode }}
+                              <span class="meta-item type-badge">
+                                <i class="fa-solid fa-tag"></i>
+                                {{ getAgentTypeName(agent) }}
                               </span>
                               @if (agent.Status) {
                                 <span class="meta-item" [class]="'status-' + agent.Status.toLowerCase()">
                                   <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
                                   {{ agent.Status }}
-                                </span>
-                              }
-                              @if (agent.ExposeAsAction) {
-                                <span class="meta-item">
-                                  <i class="fa-solid fa-bolt"></i>
-                                  Exposed
                                 </span>
                               }
                             </div>
@@ -151,7 +145,7 @@
                       <!-- Card Body -->
                       <div class="card-body">
                         @if (agent.Description) {
-                          <p class="agent-description">{{ agent.Description }}</p>
+                          <p class="agent-description" [innerHTML]="agent.Description | highlightSearch:currentFilters.searchTerm"></p>
                         } @else {
                           <p class="agent-description text-muted">No description provided</p>
                         }
@@ -224,19 +218,12 @@
                             <i class="fa-solid fa-chevron-up sort-icon"></i>
                           </span>
                         </th>
+                        <th>Type</th>
                         <th (click)="sortBy('Status')"
                             [class.sorted]="sortColumn === 'Status'"
                             [class.desc]="sortColumn === 'Status' && sortDirection === 'desc'">
                           <span class="sort-header">
                             Status
-                            <i class="fa-solid fa-chevron-up sort-icon"></i>
-                          </span>
-                        </th>
-                        <th (click)="sortBy('ExecutionMode')"
-                            [class.sorted]="sortColumn === 'ExecutionMode'"
-                            [class.desc]="sortColumn === 'ExecutionMode' && sortDirection === 'desc'">
-                          <span class="sort-header">
-                            Execution Mode
                             <i class="fa-solid fa-chevron-up sort-icon"></i>
                           </span>
                         </th>
@@ -256,22 +243,21 @@
                                 }
                               </div>
                               <div>
-                                <div class="agent-name">{{ agent.Name }}</div>
+                                <div class="agent-name" [innerHTML]="agent.Name | highlightSearch:currentFilters.searchTerm"></div>
                                 @if (agent.Description) {
-                                  <div class="agent-description-small">{{ agent.Description }}</div>
+                                  <div class="agent-description-small" [innerHTML]="agent.Description | highlightSearch:currentFilters.searchTerm"></div>
                                 }
                               </div>
                             </div>
                           </td>
                           <td>
-                            <span class="status-badge" [class]="'status-' + (agent.Status || 'unknown').toLowerCase()">
-                              {{ agent.Status || 'Unknown' }}
+                            <span class="type-badge">
+                              {{ getAgentTypeName(agent) }}
                             </span>
                           </td>
                           <td>
-                            <span class="execution-mode">
-                              <i [class]="getExecutionModeIcon(agent.ExecutionMode)"></i>
-                              {{ agent.ExecutionMode }}
+                            <span class="status-badge" [class]="'status-' + (agent.Status || 'unknown').toLowerCase()">
+                              {{ agent.Status || 'Unknown' }}
                             </span>
                           </td>
                           <td>
@@ -339,7 +325,7 @@
 
       <!-- Panel Content -->
       <div class="detail-panel-content">
-        <!-- Status Section -->
+        <!-- Status and Type Section -->
         <div class="detail-section">
           <div class="detail-badges">
             <span class="status-badge" [class]="'status-' + (selectedAgent.Status || 'unknown').toLowerCase()">

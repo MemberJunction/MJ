@@ -1,0 +1,193 @@
+<div class="activity-container">
+    <!-- Toolbar -->
+    <div class="activity-toolbar">
+        <div class="toolbar-left">
+            <div class="search-box">
+                <i class="fa-solid fa-search"></i>
+                <input type="text" placeholder="Search executions..."
+                       [value]="SearchTerm"
+                       (input)="OnSearchChange($any($event.target).value)" />
+            </div>
+            <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
+                <option value="">All Statuses</option>
+                <option *ngFor="let s of StatusOptions.slice(1)" [value]="s">{{s}}</option>
+            </select>
+            <select class="filter-select" [value]="JobNameFilter" (change)="OnJobNameFilterChange($any($event.target).value)">
+                <option value="">All Jobs</option>
+                <option *ngFor="let name of UniqueJobNames" [value]="name">{{name}}</option>
+            </select>
+        </div>
+        <div class="toolbar-right">
+            <div class="time-range-group">
+                <button *ngFor="let range of TimeRanges"
+                        class="range-btn"
+                        [class.active]="SelectedTimeRange === range.value"
+                        (click)="OnTimeRangeChange(range.value)">
+                    {{range.label}}
+                </button>
+            </div>
+            <button class="control-btn" (click)="Refresh()">
+                <i class="fa-solid fa-arrows-rotate"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div *ngIf="IsLoading" class="loading-container">
+        <mj-loading text="Loading activity..." size="medium"></mj-loading>
+    </div>
+
+    <div *ngIf="!IsLoading" class="activity-content">
+        <!-- Job Type Summary Cards -->
+        <div class="type-cards-row" *ngIf="JobTypes.length > 0">
+            <div *ngFor="let type of JobTypes" class="type-card">
+                <div class="type-card-icon">
+                    <i [class]="GetTypeIcon(type.typeName)"></i>
+                </div>
+                <div class="type-card-info">
+                    <div class="type-card-name">{{type.typeName}}</div>
+                    <div class="type-card-stats">
+                        <span>{{type.activeJobsCount}} active</span>
+                        <span class="dot">&middot;</span>
+                        <span>{{type.totalRuns}} runs</span>
+                        <span class="dot">&middot;</span>
+                        <span [style.color]="GetSuccessRateColor(type.successRate)">
+                            {{FormatPercentage(type.successRate)}}
+                        </span>
+                    </div>
+                </div>
+                <div class="type-card-bar">
+                    <div class="type-bar-fill"
+                         [style.width]="(type.successRate * 100) + '%'"
+                         [style.background]="GetSuccessRateColor(type.successRate)">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Execution Trends Chart -->
+        <div class="panel" *ngIf="Trends.length > 0">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i class="fa-solid fa-chart-bar"></i> Execution Trends
+                </div>
+                <span class="result-count">{{FilteredExecutions.length}} executions</span>
+            </div>
+            <div class="panel-body chart-container">
+                <div class="trend-chart">
+                    <div *ngFor="let trend of Trends; let i = index" class="chart-column">
+                        <div class="bars-wrapper">
+                            <div class="bar success-bar"
+                                 [style.height]="GetBarHeight(trend.successes)"
+                                 [title]="trend.successes + ' successful'">
+                            </div>
+                            <div class="bar failure-bar"
+                                 *ngIf="trend.failures > 0"
+                                 [style.height]="GetBarHeight(trend.failures)"
+                                 [title]="trend.failures + ' failed'">
+                            </div>
+                        </div>
+                        <div class="chart-label" [class.hidden-label]="!ShouldShowLabel(i)" >{{FormatChartLabel(trend.timestamp)}}</div>
+                    </div>
+                </div>
+                <div class="chart-legend">
+                    <span class="legend-item"><span class="legend-dot success"></span> Successful</span>
+                    <span class="legend-item"><span class="legend-dot failure"></span> Failed</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Execution History Table -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Execution History
+                </div>
+                <span class="result-count">{{FilteredExecutions.length}} of {{Executions.length}}</span>
+            </div>
+            <div class="panel-body table-container">
+                <div *ngIf="FilteredExecutions.length === 0" class="empty-state-small">
+                    <i class="fa-solid fa-inbox"></i>
+                    <span>No executions found for this time range</span>
+                </div>
+                <table *ngIf="FilteredExecutions.length > 0" class="data-table">
+                    <thead>
+                        <tr>
+                            <th class="col-expand"></th>
+                            <th>Status</th>
+                            <th>Job Name</th>
+                            <th>Started</th>
+                            <th>Duration</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <ng-container *ngFor="let exec of FilteredExecutions">
+                            <tr class="exec-row" [class.expanded]="IsExpanded(exec)" (click)="ToggleExpand(exec)">
+                                <td class="col-expand">
+                                    <i class="fa-solid fa-chevron-right expand-icon"
+                                       [class.rotated]="IsExpanded(exec)"></i>
+                                </td>
+                                <td>
+                                    <span class="exec-status-badge" [ngClass]="GetStatusClass(exec.status)">
+                                        <i [class]="GetStatusIcon(exec.status)"></i>
+                                        {{exec.status}}
+                                    </span>
+                                </td>
+                                <td class="cell-name">{{exec.jobName}}</td>
+                                <td class="cell-meta">{{FormatDateTime(exec.startedAt)}}</td>
+                                <td class="cell-meta">{{FormatDuration(exec.duration)}}</td>
+                                <td class="cell-error">{{TruncateError(exec.errorMessage)}}</td>
+                            </tr>
+                            <tr *ngIf="IsExpanded(exec)" class="exec-detail-row">
+                                <td [attr.colspan]="6">
+                                    <div class="exec-detail-content">
+                                        <div class="exec-detail-grid">
+                                            <div class="detail-item">
+                                                <span class="detail-label">Job Name</span>
+                                                <span class="detail-value">{{exec.jobName}}</span>
+                                            </div>
+                                            <div class="detail-item">
+                                                <span class="detail-label">Started</span>
+                                                <span class="detail-value">{{FormatDateTime(exec.startedAt)}}</span>
+                                            </div>
+                                            <div class="detail-item">
+                                                <span class="detail-label">Completed</span>
+                                                <span class="detail-value">{{exec.completedAt ? FormatDateTime(exec.completedAt) : '-'}}</span>
+                                            </div>
+                                            <div class="detail-item">
+                                                <span class="detail-label">Duration</span>
+                                                <span class="detail-value">{{FormatDuration(exec.duration)}}</span>
+                                            </div>
+                                            <div class="detail-item">
+                                                <span class="detail-label">Status</span>
+                                                <span class="detail-value">
+                                                    <span class="exec-status-badge" [ngClass]="GetStatusClass(exec.status)">
+                                                        <i [class]="GetStatusIcon(exec.status)"></i>
+                                                        {{exec.status}}
+                                                    </span>
+                                                </span>
+                                            </div>
+                                            <div class="detail-item" *ngIf="exec.errorMessage">
+                                                <span class="detail-label">Error</span>
+                                                <span class="detail-value error-text">{{exec.errorMessage}}</span>
+                                            </div>
+                                        </div>
+                                        <div class="exec-detail-actions">
+                                            <button class="detail-action-btn" (click)="OpenExecutionRecord(exec, $event)">
+                                                <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Run Record
+                                            </button>
+                                            <button class="detail-action-btn secondary" (click)="OpenJobRecord(exec, $event)">
+                                                <i class="fa-solid fa-briefcase"></i> Open Job
+                                            </button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </ng-container>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,80 @@
+<div class="action-list-item" [class.compact]="IsCompact" (click)="onRowClick()">
+  <!-- Icon -->
+  <div class="item-icon" [class.ai-generated]="Action.Type === 'Generated'">
+    <i [class]="getActionIcon()"></i>
+  </div>
+
+  <!-- Name & Description -->
+  <div class="item-main">
+    <span class="item-name" [title]="Action.Name">{{ Action.Name }}</span>
+    @if (!IsCompact && Action.Description) {
+      <span class="item-description" [title]="Action.Description">{{ Action.Description }}</span>
+    }
+  </div>
+
+  <!-- Category -->
+  <button class="item-category" (click)="onCategoryClick($event)" [title]="'View category: ' + getCategoryName()">
+    <i class="fa-solid fa-folder"></i>
+    <span>{{ getCategoryName() }}</span>
+  </button>
+
+  <!-- Status -->
+  <div class="item-status">
+    <kendo-chip
+      [themeColor]="getStatusColor()"
+      [size]="'small'">
+      {{ Action.Status }}
+    </kendo-chip>
+  </div>
+
+  <!-- Type -->
+  <div class="item-type">
+    @if (Action.Type === 'Generated') {
+      <span class="type-badge ai">
+        <i class="fa-solid fa-robot"></i>
+        @if (!IsCompact) {
+          AI
+        }
+      </span>
+    } @else {
+      <span class="type-badge custom">
+        <i class="fa-solid fa-code"></i>
+        @if (!IsCompact) {
+          Custom
+        }
+      </span>
+    }
+  </div>
+
+  <!-- Params Count -->
+  @if (!IsCompact) {
+    <div class="item-params" [title]="(Action.Params.length || 0) + ' parameters'">
+      <i class="fa-solid fa-sliders"></i>
+      <span>{{ Action.Params.length || 0 }}</span>
+    </div>
+  }
+
+  <!-- Updated -->
+  <div class="item-updated" [title]="Action.__mj_UpdatedAt | date:'full'">
+    {{ formatDate(Action.__mj_UpdatedAt) }}
+  </div>
+
+  <!-- Actions -->
+  <div class="item-actions">
+    <button kendoButton
+      [fillMode]="'flat'"
+      [size]="'small'"
+      title="Run Action"
+      [disabled]="Action.Status !== 'Active'"
+      (click)="onRunClick($event)">
+      <i class="fa-solid fa-play"></i>
+    </button>
+    <button kendoButton
+      [fillMode]="'flat'"
+      [size]="'small'"
+      title="Edit Action"
+      (click)="onEditClick($event)">
+      <i class="fa-solid fa-pen"></i>
+    </button>
+  </div>
+</div>

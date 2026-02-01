@@ -30,10 +30,8 @@ import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryGridModule } from '@memberjunction/ng-query-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
-import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
 import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
@@ -124,7 +122,6 @@ import { NotificationsResource } from './lib/resource-wrappers/notifications-res
     BaseFormsModule,
     ListViewModule,
     TreeViewModule,
-    UserViewGridModule,
     QueryGridModule,
     LayoutModule,
     DropDownsModule,
@@ -134,7 +131,6 @@ import { NotificationsResource } from './lib/resource-wrappers/notifications-res
     DashboardViewerModule,
     ExplorerSettingsModule,
     FileStorageModule,
-    UserViewPropertiesDialogModule,
     MJTabStripModule,
     EntityFormDialogModule,
     RecordSelectorModule,

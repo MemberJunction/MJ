@@ -81,7 +81,15 @@ export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export * from './directives/index.js';
 export * from './entitySubclasses/entityPermissions.server.js';
 export * from './types.js';
-export { TokenExpiredError, getSystemUser } from './auth/index.js';
+export {
+    TokenExpiredError,
+    getSystemUser,
+    getSigningKeys,
+    extractUserInfoFromPayload,
+    verifyUserRecord,
+    AuthProviderFactory,
+    IAuthProvider,
+} from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
 
 export * from './generic/PushStatusResolver.js';
@@ -98,7 +106,6 @@ export * from './generic/DeleteOptionsInput.js';
 export * from './agents/skip-agent.js';
 export * from './agents/skip-sdk.js';
 
-export * from './resolvers/AskSkipResolver.js';
 export * from './resolvers/ColorResolver.js';
 export * from './resolvers/ComponentRegistryResolver.js';
 export * from './resolvers/DatasetResolver.js';
@@ -115,6 +122,7 @@ export * from './resolvers/TransactionGroupResolver.js';
 export * from './resolvers/CreateQueryResolver.js';
 export * from './resolvers/TelemetryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
+export * from './resolvers/MCPResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';

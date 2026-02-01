@@ -7,6 +7,7 @@ import { TestEntity, TestRunEntity, TestSuiteTestEntity, TestSuiteRunEntity, Use
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { TestFormComponent } from '../../generated/Entities/Test/test.form.component';
 import {
   TestingDialogService,
@@ -115,7 +116,8 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     protected cdr: ChangeDetectorRef,
     private testingDialogService: TestingDialogService,
     private evalPrefsService: EvaluationPreferencesService,
-    private viewContainerRef: ViewContainerRef
+    private viewContainerRef: ViewContainerRef,
+    private appManager: ApplicationManager
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -438,6 +440,13 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
 
   openTestSuite(suiteId: string) {
     SharedService.Instance.OpenEntityRecord('MJ: Test Suites', CompositeKey.FromID(suiteId));
+  }
+
+  navigateToTestingDashboard(): void {
+    const testingApp = this.appManager.GetAppByName('Testing');
+    if (testingApp) {
+      this.navigationService.SwitchToApp(testingApp.ID);
+    }
   }
 
   async runTest() {

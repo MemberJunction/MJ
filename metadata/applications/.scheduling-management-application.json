@@ -2,41 +2,29 @@
   "fields": {
     "Name": "Scheduling",
     "Description": "Manage and monitor scheduled jobs and tasks",
-    "Icon": "fa-solid fa-calendar-alt",
+    "Icon": "fa-solid fa-calendar-check",
     "DefaultForNewUser": true,
-    "Color": "#00bcd4",
+    "Color": "#0076b6",
     "DefaultSequence": 1003,
     "DefaultNavItems": [
       {
-        "Label": "Monitor",
-        "Icon": "fa-solid fa-chart-line",
+        "Label": "Dashboard",
+        "Icon": "fa-solid fa-gauge-high",
         "ResourceType": "Custom",
-        "DriverClass": "SchedulingMonitorResource",
+        "DriverClass": "SchedulingDashboardResource",
         "isDefault": true
       },
       {
         "Label": "Jobs",
-        "Icon": "fa-solid fa-calendar-alt",
+        "Icon": "fa-solid fa-calendar-check",
         "ResourceType": "Custom",
         "DriverClass": "SchedulingJobsResource"
       },
       {
-        "Label": "History",
-        "Icon": "fa-solid fa-history",
+        "Label": "Activity",
+        "Icon": "fa-solid fa-clock-rotate-left",
         "ResourceType": "Custom",
-        "DriverClass": "SchedulingHistoryResource"
-      },
-      {
-        "Label": "Types",
-        "Icon": "fa-solid fa-cogs",
-        "ResourceType": "Custom",
-        "DriverClass": "SchedulingTypesResource"
-      },
-      {
-        "Label": "Health",
-        "Icon": "fa-solid fa-heartbeat",
-        "ResourceType": "Custom",
-        "DriverClass": "SchedulingHealthResource"
+        "DriverClass": "SchedulingActivityResource"
       }
     ]
   },
@@ -47,7 +35,7 @@
     "ID": "09CBDAE2-4F2A-4F01-BA8C-C7EB4AFAC36A"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.182Z",
-    "checksum": "0de2dbdd500a191d98daed8d586736b3c7733fb31b1058f50cd1c1d9c92f3308"
+    "lastModified": "2026-02-01T00:27:54.249Z",
+    "checksum": "706f12e0e0f06bbdfb6a08220067f9104557ff1f2a273bff1afa2befe48b18e5"
   }
 }
