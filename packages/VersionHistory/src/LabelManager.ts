@@ -1,4 +1,5 @@
-import { BaseEntity, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { VersionLabelEntity } from '@memberjunction/core-entities';
 import { CreateLabelParams, LabelFilter, VersionLabelStatus } from './types';
 import {
     ENTITY_VERSION_LABELS,
@@ -17,18 +18,19 @@ export class LabelManager {
      * Create a new version label and persist it. Does not capture any snapshot
      * items — the caller (VersionHistoryEngine) handles that separately.
      */
-    public async CreateLabel(params: CreateLabelParams, contextUser: UserInfo): Promise<BaseEntity> {
+    public async CreateLabel(params: CreateLabelParams, contextUser: UserInfo): Promise<VersionLabelEntity> {
         this.validateCreateParams(params);
 
         const md = new Metadata();
-        const label = await md.GetEntityObject<BaseEntity>(ENTITY_VERSION_LABELS, contextUser);
+        const label = await md.GetEntityObject<VersionLabelEntity>(ENTITY_VERSION_LABELS, contextUser);
 
-        label.Set('Name', params.Name);
-        label.Set('Description', params.Description ?? null);
-        label.Set('Scope', params.Scope ?? 'System');
-        label.Set('CreatedByUserID', contextUser.ID);
-        label.Set('ExternalSystemID', params.ExternalSystemID ?? null);
-        label.Set('Status', 'Active');
+        label.Name = params.Name;
+        label.Description = params.Description ?? null;
+        label.Scope = params.Scope ?? 'Record';
+        label.CreatedByUserID = contextUser.ID;
+        label.ExternalSystemID = params.ExternalSystemID ?? null;
+        label.ParentID = params.ParentID ?? null;
+        label.Status = 'Active';
 
         this.applyEntityScope(label, params, md);
         this.applyRecordScope(label, params);
@@ -38,15 +40,15 @@ export class LabelManager {
             throw new Error(`Failed to save version label '${params.Name}'`);
         }
 
-        LogStatus(`VersionHistory: Created label '${params.Name}' (${label.Get('ID')}) with scope ${label.Get('Scope')}`);
+        LogStatus(`VersionHistory: Created label '${params.Name}' (${label.ID}) with scope ${label.Scope}`);
         return label;
     }
 
     /**
      * Load a single version label by ID.
      */
-    public async GetLabel(labelId: string, contextUser: UserInfo): Promise<BaseEntity> {
-        const label = await loadEntityById(ENTITY_VERSION_LABELS, labelId, contextUser);
+    public async GetLabel(labelId: string, contextUser: UserInfo): Promise<VersionLabelEntity> {
+        const label = await loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
         if (!label) {
             throw new Error(`Version label '${labelId}' not found`);
         }
@@ -56,14 +58,14 @@ export class LabelManager {
     /**
      * Query version labels with optional filters.
      */
-    public async GetLabels(filter: LabelFilter, contextUser: UserInfo): Promise<BaseEntity[]> {
+    public async GetLabels(filter: LabelFilter, contextUser: UserInfo): Promise<VersionLabelEntity[]> {
         const rv = new RunView();
         const filterParts = this.buildFilterClauses(filter);
         const extraFilter = filterParts.length > 0 ? filterParts.join(' AND ') : '';
         const orderBy = filter.OrderBy ?? '__mj_CreatedAt DESC';
         const maxRows = filter.MaxResults ?? 100;
 
-        const result = await rv.RunView<BaseEntity>({
+        const result = await rv.RunView<VersionLabelEntity>({
             EntityName: ENTITY_VERSION_LABELS,
             ExtraFilter: extraFilter,
             OrderBy: orderBy,
@@ -110,19 +112,19 @@ export class LabelManager {
         }
     }
 
-    private applyEntityScope(label: BaseEntity, params: CreateLabelParams, md: Metadata): void {
+    private applyEntityScope(label: VersionLabelEntity, params: CreateLabelParams, md: Metadata): void {
         if (params.EntityName && (params.Scope === 'Entity' || params.Scope === 'Record')) {
             const entityInfo = md.EntityByName(params.EntityName);
             if (!entityInfo) {
                 throw new Error(`Entity '${params.EntityName}' not found in metadata`);
             }
-            label.Set('EntityID', entityInfo.ID);
+            label.EntityID = entityInfo.ID;
         }
     }
 
-    private applyRecordScope(label: BaseEntity, params: CreateLabelParams): void {
+    private applyRecordScope(label: VersionLabelEntity, params: CreateLabelParams): void {
         if (params.RecordKey && params.Scope === 'Record') {
-            label.Set('RecordID', params.RecordKey.ToConcatenatedString());
+            label.RecordID = params.RecordKey.ToConcatenatedString();
         }
     }
 
@@ -132,13 +134,13 @@ export class LabelManager {
         contextUser: UserInfo
     ): Promise<boolean> {
         const label = await this.GetLabel(labelId, contextUser);
-        label.Set('Status', status);
+        label.Status = status;
         const saved = await label.Save();
         if (!saved) {
             LogError(`LabelManager: Failed to update label '${labelId}' to status '${status}'`);
             return false;
         }
-        LogStatus(`VersionHistory: Label '${label.Get('Name')}' (${labelId}) status updated to ${status}`);
+        LogStatus(`VersionHistory: Label '${label.Name}' (${labelId}) status updated to ${status}`);
         return true;
     }
 

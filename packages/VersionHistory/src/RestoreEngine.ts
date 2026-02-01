@@ -9,6 +9,11 @@ import {
     LogStatus,
 } from '@memberjunction/core';
 import {
+    VersionLabelEntity,
+    VersionLabelItemEntityType,
+    VersionLabelRestoreEntity,
+} from '@memberjunction/core-entities';
+import {
     RestoreItemResult,
     RestoreOptions,
     RestoreResult,
@@ -20,11 +25,11 @@ import { SnapshotBuilder } from './SnapshotBuilder';
 import {
     ENTITY_VERSION_LABEL_ITEMS,
     ENTITY_VERSION_LABEL_RESTORES,
+    ENTITY_VERSION_LABELS,
     sqlEquals,
     sqlNotIn,
     loadRecordChangeSnapshot,
     loadEntityById,
-    buildIdKey,
     buildPrimaryKeyForLoad,
 } from './constants';
 
@@ -56,9 +61,11 @@ export class RestoreEngine {
         const resolvedOptions = this.resolveDefaults(options);
 
         // Load the target label
-        const label = await this.LabelMgr.GetLabel(labelId, contextUser);
-        const labelName = label.Get('Name') as string;
-        const labelScope = label.Get('Scope') as VersionLabelScope;
+        const label = await loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
+        if (!label) throw new Error(`Version label '${labelId}' not found`);
+
+        const labelName = label.Name;
+        const labelScope = label.Scope;
         LogStatus(`VersionHistory: Starting restore to label '${labelName}' (${labelId})`);
 
         // Load all label items to restore
@@ -123,7 +130,7 @@ export class RestoreEngine {
      * audit record in batches.
      */
     private async processRestoreItems(
-        sortedItems: LabelItemRecord[],
+        sortedItems: VersionLabelItemEntityType[],
         dryRun: boolean,
         restoreAuditId: string | null,
         contextUser: UserInfo
@@ -167,7 +174,7 @@ export class RestoreEngine {
         labelId: string,
         options: Required<RestoreOptions>,
         contextUser: UserInfo
-    ): Promise<LabelItemRecord[]> {
+    ): Promise<VersionLabelItemEntityType[]> {
         const rv = new RunView();
 
         let extraFilter = sqlEquals('VersionLabelID', labelId);
@@ -183,7 +190,7 @@ export class RestoreEngine {
             }
         }
 
-        const result = await rv.RunView<Record<string, unknown>>({
+        const result = await rv.RunView<VersionLabelItemEntityType>({
             EntityName: ENTITY_VERSION_LABEL_ITEMS,
             ExtraFilter: extraFilter,
             ResultType: 'simple',
@@ -194,13 +201,7 @@ export class RestoreEngine {
             return [];
         }
 
-        let items: LabelItemRecord[] = result.Results.map(r => ({
-            ID: r['ID'] as string,
-            VersionLabelID: r['VersionLabelID'] as string,
-            RecordChangeID: r['RecordChangeID'] as string,
-            EntityID: r['EntityID'] as string,
-            RecordID: r['RecordID'] as string,
-        }));
+        let items = result.Results;
 
         // Apply selected records filter
         if (options.Scope === 'Selected' && options.SelectedRecords && options.SelectedRecords.length > 0) {
@@ -214,9 +215,9 @@ export class RestoreEngine {
      * Filter label items to only include those matching a set of selected records.
      */
     private filterBySelectedRecords(
-        items: LabelItemRecord[],
+        items: VersionLabelItemEntityType[],
         selectedRecords: Array<{ EntityName: string; RecordID: string }>
-    ): LabelItemRecord[] {
+    ): VersionLabelItemEntityType[] {
         const selectedSet = new Set(
             selectedRecords.map(s => `${s.EntityName}::${s.RecordID}`)
         );
@@ -232,7 +233,7 @@ export class RestoreEngine {
      * Sort label items by entity dependency order so parents are restored
      * before their children.
      */
-    private sortByDependencyOrder(items: LabelItemRecord[]): LabelItemRecord[] {
+    private sortByDependencyOrder(items: VersionLabelItemEntityType[]): VersionLabelItemEntityType[] {
         const md = new Metadata();
 
         // Build a map of entityId -> dependency level
@@ -241,7 +242,7 @@ export class RestoreEngine {
 
         const computeLevel = (entityId: string): number => {
             if (levelMap.has(entityId)) return levelMap.get(entityId)!;
-            if (visited.has(entityId)) return 0; // Cycle -- break it
+            if (visited.has(entityId)) return 0; // Cycle — break it
             visited.add(entityId);
 
             const entityInfo = md.Entities.find(e => e.ID === entityId);
@@ -282,7 +283,7 @@ export class RestoreEngine {
      * Restore a single record to its labeled state.
      */
     private async restoreSingleItem(
-        item: LabelItemRecord,
+        item: VersionLabelItemEntityType,
         dryRun: boolean,
         contextUser: UserInfo
     ): Promise<RestoreItemResult> {
@@ -423,7 +424,7 @@ export class RestoreEngine {
     private async createPreRestoreLabel(
         targetLabelName: string,
         targetLabelScope: VersionLabelScope,
-        items: LabelItemRecord[],
+        items: VersionLabelItemEntityType[],
         contextUser: UserInfo
     ): Promise<string> {
         const label = await this.LabelMgr.CreateLabel({
@@ -432,7 +433,7 @@ export class RestoreEngine {
             Scope: targetLabelScope,
         }, contextUser);
 
-        const preRestoreLabelId = label.Get('ID') as string;
+        const preRestoreLabelId = label.ID;
         const md = new Metadata();
 
         // Capture current state of each record that will be restored
@@ -469,16 +470,16 @@ export class RestoreEngine {
         contextUser: UserInfo
     ): Promise<string> {
         const md = new Metadata();
-        const restore = await md.GetEntityObject<BaseEntity>(ENTITY_VERSION_LABEL_RESTORES, contextUser);
+        const restore = await md.GetEntityObject<VersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, contextUser);
 
-        restore.Set('VersionLabelID', labelId);
-        restore.Set('Status', 'In Progress');
-        restore.Set('UserID', contextUser.ID);
-        restore.Set('TotalItems', totalItems);
-        restore.Set('CompletedItems', 0);
-        restore.Set('FailedItems', 0);
+        restore.VersionLabelID = labelId;
+        restore.Status = 'In Progress';
+        restore.UserID = contextUser.ID;
+        restore.TotalItems = totalItems;
+        restore.CompletedItems = 0;
+        restore.FailedItems = 0;
         if (preRestoreLabelId) {
-            restore.Set('PreRestoreLabelID', preRestoreLabelId);
+            restore.PreRestoreLabelID = preRestoreLabelId;
         }
 
         const saved = await restore.Save();
@@ -486,7 +487,7 @@ export class RestoreEngine {
             throw new Error('Failed to create restore audit record');
         }
 
-        return restore.Get('ID') as string;
+        return restore.ID;
     }
 
     /**
@@ -499,11 +500,11 @@ export class RestoreEngine {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const restore = await loadEntityById(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
+            const restore = await loadEntityById<VersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
             if (!restore) return;
 
-            restore.Set('CompletedItems', completedItems);
-            restore.Set('FailedItems', failedItems);
+            restore.CompletedItems = completedItems;
+            restore.FailedItems = failedItems;
             await restore.Save();
         } catch (e: unknown) {
             // Non-critical — progress update failure shouldn't stop the restore
@@ -523,18 +524,18 @@ export class RestoreEngine {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const restore = await loadEntityById(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
+            const restore = await loadEntityById<VersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
             if (!restore) return;
 
-            restore.Set('Status', status);
-            restore.Set('EndedAt', new Date());
+            restore.Status = status;
+            restore.EndedAt = new Date();
 
             if (failedCount > 0) {
                 const errorItems = details
                     .filter(d => d.Status === 'Failed')
                     .map(d => `${d.EntityName}/${d.RecordID}: ${d.ErrorMessage ?? 'Unknown'}`)
                     .join('\n');
-                restore.Set('ErrorLog', errorItems);
+                restore.ErrorLog = errorItems;
             }
 
             await restore.Save();
@@ -584,17 +585,6 @@ export class RestoreEngine {
             Details: [],
         };
     }
-}
-
-/**
- * Internal representation of a VersionLabelItem row.
- */
-interface LabelItemRecord {
-    ID: string;
-    VersionLabelID: string;
-    RecordChangeID: string;
-    EntityID: string;
-    RecordID: string;
 }
 
 /**

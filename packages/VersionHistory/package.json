@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@memberjunction/core": "3.3.0",
+    "@memberjunction/core-entities": "3.3.0",
     "@memberjunction/global": "3.3.0"
   },
   "repository": {

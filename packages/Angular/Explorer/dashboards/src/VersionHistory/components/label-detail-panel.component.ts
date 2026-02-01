@@ -1,0 +1,821 @@
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, HostListener, ElementRef, NgZone } from '@angular/core';
+import { Subject } from 'rxjs';
+import { RunView, Metadata, EntityInfo, CompositeKey, UserInfo } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { VersionLabelEntityType, VersionLabelItemEntityType, VersionLabelRestoreEntityType, VersionLabelEntity } from '@memberjunction/core-entities';
+
+// =========================================================================
+// Interfaces
+// =========================================================================
+
+type DetailTab = 'overview' | 'snapshots' | 'dependencies' | 'changes' | 'history';
+
+interface SnapshotEntityGroup {
+    EntityName: string;
+    EntityID: string;
+    Items: SnapshotItemView[];
+    IsExpanded: boolean;
+}
+
+interface SnapshotItemView {
+    RecordID: string;
+    RecordChangeID: string;
+    DisplayName: string;
+    FieldPreview: string;
+    FullRecordJSON: Record<string, unknown> | null;
+}
+
+interface ClientDiffResult {
+    Summary: { Changed: number; Unchanged: number; EntitiesAffected: number };
+    EntityGroups: ClientDiffEntityGroup[];
+}
+
+interface ClientDiffEntityGroup {
+    EntityName: string;
+    Records: ClientRecordDiff[];
+    IsExpanded: boolean;
+}
+
+interface ClientRecordDiff {
+    RecordID: string;
+    ChangeType: 'Modified' | 'Unchanged';
+    FieldChanges: FieldChangeView[];
+}
+
+interface FieldChangeView {
+    FieldName: string;
+    OldValue: string;
+    NewValue: string;
+    ChangeType: 'Added' | 'Modified' | 'Removed';
+}
+
+interface DependencyEntityView {
+    EntityName: string;
+    RelationshipField: string;
+    Children: DependencyEntityView[];
+    Depth: number;
+    IsExpanded: boolean;
+}
+
+export interface MicroViewData {
+    EntityName: string;
+    EntityID: string;
+    RecordID: string;
+    RecordChangeID: string;
+    FullRecordJSON: Record<string, unknown> | null;
+    FieldDiffs: FieldChangeView[] | null;
+}
+
+interface RecordChangeRow {
+    ID: string;
+    EntityID: string;
+    RecordID: string;
+    FullRecordJSON: string;
+    ChangedAt: string;
+}
+
+// =========================================================================
+// Component
+// =========================================================================
+
+@Component({
+    selector: 'mj-label-detail-panel',
+    templateUrl: './label-detail-panel.component.html',
+    styleUrls: ['./label-detail-panel.component.css'],
+    changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class LabelDetailPanelComponent implements OnInit, OnDestroy {
+    @Input() Label!: VersionLabelEntityType;
+    @Input() AllLabels: VersionLabelEntityType[] = [];
+    @Input() ItemCountMap = new Map<string, number>();
+    @Output() Close = new EventEmitter<void>();
+    @Output() LabelUpdated = new EventEmitter<void>();
+
+    // Tab state
+    public ActiveTab: DetailTab = 'overview';
+
+    // Animation
+    public IsVisible = false;
+
+    // Data
+    public LabelItems: VersionLabelItemEntityType[] = [];
+    public ChildLabels: VersionLabelEntityType[] = [];
+    public IsLoadingItems = true;
+    public IsArchiving = false;
+
+    // Overview stats
+    public UniqueEntityCount = 0;
+    public CreatorName = '';
+
+    // Snapshot tab
+    public SnapshotGroups: SnapshotEntityGroup[] = [];
+    public SnapshotViewMode: 'card' | 'list' = 'list';
+    public SnapshotSearch = '';
+    public FilteredSnapshotGroups: SnapshotEntityGroup[] = [];
+
+    // Changes tab (lazy)
+    public DiffResult: ClientDiffResult | null = null;
+    public IsLoadingDiff = false;
+    private diffLoaded = false;
+
+    // Dependencies tab (lazy)
+    public DependencyTree: DependencyEntityView[] = [];
+    public IsLoadingDependencies = false;
+    private dependenciesLoaded = false;
+
+    // History tab (lazy)
+    public Restores: VersionLabelRestoreEntityType[] = [];
+    public RelatedLabels: VersionLabelEntityType[] = [];
+    public IsLoadingHistory = false;
+    private historyLoaded = false;
+
+    // Micro view (inline)
+    public MicroViewRecord: MicroViewData | null = null;
+    public ShowMicroView = false;
+    public BreadcrumbLabel = '';
+
+    // Resize
+    public PanelWidthPx = 0;
+    private isResizing = false;
+    private resizeMinWidth = 400;
+    private resizeMaxWidthRatio = 0.92;
+    private static readonly PREFS_KEY = 'VersionHistory.DetailPanel.UserPreferences';
+
+    private metadata = new Metadata();
+    private destroy$ = new Subject<void>();
+
+    // Bound handlers for resize (need references for removeEventListener)
+    private boundOnResizeMove = this.onResizeMove.bind(this);
+    private boundOnResizeEnd = this.onResizeEnd.bind(this);
+
+    constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone, private elRef: ElementRef) {}
+
+    // =========================================================================
+    // Lifecycle
+    // =========================================================================
+
+    ngOnInit(): void {
+        this.loadPanelPreferences();
+        // Animate in on next microtask
+        Promise.resolve().then(() => {
+            this.IsVisible = true;
+            this.cdr.markForCheck();
+        });
+        this.computeChildLabels();
+        this.loadLabelItems();
+    }
+
+    ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
+        // Clean up any in-progress resize
+        document.removeEventListener('mousemove', this.boundOnResizeMove);
+        document.removeEventListener('mouseup', this.boundOnResizeEnd);
+    }
+
+    @HostListener('document:keydown.escape')
+    public OnEscapeKey(): void {
+        if (this.ShowMicroView) {
+            this.OnBackFromMicroView();
+        } else {
+            this.OnClose();
+        }
+    }
+
+    // =========================================================================
+    // Panel actions
+    // =========================================================================
+
+    public OnClose(): void {
+        this.IsVisible = false;
+        this.cdr.markForCheck();
+        // Wait for CSS transition to complete
+        setTimeout(() => this.Close.emit(), 300);
+    }
+
+    public OnBackdropClick(): void {
+        if (!this.ShowMicroView) {
+            this.OnClose();
+        }
+    }
+
+    public OnTabChange(tab: DetailTab): void {
+        this.ActiveTab = tab;
+        this.loadTabData(tab);
+        this.cdr.markForCheck();
+    }
+
+    // =========================================================================
+    // Label actions
+    // =========================================================================
+
+    public async OnArchive(): Promise<void> {
+        if (this.IsArchiving || this.Label.Status === 'Archived') return;
+
+        this.IsArchiving = true;
+        this.cdr.markForCheck();
+
+        try {
+            const md = new Metadata();
+            const label = await md.GetEntityObject<VersionLabelEntity>('MJ: Version Labels');
+            await label.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.Label.ID }]));
+            label.Status = 'Archived';
+            const saved = await label.Save();
+            if (saved) {
+                this.Label.Status = 'Archived';
+                this.LabelUpdated.emit();
+            }
+        } catch (e) {
+            console.error('Error archiving label:', e);
+        } finally {
+            this.IsArchiving = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    // =========================================================================
+    // Data loading
+    // =========================================================================
+
+    private computeChildLabels(): void {
+        this.ChildLabels = this.AllLabels.filter(l => l.ParentID === this.Label.ID);
+    }
+
+    private async loadLabelItems(): Promise<void> {
+        this.IsLoadingItems = true;
+        this.cdr.markForCheck();
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<VersionLabelItemEntityType>({
+                EntityName: 'MJ: Version Label Items',
+                ExtraFilter: `VersionLabelID = '${this.Label.ID}'`,
+                ResultType: 'simple'
+            });
+
+            if (result.Success) {
+                this.LabelItems = result.Results;
+                this.computeOverviewStats();
+                this.buildSnapshotGroups();
+            }
+        } catch (e) {
+            console.error('Error loading label items:', e);
+        } finally {
+            this.IsLoadingItems = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    private computeOverviewStats(): void {
+        const entityIds = new Set(this.LabelItems.map(i => i.EntityID ?? '').filter(Boolean));
+        this.UniqueEntityCount = entityIds.size;
+        this.CreatorName = this.Label.CreatedByUser ?? '';
+    }
+
+    private buildSnapshotGroups(): void {
+        const groupMap = new Map<string, SnapshotItemView[]>();
+
+        for (const item of this.LabelItems) {
+            const entityId = item.EntityID ?? '';
+            const entityName = this.resolveEntityName(entityId);
+            const key = entityName || entityId;
+
+            if (!groupMap.has(key)) {
+                groupMap.set(key, []);
+            }
+
+            groupMap.get(key)!.push({
+                RecordID: item.RecordID ?? '',
+                RecordChangeID: item.RecordChangeID ?? '',
+                DisplayName: item.RecordID ?? 'Unknown',
+                FieldPreview: '',
+                FullRecordJSON: null
+            });
+        }
+
+        this.SnapshotGroups = Array.from(groupMap.entries())
+            .map(([name, items]) => ({
+                EntityName: name,
+                EntityID: items[0]?.RecordChangeID ? '' : '',
+                Items: items,
+                IsExpanded: false
+            }))
+            .sort((a, b) => b.Items.length - a.Items.length);
+
+        this.FilteredSnapshotGroups = [...this.SnapshotGroups];
+    }
+
+    private loadTabData(tab: DetailTab): void {
+        switch (tab) {
+            case 'changes':
+                if (!this.diffLoaded) {
+                    this.loadDiffData();
+                }
+                break;
+            case 'dependencies':
+                if (!this.dependenciesLoaded) {
+                    this.loadDependencyData();
+                }
+                break;
+            case 'history':
+                if (!this.historyLoaded) {
+                    this.loadHistoryData();
+                }
+                break;
+        }
+    }
+
+    // =========================================================================
+    // Changes tab
+    // =========================================================================
+
+    private async loadDiffData(): Promise<void> {
+        this.IsLoadingDiff = true;
+        this.cdr.markForCheck();
+
+        try {
+            const rv = new RunView();
+            const entityGroups: ClientDiffEntityGroup[] = [];
+            let totalChanged = 0;
+            let totalUnchanged = 0;
+
+            // Group label items by entity
+            const entityItemMap = new Map<string, VersionLabelItemEntityType[]>();
+            for (const item of this.LabelItems) {
+                const entityId = item.EntityID ?? '';
+                if (!entityItemMap.has(entityId)) {
+                    entityItemMap.set(entityId, []);
+                }
+                entityItemMap.get(entityId)!.push(item);
+            }
+
+            // For each entity group, load latest RecordChanges and compare
+            for (const [entityId, items] of entityItemMap) {
+                const entityName = this.resolveEntityName(entityId);
+                const records: ClientRecordDiff[] = [];
+
+                for (const item of items) {
+                    const latestChange = await this.loadLatestRecordChange(rv, entityId, item.RecordID ?? '');
+                    const isModified = latestChange != null && latestChange !== item.RecordChangeID;
+
+                    if (isModified) {
+                        totalChanged++;
+                        records.push({
+                            RecordID: item.RecordID ?? '',
+                            ChangeType: 'Modified',
+                            FieldChanges: await this.computeFieldChanges(rv, item.RecordChangeID ?? '', latestChange)
+                        });
+                    } else {
+                        totalUnchanged++;
+                        records.push({
+                            RecordID: item.RecordID ?? '',
+                            ChangeType: 'Unchanged',
+                            FieldChanges: []
+                        });
+                    }
+                }
+
+                if (records.some(r => r.ChangeType === 'Modified')) {
+                    entityGroups.push({
+                        EntityName: entityName,
+                        Records: records.filter(r => r.ChangeType === 'Modified'),
+                        IsExpanded: false
+                    });
+                }
+            }
+
+            this.DiffResult = {
+                Summary: {
+                    Changed: totalChanged,
+                    Unchanged: totalUnchanged,
+                    EntitiesAffected: entityGroups.length
+                },
+                EntityGroups: entityGroups
+            };
+
+            this.diffLoaded = true;
+        } catch (e) {
+            console.error('Error loading diff data:', e);
+        } finally {
+            this.IsLoadingDiff = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    private async loadLatestRecordChange(rv: RunView, entityId: string, recordId: string): Promise<string | null> {
+        if (!entityId || !recordId) return null;
+
+        const result = await rv.RunView<RecordChangeRow>({
+            EntityName: 'Record Changes',
+            ExtraFilter: `EntityID = '${entityId}' AND RecordID = '${recordId}'`,
+            OrderBy: 'ChangedAt DESC',
+            MaxRows: 1,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        });
+
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0].ID;
+        }
+        return null;
+    }
+
+    private async computeFieldChanges(rv: RunView, oldChangeId: string, newChangeId: string): Promise<FieldChangeView[]> {
+        if (!oldChangeId || !newChangeId) return [];
+
+        try {
+            const [oldResult, newResult] = await rv.RunViews([
+                {
+                    EntityName: 'Record Changes',
+                    ExtraFilter: `ID = '${oldChangeId}'`,
+                    Fields: ['FullRecordJSON'],
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'Record Changes',
+                    ExtraFilter: `ID = '${newChangeId}'`,
+                    Fields: ['FullRecordJSON'],
+                    ResultType: 'simple'
+                }
+            ]);
+
+            if (!oldResult.Success || !newResult.Success) return [];
+            if (oldResult.Results.length === 0 || newResult.Results.length === 0) return [];
+
+            const oldRow = oldResult.Results[0] as RecordChangeRow;
+            const newRow = newResult.Results[0] as RecordChangeRow;
+
+            return this.diffRecordJson(oldRow.FullRecordJSON, newRow.FullRecordJSON);
+        } catch {
+            return [];
+        }
+    }
+
+    private diffRecordJson(oldJson: string, newJson: string): FieldChangeView[] {
+        const changes: FieldChangeView[] = [];
+
+        try {
+            const oldData = JSON.parse(oldJson || '{}') as Record<string, unknown>;
+            const newData = JSON.parse(newJson || '{}') as Record<string, unknown>;
+            const allKeys = new Set([...Object.keys(oldData), ...Object.keys(newData)]);
+
+            for (const key of allKeys) {
+                // Skip MJ system fields
+                if (key.startsWith('__mj_')) continue;
+
+                const oldVal = oldData[key];
+                const newVal = newData[key];
+
+                if (oldVal === undefined && newVal !== undefined) {
+                    changes.push({ FieldName: key, OldValue: '', NewValue: this.formatFieldValue(newVal), ChangeType: 'Added' });
+                } else if (oldVal !== undefined && newVal === undefined) {
+                    changes.push({ FieldName: key, OldValue: this.formatFieldValue(oldVal), NewValue: '', ChangeType: 'Removed' });
+                } else if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+                    changes.push({ FieldName: key, OldValue: this.formatFieldValue(oldVal), NewValue: this.formatFieldValue(newVal), ChangeType: 'Modified' });
+                }
+            }
+        } catch {
+            // Invalid JSON - skip
+        }
+
+        return changes;
+    }
+
+    // =========================================================================
+    // Dependencies tab
+    // =========================================================================
+
+    private loadDependencyData(): void {
+        this.IsLoadingDependencies = true;
+        this.cdr.markForCheck();
+
+        try {
+            const entityId = this.Label.EntityID;
+            if (!entityId) {
+                this.DependencyTree = [];
+                this.dependenciesLoaded = true;
+                return;
+            }
+
+            const entityInfo = this.metadata.Entities.find(e => e.ID === entityId);
+            if (!entityInfo) {
+                this.DependencyTree = [];
+                this.dependenciesLoaded = true;
+                return;
+            }
+
+            this.DependencyTree = this.buildDependencyTree(entityInfo, 0, new Set<string>());
+            this.dependenciesLoaded = true;
+        } catch (e) {
+            console.error('Error loading dependency data:', e);
+        } finally {
+            this.IsLoadingDependencies = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    private buildDependencyTree(entity: EntityInfo, depth: number, visited: Set<string>): DependencyEntityView[] {
+        if (depth > 3 || visited.has(entity.Name)) return [];
+        visited.add(entity.Name);
+
+        const deps: DependencyEntityView[] = [];
+
+        // Get One-To-Many relationships (entities that depend on this one)
+        const dependents = entity.RelatedEntities.filter(r =>
+            r.Type.trim().toUpperCase() === 'ONE TO MANY' &&
+            r.RelatedEntity !== entity.Name
+        );
+
+        for (const rel of dependents) {
+            const childEntity = this.metadata.Entities.find(e => e.Name === rel.RelatedEntity);
+            const children = childEntity
+                ? this.buildDependencyTree(childEntity, depth + 1, new Set(visited))
+                : [];
+
+            deps.push({
+                EntityName: rel.RelatedEntity,
+                RelationshipField: rel.RelatedEntityJoinField,
+                Children: children,
+                Depth: depth + 1,
+                IsExpanded: depth < 1
+            });
+        }
+
+        return deps.sort((a, b) => a.EntityName.localeCompare(b.EntityName));
+    }
+
+    // =========================================================================
+    // History tab
+    // =========================================================================
+
+    private async loadHistoryData(): Promise<void> {
+        this.IsLoadingHistory = true;
+        this.cdr.markForCheck();
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<VersionLabelRestoreEntityType>({
+                EntityName: 'MJ: Version Label Restores',
+                ExtraFilter: `VersionLabelID = '${this.Label.ID}'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 50,
+                ResultType: 'simple'
+            });
+
+            if (result.Success) {
+                this.Restores = result.Results;
+            }
+
+            // Find related labels (same entity + record)
+            this.RelatedLabels = this.AllLabels.filter(l =>
+                l.ID !== this.Label.ID &&
+                l.EntityID === this.Label.EntityID &&
+                l.RecordID === this.Label.RecordID &&
+                l.RecordID != null
+            );
+
+            this.historyLoaded = true;
+        } catch (e) {
+            console.error('Error loading history data:', e);
+        } finally {
+            this.IsLoadingHistory = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    // =========================================================================
+    // Snapshot interactions
+    // =========================================================================
+
+    public ToggleSnapshotGroup(group: SnapshotEntityGroup): void {
+        group.IsExpanded = !group.IsExpanded;
+        this.cdr.markForCheck();
+    }
+
+    public OnSnapshotSearchChange(text: string): void {
+        this.SnapshotSearch = text;
+        if (!text) {
+            this.FilteredSnapshotGroups = [...this.SnapshotGroups];
+        } else {
+            const search = text.toLowerCase();
+            this.FilteredSnapshotGroups = this.SnapshotGroups
+                .filter(g => g.EntityName.toLowerCase().includes(search) ||
+                    g.Items.some(i => i.RecordID.toLowerCase().includes(search) || i.DisplayName.toLowerCase().includes(search)))
+                .map(g => ({
+                    ...g,
+                    Items: g.Items.filter(i =>
+                        i.RecordID.toLowerCase().includes(search) ||
+                        i.DisplayName.toLowerCase().includes(search) ||
+                        g.EntityName.toLowerCase().includes(search)
+                    )
+                }));
+        }
+        this.cdr.markForCheck();
+    }
+
+    public ToggleSnapshotViewMode(): void {
+        this.SnapshotViewMode = this.SnapshotViewMode === 'card' ? 'list' : 'card';
+        this.cdr.markForCheck();
+    }
+
+    // =========================================================================
+    // Diff interactions
+    // =========================================================================
+
+    public ToggleDiffGroup(group: ClientDiffEntityGroup): void {
+        group.IsExpanded = !group.IsExpanded;
+        this.cdr.markForCheck();
+    }
+
+    // =========================================================================
+    // Dependency interactions
+    // =========================================================================
+
+    public ToggleDependencyNode(node: DependencyEntityView): void {
+        node.IsExpanded = !node.IsExpanded;
+        this.cdr.markForCheck();
+    }
+
+    // =========================================================================
+    // Micro view (inline navigation)
+    // =========================================================================
+
+    public OpenMicroView(entityName: string, recordId: string, recordChangeId: string): void {
+        this.BreadcrumbLabel = `${entityName} / ${recordId.substring(0, 12)}...`;
+        this.MicroViewRecord = {
+            EntityName: entityName,
+            EntityID: '',
+            RecordID: recordId,
+            RecordChangeID: recordChangeId,
+            FullRecordJSON: null,
+            FieldDiffs: null
+        };
+        this.ShowMicroView = true;
+        this.cdr.markForCheck();
+    }
+
+    public OnBackFromMicroView(): void {
+        this.ShowMicroView = false;
+        this.MicroViewRecord = null;
+        this.cdr.markForCheck();
+    }
+
+    // =========================================================================
+    // Resize handling
+    // =========================================================================
+
+    public OnResizeStart(event: MouseEvent): void {
+        event.preventDefault();
+        this.isResizing = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        // Run outside Angular zone for performance during drag
+        this.ngZone.runOutsideAngular(() => {
+            document.addEventListener('mousemove', this.boundOnResizeMove);
+            document.addEventListener('mouseup', this.boundOnResizeEnd);
+        });
+    }
+
+    private onResizeMove(event: MouseEvent): void {
+        if (!this.isResizing) return;
+
+        const viewportWidth = window.innerWidth;
+        const maxWidth = viewportWidth * this.resizeMaxWidthRatio;
+        const newWidth = Math.max(this.resizeMinWidth, Math.min(maxWidth, viewportWidth - event.clientX));
+
+        this.PanelWidthPx = newWidth;
+        this.ngZone.run(() => this.cdr.markForCheck());
+    }
+
+    private onResizeEnd(): void {
+        if (!this.isResizing) return;
+        this.isResizing = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', this.boundOnResizeMove);
+        document.removeEventListener('mouseup', this.boundOnResizeEnd);
+        this.savePanelPreferences();
+    }
+
+    // =========================================================================
+    // Panel preferences
+    // =========================================================================
+
+    private loadPanelPreferences(): void {
+        // Default to 65% of viewport
+        this.PanelWidthPx = Math.max(this.resizeMinWidth, Math.min(window.innerWidth * 0.65, 1000));
+
+        try {
+            const raw = UserInfoEngine.Instance.GetSetting(LabelDetailPanelComponent.PREFS_KEY);
+            if (raw) {
+                const prefs = JSON.parse(raw) as { PanelWidthPx?: number };
+                if (prefs.PanelWidthPx && prefs.PanelWidthPx >= this.resizeMinWidth) {
+                    this.PanelWidthPx = Math.min(prefs.PanelWidthPx, window.innerWidth * this.resizeMaxWidthRatio);
+                }
+            }
+        } catch {
+            // Use defaults
+        }
+    }
+
+    private savePanelPreferences(): void {
+        try {
+            const prefs = JSON.stringify({ PanelWidthPx: Math.round(this.PanelWidthPx) });
+            UserInfoEngine.Instance.SetSettingDebounced(LabelDetailPanelComponent.PREFS_KEY, prefs);
+        } catch {
+            // Ignore save errors
+        }
+    }
+
+    // =========================================================================
+    // Display helpers
+    // =========================================================================
+
+    public resolveEntityName(entityId: string): string {
+        if (!entityId) return 'Unknown';
+        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        return entity ? entity.Name : 'Unknown';
+    }
+
+    public GetScopeIcon(scope: string | undefined): string {
+        const icons: Record<string, string> = {
+            'System': 'fa-solid fa-globe',
+            'Entity': 'fa-solid fa-table',
+            'Record': 'fa-solid fa-file'
+        };
+        return icons[scope ?? ''] ?? 'fa-solid fa-tag';
+    }
+
+    public GetStatusClass(status: string | undefined): string {
+        const classes: Record<string, string> = {
+            'Active': 'status-active',
+            'Archived': 'status-archived',
+            'Restored': 'status-restored'
+        };
+        return classes[status ?? ''] ?? '';
+    }
+
+    public GetChangeTypeClass(changeType: string): string {
+        const classes: Record<string, string> = {
+            'Added': 'change-added',
+            'Modified': 'change-modified',
+            'Removed': 'change-removed'
+        };
+        return classes[changeType] ?? '';
+    }
+
+    public GetChangeTypeIcon(changeType: string): string {
+        const icons: Record<string, string> = {
+            'Added': 'fa-solid fa-plus-circle',
+            'Modified': 'fa-solid fa-pen-to-square',
+            'Removed': 'fa-solid fa-minus-circle'
+        };
+        return icons[changeType] ?? 'fa-solid fa-circle';
+    }
+
+    public FormatDate(date: Date | string | undefined): string {
+        if (!date) return '';
+        const d = date instanceof Date ? date : new Date(date);
+        return d.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    public FormatRelativeDate(date: Date | string | undefined): string {
+        if (!date) return '';
+        const d = date instanceof Date ? date : new Date(date);
+        const now = new Date();
+        const diffMs = now.getTime() - d.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    public FormatDuration(ms: number | undefined): string {
+        if (!ms) return '';
+        if (ms < 1000) return `${ms}ms`;
+        return `${(ms / 1000).toFixed(1)}s`;
+    }
+
+    public GetItemCount(labelId: string | undefined): number {
+        return this.ItemCountMap.get(labelId ?? '') ?? 0;
+    }
+
+    private formatFieldValue(value: unknown): string {
+        if (value == null) return 'null';
+        if (typeof value === 'object') return JSON.stringify(value);
+        return String(value);
+    }
+}

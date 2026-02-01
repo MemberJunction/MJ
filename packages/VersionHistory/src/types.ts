@@ -28,12 +28,14 @@ export interface CreateLabelParams {
     Name: string;
     /** Optional longer description */
     Description?: string;
-    /** Scope of the label (default: System) */
+    /** Scope of the label (default: Record) */
     Scope?: VersionLabelScope;
     /** When scope is Entity or Record, the target entity name */
     EntityName?: string;
     /** When scope is Record, the target record key */
     RecordKey?: CompositeKey;
+    /** Optional parent label ID for grouping related labels */
+    ParentID?: string;
     /** Optional external system reference (git SHA, release tag, etc.) */
     ExternalSystemID?: string;
     /**

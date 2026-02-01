@@ -1,9 +1,9 @@
 import {
-    BaseEntity,
     CompositeKey,
     UserInfo,
     LogStatus,
 } from '@memberjunction/core';
+import { VersionLabelEntity } from '@memberjunction/core-entities';
 import {
     CaptureResult,
     CreateLabelParams,
@@ -52,10 +52,10 @@ import { RestoreEngine } from './RestoreEngine';
  * }, contextUser);
  *
  * // Later: see what changed since the label
- * const diff = await engine.DiffLabelToCurrentState(label.Get('ID'), contextUser);
+ * const diff = await engine.DiffLabelToCurrentState(label.Label.ID, contextUser);
  *
  * // Restore if needed
- * const result = await engine.RestoreToLabel(label.Get('ID'), {}, contextUser);
+ * const result = await engine.RestoreToLabel(label.Label.ID, {}, contextUser);
  * ```
  */
 export class VersionHistoryEngine {
@@ -80,11 +80,14 @@ export class VersionHistoryEngine {
     public async CreateLabel(
         params: CreateLabelParams,
         contextUser: UserInfo
-    ): Promise<{ Label: BaseEntity; CaptureResult: CaptureResult }> {
+    ): Promise<{ Label: VersionLabelEntity; CaptureResult: CaptureResult }> {
         // Create the label record
         const label = await this.LabelMgr.CreateLabel(params, contextUser);
-        const labelId = label.Get('ID') as string;
-        const scope = params.Scope ?? 'System';
+        const labelId = label.ID;
+        const scope = params.Scope ?? 'Record';
+
+        // Track creation timing
+        const startTime = Date.now();
 
         // Capture the snapshot based on scope
         let captureResult: CaptureResult;
@@ -123,9 +126,15 @@ export class VersionHistoryEngine {
                 throw new Error(`Unknown scope: ${scope}`);
         }
 
+        // Update label with metrics
+        const durationMs = Date.now() - startTime;
+        label.ItemCount = captureResult.ItemsCaptured;
+        label.CreationDurationMS = durationMs;
+        await label.Save();
+
         LogStatus(
             `VersionHistory: Label '${params.Name}' created with ${captureResult.ItemsCaptured} items ` +
-            `(${captureResult.SyntheticSnapshotsCreated} synthetic snapshots)`
+            `in ${durationMs}ms (${captureResult.SyntheticSnapshotsCreated} synthetic snapshots)`
         );
 
         return { Label: label, CaptureResult: captureResult };
@@ -141,14 +150,14 @@ export class VersionHistoryEngine {
     /**
      * Load a single version label by ID.
      */
-    public async GetLabel(labelId: string, contextUser: UserInfo): Promise<BaseEntity> {
+    public async GetLabel(labelId: string, contextUser: UserInfo): Promise<VersionLabelEntity> {
         return this.LabelMgr.GetLabel(labelId, contextUser);
     }
 
     /**
      * Query version labels with optional filters.
      */
-    public async GetLabels(filter: LabelFilter, contextUser: UserInfo): Promise<BaseEntity[]> {
+    public async GetLabels(filter: LabelFilter, contextUser: UserInfo): Promise<VersionLabelEntity[]> {
         return this.LabelMgr.GetLabels(filter, contextUser);
     }
 

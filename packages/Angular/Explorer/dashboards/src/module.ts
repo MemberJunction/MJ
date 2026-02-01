@@ -173,6 +173,8 @@ import { VersionHistoryLabelsResourceComponent } from './VersionHistory/componen
 import { VersionHistoryDiffResourceComponent } from './VersionHistory/components/diff-resource.component';
 import { VersionHistoryRestoreResourceComponent } from './VersionHistory/components/restore-resource.component';
 import { VersionHistoryGraphResourceComponent } from './VersionHistory/components/graph-resource.component';
+import { LabelDetailPanelComponent } from './VersionHistory/components/label-detail-panel.component';
+import { RecordMicroViewComponent } from './VersionHistory/components/record-micro-view.component';
 
 
 
@@ -303,7 +305,9 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryRestoreResourceComponent,
-    VersionHistoryGraphResourceComponent
+    VersionHistoryGraphResourceComponent,
+    LabelDetailPanelComponent,
+    RecordMicroViewComponent
   ],
   imports: [
     CommonModule,
@@ -441,7 +445,9 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryRestoreResourceComponent,
-    VersionHistoryGraphResourceComponent
+    VersionHistoryGraphResourceComponent,
+    LabelDetailPanelComponent,
+    RecordMicroViewComponent
   ]
 })
 export class DashboardsModule { }

@@ -1,0 +1,95 @@
+<!-- Overlay mode (legacy) -->
+<ng-container *ngIf="!Inline">
+    <div class="micro-backdrop" [class.visible]="IsVisible" (click)="OnClose()"></div>
+    <div class="micro-panel" [class.visible]="IsVisible">
+        <ng-container *ngTemplateOutlet="microContent"></ng-container>
+    </div>
+</ng-container>
+
+<!-- Inline mode (embedded in parent panel) -->
+<ng-container *ngIf="Inline">
+    <div class="micro-inline">
+        <ng-container *ngTemplateOutlet="microContent"></ng-container>
+    </div>
+</ng-container>
+
+<!-- Shared content template -->
+<ng-template #microContent>
+    <!-- Header -->
+    <div class="micro-header" *ngIf="!Inline">
+        <div class="micro-header-info">
+            <div class="micro-entity">
+                <i class="fa-solid fa-table micro-entity-icon"></i>
+                <span>{{Data.EntityName}}</span>
+            </div>
+            <div class="micro-record-id">
+                <i class="fa-solid fa-fingerprint"></i>
+                <span>{{Data.RecordID}}</span>
+            </div>
+        </div>
+        <button class="micro-close" (click)="OnClose()">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+
+    <!-- Inline header (simpler, entity + record info) -->
+    <div class="micro-inline-header" *ngIf="Inline">
+        <div class="micro-entity">
+            <i class="fa-solid fa-table micro-entity-icon"></i>
+            <span>{{Data.EntityName}}</span>
+        </div>
+        <div class="micro-record-id">
+            <i class="fa-solid fa-fingerprint"></i>
+            <span>{{Data.RecordID}}</span>
+        </div>
+    </div>
+
+    <!-- Content -->
+    <div class="micro-content" [class.micro-content-inline]="Inline">
+        <mj-loading *ngIf="IsLoading" text="Loading record data..."></mj-loading>
+
+        <!-- Error -->
+        <div class="micro-error" *ngIf="!IsLoading && ErrorMessage">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span>{{ErrorMessage}}</span>
+        </div>
+
+        <!-- Field table -->
+        <div class="micro-fields" *ngIf="!IsLoading && !ErrorMessage && Fields.length > 0">
+            <div class="micro-field-header">
+                <span class="mf-col-name">Field</span>
+                <span class="mf-col-value" *ngIf="!HasDiffs">Value</span>
+                <ng-container *ngIf="HasDiffs">
+                    <span class="mf-col-old">Old</span>
+                    <span class="mf-col-new">New</span>
+                </ng-container>
+            </div>
+
+            <div class="micro-field-row" *ngFor="let field of Fields; let odd = odd"
+                 [class.odd]="odd" [ngClass]="field.DiffClass">
+                <span class="mf-col-name">
+                    <i [class]="GetTypeIcon(field.Type)" class="mf-type-icon"></i>
+                    <span class="mf-field-name">{{field.Name}}</span>
+                </span>
+
+                <span class="mf-col-value" *ngIf="!HasDiffs" [title]="field.Value">
+                    {{field.Value}}
+                </span>
+
+                <ng-container *ngIf="HasDiffs">
+                    <span class="mf-col-old" [title]="field.OldValue">
+                        {{field.OldValue || field.Value}}
+                    </span>
+                    <span class="mf-col-new" [title]="field.Value">
+                        {{field.Value}}
+                    </span>
+                </ng-container>
+            </div>
+        </div>
+
+        <!-- Empty -->
+        <div class="micro-empty" *ngIf="!IsLoading && !ErrorMessage && Fields.length === 0">
+            <p>No field data available.</p>
+        </div>
+    </div>
+</ng-template>

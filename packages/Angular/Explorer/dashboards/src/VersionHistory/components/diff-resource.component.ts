@@ -3,17 +3,14 @@ import { Subject } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, VersionLabelEntityType, VersionLabelItemEntityType } from '@memberjunction/core-entities';
+
+interface VersionDiffPreferences {
+    DiffMode: 'label-to-label' | 'label-to-current';
+}
 
 export function LoadVersionHistoryDiffResource() {
     // Prevents tree-shaking
-}
-
-interface LabelOption {
-    ID: string;
-    Name: string;
-    Scope: string;
-    CreatedAt: Date;
 }
 
 interface DiffItemView {
@@ -50,7 +47,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     public HasDiffResult = false;
 
     // Label selection
-    public AvailableLabels: LabelOption[] = [];
+    public AvailableLabels: VersionLabelEntityType[] = [];
     public FromLabelId = '';
     public ToLabelId = '';
     public DiffMode: 'label-to-label' | 'label-to-current' = 'label-to-current';
@@ -65,6 +62,8 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     // UI state
     public ExpandedEntities = new Set<string>();
 
+    private static readonly PREFS_KEY = 'VersionHistory.Diff.UserPreferences';
+    private preferencesLoaded = false;
     private destroy$ = new Subject<void>();
 
     constructor(private cdr: ChangeDetectorRef) {
@@ -72,6 +71,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     }
 
     ngOnInit(): void {
+        this.loadUserPreferences();
         this.LoadLabels();
     }
 
@@ -94,22 +94,16 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             this.cdr.markForCheck();
 
             const rv = new RunView();
-            const result = await rv.RunView<Record<string, unknown>>({
+            const result = await rv.RunView<VersionLabelEntityType>({
                 EntityName: 'MJ: Version Labels',
                 ExtraFilter: "Status = 'Active'",
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 200,
-                Fields: ['ID', 'Name', 'Scope', '__mj_CreatedAt'],
                 ResultType: 'simple'
             });
 
             if (result.Success) {
-                this.AvailableLabels = result.Results.map(row => ({
-                    ID: row['ID'] as string,
-                    Name: row['Name'] as string,
-                    Scope: row['Scope'] as string,
-                    CreatedAt: new Date(row['__mj_CreatedAt'] as string)
-                }));
+                this.AvailableLabels = result.Results;
             }
         } catch (error) {
             console.error('Error loading labels for diff:', error);
@@ -125,6 +119,31 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
         this.HasDiffResult = false;
         this.EntityGroups = [];
         this.cdr.markForCheck();
+        this.persistPreferences();
+    }
+
+    private loadUserPreferences(): void {
+        try {
+            const raw = UserInfoEngine.Instance.GetSetting(VersionHistoryDiffResourceComponent.PREFS_KEY);
+            if (raw) {
+                const prefs: VersionDiffPreferences = JSON.parse(raw);
+                if (prefs.DiffMode === 'label-to-label' || prefs.DiffMode === 'label-to-current') {
+                    this.DiffMode = prefs.DiffMode;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading diff preferences:', error);
+            this.DiffMode = 'label-to-current';
+        }
+        this.preferencesLoaded = true;
+    }
+
+    private persistPreferences(): void {
+        if (!this.preferencesLoaded) return;
+        const prefs: VersionDiffPreferences = {
+            DiffMode: this.DiffMode
+        };
+        UserInfoEngine.Instance.SetSettingDebounced(VersionHistoryDiffResourceComponent.PREFS_KEY, JSON.stringify(prefs));
     }
 
     public async RunDiff(): Promise<void> {
@@ -160,8 +179,8 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     private async loadLabelItems(
         rv: RunView,
         labelId: string
-    ): Promise<Record<string, unknown>[]> {
-        const result = await rv.RunView<Record<string, unknown>>({
+    ): Promise<VersionLabelItemEntityType[]> {
+        const result = await rv.RunView<VersionLabelItemEntityType>({
             EntityName: 'MJ: Version Label Items',
             ExtraFilter: `VersionLabelID = '${labelId}'`,
             ResultType: 'simple'
@@ -170,8 +189,8 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     }
 
     private computeDiff(
-        fromItems: Record<string, unknown>[],
-        toItems: Record<string, unknown>[]
+        fromItems: VersionLabelItemEntityType[],
+        toItems: VersionLabelItemEntityType[]
     ): void {
         const entityMap = new Map<string, DiffItemView[]>();
 
@@ -181,13 +200,13 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
 
         // Items in 'to' but not in 'from' = Added
         for (const [key, item] of toMap) {
-            const entityName = this.resolveEntityName(item['EntityID'] as string);
+            const entityName = this.resolveEntityName(item.EntityID ?? '');
             if (!entityMap.has(entityName)) entityMap.set(entityName, []);
 
             if (!fromMap.has(key)) {
                 entityMap.get(entityName)!.push({
                     EntityName: entityName,
-                    RecordID: item['RecordID'] as string,
+                    RecordID: item.RecordID ?? '',
                     ChangeType: 'Added',
                     FieldChanges: []
                 });
@@ -196,24 +215,24 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
 
         // Items in 'from' but not in 'to' = Removed
         for (const [key, item] of fromMap) {
-            const entityName = this.resolveEntityName(item['EntityID'] as string);
+            const entityName = this.resolveEntityName(item.EntityID ?? '');
             if (!entityMap.has(entityName)) entityMap.set(entityName, []);
 
             if (!toMap.has(key)) {
                 entityMap.get(entityName)!.push({
                     EntityName: entityName,
-                    RecordID: item['RecordID'] as string,
+                    RecordID: item.RecordID ?? '',
                     ChangeType: 'Removed',
                     FieldChanges: []
                 });
             } else {
                 // Both exist - check if RecordChangeID differs (= Modified)
                 const toItem = toMap.get(key)!;
-                const changeType = item['RecordChangeID'] !== toItem['RecordChangeID']
+                const changeType = item.RecordChangeID !== toItem.RecordChangeID
                     ? 'Modified' : 'Unchanged';
                 entityMap.get(entityName)!.push({
                     EntityName: entityName,
-                    RecordID: item['RecordID'] as string,
+                    RecordID: item.RecordID ?? '',
                     ChangeType: changeType,
                     FieldChanges: []
                 });
@@ -225,7 +244,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
 
     private async computeDiffToCurrentState(
         rv: RunView,
-        labelItems: Record<string, unknown>[]
+        labelItems: VersionLabelItemEntityType[]
     ): Promise<void> {
         // For label-to-current, we compare snapshot RecordChangeIDs against
         // the latest RecordChange for each entity/record combination.
@@ -233,12 +252,12 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
         const entityMap = new Map<string, DiffItemView[]>();
 
         for (const item of labelItems) {
-            const entityName = this.resolveEntityName(item['EntityID'] as string);
+            const entityName = this.resolveEntityName(item.EntityID ?? '');
             if (!entityMap.has(entityName)) entityMap.set(entityName, []);
 
             entityMap.get(entityName)!.push({
                 EntityName: entityName,
-                RecordID: item['RecordID'] as string,
+                RecordID: item.RecordID ?? '',
                 ChangeType: 'Modified', // Simplified: mark all as potentially modified
                 FieldChanges: []
             });
@@ -248,11 +267,11 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     }
 
     private buildItemKeyMap(
-        items: Record<string, unknown>[]
-    ): Map<string, Record<string, unknown>> {
-        const map = new Map<string, Record<string, unknown>>();
+        items: VersionLabelItemEntityType[]
+    ): Map<string, VersionLabelItemEntityType> {
+        const map = new Map<string, VersionLabelItemEntityType>();
         for (const item of items) {
-            const key = `${item['EntityID']}|${item['RecordID']}`;
+            const key = `${item.EntityID ?? ''}|${item.RecordID ?? ''}`;
             map.set(key, item);
         }
         return map;
@@ -329,8 +348,11 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
         return icons[changeType] ?? 'fa-solid fa-circle';
     }
 
-    public FormatLabelOption(label: LabelOption): string {
-        const date = label.CreatedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    public FormatLabelOption(label: VersionLabelEntityType): string {
+        const dateVal = label.__mj_CreatedAt;
+        const date = dateVal instanceof Date
+            ? dateVal.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : new Date(dateVal as unknown as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         return `${label.Name} (${label.Scope}, ${date})`;
     }
 

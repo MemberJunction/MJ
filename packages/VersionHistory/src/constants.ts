@@ -149,14 +149,14 @@ export async function loadRecordChangeSnapshot(
 }
 
 /**
- * Load a BaseEntity by its ID using InnerLoad with the entity's actual PK name.
+ * Load a strongly-typed entity by its ID using InnerLoad with the entity's actual PK name.
  * Returns null if not found or on error.
  */
-export async function loadEntityById(
+export async function loadEntityById<T extends BaseEntity = BaseEntity>(
     entityName: string,
     id: string,
     contextUser: UserInfo
-): Promise<BaseEntity | null> {
+): Promise<T | null> {
     const md = new Metadata();
     const entityInfo = md.EntityByName(entityName);
     if (!entityInfo) {
@@ -164,7 +164,7 @@ export async function loadEntityById(
         return null;
     }
 
-    const entity = await md.GetEntityObject<BaseEntity>(entityName, contextUser);
+    const entity = await md.GetEntityObject<T>(entityName, contextUser);
     const key = buildPrimaryKeyForLoad(entityInfo, id);
     const loaded = await entity.InnerLoad(key);
     if (!loaded) return null;

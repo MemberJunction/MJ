@@ -1,11 +1,10 @@
 import {
-    BaseEntity,
     Metadata,
     RunView,
     UserInfo,
     LogError,
-    LogStatus,
 } from '@memberjunction/core';
+import { VersionLabelEntity, VersionLabelItemEntityType } from '@memberjunction/core-entities';
 import {
     DiffResult,
     DiffSummary,
@@ -20,7 +19,6 @@ import {
     ENTITY_VERSION_LABELS,
     ENTITY_RECORD_CHANGES,
     sqlEquals,
-    escapeSqlString,
     loadRecordChangeSnapshot,
     loadEntityById,
 } from './constants';
@@ -45,8 +43,8 @@ export class DiffEngine {
     ): Promise<DiffResult> {
         // Short-circuit: identical labels produce an empty diff
         if (fromLabelId === toLabelId) {
-            const label = await loadEntityById(ENTITY_VERSION_LABELS, fromLabelId, contextUser);
-            const labelName = label ? (label.Get('Name') as string) : fromLabelId;
+            const label = await loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser);
+            const labelName = label ? label.Name : fromLabelId;
             return {
                 FromLabelID: fromLabelId,
                 FromLabelName: labelName,
@@ -58,8 +56,8 @@ export class DiffEngine {
         }
 
         const [fromLabel, toLabel] = await Promise.all([
-            loadEntityById(ENTITY_VERSION_LABELS, fromLabelId, contextUser),
-            loadEntityById(ENTITY_VERSION_LABELS, toLabelId, contextUser),
+            loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser),
+            loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, toLabelId, contextUser),
         ]);
         if (!fromLabel) throw new Error(`Version label '${fromLabelId}' not found`);
         if (!toLabel) throw new Error(`Version label '${toLabelId}' not found`);
@@ -74,9 +72,9 @@ export class DiffEngine {
 
         return {
             FromLabelID: fromLabelId,
-            FromLabelName: fromLabel.Get('Name') as string,
+            FromLabelName: fromLabel.Name,
             ToLabelID: toLabelId,
-            ToLabelName: toLabel.Get('Name') as string,
+            ToLabelName: toLabel.Name,
             Summary: summary,
             EntityDiffs: entityDiffs,
         };
@@ -94,7 +92,7 @@ export class DiffEngine {
         labelId: string,
         contextUser: UserInfo
     ): Promise<DiffResult> {
-        const label = await loadEntityById(ENTITY_VERSION_LABELS, labelId, contextUser);
+        const label = await loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
         if (!label) throw new Error(`Version label '${labelId}' not found`);
 
         const fromIndex = await this.buildSnapshotIndex(labelId, contextUser);
@@ -108,7 +106,7 @@ export class DiffEngine {
 
         return {
             FromLabelID: labelId,
-            FromLabelName: label.Get('Name') as string,
+            FromLabelName: label.Name,
             ToLabelID: null,
             ToLabelName: null,
             Summary: summary,
@@ -136,7 +134,7 @@ export class DiffEngine {
             sqlEquals('RecordID', recordId),
         ].join(' AND ');
 
-        const result = await rv.RunView<Record<string, unknown>>({
+        const result = await rv.RunView<VersionLabelItemEntityType>({
             EntityName: ENTITY_VERSION_LABEL_ITEMS,
             ExtraFilter: filter,
             Fields: ['ID', 'RecordChangeID', 'EntityID', 'RecordID'],
@@ -147,9 +145,8 @@ export class DiffEngine {
         if (!result.Success || result.Results.length === 0) return null;
 
         const item = result.Results[0];
-        const recordChangeId = item['RecordChangeID'] as string;
         return this.buildSnapshotFromRecordChange(
-            recordChangeId,
+            item.RecordChangeID,
             entityName,
             entityInfo.ID,
             recordId,
@@ -166,7 +163,7 @@ export class DiffEngine {
      */
     private async buildSnapshotIndex(labelId: string, contextUser: UserInfo): Promise<SnapshotIndex> {
         const rv = new RunView();
-        const result = await rv.RunView<Record<string, unknown>>({
+        const result = await rv.RunView<VersionLabelItemEntityType>({
             EntityName: ENTITY_VERSION_LABEL_ITEMS,
             ExtraFilter: sqlEquals('VersionLabelID', labelId),
             Fields: ['ID', 'RecordChangeID', 'EntityID', 'RecordID'],
@@ -180,8 +177,8 @@ export class DiffEngine {
         }
 
         for (const item of result.Results) {
-            const key = `${item['EntityID']}::${item['RecordID']}`;
-            index.set(key, item['RecordChangeID'] as string);
+            const key = `${item.EntityID}::${item.RecordID}`;
+            index.set(key, item.RecordChangeID);
         }
         return index;
     }
@@ -239,7 +236,7 @@ export class DiffEngine {
             sqlEquals('RecordID', recordId),
         ].join(' AND ');
 
-        const result = await rv.RunView<Record<string, unknown>>({
+        const result = await rv.RunView<{ ID: string }>({
             EntityName: ENTITY_RECORD_CHANGES,
             ExtraFilter: filter,
             OrderBy: 'ChangedAt DESC',
@@ -249,7 +246,7 @@ export class DiffEngine {
         }, contextUser);
 
         if (result.Success && result.Results.length > 0) {
-            return result.Results[0]['ID'] as string;
+            return result.Results[0].ID;
         }
         return null;
     }
@@ -451,7 +448,7 @@ export class DiffEngine {
         contextUser: UserInfo
     ): Promise<RecordSnapshot | null> {
         const rv = new RunView();
-        const result = await rv.RunView<Record<string, unknown>>({
+        const result = await rv.RunView<{ ID: string; ChangedAt: string }>({
             EntityName: ENTITY_RECORD_CHANGES,
             ExtraFilter: sqlEquals('ID', recordChangeId),
             Fields: ['ID', 'ChangedAt'],
@@ -461,7 +458,7 @@ export class DiffEngine {
 
         if (!result.Success || result.Results.length === 0) return null;
 
-        const changedAt = result.Results[0]['ChangedAt'] as string;
+        const changedAt = result.Results[0].ChangedAt;
         const parsed = await loadRecordChangeSnapshot(recordChangeId, contextUser);
         if (!parsed) return null;
 

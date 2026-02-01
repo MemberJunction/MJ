@@ -1,5 +1,4 @@
 import {
-    BaseEntity,
     CompositeKey,
     EntityInfo,
     Metadata,
@@ -8,6 +7,7 @@ import {
     LogError,
     LogStatus,
 } from '@memberjunction/core';
+import { RecordChangeEntity, VersionLabelItemEntity } from '@memberjunction/core-entities';
 import { CaptureError, CaptureResult, DependencyNode, WalkOptions } from './types';
 import { DependencyGraphWalker } from './DependencyGraphWalker';
 import {
@@ -217,7 +217,7 @@ export class SnapshotBuilder {
             const latestChange = await this.findLatestRecordChange(entityInfo.ID, recordId, contextUser);
 
             if (latestChange) {
-                recordChangeId = latestChange.Get('ID') as string;
+                recordChangeId = latestChange.ID;
             } else {
                 // No existing change — create a synthetic snapshot
                 const recordData = existingRecordData ?? await this.loadCurrentRecord(entityName, recordKey, contextUser);
@@ -234,16 +234,16 @@ export class SnapshotBuilder {
                 if (!syntheticChange) {
                     return { success: false, wasSynthetic: false, error: 'Failed to create synthetic snapshot' };
                 }
-                recordChangeId = syntheticChange.Get('ID') as string;
+                recordChangeId = syntheticChange.ID;
                 wasSynthetic = true;
             }
 
             // Create the VersionLabelItem
-            const item = await md.GetEntityObject<BaseEntity>(ENTITY_VERSION_LABEL_ITEMS, contextUser);
-            item.Set('VersionLabelID', labelId);
-            item.Set('RecordChangeID', recordChangeId);
-            item.Set('EntityID', entityInfo.ID);
-            item.Set('RecordID', recordId);
+            const item = await md.GetEntityObject<VersionLabelItemEntity>(ENTITY_VERSION_LABEL_ITEMS, contextUser);
+            item.VersionLabelID = labelId;
+            item.RecordChangeID = recordChangeId;
+            item.EntityID = entityInfo.ID;
+            item.RecordID = recordId;
 
             const saved = await item.Save();
             if (!saved) {
@@ -265,10 +265,10 @@ export class SnapshotBuilder {
         entityId: string,
         recordId: string,
         contextUser: UserInfo
-    ): Promise<BaseEntity | null> {
+    ): Promise<RecordChangeEntity | null> {
         const rv = new RunView();
         const filter = `${sqlEquals('EntityID', entityId)} AND ${sqlEquals('RecordID', recordId)}`;
-        const result = await rv.RunView<BaseEntity>({
+        const result = await rv.RunView<RecordChangeEntity>({
             EntityName: ENTITY_RECORD_CHANGES,
             ExtraFilter: filter,
             OrderBy: 'ChangedAt DESC',
@@ -292,20 +292,20 @@ export class SnapshotBuilder {
         recordId: string,
         recordData: Record<string, unknown>,
         contextUser: UserInfo
-    ): Promise<BaseEntity | null> {
+    ): Promise<RecordChangeEntity | null> {
         try {
             const md = new Metadata();
-            const change = await md.GetEntityObject<BaseEntity>(ENTITY_RECORD_CHANGES, contextUser);
+            const change = await md.GetEntityObject<RecordChangeEntity>(ENTITY_RECORD_CHANGES, contextUser);
 
-            change.Set('EntityID', entityInfo.ID);
-            change.Set('RecordID', recordId);
-            change.Set('UserID', contextUser.ID);
-            change.Set('Type', 'Snapshot');
-            change.Set('Source', 'Internal');
-            change.Set('ChangesJSON', '{}');
-            change.Set('ChangesDescription', 'Snapshot captured for version label');
-            change.Set('FullRecordJSON', JSON.stringify(recordData));
-            change.Set('Status', 'Complete');
+            change.EntityID = entityInfo.ID;
+            change.RecordID = recordId;
+            change.UserID = contextUser.ID;
+            change.Type = 'Snapshot';
+            change.Source = 'Internal';
+            change.ChangesJSON = '{}';
+            change.ChangesDescription = 'Snapshot captured for version label';
+            change.FullRecordJSON = JSON.stringify(recordData);
+            change.Status = 'Complete';
 
             const saved = await change.Save();
             if (!saved) {
