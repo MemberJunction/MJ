@@ -1,0 +1,75 @@
+/* Override shared form-styles to enable flex layout */
+:host {
+    display: block;
+    height: 100%;
+}
+
+.record-form-container {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Override the shared record-form min-height so flex layout works properly */
+.record-form {
+    min-height: 0 !important;
+}
+
+.template-header {
+    border-bottom: 2px solid #e9ecef;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Expansion Panel Styling */
+::ng-deep .configuration-sections kendo-expansionpanel {
+    border: none !important;
+    border-radius: 12px !important;
+    margin-bottom: 12px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+    background: white !important;
+    overflow: hidden !important;
+}
+
+::ng-deep .configuration-sections .k-expander-header {
+    background: white !important;
+    border: none !important;
+    padding: 16px 20px !important;
+    border-radius: 12px !important;
+    color: #2c3e50 !important;
+    font-weight: 600 !important;
+    font-size: 16px !important;
+    transition: all 0.2s ease !important;
+}
+
+::ng-deep .configuration-sections .k-expander-header:hover {
+    background: #f8f9fa !important;
+}
+
+/* Expanded state header */
+::ng-deep .configuration-sections kendo-expansionpanel[aria-expanded="true"] .k-expander-header {
+    background: #17a2b8 !important;
+    color: white !important;
+    border-radius: 12px 12px 0 0 !important;
+}
+
+/* Content area */
+::ng-deep .configuration-sections .k-expander-content {
+    padding: 0 !important;
+    border: none !important;
+    background: white !important;
+    border-radius: 0 0 12px 12px !important;
+}
+
+/* Icon in header */
+::ng-deep .configuration-sections .k-expander-header .fa-solid {
+    transition: transform 0.2s ease !important;
+}
+
+/* Smooth transitions */
+.template-header,
+.badge {
+    transition: all 0.2s ease;
+}

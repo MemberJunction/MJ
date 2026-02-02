@@ -1,5 +1,42 @@
 # Change Log - @memberjunction/core-actions
 
+## 3.4.0
+
+### Patch Changes
+
+- cf1df5b: no migration
+- Updated dependencies [d596467]
+- Updated dependencies [cf1df5b]
+- Updated dependencies [fca3ce4]
+- Updated dependencies [ef7acd8]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ai-prompts@3.4.0
+  - @memberjunction/ai-mcp-client@3.4.0
+  - @memberjunction/storage@3.4.0
+  - @memberjunction/sqlserver-dataprovider@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/content-autotagging@3.4.0
+  - @memberjunction/core-entities-server@3.4.0
+  - @memberjunction/ai-agents@3.4.0
+  - @memberjunction/actions@3.4.0
+  - @memberjunction/aiengine@3.4.0
+  - @memberjunction/external-change-detection@3.4.0
+  - @memberjunction/ai-agent-manager@3.4.0
+  - @memberjunction/ai-engine-base@3.4.0
+  - @memberjunction/ai-core-plus@3.4.0
+  - @memberjunction/ai-vector-sync@3.4.0
+  - @memberjunction/actions-base@3.4.0
+  - @memberjunction/communication-types@3.4.0
+  - @memberjunction/communication-engine@3.4.0
+  - @memberjunction/code-execution@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/ai-betty-bot@3.4.0
+  - @memberjunction/export-engine@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-react",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "Angular components for hosting React components in MemberJunction applications",
   "scripts": {
     "build": "ngc -p tsconfig.json",
@@ -40,14 +40,14 @@
     "styles"
   ],
   "dependencies": {
-    "@memberjunction/ai-vectors-memory": "3.3.0",
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/core-entities": "3.3.0",
-    "@memberjunction/global": "3.3.0",
-    "@memberjunction/graphql-dataprovider": "3.3.0",
-    "@memberjunction/interactive-component-types": "3.3.0",
-    "@memberjunction/ng-notifications": "3.3.0",
-    "@memberjunction/react-runtime": "3.3.0",
+    "@memberjunction/ai-vectors-memory": "3.4.0",
+    "@memberjunction/core": "3.4.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/global": "3.4.0",
+    "@memberjunction/graphql-dataprovider": "3.4.0",
+    "@memberjunction/interactive-component-types": "3.4.0",
+    "@memberjunction/ng-notifications": "3.4.0",
+    "@memberjunction/react-runtime": "3.4.0",
     "@angular/common": "18.2.14",
     "@angular/core": "18.2.14",
     "@angular/platform-browser": "18.2.14",

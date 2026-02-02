@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 3.4.0
+
+### Minor Changes
+
+- a3961d5: feat(codegen): Add soft PK/FK support for messy databases
+
+### Patch Changes
+
+- @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

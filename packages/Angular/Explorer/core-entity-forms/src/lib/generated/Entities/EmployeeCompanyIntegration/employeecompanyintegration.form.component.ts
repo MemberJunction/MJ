@@ -16,6 +16,7 @@ export class EmployeeCompanyIntegrationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'integrationMapping', sectionName: 'Integration Mapping', isExpanded: true },
             { sectionKey: 'externalIdentifier', sectionName: 'External Identifier', isExpanded: true },
+            { sectionKey: 'employeeInfo', sectionName: 'Employee Info', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -1,50 +1,69 @@
-<div class="scheduling-dashboard">
-  <div class="dashboard-content">
-    @if (activeTab === 'monitoring' && hasVisited('monitoring')) {
-      <app-scheduling-monitoring
-        [initialState]="monitoringState"
-        (stateChange)="onMonitoringStateChange($event)">
-      </app-scheduling-monitoring>
-    }
+<div class="scheduling-dashboard-container">
+    <div class="dashboard-header">
+        <div class="header-title">
+            <i class="fa-solid fa-calendar-check"></i>
+            <span>Job Scheduling</span>
+        </div>
+        <div class="header-actions">
+            <div class="status-badge" *ngIf="AlertCount > 0">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>{{AlertCount}} Alert{{AlertCount !== 1 ? 's' : ''}}</span>
+            </div>
+            <div class="status-badge healthy" *ngIf="AlertCount === 0">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>Healthy</span>
+            </div>
+            <span class="tab-label">{{GetCurrentTabLabel()}}</span>
+        </div>
+    </div>
 
-    @if (activeTab === 'jobs' && hasVisited('jobs')) {
-      <app-scheduling-jobs
-        [initialState]="jobsState"
-        (stateChange)="onJobsStateChange($event)">
-      </app-scheduling-jobs>
-    }
+    <div class="dashboard-content">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Overview</div>
+            </div>
+            <div class="nav-item" [class.selected]="ActiveTab === 'dashboard'" (click)="OnTabChange('dashboard')">
+                <i class="fa-solid fa-gauge-high"></i>
+                <span>Dashboard</span>
+            </div>
 
-    @if (activeTab === 'history' && hasVisited('history')) {
-      <app-scheduling-history
-        [initialState]="historyState"
-        (stateChange)="onHistoryStateChange($event)">
-      </app-scheduling-history>
-    }
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Management</div>
+            </div>
+            <div class="nav-item" [class.selected]="ActiveTab === 'jobs'" (click)="OnTabChange('jobs')">
+                <i class="fa-solid fa-calendar-check"></i>
+                <span>Jobs</span>
+                <span class="badge" *ngIf="ActiveJobCount > 0">{{ActiveJobCount}}</span>
+            </div>
+            <div class="nav-item" [class.selected]="ActiveTab === 'activity'" (click)="OnTabChange('activity')">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                <span>Activity</span>
+            </div>
+        </div>
 
-    @if (activeTab === 'types' && hasVisited('types')) {
-      <app-scheduling-types
-        [initialState]="typesState"
-        (stateChange)="onTypesStateChange($event)">
-      </app-scheduling-types>
-    }
+        <div class="main-content">
+            <div [ngSwitch]="ActiveTab" class="tab-container">
+                <div *ngSwitchCase="'dashboard'" class="tab-content">
+                    <app-scheduling-overview
+                        [initialState]="DashboardState"
+                        (stateChange)="OnDashboardStateChange($event)">
+                    </app-scheduling-overview>
+                </div>
 
-    @if (activeTab === 'health' && hasVisited('health')) {
-      <app-scheduling-health
-        [initialState]="healthState"
-        (stateChange)="onHealthStateChange($event)">
-      </app-scheduling-health>
-    }
-  </div>
+                <div *ngSwitchCase="'jobs'" class="tab-content">
+                    <app-scheduling-jobs
+                        [initialState]="JobsState"
+                        (stateChange)="OnJobsStateChange($event)">
+                    </app-scheduling-jobs>
+                </div>
 
-  <div class="scheduling-dashboard-nav">
-    @for (navItem of navigationConfig; track $index) {
-      <div
-        class="nav-item"
-        [class.active]="navItem.selected"
-        (click)="onTabChange(navigationItems[$index])">
-        <i [class]="navItem.icon"></i>
-        <span>{{ navItem.text }}</span>
-      </div>
-    }
-  </div>
+                <div *ngSwitchCase="'activity'" class="tab-content">
+                    <app-scheduling-activity
+                        [initialState]="ActivityState"
+                        (stateChange)="OnActivityStateChange($event)">
+                    </app-scheduling-activity>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>

@@ -1,10 +1,10 @@
-<div class="record-form-container">
+<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
     @if (record) {
-        <form class="record-form" #form="ngForm">
+        <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
             <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
             <!-- Header Section -->
-            <div class="query-header" style="background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 20px;">
+            <div class="query-header" style="flex-shrink: 0; background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 20px;">
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     
                     <!-- Top Row: Name and Run Button -->
@@ -106,7 +106,7 @@
             </div>
 
             <!-- Main Content Area with Expansion Panels -->
-            <div class="query-content" style="padding: 20px; overflow-y: auto; background: #f5f7fa;">
+            <div class="query-content" style="flex: 1; min-height: 0; padding: 20px; overflow-y: auto; background: #f5f7fa;">
                 
                 <!-- SQL Query Panel -->
                 <kendo-expansionpanel 
@@ -555,12 +555,12 @@
                                 } @else {
                                     @if (EditMode) {
                                         <!-- Edit Mode: Use the standard grid -->
-                                        <mj-user-view-grid 
-                                            [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"  
+                                        <mj-explorer-entity-data-grid
+                                            [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"
                                             [NewRecordValues]="NewRecordValues('Query Permissions')"
-                                            [AllowLoad]="true"  
-                                            [EditMode]="GridEditMode()">
-                                        </mj-user-view-grid>
+                                            [AllowLoad]="true"
+                                            [ShowToolbar]="false">
+                                        </mj-explorer-entity-data-grid>
                                     } @else {
                                         <!-- Read Mode: Nice card-based display -->
                                         <div class="permissions-display">

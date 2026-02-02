@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-reranker",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "MemberJunction: AI Reranker Service and LLM-based reranking for two-stage retrieval",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,13 +15,13 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "3.3.0",
-    "@memberjunction/ai-prompts": "3.3.0",
-    "@memberjunction/ai-core-plus": "3.3.0",
-    "@memberjunction/aiengine": "3.3.0",
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/core-entities": "3.3.0",
-    "@memberjunction/global": "3.3.0"
+    "@memberjunction/ai": "3.4.0",
+    "@memberjunction/ai-prompts": "3.4.0",
+    "@memberjunction/ai-core-plus": "3.4.0",
+    "@memberjunction/aiengine": "3.4.0",
+    "@memberjunction/core": "3.4.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/global": "3.4.0"
   },
   "devDependencies": {
     "@types/node": "20.14.2",

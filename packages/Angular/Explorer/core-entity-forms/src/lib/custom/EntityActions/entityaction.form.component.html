@@ -79,13 +79,12 @@
                         Filters
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters')"  
+                        <mj-explorer-entity-data-grid
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters')"
                             [NewRecordValues]="NewRecordValues('Entity Action Filters')"
-                            [AllowLoad]="IsCurrentTab('Entity Action Filters')"  
-                            [EditMode]="GridEditMode()"  
-                        >
-                        </mj-user-view-grid>
+                            [AllowLoad]="IsCurrentTab('Entity Action Filters')"
+                            [ShowToolbar]="false">
+                        </mj-explorer-entity-data-grid>
                     </mj-tab-body>
                 </mj-tabstrip>
     </form>

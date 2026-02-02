@@ -1036,13 +1036,12 @@
                         
                         <!-- Direct Content Projection -->
                         <div style="padding: 16px 0;">
-                            <mj-user-view-grid 
-                                [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AIPromptID')"  
+                            <mj-explorer-entity-data-grid
+                                [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AIPromptID')"
                                 [NewRecordValues]="NewRecordValues('AI Result Cache')"
                                 [AllowLoad]="true"
-                                [EditMode]="GridEditMode()"  
-                                style="height: 300px;">
-                            </mj-user-view-grid>
+                                [ShowToolbar]="false">
+                            </mj-explorer-entity-data-grid>
                         </div>
                     </kendo-expansionpanel>
                 }
@@ -1065,25 +1064,23 @@
                                 <!-- AI Agents -->
                                 <div>
                                     <h6 style="margin: 0 0 12px 0; color: #495057;">AI Agents Using This Prompt</h6>
-                                    <mj-user-view-grid 
-                                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Prompts','PromptID')"  
+                                    <mj-explorer-entity-data-grid
+                                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Prompts','PromptID')"
                                         [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
                                         [AllowLoad]="true"
-                                        [EditMode]="GridEditMode()"  
-                                        style="height: 200px;">
-                                    </mj-user-view-grid>
+                                        [ShowToolbar]="false">
+                                    </mj-explorer-entity-data-grid>
                                 </div>
                                 
                                 <!-- Result Selector References -->
                                 <div>
                                     <h6 style="margin: 0 0 12px 0; color: #495057;">Prompts Using This as Result Selector</h6>
-                                    <mj-user-view-grid 
-                                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','ResultSelectorPromptID')"  
+                                    <mj-explorer-entity-data-grid
+                                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','ResultSelectorPromptID')"
                                         [NewRecordValues]="NewRecordValues('AI Prompts')"
                                         [AllowLoad]="true"
-                                        [EditMode]="GridEditMode()"  
-                                        style="height: 200px;">
-                                    </mj-user-view-grid>
+                                        [ShowToolbar]="false">
+                                    </mj-explorer-entity-data-grid>
                                 </div>
                             </div>
                         </div>
