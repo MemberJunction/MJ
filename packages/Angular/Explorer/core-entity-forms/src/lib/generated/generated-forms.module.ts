@@ -234,6 +234,9 @@ import { TestFormComponent, LoadTestFormComponent } from "./Entities/Test/test.f
 import { UserNotificationPreferenceFormComponent, LoadUserNotificationPreferenceFormComponent } from "./Entities/UserNotificationPreference/usernotificationpreference.form.component";
 import { UserNotificationTypeFormComponent, LoadUserNotificationTypeFormComponent } from "./Entities/UserNotificationType/usernotificationtype.form.component";
 import { UserSettingFormComponent, LoadUserSettingFormComponent } from "./Entities/UserSetting/usersetting.form.component";
+import { VersionLabelItemFormComponent, LoadVersionLabelItemFormComponent } from "./Entities/VersionLabelItem/versionlabelitem.form.component";
+import { VersionLabelRestoreFormComponent, LoadVersionLabelRestoreFormComponent } from "./Entities/VersionLabelRestore/versionlabelrestore.form.component";
+import { VersionLabelFormComponent, LoadVersionLabelFormComponent } from "./Entities/VersionLabel/versionlabel.form.component";
 import { OutputDeliveryTypeFormComponent, LoadOutputDeliveryTypeFormComponent } from "./Entities/OutputDeliveryType/outputdeliverytype.form.component";
 import { OutputFormatTypeFormComponent, LoadOutputFormatTypeFormComponent } from "./Entities/OutputFormatType/outputformattype.form.component";
 import { OutputTriggerTypeFormComponent, LoadOutputTriggerTypeFormComponent } from "./Entities/OutputTriggerType/outputtriggertype.form.component";
@@ -754,6 +757,9 @@ declarations: [
     UserNotificationPreferenceFormComponent,
     UserNotificationTypeFormComponent,
     UserSettingFormComponent,
+    VersionLabelItemFormComponent,
+    VersionLabelRestoreFormComponent,
+    VersionLabelFormComponent,
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
     OutputTriggerTypeFormComponent,
@@ -762,10 +768,7 @@ declarations: [
     QueryEntityFormComponent,
     QueryFieldFormComponent,
     QueryPermissionFormComponent,
-    QueueTaskFormComponent,
-    QueueTypeFormComponent,
-    QueueFormComponent,
-    RecommendationItemFormComponent],
+    QueueTaskFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -791,6 +794,9 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    QueueTypeFormComponent,
+    QueueFormComponent,
+    RecommendationItemFormComponent,
     RecommendationProviderFormComponent,
     RecommendationRunFormComponent,
     RecommendationFormComponent,
@@ -807,10 +813,7 @@ declarations: [
     RoleFormComponent,
     RowLevelSecurityFilterFormComponent,
     ScheduledActionParamFormComponent,
-    ScheduledActionFormComponent,
-    SchemaInfoFormComponent,
-    SkillFormComponent,
-    TaggedItemFormComponent],
+    ScheduledActionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -836,6 +839,9 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    SchemaInfoFormComponent,
+    SkillFormComponent,
+    TaggedItemFormComponent,
     TagFormComponent,
     TemplateCategoryFormComponent,
     TemplateContentTypeFormComponent,
@@ -852,10 +858,7 @@ declarations: [
     UserViewRunDetailFormComponent,
     UserViewRunFormComponent,
     UserViewFormComponent,
-    UserFormComponent,
-    VectorDatabaseFormComponent,
-    VectorIndexFormComponent,
-    VersionInstallationFormComponent],
+    UserFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -881,6 +884,9 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    VectorDatabaseFormComponent,
+    VectorIndexFormComponent,
+    VersionInstallationFormComponent,
     WorkflowEngineFormComponent,
     WorkflowRunFormComponent,
     WorkflowFormComponent,
@@ -1145,6 +1151,9 @@ export function LoadCoreGeneratedForms() {
     LoadUserNotificationPreferenceFormComponent();
     LoadUserNotificationTypeFormComponent();
     LoadUserSettingFormComponent();
+    LoadVersionLabelItemFormComponent();
+    LoadVersionLabelRestoreFormComponent();
+    LoadVersionLabelFormComponent();
     LoadOutputDeliveryTypeFormComponent();
     LoadOutputFormatTypeFormComponent();
     LoadOutputTriggerTypeFormComponent();

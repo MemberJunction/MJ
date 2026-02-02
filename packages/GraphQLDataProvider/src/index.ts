@@ -34,6 +34,13 @@ export type {
     ComponentSpecWithHash
 } from './GraphQLComponentRegistryClient';
 
+export { GraphQLVersionHistoryClient } from './graphQLVersionHistoryClient';
+export type {
+    CreateVersionLabelParams,
+    CreateVersionLabelProgress,
+    CreateVersionLabelResult
+} from './graphQLVersionHistoryClient';
+
 export * from './graphQLFileStorageClient';
 
 export * from './storage-providers';

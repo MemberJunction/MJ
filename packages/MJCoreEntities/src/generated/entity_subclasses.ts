@@ -389,7 +389,7 @@ export const ActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Other'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -399,8 +399,8 @@ export const ActionParamSchema = z.object({
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Other
     *   * Scalar
+    *   * Other
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
@@ -4445,7 +4445,7 @@ export const ConversationSchema = z.object({
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     ExternalID: z.string().nullable().describe(`
         * * Field Name: ExternalID
-        * * Display Name: External
+        * * Display Name: External ID
         * * SQL Data Type: nvarchar(500)
         * * Description: External system identifier for cross-system conversation tracking.`),
     Name: z.string().nullable().describe(`
@@ -4475,7 +4475,7 @@ export const ConversationSchema = z.object({
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     LinkedRecordID: z.string().nullable().describe(`
         * * Field Name: LinkedRecordID
-        * * Display Name: Linked Record
+        * * Display Name: Linked Record ID
         * * SQL Data Type: nvarchar(500)
         * * Description: ID of a related record this conversation is about (support ticket, order, etc.).`),
     DataContextID: z.string().nullable().describe(`
@@ -5136,7 +5136,7 @@ export const DuplicateRunDetailSchema = z.object({
         * * Default Value: getutcdate()`),
     DuplicateRun: z.string().describe(`
         * * Field Name: DuplicateRun
-        * * Display Name: Duplicate Run
+        * * Display Name: Duplicate Run Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -5285,7 +5285,7 @@ export const EmployeeCompanyIntegrationSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee Name
+        * * Display Name: Employee
         * * SQL Data Type: nvarchar(81)`),
     CompanyIntegration: z.string().describe(`
         * * Field Name: CompanyIntegration
@@ -5326,7 +5326,7 @@ export const EmployeeRoleSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee Name
+        * * Display Name: Employee
         * * SQL Data Type: nvarchar(81)`),
     Role: z.string().describe(`
         * * Field Name: Role
@@ -5367,11 +5367,11 @@ export const EmployeeSkillSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee
+        * * Display Name: Employee Name
         * * SQL Data Type: nvarchar(81)`),
     Skill: z.string().describe(`
         * * Field Name: Skill
-        * * Display Name: Skill
+        * * Display Name: Skill Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -5839,12 +5839,12 @@ export const EntityActionFilterSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action
+        * * Display Name: Entity Action ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)`),
     ActionFilterID: z.string().describe(`
         * * Field Name: ActionFilterID
-        * * Display Name: Action Filter
+        * * Display Name: Action Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)`),
     Sequence: z.number().describe(`
@@ -5935,12 +5935,12 @@ export const EntityActionInvocationSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action
+        * * Display Name: Entity Action ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)`),
     InvocationTypeID: z.string().describe(`
         * * Field Name: InvocationTypeID
-        * * Display Name: Invocation Type
+        * * Display Name: Invocation Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)`),
     Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
@@ -5966,7 +5966,7 @@ export const EntityActionInvocationSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Action
+        * * Display Name: Entity Action Name
         * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
@@ -6032,7 +6032,7 @@ export const EntityActionParamSchema = z.object({
         * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
-        * * Display Name: Action Parameter
+        * * Display Name: Parameter Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -6209,7 +6209,7 @@ export const EntityCommunicationFieldSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityCommunicationMessageTypeID: z.string().describe(`
         * * Field Name: EntityCommunicationMessageTypeID
-        * * Display Name: Message Type ID
+        * * Display Name: Entity Communication Message Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)`),
     FieldName: z.string().describe(`
@@ -6609,13 +6609,13 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`),
     IsPrimaryKey: z.boolean().describe(`
         * * Field Name: IsPrimaryKey
-        * * Display Name: Primary Key
+        * * Display Name: Is Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)`),
     IsUnique: z.boolean().describe(`
         * * Field Name: IsUnique
-        * * Display Name: Unique
+        * * Display Name: Is Unique
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field must have unique values within the entity.`),
@@ -6769,7 +6769,7 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details`),
     IsVirtual: z.boolean().describe(`
         * * Field Name: IsVirtual
-        * * Display Name: Virtual
+        * * Display Name: Is Virtual
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: NULL`),
@@ -6892,7 +6892,7 @@ export const EntityFieldSchema = z.object({
         * * Description: When true, this field will be encrypted at rest using the specified EncryptionKeyID. Encrypted fields cannot be indexed or searched.`),
     EncryptionKeyID: z.string().nullable().describe(`
         * * Field Name: EncryptionKeyID
-        * * Display Name: Encryption Key ID
+        * * Display Name: Encryption Key
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Encryption Keys (vwEncryptionKeys.ID)
         * * Description: References the encryption key to use when Encrypt is true. Required if Encrypt is true.`),
@@ -6908,6 +6908,23 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When AllowDecryptInAPI is false: if true, send encrypted ciphertext (e.g., $ENC$...); if false (default), send sentinel value, usually "[!ENCRYPTED$]", indicating a value exists but is protected. Most secure option is false.`),
+    IsSoftPrimaryKey: z.boolean().describe(`
+        * * Field Name: IsSoftPrimaryKey
+        * * Display Name: Is Soft Primary Key
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, indicates IsPrimaryKey was set via metadata (not a database constraint). Protects IsPrimaryKey from being cleared by schema sync.`),
+    IsSoftForeignKey: z.boolean().describe(`
+        * * Field Name: IsSoftForeignKey
+        * * Display Name: Is Soft Foreign Key
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, indicates RelatedEntityID/RelatedEntityFieldName were set via metadata (not a database constraint). Protects these fields from being cleared by schema sync.`),
+    RelatedEntityJoinFields: z.string().nullable().describe(`
+        * * Field Name: RelatedEntityJoinFields
+        * * Display Name: Related Entity Join Fields
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -7432,22 +7449,22 @@ export const ErrorLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     CompanyIntegrationRunID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunID
-        * * Display Name: Company Integration Run ID
+        * * Display Name: Company Integration Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)`),
     CompanyIntegrationRunDetailID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunDetailID
-        * * Display Name: Company Integration Run Detail ID
+        * * Display Name: Company Integration Run Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
-        * * Display Name: Code
+        * * Display Name: Error Code
         * * SQL Data Type: nchar(20)
         * * Description: Error code for categorizing and handling specific error types.`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Message
+        * * Display Name: Error Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The primary error message describing what went wrong.`),
     CreatedBy: z.string().nullable().describe(`
@@ -7458,16 +7475,16 @@ export const ErrorLogSchema = z.object({
         * * Description: User or system process that encountered this error.`),
     Status: z.string().nullable().describe(`
         * * Field Name: Status
-        * * Display Name: Status
+        * * Display Name: Error Status
         * * SQL Data Type: nvarchar(10)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Error Category
         * * SQL Data Type: nvarchar(20)
         * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).`),
     Details: z.string().nullable().describe(`
         * * Field Name: Details
-        * * Display Name: Details
+        * * Display Name: Error Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Full error details including stack trace, inner exceptions, and context data.`),
     __mj_CreatedAt: z.date().describe(`
@@ -7482,11 +7499,11 @@ export const ErrorLogSchema = z.object({
         * * Default Value: getutcdate()`),
     CompanyIntegrationRun: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRun
-        * * Display Name: Company Integration Run
+        * * Display Name: Integration Run
         * * SQL Data Type: nvarchar(100)`),
     CompanyIntegrationRunDetail: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunDetail
-        * * Display Name: Company Integration Run Detail
+        * * Display Name: Integration Run Detail
         * * SQL Data Type: nvarchar(450)`),
 });
 
@@ -9482,11 +9499,11 @@ detailed information about what validation rules failed.`),
         * * Description: Human-readable notes and comments about this agent run step`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
-        * * Display Name: Agent Run Name
+        * * Display Name: Agent Run
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -12103,7 +12120,7 @@ export const APIKeyUsageLogSchema = z.object({
         * * Default Value: getutcdate()`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
-        * * Display Name: Application ID
+        * * Display Name: Application
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
         * * Description: The application through which this request was made (MJAPI, MCPServer, etc.).`),
@@ -13696,13 +13713,13 @@ export const ConversationDetailRatingSchema = z.object({
         * * Default Value: newsequentialid()`),
     ConversationDetailID: z.string().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: The conversation message being rated.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: The user providing the rating.`),
@@ -14892,7 +14909,7 @@ export const MCPServerConnectionToolSchema = z.object({
         * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)`),
     IsEnabled: z.boolean().describe(`
         * * Field Name: IsEnabled
-        * * Display Name: Enabled
+        * * Display Name: Is Enabled
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this tool is enabled for the connection`),
@@ -14918,11 +14935,11 @@ export const MCPServerConnectionToolSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: Connection
+        * * Display Name: MCP Server Connection
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: Tool
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -15258,12 +15275,12 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     MCPServerConnectionID: z.string().describe(`
         * * Field Name: MCPServerConnectionID
-        * * Display Name: MCP Server Connection
+        * * Display Name: Connection ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
     MCPServerToolID: z.string().nullable().describe(`
         * * Field Name: MCPServerToolID
-        * * Display Name: MCP Server Tool
+        * * Display Name: Tool ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
         * * Description: FK to MCP Server Tool (null if tool not cached)`),
@@ -15274,18 +15291,18 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Description: Tool name (stored directly for resilience)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: FK to User who initiated the call`),
     StartedAt: z.date().describe(`
         * * Field Name: StartedAt
-        * * Display Name: Started At
+        * * Display Name: Start Time
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
-        * * Display Name: Ended At
+        * * Display Name: End Time
         * * SQL Data Type: datetimeoffset`),
     DurationMs: z.number().nullable().describe(`
         * * Field Name: DurationMs
@@ -15329,11 +15346,11 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: MCP Server Connection Name
+        * * Display Name: Connection Name
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: MCP Server Tool Name
+        * * Display Name: Tool Name (Cached)
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -17304,6 +17321,275 @@ export const UserSettingSchema = z.object({
 export type UserSettingEntityType = z.infer<typeof UserSettingSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Version Label Items
+ */
+export const VersionLabelItemSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    VersionLabelID: z.string().describe(`
+        * * Field Name: VersionLabelID
+        * * Display Name: Version Label
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+        * * Description: The version label this item belongs to`),
+    RecordChangeID: z.string().describe(`
+        * * Field Name: RecordChangeID
+        * * Display Name: Record Change
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Record Changes (vwRecordChanges.ID)
+        * * Description: The specific RecordChange entry representing the record state at label creation time`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Denormalized entity reference for query performance`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Denormalized record primary key for query performance`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    VersionLabel: z.string().describe(`
+        * * Field Name: VersionLabel
+        * * Display Name: Version Label
+        * * SQL Data Type: nvarchar(200)`),
+    RecordChange: z.string().describe(`
+        * * Field Name: RecordChange
+        * * Display Name: Record Change
+        * * SQL Data Type: nvarchar(MAX)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type VersionLabelItemEntityType = z.infer<typeof VersionLabelItemSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Version Label Restores
+ */
+export const VersionLabelRestoreSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    VersionLabelID: z.string().describe(`
+        * * Field Name: VersionLabelID
+        * * Display Name: Version Label ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+        * * Description: The version label being restored to`),
+    Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('In Progress'), z.literal('Partial'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Error
+    *   * In Progress
+    *   * Partial
+    *   * Pending
+        * * Description: Current status of the restore operation`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: When the restore operation began`),
+    EndedAt: z.date().nullable().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the restore operation completed or failed`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who initiated the restore`),
+    TotalItems: z.number().describe(`
+        * * Field Name: TotalItems
+        * * Display Name: Total Items
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total number of records to restore`),
+    CompletedItems: z.number().describe(`
+        * * Field Name: CompletedItems
+        * * Display Name: Completed Items
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records successfully restored so far`),
+    FailedItems: z.number().describe(`
+        * * Field Name: FailedItems
+        * * Display Name: Failed Items
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records that failed to restore`),
+    ErrorLog: z.string().nullable().describe(`
+        * * Field Name: ErrorLog
+        * * Display Name: Error Log
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed error information for failed restore items`),
+    PreRestoreLabelID: z.string().nullable().describe(`
+        * * Field Name: PreRestoreLabelID
+        * * Display Name: Pre-Restore Label ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+        * * Description: Reference to the automatically created safety-net label that captured state before the restore began`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    VersionLabel: z.string().describe(`
+        * * Field Name: VersionLabel
+        * * Display Name: Version Label
+        * * SQL Data Type: nvarchar(200)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    PreRestoreLabel: z.string().nullable().describe(`
+        * * Field Name: PreRestoreLabel
+        * * Display Name: Pre-Restore Label
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type VersionLabelRestoreEntityType = z.infer<typeof VersionLabelRestoreSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Version Labels
+ */
+export const VersionLabelSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Human-readable label name, e.g. Release 2.5, Pre-Refactor Snapshot`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional longer description of what this label represents`),
+    Scope: z.union([z.literal('Entity'), z.literal('Record'), z.literal('System')]).describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Record
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Entity
+    *   * Record
+    *   * System
+        * * Description: Breadth of the label: Record (one record and its dependency graph, the primary use case), Entity (one entity type), or System (all entities). Parent grouping labels may use any scope as a logical container.`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: When Scope is Entity or Record, identifies the target entity. NULL for System scope.`),
+    RecordID: z.string().nullable().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: When Scope is Record, identifies the specific record. NULL for System and Entity scopes.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+        * * Description: Self-referencing parent for grouping related labels. When a user labels multiple records of the same entity, a parent label is created as the container and each individual record label references it via ParentID.`),
+    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Restored')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+    *   * Restored
+        * * Description: Lifecycle state: Active (current), Archived (historical reference only), Restored (this label was used in a restore operation)`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who created this version label`),
+    ExternalSystemID: z.string().nullable().describe(`
+        * * Field Name: ExternalSystemID
+        * * Display Name: External System ID
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Optional reference to an external system identifier such as a git SHA, release tag, or deployment ID`),
+    ItemCount: z.number().describe(`
+        * * Field Name: ItemCount
+        * * Display Name: Item Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total number of VersionLabelItem rows created for this label. Populated after label creation completes.`),
+    CreationDurationMS: z.number().describe(`
+        * * Field Name: CreationDurationMS
+        * * Display Name: Creation Duration (ms)
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Time in milliseconds taken to create this label and all its items. Used for estimation of future label creation operations.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByUser: z.string().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User Name
+        * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type VersionLabelEntityType = z.infer<typeof VersionLabelSchema>;
+
+/**
  * zod schema definition for the entity Output Delivery Types
  */
 export const OutputDeliveryTypeSchema = z.object({
@@ -18066,7 +18352,7 @@ export const RecommendationItemSchema = z.object({
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     DestinationEntityRecordID: z.string().describe(`
         * * Field Name: DestinationEntityRecordID
-        * * Display Name: Destination Entity Record ID
+        * * Display Name: Destination Record ID
         * * SQL Data Type: nvarchar(450)
         * * Description: The record ID of the destination entity`),
     MatchProbability: z.number().nullable().describe(`
@@ -18205,12 +18491,12 @@ export const RecommendationSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecommendationRunID: z.string().describe(`
         * * Field Name: RecommendationRunID
-        * * Display Name: Recommendation Run ID
+        * * Display Name: Recommendation Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)`),
     SourceEntityID: z.string().describe(`
         * * Field Name: SourceEntityID
-        * * Display Name: Source Entity ID
+        * * Display Name: Source Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     SourceEntityRecordID: z.string().describe(`
@@ -18299,32 +18585,34 @@ export type RecordChangeReplayRunEntityType = z.infer<typeof RecordChangeReplayR
 export const RecordChangeSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     RecordID: z.string().describe(`
         * * Field Name: RecordID
-        * * Display Name: Record
+        * * Display Name: Record ID
         * * SQL Data Type: nvarchar(750)
         * * Description: Field RecordID for entity Record Changes.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    Type: z.union([z.literal('Create'), z.literal('Delete'), z.literal('Update')]).describe(`
+    Type: z.union([z.literal('Create'), z.literal('Delete'), z.literal('Snapshot'), z.literal('Update')]).describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Change Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Create
     * * Value List Type: List
     * * Possible Values 
     *   * Create
     *   * Delete
+    *   * Snapshot
     *   * Update
         * * Description: Create, Update, or Delete`),
     Source: z.union([z.literal('External'), z.literal('Internal')]).describe(`
@@ -18360,6 +18648,7 @@ export const RecordChangeSchema = z.object({
         * * Description: A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
         * * Field Name: Status
+        * * Display Name: Status
         * * SQL Data Type: nvarchar(50)
         * * Default Value: Complete
     * * Value List Type: List
@@ -18385,6 +18674,7 @@ export const RecordChangeSchema = z.object({
         * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)`),
     Comments: z.string().nullable().describe(`
         * * Field Name: Comments
+        * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
     CreatedAt: z.date().describe(`
         * * Field Name: CreatedAt
@@ -18400,11 +18690,11 @@ export const RecordChangeSchema = z.object({
         * * Description: Field UpdatedAt for entity Record Changes.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     ReplayRun: z.string().nullable().describe(`
         * * Field Name: ReplayRun
@@ -18412,7 +18702,7 @@ export const RecordChangeSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     Integration: z.string().nullable().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -18434,7 +18724,7 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)`),
     DeletedRecordID: z.string().describe(`
         * * Field Name: DeletedRecordID
-        * * Display Name: Deleted Record ID
+        * * Display Name: Deleted Record
         * * SQL Data Type: nvarchar(750)
         * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -18685,12 +18975,12 @@ export const ReportSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category ID
+        * * Display Name: Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     SharingScope: z.union([z.literal('Everyone'), z.literal('None'), z.literal('Specific')]).describe(`
@@ -18706,17 +18996,17 @@ export const ReportSchema = z.object({
         * * Description: Field SharingScope for entity Reports.`),
     ConversationID: z.string().nullable().describe(`
         * * Field Name: ConversationID
-        * * Display Name: Conversation ID
+        * * Display Name: Conversation
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversations (vwConversations.ID)`),
     ConversationDetailID: z.string().nullable().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail ID
+        * * Display Name: Conversation Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
-        * * Display Name: Data Context ID
+        * * Display Name: Data Context
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)`),
     Configuration: z.string().nullable().describe(`
@@ -18726,17 +19016,17 @@ export const ReportSchema = z.object({
         * * Description: Field Configuration for entity Reports.`),
     OutputTriggerTypeID: z.string().nullable().describe(`
         * * Field Name: OutputTriggerTypeID
-        * * Display Name: Output Trigger Type ID
+        * * Display Name: Output Trigger Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Trigger Types (vwOutputTriggerTypes.ID)`),
     OutputFormatTypeID: z.string().nullable().describe(`
         * * Field Name: OutputFormatTypeID
-        * * Display Name: Output Format Type ID
+        * * Display Name: Output Format Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Format Types (vwOutputFormatTypes.ID)`),
     OutputDeliveryTypeID: z.string().nullable().describe(`
         * * Field Name: OutputDeliveryTypeID
-        * * Display Name: Output Delivery Type ID
+        * * Display Name: Output Delivery Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Delivery Types (vwOutputDeliveryTypes.ID)`),
     OutputFrequency: z.string().nullable().describe(`
@@ -18751,7 +19041,7 @@ export const ReportSchema = z.object({
         * * Description: Email address(es) to send the report to when using email delivery.`),
     OutputWorkflowID: z.string().nullable().describe(`
         * * Field Name: OutputWorkflowID
-        * * Display Name: Output Workflow ID
+        * * Display Name: Output Workflow
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Workflows (vwWorkflows.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -18771,7 +19061,7 @@ export const ReportSchema = z.object({
         * * Description: Thumbnail image for the report that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment ID
+        * * Display Name: Environment
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
@@ -19628,7 +19918,7 @@ export const TemplateParamSchema = z.object({
         * * Default Value: newsequentialid()`),
     TemplateID: z.string().describe(`
         * * Field Name: TemplateID
-        * * Display Name: Template ID
+        * * Display Name: Template
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Templates (vwTemplates.ID)`),
     Name: z.string().describe(`
@@ -19661,13 +19951,13 @@ export const TemplateParamSchema = z.object({
         * * Description: Default value of the parameter`),
     IsRequired: z.boolean().describe(`
         * * Field Name: IsRequired
-        * * Display Name: Is Required
+        * * Display Name: Required
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this parameter must be provided when using the template.`),
     LinkedParameterName: z.string().nullable().describe(`
         * * Field Name: LinkedParameterName
-        * * Display Name: Linked Parameter Name
+        * * Display Name: Linked Parameter
         * * SQL Data Type: nvarchar(255)
         * * Description: Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.`),
     LinkedParameterField: z.string().nullable().describe(`
@@ -19682,7 +19972,7 @@ export const TemplateParamSchema = z.object({
         * * Description: Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.`),
     EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     RecordID: z.string().nullable().describe(`
@@ -19707,7 +19997,7 @@ export const TemplateParamSchema = z.object({
         * * Description: This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.`),
     TemplateContentID: z.string().nullable().describe(`
         * * Field Name: TemplateContentID
-        * * Display Name: Template Content ID
+        * * Display Name: Template Content
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Template Contents (vwTemplateContents.ID)
         * * Description: Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.`),
@@ -22032,17 +22322,17 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Other
     *   * Scalar
+    *   * Other
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -32596,7 +32886,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: ExternalID
-    * * Display Name: External
+    * * Display Name: External ID
     * * SQL Data Type: nvarchar(500)
     * * Description: External system identifier for cross-system conversation tracking.
     */
@@ -32674,7 +32964,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: LinkedRecordID
-    * * Display Name: Linked Record
+    * * Display Name: Linked Record ID
     * * SQL Data Type: nvarchar(500)
     * * Description: ID of a related record this conversation is about (support ticket, order, etc.).
     */
@@ -34311,7 +34601,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
 
     /**
     * * Field Name: DuplicateRun
-    * * Display Name: Duplicate Run
+    * * Display Name: Duplicate Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get DuplicateRun(): string {
@@ -34681,7 +34971,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee Name
+    * * Display Name: Employee
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -34790,7 +35080,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee Name
+    * * Display Name: Employee
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -34899,7 +35189,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee
+    * * Display Name: Employee Name
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -34908,7 +35198,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: Skill
-    * * Display Name: Skill
+    * * Display Name: Skill Name
     * * SQL Data Type: nvarchar(50)
     */
     get Skill(): string {
@@ -36074,7 +36364,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action
+    * * Display Name: Entity Action ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
@@ -36087,7 +36377,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: ActionFilterID
-    * * Display Name: Action Filter
+    * * Display Name: Action Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)
     */
@@ -36320,7 +36610,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action
+    * * Display Name: Entity Action ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
@@ -36333,7 +36623,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: InvocationTypeID
-    * * Display Name: Invocation Type
+    * * Display Name: Invocation Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
     */
@@ -36385,7 +36675,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Action
+    * * Display Name: Entity Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -36548,7 +36838,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: ActionParam
-    * * Display Name: Action Parameter
+    * * Display Name: Parameter Name
     * * SQL Data Type: nvarchar(255)
     */
     get ActionParam(): string {
@@ -36997,7 +37287,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: EntityCommunicationMessageTypeID
-    * * Display Name: Message Type ID
+    * * Display Name: Entity Communication Message Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)
     */
@@ -38068,7 +38358,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsPrimaryKey
-    * * Display Name: Primary Key
+    * * Display Name: Is Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
@@ -38082,7 +38372,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsUnique
-    * * Display Name: Unique
+    * * Display Name: Is Unique
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field must have unique values within the entity.
@@ -38391,7 +38681,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsVirtual
-    * * Display Name: Virtual
+    * * Display Name: Is Virtual
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: NULL
@@ -38665,7 +38955,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: EncryptionKeyID
-    * * Display Name: Encryption Key ID
+    * * Display Name: Encryption Key
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Encryption Keys (vwEncryptionKeys.ID)
     * * Description: References the encryption key to use when Encrypt is true. Required if Encrypt is true.
@@ -38703,6 +38993,47 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
     set SendEncryptedValue(value: boolean) {
         this.Set('SendEncryptedValue', value);
+    }
+
+    /**
+    * * Field Name: IsSoftPrimaryKey
+    * * Display Name: Is Soft Primary Key
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, indicates IsPrimaryKey was set via metadata (not a database constraint). Protects IsPrimaryKey from being cleared by schema sync.
+    */
+    get IsSoftPrimaryKey(): boolean {
+        return this.Get('IsSoftPrimaryKey');
+    }
+    set IsSoftPrimaryKey(value: boolean) {
+        this.Set('IsSoftPrimaryKey', value);
+    }
+
+    /**
+    * * Field Name: IsSoftForeignKey
+    * * Display Name: Is Soft Foreign Key
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, indicates RelatedEntityID/RelatedEntityFieldName were set via metadata (not a database constraint). Protects these fields from being cleared by schema sync.
+    */
+    get IsSoftForeignKey(): boolean {
+        return this.Get('IsSoftForeignKey');
+    }
+    set IsSoftForeignKey(value: boolean) {
+        this.Set('IsSoftForeignKey', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityJoinFields
+    * * Display Name: Related Entity Join Fields
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }
+    */
+    get RelatedEntityJoinFields(): string | null {
+        return this.Get('RelatedEntityJoinFields');
+    }
+    set RelatedEntityJoinFields(value: string | null) {
+        this.Set('RelatedEntityJoinFields', value);
     }
 
     /**
@@ -40014,7 +40345,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunID
-    * * Display Name: Company Integration Run ID
+    * * Display Name: Company Integration Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
     */
@@ -40027,7 +40358,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunDetailID
-    * * Display Name: Company Integration Run Detail ID
+    * * Display Name: Company Integration Run Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)
     */
@@ -40040,7 +40371,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Code
-    * * Display Name: Code
+    * * Display Name: Error Code
     * * SQL Data Type: nchar(20)
     * * Description: Error code for categorizing and handling specific error types.
     */
@@ -40053,7 +40384,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Message
+    * * Display Name: Error Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The primary error message describing what went wrong.
     */
@@ -40080,7 +40411,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Status
-    * * Display Name: Status
+    * * Display Name: Error Status
     * * SQL Data Type: nvarchar(10)
     */
     get Status(): string | null {
@@ -40092,7 +40423,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Error Category
     * * SQL Data Type: nvarchar(20)
     * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).
     */
@@ -40105,7 +40436,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Details
-    * * Display Name: Details
+    * * Display Name: Error Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Full error details including stack trace, inner exceptions, and context data.
     */
@@ -40138,7 +40469,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRun
-    * * Display Name: Company Integration Run
+    * * Display Name: Integration Run
     * * SQL Data Type: nvarchar(100)
     */
     get CompanyIntegrationRun(): string | null {
@@ -40147,7 +40478,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunDetail
-    * * Display Name: Company Integration Run Detail
+    * * Display Name: Integration Run Detail
     * * SQL Data Type: nvarchar(450)
     */
     get CompanyIntegrationRunDetail(): string | null {
@@ -45355,7 +45686,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: AgentRun
-    * * Display Name: Agent Run Name
+    * * Display Name: Agent Run
     * * SQL Data Type: nvarchar(255)
     */
     get AgentRun(): string | null {
@@ -45364,7 +45695,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -52506,7 +52837,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: ApplicationID
-    * * Display Name: Application ID
+    * * Display Name: Application
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
     * * Description: The application through which this request was made (MJAPI, MCPServer, etc.).
@@ -56647,7 +56978,7 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     * * Description: The conversation message being rated.
@@ -56661,7 +56992,7 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: The user providing the rating.
@@ -59708,7 +60039,7 @@ export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectio
 
     /**
     * * Field Name: IsEnabled
-    * * Display Name: Enabled
+    * * Display Name: Is Enabled
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this tool is enabled for the connection
@@ -59768,7 +60099,7 @@ export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectio
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: Connection
+    * * Display Name: MCP Server Connection
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -59777,7 +60108,7 @@ export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectio
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: Tool
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -60659,7 +60990,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerConnectionID
-    * * Display Name: MCP Server Connection
+    * * Display Name: Connection ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
     */
@@ -60672,7 +61003,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerToolID
-    * * Display Name: MCP Server Tool
+    * * Display Name: Tool ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
     * * Description: FK to MCP Server Tool (null if tool not cached)
@@ -60699,7 +61030,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: FK to User who initiated the call
@@ -60713,7 +61044,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: StartedAt
-    * * Display Name: Started At
+    * * Display Name: Start Time
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -60726,7 +61057,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: EndedAt
-    * * Display Name: Ended At
+    * * Display Name: End Time
     * * SQL Data Type: datetimeoffset
     */
     get EndedAt(): Date | null {
@@ -60836,7 +61167,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: MCP Server Connection Name
+    * * Display Name: Connection Name
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -60845,7 +61176,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: MCP Server Tool Name
+    * * Display Name: Tool Name (Cached)
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -66021,6 +66352,651 @@ export class UserSettingEntity extends BaseEntity<UserSettingEntityType> {
 
 
 /**
+ * MJ: Version Label Items - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: VersionLabelItem
+ * * Base View: vwVersionLabelItems
+ * * @description Links a Version Label to the specific RecordChange snapshot for each record captured by that label. Denormalizes EntityID and RecordID for efficient querying.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Version Label Items')
+export class VersionLabelItemEntity extends BaseEntity<VersionLabelItemEntityType> {
+    /**
+    * Loads the MJ: Version Label Items record from the database
+    * @param ID: string - primary key value to load the MJ: Version Label Items record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof VersionLabelItemEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: VersionLabelID
+    * * Display Name: Version Label
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+    * * Description: The version label this item belongs to
+    */
+    get VersionLabelID(): string {
+        return this.Get('VersionLabelID');
+    }
+    set VersionLabelID(value: string) {
+        this.Set('VersionLabelID', value);
+    }
+
+    /**
+    * * Field Name: RecordChangeID
+    * * Display Name: Record Change
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Record Changes (vwRecordChanges.ID)
+    * * Description: The specific RecordChange entry representing the record state at label creation time
+    */
+    get RecordChangeID(): string {
+        return this.Get('RecordChangeID');
+    }
+    set RecordChangeID(value: string) {
+        this.Set('RecordChangeID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Denormalized entity reference for query performance
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Denormalized record primary key for query performance
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: VersionLabel
+    * * Display Name: Version Label
+    * * SQL Data Type: nvarchar(200)
+    */
+    get VersionLabel(): string {
+        return this.Get('VersionLabel');
+    }
+
+    /**
+    * * Field Name: RecordChange
+    * * Display Name: Record Change
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get RecordChange(): string {
+        return this.Get('RecordChange');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Version Label Restores - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: VersionLabelRestore
+ * * Base View: vwVersionLabelRestores
+ * * @description Audit trail for restore operations performed against version labels. Tracks progress, success/failure counts, and links to the safety-net pre-restore label.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Version Label Restores')
+export class VersionLabelRestoreEntity extends BaseEntity<VersionLabelRestoreEntityType> {
+    /**
+    * Loads the MJ: Version Label Restores record from the database
+    * @param ID: string - primary key value to load the MJ: Version Label Restores record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof VersionLabelRestoreEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: VersionLabelID
+    * * Display Name: Version Label ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+    * * Description: The version label being restored to
+    */
+    get VersionLabelID(): string {
+        return this.Get('VersionLabelID');
+    }
+    set VersionLabelID(value: string) {
+        this.Set('VersionLabelID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Error
+    *   * In Progress
+    *   * Partial
+    *   * Pending
+    * * Description: Current status of the restore operation
+    */
+    get Status(): 'Complete' | 'Error' | 'In Progress' | 'Partial' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Complete' | 'Error' | 'In Progress' | 'Partial' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: When the restore operation began
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the restore operation completed or failed
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who initiated the restore
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: TotalItems
+    * * Display Name: Total Items
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total number of records to restore
+    */
+    get TotalItems(): number {
+        return this.Get('TotalItems');
+    }
+    set TotalItems(value: number) {
+        this.Set('TotalItems', value);
+    }
+
+    /**
+    * * Field Name: CompletedItems
+    * * Display Name: Completed Items
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records successfully restored so far
+    */
+    get CompletedItems(): number {
+        return this.Get('CompletedItems');
+    }
+    set CompletedItems(value: number) {
+        this.Set('CompletedItems', value);
+    }
+
+    /**
+    * * Field Name: FailedItems
+    * * Display Name: Failed Items
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records that failed to restore
+    */
+    get FailedItems(): number {
+        return this.Get('FailedItems');
+    }
+    set FailedItems(value: number) {
+        this.Set('FailedItems', value);
+    }
+
+    /**
+    * * Field Name: ErrorLog
+    * * Display Name: Error Log
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed error information for failed restore items
+    */
+    get ErrorLog(): string | null {
+        return this.Get('ErrorLog');
+    }
+    set ErrorLog(value: string | null) {
+        this.Set('ErrorLog', value);
+    }
+
+    /**
+    * * Field Name: PreRestoreLabelID
+    * * Display Name: Pre-Restore Label ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+    * * Description: Reference to the automatically created safety-net label that captured state before the restore began
+    */
+    get PreRestoreLabelID(): string | null {
+        return this.Get('PreRestoreLabelID');
+    }
+    set PreRestoreLabelID(value: string | null) {
+        this.Set('PreRestoreLabelID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: VersionLabel
+    * * Display Name: Version Label
+    * * SQL Data Type: nvarchar(200)
+    */
+    get VersionLabel(): string {
+        return this.Get('VersionLabel');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: PreRestoreLabel
+    * * Display Name: Pre-Restore Label
+    * * SQL Data Type: nvarchar(200)
+    */
+    get PreRestoreLabel(): string | null {
+        return this.Get('PreRestoreLabel');
+    }
+}
+
+
+/**
+ * MJ: Version Labels - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: VersionLabel
+ * * Base View: vwVersionLabels
+ * * @description A named point-in-time bookmark into the RecordChange history, used for versioning, diffing, and restoration.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Version Labels')
+export class VersionLabelEntity extends BaseEntity<VersionLabelEntityType> {
+    /**
+    * Loads the MJ: Version Labels record from the database
+    * @param ID: string - primary key value to load the MJ: Version Labels record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof VersionLabelEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Human-readable label name, e.g. Release 2.5, Pre-Refactor Snapshot
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional longer description of what this label represents
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Record
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Entity
+    *   * Record
+    *   * System
+    * * Description: Breadth of the label: Record (one record and its dependency graph, the primary use case), Entity (one entity type), or System (all entities). Parent grouping labels may use any scope as a logical container.
+    */
+    get Scope(): 'Entity' | 'Record' | 'System' {
+        return this.Get('Scope');
+    }
+    set Scope(value: 'Entity' | 'Record' | 'System') {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: When Scope is Entity or Record, identifies the target entity. NULL for System scope.
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: When Scope is Record, identifies the specific record. NULL for System and Entity scopes.
+    */
+    get RecordID(): string | null {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string | null) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Version Labels (vwVersionLabels.ID)
+    * * Description: Self-referencing parent for grouping related labels. When a user labels multiple records of the same entity, a parent label is created as the container and each individual record label references it via ParentID.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+    *   * Restored
+    * * Description: Lifecycle state: Active (current), Archived (historical reference only), Restored (this label was used in a restore operation)
+    */
+    get Status(): 'Active' | 'Archived' | 'Restored' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Archived' | 'Restored') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who created this version label
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ExternalSystemID
+    * * Display Name: External System ID
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Optional reference to an external system identifier such as a git SHA, release tag, or deployment ID
+    */
+    get ExternalSystemID(): string | null {
+        return this.Get('ExternalSystemID');
+    }
+    set ExternalSystemID(value: string | null) {
+        this.Set('ExternalSystemID', value);
+    }
+
+    /**
+    * * Field Name: ItemCount
+    * * Display Name: Item Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total number of VersionLabelItem rows created for this label. Populated after label creation completes.
+    */
+    get ItemCount(): number {
+        return this.Get('ItemCount');
+    }
+    set ItemCount(value: number) {
+        this.Set('ItemCount', value);
+    }
+
+    /**
+    * * Field Name: CreationDurationMS
+    * * Display Name: Creation Duration (ms)
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Time in milliseconds taken to create this label and all its items. Used for estimation of future label creation operations.
+    */
+    get CreationDurationMS(): number {
+        return this.Get('CreationDurationMS');
+    }
+    set CreationDurationMS(value: number) {
+        this.Set('CreationDurationMS', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string {
+        return this.Get('CreatedByUser');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+}
+
+
+/**
  * Output Delivery Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: OutputDeliveryType
@@ -68097,7 +69073,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
 
     /**
     * * Field Name: DestinationEntityRecordID
-    * * Display Name: Destination Entity Record ID
+    * * Display Name: Destination Record ID
     * * SQL Data Type: nvarchar(450)
     * * Description: The record ID of the destination entity
     */
@@ -68462,7 +69438,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: RecommendationRunID
-    * * Display Name: Recommendation Run ID
+    * * Display Name: Recommendation Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)
     */
@@ -68475,7 +69451,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: SourceEntityID
-    * * Display Name: Source Entity ID
+    * * Display Name: Source Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -68703,6 +69679,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -68715,7 +69692,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -68728,7 +69705,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: RecordID
-    * * Display Name: Record
+    * * Display Name: Record ID
     * * SQL Data Type: nvarchar(750)
     * * Description: Field RecordID for entity Record Changes.
     */
@@ -68741,7 +69718,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -68754,20 +69731,21 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Change Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Create
     * * Value List Type: List
     * * Possible Values 
     *   * Create
     *   * Delete
+    *   * Snapshot
     *   * Update
     * * Description: Create, Update, or Delete
     */
-    get Type(): 'Create' | 'Delete' | 'Update' {
+    get Type(): 'Create' | 'Delete' | 'Snapshot' | 'Update' {
         return this.Get('Type');
     }
-    set Type(value: 'Create' | 'Delete' | 'Update') {
+    set Type(value: 'Create' | 'Delete' | 'Snapshot' | 'Update') {
         this.Set('Type', value);
     }
 
@@ -68844,6 +69822,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Status
+    * * Display Name: Status
     * * SQL Data Type: nvarchar(50)
     * * Default Value: Complete
     * * Value List Type: List
@@ -68901,6 +69880,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Comments
+    * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
     get Comments(): string | null {
@@ -68934,7 +69914,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -68943,7 +69923,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -68961,7 +69941,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string | null {
@@ -69028,7 +70008,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: DeletedRecordID
-    * * Display Name: Deleted Record ID
+    * * Display Name: Deleted Record
     * * SQL Data Type: nvarchar(750)
     * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.
     */
@@ -69703,7 +70683,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category ID
+    * * Display Name: Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)
     */
@@ -69716,7 +70696,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -69748,7 +70728,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: ConversationID
-    * * Display Name: Conversation ID
+    * * Display Name: Conversation
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
     */
@@ -69761,7 +70741,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail ID
+    * * Display Name: Conversation Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     */
@@ -69774,7 +70754,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: DataContextID
-    * * Display Name: Data Context ID
+    * * Display Name: Data Context
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
     */
@@ -69800,7 +70780,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: OutputTriggerTypeID
-    * * Display Name: Output Trigger Type ID
+    * * Display Name: Output Trigger Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Output Trigger Types (vwOutputTriggerTypes.ID)
     */
@@ -69813,7 +70793,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: OutputFormatTypeID
-    * * Display Name: Output Format Type ID
+    * * Display Name: Output Format Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Output Format Types (vwOutputFormatTypes.ID)
     */
@@ -69826,7 +70806,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: OutputDeliveryTypeID
-    * * Display Name: Output Delivery Type ID
+    * * Display Name: Output Delivery Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Output Delivery Types (vwOutputDeliveryTypes.ID)
     */
@@ -69865,7 +70845,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: OutputWorkflowID
-    * * Display Name: Output Workflow ID
+    * * Display Name: Output Workflow
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Workflows (vwWorkflows.ID)
     */
@@ -69911,7 +70891,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment ID
+    * * Display Name: Environment
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -72207,7 +73187,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: TemplateID
-    * * Display Name: Template ID
+    * * Display Name: Template
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
     */
@@ -72280,7 +73260,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: IsRequired
-    * * Display Name: Is Required
+    * * Display Name: Required
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this parameter must be provided when using the template.
@@ -72294,7 +73274,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: LinkedParameterName
-    * * Display Name: Linked Parameter Name
+    * * Display Name: Linked Parameter
     * * SQL Data Type: nvarchar(255)
     * * Description: Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.
     */
@@ -72333,7 +73313,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -72392,7 +73372,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: TemplateContentID
-    * * Display Name: Template Content ID
+    * * Display Name: Template Content
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Template Contents (vwTemplateContents.ID)
     * * Description: Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.

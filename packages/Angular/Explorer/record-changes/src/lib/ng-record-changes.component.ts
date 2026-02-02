@@ -1,79 +1,85 @@
-import { Component, EventEmitter, Input, OnInit, Output, Renderer2, ElementRef, AfterViewInit, OnDestroy, ViewChild, ViewEncapsulation } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, ChangeDetectorRef, ChangeDetectionStrategy, ViewEncapsulation } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { SortDescriptor } from '@progress/kendo-data-query';
-import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, Metadata } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, Metadata, RunView } from '@memberjunction/core';
 import { RecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { diffChars, diffWords, Change } from 'diff';
+
+/** Lightweight shape for displaying a version label associated with this record */
+interface RecordLabel {
+  ID: string;
+  Name: string;
+  Description: string | null;
+  Scope: string;
+  Status: string;
+  CreatedAt: Date;
+  ItemCount: number;
+}
 
 @Component({
   selector: 'mj-record-changes',
   templateUrl: './ng-record-changes.component.html',
   styleUrls: ['./ng-record-changes.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None
 })
-export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy {
-  public showloader: boolean = false;
+export class RecordChangesComponent implements OnInit {
+  public IsLoading = false;
+  public IsVisible = false;
   @Output() dialogClosed = new EventEmitter();
   @Input() record!: BaseEntity;
-
-  @ViewChild('recordChangesWrapper', { static: true }) wrapper!: ElementRef;
 
   viewData: RecordChangeEntity[] = [];
   filteredData: RecordChangeEntity[] = [];
   expandedItems: Set<string> = new Set();
-  
+
+  // Version label state
+  RecordLabels: RecordLabel[] = [];
+  IsLoadingLabels = false;
+  ShowCreateWizard = false;
+
   // Filter properties
-  searchTerm: string = '';
-  selectedType: string = '';
-  selectedSource: string = '';
-  
-  sortSettings: SortDescriptor[] = [
-    {
-      field: "ChangedAt",
-      dir: "desc",
-    },
-  ];
+  searchTerm = '';
+  selectedType = '';
+  selectedSource = '';
 
-
-  constructor(private renderer: Renderer2, private mjNotificationService: MJNotificationService, private sanitizer: DomSanitizer) { }
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private mjNotificationService: MJNotificationService,
+    private sanitizer: DomSanitizer
+  ) {}
 
   ngOnInit(): void {
-    if(this.record){
-      this.showloader = true;
+    if (this.record) {
+      this.IsLoading = true;
+      this.IsVisible = true;
+      this.cdr.markForCheck();
       this.LoadRecordChanges(this.record.PrimaryKey, '', this.record.EntityInfo.Name);
+      this.LoadRecordLabels();
     }
   }
 
-  ngAfterViewInit(): void {
-    // Move the wrapper to the body when the component is initialized
-    if (this.renderer && this.wrapper && this.wrapper.nativeElement)
-      this.renderer.appendChild(document.body, this.wrapper.nativeElement);
+  public OnClose(): void {
+    this.IsVisible = false;
+    this.cdr.markForCheck();
+    // Allow the slide-out animation to complete before emitting
+    setTimeout(() => this.dialogClosed.emit(), 300);
   }
 
-  ngOnDestroy(): void {
-    // Remove the wrapper from the body when the component is destroyed
-    if (this.renderer && this.wrapper && this.wrapper.nativeElement)
-      this.renderer.removeChild(document.body, this.wrapper.nativeElement);
-  }
-
-  public async LoadRecordChanges(pkey: CompositeKey, appName: string, entityName: string) {
+  public async LoadRecordChanges(pkey: CompositeKey, appName: string, entityName: string): Promise<void> {
     if (pkey && entityName) {
       const md = new Metadata();
       const changes = await md.GetRecordChanges<RecordChangeEntity>(entityName, pkey);
-      if(changes){
+      if (changes) {
         this.viewData = changes.sort((a, b) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime());
         this.filteredData = [...this.viewData];
-        this.showloader = false;
+        this.IsLoading = false;
       } else {
         this.mjNotificationService.CreateSimpleNotification(`Error loading record changes for ${entityName} with primary key ${pkey.ToString()}.`, 'error');
-        this.showloader = false;
+        this.IsLoading = false;
       }
+      this.cdr.markForCheck();
     }
-  }
-
-  closePropertiesDialog(){
-    this.dialogClosed.emit();
   }
 
   // Filter and search methods
@@ -85,30 +91,125 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     this.applyFilters();
   }
 
+  public ClearFilters(): void {
+    this.searchTerm = '';
+    this.selectedType = '';
+    this.selectedSource = '';
+    this.applyFilters();
+  }
+
+  // Version label methods
+  public async LoadRecordLabels(): Promise<void> {
+    if (!this.record) return;
+
+    this.IsLoadingLabels = true;
+    this.cdr.markForCheck();
+
+    try {
+      const entityId = this.record.EntityInfo.ID;
+      const recordId = this.record.PrimaryKey.ToConcatenatedString();
+
+      const rv = new RunView();
+      // Find all label items that reference this specific record
+      const itemsResult = await rv.RunView<{ VersionLabelID: string }>({
+        EntityName: 'MJ: Version Label Items',
+        Fields: ['VersionLabelID'],
+        ExtraFilter: `EntityID='${entityId}' AND RecordID='${recordId}'`,
+        ResultType: 'simple'
+      });
+
+      if (!itemsResult.Success || itemsResult.Results.length === 0) {
+        this.RecordLabels = [];
+        this.IsLoadingLabels = false;
+        this.cdr.markForCheck();
+        return;
+      }
+
+      const labelIds = [...new Set(itemsResult.Results.map(i => i.VersionLabelID))];
+      const labelIdFilter = labelIds.map(id => `'${id}'`).join(',');
+
+      const labelsResult = await rv.RunView<{
+        ID: string; Name: string; Description: string | null;
+        Scope: string; Status: string; ItemCount: number; __mj_CreatedAt: Date;
+      }>({
+        EntityName: 'MJ: Version Labels',
+        Fields: ['ID', 'Name', 'Description', 'Scope', 'Status', 'ItemCount', '__mj_CreatedAt'],
+        ExtraFilter: `ID IN (${labelIdFilter})`,
+        OrderBy: '__mj_CreatedAt DESC',
+        ResultType: 'simple'
+      });
+
+      if (labelsResult.Success) {
+        this.RecordLabels = labelsResult.Results.map(l => ({
+          ID: l.ID,
+          Name: l.Name,
+          Description: l.Description,
+          Scope: l.Scope,
+          Status: l.Status,
+          CreatedAt: l.__mj_CreatedAt,
+          ItemCount: l.ItemCount
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading version labels for record:', error);
+      this.RecordLabels = [];
+    } finally {
+      this.IsLoadingLabels = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public OpenCreateWizard(): void {
+    this.ShowCreateWizard = true;
+    this.cdr.markForCheck();
+  }
+
+  public OnLabelCreated(event: { LabelCount: number; ItemCount: number }): void {
+    this.ShowCreateWizard = false;
+    this.cdr.markForCheck();
+    this.LoadRecordLabels();
+    this.mjNotificationService.CreateSimpleNotification(
+      `Version label created with ${event.ItemCount} snapshot${event.ItemCount !== 1 ? 's' : ''}`,
+      'info'
+    );
+  }
+
+  public OnLabelCreateCancelled(): void {
+    this.ShowCreateWizard = false;
+    this.cdr.markForCheck();
+  }
+
+  public getLabelStatusClass(status: string): string {
+    switch (status) {
+      case 'Active': return 'label-status-active';
+      case 'Archived': return 'label-status-archived';
+      case 'Restored': return 'label-status-restored';
+      default: return '';
+    }
+  }
+
   private applyFilters(): void {
     let filtered = [...this.viewData];
 
-    // Apply search filter
     if (this.searchTerm.trim()) {
       const search = this.searchTerm.toLowerCase();
-      filtered = filtered.filter(change => 
+      filtered = filtered.filter(change =>
         change.ChangesDescription?.toLowerCase().includes(search) ||
         change.User?.toLowerCase().includes(search) ||
         change.Comments?.toLowerCase().includes(search)
       );
     }
 
-    // Apply type filter
     if (this.selectedType) {
       filtered = filtered.filter(change => change.Type === this.selectedType);
     }
 
-    // Apply source filter
     if (this.selectedSource) {
       filtered = filtered.filter(change => change.Source === this.selectedSource);
     }
 
     this.filteredData = filtered;
+    this.cdr.markForCheck();
   }
 
   // Timeline interaction methods
@@ -118,6 +219,7 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     } else {
       this.expandedItems.add(changeId);
     }
+    this.cdr.markForCheck();
   }
 
   onTimelineItemKeydown(event: KeyboardEvent, changeId: string): void {
@@ -183,7 +285,7 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
     if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    
+
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: 'numeric',
@@ -210,21 +312,20 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     if (change.Type === 'Delete') {
       return 'Record was deleted';
     }
-    
+
     try {
       const changesJson = JSON.parse(change.ChangesJSON || '{}');
       const fields = Object.keys(changesJson);
       if (fields.length === 0) return 'No field changes detected';
-      
-      // Get field display names
+
       const fieldNames = fields.map(fieldKey => {
         const changeInfo = changesJson[fieldKey];
-        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) => 
+        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) =>
           f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
         );
         return field?.DisplayNameOrName || changeInfo.field;
       });
-      
+
       if (fieldNames.length === 1) {
         return `${fieldNames[0]} changed`;
       }
@@ -235,34 +336,31 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
         const lastField = fieldNames.pop();
         return `${fieldNames.join(', ')}, and ${lastField} changed`;
       }
-      
-      // For more than 4 fields, show first 3 and count
+
       return `${fieldNames.slice(0, 3).join(', ')}, and ${fieldNames.length - 3} other field${fieldNames.length - 3 > 1 ? 's' : ''} changed`;
     } catch {
       return change.ChangesDescription || 'Changes made';
     }
   }
 
-  getFieldChanges(change: RecordChangeEntity): Array<{field: string, displayName: string, oldValue: any, newValue: any, isBooleanField: boolean, diffHtml?: SafeHtml}> {
+  getFieldChanges(change: RecordChangeEntity): Array<{field: string, displayName: string, oldValue: string, newValue: string, isBooleanField: boolean, diffHtml?: SafeHtml}> {
     try {
       const changesJson = JSON.parse(change.ChangesJSON || '{}');
       const fields = Object.keys(changesJson);
-      
+
       return fields.map(fieldKey => {
         const changeInfo = changesJson[fieldKey];
-        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) => 
+        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) =>
           f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
         );
-        
+
         const isBooleanField = field?.TSType === EntityFieldTSType.Boolean;
         let diffHtml: SafeHtml | undefined;
-        
-        // Generate diff HTML for non-boolean text fields
+
         if (!isBooleanField) {
           const oldStr = String(changeInfo.oldValue ?? '');
           const newStr = String(changeInfo.newValue ?? '');
-          
-          // Always show diff if values are different, even if one is empty
+
           if (oldStr !== newStr) {
             diffHtml = this.generateDiffHtml(oldStr, newStr);
           }
@@ -282,15 +380,15 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     }
   }
 
-  getCreatedFields(change: RecordChangeEntity): Array<{name: string, displayName: string, value: any}> {
+  getCreatedFields(change: RecordChangeEntity): Array<{name: string, displayName: string, value: string}> {
     try {
       if (!change.FullRecordJSON) return [];
-      
+
       const record = JSON.parse(change.FullRecordJSON);
       const fields = this.record.EntityInfo.Fields;
-      
+
       return fields
-        .filter((field: EntityFieldInfo) => record[field.Name] !== null && record[field.Name] !== undefined && record[field.Name] !== '')
+        .filter((field: EntityFieldInfo) => record[field.Name] != null && record[field.Name] !== '')
         .map((field: EntityFieldInfo) => ({
           name: field.Name,
           displayName: field.DisplayNameOrName,
@@ -302,25 +400,23 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   private generateDiffHtml(oldValue: string, newValue: string): SafeHtml {
-    // Handle empty values
     if (!oldValue && !newValue) {
       return this.sanitizer.bypassSecurityTrustHtml('<div class="diff-container"><span class="diff-unchanged">(no change)</span></div>');
     }
-    
+
     if (!oldValue) {
       return this.sanitizer.bypassSecurityTrustHtml(`<div class="diff-container"><span class="diff-added">${this.escapeHtml(newValue)}</span></div>`);
     }
-    
+
     if (!newValue) {
       return this.sanitizer.bypassSecurityTrustHtml(`<div class="diff-container"><span class="diff-removed">${this.escapeHtml(oldValue)}</span></div>`);
     }
-    
-    // Decide between character and word diff based on content length and type
+
     const useWordDiff = this.shouldUseWordDiff(oldValue, newValue);
     const diffs = useWordDiff ? diffWords(oldValue, newValue) : diffChars(oldValue, newValue);
-    
+
     let html = '<div class="diff-container">';
-    
+
     diffs.forEach((part: Change) => {
       const escapedValue = this.escapeHtml(part.value);
       if (part.added) {
@@ -331,19 +427,17 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
         html += `<span class="diff-unchanged">${escapedValue}</span>`;
       }
     });
-    
+
     html += '</div>';
-    
+
     return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 
   private shouldUseWordDiff(oldValue: string, newValue: string): boolean {
-    // Use word diff for longer text with spaces (sentences/paragraphs)
-    // Use character diff for shorter text, codes, IDs, etc.
     const hasMultipleWords = (text: string) => text.includes(' ') && text.split(' ').length > 3;
     const isLongText = (text: string) => text.length > 50;
-    
-    return (hasMultipleWords(oldValue) || hasMultipleWords(newValue)) && 
+
+    return (hasMultipleWords(oldValue) || hasMultipleWords(newValue)) &&
            (isLongText(oldValue) || isLongText(newValue));
   }
 

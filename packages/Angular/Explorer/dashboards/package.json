@@ -63,6 +63,7 @@
     "@memberjunction/ng-react": "3.4.0",
     "@memberjunction/ng-shared": "3.4.0",
     "@memberjunction/ng-shared-generic": "3.4.0",
+    "@memberjunction/ng-versions": "3.4.0",
     "@memberjunction/ng-testing": "3.4.0",
     "@memberjunction/skip-types": "3.4.0",
     "@memberjunction/templates-base-types": "3.4.0",

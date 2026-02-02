@@ -168,6 +168,12 @@ import { SharedPipesModule } from './shared/shared-pipes.module';
 import { MCPModule } from './MCP';
 // Actions Module (test harness, dialogs)
 import { ActionsModule } from '@memberjunction/ng-actions';
+// Version History Dashboard Components
+import { VersionHistoryLabelsResourceComponent } from './VersionHistory/components/labels-resource.component';
+import { VersionHistoryDiffResourceComponent } from './VersionHistory/components/diff-resource.component';
+import { VersionHistoryRestoreResourceComponent } from './VersionHistory/components/restore-resource.component';
+import { VersionHistoryGraphResourceComponent } from './VersionHistory/components/graph-resource.component';
+import { VersionsModule } from '@memberjunction/ng-versions';
 
 
 
@@ -293,7 +299,12 @@ import { ActionsModule } from '@memberjunction/ng-actions';
     APIKeyListComponent,
     APIApplicationsPanelComponent,
     APIScopesPanelComponent,
-    APIUsagePanelComponent
+    APIUsagePanelComponent,
+    // Version History Dashboard Components
+    VersionHistoryLabelsResourceComponent,
+    VersionHistoryDiffResourceComponent,
+    VersionHistoryRestoreResourceComponent,
+    VersionHistoryGraphResourceComponent
   ],
   imports: [
     CommonModule,
@@ -335,7 +346,8 @@ import { ActionsModule } from '@memberjunction/ng-actions';
     CredentialsModule,
     SharedPipesModule,
     ActionsModule,
-    MarkdownModule
+    MarkdownModule,
+    VersionsModule
   ],
   providers: [
     AIInstrumentationService,
@@ -426,7 +438,12 @@ import { ActionsModule } from '@memberjunction/ng-actions';
     APIScopesPanelComponent,
     APIUsagePanelComponent,
     // MCP Dashboard Module (re-exports its components)
-    MCPModule
+    MCPModule,
+    // Version History Dashboard Components
+    VersionHistoryLabelsResourceComponent,
+    VersionHistoryDiffResourceComponent,
+    VersionHistoryRestoreResourceComponent,
+    VersionHistoryGraphResourceComponent
   ]
 })
 export class DashboardsModule { }

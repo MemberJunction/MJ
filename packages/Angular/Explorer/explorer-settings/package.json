@@ -32,7 +32,6 @@
     "@memberjunction/ng-base-application": "3.4.0",
     "@memberjunction/ng-base-forms": "3.4.0",
     "@memberjunction/ng-code-editor": "3.4.0",
-    "@memberjunction/ng-compare-records": "3.4.0",
     "@memberjunction/ng-container-directives": "3.4.0",
     "@memberjunction/ng-entity-form-dialog": "3.4.0",
     "@memberjunction/ng-entity-permissions": "3.4.0",

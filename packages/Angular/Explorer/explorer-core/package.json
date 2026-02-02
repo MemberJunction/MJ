@@ -42,7 +42,6 @@
     "@memberjunction/ng-auth-services": "3.4.0",
     "@memberjunction/ng-base-application": "3.4.0",
     "@memberjunction/ng-base-forms": "3.4.0",
-    "@memberjunction/ng-compare-records": "3.4.0",
     "@memberjunction/ng-container-directives": "3.4.0",
     "@memberjunction/ng-conversations": "3.4.0",
     "@memberjunction/ng-dashboards": "3.4.0",
