@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnInit, Output, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, ChangeDetectorRef, ChangeDetectionStrategy, ViewEncapsulation } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, Metadata } from '@memberjunction/core';
 import { RecordChangeEntity } from '@memberjunction/core-entities';
@@ -9,7 +9,8 @@ import { diffChars, diffWords, Change } from 'diff';
   selector: 'mj-record-changes',
   templateUrl: './ng-record-changes.component.html',
   styleUrls: ['./ng-record-changes.component.css'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  encapsulation: ViewEncapsulation.None
 })
 export class RecordChangesComponent implements OnInit {
   public IsLoading = false;
