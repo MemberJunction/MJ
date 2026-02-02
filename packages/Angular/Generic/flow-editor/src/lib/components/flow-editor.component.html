@@ -30,7 +30,8 @@
     <!-- Foblex Canvas -->
     <div class="mj-flow-editor-canvas" [class.mj-flow-editor-canvas--pan-mode]="panMode">
       <f-flow fDraggable
-              [fDraggableDisabled]="!panMode"
+              [fDraggableDisabled]="false"
+              [fCanvasMoveTrigger]="canvasMoveTriggerFn"
               [vCellSize]="GridSize"
               [hCellSize]="GridSize"
               [fCellSizeWhileDragging]="ShowGrid"

@@ -79,6 +79,11 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   protected selectedConnectionIDs: string[] = [];
   protected panMode = false;
 
+  /** Trigger function for canvas panning — only allows panning in pan mode */
+  protected canvasMoveTriggerFn = (_event: MouseEvent | TouchEvent): boolean => {
+    return this.panMode;
+  };
+
   /* Context menu state */
   protected contextMenuVisible = false;
   protected contextMenuX = 0;
