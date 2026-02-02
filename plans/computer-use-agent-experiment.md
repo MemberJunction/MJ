@@ -6,7 +6,7 @@
 
 ## 1. Project Context
 
-Welcome aboard, Caleb!
+Welcome aboard, Caeleb!
 
 Your first project at Blue Cypress is to build an early prototype of something we believe will become a major capability inside the MemberJunction ecosystem:
 
@@ -388,7 +388,7 @@ Once stable, we will:
 
 ## Final Note
 
-Caleb — this is a perfect starter project because it's:
+Caeleb — this is a perfect starter project because it's:
 
 - **Self-contained** — no MJ dependencies to learn upfront
 - **Highly modern** — cutting-edge AI agent patterns
