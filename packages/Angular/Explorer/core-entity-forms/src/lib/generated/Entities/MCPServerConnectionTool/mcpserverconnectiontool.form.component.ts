@@ -16,6 +16,7 @@ export class MCPServerConnectionToolFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'connectionMapping', sectionName: 'Connection Mapping', isExpanded: true },
             { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
