@@ -17,6 +17,7 @@ export class APIKeyUsageLogFormComponent extends BaseFormComponent {
             { sectionKey: 'requestInformation', sectionName: 'Request Information', isExpanded: true },
             { sectionKey: 'responseClientInfo', sectionName: 'Response & Client Info', isExpanded: true },
             { sectionKey: 'authorizationDetails', sectionName: 'Authorization Details', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

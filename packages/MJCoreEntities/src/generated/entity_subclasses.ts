@@ -2375,13 +2375,13 @@ export const AIResultCacheSchema = z.object({
         * * Default Value: newsequentialid()`),
     AIPromptID: z.string().describe(`
         * * Field Name: AIPromptID
-        * * Display Name: AI Prompt
+        * * Display Name: AIPrompt ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: Reference to the AI prompt this result corresponds to.`),
     AIModelID: z.string().describe(`
         * * Field Name: AIModelID
-        * * Display Name: AI Model
+        * * Display Name: AIModel ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         * * Description: Reference to the AI model that generated this result.`),
@@ -2426,19 +2426,19 @@ export const AIResultCacheSchema = z.object({
         * * Default Value: getutcdate()`),
     VendorID: z.string().nullable().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor
+        * * Display Name: Vendor ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
         * * Description: The vendor that provided this result.`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent
+        * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
         * * Description: The agent that initiated the request, if any.`),
     ConfigurationID: z.string().nullable().describe(`
         * * Field Name: ConfigurationID
-        * * Display Name: Configuration
+        * * Display Name: Configuration ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
         * * Description: The configuration used for this execution.`),
@@ -2449,17 +2449,17 @@ export const AIResultCacheSchema = z.object({
         * * Description: Vector representation of the prompt for similarity matching.`),
     PromptRunID: z.string().nullable().describe(`
         * * Field Name: PromptRunID
-        * * Display Name: Prompt Run
+        * * Display Name: Prompt Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: Reference to the AIPromptRun that created this cache entry.`),
     AIPrompt: z.string().describe(`
         * * Field Name: AIPrompt
-        * * Display Name: AI Prompt
+        * * Display Name: AIPrompt
         * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
-        * * Display Name: AI Model
+        * * Display Name: AIModel
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
@@ -2473,10 +2473,6 @@ export const AIResultCacheSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(100)`),
-    PromptRun: z.string().nullable().describe(`
-        * * Field Name: PromptRun
-        * * Display Name: Prompt Run
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIResultCacheEntityType = z.infer<typeof AIResultCacheSchema>;
@@ -4440,7 +4436,7 @@ export const ConversationSchema = z.object({
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     ExternalID: z.string().nullable().describe(`
@@ -4464,13 +4460,13 @@ export const ConversationSchema = z.object({
         * * Description: The type or category of conversation (Skip, Support, Chat, etc.).`),
     IsArchived: z.boolean().describe(`
         * * Field Name: IsArchived
-        * * Display Name: Archived
+        * * Display Name: Is Archived
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation has been archived and should not appear in active lists.`),
     LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
-        * * Display Name: Linked Entity
+        * * Display Name: Linked Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     LinkedRecordID: z.string().nullable().describe(`
@@ -4480,7 +4476,7 @@ export const ConversationSchema = z.object({
         * * Description: ID of a related record this conversation is about (support ticket, order, etc.).`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
-        * * Display Name: Data Context
+        * * Display Name: Data Context ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -4505,24 +4501,24 @@ export const ConversationSchema = z.object({
         * * Description: Tracks the processing status of the conversation: Available, Processing`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment
+        * * Display Name: Environment ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ProjectID: z.string().nullable().describe(`
         * * Field Name: ProjectID
-        * * Display Name: Project
+        * * Display Name: Project ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     IsPinned: z.boolean().describe(`
         * * Field Name: IsPinned
-        * * Display Name: Pinned
+        * * Display Name: Is Pinned
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation is pinned to the top of lists`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run
+        * * Display Name: Test Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`),
@@ -4545,10 +4541,6 @@ export const ConversationSchema = z.object({
     Project: z.string().nullable().describe(`
         * * Field Name: Project
         * * Display Name: Project
-        * * SQL Data Type: nvarchar(255)`),
-    TestRun: z.string().nullable().describe(`
-        * * Field Name: TestRun
-        * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -5134,10 +5126,6 @@ export const DuplicateRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DuplicateRun: z.string().describe(`
-        * * Field Name: DuplicateRun
-        * * Display Name: Duplicate Run
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type DuplicateRunDetailEntityType = z.infer<typeof DuplicateRunDetailSchema>;
@@ -5249,27 +5237,26 @@ export type DuplicateRunEntityType = z.infer<typeof DuplicateRunSchema>;
 export const EmployeeCompanyIntegrationSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EmployeeID: z.string().describe(`
         * * Field Name: EmployeeID
-        * * Display Name: Employee
+        * * Display Name: Employee ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)`),
     CompanyIntegrationID: z.string().describe(`
         * * Field Name: CompanyIntegrationID
-        * * Display Name: Company Integration
+        * * Display Name: Company Integration ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)`),
     ExternalSystemRecordID: z.string().describe(`
         * * Field Name: ExternalSystemRecordID
-        * * Display Name: External System Record ID
+        * * Display Name: External System Record
         * * SQL Data Type: nvarchar(750)
         * * Description: The employee's unique identifier in the external integrated system.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if this employee integration mapping is currently active.`),
@@ -5283,13 +5270,9 @@ export const EmployeeCompanyIntegrationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Employee: z.string().nullable().describe(`
-        * * Field Name: Employee
-        * * Display Name: Employee
-        * * SQL Data Type: nvarchar(81)`),
     CompanyIntegration: z.string().describe(`
         * * Field Name: CompanyIntegration
-        * * Display Name: Company Integration Name
+        * * Display Name: Company Integration
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -5306,28 +5289,24 @@ export const EmployeeRoleSchema = z.object({
         * * Default Value: newsequentialid()`),
     EmployeeID: z.string().describe(`
         * * Field Name: EmployeeID
-        * * Display Name: Employee
+        * * Display Name: Employee ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)`),
     RoleID: z.string().describe(`
         * * Field Name: RoleID
-        * * Display Name: Role
+        * * Display Name: Role ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Roles (vwRoles.ID)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
+        * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
+        * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Employee: z.string().nullable().describe(`
-        * * Field Name: Employee
-        * * Display Name: Employee
-        * * SQL Data Type: nvarchar(81)`),
     Role: z.string().describe(`
         * * Field Name: Role
         * * Display Name: Role
@@ -5347,28 +5326,24 @@ export const EmployeeSkillSchema = z.object({
         * * Default Value: newsequentialid()`),
     EmployeeID: z.string().describe(`
         * * Field Name: EmployeeID
-        * * Display Name: Employee
+        * * Display Name: Employee ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)`),
     SkillID: z.string().describe(`
         * * Field Name: SkillID
-        * * Display Name: Skill
+        * * Display Name: Skill ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Skills (vwSkills.ID)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
+        * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
+        * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Employee: z.string().nullable().describe(`
-        * * Field Name: Employee
-        * * Display Name: Employee
-        * * SQL Data Type: nvarchar(81)`),
     Skill: z.string().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
@@ -5839,12 +5814,12 @@ export const EntityActionFilterSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action
+        * * Display Name: Entity Action ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)`),
     ActionFilterID: z.string().describe(`
         * * Field Name: ActionFilterID
-        * * Display Name: Action Filter
+        * * Display Name: Action Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)`),
     Sequence: z.number().describe(`
@@ -5865,22 +5840,14 @@ export const EntityActionFilterSchema = z.object({
         * * Description: Status of the entity action filter (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
+        * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
+        * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action Name
-        * * SQL Data Type: nvarchar(425)`),
-    ActionFilter: z.string().describe(`
-        * * Field Name: ActionFilter
-        * * Display Name: Action Filter Name
-        * * SQL Data Type: nvarchar(MAX)`),
 });
 
 export type EntityActionFilterEntityType = z.infer<typeof EntityActionFilterSchema>;
@@ -5956,18 +5923,14 @@ export const EntityActionInvocationSchema = z.object({
         * * Description: Status of the entity action invocation (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
+        * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
+        * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action
-        * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
         * * Display Name: Invocation Type
@@ -5987,12 +5950,12 @@ export const EntityActionParamSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action
+        * * Display Name: Entity Action ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)`),
     ActionParamID: z.string().describe(`
         * * Field Name: ActionParamID
-        * * Display Name: Action Parameter
+        * * Display Name: Action Param ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Params (vwActionParams.ID)`),
     ValueType: z.union([z.literal('Entity Field'), z.literal('Entity Object'), z.literal('Script'), z.literal('Static')]).describe(`
@@ -6026,13 +5989,9 @@ export const EntityActionParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Action
-        * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
-        * * Display Name: Parameter
+        * * Display Name: Action Param
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -6209,7 +6168,7 @@ export const EntityCommunicationFieldSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityCommunicationMessageTypeID: z.string().describe(`
         * * Field Name: EntityCommunicationMessageTypeID
-        * * Display Name: Message Type
+        * * Display Name: Entity Communication Message Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)`),
     FieldName: z.string().describe(`
@@ -6224,18 +6183,14 @@ export const EntityCommunicationFieldSchema = z.object({
         * * Description: Priority of the field for the communication base message type`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
+        * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
+        * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityCommunicationMessageType: z.string().describe(`
-        * * Field Name: EntityCommunicationMessageType
-        * * Display Name: Message Type Name
-        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type EntityCommunicationFieldEntityType = z.infer<typeof EntityCommunicationFieldSchema>;
@@ -6609,13 +6564,13 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`),
     IsPrimaryKey: z.boolean().describe(`
         * * Field Name: IsPrimaryKey
-        * * Display Name: Is Primary Key
+        * * Display Name: Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)`),
     IsUnique: z.boolean().describe(`
         * * Field Name: IsUnique
-        * * Display Name: Is Unique
+        * * Display Name: Unique
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field must have unique values within the entity.`),
@@ -6769,7 +6724,7 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details`),
     IsVirtual: z.boolean().describe(`
         * * Field Name: IsVirtual
-        * * Display Name: Is Virtual
+        * * Display Name: Virtual
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: NULL`),
@@ -6892,7 +6847,7 @@ export const EntityFieldSchema = z.object({
         * * Description: When true, this field will be encrypted at rest using the specified EncryptionKeyID. Encrypted fields cannot be indexed or searched.`),
     EncryptionKeyID: z.string().nullable().describe(`
         * * Field Name: EncryptionKeyID
-        * * Display Name: Encryption Key
+        * * Display Name: Encryption Key ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Encryption Keys (vwEncryptionKeys.ID)
         * * Description: References the encryption key to use when Encrypt is true. Required if Encrypt is true.`),
@@ -7444,27 +7399,24 @@ export type EntitySettingEntityType = z.infer<typeof EntitySettingSchema>;
 export const ErrorLogSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     CompanyIntegrationRunID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunID
-        * * Display Name: Company Integration Run
+        * * Display Name: CompanyIntegrationRun ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)`),
     CompanyIntegrationRunDetailID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunDetailID
-        * * Display Name: Company Integration Run Detail
+        * * Display Name: CompanyIntegrationRunDetail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
-        * * Display Name: Error Code
         * * SQL Data Type: nchar(20)
         * * Description: Error code for categorizing and handling specific error types.`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The primary error message describing what went wrong.`),
     CreatedBy: z.string().nullable().describe(`
@@ -7475,16 +7427,13 @@ export const ErrorLogSchema = z.object({
         * * Description: User or system process that encountered this error.`),
     Status: z.string().nullable().describe(`
         * * Field Name: Status
-        * * Display Name: Status
         * * SQL Data Type: nvarchar(10)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
         * * SQL Data Type: nvarchar(20)
         * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).`),
     Details: z.string().nullable().describe(`
         * * Field Name: Details
-        * * Display Name: Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Full error details including stack trace, inner exceptions, and context data.`),
     __mj_CreatedAt: z.date().describe(`
@@ -7497,14 +7446,6 @@ export const ErrorLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CompanyIntegrationRun: z.string().nullable().describe(`
-        * * Field Name: CompanyIntegrationRun
-        * * Display Name: Company Integration Run
-        * * SQL Data Type: nvarchar(100)`),
-    CompanyIntegrationRunDetail: z.string().nullable().describe(`
-        * * Field Name: CompanyIntegrationRunDetail
-        * * Display Name: Company Integration Run Detail
-        * * SQL Data Type: nvarchar(450)`),
 });
 
 export type ErrorLogEntityType = z.infer<typeof ErrorLogSchema>;
@@ -9360,7 +9301,7 @@ export const AIAgentRunStepSchema = z.object({
         * * Description: Unique identifier for this execution step`),
     AgentRunID: z.string().describe(`
         * * Field Name: AgentRunID
-        * * Display Name: Agent Run
+        * * Display Name: Agent Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Reference to the parent AIAgentRun that contains this step`),
@@ -9392,7 +9333,7 @@ export const AIAgentRunStepSchema = z.object({
         * * Description: Human-readable name of what this step accomplishes`),
     TargetID: z.string().nullable().describe(`
         * * Field Name: TargetID
-        * * Display Name: Target
+        * * Display Name: Target ID
         * * SQL Data Type: uniqueidentifier
         * * Description: ID of the specific target being executed (AIPrompt.ID, AIAction.ID, AIAgent.ID, etc.). NULL for steps that don't target a specific entity.`),
     Status: z.union([z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Running')]).describe(`
@@ -9450,7 +9391,7 @@ export const AIAgentRunStepSchema = z.object({
         * * Default Value: getutcdate()`),
     TargetLogID: z.string().nullable().describe(`
         * * Field Name: TargetLogID
-        * * Display Name: Target Log
+        * * Display Name: Target Log ID
         * * SQL Data Type: uniqueidentifier
         * * Description: ID of the execution log/run record created for this step (ActionExecutionLog.ID for action steps, AIAgentRun.ID for subagent steps, AIPromptRun.ID for prompt steps)`),
     PayloadAtStart: z.string().nullable().describe(`
@@ -9488,7 +9429,7 @@ permanently, Warn means validation failed but execution continues.`),
 detailed information about what validation rules failed.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles`),
@@ -9497,17 +9438,9 @@ detailed information about what validation rules failed.`),
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable notes and comments about this agent run step`),
-    AgentRun: z.string().nullable().describe(`
-        * * Field Name: AgentRun
-        * * Display Name: Agent Run
-        * * SQL Data Type: nvarchar(255)`),
-    Parent: z.string().nullable().describe(`
-        * * Field Name: Parent
-        * * Display Name: Parent
-        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -12007,7 +11940,7 @@ export const APIKeyScopeSchema = z.object({
         * * Related Entity/Foreign Key: MJ: API Keys (vwAPIKeys.ID)`),
     ScopeID: z.string().describe(`
         * * Field Name: ScopeID
-        * * Display Name: Scope
+        * * Display Name: Scope ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -12037,7 +11970,7 @@ export const APIKeyScopeSchema = z.object({
         * * Description: How to interpret the pattern: Include (grant if matches) or Exclude (grant if does NOT match).`),
     IsDeny: z.boolean().describe(`
         * * Field Name: IsDeny
-        * * Display Name: Is Deny
+        * * Display Name: Deny Rule
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If true, this rule explicitly DENIES access. Deny rules trump allow rules at the same priority level.`),
@@ -12095,7 +12028,7 @@ export const APIKeyUsageLogSchema = z.object({
         * * Description: HTTP response status code returned to the client (e.g., 200 for success, 401 for unauthorized, 500 for server error).`),
     ResponseTimeMs: z.number().nullable().describe(`
         * * Field Name: ResponseTimeMs
-        * * Display Name: Response Time (ms)
+        * * Display Name: Response Time
         * * SQL Data Type: int
         * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.`),
     IPAddress: z.string().nullable().describe(`
@@ -12120,7 +12053,7 @@ export const APIKeyUsageLogSchema = z.object({
         * * Default Value: getutcdate()`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
-        * * Display Name: Application
+        * * Display Name: Application ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
         * * Description: The application through which this request was made (MJAPI, MCPServer, etc.).`),
@@ -12152,11 +12085,11 @@ export const APIKeyUsageLogSchema = z.object({
         * * Description: When authorization is denied, explains why (e.g., app ceiling blocked, no matching key scope, explicit deny rule).`),
     APIKey: z.string().describe(`
         * * Field Name: APIKey
-        * * Display Name: API Key Value
+        * * Display Name: API Key
         * * SQL Data Type: nvarchar(255)`),
     Application: z.string().nullable().describe(`
         * * Field Name: Application
-        * * Display Name: Application Name
+        * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -13557,13 +13490,13 @@ export const ConversationDetailArtifactSchema = z.object({
         * * Default Value: newsequentialid()`),
     ConversationDetailID: z.string().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: Foreign key to ConversationDetail - the conversation message associated with this artifact`),
     ArtifactVersionID: z.string().describe(`
         * * Field Name: ArtifactVersionID
-        * * Display Name: Artifact Version
+        * * Display Name: Artifact Version ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
         * * Description: Foreign key to ArtifactVersion - the specific artifact version linked to this conversation message`),
@@ -13587,10 +13520,6 @@ export const ConversationDetailArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ConversationDetail: z.string().describe(`
-        * * Field Name: ConversationDetail
-        * * Display Name: Message
-        * * SQL Data Type: nvarchar(MAX)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
@@ -13713,13 +13642,13 @@ export const ConversationDetailRatingSchema = z.object({
         * * Default Value: newsequentialid()`),
     ConversationDetailID: z.string().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: The conversation message being rated.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: The user providing the rating.`),
@@ -13743,10 +13672,6 @@ export const ConversationDetailRatingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ConversationDetail: z.string().describe(`
-        * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -14935,11 +14860,7 @@ export const MCPServerConnectionToolSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: MCP Server Connection
-        * * SQL Data Type: nvarchar(255)`),
-    MCPServerTool: z.string().nullable().describe(`
-        * * Field Name: MCPServerTool
-        * * Display Name: MCP Server Tool
+        * * Display Name: Connection
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -15307,12 +15228,12 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     MCPServerConnectionID: z.string().describe(`
         * * Field Name: MCPServerConnectionID
-        * * Display Name: Server Connection
+        * * Display Name: MCP Server Connection
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
     MCPServerToolID: z.string().nullable().describe(`
         * * Field Name: MCPServerToolID
-        * * Display Name: Server Tool
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
         * * Description: FK to MCP Server Tool (null if tool not cached)`),
@@ -15378,11 +15299,7 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: Server Connection Name
-        * * SQL Data Type: nvarchar(255)`),
-    MCPServerTool: z.string().nullable().describe(`
-        * * Field Name: MCPServerTool
-        * * Display Name: Server Tool Name
+        * * Display Name: MCP Server Connection Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -15488,12 +15405,12 @@ export const OAuthAuthorizationStateSchema = z.object({
         * * Default Value: newsequentialid()`),
     MCPServerConnectionID: z.string().describe(`
         * * Field Name: MCPServerConnectionID
-        * * Display Name: MCP Server Connection
+        * * Display Name: MCP Server Connection ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     StateParameter: z.string().describe(`
@@ -15573,11 +15490,11 @@ export const OAuthAuthorizationStateSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: MCP Server Connection Name
+        * * Display Name: MCP Server Connection
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -16587,7 +16504,7 @@ export const TaskSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
     Name: z.string().describe(`
@@ -16602,33 +16519,33 @@ export const TaskSchema = z.object({
         * * Description: Detailed description of the task requirements and objectives`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type
+        * * Display Name: Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment
+        * * Display Name: Environment ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ProjectID: z.string().nullable().describe(`
         * * Field Name: ProjectID
-        * * Display Name: Project
+        * * Display Name: Project ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     ConversationDetailID: z.string().nullable().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent
+        * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
     Status: z.union([z.literal('Blocked'), z.literal('Cancelled'), z.literal('Complete'), z.literal('Deferred'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
@@ -16693,10 +16610,6 @@ export const TaskSchema = z.object({
         * * Field Name: Project
         * * Display Name: Project
         * * SQL Data Type: nvarchar(255)`),
-    ConversationDetail: z.string().nullable().describe(`
-        * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -16707,7 +16620,7 @@ export const TaskSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -18470,7 +18383,7 @@ export const RecommendationItemSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecommendationID: z.string().describe(`
         * * Field Name: RecommendationID
-        * * Display Name: Recommendation
+        * * Display Name: Recommendation ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Recommendations (vwRecommendations.ID)`),
     DestinationEntityID: z.string().describe(`
@@ -18498,10 +18411,6 @@ export const RecommendationItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Recommendation: z.string().describe(`
-        * * Field Name: Recommendation
-        * * Display Name: Recommendation
-        * * SQL Data Type: nvarchar(MAX)`),
     DestinationEntity: z.string().describe(`
         * * Field Name: DestinationEntity
         * * Display Name: Destination Entity
@@ -18619,17 +18528,17 @@ export const RecommendationSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecommendationRunID: z.string().describe(`
         * * Field Name: RecommendationRunID
-        * * Display Name: Recommendation Run
+        * * Display Name: Recommendation Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)`),
     SourceEntityID: z.string().describe(`
         * * Field Name: SourceEntityID
-        * * Display Name: Source Entity
+        * * Display Name: Source Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     SourceEntityRecordID: z.string().describe(`
         * * Field Name: SourceEntityRecordID
-        * * Display Name: Source Record ID
+        * * Display Name: Source Entity Record ID
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The record ID of the source entity`),
     __mj_CreatedAt: z.date().describe(`
@@ -18642,10 +18551,6 @@ export const RecommendationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RecommendationRun: z.string().describe(`
-        * * Field Name: RecommendationRun
-        * * Display Name: Recommendation Run
-        * * SQL Data Type: nvarchar(255)`),
     SourceEntity: z.string().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
@@ -18713,7 +18618,6 @@ export type RecordChangeReplayRunEntityType = z.infer<typeof RecordChangeReplayR
 export const RecordChangeSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
@@ -18723,7 +18627,7 @@ export const RecordChangeSchema = z.object({
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     RecordID: z.string().describe(`
         * * Field Name: RecordID
-        * * Display Name: Record ID
+        * * Display Name: Record
         * * SQL Data Type: nvarchar(750)
         * * Description: Field RecordID for entity Record Changes.`),
     UserID: z.string().describe(`
@@ -18733,7 +18637,7 @@ export const RecordChangeSchema = z.object({
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     Type: z.union([z.literal('Create'), z.literal('Delete'), z.literal('Update')]).describe(`
         * * Field Name: Type
-        * * Display Name: Change Type
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Create
     * * Value List Type: List
@@ -18775,7 +18679,6 @@ export const RecordChangeSchema = z.object({
         * * Description: A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
         * * Field Name: Status
-        * * Display Name: Status
         * * SQL Data Type: nvarchar(50)
         * * Default Value: Complete
     * * Value List Type: List
@@ -18801,7 +18704,6 @@ export const RecordChangeSchema = z.object({
         * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)`),
     Comments: z.string().nullable().describe(`
         * * Field Name: Comments
-        * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
     CreatedAt: z.date().describe(`
         * * Field Name: CreatedAt
@@ -18823,10 +18725,6 @@ export const RecordChangeSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    ReplayRun: z.string().nullable().describe(`
-        * * Field Name: ReplayRun
-        * * Display Name: Replay Run
-        * * SQL Data Type: nvarchar(100)`),
     Integration: z.string().nullable().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
@@ -18846,12 +18744,12 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecordMergeLogID: z.string().describe(`
         * * Field Name: RecordMergeLogID
-        * * Display Name: Record Merge Log
+        * * Display Name: Record Merge Log ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)`),
     DeletedRecordID: z.string().describe(`
         * * Field Name: DeletedRecordID
-        * * Display Name: Deleted Record
+        * * Display Name: Deleted Record ID
         * * SQL Data Type: nvarchar(750)
         * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -18879,10 +18777,6 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RecordMergeLog: z.string().describe(`
-        * * Field Name: RecordMergeLog
-        * * Display Name: Merge Log
-        * * SQL Data Type: nvarchar(450)`),
 });
 
 export type RecordMergeDeletionLogEntityType = z.infer<typeof RecordMergeDeletionLogSchema>;
@@ -19102,12 +18996,12 @@ export const ReportSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category
+        * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     SharingScope: z.union([z.literal('Everyone'), z.literal('None'), z.literal('Specific')]).describe(`
@@ -19123,17 +19017,17 @@ export const ReportSchema = z.object({
         * * Description: Field SharingScope for entity Reports.`),
     ConversationID: z.string().nullable().describe(`
         * * Field Name: ConversationID
-        * * Display Name: Conversation
+        * * Display Name: Conversation ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversations (vwConversations.ID)`),
     ConversationDetailID: z.string().nullable().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
-        * * Display Name: Data Context
+        * * Display Name: Data Context ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)`),
     Configuration: z.string().nullable().describe(`
@@ -19143,17 +19037,17 @@ export const ReportSchema = z.object({
         * * Description: Field Configuration for entity Reports.`),
     OutputTriggerTypeID: z.string().nullable().describe(`
         * * Field Name: OutputTriggerTypeID
-        * * Display Name: Output Trigger Type
+        * * Display Name: Output Trigger Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Trigger Types (vwOutputTriggerTypes.ID)`),
     OutputFormatTypeID: z.string().nullable().describe(`
         * * Field Name: OutputFormatTypeID
-        * * Display Name: Output Format Type
+        * * Display Name: Output Format Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Format Types (vwOutputFormatTypes.ID)`),
     OutputDeliveryTypeID: z.string().nullable().describe(`
         * * Field Name: OutputDeliveryTypeID
-        * * Display Name: Output Delivery Type
+        * * Display Name: Output Delivery Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Delivery Types (vwOutputDeliveryTypes.ID)`),
     OutputFrequency: z.string().nullable().describe(`
@@ -19168,7 +19062,7 @@ export const ReportSchema = z.object({
         * * Description: Email address(es) to send the report to when using email delivery.`),
     OutputWorkflowID: z.string().nullable().describe(`
         * * Field Name: OutputWorkflowID
-        * * Display Name: Output Workflow
+        * * Display Name: Output Workflow ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Workflows (vwWorkflows.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -19188,7 +19082,7 @@ export const ReportSchema = z.object({
         * * Description: Thumbnail image for the report that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment
+        * * Display Name: Environment ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
@@ -19204,10 +19098,6 @@ export const ReportSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
-    ConversationDetail: z.string().nullable().describe(`
-        * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
@@ -20045,7 +19935,7 @@ export const TemplateParamSchema = z.object({
         * * Default Value: newsequentialid()`),
     TemplateID: z.string().describe(`
         * * Field Name: TemplateID
-        * * Display Name: Template
+        * * Display Name: Template ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Templates (vwTemplates.ID)`),
     Name: z.string().describe(`
@@ -20099,12 +19989,12 @@ export const TemplateParamSchema = z.object({
         * * Description: Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.`),
     EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     RecordID: z.string().nullable().describe(`
         * * Field Name: RecordID
-        * * Display Name: Record
+        * * Display Name: Record ID
         * * SQL Data Type: nvarchar(2000)
         * * Description: Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.`),
     __mj_CreatedAt: z.date().describe(`
@@ -20124,7 +20014,7 @@ export const TemplateParamSchema = z.object({
         * * Description: This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.`),
     TemplateContentID: z.string().nullable().describe(`
         * * Field Name: TemplateContentID
-        * * Display Name: Template Content
+        * * Display Name: Template Content ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Template Contents (vwTemplateContents.ID)
         * * Description: Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.`),
@@ -20135,10 +20025,6 @@ export const TemplateParamSchema = z.object({
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)`),
-    TemplateContent: z.string().nullable().describe(`
-        * * Field Name: TemplateContent
-        * * Display Name: Template Content
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -23239,153 +23125,6 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     }
 
     /**
-    * Validate() method override for AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * CompactLength: This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
-    * * CompactMode: CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
-    * * MaxExecutionsPerRun: This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
-    * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
-    * * ResultExpirationTurns: This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
-    * * Table-Level: This rule ensures that if the compact mode is set to 'First N Chars', a compact length must be specified. For any other compact mode, the compact length can be left empty.
-    * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', a compact mode value must also be provided. If the result expiration mode is not 'Compact', compact mode can be left empty.
-    * * Table-Level: This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
-    * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateCompactLengthGreaterThanZero(result);
-        this.ValidateCompactModeAllowedValues(result);
-        this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
-        this.ValidateMinExecutionsPerRunIsNonNegative(result);
-        this.ValidateResultExpirationTurnsNonNegative(result);
-        this.ValidateCompactLengthRequiredForFirstNCharsMode(result);
-        this.ValidateCompactModeWhenResultExpirationModeIsCompact(result);
-        this.ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result);
-        this.ValidateResultExpirationModeRequiresCompactFieldsEmpty(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCompactLengthGreaterThanZero(result: ValidationResult) {
-    	if (this.CompactLength != null && this.CompactLength <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("CompactLength", "CompactLength must be greater than zero if specified.", this.CompactLength, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCompactModeAllowedValues(result: ValidationResult) {
-    	// CompactMode is optional; if set, it must be one of the allowed options
-    	if (this.CompactMode != null && this.CompactMode !== 'AI Summary' && this.CompactMode !== 'First N Chars') {
-    		result.Errors.push(new ValidationErrorInfo(
-    			'CompactMode',
-    			"CompactMode must be either 'AI Summary' or 'First N Chars' when provided.",
-    			this.CompactMode,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
-    	if (this.MaxExecutionsPerRun != null && this.MaxExecutionsPerRun <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "When provided, the maximum executions per run must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun != null && this.MinExecutionsPerRun < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "The minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateResultExpirationTurnsNonNegative(result: ValidationResult) {
-    	if (this.ResultExpirationTurns != null && this.ResultExpirationTurns < 0) {
-    		result.Errors.push(new ValidationErrorInfo("ResultExpirationTurns", "If provided, ResultExpirationTurns must be zero or greater.", this.ResultExpirationTurns, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the compact mode is set to 'First N Chars', a compact length must be specified. For any other compact mode, the compact length can be left empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCompactLengthRequiredForFirstNCharsMode(result: ValidationResult) {
-    	if (this.CompactMode === "First N Chars" && this.CompactLength == null) {
-    		result.Errors.push(new ValidationErrorInfo("CompactLength", "When CompactMode is set to 'First N Chars', CompactLength must be specified.", this.CompactLength, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the result expiration mode is set to 'Compact', a compact mode value must also be provided. If the result expiration mode is not 'Compact', compact mode can be left empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCompactModeWhenResultExpirationModeIsCompact(result: ValidationResult) {
-    	if (this.ResultExpirationMode === "Compact" && this.CompactMode == null) {
-    		result.Errors.push(new ValidationErrorInfo("CompactMode", "CompactMode must be specified when ResultExpirationMode is 'Compact'.", this.CompactMode, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null && this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be greater than maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateResultExpirationModeRequiresCompactFieldsEmpty(result: ValidationResult) {
-    	if (this.ResultExpirationMode === "Compact") {
-    		if (this.CompactMode != null || this.CompactLength != null || this.CompactPromptID != null) {
-    			result.Errors.push(new ValidationErrorInfo("ResultExpirationMode", "When ResultExpirationMode is set to 'Compact', the fields CompactMode, CompactLength, and CompactPromptID must be empty.", this.ResultExpirationMode, ValidationErrorType.Failure));
-    		}
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -24683,128 +24422,6 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
 
     /**
-    * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
-    * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
-    * * MaxMessages: This rule ensures that the maximum number of messages, if specified, must be greater than zero.
-    * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
-    * * Table-Level: This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
-    * * Table-Level: This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
-    * * Table-Level: This rule ensures that if a ParentID is specified, then ExposeAsAction must be set to false. If ParentID is not specified, ExposeAsAction can be either true or false.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateDefaultPromptEffortLevelInAllowedRange(result);
-        this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
-        this.ValidateMaxMessagesGreaterThanZero(result);
-        this.ValidateMinExecutionsPerRunNonNegative(result);
-        this.ValidateContextCompressionFieldsWhenEnabled(result);
-        this.ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result);
-        this.ValidateParentIDRequiresExposeAsActionFalse(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateDefaultPromptEffortLevelInAllowedRange(result: ValidationResult) {
-    	if (this.DefaultPromptEffortLevel != null && (this.DefaultPromptEffortLevel < 1 || this.DefaultPromptEffortLevel > 100)) {
-    		result.Errors.push(new ValidationErrorInfo("DefaultPromptEffortLevel", "If specified, DefaultPromptEffortLevel must be between 1 and 100.", this.DefaultPromptEffortLevel, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
-    	if (this.MaxExecutionsPerRun != null && this.MaxExecutionsPerRun <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "If specified, the maximum executions per run must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the maximum number of messages, if specified, must be greater than zero.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMaxMessagesGreaterThanZero(result: ValidationResult) {
-    	if (this.MaxMessages != null && this.MaxMessages <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxMessages", "If a maximum number of messages is specified, it must be greater than zero.", this.MaxMessages, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMinExecutionsPerRunNonNegative(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun != null && this.MinExecutionsPerRun < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be less than zero.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateContextCompressionFieldsWhenEnabled(result: ValidationResult) {
-    	if (this.EnableContextCompression) {
-    		if (this.ContextCompressionMessageThreshold == null) {
-    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageThreshold", "Context compression message threshold must be provided when context compression is enabled.", this.ContextCompressionMessageThreshold, ValidationErrorType.Failure));
-    		}
-    		if (this.ContextCompressionPromptID == null) {
-    			result.Errors.push(new ValidationErrorInfo("ContextCompressionPromptID", "Context compression prompt ID must be provided when context compression is enabled.", this.ContextCompressionPromptID, ValidationErrorType.Failure));
-    		}
-    		if (this.ContextCompressionMessageRetentionCount == null) {
-    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageRetentionCount", "Context compression message retention count must be provided when context compression is enabled.", this.ContextCompressionMessageRetentionCount, ValidationErrorType.Failure));
-    		}
-    	}
-    }
-
-    /**
-    * This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null) {
-    		if (this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
-    			result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "The minimum number of executions per run cannot be greater than the maximum.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
-    		}
-    	}
-    }
-
-    /**
-    * This rule ensures that if a ParentID is specified, then ExposeAsAction must be set to false. If ParentID is not specified, ExposeAsAction can be either true or false.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParentIDRequiresExposeAsActionFalse(result: ValidationResult) {
-    	if (this.ParentID != null && this.ExposeAsAction) {
-    		result.Errors.push(new ValidationErrorInfo("ExposeAsAction", "If ParentID is specified, ExposeAsAction must be false.", this.ExposeAsAction, ValidationErrorType.Failure));
-    	}
-    }
-    
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -26037,61 +25654,6 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
-    * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * CostRank: This rule ensures that if a CostRank value is provided, it must be zero or a positive number. CostRank cannot be negative.
-    * * PowerRank: This rule ensures that if a value is provided for PowerRank, it must not be negative.
-    * * SpeedRank: This rule ensures that the SpeedRank, if specified, must be zero or a positive number. Negative values are not allowed.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateCostRankNonNegative(result);
-        this.ValidatePowerRankIsNonNegative(result);
-        this.ValidateSpeedRankNonNegative(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if a CostRank value is provided, it must be zero or a positive number. CostRank cannot be negative.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCostRankNonNegative(result: ValidationResult) {
-    	if (this.CostRank != null && this.CostRank < 0) {
-    		result.Errors.push(new ValidationErrorInfo("CostRank", "CostRank must be greater than or equal to zero.", this.CostRank, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if a value is provided for PowerRank, it must not be negative.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidatePowerRankIsNonNegative(result: ValidationResult) {
-    	if (this.PowerRank != null && this.PowerRank < 0) {
-    		result.Errors.push(new ValidationErrorInfo("PowerRank", "PowerRank must be zero or positive.", this.PowerRank, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the SpeedRank, if specified, must be zero or a positive number. Negative values are not allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateSpeedRankNonNegative(result: ValidationResult) {
-    	if (this.SpeedRank != null && this.SpeedRank < 0) {
-    		result.Errors.push(new ValidationErrorInfo("SpeedRank", "SpeedRank must be zero or a positive number.", this.SpeedRank, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -26570,131 +26132,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * CacheSimilarityThreshold: This rule ensures that the "CacheSimilarityThreshold" value, if provided, must be between 0 and 1 (including both 0 and 1). If it is not set, there is no restriction.
-    * * CacheTTLSeconds: This rule ensures that if a cache time-to-live (CacheTTLSeconds) value is provided, it must be greater than zero. If it is not set, that's allowed.
-    * * EffortLevel: This rule ensures that if an Effort Level is provided, it must be a number between 1 and 100, inclusive.
-    * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', a cache similarity threshold must be provided. For other cache match types, the cache similarity threshold can be left blank.
-    * * Table-Level: This rule ensures that if the OutputType is set to "object", then an OutputExample must be provided. For all other OutputType values, OutputExample can be left empty.
-    * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then a configuration parameter must be provided. For all other modes, the configuration parameter can be left blank.
-    * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then a value for parallel count must be provided. For other parallelization modes, parallel count can be left blank.
-    * * Table-Level: This rule makes sure that the 'ResultSelectorPromptID' field cannot have the same value as the record's own 'ID'. In other words, the record cannot select itself as its own result selector prompt.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateCacheSimilarityThresholdBetweenZeroAndOne(result);
-        this.ValidateCacheTTLSecondsIsPositive(result);
-        this.ValidateEffortLevelIsBetween1And100(result);
-        this.ValidateCacheSimilarityThresholdRequiredForVectorMatchType(result);
-        this.ValidateOutputExampleRequiredWhenOutputTypeIsObject(result);
-        this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
-        this.ValidateParallelCountRequiredForStaticCount(result);
-        this.ValidateResultSelectorPromptIDNotEqualID(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the "CacheSimilarityThreshold" value, if provided, must be between 0 and 1 (including both 0 and 1). If it is not set, there is no restriction.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCacheSimilarityThresholdBetweenZeroAndOne(result: ValidationResult) {
-    	if (this.CacheSimilarityThreshold != null && (this.CacheSimilarityThreshold < 0 || this.CacheSimilarityThreshold > 1)) {
-    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "CacheSimilarityThreshold must be between 0 and 1, inclusive.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if a cache time-to-live (CacheTTLSeconds) value is provided, it must be greater than zero. If it is not set, that's allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCacheTTLSecondsIsPositive(result: ValidationResult) {
-    	if (this.CacheTTLSeconds != null && this.CacheTTLSeconds <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "Cache time-to-live (CacheTTLSeconds) must be greater than 0 if specified.", this.CacheTTLSeconds, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if an Effort Level is provided, it must be a number between 1 and 100, inclusive.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
-    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
-    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort Level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the cache match type is set to 'Vector', a cache similarity threshold must be provided. For other cache match types, the cache similarity threshold can be left blank.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCacheSimilarityThresholdRequiredForVectorMatchType(result: ValidationResult) {
-    	if (this.CacheMatchType === "Vector" && this.CacheSimilarityThreshold == null) {
-    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "A cache similarity threshold must be set when CacheMatchType is 'Vector'.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the OutputType is set to "object", then an OutputExample must be provided. For all other OutputType values, OutputExample can be left empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateOutputExampleRequiredWhenOutputTypeIsObject(result: ValidationResult) {
-    	if (this.OutputType === "object" && this.OutputExample == null) {
-    		result.Errors.push(new ValidationErrorInfo("OutputExample", "An output example must be provided when OutputType is 'object'.", this.OutputExample, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then a configuration parameter must be provided. For all other modes, the configuration parameter can be left blank.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParallelConfigParamRequiredForConfigParamMode(result: ValidationResult) {
-    	if (this.ParallelizationMode === "ConfigParam" && this.ParallelConfigParam == null) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be provided when ParallelizationMode is set to 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the parallelization mode is set to 'StaticCount', then a value for parallel count must be provided. For other parallelization modes, parallel count can be left blank.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParallelCountRequiredForStaticCount(result: ValidationResult) {
-    	if (this.ParallelizationMode === "StaticCount" && this.ParallelCount == null) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "A parallel count must be provided when parallelization mode is set to 'StaticCount'.", this.ParallelCount, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule makes sure that the 'ResultSelectorPromptID' field cannot have the same value as the record's own 'ID'. In other words, the record cannot select itself as its own result selector prompt.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
-    	if (this.ResultSelectorPromptID != null && this.ResultSelectorPromptID === this.ID) {
-    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "ResultSelectorPromptID cannot be the same as the ID of this record.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -27568,7 +27005,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AIPromptID
-    * * Display Name: AI Prompt
+    * * Display Name: AIPrompt ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Reference to the AI prompt this result corresponds to.
@@ -27582,7 +27019,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AIModelID
-    * * Display Name: AI Model
+    * * Display Name: AIModel ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     * * Description: Reference to the AI model that generated this result.
@@ -27685,7 +27122,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor
+    * * Display Name: Vendor ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     * * Description: The vendor that provided this result.
@@ -27699,7 +27136,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent
+    * * Display Name: Agent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: The agent that initiated the request, if any.
@@ -27713,7 +27150,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: ConfigurationID
-    * * Display Name: Configuration
+    * * Display Name: Configuration ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
     * * Description: The configuration used for this execution.
@@ -27740,7 +27177,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: PromptRunID
-    * * Display Name: Prompt Run
+    * * Display Name: Prompt Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
     * * Description: Reference to the AIPromptRun that created this cache entry.
@@ -27754,7 +27191,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AIPrompt
-    * * Display Name: AI Prompt
+    * * Display Name: AIPrompt
     * * SQL Data Type: nvarchar(255)
     */
     get AIPrompt(): string {
@@ -27763,7 +27200,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
 
     /**
     * * Field Name: AIModel
-    * * Display Name: AI Model
+    * * Display Name: AIModel
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {
@@ -27795,15 +27232,6 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
-    }
-
-    /**
-    * * Field Name: PromptRun
-    * * Display Name: Prompt Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get PromptRun(): string | null {
-        return this.Get('PromptRun');
     }
 }
 
@@ -29524,33 +28952,6 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for Communication Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: This rule ensures that scheduled sending is only supported if sending is also supported. In other words, you cannot support scheduled sending without also supporting sending.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateSupportsScheduledSendingOnlyIfSendingIsSupported(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that scheduled sending is only supported if sending is also supported. In other words, you cannot support scheduled sending without also supporting sending.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateSupportsScheduledSendingOnlyIfSendingIsSupported(result: ValidationResult) {
-    	if (this.SupportsScheduledSending && !this.SupportsSending) {
-    		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "Scheduled sending cannot be supported if sending is not supported.", this.SupportsScheduledSending, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -32451,33 +31852,6 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
-    * Validate() method override for Conversation Details entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * UserRating: This rule ensures that if a user rating is provided, it must be a whole number between 1 and 10, inclusive.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateUserRatingBetween1And10(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if a user rating is provided, it must be a whole number between 1 and 10, inclusive.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateUserRatingBetween1And10(result: ValidationResult) {
-    	if (this.UserRating != null && (this.UserRating < 1 || this.UserRating > 10)) {
-    		result.Errors.push(new ValidationErrorInfo("UserRating", "User rating must be between 1 and 10.", this.UserRating, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -33000,7 +32374,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -33064,7 +32438,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: IsArchived
-    * * Display Name: Archived
+    * * Display Name: Is Archived
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation has been archived and should not appear in active lists.
@@ -33078,7 +32452,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntityID
-    * * Display Name: Linked Entity
+    * * Display Name: Linked Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -33104,7 +32478,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: DataContextID
-    * * Display Name: Data Context
+    * * Display Name: Data Context ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
     */
@@ -33155,7 +32529,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment
+    * * Display Name: Environment ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -33169,7 +32543,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: ProjectID
-    * * Display Name: Project
+    * * Display Name: Project ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -33182,7 +32556,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: IsPinned
-    * * Display Name: Pinned
+    * * Display Name: Is Pinned
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation is pinned to the top of lists
@@ -33196,7 +32570,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run
+    * * Display Name: Test Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.
@@ -33251,15 +32625,6 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     */
     get Project(): string | null {
         return this.Get('Project');
-    }
-
-    /**
-    * * Field Name: TestRun
-    * * Display Name: Test Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get TestRun(): string | null {
-        return this.Get('TestRun');
     }
 }
 
@@ -34725,15 +34090,6 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
-
-    /**
-    * * Field Name: DuplicateRun
-    * * Display Name: Duplicate Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get DuplicateRun(): string {
-        return this.Get('DuplicateRun');
-    }
 }
 
 
@@ -35012,7 +34368,6 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: ID
-    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -35025,7 +34380,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: EmployeeID
-    * * Display Name: Employee
+    * * Display Name: Employee ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
@@ -35038,7 +34393,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: CompanyIntegrationID
-    * * Display Name: Company Integration
+    * * Display Name: Company Integration ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
     */
@@ -35051,7 +34406,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: ExternalSystemRecordID
-    * * Display Name: External System Record ID
+    * * Display Name: External System Record
     * * SQL Data Type: nvarchar(750)
     * * Description: The employee's unique identifier in the external integrated system.
     */
@@ -35064,7 +34419,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if this employee integration mapping is currently active.
@@ -35097,17 +34452,8 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     }
 
     /**
-    * * Field Name: Employee
-    * * Display Name: Employee
-    * * SQL Data Type: nvarchar(81)
-    */
-    get Employee(): string | null {
-        return this.Get('Employee');
-    }
-
-    /**
     * * Field Name: CompanyIntegration
-    * * Display Name: Company Integration Name
+    * * Display Name: Company Integration
     * * SQL Data Type: nvarchar(255)
     */
     get CompanyIntegration(): string {
@@ -35161,7 +34507,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
 
     /**
     * * Field Name: EmployeeID
-    * * Display Name: Employee
+    * * Display Name: Employee ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
@@ -35174,7 +34520,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
 
     /**
     * * Field Name: RoleID
-    * * Display Name: Role
+    * * Display Name: Role ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Roles (vwRoles.ID)
     */
@@ -35187,7 +34533,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
+    * * Display Name: __mj _Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35197,21 +34543,12 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
+    * * Display Name: __mj _Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Employee
-    * * Display Name: Employee
-    * * SQL Data Type: nvarchar(81)
-    */
-    get Employee(): string | null {
-        return this.Get('Employee');
     }
 
     /**
@@ -35270,7 +34607,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: EmployeeID
-    * * Display Name: Employee
+    * * Display Name: Employee ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
@@ -35283,7 +34620,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: SkillID
-    * * Display Name: Skill
+    * * Display Name: Skill ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Skills (vwSkills.ID)
     */
@@ -35296,7 +34633,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
+    * * Display Name: __mj _Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35306,21 +34643,12 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
+    * * Display Name: __mj _Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Employee
-    * * Display Name: Employee
-    * * SQL Data Type: nvarchar(81)
-    */
-    get Employee(): string | null {
-        return this.Get('Employee');
     }
 
     /**
@@ -35583,33 +34911,6 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateAllowRecordMergeForSoftDeleteAPI(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateAllowRecordMergeForSoftDeleteAPI(result: ValidationResult) {
-    	if (this.AllowDeleteAPI && this.DeleteType === "Soft" && !this.AllowRecordMerge) {
-    		result.Errors.push(new ValidationErrorInfo("AllowRecordMerge", "When API deletes are allowed and delete type is 'Soft', record merging must be allowed.", this.AllowRecordMerge, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -36491,7 +35792,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action
+    * * Display Name: Entity Action ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
@@ -36504,7 +35805,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: ActionFilterID
-    * * Display Name: Action Filter
+    * * Display Name: Action Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)
     */
@@ -36549,7 +35850,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
+    * * Display Name: __mj _Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -36559,30 +35860,12 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
+    * * Display Name: __mj _Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action Name
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
-    }
-
-    /**
-    * * Field Name: ActionFilter
-    * * Display Name: Action Filter Name
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ActionFilter(): string {
-        return this.Get('ActionFilter');
     }
 }
 
@@ -36782,7 +36065,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
+    * * Display Name: __mj _Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -36792,21 +36075,12 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
+    * * Display Name: __mj _Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
     }
 
     /**
@@ -36865,7 +36139,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action
+    * * Display Name: Entity Action ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
@@ -36878,7 +36152,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: ActionParamID
-    * * Display Name: Action Parameter
+    * * Display Name: Action Param ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Params (vwActionParams.ID)
     */
@@ -36955,17 +36229,8 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     }
 
     /**
-    * * Field Name: EntityAction
-    * * Display Name: Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
-    }
-
-    /**
     * * Field Name: ActionParam
-    * * Display Name: Parameter
+    * * Display Name: Action Param
     * * SQL Data Type: nvarchar(255)
     */
     get ActionParam(): string {
@@ -37414,7 +36679,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: EntityCommunicationMessageTypeID
-    * * Display Name: Message Type
+    * * Display Name: Entity Communication Message Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)
     */
@@ -37453,7 +36718,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
+    * * Display Name: __mj _Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -37463,21 +36728,12 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
+    * * Display Name: __mj _Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: EntityCommunicationMessageType
-    * * Display Name: Message Type Name
-    * * SQL Data Type: nvarchar(100)
-    */
-    get EntityCommunicationMessageType(): string {
-        return this.Get('EntityCommunicationMessageType');
     }
 }
 
@@ -37979,39 +37235,6 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     }
 
     /**
-    * Validate() method override for Entity Documents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: This rule ensures that both the Potential Match Threshold and the Absolute Match Threshold are numbers between 0 and 1, inclusive. Additionally, the Potential Match Threshold must not be higher than the Absolute Match Threshold.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidatePotentialAndAbsoluteMatchThresholdRangeAndRelationship(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that both the Potential Match Threshold and the Absolute Match Threshold are numbers between 0 and 1, inclusive. Additionally, the Potential Match Threshold must not be higher than the Absolute Match Threshold.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidatePotentialAndAbsoluteMatchThresholdRangeAndRelationship(result: ValidationResult) {
-    	if (this.PotentialMatchThreshold < 0 || this.PotentialMatchThreshold > 1) {
-    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "Potential Match Threshold must be between 0 and 1.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
-    	}
-    	if (this.AbsoluteMatchThreshold < 0 || this.AbsoluteMatchThreshold > 1) {
-    		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "Absolute Match Threshold must be between 0 and 1.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
-    	}
-    	if (this.PotentialMatchThreshold > this.AbsoluteMatchThreshold) {
-    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "Potential Match Threshold must not exceed the Absolute Match Threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -38485,7 +37708,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsPrimaryKey
-    * * Display Name: Is Primary Key
+    * * Display Name: Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
@@ -38499,7 +37722,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsUnique
-    * * Display Name: Is Unique
+    * * Display Name: Unique
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field must have unique values within the entity.
@@ -38808,7 +38031,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsVirtual
-    * * Display Name: Is Virtual
+    * * Display Name: Virtual
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: NULL
@@ -39082,7 +38305,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: EncryptionKeyID
-    * * Display Name: Encryption Key
+    * * Display Name: Encryption Key ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Encryption Keys (vwEncryptionKeys.ID)
     * * Description: References the encryption key to use when Encrypt is true. Required if Encrypt is true.
@@ -40459,7 +39682,6 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -40472,7 +39694,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunID
-    * * Display Name: Company Integration Run
+    * * Display Name: CompanyIntegrationRun ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
     */
@@ -40485,7 +39707,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunDetailID
-    * * Display Name: Company Integration Run Detail
+    * * Display Name: CompanyIntegrationRunDetail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)
     */
@@ -40498,7 +39720,6 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Code
-    * * Display Name: Error Code
     * * SQL Data Type: nchar(20)
     * * Description: Error code for categorizing and handling specific error types.
     */
@@ -40511,7 +39732,6 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The primary error message describing what went wrong.
     */
@@ -40538,7 +39758,6 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Status
-    * * Display Name: Status
     * * SQL Data Type: nvarchar(10)
     */
     get Status(): string | null {
@@ -40550,7 +39769,6 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
     * * SQL Data Type: nvarchar(20)
     * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).
     */
@@ -40563,7 +39781,6 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Details
-    * * Display Name: Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Full error details including stack trace, inner exceptions, and context data.
     */
@@ -40592,24 +39809,6 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: CompanyIntegrationRun
-    * * Display Name: Company Integration Run
-    * * SQL Data Type: nvarchar(100)
-    */
-    get CompanyIntegrationRun(): string | null {
-        return this.Get('CompanyIntegrationRun');
-    }
-
-    /**
-    * * Field Name: CompanyIntegrationRunDetail
-    * * Display Name: Company Integration Run Detail
-    * * SQL Data Type: nvarchar(450)
-    */
-    get CompanyIntegrationRunDetail(): string | null {
-        return this.Get('CompanyIntegrationRunDetail');
     }
 }
 
@@ -40643,33 +39842,6 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for Explorer Navigation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Sequence: This rule ensures that the 'Sequence' value must always be greater than zero.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateSequenceGreaterThanZero(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the 'Sequence' value must always be greater than zero.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateSequenceGreaterThanZero(result: ValidationResult) {
-    	if (this.Sequence <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("Sequence", "The Sequence value must be greater than zero.", this.Sequence, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -43416,81 +42588,6 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
     }
 
     /**
-    * Validate() method override for MJ: AI Agent Data Sources entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * ResultType: Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
-    * * Table-Level: This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
-    * * Table-Level: This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
-    * * Table-Level: This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateResultTypeAllowedValues(result);
-        this.ValidateCacheTimeoutSecondsRequiredForPerAgentPolicy(result);
-        this.ValidateEntityNameRequiredWhenSourceTypeRunView(result);
-        this.ValidateQueryNameRequiredWhenSourceTypeIsRunQuery(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateResultTypeAllowedValues(result: ValidationResult) {
-    	// If ResultType has a value, ensure it is one of the permitted options
-    	if (this.ResultType != null && this.ResultType !== 'entity_object' && this.ResultType !== 'simple') {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"ResultType",
-    			"Result Type must be either 'entity_object' or 'simple' when specified",
-    			this.ResultType,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCacheTimeoutSecondsRequiredForPerAgentPolicy(result: ValidationResult) {
-    	if (this.CachePolicy === "PerAgent" && this.CacheTimeoutSeconds == null) {
-    		result.Errors.push(new ValidationErrorInfo("CacheTimeoutSeconds", "When the cache policy is set to 'PerAgent', you must specify a cache timeout value.", this.CacheTimeoutSeconds, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEntityNameRequiredWhenSourceTypeRunView(result: ValidationResult) {
-    	if (this.SourceType === "RunView" && this.EntityName == null) {
-    		result.Errors.push(new ValidationErrorInfo("EntityName", "EntityName is required when SourceType is 'RunView'.", this.EntityName, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateQueryNameRequiredWhenSourceTypeIsRunQuery(result: ValidationResult) {
-    	if (this.SourceType === "RunQuery" && this.QueryName == null) {
-    		result.Errors.push(new ValidationErrorInfo("QueryName", "The query name must be provided when Source Type is 'RunQuery'.", this.QueryName, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -44440,40 +43537,6 @@ export class AIAgentPermissionEntity extends BaseEntity<AIAgentPermissionEntityT
     }
 
     /**
-    * Validate() method override for MJ: AI Agent Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: This rule ensures that either a Role or a User is specified, but not both at the same time. You must provide one or the other, but never both, and neither can be left blank at the same time.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateRoleIDAndUserIDExclusive(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that either a Role or a User is specified, but not both at the same time. You must provide one or the other, but never both, and neither can be left blank at the same time.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRoleIDAndUserIDExclusive(result: ValidationResult) {
-    	const hasRole = this.RoleID !== null;
-    	const hasUser = this.UserID !== null;
-    	if ((hasRole && hasUser) || (!hasRole && !hasUser)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"RoleID/UserID",
-    			"You must specify either a Role or a User, but not both and not neither.",
-    			`RoleID: $${this.RoleID}, UserID: $${this.UserID}`,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -44673,33 +43736,6 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: AI Agent Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then a value for context message count must be provided. For any other context behavior, the context message count may be left empty.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateContextMessageCountForSelectedBehaviors(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then a value for context message count must be provided. For any other context behavior, the context message count may be left empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateContextMessageCountForSelectedBehaviors(result: ValidationResult) {
-    	if ((this.ContextBehavior === "InitialMessages" || this.ContextBehavior === "RecentMessages") && this.ContextMessageCount == null) {
-    		result.Errors.push(new ValidationErrorInfo("ContextMessageCount", "When ContextBehavior is 'InitialMessages' or 'RecentMessages', ContextMessageCount must be provided.", this.ContextMessageCount, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -44916,33 +43952,6 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: AI Agent Relationships entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * MaxMessages: This rule makes sure that if a value is specified for MaxMessages, it must be greater than 0.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateMaxMessagesGreaterThanZero(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule makes sure that if a value is specified for MaxMessages, it must be greater than 0.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMaxMessagesGreaterThanZero(result: ValidationResult) {
-    	if (this.MaxMessages != null && this.MaxMessages <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxMessages", "MaxMessages must be greater than 0 when specified.", this.MaxMessages, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -45446,57 +44455,6 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * FinalPayloadValidationResult: The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
-    * * StepNumber: This rule ensures that the step number must be greater than zero.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateFinalPayloadValidationResultAllowedValues(result);
-        this.ValidateStepNumberGreaterThanZero(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
-    	// Ensure the value is either null or one of the permitted statuses
-    	if (this.FinalPayloadValidationResult != null &&
-    		!(this.FinalPayloadValidationResult === 'Warn' ||
-    		  this.FinalPayloadValidationResult === 'Fail' ||
-    		  this.FinalPayloadValidationResult === 'Retry' ||
-    		  this.FinalPayloadValidationResult === 'Pass')) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"FinalPayloadValidationResult",
-    			"FinalPayloadValidationResult must be one of: Warn, Fail, Retry, Pass, or left empty.",
-    			this.FinalPayloadValidationResult,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * This rule ensures that the step number must be greater than zero.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateStepNumberGreaterThanZero(result: ValidationResult) {
-    	if (this.StepNumber <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("StepNumber", "Step number must be greater than zero.", this.StepNumber, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -45512,7 +44470,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * * Field Name: AgentRunID
-    * * Display Name: Agent Run
+    * * Display Name: Agent Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: Reference to the parent AIAgentRun that contains this step
@@ -45576,7 +44534,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * * Field Name: TargetID
-    * * Display Name: Target
+    * * Display Name: Target ID
     * * SQL Data Type: uniqueidentifier
     * * Description: ID of the specific target being executed (AIPrompt.ID, AIAction.ID, AIAgent.ID, etc.). NULL for steps that don't target a specific entity.
     */
@@ -45708,7 +44666,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * * Field Name: TargetLogID
-    * * Display Name: Target Log
+    * * Display Name: Target Log ID
     * * SQL Data Type: uniqueidentifier
     * * Description: ID of the execution log/run record created for this step (ActionExecutionLog.ID for action steps, AIAgentRun.ID for subagent steps, AIPromptRun.ID for prompt steps)
     */
@@ -45786,7 +44744,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
     * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles
@@ -45812,26 +44770,8 @@ detailed information about what validation rules failed.
     }
 
     /**
-    * * Field Name: AgentRun
-    * * Display Name: Agent Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get AgentRun(): string | null {
-        return this.Get('AgentRun');
-    }
-
-    /**
-    * * Field Name: Parent
-    * * Display Name: Parent
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Parent(): string | null {
-        return this.Get('Parent');
-    }
-
-    /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -45868,57 +44808,6 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * EffortLevel: This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
-    * * FinalStep: The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateEffortLevelBetween1And100(result);
-        this.ValidateFinalStepAllowedValues(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEffortLevelBetween1And100(result: ValidationResult) {
-    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
-    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateFinalStepAllowedValues(result: ValidationResult) {
-    	// If FinalStep has a value, it must be one of the permitted options
-    	if (this.FinalStep != null) {
-    		const allowed = ["While", "ForEach", "Chat", "Sub-Agent", "Actions", "Retry", "Failed", "Success"];
-    		const allowedValues = allowed.join(", ");
-    		if (!allowed.includes(this.FinalStep)) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"FinalStep",
-    				"FinalStep must be one of the allowed values: " + allowedValues + ".",
-    				this.FinalStep,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	}
     }
 
     /**
@@ -46689,33 +45578,6 @@ export class AIAgentStepPathEntity extends BaseEntity<AIAgentStepPathEntityType>
     }
 
     /**
-    * Validate() method override for MJ: AI Agent Step Paths entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: This rule ensures that the origin step and the destination step must be different. They cannot be the same step.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateOriginStepIDAgainstDestinationStepIDDifferent(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the origin step and the destination step must be different. They cannot be the same step.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateOriginStepIDAgainstDestinationStepIDDifferent(result: ValidationResult) {
-    	if (this.OriginStepID === this.DestinationStepID) {
-    		result.Errors.push(new ValidationErrorInfo("OriginStepID", "The origin step cannot be the same as the destination step.", this.OriginStepID, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -46873,47 +45735,6 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: AI Agent Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * RetryCount: This rule ensures that the number of retries allowed cannot be negative.
-    * * TimeoutSeconds: This rule ensures that, if provided, the timeout value must be greater than zero seconds.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateRetryCountNonNegative(result);
-        this.ValidateTimeoutSecondsGreaterThanZero(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the number of retries allowed cannot be negative.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRetryCountNonNegative(result: ValidationResult) {
-    	if (this.RetryCount < 0) {
-    		result.Errors.push(new ValidationErrorInfo("RetryCount", "Retry count cannot be negative.", this.RetryCount, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that, if provided, the timeout value must be greater than zero seconds.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateTimeoutSecondsGreaterThanZero(result: ValidationResult) {
-    	if (this.TimeoutSeconds != null && this.TimeoutSeconds <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("TimeoutSeconds", "TimeoutSeconds must be greater than zero if specified.", this.TimeoutSeconds, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -48069,121 +46890,6 @@ export class AICredentialBindingEntity extends BaseEntity<AICredentialBindingEnt
     }
 
     /**
-    * Validate() method override for MJ: AI Credential Bindings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Ensures that the type of binding specified in the record matches exactly one related ID column: when BindingType is 'Vendor' an AIVendorID must be provided and the other two IDs must be empty; when BindingType is 'ModelVendor' an AIModelVendorID must be provided and the other IDs must be empty; when BindingType is 'PromptModel' an AIPromptModelID must be provided and the other IDs must be empty. This prevents ambiguous or missing references.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateBindingTypeAndRelatedIds(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * Ensures that the type of binding specified in the record matches exactly one related ID column: when BindingType is 'Vendor' an AIVendorID must be provided and the other two IDs must be empty; when BindingType is 'ModelVendor' an AIModelVendorID must be provided and the other IDs must be empty; when BindingType is 'PromptModel' an AIPromptModelID must be provided and the other IDs must be empty. This prevents ambiguous or missing references.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateBindingTypeAndRelatedIds(result: ValidationResult) {
-    	// Validate that the ID fields correspond to the selected BindingType
-    	if (this.BindingType === 'Vendor') {
-    		// AIVendorID must be present
-    		if (this.AIVendorID == null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"AIVendorID",
-    				"When BindingType is 'Vendor', AIVendorID must be provided.",
-    				this.AIVendorID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    		// The other IDs must be empty
-    		if (this.AIModelVendorID != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"AIModelVendorID",
-    				"When BindingType is 'Vendor', AIModelVendorID must be empty.",
-    				this.AIModelVendorID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    		if (this.AIPromptModelID != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"AIPromptModelID",
-    				"When BindingType is 'Vendor', AIPromptModelID must be empty.",
-    				this.AIPromptModelID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	} else if (this.BindingType === 'ModelVendor') {
-    		// AIModelVendorID must be present
-    		if (this.AIModelVendorID == null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"AIModelVendorID",
-    				"When BindingType is 'ModelVendor', AIModelVendorID must be provided.",
-    				this.AIModelVendorID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    		// The other IDs must be empty
-    		if (this.AIVendorID != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"AIVendorID",
-    				"When BindingType is 'ModelVendor', AIVendorID must be empty.",
-    				this.AIVendorID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    		if (this.AIPromptModelID != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"AIPromptModelID",
-    				"When BindingType is 'ModelVendor', AIPromptModelID must be empty.",
-    				this.AIPromptModelID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	} else if (this.BindingType === 'PromptModel') {
-    		// AIPromptModelID must be present
-    		if (this.AIPromptModelID == null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"AIPromptModelID",
-    				"When BindingType is 'PromptModel', AIPromptModelID must be provided.",
-    				this.AIPromptModelID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    		// The other IDs must be empty
-    		if (this.AIVendorID != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"AIVendorID",
-    				"When BindingType is 'PromptModel', AIVendorID must be empty.",
-    				this.AIVendorID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    		if (this.AIModelVendorID != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"AIModelVendorID",
-    				"When BindingType is 'PromptModel', AIModelVendorID must be empty.",
-    				this.AIModelVendorID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	} else {
-    		// Unexpected BindingType value
-    		result.Errors.push(new ValidationErrorInfo(
-    			"BindingType",
-    			"BindingType must be one of 'Vendor', 'ModelVendor', or 'PromptModel'.",
-    			this.BindingType,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -48571,58 +47277,6 @@ export class AIModelArchitectureEntity extends BaseEntity<AIModelArchitectureEnt
     }
 
     /**
-    * Validate() method override for MJ: AI Model Architectures entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Rank: Rank must be greater than zero, ensuring that every item has a positive ranking value.
-    * * Weight: Weight must be between 0 and 1 when a value is provided; if no weight is entered, it may be left empty.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateRankGreaterThanZero(result);
-        this.ValidateWeightRange(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * Rank must be greater than zero, ensuring that every item has a positive ranking value.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRankGreaterThanZero(result: ValidationResult) {
-    	if (this.Rank <= 0) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Rank",
-    			"Rank must be greater than 0.",
-    			this.Rank,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * Weight must be between 0 and 1 when a value is provided; if no weight is entered, it may be left empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateWeightRange(result: ValidationResult) {
-    	// Ensure Weight is within the allowed range when it is provided
-    	if (this.Weight != null && (this.Weight < 0 || this.Weight > 1)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Weight",
-    			"Weight must be between 0 and 1.",
-    			this.Weight,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -48768,77 +47422,6 @@ export class AIModelCostEntity extends BaseEntity<AIModelCostEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: AI Model Costs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Currency: This rule ensures that the currency code is exactly 3 characters long and consists only of uppercase letters.
-    * * InputPricePerUnit: This rule ensures that the input price per unit cannot be negative. The value must be zero or higher.
-    * * OutputPricePerUnit: This rule ensures that the output price per unit must be zero or greater. In other words, negative prices are not allowed for the output price per unit.
-    * * Table-Level: This rule ensures that if both a start date and an end date are provided, the end date must be later than the start date. If either date is missing, no validation is enforced.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateCurrencyIsThreeUppercaseLetters(result);
-        this.ValidateInputPricePerUnitIsNonNegative(result);
-        this.ValidateOutputPricePerUnitNonNegative(result);
-        this.ValidateEndedAtAfterStartedAt(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the currency code is exactly 3 characters long and consists only of uppercase letters.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCurrencyIsThreeUppercaseLetters(result: ValidationResult) {
-    	if (this.Currency.length !== 3) {
-    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be exactly 3 characters long.", this.Currency, ValidationErrorType.Failure));
-    	} else if (this.Currency !== this.Currency.toUpperCase()) {
-    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be in uppercase letters.", this.Currency, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the input price per unit cannot be negative. The value must be zero or higher.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateInputPricePerUnitIsNonNegative(result: ValidationResult) {
-    	if (this.InputPricePerUnit < 0) {
-    		result.Errors.push(new ValidationErrorInfo("InputPricePerUnit", "The input price per unit cannot be negative.", this.InputPricePerUnit, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the output price per unit must be zero or greater. In other words, negative prices are not allowed for the output price per unit.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateOutputPricePerUnitNonNegative(result: ValidationResult) {
-    	if (this.OutputPricePerUnit < 0) {
-    		result.Errors.push(new ValidationErrorInfo("OutputPricePerUnit", "The output price per unit cannot be negative.", this.OutputPricePerUnit, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if both a start date and an end date are provided, the end date must be later than the start date. If either date is missing, no validation is enforced.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEndedAtAfterStartedAt(result: ValidationResult) {
-    	if (this.EndedAt !== null && this.StartedAt !== null && this.EndedAt <= this.StartedAt) {
-    		result.Errors.push(new ValidationErrorInfo("EndedAt", "When both an end date and a start date are set, the end date must be later than the start date.", this.EndedAt, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -49329,33 +47912,6 @@ export class AIModelPriceTypeEntity extends BaseEntity<AIModelPriceTypeEntityTyp
     }
 
     /**
-    * Validate() method override for MJ: AI Model Price Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Name: This rule ensures that the Name field is not empty or just spaces. The Name must contain at least one non-space character.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateNameNotEmptyOrWhitespace(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the Name field is not empty or just spaces. The Name must contain at least one non-space character.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateNameNotEmptyOrWhitespace(result: ValidationResult) {
-    	if (this.Name.trim().length === 0) {
-    		result.Errors.push(new ValidationErrorInfo("Name", "Name must not be empty or only spaces.", this.Name, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -49444,47 +48000,6 @@ export class AIModelPriceUnitTypeEntity extends BaseEntity<AIModelPriceUnitTypeE
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: AI Model Price Unit Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * DriverClass: This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
-    * * Name: This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateDriverClassNotBlank(result);
-        this.ValidateNameHasNonWhitespaceCharacters(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateDriverClassNotBlank(result: ValidationResult) {
-    	if (this.DriverClass != null && this.DriverClass.trim().length === 0) {
-    		result.Errors.push(new ValidationErrorInfo("DriverClass", "DriverClass cannot be blank or consist only of whitespace.", this.DriverClass, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateNameHasNonWhitespaceCharacters(result: ValidationResult) {
-    	if (this.Name != null && this.Name.trim().length === 0) {
-    		result.Errors.push(new ValidationErrorInfo("Name", "Name cannot be empty or consist only of spaces.", this.Name, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -49589,61 +48104,6 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: AI Model Vendors entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * MaxInputTokens: This rule ensures that the value for MaxInputTokens, if provided, must be zero or greater (i.e., cannot be a negative number).
-    * * MaxOutputTokens: This rule ensures that if a maximum output tokens value is provided, it must be greater than or equal to zero. If no value is provided, there is no restriction.
-    * * Priority: This rule ensures that the Priority value must not be less than zero. In other words, Priority cannot be negative.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateMaxInputTokensIsNonNegative(result);
-        this.ValidateMaxOutputTokensNonNegative(result);
-        this.ValidatePriorityIsNonNegative(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the value for MaxInputTokens, if provided, must be zero or greater (i.e., cannot be a negative number).
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMaxInputTokensIsNonNegative(result: ValidationResult) {
-    	if (this.MaxInputTokens != null && this.MaxInputTokens < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxInputTokens", "MaxInputTokens, if specified, must be zero or a positive number.", this.MaxInputTokens, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if a maximum output tokens value is provided, it must be greater than or equal to zero. If no value is provided, there is no restriction.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMaxOutputTokensNonNegative(result: ValidationResult) {
-    	if (this.MaxOutputTokens !== null && this.MaxOutputTokens < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxOutputTokens", "If specified, the maximum output tokens must be greater than or equal to zero.", this.MaxOutputTokens, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the Priority value must not be less than zero. In other words, Priority cannot be negative.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidatePriorityIsNonNegative(result: ValidationResult) {
-    	if (this.Priority < 0) {
-    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must not be negative.", this.Priority, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -49917,101 +48377,6 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * EffortLevel: Effort level must be between 1 and 100 whenever it is provided. This ensures that effort values stay within the allowed range.
-    * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative values are not allowed.
-    * * ParallelCount: This rule ensures that the ParallelCount value must always be at least 1.
-    * * Priority: This rule ensures that the priority value must be zero or a positive number; in other words, priority cannot be negative.
-    * * Table-Level: This rule ensures that, depending on the parallelization mode, the configuration parameter for parallelization is either required or must not be set. Specifically: If the parallelization mode is 'None' or 'StaticCount', the configuration parameter must be empty. If the parallelization mode is 'ConfigParam', the configuration parameter is required.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateEffortLevelRange(result);
-        this.ValidateExecutionGroupNonNegative(result);
-        this.ValidateParallelCountAtLeastOne(result);
-        this.ValidatePriorityIsNonNegative(result);
-        this.ValidateParallelizationModeAndConfigParam(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * Effort level must be between 1 and 100 whenever it is provided. This ensures that effort values stay within the allowed range.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEffortLevelRange(result: ValidationResult) {
-    	// Only validate when a value is provided
-    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"EffortLevel",
-    			"Effort level must be between 1 and 100.",
-    			this.EffortLevel,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative values are not allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateExecutionGroupNonNegative(result: ValidationResult) {
-    	if (this.ExecutionGroup < 0) {
-    		result.Errors.push(new ValidationErrorInfo("ExecutionGroup", "ExecutionGroup must be zero or a positive integer.", this.ExecutionGroup, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the ParallelCount value must always be at least 1.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParallelCountAtLeastOne(result: ValidationResult) {
-    	if (this.ParallelCount < 1) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be greater than or equal to 1.", this.ParallelCount, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the priority value must be zero or a positive number; in other words, priority cannot be negative.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidatePriorityIsNonNegative(result: ValidationResult) {
-    	if (this.Priority < 0) {
-    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must be zero or a positive number.", this.Priority, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that, depending on the parallelization mode, the configuration parameter for parallelization is either required or must not be set. Specifically: If the parallelization mode is 'None' or 'StaticCount', the configuration parameter must be empty. If the parallelization mode is 'ConfigParam', the configuration parameter is required.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParallelizationModeAndConfigParam(result: ValidationResult) {
-    	if (this.ParallelizationMode === "ConfigParam") {
-    		if (this.ParallelConfigParam == null) {
-    			result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be provided when ParallelizationMode is 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
-    		}
-    	} else if (this.ParallelizationMode === "None" || this.ParallelizationMode === "StaticCount") {
-    		if (this.ParallelConfigParam != null) {
-    			result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be null when ParallelizationMode is 'None' or 'StaticCount'.", this.ParallelConfigParam, ValidationErrorType.Failure));
-    		}
-    	}
     }
 
     /**
@@ -50553,65 +48918,6 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * EffortLevel: This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
-    * * Table-Level: This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
-    * * Table-Level: This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateEffortLevelIsBetween1And100(result);
-        this.ValidateCompletedAtNotBeforeRunAt(result);
-        this.ValidateTokensUsedEqualsPromptPlusCompletion(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
-    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
-    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100 if provided.", this.EffortLevel, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCompletedAtNotBeforeRunAt(result: ValidationResult) {
-    	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
-    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "If provided, CompletedAt must be the same as or later than RunAt.", this.CompletedAt, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateTokensUsedEqualsPromptPlusCompletion(result: ValidationResult) {
-    	// Allow missing values for any of the three fields
-    	if (this.TokensUsed != null && this.TokensPrompt != null && this.TokensCompletion != null) {
-    		if (this.TokensUsed !== this.TokensPrompt + this.TokensCompletion) {
-    			result.Errors.push(new ValidationErrorInfo("TokensUsed", "The total tokens used must equal the sum of the prompt tokens and completion tokens.", this.TokensUsed, ValidationErrorType.Failure));
-    		}
-    	}
-    	// Otherwise, skip the check (it passes)
     }
 
     /**
@@ -51988,33 +50294,6 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Vendor Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Rank: This rule ensures that the Rank value cannot be negative. It must be zero or higher.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateRankIsNonNegative(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the Rank value cannot be negative. It must be zero or higher.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRankIsNonNegative(result: ValidationResult) {
-    	if (this.Rank < 0) {
-    		result.Errors.push(new ValidationErrorInfo("Rank", "Rank must be zero or greater.", this.Rank, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -52685,7 +50964,7 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
 
     /**
     * * Field Name: ScopeID
-    * * Display Name: Scope
+    * * Display Name: Scope ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
     */
@@ -52749,7 +51028,7 @@ export class APIKeyScopeEntity extends BaseEntity<APIKeyScopeEntityType> {
 
     /**
     * * Field Name: IsDeny
-    * * Display Name: Is Deny
+    * * Display Name: Deny Rule
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If true, this rule explicitly DENIES access. Deny rules trump allow rules at the same priority level.
@@ -52905,7 +51184,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: ResponseTimeMs
-    * * Display Name: Response Time (ms)
+    * * Display Name: Response Time
     * * SQL Data Type: int
     * * Description: Total time in milliseconds to process the request and return a response. Useful for performance monitoring.
     */
@@ -52964,7 +51243,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: ApplicationID
-    * * Display Name: Application
+    * * Display Name: Application ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: API Applications (vwAPIApplications.ID)
     * * Description: The application through which this request was made (MJAPI, MCPServer, etc.).
@@ -53036,7 +51315,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: APIKey
-    * * Display Name: API Key Value
+    * * Display Name: API Key
     * * SQL Data Type: nvarchar(255)
     */
     get APIKey(): string {
@@ -53045,7 +51324,7 @@ export class APIKeyUsageLogEntity extends BaseEntity<APIKeyUsageLogEntityType> {
 
     /**
     * * Field Name: Application
-    * * Display Name: Application Name
+    * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
     get Application(): string | null {
@@ -56266,33 +54545,6 @@ export class ConversationArtifactVersionEntity extends BaseEntity<ConversationAr
     }
 
     /**
-    * Validate() method override for MJ: Conversation Artifact Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Version: This rule ensures that the Version field must always be greater than 0. Any value for Version must be a positive integer.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateVersionGreaterThanZero(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the Version field must always be greater than 0. Any value for Version must be a positive integer.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateVersionGreaterThanZero(result: ValidationResult) {
-    	if (this.Version <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("Version", "Version must be greater than zero.", this.Version, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -56652,7 +54904,7 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     * * Description: Foreign key to ConversationDetail - the conversation message associated with this artifact
@@ -56666,7 +54918,7 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
 
     /**
     * * Field Name: ArtifactVersionID
-    * * Display Name: Artifact Version
+    * * Display Name: Artifact Version ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
     * * Description: Foreign key to ArtifactVersion - the specific artifact version linked to this conversation message
@@ -56717,15 +54969,6 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
     }
 
     /**
-    * * Field Name: ConversationDetail
-    * * Display Name: Message
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConversationDetail(): string {
-        return this.Get('ConversationDetail');
-    }
-
-    /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
     * * SQL Data Type: nvarchar(255)
@@ -56764,39 +55007,6 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: Conversation Detail Attachments entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Each record must include content either directly (InlineData) or by reference (FileID); they cannot both be empty.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateInlineDataOrFileIDPresence(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * Each record must include content either directly (InlineData) or by reference (FileID); they cannot both be empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateInlineDataOrFileIDPresence(result: ValidationResult) {
-    	// Ensure that at least one source of content is supplied
-    	if (this.InlineData == null && this.FileID == null) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"InlineDataOrFileID",
-    			"Either InlineData or FileID must be provided; both cannot be empty.",
-    			null,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**
@@ -57064,33 +55274,6 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
     }
 
     /**
-    * Validate() method override for MJ: Conversation Detail Ratings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Rating: This rule ensures that the rating must be a whole number between 1 and 10, inclusive.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateRatingWithinAllowedRange(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the rating must be a whole number between 1 and 10, inclusive.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRatingWithinAllowedRange(result: ValidationResult) {
-    	if (this.Rating < 1 || this.Rating > 10) {
-    		result.Errors.push(new ValidationErrorInfo("Rating", "Rating must be between 1 and 10.", this.Rating, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -57105,7 +55288,7 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     * * Description: The conversation message being rated.
@@ -57119,7 +55302,7 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: The user providing the rating.
@@ -57175,15 +55358,6 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConversationDetail(): string {
-        return this.Get('ConversationDetail');
     }
 
     /**
@@ -58449,33 +56623,6 @@ export class DashboardUserPreferenceEntity extends BaseEntity<DashboardUserPrefe
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: Dashboard User Preferences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: This rule ensures that when the scope is set to 'Global', there should not be an application assigned, and when the scope is set to 'App', an application must be assigned.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateScopeAndApplicationIDConsistency(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that when the scope is set to 'Global', there should not be an application assigned, and when the scope is set to 'App', an application must be assigned.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateScopeAndApplicationIDConsistency(result: ValidationResult) {
-    	if ((this.Scope === "Global" && this.ApplicationID !== null) || (this.Scope === "App" && this.ApplicationID === null)) {
-    		result.Errors.push(new ValidationErrorInfo("Scope", "When the scope is 'Global', ApplicationID must be null. When scope is 'App', ApplicationID must not be null.", this.Scope + ":" + this.ApplicationID, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -59919,39 +58066,6 @@ export class MCPServerConnectionPermissionEntity extends BaseEntity<MCPServerCon
     }
 
     /**
-    * Validate() method override for MJ: MCP Server Connection Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Either a specific user or a role must be assigned to the permission record, but you cannot assign both at the same time and you cannot leave both empty. This ensures that each permission is linked to exactly one entity, maintaining clear ownership and preventing ambiguous access settings.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateUserIDOrRoleIDExclusive(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * Either a specific user or a role must be assigned to the permission record, but you cannot assign both at the same time and you cannot leave both empty. This ensures that each permission is linked to exactly one entity, maintaining clear ownership and preventing ambiguous access settings.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateUserIDOrRoleIDExclusive(result: ValidationResult) {
-    	// Ensure that exactly one of UserID or RoleID is set
-    	if ((this.UserID != null && this.RoleID != null) || (this.UserID == null && this.RoleID == null)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"UserID",
-    			"Either a specific user or a role must be assigned, but not both and not neither.",
-    			this.UserID,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -60226,20 +58340,11 @@ export class MCPServerConnectionToolEntity extends BaseEntity<MCPServerConnectio
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: MCP Server Connection
+    * * Display Name: Connection
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
         return this.Get('MCPServerConnection');
-    }
-
-    /**
-    * * Field Name: MCPServerTool
-    * * Display Name: MCP Server Tool
-    * * SQL Data Type: nvarchar(255)
-    */
-    get MCPServerTool(): string | null {
-        return this.Get('MCPServerTool');
     }
 }
 
@@ -61197,7 +59302,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerConnectionID
-    * * Display Name: Server Connection
+    * * Display Name: MCP Server Connection
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
     */
@@ -61210,7 +59315,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerToolID
-    * * Display Name: Server Tool
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
     * * Description: FK to MCP Server Tool (null if tool not cached)
@@ -61374,20 +59479,11 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: Server Connection Name
+    * * Display Name: MCP Server Connection Name
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
         return this.Get('MCPServerConnection');
-    }
-
-    /**
-    * * Field Name: MCPServerTool
-    * * Display Name: Server Tool Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get MCPServerTool(): string | null {
-        return this.Get('MCPServerTool');
     }
 
     /**
@@ -61685,7 +59781,7 @@ export class OAuthAuthorizationStateEntity extends BaseEntity<OAuthAuthorization
 
     /**
     * * Field Name: MCPServerConnectionID
-    * * Display Name: MCP Server Connection
+    * * Display Name: MCP Server Connection ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
     */
@@ -61698,7 +59794,7 @@ export class OAuthAuthorizationStateEntity extends BaseEntity<OAuthAuthorization
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -61900,7 +59996,7 @@ export class OAuthAuthorizationStateEntity extends BaseEntity<OAuthAuthorization
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: MCP Server Connection Name
+    * * Display Name: MCP Server Connection
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -61909,7 +60005,7 @@ export class OAuthAuthorizationStateEntity extends BaseEntity<OAuthAuthorization
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -63306,33 +61402,6 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: Report Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * VersionNumber: This rule ensures that the Version Number must be greater than zero.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateVersionNumberGreaterThanZero(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the Version Number must be greater than zero.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
-    	if (this.VersionNumber <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "Version Number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -63483,37 +61552,6 @@ export class ScheduledJobRunEntity extends BaseEntity<ScheduledJobRunEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: Scheduled Job Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Details: This rule ensures that if the Details field is not empty, it must contain a valid JSON value.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateDetailsAsJson(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if the Details field is not empty, it must contain a valid JSON value.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateDetailsAsJson(result: ValidationResult) {
-    	if (this.Details != null) {
-    		try {
-    			JSON.parse(this.Details);
-    		} catch (e) {
-    			result.Errors.push(new ValidationErrorInfo("Details", "Details must be a valid JSON if provided.", this.Details, ValidationErrorType.Failure));
-    		}
-    	}
     }
 
     /**
@@ -63868,37 +61906,6 @@ export class ScheduledJobEntity extends BaseEntity<ScheduledJobEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: Scheduled Jobs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Configuration: This rule ensures that if the Configuration field has a value, it must be valid JSON. If the Configuration field is empty or not set, this rule does not apply.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateConfigurationIsJson(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if the Configuration field has a value, it must be valid JSON. If the Configuration field is empty or not set, this rule does not apply.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateConfigurationIsJson(result: ValidationResult) {
-    	if (this.Configuration != null) {
-    		try {
-    			JSON.parse(this.Configuration);
-    		} catch (e) {
-    			result.Errors.push(new ValidationErrorInfo("Configuration", "If specified, Configuration must be valid JSON.", this.Configuration, ValidationErrorType.Failure));
-    		}
-    	}
     }
 
     /**
@@ -64343,38 +62350,6 @@ export class TaskDependencyEntity extends BaseEntity<TaskDependencyEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: Task Dependencies entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: This rule ensures that a task cannot be set as dependent on itself. In other words, each task can only depend on a different task, not on itself.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateTaskIDNotEqualDependsOnTaskID(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that a task cannot be set as dependent on itself. In other words, each task can only depend on a different task, not on itself.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateTaskIDNotEqualDependsOnTaskID(result: ValidationResult) {
-    	if (this.TaskID === this.DependsOnTaskID) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"TaskID",
-    			"A task cannot be dependent on itself.",
-    			this.TaskID,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -64594,47 +62569,6 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * PercentComplete: This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
-    * * Table-Level: This rule ensures that for each record, either UserID or AgentID can be set, or both can be left empty, but not both can be filled in at the same time.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidatePercentCompleteWithinZeroAndOneHundred(result);
-        this.ValidateUserIDAndAgentIDMutualExclusivity(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidatePercentCompleteWithinZeroAndOneHundred(result: ValidationResult) {
-    	if (this.PercentComplete != null && (this.PercentComplete < 0 || this.PercentComplete > 100)) {
-    		result.Errors.push(new ValidationErrorInfo("PercentComplete", "PercentComplete must be between 0 and 100 if specified.", this.PercentComplete, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that for each record, either UserID or AgentID can be set, or both can be left empty, but not both can be filled in at the same time.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateUserIDAndAgentIDMutualExclusivity(result: ValidationResult) {
-    	if (this.UserID != null && this.AgentID != null) {
-    		result.Errors.push(new ValidationErrorInfo("UserID", "UserID and AgentID cannot both have values at the same time. Only one or neither may be set.", this.UserID, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -64649,7 +62583,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
     */
@@ -64688,7 +62622,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type
+    * * Display Name: Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)
     */
@@ -64701,7 +62635,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment
+    * * Display Name: Environment ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -64715,7 +62649,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: ProjectID
-    * * Display Name: Project
+    * * Display Name: Project ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -64728,7 +62662,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     */
@@ -64741,7 +62675,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -64754,7 +62688,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent
+    * * Display Name: Agent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     */
@@ -64898,15 +62832,6 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
     }
 
     /**
-    * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConversationDetail(): string | null {
-        return this.Get('ConversationDetail');
-    }
-
-    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -64926,7 +62851,7 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -65135,38 +63060,6 @@ export class TestRunFeedbackEntity extends BaseEntity<TestRunFeedbackEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: Test Run Feedbacks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Rating: When a rating is provided, it must be a whole number from 1 up to 10. This ensures that every recorded rating falls within the allowed scoring range.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateRatingRange(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * When a rating is provided, it must be a whole number from 1 up to 10. This ensures that every recorded rating falls within the allowed scoring range.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRatingRange(result: ValidationResult) {
-    	if (this.Rating != null && (this.Rating < 1 || this.Rating > 10)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Rating",
-    			"Rating must be between 1 and 10.",
-    			this.Rating,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**
@@ -66754,39 +64647,6 @@ export class TestEntity extends BaseEntity<TestEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: Tests entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * RepeatCount: If a repeat count is entered, it must be a positive number greater than zero; otherwise it can be left empty.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateRepeatCountPositive(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * If a repeat count is entered, it must be a positive number greater than zero; otherwise it can be left empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRepeatCountPositive(result: ValidationResult) {
-    	// If a repeat count is set, it must be greater than zero
-    	if (this.RepeatCount != null && this.RepeatCount <= 0) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"RepeatCount",
-    			"Repeat count must be greater than zero if provided.",
-    			this.RepeatCount,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**
@@ -69547,33 +67407,6 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     }
 
     /**
-    * Validate() method override for Recommendation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * MatchProbability: This rule ensures that if a match probability is set, it must be between 0 and 1, inclusive.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateMatchProbabilityIsBetweenZeroAndOne(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if a match probability is set, it must be between 0 and 1, inclusive.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMatchProbabilityIsBetweenZeroAndOne(result: ValidationResult) {
-    	if (this.MatchProbability != null && (this.MatchProbability < 0 || this.MatchProbability > 1)) {
-    		result.Errors.push(new ValidationErrorInfo("MatchProbability", "MatchProbability, if provided, must be between 0 and 1 (inclusive).", this.MatchProbability, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -69588,7 +67421,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
 
     /**
     * * Field Name: RecommendationID
-    * * Display Name: Recommendation
+    * * Display Name: Recommendation ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Recommendations (vwRecommendations.ID)
     */
@@ -69656,15 +67489,6 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Recommendation
-    * * Display Name: Recommendation
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Recommendation(): string {
-        return this.Get('Recommendation');
     }
 
     /**
@@ -69979,7 +67803,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: RecommendationRunID
-    * * Display Name: Recommendation Run
+    * * Display Name: Recommendation Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)
     */
@@ -69992,7 +67816,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: SourceEntityID
-    * * Display Name: Source Entity
+    * * Display Name: Source Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -70005,7 +67829,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: SourceEntityRecordID
-    * * Display Name: Source Record ID
+    * * Display Name: Source Entity Record ID
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The record ID of the source entity
     */
@@ -70034,15 +67858,6 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: RecommendationRun
-    * * Display Name: Recommendation Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get RecommendationRun(): string {
-        return this.Get('RecommendationRun');
     }
 
     /**
@@ -70220,7 +68035,6 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -70246,7 +68060,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: RecordID
-    * * Display Name: Record ID
+    * * Display Name: Record
     * * SQL Data Type: nvarchar(750)
     * * Description: Field RecordID for entity Record Changes.
     */
@@ -70272,7 +68086,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Change Type
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Create
     * * Value List Type: List
@@ -70362,7 +68176,6 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Status
-    * * Display Name: Status
     * * SQL Data Type: nvarchar(50)
     * * Default Value: Complete
     * * Value List Type: List
@@ -70420,7 +68233,6 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Comments
-    * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
     get Comments(): string | null {
@@ -70468,15 +68280,6 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     */
     get User(): string {
         return this.Get('User');
-    }
-
-    /**
-    * * Field Name: ReplayRun
-    * * Display Name: Replay Run
-    * * SQL Data Type: nvarchar(100)
-    */
-    get ReplayRun(): string | null {
-        return this.Get('ReplayRun');
     }
 
     /**
@@ -70535,7 +68338,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: RecordMergeLogID
-    * * Display Name: Record Merge Log
+    * * Display Name: Record Merge Log ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)
     */
@@ -70548,7 +68351,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: DeletedRecordID
-    * * Display Name: Deleted Record
+    * * Display Name: Deleted Record ID
     * * SQL Data Type: nvarchar(750)
     * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.
     */
@@ -70608,15 +68411,6 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: RecordMergeLog
-    * * Display Name: Merge Log
-    * * SQL Data Type: nvarchar(450)
-    */
-    get RecordMergeLog(): string {
-        return this.Get('RecordMergeLog');
     }
 }
 
@@ -71223,7 +69017,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category
+    * * Display Name: Category ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)
     */
@@ -71236,7 +69030,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -71268,7 +69062,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: ConversationID
-    * * Display Name: Conversation
+    * * Display Name: Conversation ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
     */
@@ -71281,7 +69075,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     */
@@ -71294,7 +69088,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: DataContextID
-    * * Display Name: Data Context
+    * * Display Name: Data Context ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
     */
@@ -71320,7 +69114,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: OutputTriggerTypeID
-    * * Display Name: Output Trigger Type
+    * * Display Name: Output Trigger Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Output Trigger Types (vwOutputTriggerTypes.ID)
     */
@@ -71333,7 +69127,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: OutputFormatTypeID
-    * * Display Name: Output Format Type
+    * * Display Name: Output Format Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Output Format Types (vwOutputFormatTypes.ID)
     */
@@ -71346,7 +69140,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: OutputDeliveryTypeID
-    * * Display Name: Output Delivery Type
+    * * Display Name: Output Delivery Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Output Delivery Types (vwOutputDeliveryTypes.ID)
     */
@@ -71385,7 +69179,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: OutputWorkflowID
-    * * Display Name: Output Workflow
+    * * Display Name: Output Workflow ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Workflows (vwWorkflows.ID)
     */
@@ -71431,7 +69225,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment
+    * * Display Name: Environment ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -71468,15 +69262,6 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
-    }
-
-    /**
-    * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConversationDetail(): string | null {
-        return this.Get('ConversationDetail');
     }
 
     /**
@@ -71701,45 +69486,6 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for Resource Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: This rule ensures that if the type is set to 'Role', a role ID must be provided and a user ID must not be provided. If the type is set to 'User', a user ID must be provided and a role ID must not be provided.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateTypeAndRoleOrUserIDExclusive(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that if the type is set to 'Role', a role ID must be provided and a user ID must not be provided. If the type is set to 'User', a user ID must be provided and a role ID must not be provided.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateTypeAndRoleOrUserIDExclusive(result: ValidationResult) {
-    	if (this.Type === "Role") {
-    		if (this.RoleID == null) {
-    			result.Errors.push(new ValidationErrorInfo("RoleID", "When Type is 'Role', RoleID must be provided.", this.RoleID, ValidationErrorType.Failure));
-    		}
-    		if (this.UserID != null) {
-    			result.Errors.push(new ValidationErrorInfo("UserID", "When Type is 'Role', UserID must not be provided.", this.UserID, ValidationErrorType.Failure));
-    		}
-    	} else if (this.Type === "User") {
-    		if (this.UserID == null) {
-    			result.Errors.push(new ValidationErrorInfo("UserID", "When Type is 'User', UserID must be provided.", this.UserID, ValidationErrorType.Failure));
-    		}
-    		if (this.RoleID != null) {
-    			result.Errors.push(new ValidationErrorInfo("RoleID", "When Type is 'User', RoleID must not be provided.", this.RoleID, ValidationErrorType.Failure));
-    		}
-    	}
     }
 
     /**
@@ -72772,50 +70518,6 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     }
 
     /**
-    * Validate() method override for Schema Info entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: This rule ensures that the maximum entity ID value must be greater than the minimum entity ID value.
-    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateEntityIDMaxGreaterThanEntityIDMin(result);
-        this.ValidateEntityIDMinEntityIDMaxGreaterThanZero(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the maximum entity ID value must be greater than the minimum entity ID value.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEntityIDMaxGreaterThanEntityIDMin(result: ValidationResult) {
-    	if (this.EntityIDMax <= this.EntityIDMin) {
-    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than the minimum entity ID.", this.EntityIDMax, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEntityIDMinEntityIDMaxGreaterThanZero(result: ValidationResult) {
-    	if (this.EntityIDMin <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("EntityIDMin", "The minimum entity ID must be greater than zero.", this.EntityIDMin, ValidationErrorType.Failure));
-    	}
-    	if (this.EntityIDMax <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than zero.", this.EntityIDMax, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -73727,7 +71429,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: TemplateID
-    * * Display Name: Template
+    * * Display Name: Template ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
     */
@@ -73853,7 +71555,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -73866,7 +71568,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: RecordID
-    * * Display Name: Record
+    * * Display Name: Record ID
     * * SQL Data Type: nvarchar(2000)
     * * Description: Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.
     */
@@ -73912,7 +71614,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: TemplateContentID
-    * * Display Name: Template Content
+    * * Display Name: Template Content ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Template Contents (vwTemplateContents.ID)
     * * Description: Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.
@@ -73940,15 +71642,6 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     */
     get Entity(): string | null {
         return this.Get('Entity');
-    }
-
-    /**
-    * * Field Name: TemplateContent
-    * * Display Name: Template Content
-    * * SQL Data Type: nvarchar(255)
-    */
-    get TemplateContent(): string | null {
-        return this.Get('TemplateContent');
     }
 }
 
