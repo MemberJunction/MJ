@@ -160,19 +160,31 @@
                             <i [class]="OverviewEntityIcon" style="margin-right: 6px; color: #3b82f6;"></i>{{Label.Entity ?? resolveEntityName(Label.EntityID)}}
                         </span>
                     </div>
-                    <div class="detail-field" *ngIf="OverviewRecordName">
-                        <span class="field-label">Record Name</span>
-                        <span class="field-value field-record-name">{{OverviewRecordName}}</span>
-                    </div>
-                    <div class="detail-field" *ngIf="Label.RecordID">
+                    <div class="detail-field" *ngIf="Label.RecordID && Label.Scope !== 'Record'">
                         <span class="field-label">Record ID</span>
-                        <span class="field-value field-mono">{{Label.RecordID}}</span>
+                        <span class="field-value field-mono">{{FormatRecordID(Label.RecordID)}}</span>
                     </div>
                     <div class="detail-field" *ngIf="Label.ExternalSystemID">
                         <span class="field-label">External Ref</span>
                         <span class="field-value field-mono">{{Label.ExternalSystemID}}</span>
                     </div>
                 </div>
+            </div>
+
+            <!-- Record card (Record-scoped labels) -->
+            <div class="record-card" *ngIf="Label.Scope === 'Record' && Label.RecordID">
+                <div class="record-card-main">
+                    <i [class]="OverviewEntityIcon" class="record-card-icon"></i>
+                    <div class="record-card-info">
+                        <span class="record-card-name" *ngIf="OverviewRecordName">{{OverviewRecordName}}</span>
+                        <span class="record-card-name record-card-name-loading" *ngIf="!OverviewRecordName">Loading...</span>
+                        <span class="record-card-entity">{{Label.Entity ?? resolveEntityName(Label.EntityID)}}</span>
+                        <span class="record-card-id">{{FormatRecordID(Label.RecordID)}}</span>
+                    </div>
+                </div>
+                <button class="record-card-open-btn" (click)="OnOpenOverviewRecord()" title="Open record">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open
+                </button>
             </div>
 
             <!-- Description -->
@@ -286,6 +298,11 @@
                     </div>
 
                     <div class="group-content" *ngIf="group.IsExpanded">
+                        <!-- Loading names indicator -->
+                        <div class="group-names-loading" *ngIf="group.IsLoadingNames">
+                            <mj-loading text="Loading record names..." size="small"></mj-loading>
+                        </div>
+
                         <!-- List mode -->
                         <ng-container *ngIf="SnapshotViewMode === 'list'">
                             <div class="snapshot-list-item" *ngFor="let item of group.Items"
@@ -393,6 +410,18 @@
                         <span class="diff-stat-value">{{DiffResult.Summary.EntitiesAffected}}</span>
                         <span class="diff-stat-label">Entities</span>
                     </div>
+                </div>
+
+                <!-- Expand/collapse all -->
+                <div class="diff-toolbar" *ngIf="DiffResult.EntityGroups.length > 0">
+                    <button class="toolbar-action-btn" (click)="ExpandAllDiffGroups()" title="Expand all">
+                        <i class="fa-solid fa-angles-down"></i>
+                        <span>Expand All</span>
+                    </button>
+                    <button class="toolbar-action-btn" (click)="CollapseAllDiffGroups()" title="Collapse all">
+                        <i class="fa-solid fa-angles-up"></i>
+                        <span>Collapse All</span>
+                    </button>
                 </div>
 
                 <!-- Entity diff groups -->

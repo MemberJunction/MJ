@@ -122,27 +122,35 @@
                     <button class="filter-pill change-modified" [class.active]="DiffFilterType === 'modified'"
                             (click)="OnDiffFilterChange('modified')">Modified</button>
                 </div>
-                <div class="diff-sort-toggle">
-                    <button class="toggle-btn-sm" [class.active]="DiffSortBy === 'name'"
-                            (click)="OnDiffSortChange('name')" title="Sort by name">
-                        <i class="fa-solid" [ngClass]="DiffSortBy === 'name' && DiffSortDir === 'desc' ? 'fa-arrow-up-z-a' : 'fa-arrow-down-a-z'"></i>
+                <div class="diff-toolbar-right">
+                    <button class="toolbar-action-btn" (click)="ExpandAllGroups()" title="Expand all">
+                        <i class="fa-solid fa-angles-down"></i>
                     </button>
-                    <button class="toggle-btn-sm" [class.active]="DiffSortBy === 'count'"
-                            (click)="OnDiffSortChange('count')" title="Sort by count">
-                        <i class="fa-solid" [ngClass]="DiffSortBy === 'count' && DiffSortDir === 'asc' ? 'fa-arrow-up-1-9' : 'fa-arrow-down-9-1'"></i>
+                    <button class="toolbar-action-btn" (click)="CollapseAllGroups()" title="Collapse all">
+                        <i class="fa-solid fa-angles-up"></i>
                     </button>
+                    <div class="diff-sort-toggle">
+                        <button class="toggle-btn-sm" [class.active]="DiffSortBy === 'name'"
+                                (click)="OnDiffSortChange('name')" title="Sort by name">
+                            <i class="fa-solid" [ngClass]="DiffSortBy === 'name' && DiffSortDir === 'desc' ? 'fa-arrow-up-z-a' : 'fa-arrow-down-a-z'"></i>
+                        </button>
+                        <button class="toggle-btn-sm" [class.active]="DiffSortBy === 'count'"
+                                (click)="OnDiffSortChange('count')" title="Sort by count">
+                            <i class="fa-solid" [ngClass]="DiffSortBy === 'count' && DiffSortDir === 'asc' ? 'fa-arrow-up-1-9' : 'fa-arrow-down-9-1'"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <!-- Entity Groups -->
             <div class="entity-groups" *ngIf="FilteredEntityGroups.length > 0">
                 <div class="entity-group" *ngFor="let group of FilteredEntityGroups">
-                    <div class="entity-group-header" (click)="ToggleEntityGroup(group.EntityName)">
+                    <div class="entity-group-header" (click)="ToggleEntityGroup(group)">
                         <div class="entity-group-left">
-                            <i class="fa-solid"
-                               [ngClass]="IsEntityExpanded(group.EntityName) ? 'fa-chevron-down' : 'fa-chevron-right'">
+                            <i class="fa-solid fa-chevron-right entity-chevron"
+                               [class.expanded]="group.IsExpanded">
                             </i>
-                            <i class="fa-solid fa-table entity-icon"></i>
+                            <i [class]="group.EntityIcon" class="entity-icon"></i>
                             <span class="entity-group-name">{{group.EntityName}}</span>
                         </div>
                         <div class="entity-group-badges">
@@ -158,12 +166,46 @@
                         </div>
                     </div>
 
-                    <div class="entity-group-items" *ngIf="IsEntityExpanded(group.EntityName)">
-                        <div class="diff-item" *ngFor="let item of group.Items"
-                             [ngClass]="GetChangeTypeClass(item.ChangeType)">
-                            <i [class]="GetChangeTypeIcon(item.ChangeType)" class="diff-item-icon"></i>
-                            <span class="diff-item-record">{{item.RecordID | slice:0:20}}</span>
-                            <span class="diff-item-type">{{item.ChangeType}}</span>
+                    <div class="entity-group-items" *ngIf="group.IsExpanded">
+                        <div class="diff-item-wrapper" *ngFor="let item of group.Items">
+                            <div class="diff-item" [ngClass]="GetChangeTypeClass(item.ChangeType)"
+                                 [class.clickable]="item.ChangeType === 'Modified'"
+                                 (click)="ToggleItem(item)">
+                                <i [class]="GetChangeTypeIcon(item.ChangeType)" class="diff-item-icon"></i>
+                                <span class="diff-item-record">
+                                    {{FormatRecordID(item.RecordID)}}
+                                    <span class="diff-item-display-name" *ngIf="item.DisplayName"> ({{item.DisplayName}})</span>
+                                </span>
+                                <span class="diff-item-type">{{item.ChangeType}}</span>
+                                <button class="diff-item-open-btn" (click)="OnOpenRecord(item); $event.stopPropagation()"
+                                        title="Open record">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                </button>
+                                <i class="fa-solid fa-chevron-right diff-item-chevron"
+                                   [class.expanded]="item.IsExpanded"
+                                   *ngIf="item.ChangeType === 'Modified'"></i>
+                            </div>
+
+                            <!-- Field-level changes -->
+                            <div class="diff-fields" *ngIf="item.IsExpanded && item.ChangeType === 'Modified'">
+                                <mj-loading *ngIf="item.IsLoadingFields" text="Loading changes..." size="small"></mj-loading>
+
+                                <ng-container *ngIf="!item.IsLoadingFields && item.FieldChanges.length > 0">
+                                    <div class="diff-field" *ngFor="let field of item.FieldChanges"
+                                         [ngClass]="GetChangeTypeClass(field.ChangeType)">
+                                        <span class="diff-field-name">{{field.FieldName}}</span>
+                                        <span class="diff-field-values">
+                                            <span class="diff-field-old" *ngIf="field.OldValue">{{field.OldValue | slice:0:60}}</span>
+                                            <i class="fa-solid fa-arrow-right diff-field-arrow" *ngIf="field.OldValue && field.NewValue"></i>
+                                            <span class="diff-field-new" *ngIf="field.NewValue">{{field.NewValue | slice:0:60}}</span>
+                                        </span>
+                                    </div>
+                                </ng-container>
+
+                                <div class="diff-fields-empty" *ngIf="!item.IsLoadingFields && item.FieldsLoaded && item.FieldChanges.length === 0">
+                                    <span>No field-level changes available</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

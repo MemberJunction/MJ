@@ -314,24 +314,77 @@ export class MjRecordMicroViewComponent implements OnInit {
             const relatedEntity = this.metadata.Entities.find(e => e.ID === field.RelatedEntityID);
             if (!relatedEntity) continue;
 
-            // Find the virtual field linked to this FK via RelatedEntityNameFieldMap
-            const virtualField = entityInfo.Fields.find(f =>
-                f.RelatedEntityNameFieldMap === field.Name && f.IsVirtual
-            );
-
             const fkValue = data[field.Name];
-            const displayValue = virtualField ? data[virtualField.Name] : null;
+            if (fkValue == null) continue;
 
-            if (fkValue != null) {
-                map.set(field.Name, {
-                    DisplayValue: displayValue != null ? String(displayValue) : '',
-                    EntityName: relatedEntity.Name,
-                    RecordId: String(fkValue)
-                });
-            }
+            // Find display value from the associated virtual field
+            const displayValue = this.findFkDisplayValue(entityInfo, field.Name, data);
+
+            map.set(field.Name, {
+                DisplayValue: displayValue,
+                EntityName: relatedEntity.Name,
+                RecordId: String(fkValue)
+            });
         }
 
         return map;
+    }
+
+    /**
+     * Find the display value for a FK field by checking multiple strategies:
+     * 1. Look for a virtual field with RelatedEntityNameFieldMap pointing to this FK
+     * 2. Look for any virtual field whose name is derived from the FK name
+     * 3. Scan data keys for common naming patterns (e.g., "TypeID" -> "Type")
+     */
+    private findFkDisplayValue(entityInfo: EntityInfo, fkFieldName: string, data: Record<string, unknown>): string {
+        // Strategy 1: Metadata-linked virtual field via RelatedEntityNameFieldMap
+        const linkedVirtual = entityInfo.Fields.find(f =>
+            f.RelatedEntityNameFieldMap === fkFieldName && f.IsVirtual
+        );
+        if (linkedVirtual && data[linkedVirtual.Name] != null) {
+            return String(data[linkedVirtual.Name]);
+        }
+
+        // Strategy 2: Find any virtual field that looks like a display field for this FK
+        // by checking all virtual fields and matching via naming patterns
+        const virtualFields = entityInfo.Fields.filter(f => f.IsVirtual);
+        for (const vf of virtualFields) {
+            // Check if this virtual field's RelatedEntityNameFieldMap matches (case-insensitive)
+            if (vf.RelatedEntityNameFieldMap &&
+                vf.RelatedEntityNameFieldMap.toLowerCase() === fkFieldName.toLowerCase() &&
+                data[vf.Name] != null) {
+                return String(data[vf.Name]);
+            }
+        }
+
+        // Strategy 3: Try common naming conventions in the data itself
+        // e.g., "TypeID" -> look for "Type" key in data
+        //        "OwnerUserID" -> look for "Owner User" or "OwnerUser"
+        // Strip trailing "ID" from the FK name and try variations
+        if (fkFieldName.endsWith('ID') && fkFieldName.length > 2) {
+            const baseName = fkFieldName.slice(0, -2);
+
+            // Direct match in data (e.g., "CategoryID" -> "Category")
+            if (data[baseName] != null && typeof data[baseName] === 'string' &&
+                !this.looksLikeGuid(data[baseName] as string)) {
+                return String(data[baseName]);
+            }
+
+            // Try with space before capitals (e.g., "OwnerUserID" -> "Owner User")
+            const spacedName = baseName.replace(/([a-z])([A-Z])/g, '$1 $2');
+            if (spacedName !== baseName && data[spacedName] != null &&
+                typeof data[spacedName] === 'string' &&
+                !this.looksLikeGuid(data[spacedName] as string)) {
+                return String(data[spacedName]);
+            }
+        }
+
+        return '';
+    }
+
+    /** Quick check if a string looks like a GUID (to avoid using GUIDs as display values). */
+    private looksLikeGuid(value: string): boolean {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
     }
 
     /**

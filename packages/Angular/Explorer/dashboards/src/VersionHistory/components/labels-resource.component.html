@@ -220,11 +220,25 @@
     </ng-container>
 
     <!-- Create Label Wizard -->
-    <mj-label-create
-        *ngIf="ShowCreateWizard"
-        (Created)="OnLabelCreated($event)"
-        (Cancel)="OnCreateWizardCancel()">
-    </mj-label-create>
+    <div class="create-wizard-overlay" *ngIf="ShowCreateWizard" (click)="OnCreateWizardCancel()">
+        <div class="create-wizard-container" (click)="$event.stopPropagation()">
+            <div class="create-wizard-header">
+                <h3 class="create-wizard-title">
+                    <i class="fa-solid fa-tag"></i>
+                    Create Version Label
+                </h3>
+                <button class="create-wizard-close" (click)="OnCreateWizardCancel()" title="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="create-wizard-body">
+                <mj-label-create
+                    (Created)="OnLabelCreated($event)"
+                    (Cancel)="OnCreateWizardCancel()">
+                </mj-label-create>
+            </div>
+        </div>
+    </div>
 
     <!-- Detail panel -->
     <mj-label-detail-panel

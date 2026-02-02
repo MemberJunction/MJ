@@ -111,7 +111,6 @@
 .micro-record-name {
     color: #6366f1;
     font-weight: 700;
-    max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -302,6 +301,7 @@
     align-items: center;
     gap: 6px;
     overflow: hidden;
+    cursor: default;
 }
 
 .mf-type-icon {

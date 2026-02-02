@@ -499,6 +499,91 @@
     color: #6366f1;
 }
 
+/* Record card for Record-scoped labels on overview tab */
+.record-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px;
+    background: rgba(99, 102, 241, 0.04);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: 12px;
+    margin-bottom: 24px;
+}
+
+.record-card-main {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    flex: 1;
+}
+
+.record-card-icon {
+    font-size: 22px;
+    color: #6366f1;
+    flex-shrink: 0;
+}
+
+.record-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.record-card-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary, #1f2937);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.record-card-name-loading {
+    color: var(--text-tertiary, #9ca3af);
+    font-weight: 500;
+    font-style: italic;
+}
+
+.record-card-entity {
+    font-size: 13px;
+    color: var(--text-secondary, #6b7280);
+}
+
+.record-card-id {
+    font-size: 12px;
+    color: var(--text-tertiary, #9ca3af);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.record-card-open-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #6366f1;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.record-card-open-btn:hover {
+    background: #4f46e5;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
 .inline-badge {
     display: inline-flex;
     align-items: center;
@@ -714,6 +799,12 @@
 .group-content {
     border-top: 1px solid var(--border-color, #f3f4f6);
     animation: tabFadeIn 0.15s ease;
+}
+
+.group-names-loading {
+    display: flex;
+    justify-content: center;
+    padding: 8px 14px;
 }
 
 /* Snapshot list items */
@@ -958,6 +1049,38 @@
     font-size: 12px;
     color: var(--text-tertiary, #9ca3af);
     margin-top: 4px;
+}
+
+/* Diff toolbar */
+.diff-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.toolbar-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 6px;
+    background: var(--card-background, #ffffff);
+    color: var(--text-secondary, #6b7280);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.toolbar-action-btn i {
+    font-size: 11px;
+}
+
+.toolbar-action-btn:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+    background: rgba(99, 102, 241, 0.06);
 }
 
 .diff-groups {

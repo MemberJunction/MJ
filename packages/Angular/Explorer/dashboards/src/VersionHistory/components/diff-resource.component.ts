@@ -1,8 +1,8 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { RunView, Metadata } from '@memberjunction/core';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { RunView, Metadata, CompositeKey, EntityRecordNameInput } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, VersionLabelEntityType, VersionLabelItemEntityType } from '@memberjunction/core-entities';
 
 interface VersionDiffPreferences {
@@ -15,23 +15,42 @@ export function LoadVersionHistoryDiffResource() {
 
 interface DiffItemView {
     EntityName: string;
+    EntityID: string;
     RecordID: string;
+    DisplayName: string;
     ChangeType: 'Added' | 'Removed' | 'Modified' | 'Unchanged';
     FieldChanges: FieldChangeView[];
+    IsExpanded: boolean;
+    IsLoadingFields: boolean;
+    FieldsLoaded: boolean;
+    /** RecordChangeID from the "from" label (for loading FullRecordJSON). */
+    FromRecordChangeID: string;
+    /** RecordChangeID from the "to" label (for loading FullRecordJSON). */
+    ToRecordChangeID: string;
 }
 
 interface FieldChangeView {
     FieldName: string;
     OldValue: string;
     NewValue: string;
+    ChangeType: 'Added' | 'Modified' | 'Removed';
+}
+
+interface RecordChangeRow {
+    ID: string;
+    FullRecordJSON: string;
 }
 
 interface EntityGroupView {
     EntityName: string;
+    EntityIcon: string;
     Items: DiffItemView[];
     AddedCount: number;
     RemovedCount: number;
     ModifiedCount: number;
+    IsExpanded: boolean;
+    NamesLoaded: boolean;
+    IsLoadingNames: boolean;
 }
 
 @RegisterClass(BaseResourceComponent, 'VersionHistoryDiffResource')
@@ -72,8 +91,9 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     private static readonly PREFS_KEY = 'VersionHistory.Diff.UserPreferences';
     private preferencesLoaded = false;
     private destroy$ = new Subject<void>();
+    private metadata = new Metadata();
 
-    constructor(private cdr: ChangeDetectorRef) {
+    constructor(private cdr: ChangeDetectorRef, private navigationService: NavigationService) {
         super();
     }
 
@@ -213,9 +233,16 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             if (!fromMap.has(key)) {
                 entityMap.get(entityName)!.push({
                     EntityName: entityName,
+                    EntityID: item.EntityID ?? '',
                     RecordID: item.RecordID ?? '',
+                    DisplayName: '',
                     ChangeType: 'Added',
-                    FieldChanges: []
+                    FieldChanges: [],
+                    IsExpanded: false,
+                    IsLoadingFields: false,
+                    FieldsLoaded: false,
+                    FromRecordChangeID: '',
+                    ToRecordChangeID: item.RecordChangeID ?? ''
                 });
             }
         }
@@ -228,9 +255,16 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             if (!toMap.has(key)) {
                 entityMap.get(entityName)!.push({
                     EntityName: entityName,
+                    EntityID: item.EntityID ?? '',
                     RecordID: item.RecordID ?? '',
+                    DisplayName: '',
                     ChangeType: 'Removed',
-                    FieldChanges: []
+                    FieldChanges: [],
+                    IsExpanded: false,
+                    IsLoadingFields: false,
+                    FieldsLoaded: false,
+                    FromRecordChangeID: item.RecordChangeID ?? '',
+                    ToRecordChangeID: ''
                 });
             } else {
                 // Both exist - check if RecordChangeID differs (= Modified)
@@ -239,9 +273,16 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
                     ? 'Modified' : 'Unchanged';
                 entityMap.get(entityName)!.push({
                     EntityName: entityName,
+                    EntityID: item.EntityID ?? '',
                     RecordID: item.RecordID ?? '',
+                    DisplayName: '',
                     ChangeType: changeType,
-                    FieldChanges: []
+                    FieldChanges: [],
+                    IsExpanded: false,
+                    IsLoadingFields: false,
+                    FieldsLoaded: false,
+                    FromRecordChangeID: item.RecordChangeID ?? '',
+                    ToRecordChangeID: toItem.RecordChangeID ?? ''
                 });
             }
         }
@@ -253,20 +294,31 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
         rv: RunView,
         labelItems: VersionLabelItemEntityType[]
     ): Promise<void> {
-        // For label-to-current, we compare snapshot RecordChangeIDs against
+        // For label-to-current, compare snapshot RecordChangeIDs against
         // the latest RecordChange for each entity/record combination.
-        // This is a simplified client-side comparison.
         const entityMap = new Map<string, DiffItemView[]>();
 
         for (const item of labelItems) {
-            const entityName = this.resolveEntityName(item.EntityID ?? '');
+            const entityId = item.EntityID ?? '';
+            const entityName = this.resolveEntityName(entityId);
             if (!entityMap.has(entityName)) entityMap.set(entityName, []);
+
+            // Load the latest RecordChange for this record
+            const latestChangeId = await this.loadLatestRecordChange(rv, entityId, item.RecordID ?? '');
+            const isModified = latestChangeId != null && latestChangeId !== item.RecordChangeID;
 
             entityMap.get(entityName)!.push({
                 EntityName: entityName,
+                EntityID: entityId,
                 RecordID: item.RecordID ?? '',
-                ChangeType: 'Modified', // Simplified: mark all as potentially modified
-                FieldChanges: []
+                DisplayName: '',
+                ChangeType: isModified ? 'Modified' : 'Unchanged',
+                FieldChanges: [],
+                IsExpanded: false,
+                IsLoadingFields: false,
+                FieldsLoaded: false,
+                FromRecordChangeID: item.RecordChangeID ?? '',
+                ToRecordChangeID: latestChangeId ?? ''
             });
         }
 
@@ -300,35 +352,99 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             this.TotalModified += modified;
             this.TotalUnchanged += items.filter(i => i.ChangeType === 'Unchanged').length;
 
+            // Resolve entity icon from first item's EntityID
+            const firstItem = items[0];
+            const entityIcon = this.resolveEntityIcon(firstItem?.EntityID ?? '');
+
             return {
                 EntityName: entityName,
+                EntityIcon: entityIcon,
                 Items: items.filter(i => i.ChangeType !== 'Unchanged'),
                 AddedCount: added,
                 RemovedCount: removed,
-                ModifiedCount: modified
+                ModifiedCount: modified,
+                IsExpanded: false,
+                NamesLoaded: false,
+                IsLoadingNames: false
             };
         }).filter(g => g.Items.length > 0)
           .sort((a, b) => b.Items.length - a.Items.length);
 
+        this.ExpandedEntities.clear();
         this.applySortAndFilterDiff();
     }
 
     private resolveEntityName(entityId: string): string {
         if (!entityId) return 'Unknown';
-        try {
-            const md = new Metadata();
-            const entity = md.Entities.find(e => e.ID === entityId);
-            return entity ? entity.Name : 'Unknown';
-        } catch {
-            return 'Unknown';
-        }
+        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        return entity ? entity.Name : 'Unknown';
     }
 
-    public ToggleEntityGroup(entityName: string): void {
-        if (this.ExpandedEntities.has(entityName)) {
-            this.ExpandedEntities.delete(entityName);
+    private resolveEntityIcon(entityId: string): string {
+        if (!entityId) return 'fa-solid fa-table';
+        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        return entity?.Icon || 'fa-solid fa-table';
+    }
+
+    // =========================================================================
+    // Expand / Collapse
+    // =========================================================================
+
+    public ToggleEntityGroup(group: EntityGroupView): void {
+        group.IsExpanded = !group.IsExpanded;
+        if (group.IsExpanded) {
+            this.ExpandedEntities.add(group.EntityName);
+            // Auto-expand all Modified items so field details show immediately
+            for (const item of group.Items) {
+                if (item.ChangeType === 'Modified') {
+                    item.IsExpanded = true;
+                }
+            }
+            // Auto-load field changes for modified items when group opens
+            this.loadFieldChangesForGroup(group);
+            // Load record display names
+            if (!group.NamesLoaded && !group.IsLoadingNames) {
+                this.loadGroupRecordNames(group);
+            }
         } else {
-            this.ExpandedEntities.add(entityName);
+            this.ExpandedEntities.delete(group.EntityName);
+        }
+        this.cdr.markForCheck();
+    }
+
+    public ToggleItem(item: DiffItemView): void {
+        if (item.ChangeType !== 'Modified') return;
+        item.IsExpanded = !item.IsExpanded;
+        if (item.IsExpanded && !item.FieldsLoaded) {
+            this.loadFieldChangesForItem(item);
+        }
+        this.cdr.markForCheck();
+    }
+
+    public ExpandAllGroups(): void {
+        for (const group of this.FilteredEntityGroups) {
+            group.IsExpanded = true;
+            this.ExpandedEntities.add(group.EntityName);
+            this.loadFieldChangesForGroup(group);
+            for (const item of group.Items) {
+                if (item.ChangeType === 'Modified') {
+                    item.IsExpanded = true;
+                }
+            }
+            if (!group.NamesLoaded && !group.IsLoadingNames) {
+                this.loadGroupRecordNames(group);
+            }
+        }
+        this.cdr.markForCheck();
+    }
+
+    public CollapseAllGroups(): void {
+        for (const group of this.FilteredEntityGroups) {
+            group.IsExpanded = false;
+            this.ExpandedEntities.delete(group.EntityName);
+            for (const item of group.Items) {
+                item.IsExpanded = false;
+            }
         }
         this.cdr.markForCheck();
     }
@@ -336,6 +452,191 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     public IsEntityExpanded(entityName: string): boolean {
         return this.ExpandedEntities.has(entityName);
     }
+
+    /** Open a record in the explorer via NavigationService. */
+    public OnOpenRecord(item: DiffItemView): void {
+        const rawId = this.extractRawRecordId(item.RecordID);
+        const pkey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+        this.navigationService.OpenEntityRecord(item.EntityName, pkey);
+    }
+
+    // =========================================================================
+    // Record name resolution
+    // =========================================================================
+
+    /** Lazy-load record display names for a group using Metadata.GetEntityRecordNames. */
+    private async loadGroupRecordNames(group: EntityGroupView): Promise<void> {
+        group.IsLoadingNames = true;
+        this.cdr.markForCheck();
+
+        try {
+            const inputs: EntityRecordNameInput[] = group.Items.map(item => {
+                const rawId = this.extractRawRecordId(item.RecordID);
+                const input = new EntityRecordNameInput();
+                input.EntityName = group.EntityName;
+                input.CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+                return input;
+            });
+
+            const results = await this.metadata.GetEntityRecordNames(inputs);
+
+            for (const result of results) {
+                if (result.Success && result.RecordName) {
+                    const resultId = result.CompositeKey?.KeyValuePairs?.[0]?.Value;
+                    if (resultId) {
+                        const item = group.Items.find(i =>
+                            this.extractRawRecordId(i.RecordID) === String(resultId)
+                        );
+                        if (item) {
+                            item.DisplayName = result.RecordName;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error loading record names for group:', group.EntityName, e);
+        } finally {
+            group.IsLoadingNames = false;
+            group.NamesLoaded = true;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** Extract the raw UUID from a RecordID that may be in "ID|<uuid>" format. */
+    private extractRawRecordId(recordId: string): string {
+        if (!recordId) return '';
+        const parts = recordId.split('||');
+        if (parts.length === 1) {
+            const singleParts = recordId.split('|');
+            if (singleParts.length === 2) {
+                return singleParts[1];
+            }
+        }
+        return recordId;
+    }
+
+    // =========================================================================
+    // Field-level diff loading
+    // =========================================================================
+
+    /** Auto-load field changes for all modified items in a group (when first expanded). */
+    private loadFieldChangesForGroup(group: EntityGroupView): void {
+        for (const item of group.Items) {
+            if (item.ChangeType === 'Modified' && !item.FieldsLoaded && !item.IsLoadingFields) {
+                this.loadFieldChangesForItem(item);
+            }
+        }
+    }
+
+    /** Lazy-load field-level changes for a single modified item. */
+    private async loadFieldChangesForItem(item: DiffItemView): Promise<void> {
+        if (!item.FromRecordChangeID || !item.ToRecordChangeID) {
+            item.FieldsLoaded = true;
+            return;
+        }
+
+        item.IsLoadingFields = true;
+        this.cdr.markForCheck();
+
+        try {
+            item.FieldChanges = await this.computeFieldChanges(item.FromRecordChangeID, item.ToRecordChangeID);
+        } catch (e) {
+            console.error('Error loading field changes:', e);
+        } finally {
+            item.IsLoadingFields = false;
+            item.FieldsLoaded = true;
+            this.cdr.markForCheck();
+        }
+    }
+
+    private async loadLatestRecordChange(rv: RunView, entityId: string, recordId: string): Promise<string | null> {
+        if (!entityId || !recordId) return null;
+
+        const result = await rv.RunView<RecordChangeRow>({
+            EntityName: 'Record Changes',
+            ExtraFilter: `EntityID = '${entityId}' AND RecordID = '${recordId}'`,
+            OrderBy: 'ChangedAt DESC',
+            MaxRows: 1,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        });
+
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0].ID;
+        }
+        return null;
+    }
+
+    private async computeFieldChanges(oldChangeId: string, newChangeId: string): Promise<FieldChangeView[]> {
+        if (!oldChangeId || !newChangeId) return [];
+
+        try {
+            const rv = new RunView();
+            const [oldResult, newResult] = await rv.RunViews([
+                {
+                    EntityName: 'Record Changes',
+                    ExtraFilter: `ID = '${oldChangeId}'`,
+                    Fields: ['FullRecordJSON'],
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'Record Changes',
+                    ExtraFilter: `ID = '${newChangeId}'`,
+                    Fields: ['FullRecordJSON'],
+                    ResultType: 'simple'
+                }
+            ]);
+
+            if (!oldResult.Success || !newResult.Success) return [];
+            if (oldResult.Results.length === 0 || newResult.Results.length === 0) return [];
+
+            const oldRow = oldResult.Results[0] as RecordChangeRow;
+            const newRow = newResult.Results[0] as RecordChangeRow;
+
+            return this.diffRecordJson(oldRow.FullRecordJSON, newRow.FullRecordJSON);
+        } catch {
+            return [];
+        }
+    }
+
+    private diffRecordJson(oldJson: string, newJson: string): FieldChangeView[] {
+        const changes: FieldChangeView[] = [];
+
+        try {
+            const oldData = JSON.parse(oldJson || '{}') as Record<string, unknown>;
+            const newData = JSON.parse(newJson || '{}') as Record<string, unknown>;
+            const allKeys = new Set([...Object.keys(oldData), ...Object.keys(newData)]);
+
+            for (const key of allKeys) {
+                if (key.startsWith('__mj_')) continue;
+
+                const oldVal = oldData[key];
+                const newVal = newData[key];
+
+                if (oldVal === undefined && newVal !== undefined) {
+                    changes.push({ FieldName: key, OldValue: '', NewValue: this.formatFieldValue(newVal), ChangeType: 'Added' });
+                } else if (oldVal !== undefined && newVal === undefined) {
+                    changes.push({ FieldName: key, OldValue: this.formatFieldValue(oldVal), NewValue: '', ChangeType: 'Removed' });
+                } else if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+                    changes.push({ FieldName: key, OldValue: this.formatFieldValue(oldVal), NewValue: this.formatFieldValue(newVal), ChangeType: 'Modified' });
+                }
+            }
+        } catch {
+            // Invalid JSON - skip
+        }
+
+        return changes;
+    }
+
+    private formatFieldValue(value: unknown): string {
+        if (value == null) return 'null';
+        if (typeof value === 'object') return JSON.stringify(value);
+        return String(value);
+    }
+
+    // =========================================================================
+    // Display helpers
+    // =========================================================================
 
     public GetChangeTypeClass(changeType: string): string {
         const classes: Record<string, string> = {
@@ -355,6 +656,10 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             'Unchanged': 'fa-solid fa-equals'
         };
         return icons[changeType] ?? 'fa-solid fa-circle';
+    }
+
+    public FormatRecordID(recordId: string): string {
+        return this.extractRawRecordId(recordId);
     }
 
     public FormatLabelOption(label: VersionLabelEntityType): string {
@@ -446,11 +751,12 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             const search = this.DiffSearch.toLowerCase();
             groups = groups
                 .filter(g => g.EntityName.toLowerCase().includes(search) ||
-                    g.Items.some(i => i.RecordID.toLowerCase().includes(search)))
+                    g.Items.some(i => i.RecordID.toLowerCase().includes(search) || i.DisplayName.toLowerCase().includes(search)))
                 .map(g => ({
                     ...g,
                     Items: g.Items.filter(i =>
                         i.RecordID.toLowerCase().includes(search) ||
+                        i.DisplayName.toLowerCase().includes(search) ||
                         g.EntityName.toLowerCase().includes(search)
                     )
                 }))

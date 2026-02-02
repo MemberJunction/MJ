@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, HostListener, ElementRef, NgZone } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RunView, Metadata, EntityInfo, CompositeKey, UserInfo } from '@memberjunction/core';
+import { RunView, Metadata, EntityInfo, CompositeKey, UserInfo, EntityRecordNameInput } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { VersionLabelEntityType, VersionLabelItemEntityType, VersionLabelRestoreEntityType, VersionLabelEntity } from '@memberjunction/core-entities';
 import { MicroViewData, FieldChangeView } from '../types';
@@ -18,6 +18,8 @@ interface SnapshotEntityGroup {
     EntityIcon: string;
     Items: SnapshotItemView[];
     IsExpanded: boolean;
+    IsLoadingNames: boolean;
+    NamesLoaded: boolean;
 }
 
 interface SnapshotItemView {
@@ -273,37 +275,33 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
 
         // Resolve record display name for Record-scoped labels
         if (this.Label.Scope === 'Record' && this.Label.RecordID && this.Label.EntityID) {
-            this.OverviewRecordName = this.resolveOverviewRecordName();
+            this.loadOverviewRecordName();
         }
     }
 
     /**
-     * For Record-scoped labels, try to find the record's display name from the
-     * snapshot data using the entity's NameField.
+     * For Record-scoped labels, load the record's display name via GetEntityRecordNames.
      */
-    private resolveOverviewRecordName(): string {
-        const entity = this.metadata.Entities.find(e => e.ID === this.Label.EntityID);
-        if (!entity) return '';
-        const nameField = entity.NameField;
-        if (!nameField) return '';
+    private async loadOverviewRecordName(): Promise<void> {
+        const entityName = this.resolveEntityName(this.Label.EntityID ?? '');
+        if (!entityName || entityName === 'Unknown') return;
 
-        // Look through label items for one matching this record that has JSON
-        for (const item of this.LabelItems) {
-            if (item.EntityID === this.Label.EntityID) {
-                const jsonStr = (item as Record<string, unknown>)['FullRecordJSON'];
-                if (typeof jsonStr === 'string' && jsonStr) {
-                    try {
-                        const data = JSON.parse(jsonStr) as Record<string, unknown>;
-                        if (data[nameField.Name] != null) {
-                            return String(data[nameField.Name]);
-                        }
-                    } catch {
-                        // Fall through
-                    }
-                }
+        const rawId = this.extractRawRecordId(this.Label.RecordID ?? '');
+        if (!rawId) return;
+
+        try {
+            const input = new EntityRecordNameInput();
+            input.EntityName = entityName;
+            input.CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+
+            const results = await this.metadata.GetEntityRecordNames([input]);
+            if (results.length > 0 && results[0].Success && results[0].RecordName) {
+                this.OverviewRecordName = results[0].RecordName;
+                this.cdr.markForCheck();
             }
+        } catch (e) {
+            console.error('Error loading overview record name:', e);
         }
-        return '';
     }
 
     private buildSnapshotGroups(): void {
@@ -318,7 +316,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
                 groupMap.set(key, { entityId, items: [] });
             }
 
-            const displayName = this.resolveRecordDisplayName(entityId, item);
+            const displayName = this.buildInitialDisplayName(item);
             groupMap.get(key)!.items.push({
                 RecordID: item.RecordID ?? '',
                 RecordChangeID: item.RecordChangeID ?? '',
@@ -334,41 +332,21 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
                 EntityID: group.entityId,
                 EntityIcon: this.resolveEntityIcon(group.entityId),
                 Items: group.items,
-                IsExpanded: false
+                IsExpanded: false,
+                IsLoadingNames: false,
+                NamesLoaded: false
             }));
 
         this.applySortAndFilter();
     }
 
     /**
-     * Resolve a display name for a record from its snapshot JSON using the entity's NameField.
-     * Falls back to a shortened raw ID if no name field is available.
+     * Initial display name before lazy-loading (just the shortened raw ID).
+     * Real names are loaded via loadGroupRecordNames() when the group is expanded.
      */
-    private resolveRecordDisplayName(entityId: string, item: VersionLabelItemEntityType): string {
-        const rawRecordId = this.extractRawRecordId(item.RecordID ?? '');
-
-        // Try to get the NameField value from the snapshot JSON
-        const entity = entityId ? this.metadata.Entities.find(e => e.ID === entityId) : undefined;
-        if (entity) {
-            const nameField = entity.NameField;
-            if (nameField) {
-                // The item may have FullRecordJSON we can parse
-                const jsonStr = (item as Record<string, unknown>)['FullRecordJSON'];
-                if (typeof jsonStr === 'string' && jsonStr) {
-                    try {
-                        const data = JSON.parse(jsonStr) as Record<string, unknown>;
-                        if (data[nameField.Name] != null) {
-                            return String(data[nameField.Name]);
-                        }
-                    } catch {
-                        // Fall through
-                    }
-                }
-            }
-        }
-
-        // Fallback: show shortened ID
-        return rawRecordId.length > 20 ? rawRecordId.substring(0, 20) + '...' : rawRecordId;
+    private buildInitialDisplayName(item: VersionLabelItemEntityType): string {
+        const rawId = this.extractRawRecordId(item.RecordID ?? '');
+        return rawId.length > 20 ? rawId.substring(0, 20) + '...' : rawId;
     }
 
     /** Extract the raw ID value from a potentially formatted "ID|<uuid>" string. */
@@ -731,7 +709,52 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
 
     public ToggleSnapshotGroup(group: SnapshotEntityGroup): void {
         group.IsExpanded = !group.IsExpanded;
+        if (group.IsExpanded && !group.NamesLoaded) {
+            this.loadGroupRecordNames(group);
+        }
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Lazy-load record display names for a group using Metadata.GetEntityRecordNames.
+     * Only called when a group is first expanded.
+     */
+    private async loadGroupRecordNames(group: SnapshotEntityGroup): Promise<void> {
+        group.IsLoadingNames = true;
+        this.cdr.markForCheck();
+
+        try {
+            const inputs: EntityRecordNameInput[] = group.Items.map(item => {
+                const rawId = this.extractRawRecordId(item.RecordID);
+                const input = new EntityRecordNameInput();
+                input.EntityName = group.EntityName;
+                input.CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+                return input;
+            });
+
+            const results = await this.metadata.GetEntityRecordNames(inputs);
+
+            for (const result of results) {
+                if (result.Success && result.RecordName) {
+                    // Match result back to the item by composite key value
+                    const resultId = result.CompositeKey?.KeyValuePairs?.[0]?.Value;
+                    if (resultId) {
+                        const item = group.Items.find(i =>
+                            this.extractRawRecordId(i.RecordID) === String(resultId)
+                        );
+                        if (item) {
+                            item.DisplayName = result.RecordName;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error loading record names for group:', group.EntityName, e);
+        } finally {
+            group.IsLoadingNames = false;
+            group.NamesLoaded = true;
+            this.cdr.markForCheck();
+        }
     }
 
     public OnSnapshotSearchChange(text: string): void {
@@ -763,6 +786,22 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
 
     public ToggleDiffGroup(group: ClientDiffEntityGroup): void {
         group.IsExpanded = !group.IsExpanded;
+        this.cdr.markForCheck();
+    }
+
+    public ExpandAllDiffGroups(): void {
+        if (!this.DiffResult) return;
+        for (const group of this.DiffResult.EntityGroups) {
+            group.IsExpanded = true;
+        }
+        this.cdr.markForCheck();
+    }
+
+    public CollapseAllDiffGroups(): void {
+        if (!this.DiffResult) return;
+        for (const group of this.DiffResult.EntityGroups) {
+            group.IsExpanded = false;
+        }
         this.cdr.markForCheck();
     }
 
@@ -806,6 +845,19 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
 
     public OnOpenRecordClick(event: EntityLinkClickEvent): void {
         this.EntityLinkClick.emit(event);
+    }
+
+    /** Open the record referenced by a Record-scoped label via navigation. */
+    public OnOpenOverviewRecord(): void {
+        if (!this.Label.EntityID || !this.Label.RecordID) return;
+        const entityName = this.resolveEntityName(this.Label.EntityID);
+        const rawId = this.extractRawRecordId(this.Label.RecordID);
+        const pkey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+        this.EntityLinkClick.emit({
+            EntityName: entityName,
+            RecordID: rawId,
+            CompositeKey: pkey
+        });
     }
 
     // =========================================================================
@@ -898,6 +950,11 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         if (!entityName) return 'fa-solid fa-table';
         const entity = this.metadata.Entities.find(e => e.Name === entityName);
         return entity?.Icon || 'fa-solid fa-table';
+    }
+
+    /** Format a record ID for display — strips 'ID|' prefix for single-value PKs. */
+    public FormatRecordID(recordId: string | undefined): string {
+        return this.extractRawRecordId(recordId ?? '');
     }
 
     public GetScopeIcon(scope: string | undefined): string {
