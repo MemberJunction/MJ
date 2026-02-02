@@ -8,7 +8,8 @@ import { FFlowComponent, FCanvasComponent, FZoomDirective, FCreateConnectionEven
 import {
   FlowNode, FlowConnection, FlowNodeTypeConfig, FlowNodeAddedEvent,
   FlowNodeMovedEvent, FlowConnectionCreatedEvent, FlowSelectionChangedEvent,
-  FlowCanvasClickEvent, FlowPosition, FlowLayoutDirection
+  FlowCanvasClickEvent, FlowPosition, FlowLayoutDirection,
+  FlowContextMenuTarget, FlowContextMenuAction
 } from '../interfaces/flow-types';
 import { FlowStateService } from '../services/flow-state.service';
 import { FlowLayoutService } from '../services/flow-layout.service';
@@ -31,7 +32,7 @@ import { FlowLayoutService } from '../services/flow-layout.service';
 @Component({
   selector: 'mj-flow-editor',
   templateUrl: './flow-editor.component.html',
-  styleUrls: ['./flow-editor.component.scss'],
+  styleUrls: ['./flow-editor.component.css'],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.Default,
   providers: [FlowStateService, FlowLayoutService]
@@ -62,6 +63,8 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @Output() CanvasClicked = new EventEmitter<FlowCanvasClickEvent>();
   @Output() NodesChanged = new EventEmitter<FlowNode[]>();
   @Output() ConnectionsChanged = new EventEmitter<FlowConnection[]>();
+  @Output() NodeEditRequested = new EventEmitter<FlowNode>();
+  @Output() ConnectionEditRequested = new EventEmitter<FlowConnection>();
 
   // ── View Children ───────────────────────────────────────────
   @ViewChild(FFlowComponent) protected fFlow: FFlowComponent | undefined;
@@ -74,6 +77,15 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   protected canvasScale = 1;
   protected selectedNodeIDs: string[] = [];
   protected selectedConnectionIDs: string[] = [];
+  protected panMode = false;
+
+  /* Context menu state */
+  protected contextMenuVisible = false;
+  protected contextMenuX = 0;
+  protected contextMenuY = 0;
+  protected contextMenuTargetType: FlowContextMenuTarget = 'node';
+  protected contextMenuNode: FlowNode | null = null;
+  protected contextMenuConnection: FlowConnection | null = null;
 
   private destroy$ = new Subject<void>();
   private initialized = false;
@@ -335,7 +347,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Nodes moved on canvas */
   protected onNodesMoved(event: FMoveNodesEvent): void {
-    if (!event.fNodes || event.fNodes.length === 0) return;
+    if (this.ReadOnly || !event.fNodes || event.fNodes.length === 0) return;
     this.pushUndoState();
 
     for (const moved of event.fNodes) {
@@ -362,6 +374,107 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   protected onMinimapToggled(show: boolean): void {
     this.ShowMinimap = show;
+    this.cdr.detectChanges();
+  }
+
+  protected onPanModeToggled(enabled: boolean): void {
+    this.panMode = enabled;
+    this.cdr.detectChanges();
+  }
+
+  // ── Context Menu ───────────────────────────────────────────
+
+  protected onNodeContextMenu(event: MouseEvent, node: FlowNode): void {
+    if (this.ReadOnly) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.showContextMenu(event, 'node', node, null);
+  }
+
+  protected onConnectionContextMenu(event: MouseEvent, conn: FlowConnection): void {
+    if (this.ReadOnly) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.showContextMenu(event, 'connection', null, conn);
+  }
+
+  protected onContextMenuAction(action: FlowContextMenuAction): void {
+    this.hideContextMenu();
+
+    if (action === 'edit') {
+      if (this.contextMenuTargetType === 'node' && this.contextMenuNode) {
+        this.NodeEditRequested.emit(this.contextMenuNode);
+      } else if (this.contextMenuTargetType === 'connection' && this.contextMenuConnection) {
+        this.ConnectionEditRequested.emit(this.contextMenuConnection);
+      }
+    } else if (action === 'remove') {
+      this.pushUndoState();
+      if (this.contextMenuTargetType === 'node' && this.contextMenuNode) {
+        this.removeNodeById(this.contextMenuNode.ID);
+      } else if (this.contextMenuTargetType === 'connection' && this.contextMenuConnection) {
+        this.removeConnectionById(this.contextMenuConnection.ID);
+      }
+    }
+  }
+
+  @HostListener('document:click')
+  protected onDocumentClick(): void {
+    if (this.contextMenuVisible) {
+      this.hideContextMenu();
+    }
+  }
+
+  private showContextMenu(
+    event: MouseEvent,
+    targetType: FlowContextMenuTarget,
+    node: FlowNode | null,
+    connection: FlowConnection | null
+  ): void {
+    this.contextMenuTargetType = targetType;
+    this.contextMenuNode = node;
+    this.contextMenuConnection = connection;
+    this.contextMenuX = event.clientX;
+    this.contextMenuY = event.clientY;
+    this.contextMenuVisible = true;
+    this.cdr.detectChanges();
+  }
+
+  private hideContextMenu(): void {
+    this.contextMenuVisible = false;
+    this.contextMenuNode = null;
+    this.contextMenuConnection = null;
+    this.cdr.detectChanges();
+  }
+
+  private removeNodeById(nodeId: string): void {
+    const node = this.Nodes.find(n => n.ID === nodeId);
+    if (!node) return;
+
+    this.Nodes = this.Nodes.filter(n => n.ID !== nodeId);
+
+    /* Remove connections attached to this node */
+    const orphaned = this.Connections.filter(
+      c => c.SourceNodeID === nodeId || c.TargetNodeID === nodeId
+    );
+    this.Connections = this.Connections.filter(
+      c => c.SourceNodeID !== nodeId && c.TargetNodeID !== nodeId
+    );
+    for (const conn of orphaned) {
+      this.ConnectionRemoved.emit(conn);
+    }
+    this.NodeRemoved.emit(node);
+    this.NodesChanged.emit(this.Nodes);
+    this.ConnectionsChanged.emit(this.Connections);
+    this.cdr.detectChanges();
+  }
+
+  private removeConnectionById(connId: string): void {
+    const conn = this.Connections.find(c => c.ID === connId);
+    if (!conn) return;
+
+    this.Connections = this.Connections.filter(c => c.ID !== connId);
+    this.ConnectionRemoved.emit(conn);
+    this.ConnectionsChanged.emit(this.Connections);
     this.cdr.detectChanges();
   }
 

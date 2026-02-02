@@ -8,20 +8,18 @@
   width: 100%;
   height: 100%;
   min-height: 400px;
-  background: #f8fafc;
+  background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   overflow: hidden;
   outline: none;
   position: relative;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
 
-  &--readonly {
-    .mj-flow-node-port {
-      cursor: default;
-      pointer-events: none;
-    }
-  }
+.mj-flow-editor--readonly .mj-flow-node-port {
+  cursor: default;
+  pointer-events: none;
 }
 
 /* ── Toolbar Area ──────────────────────────────────────────── */
@@ -47,11 +45,33 @@
   flex: 1;
   position: relative;
   overflow: hidden;
+}
 
-  f-flow {
-    width: 100%;
-    height: 100%;
-  }
+.mj-flow-editor-canvas f-flow {
+  width: 100%;
+  height: 100%;
+}
+
+/* Pan mode — grab cursor, nodes pass through pointer events to canvas */
+.mj-flow-editor-canvas--pan-mode {
+  cursor: grab;
+}
+
+.mj-flow-editor-canvas--pan-mode:active {
+  cursor: grabbing;
+}
+
+.mj-flow-editor-canvas--pan-mode mj-flow-node {
+  pointer-events: none;
+  cursor: grab;
+}
+
+.mj-flow-editor-canvas--pan-mode f-connection {
+  pointer-events: none;
+}
+
+.mj-flow-editor-canvas--pan-mode .mj-flow-connection-label {
+  pointer-events: none;
 }
 
 /* ── Minimap ───────────────────────────────────────────────── */
@@ -68,11 +88,41 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   z-index: 15;
+}
 
-  f-minimap {
-    width: 100%;
-    height: 100%;
-  }
+.mj-flow-editor-minimap f-minimap {
+  width: 100%;
+  height: 100%;
+}
+
+/* Foblex minimap SVG node rectangles (no default styles provided by Foblex) */
+.mj-flow-editor-minimap .f-minimap-node {
+  fill: #cbd5e1;
+  stroke: #94a3b8;
+  stroke-width: 1;
+  rx: 3;
+  ry: 3;
+}
+
+.mj-flow-editor-minimap .f-minimap-node.f-selected {
+  fill: #93c5fd;
+  stroke: #3b82f6;
+  stroke-width: 1.5;
+}
+
+.mj-flow-editor-minimap .f-minimap-group {
+  fill: #e2e8f0;
+  stroke: #94a3b8;
+  stroke-width: 0.5;
+  rx: 2;
+  ry: 2;
+}
+
+/* Viewport indicator rectangle */
+.mj-flow-editor-minimap .f-minimap-view {
+  fill: rgba(59, 130, 246, 0.08);
+  stroke: #3b82f6;
+  stroke-width: 1.5;
 }
 
 /* ── Empty State ───────────────────────────────────────────── */
@@ -136,11 +186,6 @@ f-canvas {
   background: #ffffff;
 }
 
-/* Background pattern dots */
-f-circle-pattern {
-  --f-circle-pattern-color: #e2e8f0;
-}
-
 /* Selection area */
 f-selection-area {
   --f-selection-area-background: rgba(59, 130, 246, 0.08);
@@ -185,6 +230,71 @@ f-line-alignment {
   stroke: #94a3b8;
   stroke-dasharray: 6 3;
   stroke-width: 2;
+}
+
+/* ── Context Menu ─────────────────────────────────────────── */
+
+.mj-flow-context-menu {
+  position: fixed;
+  min-width: 180px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.06);
+  padding: 4px;
+  z-index: 9999;
+  animation: mj-ctx-fade-in 0.1s ease-out;
+}
+
+@keyframes mj-ctx-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.mj-flow-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 450;
+  color: #334155;
+  cursor: pointer;
+  border-radius: 5px;
+  text-align: left;
+  transition: background-color 0.1s ease;
+}
+
+.mj-flow-context-menu-item:hover {
+  background-color: #f1f5f9;
+}
+
+.mj-flow-context-menu-item i {
+  width: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.mj-flow-context-menu-item--danger {
+  color: #dc2626;
+}
+
+.mj-flow-context-menu-item--danger:hover {
+  background-color: #fef2f2;
+}
+
+.mj-flow-context-menu-item--danger i {
+  color: #dc2626;
+}
+
+.mj-flow-context-menu-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 4px 8px;
 }
 
 /* ── Focus Indicators (Accessibility) ────────────────────── */

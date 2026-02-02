@@ -9,7 +9,7 @@ import { FlowConnection } from '../interfaces/flow-types';
 @Component({
   selector: 'mj-agent-properties-panel',
   templateUrl: './agent-properties-panel.component.html',
-  styleUrls: ['./agent-properties-panel.component.scss'],
+  styleUrls: ['./agent-properties-panel.component.css'],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.Default
 })

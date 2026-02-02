@@ -23,13 +23,30 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
 
       <div class="mj-flow-toolbar-divider"></div>
 
+      <div class="mj-flow-toolbar-group">
+        <button class="mj-flow-toolbar-btn"
+                [class.mj-flow-toolbar-btn--active]="!PanMode"
+                (click)="PanModeToggled.emit(false)"
+                title="Select Mode (pointer)">
+          <i class="fa-solid fa-arrow-pointer"></i>
+        </button>
+        <button class="mj-flow-toolbar-btn"
+                [class.mj-flow-toolbar-btn--active]="PanMode"
+                (click)="PanModeToggled.emit(true)"
+                title="Pan Mode (drag to move canvas)">
+          <i class="fa-solid fa-hand"></i>
+        </button>
+      </div>
+
+      <div class="mj-flow-toolbar-divider" *ngIf="!ReadOnly"></div>
+
       <div class="mj-flow-toolbar-group" *ngIf="!ReadOnly">
         <button class="mj-flow-toolbar-btn" (click)="AutoLayoutClicked.emit()" title="Auto Arrange">
           <i class="fa-solid fa-diagram-project"></i>
         </button>
       </div>
 
-      <div class="mj-flow-toolbar-divider" *ngIf="!ReadOnly"></div>
+      <div class="mj-flow-toolbar-divider"></div>
 
       <div class="mj-flow-toolbar-group">
         <button class="mj-flow-toolbar-btn"
@@ -85,16 +102,21 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
       cursor: pointer;
       transition: all 0.15s ease;
       font-size: 13px;
+    }
 
-      &:hover {
-        background: #f1f5f9;
-        color: #334155;
-      }
+    .mj-flow-toolbar-btn:hover {
+      background: #f1f5f9;
+      color: #334155;
+    }
 
-      &--active {
-        background: #eff6ff;
-        color: #3b82f6;
-      }
+    .mj-flow-toolbar-btn--active {
+      background: #eff6ff;
+      color: #3b82f6;
+    }
+
+    .mj-flow-toolbar-btn--active:hover {
+      background: #dbeafe;
+      color: #2563eb;
     }
 
     .mj-flow-toolbar-zoom {
@@ -114,6 +136,7 @@ export class FlowToolbarComponent {
   @Input() ShowGrid = true;
   @Input() ShowMinimap = true;
   @Input() ReadOnly = false;
+  @Input() PanMode = false;
 
   @Output() ZoomInClicked = new EventEmitter<void>();
   @Output() ZoomOutClicked = new EventEmitter<void>();
@@ -121,4 +144,5 @@ export class FlowToolbarComponent {
   @Output() AutoLayoutClicked = new EventEmitter<void>();
   @Output() GridToggled = new EventEmitter<boolean>();
   @Output() MinimapToggled = new EventEmitter<boolean>();
+  @Output() PanModeToggled = new EventEmitter<boolean>();
 }

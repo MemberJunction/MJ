@@ -9,7 +9,7 @@ import { FlowNode, FlowNodeTypeConfig } from '../interfaces/flow-types';
 @Component({
   selector: 'mj-flow-node',
   templateUrl: './flow-node.component.html',
-  styleUrls: ['./flow-node.component.scss'],
+  styleUrls: ['./flow-node.component.css'],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush
 })

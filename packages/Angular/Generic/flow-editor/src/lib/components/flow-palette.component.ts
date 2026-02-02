@@ -8,7 +8,7 @@ import { FlowNodeTypeConfig } from '../interfaces/flow-types';
 @Component({
   selector: 'mj-flow-palette',
   templateUrl: './flow-palette.component.html',
-  styleUrls: ['./flow-palette.component.scss'],
+  styleUrls: ['./flow-palette.component.css'],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush
 })

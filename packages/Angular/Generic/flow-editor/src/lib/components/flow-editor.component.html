@@ -7,12 +7,14 @@
       [ShowGrid]="ShowGrid"
       [ShowMinimap]="ShowMinimap"
       [ReadOnly]="ReadOnly"
+      [PanMode]="panMode"
       (ZoomInClicked)="ZoomIn()"
       (ZoomOutClicked)="ZoomOut()"
       (FitToScreenClicked)="ZoomToFit()"
       (AutoLayoutClicked)="AutoArrange()"
       (GridToggled)="onGridToggled($event)"
-      (MinimapToggled)="onMinimapToggled($event)">
+      (MinimapToggled)="onMinimapToggled($event)"
+      (PanModeToggled)="onPanModeToggled($event)">
     </mj-flow-toolbar>
   </div>
 
@@ -26,9 +28,9 @@
     </mj-flow-palette>
 
     <!-- Foblex Canvas -->
-    <div class="mj-flow-editor-canvas">
+    <div class="mj-flow-editor-canvas" [class.mj-flow-editor-canvas--pan-mode]="panMode">
       <f-flow fDraggable
-              [fDraggableDisabled]="ReadOnly"
+              [fDraggableDisabled]="!panMode"
               [vCellSize]="GridSize"
               [hCellSize]="GridSize"
               [fCellSizeWhileDragging]="ShowGrid"
@@ -48,7 +50,7 @@
 
           <!-- Background grid -->
           <f-background *ngIf="ShowGrid">
-            <f-circle-pattern></f-circle-pattern>
+            <f-circle-pattern [color]="'#cbd5e1'" [radius]="20"></f-circle-pattern>
           </f-background>
 
           <!-- Alignment snap lines (edit mode only) -->
@@ -77,10 +79,11 @@
                         fBehavior="fixed"
                         [fRadius]="8"
                         [fOffset]="12"
-                        [fSelectionDisabled]="ReadOnly"
+                        [fSelectionDisabled]="false"
                         [fReassignDisabled]="ReadOnly"
                         [style.--connection-color]="conn.Color || '#94a3b8'"
-                        [class.mj-flow-connection-colored]="!!conn.Color">
+                        [class.mj-flow-connection-colored]="!!conn.Color"
+                        (contextmenu)="onConnectionContextMenu($event, conn)">
             <!-- Arrow marker -->
             <svg viewBox="0 0 10 10" fMarker type="end"
                  orient="auto" [refX]="9" [refY]="5" [height]="10" [width]="10">
@@ -99,12 +102,13 @@
                         fDragHandle
                         [fNodeId]="node.ID"
                         [fNodePosition]="{ x: node.Position.X, y: node.Position.Y }"
-                        [fNodeDraggingDisabled]="ReadOnly || node.Locked === true"
-                        [fNodeSelectionDisabled]="ReadOnly"
-                        [fConnectOnNode]="!ReadOnly"
+                        [fNodeDraggingDisabled]="ReadOnly || panMode || node.Locked === true"
+                        [fNodeSelectionDisabled]="panMode"
+                        [fConnectOnNode]="!ReadOnly && !panMode"
                         [Node]="node"
                         [TypeConfig]="GetTypeConfig(node.Type)"
-                        [ReadOnly]="ReadOnly">
+                        [ReadOnly]="ReadOnly"
+                        (contextmenu)="onNodeContextMenu($event, node)">
           </mj-flow-node>
 
         </f-canvas>
@@ -127,6 +131,23 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div *ngIf="contextMenuVisible"
+       class="mj-flow-context-menu"
+       [style.left.px]="contextMenuX"
+       [style.top.px]="contextMenuY"
+       (click)="$event.stopPropagation()">
+    <button class="mj-flow-context-menu-item" (click)="onContextMenuAction('edit')">
+      <i class="fa-solid fa-pen-to-square"></i>
+      <span>Edit {{ contextMenuTargetType === 'node' ? 'Node' : 'Connection' }}</span>
+    </button>
+    <div class="mj-flow-context-menu-divider"></div>
+    <button class="mj-flow-context-menu-item mj-flow-context-menu-item--danger" (click)="onContextMenuAction('remove')">
+      <i class="fa-solid fa-trash-can"></i>
+      <span>Remove {{ contextMenuTargetType === 'node' ? 'Node' : 'Connection' }}</span>
+    </button>
   </div>
 
   <!-- Status Bar -->

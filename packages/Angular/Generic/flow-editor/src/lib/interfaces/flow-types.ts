@@ -150,6 +150,12 @@ export interface FlowCanvasClickEvent {
   Position: FlowPosition;
 }
 
+/** Context menu target type */
+export type FlowContextMenuTarget = 'node' | 'connection';
+
+/** Context menu action */
+export type FlowContextMenuAction = 'edit' | 'remove';
+
 // ---------------------------------------------------------------------------
 // State Types (for undo/redo)
 // ---------------------------------------------------------------------------

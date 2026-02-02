@@ -19,7 +19,7 @@ export type AgentEditorViewMode = 'diagram' | 'list';
 @Component({
   selector: 'mj-flow-agent-editor',
   templateUrl: './flow-agent-editor.component.html',
-  styleUrls: ['./flow-agent-editor.component.scss'],
+  styleUrls: ['./flow-agent-editor.component.css'],
   encapsulation: ViewEncapsulation.None,
   providers: [AgentFlowTransformerService]
 })

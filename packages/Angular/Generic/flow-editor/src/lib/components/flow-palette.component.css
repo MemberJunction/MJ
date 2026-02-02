@@ -11,15 +11,15 @@
   overflow-y: auto;
   flex-shrink: 0;
   transition: width 0.2s ease;
+}
 
-  &--collapsed {
-    width: 44px;
+.mj-flow-palette--collapsed {
+  width: 44px;
+}
 
-    .mj-flow-palette-header {
-      justify-content: center;
-      padding: 10px 0;
-    }
-  }
+.mj-flow-palette--collapsed .mj-flow-palette-header {
+  justify-content: center;
+  padding: 10px 0;
 }
 
 .mj-flow-palette-header {
@@ -33,10 +33,10 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid #f1f5f9;
+}
 
-  i {
-    font-size: 13px;
-  }
+.mj-flow-palette-header i {
+  font-size: 13px;
 }
 
 .mj-flow-palette-content {
@@ -67,16 +67,16 @@
   cursor: grab;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
   user-select: none;
+}
 
-  &:hover {
-    background: #f8fafc;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-  }
+.mj-flow-palette-item:hover {
+  background: #f8fafc;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
 
-  &:active {
-    cursor: grabbing;
-    background: #f1f5f9;
-  }
+.mj-flow-palette-item:active {
+  cursor: grabbing;
+  background: #f1f5f9;
 }
 
 .mj-flow-palette-item-icon {
