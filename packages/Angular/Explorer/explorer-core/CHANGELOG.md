@@ -1,5 +1,51 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 3.4.0
+
+### Patch Changes
+
+- a7db1cc: no migration
+- Updated dependencies [a7db1cc]
+- Updated dependencies [ef7acd8]
+- Updated dependencies [252794e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [079dd6f]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ng-dashboards@3.4.0
+  - @memberjunction/ng-explorer-settings@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ai-engine-base@3.4.0
+  - @memberjunction/ai-core-plus@3.4.0
+  - @memberjunction/ng-base-application@3.4.0
+  - @memberjunction/ng-base-forms@3.4.0
+  - @memberjunction/ng-compare-records@3.4.0
+  - @memberjunction/ng-entity-form-dialog@3.4.0
+  - @memberjunction/ng-entity-permissions@3.4.0
+  - @memberjunction/ng-list-detail-grid@3.4.0
+  - @memberjunction/ng-record-changes@3.4.0
+  - @memberjunction/ng-shared@3.4.0
+  - @memberjunction/ng-ai-test-harness@3.4.0
+  - @memberjunction/ng-artifacts@3.4.0
+  - @memberjunction/ng-conversations@3.4.0
+  - @memberjunction/ng-dashboard-viewer@3.4.0
+  - @memberjunction/ng-entity-viewer@3.4.0
+  - @memberjunction/ng-file-storage@3.4.0
+  - @memberjunction/ng-notifications@3.4.0
+  - @memberjunction/ng-query-grid@3.4.0
+  - @memberjunction/ng-record-selector@3.4.0
+  - @memberjunction/ng-resource-permissions@3.4.0
+  - @memberjunction/ng-shared-generic@3.4.0
+  - @memberjunction/ng-user-avatar@3.4.0
+  - @memberjunction/communication-types@3.4.0
+  - @memberjunction/entity-communications-client@3.4.0
+  - @memberjunction/templates-base-types@3.4.0
+  - @memberjunction/ng-auth-services@3.4.0
+  - @memberjunction/ng-container-directives@3.4.0
+  - @memberjunction/ng-tabstrip@3.4.0
+  - @memberjunction/ng-generic-dialog@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

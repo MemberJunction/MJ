@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 3.4.0
+
+### Patch Changes
+
+- Updated dependencies [d596467]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ai-provider-bundle@3.4.0
+  - @memberjunction/sqlserver-dataprovider@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/aiengine@3.4.0
+  - @memberjunction/communication-types@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

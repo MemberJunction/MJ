@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 3.4.0
+
+### Minor Changes
+
+- a3961d5: feat(codegen): Add soft PK/FK support for messy databases
+
+### Patch Changes
+
+- b0944c9: Add multi-schema support with configurable schema placeholders to MJCLI migrate command, add configurable entity package name to CodeGen, and fix node-flyway diagnostic issues
+- 3a71e4e: Fix large text field corruptions, cross-platform improvements, more robust environment variable parsing for boolean values
+- e552e5f: no migration
+- 38d9596: no migration - and this was actually a change for CodeGenAPI
+- Updated dependencies [d596467]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ai-provider-bundle@3.4.0
+  - @memberjunction/ai-prompts@3.4.0
+  - @memberjunction/sqlserver-dataprovider@3.4.0
+  - @memberjunction/config@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/core-entities-server@3.4.0
+  - @memberjunction/actions@3.4.0
+  - @memberjunction/aiengine@3.4.0
+  - @memberjunction/ai-core-plus@3.4.0
+  - @memberjunction/actions-base@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

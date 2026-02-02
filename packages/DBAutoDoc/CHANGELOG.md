@@ -1,5 +1,17 @@
 # @memberjunction/db-auto-doc
 
+## 3.4.0
+
+### Patch Changes
+
+- 3a71e4e: Fix large text field corruptions, cross-platform improvements, more robust environment variable parsing for boolean values
+- Updated dependencies [d596467]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ai-provider-bundle@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

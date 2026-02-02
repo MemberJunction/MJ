@@ -1,5 +1,11 @@
 # @memberjunction/config
 
+## 3.4.0
+
+### Patch Changes
+
+- 3a71e4e: Fix large text field corruptions, cross-platform improvements, more robust environment variable parsing for boolean values
+
 ## 3.3.0
 
 ## 3.2.0

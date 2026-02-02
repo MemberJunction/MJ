@@ -1,0 +1,167 @@
+<div class="graph-container">
+    <mj-loading *ngIf="IsLoading" text="Loading dependency graph..."></mj-loading>
+
+    <ng-container *ngIf="!IsLoading">
+        <!-- Header -->
+        <div class="page-header">
+            <div class="header-left">
+                <h2 class="page-title">Entity Dependency Graph</h2>
+                <p class="page-subtitle">Explore entity relationships used by the version history system</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn-icon" (click)="Refresh()" title="Refresh">
+                    <i class="fa-solid fa-refresh"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-badge">
+                <i class="fa-solid fa-table"></i>
+                <span>{{TotalEntities}} Entities</span>
+            </div>
+            <div class="stat-badge">
+                <i class="fa-solid fa-diagram-project"></i>
+                <span>{{EntitiesWithDependents}} with Dependents</span>
+            </div>
+            <div class="stat-badge">
+                <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                <span>{{TotalRelationships}} Relationships</span>
+            </div>
+        </div>
+
+        <!-- Main Layout: Entity List + Detail -->
+        <div class="graph-layout">
+            <!-- Entity List -->
+            <div class="entity-list-panel">
+                <div class="panel-header">
+                    <h3 class="panel-title">Entities</h3>
+                </div>
+
+                <div class="search-bar">
+                    <i class="fa-solid fa-search search-icon"></i>
+                    <input type="text"
+                           class="search-input"
+                           placeholder="Filter entities..."
+                           [ngModel]="SearchText"
+                           (ngModelChange)="OnSearchChange($event)" />
+                </div>
+
+                <!-- Schema Filter Chips -->
+                <div class="schema-chips" *ngIf="AvailableSchemas.length > 1">
+                    <button class="schema-chip"
+                            *ngFor="let schema of AvailableSchemas"
+                            [class.active]="SchemaFilter === schema"
+                            (click)="OnSchemaFilterChange(schema)">
+                        {{schema}}
+                        <span class="schema-chip-count">{{GetSchemaEntityCount(schema)}}</span>
+                    </button>
+                </div>
+
+                <div class="entity-scroll-list">
+                    <div class="entity-list-item"
+                         *ngFor="let entity of FilteredEntities"
+                         [class.selected]="entity.IsSelected"
+                         (click)="SelectEntity(entity)">
+                        <div class="entity-list-name">{{entity.Name}}</div>
+                        <div class="entity-list-badges">
+                            <span class="dep-badge"
+                                  [ngClass]="GetDependencyLevel(entity.ReferencedByCount)"
+                                  *ngIf="entity.ReferencedByCount > 0"
+                                  title="Referenced by (entities with FKs to this)">
+                                {{entity.ReferencedByCount}} <i class="fa-solid fa-arrow-down"></i>
+                            </span>
+                            <span class="dep-badge level-depends-on"
+                                  *ngIf="entity.DependsOnCount > 0"
+                                  title="Depends on (entities this has FKs to)">
+                                {{entity.DependsOnCount}} <i class="fa-solid fa-arrow-up"></i>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="empty-list" *ngIf="FilteredEntities.length === 0">
+                        <p>No entities match your search.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detail Panel -->
+            <div class="entity-detail-panel">
+                <ng-container *ngIf="SelectedEntity; else noSelection">
+                    <div class="detail-header">
+                        <i class="fa-solid fa-table detail-icon"></i>
+                        <div class="detail-header-text">
+                            <h3 class="detail-title">{{SelectedEntity.Name}}</h3>
+                            <span class="detail-schema">{{SelectedEntity.SchemaName}}</span>
+                        </div>
+                    </div>
+
+                    <!-- Referenced By (entities that have FKs pointing to this entity) -->
+                    <div class="relationship-section">
+                        <div class="section-header">
+                            <i class="fa-solid fa-arrow-down section-icon referenced-by-icon"></i>
+                            <h4>Referenced By</h4>
+                            <span class="section-count">{{ReferencedByEntities.length}}</span>
+                        </div>
+                        <p class="section-hint">Entities that have foreign keys pointing to <strong>{{SelectedEntity.Name}}</strong></p>
+
+                        <div class="relationship-list" *ngIf="ReferencedByEntities.length > 0">
+                            <div class="relationship-item" *ngFor="let rel of ReferencedByEntities">
+                                <div class="rel-main"
+                                     (click)="NavigateToEntity(rel.ToEntity)">
+                                    <i class="fa-solid fa-table rel-icon"></i>
+                                    <span class="rel-entity-name">{{rel.ToEntity}}</span>
+                                    <span class="rel-join-field">
+                                        <i class="fa-solid fa-link"></i>
+                                        {{rel.RelatedEntityJoinField}}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="empty-relationships" *ngIf="ReferencedByEntities.length === 0">
+                            <p>No entities reference this entity.</p>
+                        </div>
+                    </div>
+
+                    <!-- Depends On (entities this entity has FKs to) -->
+                    <div class="relationship-section">
+                        <div class="section-header">
+                            <i class="fa-solid fa-arrow-up section-icon depends-on-icon"></i>
+                            <h4>Depends On</h4>
+                            <span class="section-count">{{DependsOnEntities.length}}</span>
+                        </div>
+                        <p class="section-hint"><strong>{{SelectedEntity.Name}}</strong> has foreign keys pointing to these entities</p>
+
+                        <div class="relationship-list" *ngIf="DependsOnEntities.length > 0">
+                            <div class="relationship-item" *ngFor="let rel of DependsOnEntities">
+                                <div class="rel-main"
+                                     (click)="NavigateToEntity(rel.FromEntity)">
+                                    <i class="fa-solid fa-table rel-icon"></i>
+                                    <span class="rel-entity-name">{{rel.FromEntity}}</span>
+                                    <span class="rel-join-field">
+                                        <i class="fa-solid fa-link"></i>
+                                        {{rel.RelatedEntityJoinField}}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="empty-relationships" *ngIf="DependsOnEntities.length === 0">
+                            <p>This entity has no foreign key dependencies.</p>
+                        </div>
+                    </div>
+                </ng-container>
+
+                <ng-template #noSelection>
+                    <div class="no-selection">
+                        <i class="fa-solid fa-diagram-project no-selection-icon"></i>
+                        <h3>Select an Entity</h3>
+                        <p>Choose an entity from the list to explore its dependency relationships.</p>
+                    </div>
+                </ng-template>
+            </div>
+        </div>
+    </ng-container>
+</div>

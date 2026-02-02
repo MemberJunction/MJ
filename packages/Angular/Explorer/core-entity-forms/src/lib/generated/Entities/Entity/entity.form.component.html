@@ -1432,6 +1432,50 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- MJ: Version Label Items Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJVersionLabelItems"
+        sectionName="MJ: Version Label Items"
+        icon="fa fa-history"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJVersionLabelItems')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Items','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
+                [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Version Labels Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJVersionLabels"
+        sectionName="MJ: Version Labels"
+        icon="fa fa-tag"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJVersionLabels')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Labels','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
+                [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- Query Entities Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="queryEntities"

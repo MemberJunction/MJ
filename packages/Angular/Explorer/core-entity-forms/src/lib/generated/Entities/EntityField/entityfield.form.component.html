@@ -63,6 +63,14 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="IsSoftPrimaryKey"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="FieldCodeName"
             Type="textbox"
             [EditMode]="EditMode"
@@ -377,6 +385,22 @@
             [ShowLabel]="true"
             FieldName="AutoUpdateRelatedEntityInfo"
             Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsSoftForeignKey"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RelatedEntityJoinFields"
+            Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>

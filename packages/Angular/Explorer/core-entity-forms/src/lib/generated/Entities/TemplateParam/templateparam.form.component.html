@@ -64,6 +64,14 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TemplateContent"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -153,24 +161,6 @@
             [ShowLabel]="true"
             FieldName="OrderBy"
             Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Details Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="false"
-            FieldName="TemplateContent"
-            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>

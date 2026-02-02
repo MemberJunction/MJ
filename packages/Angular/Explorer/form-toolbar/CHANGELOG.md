@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ng-form-toolbar
 
+## 3.4.0
+
+### Patch Changes
+
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ng-base-forms@3.4.0
+  - @memberjunction/ng-record-changes@3.4.0
+  - @memberjunction/ng-shared@3.4.0
+  - @memberjunction/ng-list-management@3.4.0
+  - @memberjunction/ng-container-directives@3.4.0
+  - @memberjunction/ng-markdown@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

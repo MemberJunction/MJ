@@ -1,19 +1,11 @@
 import { NgModule } from '@angular/core';
-import { RecordChangesComponent } from './ng-record-changes.component';
 import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 
-// Kendo UI Angular imports
-import { GridModule } from '@progress/kendo-angular-grid';
-import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { DialogsModule } from "@progress/kendo-angular-dialog";
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-
-import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
+import { RecordChangesComponent } from './ng-record-changes.component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { VersionsModule } from '@memberjunction/ng-versions';
 
 @NgModule({
   declarations: [
@@ -22,19 +14,12 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
   imports: [
     CommonModule,
     FormsModule,
-    ReactiveFormsModule,
-    RouterModule,
-    GridModule,
-    DialogsModule,
-    ExcelExportModule,
-    ButtonsModule,
-    CompareRecordsModule,
     ContainerDirectivesModule,
-    IndicatorsModule,
-    SharedGenericModule
+    SharedGenericModule,
+    VersionsModule
   ],
   exports: [
     RecordChangesComponent
   ]
 })
-export class RecordChangesModule { }
+export class RecordChangesModule {}
