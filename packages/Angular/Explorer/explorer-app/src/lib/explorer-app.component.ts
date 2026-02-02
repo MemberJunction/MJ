@@ -154,27 +154,9 @@ export class MJExplorerAppComponent implements OnInit {
   ngOnInit() {
     SetProductionStatus(this.environment.production);
 
-    // DIAGNOSTIC: Persistent logging
-    const debugLog = JSON.parse(localStorage.getItem('oauth_debug_log') || '[]');
-    debugLog.push({
-      time: new Date().toISOString(),
-      event: 'EXPLORER_APP_NGONINIT',
-      pathname: window.location.pathname,
-      search: window.location.search
-    });
-    localStorage.setItem('oauth_debug_log', JSON.stringify(debugLog));
-
     // Check if this is the OAuth callback route - used for conditional rendering in template
     // Note: We still run setupAuth() to restore the user's session
     this.isOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
-
-    // DIAGNOSTIC: Log the decision
-    debugLog.push({
-      time: new Date().toISOString(),
-      event: 'EXPLORER_APP_OAUTH_CHECK',
-      isOAuthCallback: this.isOAuthCallback
-    });
-    localStorage.setItem('oauth_debug_log', JSON.stringify(debugLog));
 
     // Always run auth setup - this restores the user's session
     // For OAuth callback, once authenticated, the OAuthCallbackComponent handles the code exchange

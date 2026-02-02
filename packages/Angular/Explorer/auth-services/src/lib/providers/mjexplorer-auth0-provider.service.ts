@@ -38,21 +38,8 @@ export class MJAuth0Provider extends MJAuthBase {
    * Stored as a static property for the factory to access without instantiation
    */
   static angularProviderFactory = (environment: Record<string, unknown>) => {
-    // DIAGNOSTIC: Log the skipRedirectCallback decision
+    // Check if we're on the MCP OAuth callback path
     const isMCPOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
-    console.log('[Auth0 Config] pathname:', window.location.pathname);
-    console.log('[Auth0 Config] skipRedirectCallback:', isMCPOAuthCallback);
-
-    // Also persist to localStorage for debugging
-    const debugLog = JSON.parse(localStorage.getItem('oauth_debug_log') || '[]');
-    debugLog.push({
-      time: new Date().toISOString(),
-      event: 'AUTH0_CONFIG_FACTORY',
-      pathname: window.location.pathname,
-      search: window.location.search,
-      skipRedirectCallback: isMCPOAuthCallback
-    });
-    localStorage.setItem('oauth_debug_log', JSON.stringify(debugLog));
 
     return [
       AuthService,

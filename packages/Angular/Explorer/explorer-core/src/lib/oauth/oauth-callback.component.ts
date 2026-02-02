@@ -76,38 +76,11 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
         private route: ActivatedRoute,
         private router: Router,
         private cdr: ChangeDetectorRef
-    ) {
-        // DIAGNOSTIC: Persistent logging to survive page navigation
-        const timestamp = new Date().toISOString();
-        const debugLog = JSON.parse(localStorage.getItem('oauth_debug_log') || '[]');
-        debugLog.push({ time: timestamp, event: 'CONSTRUCTOR', url: window.location.href });
-        localStorage.setItem('oauth_debug_log', JSON.stringify(debugLog));
-
-        console.log('[OAuth Callback] Component constructor called');
-        console.log('[OAuth Callback] Current URL:', window.location.href);
-    }
+    ) {}
 
     async ngOnInit(): Promise<void> {
-        // DIAGNOSTIC: Persistent logging
-        this.persistLog('NGONINIT', { queryParams: this.route.snapshot.queryParams });
-
-        console.log('[OAuth Callback] ngOnInit started');
-        console.log('[OAuth Callback] Query params:', this.route.snapshot.queryParams);
-
         // Wait for the GraphQL provider to be ready, then process the callback
         await this.waitForProviderAndProcess();
-    }
-
-    /** DIAGNOSTIC: Persist log to localStorage to survive navigation */
-    private persistLog(event: string, data?: Record<string, unknown>): void {
-        try {
-            const timestamp = new Date().toISOString();
-            const debugLog = JSON.parse(localStorage.getItem('oauth_debug_log') || '[]');
-            debugLog.push({ time: timestamp, event, ...data });
-            localStorage.setItem('oauth_debug_log', JSON.stringify(debugLog));
-        } catch (e) {
-            console.error('[OAuth Callback] Failed to persist log:', e);
-        }
     }
 
     ngOnDestroy(): void {
@@ -123,17 +96,13 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
      * then processes the OAuth callback.
      */
     private async waitForProviderAndProcess(): Promise<void> {
-        this.persistLog('WAIT_FOR_PROVIDER_START');
         const startTime = Date.now();
 
         // Check if provider is already ready
         if (this.isProviderReady()) {
-            this.persistLog('PROVIDER_ALREADY_READY');
-            console.log('[OAuth Callback] Provider already ready, processing immediately');
             await this.safeProcessCallback();
             return;
         }
-        this.persistLog('PROVIDER_NOT_READY_STARTING_POLL');
 
         // Poll for provider readiness
         this.StatusMessage = 'Waiting for authentication...';
@@ -144,7 +113,6 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
                 const elapsed = Date.now() - startTime;
 
                 if (this.isProviderReady()) {
-                    console.log('[OAuth Callback] Provider became ready after', elapsed, 'ms');
                     if (this.pollTimer) {
                         clearInterval(this.pollTimer);
                         this.pollTimer = null;
@@ -155,7 +123,6 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
                 }
 
                 if (elapsed >= MAX_WAIT_TIME_MS) {
-                    console.error('[OAuth Callback] Timed out waiting for provider after', elapsed, 'ms');
                     if (this.pollTimer) {
                         clearInterval(this.pollTimer);
                         this.pollTimer = null;
@@ -201,7 +168,6 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
      */
     private async safeProcessCallback(): Promise<void> {
         if (this.isProcessing) {
-            console.log('[OAuth Callback] Already processing, skipping');
             return;
         }
         this.isProcessing = true;
@@ -269,8 +235,6 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
      * Call the backend to exchange the authorization code for tokens
      */
     private async exchangeCode(code: string, state: string): Promise<OAuthExchangeResponse> {
-        console.log('[OAuth Callback] exchangeCode called with state:', state);
-
         // Get the GraphQL provider - we know it's ready at this point
         const gqlProvider = Metadata.Provider as GraphQLDataProvider;
         const configData = gqlProvider.ConfigData;
@@ -284,7 +248,6 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
             // URL doesn't have /graphql, append /oauth/exchange
             apiUrl = apiUrl.replace(/\/$/, '') + '/oauth/exchange';
         }
-        console.log('[OAuth Callback] Calling exchange endpoint:', apiUrl);
 
         try {
             const response = await fetch(apiUrl, {
@@ -296,14 +259,10 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
                 body: JSON.stringify({ code, state })
             });
 
-            console.log('[OAuth Callback] Exchange response status:', response.status);
-
             // Parse response regardless of status code
             const data = await response.json();
-            console.log('[OAuth Callback] Exchange response data:', data);
             return data as OAuthExchangeResponse;
         } catch (fetchError) {
-            console.error('[OAuth Callback] Fetch error:', fetchError);
             return {
                 success: false,
                 errorCode: 'fetch_error',
@@ -326,11 +285,6 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
         const sessionUrl = sessionStorage.getItem('oauth_return_url');
         const sessionPath = sessionStorage.getItem('oauth_return_path');
 
-        console.log('[OAuth Callback] Storage check - localStorage URL:', storedUrl);
-        console.log('[OAuth Callback] Storage check - localStorage path:', storedPath);
-        console.log('[OAuth Callback] Storage check - sessionStorage URL:', sessionUrl);
-        console.log('[OAuth Callback] Storage check - sessionStorage path:', sessionPath);
-
         let returnUrl = storedUrl || sessionUrl || storedPath || sessionPath;
 
         // Clean up all possible storage locations
@@ -339,19 +293,14 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
         // Default to MCP dashboard if no return URL found
         const defaultPath = '/app/admin/MCP';
         if (!returnUrl || returnUrl.trim() === '' || returnUrl === '/') {
-            console.log('[OAuth Callback] No valid return URL found in storage, defaulting to:', defaultPath);
             returnUrl = defaultPath;
-        } else {
-            console.log('[OAuth Callback] Found return URL:', returnUrl);
         }
 
         // Build the final navigation path
         const finalPath = this.buildFinalPath(returnUrl, connectionId, defaultPath);
-        console.log('[OAuth Callback] Final navigation path:', finalPath);
 
         // Use window.location for reliable navigation after OAuth
         setTimeout(() => {
-            console.log('[OAuth Callback] Executing navigation now...');
             window.location.href = finalPath;
         }, 500);
     }
