@@ -908,6 +908,48 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
   }
 
   /**
+   * Adds a new vector or updates an existing one based on whether the key already exists.
+   * If the key does not exist, a new entry is created. If the key already exists, the
+   * vector and/or metadata are updated in place.
+   *
+   * @param {string} key - The unique identifier for the vector
+   * @param {number[]} vector - The vector/embedding array
+   * @param {TMetadata} [metadata] - Optional metadata to associate with the vector
+   * @returns {boolean} True if an existing vector was updated, false if a new vector was added
+   * @throws {Error} If key is null/undefined, or if vector is invalid
+   *
+   * @example
+   * ```typescript
+   * // First call creates the entry
+   * const wasUpdate = service.AddOrUpdateVector('doc1', [0.1, 0.2, 0.3], { title: 'Doc 1' });
+   * console.log(wasUpdate); // false (new entry)
+   *
+   * // Second call updates the existing entry
+   * const wasUpdate2 = service.AddOrUpdateVector('doc1', [0.4, 0.5, 0.6], { title: 'Doc 1 v2' });
+   * console.log(wasUpdate2); // true (updated)
+   * ```
+   *
+   * @public
+   * @method
+   */
+  public AddOrUpdateVector(key: string, vector: number[], metadata?: TMetadata): boolean {
+    if (!key) {
+      throw new Error('Key cannot be null or undefined');
+    }
+    if (!vector || vector.length === 0) {
+      throw new Error('Vector cannot be null, undefined, or empty');
+    }
+
+    const exists = this.vectors.has(key);
+    if (exists) {
+      this.UpdateVector(key, { vector, metadata });
+    } else {
+      this.AddVector(key, vector, metadata);
+    }
+    return exists;
+  }
+
+  /**
    * Removes a vector from the service
    * 
    * @param {string} key - The key of the vector to remove
