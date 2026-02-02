@@ -1,18 +1,37 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
-import { RunView, Metadata, EntityInfo } from '@memberjunction/core';
+import { RunView, Metadata, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { MicroViewData } from '../types';
 
 interface FieldDisplay {
     Name: string;
+    DisplayName: string;
     Value: string;
     Type: string;
     Description: string;
     DiffClass: string;
     OldValue: string;
+    IsNull: boolean;
+    IsBoolean: boolean;
+    BooleanValue: boolean;
+    IsJson: boolean;
+    Sequence: number;
+    /** When set, the field is a FK and this holds the display value from the related virtual field */
+    ForeignKeyDisplayValue: string;
+    /** When set, user can click to navigate to this related record */
+    ForeignKeyEntityName: string;
+    /** The raw FK value (a GUID) for navigation */
+    ForeignKeyRecordId: string;
 }
 
 interface RecordChangeSimple {
     FullRecordJSON: string;
+}
+
+/** Event emitted when user wants to navigate to a related FK record */
+export interface EntityLinkClickEvent {
+    EntityName: string;
+    RecordID: string;
+    CompositeKey: CompositeKey;
 }
 
 @Component({
@@ -25,11 +44,23 @@ export class MjRecordMicroViewComponent implements OnInit {
     @Input() Data!: MicroViewData;
     @Input() Inline = false;
     @Output() Close = new EventEmitter<void>();
+    @Output() EntityLinkClick = new EventEmitter<EntityLinkClickEvent>();
+    @Output() OpenRecord = new EventEmitter<EntityLinkClickEvent>();
 
     public IsLoading = true;
     public IsVisible = false;
     public Fields: FieldDisplay[] = [];
     public ErrorMessage = '';
+    public ShowNullValues = false;
+
+    /** Formatted display of the record primary key (simplified for single-value PKs) */
+    public DisplayRecordID = '';
+
+    /** The value of the IsNameField for display in the header */
+    public RecordDisplayName = '';
+
+    /** Icon CSS class from EntityInfo.Icon, falls back to 'fa-solid fa-table' */
+    public EntityIcon = 'fa-solid fa-table';
 
     private metadata = new Metadata();
 
@@ -44,6 +75,7 @@ export class MjRecordMicroViewComponent implements OnInit {
                 this.cdr.markForCheck();
             });
         }
+        this.DisplayRecordID = this.formatRecordId(this.Data.RecordID);
         this.loadRecordData();
     }
 
@@ -64,14 +96,31 @@ export class MjRecordMicroViewComponent implements OnInit {
         }
     }
 
+    public OnBackdropClick(): void {
+        this.OnClose();
+    }
+
     public GetTypeIcon(type: string): string {
         const icons: Record<string, string> = {
             'uniqueidentifier': 'fa-solid fa-fingerprint',
             'datetime': 'fa-solid fa-calendar',
+            'datetimeoffset': 'fa-solid fa-calendar',
+            'date': 'fa-solid fa-calendar-day',
+            'time': 'fa-solid fa-clock',
+            'bit': 'fa-solid fa-toggle-on',
             'boolean': 'fa-solid fa-toggle-on',
+            'int': 'fa-solid fa-hashtag',
+            'bigint': 'fa-solid fa-hashtag',
+            'float': 'fa-solid fa-hashtag',
+            'decimal': 'fa-solid fa-hashtag',
+            'money': 'fa-solid fa-hashtag',
             'number': 'fa-solid fa-hashtag',
+            'nvarchar': 'fa-solid fa-font',
+            'varchar': 'fa-solid fa-font',
+            'ntext': 'fa-solid fa-align-left',
+            'text': 'fa-solid fa-align-left',
             'string': 'fa-solid fa-font',
-            'object': 'fa-solid fa-brackets-curly',
+            'object': 'fa-solid fa-code',
             'null': 'fa-solid fa-circle-xmark'
         };
         return icons[type.toLowerCase()] ?? 'fa-solid fa-font';
@@ -79,6 +128,46 @@ export class MjRecordMicroViewComponent implements OnInit {
 
     public get HasDiffs(): boolean {
         return this.Data.FieldDiffs != null && this.Data.FieldDiffs.length > 0;
+    }
+
+    public get VisibleFields(): FieldDisplay[] {
+        if (this.ShowNullValues) {
+            return this.Fields;
+        }
+        return this.Fields.filter(f => !f.IsNull);
+    }
+
+    public get HiddenNullCount(): number {
+        return this.Fields.filter(f => f.IsNull).length;
+    }
+
+    public ToggleShowNulls(): void {
+        this.ShowNullValues = !this.ShowNullValues;
+        this.cdr.markForCheck();
+    }
+
+    public OnEntityLinkClicked(event: MouseEvent, field: FieldDisplay): void {
+        event.stopPropagation();
+        if (field.ForeignKeyEntityName && field.ForeignKeyRecordId) {
+            const pkey = new CompositeKey([{ FieldName: 'ID', Value: field.ForeignKeyRecordId }]);
+            this.EntityLinkClick.emit({
+                EntityName: field.ForeignKeyEntityName,
+                RecordID: field.ForeignKeyRecordId,
+                CompositeKey: pkey
+            });
+        }
+    }
+
+    public OnOpenRecord(): void {
+        if (this.Data.EntityName && this.Data.RecordID) {
+            const rawId = this.extractRawId(this.Data.RecordID);
+            const pkey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+            this.OpenRecord.emit({
+                EntityName: this.Data.EntityName,
+                RecordID: rawId,
+                CompositeKey: pkey
+            });
+        }
     }
 
     // =========================================================================
@@ -97,7 +186,10 @@ export class MjRecordMicroViewComponent implements OnInit {
             }
 
             if (recordData) {
-                this.Fields = this.buildFieldList(recordData);
+                const entityInfo = this.findEntityInfo();
+                this.EntityIcon = entityInfo?.Icon || 'fa-solid fa-table';
+                this.RecordDisplayName = this.extractNameFieldValue(entityInfo, recordData);
+                this.Fields = this.buildFieldList(recordData, entityInfo);
             } else {
                 this.ErrorMessage = 'Unable to load record data.';
             }
@@ -131,34 +223,57 @@ export class MjRecordMicroViewComponent implements OnInit {
     // Field building
     // =========================================================================
 
-    private buildFieldList(data: Record<string, unknown>): FieldDisplay[] {
-        const entityInfo = this.findEntityInfo();
+    private buildFieldList(data: Record<string, unknown>, entityInfo: EntityInfo | undefined): FieldDisplay[] {
         const diffMap = this.buildDiffMap();
+        const fkMap = this.buildForeignKeyMap(entityInfo, data);
+        const virtualFieldNames = this.getVirtualFieldNames(entityInfo);
         const fields: FieldDisplay[] = [];
 
         for (const [key, value] of Object.entries(data)) {
             if (key.startsWith('__mj_')) continue;
+            // Skip virtual fields that we've merged into their FK counterpart
+            if (virtualFieldNames.has(key)) continue;
 
             const fieldMeta = entityInfo?.Fields.find(f => f.Name === key);
             const diff = diffMap.get(key);
+            const fkInfo = fkMap.get(key);
+            const fieldType = fieldMeta?.Type ?? this.inferType(value);
+            const isBooleanField = this.isBooleanType(fieldType, value);
+            const isJsonField = this.isJsonValue(value);
 
             fields.push({
                 Name: key,
-                Value: this.formatValue(value),
-                Type: fieldMeta?.Type ?? this.inferType(value),
+                DisplayName: fieldMeta?.DisplayNameOrName ?? key,
+                Value: this.formatValue(value, isJsonField),
+                Type: fieldType,
                 Description: fieldMeta?.Description ?? '',
                 DiffClass: diff?.ChangeType ? `diff-${diff.ChangeType.toLowerCase()}` : '',
-                OldValue: diff?.OldValue ?? ''
+                OldValue: diff?.OldValue ?? '',
+                IsNull: value == null,
+                IsBoolean: isBooleanField,
+                BooleanValue: this.toBooleanValue(value),
+                IsJson: isJsonField,
+                Sequence: fieldMeta?.Sequence ?? 9999,
+                ForeignKeyDisplayValue: fkInfo?.DisplayValue ?? '',
+                ForeignKeyEntityName: fkInfo?.EntityName ?? '',
+                ForeignKeyRecordId: fkInfo?.RecordId ?? ''
             });
         }
 
-        return fields.sort((a, b) => {
-            if (a.Name === 'ID') return -1;
-            if (b.Name === 'ID') return 1;
-            if (a.Name.endsWith('ID') && !b.Name.endsWith('ID')) return -1;
-            if (!a.Name.endsWith('ID') && b.Name.endsWith('ID')) return 1;
-            return a.Name.localeCompare(b.Name);
-        });
+        return fields.sort((a, b) => a.Sequence - b.Sequence);
+    }
+
+    /**
+     * Find the entity's NameField (uses EntityInfo.NameField getter which checks
+     * IsNameField first, then falls back to a field called "Name").
+     */
+    private extractNameFieldValue(entityInfo: EntityInfo | undefined, data: Record<string, unknown>): string {
+        if (!entityInfo) return '';
+        const nameField = entityInfo.NameField;
+        if (nameField && data[nameField.Name] != null) {
+            return String(data[nameField.Name]);
+        }
+        return '';
     }
 
     private findEntityInfo(): EntityInfo | undefined {
@@ -181,21 +296,156 @@ export class MjRecordMicroViewComponent implements OnInit {
         return map;
     }
 
+    /**
+     * Build a map of FK field name -> { DisplayValue, EntityName, RecordId }
+     * by matching FK fields to their associated virtual (display) fields.
+     */
+    private buildForeignKeyMap(
+        entityInfo: EntityInfo | undefined,
+        data: Record<string, unknown>
+    ): Map<string, { DisplayValue: string; EntityName: string; RecordId: string }> {
+        const map = new Map<string, { DisplayValue: string; EntityName: string; RecordId: string }>();
+        if (!entityInfo) return map;
+
+        for (const field of entityInfo.Fields) {
+            if (!field.RelatedEntityID || field.Name === 'ID') continue;
+
+            // Find the related entity name
+            const relatedEntity = this.metadata.Entities.find(e => e.ID === field.RelatedEntityID);
+            if (!relatedEntity) continue;
+
+            // Find the virtual field linked to this FK via RelatedEntityNameFieldMap
+            const virtualField = entityInfo.Fields.find(f =>
+                f.RelatedEntityNameFieldMap === field.Name && f.IsVirtual
+            );
+
+            const fkValue = data[field.Name];
+            const displayValue = virtualField ? data[virtualField.Name] : null;
+
+            if (fkValue != null) {
+                map.set(field.Name, {
+                    DisplayValue: displayValue != null ? String(displayValue) : '',
+                    EntityName: relatedEntity.Name,
+                    RecordId: String(fkValue)
+                });
+            }
+        }
+
+        return map;
+    }
+
+    /**
+     * Get the set of virtual field names so we can skip them in the main field list.
+     * Virtual fields are display-only fields whose values are merged into FK rows.
+     * We skip ALL virtual fields — not just ones with RelatedEntityNameFieldMap —
+     * because they are derived/computed and don't represent stored data.
+     */
+    private getVirtualFieldNames(entityInfo: EntityInfo | undefined): Set<string> {
+        const names = new Set<string>();
+        if (!entityInfo) return names;
+
+        for (const field of entityInfo.Fields) {
+            if (field.IsVirtual) {
+                names.add(field.Name);
+            }
+        }
+
+        return names;
+    }
+
+    // =========================================================================
+    // Record ID formatting
+    // =========================================================================
+
+    /**
+     * For single-value PKs like "ID|<uuid>", extract just the uuid.
+     * For composite keys, show the full concatenated string.
+     */
+    private formatRecordId(recordId: string): string {
+        if (!recordId) return '';
+        const parts = recordId.split('||');
+        if (parts.length === 1) {
+            const singleParts = recordId.split('|');
+            if (singleParts.length === 2) {
+                return singleParts[1];
+            }
+        }
+        return recordId;
+    }
+
+    /**
+     * Extract the raw ID value from a potentially formatted record ID string.
+     */
+    private extractRawId(recordId: string): string {
+        if (!recordId) return '';
+        const parts = recordId.split('||');
+        if (parts.length === 1) {
+            const singleParts = recordId.split('|');
+            if (singleParts.length === 2) {
+                return singleParts[1];
+            }
+        }
+        return recordId;
+    }
+
+    // =========================================================================
+    // Type helpers
+    // =========================================================================
+
+    private isBooleanType(type: string, value: unknown): boolean {
+        const t = type.toLowerCase();
+        if (t === 'bit' || t === 'boolean') return true;
+        if (value === true || value === false) return true;
+        return false;
+    }
+
+    private toBooleanValue(value: unknown): boolean {
+        if (value === true || value === 1 || value === '1' || value === 'true') return true;
+        return false;
+    }
+
+    private isJsonValue(value: unknown): boolean {
+        if (typeof value === 'object' && value != null) return true;
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            return (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                   (trimmed.startsWith('[') && trimmed.endsWith(']'));
+        }
+        return false;
+    }
+
     // =========================================================================
     // Formatting helpers
     // =========================================================================
 
-    private formatValue(value: unknown): string {
+    private formatValue(value: unknown, isJson: boolean): string {
         if (value == null) return 'null';
         if (typeof value === 'boolean') return value ? 'true' : 'false';
         if (typeof value === 'number') return String(value);
         if (typeof value === 'string') {
             if (this.isDateString(value)) return this.formatDate(value);
-            if (value.length > 200) return value.substring(0, 200) + '...';
+            // Try to pretty-print JSON strings
+            if (isJson) return this.formatJsonString(value);
+            if (value.length > 300) return value.substring(0, 300) + '...';
             return value;
         }
-        if (typeof value === 'object') return JSON.stringify(value, null, 2);
+        if (typeof value === 'object') {
+            try {
+                return JSON.stringify(value, null, 2);
+            } catch {
+                return String(value);
+            }
+        }
         return String(value);
+    }
+
+    private formatJsonString(value: string): string {
+        try {
+            const parsed = JSON.parse(value);
+            return JSON.stringify(parsed, null, 2);
+        } catch {
+            return value;
+        }
     }
 
     private isDateString(value: string): boolean {
@@ -216,12 +466,12 @@ export class MjRecordMicroViewComponent implements OnInit {
 
     private inferType(value: unknown): string {
         if (value == null) return 'null';
-        if (typeof value === 'boolean') return 'boolean';
-        if (typeof value === 'number') return 'number';
+        if (typeof value === 'boolean') return 'bit';
+        if (typeof value === 'number') return 'int';
         if (typeof value === 'string') {
             if (this.isDateString(value)) return 'datetime';
             if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return 'uniqueidentifier';
-            return 'string';
+            return 'nvarchar';
         }
         return 'object';
     }

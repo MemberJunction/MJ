@@ -1,9 +1,10 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { ResourceData, VersionLabelEntityType, VersionLabelItemEntityType, UserInfoEngine } from '@memberjunction/core-entities';
+import { EntityLinkClickEvent } from '@memberjunction/ng-versions';
 
 export function LoadVersionHistoryLabelsResource() {
     // Prevents tree-shaking
@@ -83,7 +84,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
     private metadata = new Metadata();
     private destroy$ = new Subject<void>();
 
-    constructor(private cdr: ChangeDetectorRef) {
+    constructor(private cdr: ChangeDetectorRef, private navigationService: NavigationService) {
         super();
     }
 
@@ -354,6 +355,10 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
 
     public OnLabelUpdated(): void {
         this.LoadData();
+    }
+
+    public OnEntityLinkClick(event: EntityLinkClickEvent): void {
+        this.navigationService.OpenEntityRecord(event.EntityName, event.CompositeKey);
     }
 
     // =======================================================================

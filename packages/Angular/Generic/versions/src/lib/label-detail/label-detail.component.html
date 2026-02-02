@@ -156,7 +156,13 @@
                     </div>
                     <div class="detail-field" *ngIf="Label.EntityID">
                         <span class="field-label">Entity</span>
-                        <span class="field-value">{{Label.Entity ?? resolveEntityName(Label.EntityID)}}</span>
+                        <span class="field-value">
+                            <i [class]="OverviewEntityIcon" style="margin-right: 6px; color: #3b82f6;"></i>{{Label.Entity ?? resolveEntityName(Label.EntityID)}}
+                        </span>
+                    </div>
+                    <div class="detail-field" *ngIf="OverviewRecordName">
+                        <span class="field-label">Record Name</span>
+                        <span class="field-value field-record-name">{{OverviewRecordName}}</span>
                     </div>
                     <div class="detail-field" *ngIf="Label.RecordID">
                         <span class="field-label">Record ID</span>
@@ -275,19 +281,17 @@
                 <div class="snapshot-group" *ngFor="let group of FilteredSnapshotGroups">
                     <div class="group-header" (click)="ToggleSnapshotGroup(group)">
                         <i class="fa-solid fa-chevron-right group-chevron" [class.expanded]="group.IsExpanded"></i>
-                        <i class="fa-solid fa-table group-entity-icon"></i>
-                        <span class="group-name">{{group.EntityName}}</span>
-                        <span class="group-count">{{group.Items.length}} record{{group.Items.length !== 1 ? 's' : ''}}</span>
+                        <i [class]="group.EntityIcon" class="group-entity-icon"></i>
+                        <span class="group-name">{{group.EntityName}} <span class="group-count-inline">{{group.Items.length}}</span></span>
                     </div>
 
                     <div class="group-content" *ngIf="group.IsExpanded">
                         <!-- List mode -->
                         <ng-container *ngIf="SnapshotViewMode === 'list'">
                             <div class="snapshot-list-item" *ngFor="let item of group.Items"
-                                 (click)="OpenMicroView(group.EntityName, item.RecordID, item.RecordChangeID)">
+                                 (click)="OpenMicroView(group.EntityName, item.RecordID, item.RecordChangeID, item.DisplayName)">
                                 <i class="fa-solid fa-file-lines snapshot-item-icon"></i>
                                 <span class="snapshot-item-name">{{item.DisplayName}}</span>
-                                <span class="snapshot-item-id">{{item.RecordID | slice:0:12}}...</span>
                                 <i class="fa-solid fa-chevron-right snapshot-item-arrow"></i>
                             </div>
                         </ng-container>
@@ -296,13 +300,10 @@
                         <ng-container *ngIf="SnapshotViewMode === 'card'">
                             <div class="snapshot-cards">
                                 <div class="snapshot-card" *ngFor="let item of group.Items"
-                                     (click)="OpenMicroView(group.EntityName, item.RecordID, item.RecordChangeID)">
+                                     (click)="OpenMicroView(group.EntityName, item.RecordID, item.RecordChangeID, item.DisplayName)">
                                     <div class="snapshot-card-header">
                                         <i class="fa-solid fa-file-lines"></i>
                                         <span class="snapshot-card-name">{{item.DisplayName}}</span>
-                                    </div>
-                                    <div class="snapshot-card-meta">
-                                        <span class="snapshot-card-id">{{item.RecordID | slice:0:20}}...</span>
                                     </div>
                                 </div>
                             </div>
@@ -356,7 +357,7 @@
                        [class.expanded]="node.IsExpanded"
                        *ngIf="node.Children.length > 0"></i>
                     <span class="dep-node-spacer" *ngIf="node.Children.length === 0"></span>
-                    <i class="fa-solid fa-table dep-node-icon"></i>
+                    <i [class]="resolveEntityIconByName(node.EntityName)" class="dep-node-icon"></i>
                     <span class="dep-node-name">{{node.EntityName}}</span>
                     <span class="dep-node-field">via {{node.RelationshipField}}</span>
                     <span class="dep-node-count" *ngIf="node.Children.length > 0">
@@ -399,7 +400,7 @@
                     <div class="diff-group" *ngFor="let group of DiffResult.EntityGroups">
                         <div class="diff-group-header" (click)="ToggleDiffGroup(group)">
                             <i class="fa-solid fa-chevron-right diff-chevron" [class.expanded]="group.IsExpanded"></i>
-                            <i class="fa-solid fa-table diff-group-icon"></i>
+                            <i [class]="resolveEntityIconByName(group.EntityName)" class="diff-group-icon"></i>
                             <span class="diff-group-name">{{group.EntityName}}</span>
                             <span class="diff-group-count change-modified">
                                 {{group.Records.length}} modified
@@ -500,7 +501,9 @@
         <mj-record-micro-view
             [Data]="MicroViewRecord"
             [Inline]="true"
-            (Close)="OnBackFromMicroView()">
+            (Close)="OnBackFromMicroView()"
+            (EntityLinkClick)="OnEntityLinkClick($event)"
+            (OpenRecord)="OnOpenRecordClick($event)">
         </mj-record-micro-view>
     </div>
 </div>

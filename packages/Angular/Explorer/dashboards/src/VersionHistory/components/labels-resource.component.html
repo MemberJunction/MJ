@@ -233,6 +233,7 @@
         [AllLabels]="Labels"
         [ItemCountMap]="ItemCountMap"
         (Close)="OnDetailPanelClose()"
-        (LabelUpdated)="OnLabelUpdated()">
+        (LabelUpdated)="OnLabelUpdated()"
+        (EntityLinkClick)="OnEntityLinkClick($event)">
     </mj-label-detail-panel>
 </div>

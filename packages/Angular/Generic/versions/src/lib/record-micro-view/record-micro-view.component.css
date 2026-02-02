@@ -20,7 +20,7 @@
     position: fixed;
     top: 0;
     right: 0;
-    width: 420px;
+    width: 480px;
     max-width: 90vw;
     height: 100vh;
     background: var(--card-background, #ffffff);
@@ -49,10 +49,18 @@
 .micro-inline-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 16px;
     padding: 16px 24px;
     border-bottom: 1px solid var(--border-color, #e5e7eb);
     flex-shrink: 0;
+}
+
+.micro-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
 }
 
 .micro-content-inline {
@@ -79,6 +87,13 @@
     min-width: 0;
 }
 
+.micro-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .micro-entity {
     display: flex;
     align-items: center;
@@ -92,6 +107,16 @@
     color: #3b82f6;
 }
 
+/* Record display name shown prominently next to entity name */
+.micro-record-name {
+    color: #6366f1;
+    font-weight: 700;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .micro-record-id {
     display: flex;
     align-items: center;
@@ -102,6 +127,34 @@
 }
 
 .micro-record-id i {
+    font-size: 11px;
+}
+
+/* Open record button */
+.micro-open-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    background: var(--card-background, #ffffff);
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 6px;
+    color: #3b82f6;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.micro-open-btn:hover {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+
+.micro-open-btn i {
     font-size: 11px;
 }
 
@@ -147,6 +200,35 @@
     border-radius: 8px;
     font-size: 13px;
     color: #ef4444;
+}
+
+/* Null toggle toolbar */
+.micro-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border-color, #f3f4f6);
+}
+
+.null-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary, #6b7280);
+    user-select: none;
+}
+
+.null-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #6366f1;
+    cursor: pointer;
+}
+
+.null-toggle-label {
+    font-weight: 500;
 }
 
 /* Field table */
@@ -258,6 +340,87 @@
     color: #10b981;
 }
 
+/* ================================================================= */
+/* BOOLEAN FIELD DISPLAY */
+/* ================================================================= */
+
+.mf-bool-icon {
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+.mf-bool-true {
+    color: #10b981;
+}
+
+.mf-bool-false {
+    color: var(--text-tertiary, #d1d5db);
+}
+
+.mf-bool-label {
+    margin-left: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--text-secondary, #6b7280);
+}
+
+/* ================================================================= */
+/* FOREIGN KEY LINK STYLES */
+/* ================================================================= */
+
+.mf-fk-link {
+    color: #3b82f6;
+    cursor: pointer;
+    text-decoration: none;
+    font-family: inherit;
+    font-size: inherit;
+    transition: color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.mf-fk-link:hover {
+    color: #2563eb;
+    text-decoration: underline;
+}
+
+.mf-fk-id {
+    color: var(--text-tertiary, #9ca3af);
+    font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.mf-fk-icon {
+    font-size: 9px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+}
+
+.mf-fk-link:hover .mf-fk-icon {
+    opacity: 1;
+}
+
+/* ================================================================= */
+/* JSON FIELD DISPLAY */
+/* ================================================================= */
+
+.mf-json-value {
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--hover-background, #f9fafb);
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 6px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary, #6b7280);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
 /* Empty */
 .micro-empty {
     display: flex;
@@ -282,6 +445,11 @@
     padding-right: 24px;
 }
 
+.micro-inline .micro-toolbar {
+    padding-left: 24px;
+    padding-right: 24px;
+}
+
 @media (max-width: 600px) {
     .micro-field-header,
     .micro-field-row {
@@ -291,5 +459,9 @@
     .micro-field-header:has(.mf-col-old),
     .micro-field-row:has(.mf-col-old) {
         grid-template-columns: 100px 1fr 1fr;
+    }
+
+    .micro-record-name {
+        max-width: 120px;
     }
 }

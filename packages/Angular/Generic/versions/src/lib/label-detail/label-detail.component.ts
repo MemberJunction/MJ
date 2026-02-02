@@ -4,6 +4,7 @@ import { RunView, Metadata, EntityInfo, CompositeKey, UserInfo } from '@memberju
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { VersionLabelEntityType, VersionLabelItemEntityType, VersionLabelRestoreEntityType, VersionLabelEntity } from '@memberjunction/core-entities';
 import { MicroViewData, FieldChangeView } from '../types';
+import { EntityLinkClickEvent } from '../record-micro-view/record-micro-view.component';
 
 // =========================================================================
 // Interfaces
@@ -14,6 +15,7 @@ type DetailTab = 'overview' | 'snapshots' | 'dependencies' | 'changes' | 'histor
 interface SnapshotEntityGroup {
     EntityName: string;
     EntityID: string;
+    EntityIcon: string;
     Items: SnapshotItemView[];
     IsExpanded: boolean;
 }
@@ -75,6 +77,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     @Input() ItemCountMap = new Map<string, number>();
     @Output() Close = new EventEmitter<void>();
     @Output() LabelUpdated = new EventEmitter<void>();
+    @Output() EntityLinkClick = new EventEmitter<EntityLinkClickEvent>();
 
     // Tab state
     public ActiveTab: DetailTab = 'overview';
@@ -91,6 +94,11 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     // Overview stats
     public UniqueEntityCount = 0;
     public CreatorName = '';
+
+    /** Record display name resolved via IsNameField (shown on overview when Scope=Record) */
+    public OverviewRecordName = '';
+    /** Entity icon for the overview tab */
+    public OverviewEntityIcon = 'fa-solid fa-table';
 
     // Snapshot tab
     public SnapshotGroups: SnapshotEntityGroup[] = [];
@@ -257,10 +265,49 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         const entityIds = new Set(this.LabelItems.map(i => i.EntityID ?? '').filter(Boolean));
         this.UniqueEntityCount = entityIds.size;
         this.CreatorName = this.Label.CreatedByUser ?? '';
+
+        // Resolve entity icon for overview
+        if (this.Label.EntityID) {
+            this.OverviewEntityIcon = this.resolveEntityIcon(this.Label.EntityID);
+        }
+
+        // Resolve record display name for Record-scoped labels
+        if (this.Label.Scope === 'Record' && this.Label.RecordID && this.Label.EntityID) {
+            this.OverviewRecordName = this.resolveOverviewRecordName();
+        }
+    }
+
+    /**
+     * For Record-scoped labels, try to find the record's display name from the
+     * snapshot data using the entity's NameField.
+     */
+    private resolveOverviewRecordName(): string {
+        const entity = this.metadata.Entities.find(e => e.ID === this.Label.EntityID);
+        if (!entity) return '';
+        const nameField = entity.NameField;
+        if (!nameField) return '';
+
+        // Look through label items for one matching this record that has JSON
+        for (const item of this.LabelItems) {
+            if (item.EntityID === this.Label.EntityID) {
+                const jsonStr = (item as Record<string, unknown>)['FullRecordJSON'];
+                if (typeof jsonStr === 'string' && jsonStr) {
+                    try {
+                        const data = JSON.parse(jsonStr) as Record<string, unknown>;
+                        if (data[nameField.Name] != null) {
+                            return String(data[nameField.Name]);
+                        }
+                    } catch {
+                        // Fall through
+                    }
+                }
+            }
+        }
+        return '';
     }
 
     private buildSnapshotGroups(): void {
-        const groupMap = new Map<string, SnapshotItemView[]>();
+        const groupMap = new Map<string, { entityId: string; items: SnapshotItemView[] }>();
 
         for (const item of this.LabelItems) {
             const entityId = item.EntityID ?? '';
@@ -268,27 +315,73 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
             const key = entityName || entityId;
 
             if (!groupMap.has(key)) {
-                groupMap.set(key, []);
+                groupMap.set(key, { entityId, items: [] });
             }
 
-            groupMap.get(key)!.push({
+            const displayName = this.resolveRecordDisplayName(entityId, item);
+            groupMap.get(key)!.items.push({
                 RecordID: item.RecordID ?? '',
                 RecordChangeID: item.RecordChangeID ?? '',
-                DisplayName: item.RecordID ?? 'Unknown',
+                DisplayName: displayName,
                 FieldPreview: '',
                 FullRecordJSON: null
             });
         }
 
         this.SnapshotGroups = Array.from(groupMap.entries())
-            .map(([name, items]) => ({
+            .map(([name, group]) => ({
                 EntityName: name,
-                EntityID: items[0]?.RecordChangeID ? '' : '',
-                Items: items,
+                EntityID: group.entityId,
+                EntityIcon: this.resolveEntityIcon(group.entityId),
+                Items: group.items,
                 IsExpanded: false
             }));
 
         this.applySortAndFilter();
+    }
+
+    /**
+     * Resolve a display name for a record from its snapshot JSON using the entity's NameField.
+     * Falls back to a shortened raw ID if no name field is available.
+     */
+    private resolveRecordDisplayName(entityId: string, item: VersionLabelItemEntityType): string {
+        const rawRecordId = this.extractRawRecordId(item.RecordID ?? '');
+
+        // Try to get the NameField value from the snapshot JSON
+        const entity = entityId ? this.metadata.Entities.find(e => e.ID === entityId) : undefined;
+        if (entity) {
+            const nameField = entity.NameField;
+            if (nameField) {
+                // The item may have FullRecordJSON we can parse
+                const jsonStr = (item as Record<string, unknown>)['FullRecordJSON'];
+                if (typeof jsonStr === 'string' && jsonStr) {
+                    try {
+                        const data = JSON.parse(jsonStr) as Record<string, unknown>;
+                        if (data[nameField.Name] != null) {
+                            return String(data[nameField.Name]);
+                        }
+                    } catch {
+                        // Fall through
+                    }
+                }
+            }
+        }
+
+        // Fallback: show shortened ID
+        return rawRecordId.length > 20 ? rawRecordId.substring(0, 20) + '...' : rawRecordId;
+    }
+
+    /** Extract the raw ID value from a potentially formatted "ID|<uuid>" string. */
+    private extractRawRecordId(recordId: string): string {
+        if (!recordId) return '';
+        const parts = recordId.split('||');
+        if (parts.length === 1) {
+            const singleParts = recordId.split('|');
+            if (singleParts.length === 2) {
+                return singleParts[1];
+            }
+        }
+        return recordId;
     }
 
     /** Apply current sort + search filter to snapshot groups. */
@@ -686,8 +779,9 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     // Micro view (inline navigation)
     // =========================================================================
 
-    public OpenMicroView(entityName: string, recordId: string, recordChangeId: string): void {
-        this.BreadcrumbLabel = `${entityName} / ${recordId.substring(0, 12)}...`;
+    public OpenMicroView(entityName: string, recordId: string, recordChangeId: string, displayName?: string): void {
+        const label = displayName || this.extractRawRecordId(recordId).substring(0, 12) + '...';
+        this.BreadcrumbLabel = `${entityName} / ${label}`;
         this.MicroViewRecord = {
             EntityName: entityName,
             EntityID: '',
@@ -704,6 +798,14 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         this.ShowMicroView = false;
         this.MicroViewRecord = null;
         this.cdr.markForCheck();
+    }
+
+    public OnEntityLinkClick(event: EntityLinkClickEvent): void {
+        this.EntityLinkClick.emit(event);
+    }
+
+    public OnOpenRecordClick(event: EntityLinkClickEvent): void {
+        this.EntityLinkClick.emit(event);
     }
 
     // =========================================================================
@@ -782,6 +884,20 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         if (!entityId) return 'Unknown';
         const entity = this.metadata.Entities.find(e => e.ID === entityId);
         return entity ? entity.Name : 'Unknown';
+    }
+
+    /** Resolve icon CSS class for an entity by ID, falling back to generic table icon. */
+    public resolveEntityIcon(entityId: string): string {
+        if (!entityId) return 'fa-solid fa-table';
+        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        return entity?.Icon || 'fa-solid fa-table';
+    }
+
+    /** Resolve icon CSS class for an entity by name, falling back to generic table icon. */
+    public resolveEntityIconByName(entityName: string): string {
+        if (!entityName) return 'fa-solid fa-table';
+        const entity = this.metadata.Entities.find(e => e.Name === entityName);
+        return entity?.Icon || 'fa-solid fa-table';
     }
 
     public GetScopeIcon(scope: string | undefined): string {

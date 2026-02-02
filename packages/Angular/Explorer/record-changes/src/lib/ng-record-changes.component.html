@@ -11,6 +11,44 @@
 
     @if (!IsLoading) {
         <div class="record-changes-container">
+            <!-- Version Labels Section -->
+            <div class="labels-section">
+                <div class="labels-header">
+                    <div class="labels-title">
+                        <i class="fa-solid fa-tags" aria-hidden="true"></i>
+                        <span>Version Labels</span>
+                        @if (RecordLabels.length > 0) {
+                            <span class="labels-count">{{ RecordLabels.length }}</span>
+                        }
+                    </div>
+                    <button class="create-label-btn" (click)="OpenCreateWizard()" title="Create a version label for this record">
+                        <i class="fa-solid fa-plus"></i> Create Label
+                    </button>
+                </div>
+                @if (IsLoadingLabels) {
+                    <div class="labels-loading">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Loading labels...
+                    </div>
+                } @else if (RecordLabels.length === 0) {
+                    <div class="labels-empty">
+                        No version labels for this record yet.
+                    </div>
+                } @else {
+                    <div class="labels-list">
+                        @for (label of RecordLabels; track label.ID) {
+                            <div class="label-chip" [title]="label.Description || label.Name">
+                                <i class="fa-solid fa-tag label-chip-icon"></i>
+                                <span class="label-chip-name">{{ label.Name }}</span>
+                                <span class="label-chip-meta">
+                                    <span class="label-chip-status" [class]="getLabelStatusClass(label.Status)">{{ label.Status }}</span>
+                                    <span class="label-chip-items">{{ label.ItemCount }} item{{ label.ItemCount !== 1 ? 's' : '' }}</span>
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
             @if (viewData.length === 0) {
                 <!-- Empty state — no changes ever recorded -->
                 <div class="empty-state">
@@ -214,6 +252,19 @@
                 }
             </div>
             }
+        </div>
+    }
+
+    @if (ShowCreateWizard) {
+        <div class="create-wizard-overlay" (click)="OnLabelCreateCancelled()">
+            <div class="create-wizard-container" (click)="$event.stopPropagation()">
+                <mj-label-create
+                    [PreselectedEntity]="record.EntityInfo"
+                    [PreselectedRecordIds]="[record.PrimaryKey.KeyValuePairs[0].Value]"
+                    (Created)="OnLabelCreated($event)"
+                    (Cancel)="OnLabelCreateCancelled()">
+                </mj-label-create>
+            </div>
         </div>
     }
 </mj-slide-panel>

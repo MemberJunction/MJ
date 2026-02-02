@@ -1,9 +1,20 @@
 import { Component, EventEmitter, Input, OnInit, Output, ChangeDetectorRef, ChangeDetectionStrategy, ViewEncapsulation } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, Metadata } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, Metadata, RunView } from '@memberjunction/core';
 import { RecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { diffChars, diffWords, Change } from 'diff';
+
+/** Lightweight shape for displaying a version label associated with this record */
+interface RecordLabel {
+  ID: string;
+  Name: string;
+  Description: string | null;
+  Scope: string;
+  Status: string;
+  CreatedAt: Date;
+  ItemCount: number;
+}
 
 @Component({
   selector: 'mj-record-changes',
@@ -22,6 +33,11 @@ export class RecordChangesComponent implements OnInit {
   filteredData: RecordChangeEntity[] = [];
   expandedItems: Set<string> = new Set();
 
+  // Version label state
+  RecordLabels: RecordLabel[] = [];
+  IsLoadingLabels = false;
+  ShowCreateWizard = false;
+
   // Filter properties
   searchTerm = '';
   selectedType = '';
@@ -39,6 +55,7 @@ export class RecordChangesComponent implements OnInit {
       this.IsVisible = true;
       this.cdr.markForCheck();
       this.LoadRecordChanges(this.record.PrimaryKey, '', this.record.EntityInfo.Name);
+      this.LoadRecordLabels();
     }
   }
 
@@ -79,6 +96,96 @@ export class RecordChangesComponent implements OnInit {
     this.selectedType = '';
     this.selectedSource = '';
     this.applyFilters();
+  }
+
+  // Version label methods
+  public async LoadRecordLabels(): Promise<void> {
+    if (!this.record) return;
+
+    this.IsLoadingLabels = true;
+    this.cdr.markForCheck();
+
+    try {
+      const entityId = this.record.EntityInfo.ID;
+      const recordId = this.record.PrimaryKey.ToConcatenatedString();
+
+      const rv = new RunView();
+      // Find all label items that reference this specific record
+      const itemsResult = await rv.RunView<{ VersionLabelID: string }>({
+        EntityName: 'MJ: Version Label Items',
+        Fields: ['VersionLabelID'],
+        ExtraFilter: `EntityID='${entityId}' AND RecordID='${recordId}'`,
+        ResultType: 'simple'
+      });
+
+      if (!itemsResult.Success || itemsResult.Results.length === 0) {
+        this.RecordLabels = [];
+        this.IsLoadingLabels = false;
+        this.cdr.markForCheck();
+        return;
+      }
+
+      const labelIds = [...new Set(itemsResult.Results.map(i => i.VersionLabelID))];
+      const labelIdFilter = labelIds.map(id => `'${id}'`).join(',');
+
+      const labelsResult = await rv.RunView<{
+        ID: string; Name: string; Description: string | null;
+        Scope: string; Status: string; ItemCount: number; __mj_CreatedAt: Date;
+      }>({
+        EntityName: 'MJ: Version Labels',
+        Fields: ['ID', 'Name', 'Description', 'Scope', 'Status', 'ItemCount', '__mj_CreatedAt'],
+        ExtraFilter: `ID IN (${labelIdFilter})`,
+        OrderBy: '__mj_CreatedAt DESC',
+        ResultType: 'simple'
+      });
+
+      if (labelsResult.Success) {
+        this.RecordLabels = labelsResult.Results.map(l => ({
+          ID: l.ID,
+          Name: l.Name,
+          Description: l.Description,
+          Scope: l.Scope,
+          Status: l.Status,
+          CreatedAt: l.__mj_CreatedAt,
+          ItemCount: l.ItemCount
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading version labels for record:', error);
+      this.RecordLabels = [];
+    } finally {
+      this.IsLoadingLabels = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public OpenCreateWizard(): void {
+    this.ShowCreateWizard = true;
+    this.cdr.markForCheck();
+  }
+
+  public OnLabelCreated(event: { LabelCount: number; ItemCount: number }): void {
+    this.ShowCreateWizard = false;
+    this.cdr.markForCheck();
+    this.LoadRecordLabels();
+    this.mjNotificationService.CreateSimpleNotification(
+      `Version label created with ${event.ItemCount} snapshot${event.ItemCount !== 1 ? 's' : ''}`,
+      'info'
+    );
+  }
+
+  public OnLabelCreateCancelled(): void {
+    this.ShowCreateWizard = false;
+    this.cdr.markForCheck();
+  }
+
+  public getLabelStatusClass(status: string): string {
+    switch (status) {
+      case 'Active': return 'label-status-active';
+      case 'Archived': return 'label-status-archived';
+      case 'Restored': return 'label-status-restored';
+      default: return '';
+    }
   }
 
   private applyFilters(): void {
