@@ -29,6 +29,7 @@
     "@memberjunction/global": "3.4.0",
     "@memberjunction/graphql-dataprovider": "3.4.0",
     "@memberjunction/ng-shared-generic": "3.4.0",
+    "rxjs": "^7.8.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,
