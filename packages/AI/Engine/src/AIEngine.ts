@@ -565,10 +565,6 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         try {
             const notes = this.AgentNotes.filter(n => n.Status === 'Active' && n.EmbeddingVector);
 
-            if (notes.length === 0) {
-                return;
-            }
-
             const entries = notes.map(note => ({
                 key: note.ID,
                 vector: JSON.parse(note.EmbeddingVector!),
@@ -599,10 +595,6 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         try {
             const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
 
-            if (examples.length === 0) {
-                return;
-            }
-
             const entries = examples.map(example => ({
                 key: example.ID,
                 vector: JSON.parse(example.EmbeddingVector!),
@@ -624,39 +616,6 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         } catch (error) {
             LogError(`AIEngine: Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
-    }
-
-    /**
-     * Lightweight refresh that reloads only agent notes and examples from the DB
-     * and rebuilds their vector services. Use this instead of Config(true) when
-     * only note/example data needs refreshing (e.g., after Memory Manager creates new records).
-     */
-    public async RefreshNoteAndExampleVectorServices(contextUser?: UserInfo): Promise<void> {
-        const rv = new RunView();
-        const [notesResult, examplesResult] = await rv.RunViews([
-            {
-                EntityName: 'AI Agent Notes',
-                ExtraFilter: '',
-                ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: AI Agent Examples',
-                ExtraFilter: '',
-                ResultType: 'entity_object'
-            }
-        ], contextUser);
-
-        if (notesResult?.Success) {
-            this.Base.SetAgentNotes(notesResult.Results as AIAgentNoteEntity[]);
-        }
-        if (examplesResult?.Success) {
-            this.Base.SetAgentExamples(examplesResult.Results as AIAgentExampleEntity[]);
-        }
-
-        await Promise.all([
-            this.loadNoteEmbeddings(contextUser),
-            this.loadExampleEmbeddings(contextUser)
-        ]);
     }
 
     /**

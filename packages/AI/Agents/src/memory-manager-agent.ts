@@ -1615,7 +1615,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
             // Refresh vector services so dedup can use semantic similarity
             // (vector service may be null if no notes existed at server startup)
-            await AIEngine.Instance.RefreshNoteAndExampleVectorServices(params.contextUser);
+            await AIEngine.Instance.Config(true, params.contextUser);
 
             // Extract notes from conversations (with rating context)
             const extractedNotes = await this.ExtractNotesFromConversations(conversations, params.contextUser!);
@@ -1688,7 +1688,7 @@ export class MemoryManagerAgent extends BaseAgent {
             // Refresh note/example vector services so consolidation can use semantic similarity
             // on the newly created records (which now have embeddings from the extended entity save).
             if (notesCreated > 0 || examplesCreated > 0) {
-                await AIEngine.Instance.RefreshNoteAndExampleVectorServices(params.contextUser);
+                await AIEngine.Instance.Config(true, params.contextUser);
             }
 
             // Step 9: Consolidate related notes
