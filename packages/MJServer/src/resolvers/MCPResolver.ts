@@ -238,6 +238,9 @@ export class InitiateMCPOAuthInput {
 
     @Field({ nullable: true })
     AdditionalScopes?: string;
+
+    @Field({ nullable: true, description: 'Frontend URL to use as redirect_uri. When provided, the frontend handles the OAuth callback instead of the API server.' })
+    FrontendCallbackUrl?: string;
 }
 
 /**
@@ -964,12 +967,20 @@ export class MCPResolver extends ResolverBase {
             // Initiate the OAuth flow
             const oauthManager = new OAuthManager();
             const publicUrl = this.getPublicUrl();
+
+            // Build options for the OAuth flow
+            const oauthOptions: { frontendReturnUrl?: string; frontendCallbackUrl?: string } = {};
+            if (input.FrontendCallbackUrl) {
+                oauthOptions.frontendCallbackUrl = input.FrontendCallbackUrl;
+            }
+
             const result = await oauthManager.initiateAuthorizationFlow(
                 input.ConnectionID,
                 config.MCPServerID,
                 oauthConfig,
                 publicUrl,
-                user
+                user,
+                Object.keys(oauthOptions).length > 0 ? oauthOptions : undefined
             );
 
             LogStatus(`MCPResolver: Initiated OAuth flow for connection ${input.ConnectionID}`);

@@ -316,7 +316,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         return res.status(401).json({ error: 'Invalid token' });
       }
 
+      // Set both req.user (standard Express convention) and req['mjUser'] (MJ REST convention)
+      // Note: userPayload contains { userRecord: UserInfo, email, sessionId }
+      // The mjUser property expects the UserInfo directly (userRecord)
       req.user = userPayload;
+      req['mjUser'] = userPayload.userRecord;
       next();
     } catch (error) {
       console.error('Auth error:', error);
@@ -338,13 +342,17 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       errorRedirectUrl: `${oauthPublicUrl}/oauth/error`
     });
 
+    // Create CORS middleware for OAuth routes (needed for cross-origin requests from frontend)
+    const oauthCors = cors<cors.CorsRequest>();
+
     // OAuth callback is unauthenticated (called by external auth server)
-    app.use('/oauth', callbackRouter);
+    app.use('/oauth', oauthCors, callbackRouter);
     console.log('[OAuth] Callback route registered at /oauth/callback');
 
-    // OAuth status and initiate endpoints require authentication
-    app.use('/oauth', authMiddleware, authenticatedRouter);
-    console.log('[OAuth] Authenticated routes registered at /oauth/status and /oauth/initiate');
+    // OAuth status, initiate, and exchange endpoints require authentication
+    // Must also have CORS for frontend requests and JSON body parsing
+    app.use('/oauth', oauthCors, BodyParser.json(), authMiddleware, authenticatedRouter);
+    console.log('[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
   }
 
   // Get REST API configuration

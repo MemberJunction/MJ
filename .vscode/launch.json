@@ -6,13 +6,8 @@
       "request": "launch",
       "name": "Launch MJ MetadataSync Extension",
       "runtimeExecutable": "${execPath}",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/VSCodeExtensions/MetadataSync",
-        "${workspaceFolder}"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/VSCodeExtensions/MetadataSync/dist/**/*.js"
-      ],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/VSCodeExtensions/MetadataSync", "${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/packages/VSCodeExtensions/MetadataSync/dist/**/*.js"],
       "preLaunchTask": "Build MetadataSync Extension"
     },
     {
@@ -22,18 +17,12 @@
       "cwd": "${workspaceFolder}/packages/AI/MCPServer",
       "preLaunchTask": "build-mcp-server",
       "program": "${workspaceFolder}/packages/AI/MCPServer/dist/index.js",
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "sourceMaps": true,
       "smartStep": true,
       "console": "integratedTerminal",
       "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"],
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
       "runtimeArgs": ["--enable-source-maps"]
     },
     {
@@ -55,6 +44,9 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],
       "preLaunchTask": "Kill Port 4001",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+
       "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
     },
     {
@@ -85,7 +77,7 @@
         "CI": "true"
       },
       "console": "integratedTerminal"
-    }, 
+    },
     {
       "type": "node",
       "request": "launch",
@@ -95,14 +87,8 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development"
@@ -122,14 +108,8 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development"
@@ -145,23 +125,12 @@
       "request": "launch",
       "name": "MetadataSync CLI - Pull",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
-      "args": [
-        "sync",
-        "pull",
-        "--entity", "${input:entityToPull}",
-        "--verbose"
-      ],
+      "args": ["sync", "pull", "--entity", "${input:entityToPull}", "--verbose"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**", "**/zone/**"],
       "env": {
         "NODE_ENV": "development"
@@ -177,25 +146,12 @@
       "request": "launch",
       "name": "MJ CLI - AI Agent Run",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
-      "args": [
-        "ai",
-        "agents",
-        "run",
-        "-a",
-        "Demo Loop Agent",
-        "--chat"
-      ],
+      "args": ["ai", "agents", "run", "-a", "Demo Loop Agent", "--chat"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development"
@@ -210,25 +166,12 @@
       "request": "launch",
       "name": "AI CLI - Agent Chat (Verbose Debug)",
       "program": "${workspaceFolder}/packages/AI/AICLI/bin/run.js",
-      "args": [
-        "agents",
-        "run",
-        "-a",
-        "Demo Loop Agent",
-        "--chat",
-        "--verbose"
-      ],
+      "args": ["agents", "run", "-a", "Demo Loop Agent", "--chat", "--verbose"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development",
@@ -245,22 +188,12 @@
       "request": "launch",
       "name": "MJ CLI - AI Agent List",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
-      "args": [
-        "ai",
-        "agents",
-        "list"
-      ],
+      "args": ["ai", "agents", "list"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development"
@@ -275,24 +208,12 @@
       "request": "launch",
       "name": "MetadataSync CLI - Pull with Options",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
-      "args": [
-        "sync",
-        "pull",
-        "--entity", "${input:entityToPull}",
-        "--verbose",
-        "${input:additionalPullFlags}"
-      ],
+      "args": ["sync", "pull", "--entity", "${input:entityToPull}", "--verbose", "${input:additionalPullFlags}"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**", "**/zone/**"],
       "env": {
         "NODE_ENV": "development"
@@ -308,21 +229,12 @@
       "request": "launch",
       "name": "QueryGen - Generate",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
-      "args": [
-        "querygen",
-        "generate"
-      ],
+      "args": ["querygen", "generate"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development"
@@ -338,24 +250,12 @@
       "request": "launch",
       "name": "QueryGen - Generate (with entities)",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
-      "args": [
-        "querygen",
-        "generate",
-        "--entities",
-        "${input:queryGenEntities}",
-        "--verbose"
-      ],
+      "args": ["querygen", "generate", "--entities", "${input:queryGenEntities}", "--verbose"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development"
@@ -371,21 +271,12 @@
       "request": "launch",
       "name": "QueryGen - Export",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
-      "args": [
-        "querygen",
-        "export"
-      ],
+      "args": ["querygen", "export"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development"
@@ -401,20 +292,12 @@
       "request": "launch",
       "name": "MJCLI - Migrate",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
-      "args": [
-        "migrate"
-      ],
+      "args": ["migrate"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development",
@@ -431,21 +314,12 @@
       "request": "launch",
       "name": "MJCLI - Migrate (Verbose)",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
-      "args": [
-        "migrate",
-        "--verbose"
-      ],
+      "args": ["migrate", "--verbose"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development",
@@ -462,23 +336,12 @@
       "request": "launch",
       "name": "MJCLI - Migrate with Tag",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
-      "args": [
-        "migrate",
-        "--verbose",
-        "--tag",
-        "${input:migrateTag}"
-      ],
+      "args": ["migrate", "--verbose", "--tag", "${input:migrateTag}"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development",
@@ -499,14 +362,8 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/packages/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/packages/**/dist/**/*.js",
-        "${workspaceFolder}/packages/**/lib/**/*.js"
-      ],
+      "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
+      "outFiles": ["${workspaceFolder}/packages/**/dist/**/*.js", "${workspaceFolder}/packages/**/lib/**/*.js"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development",

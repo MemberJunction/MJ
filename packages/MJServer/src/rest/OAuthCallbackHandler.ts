@@ -90,6 +90,7 @@ export class OAuthCallbackHandler {
         // Authenticated routes
         this.authenticatedRouter.get('/status/:stateParameter', this.getStatus.bind(this));
         this.authenticatedRouter.post('/initiate', this.initiateFlow.bind(this));
+        this.authenticatedRouter.post('/exchange', this.handleExchange.bind(this));
     }
 
     /**
@@ -430,6 +431,107 @@ export class OAuthCallbackHandler {
                 success: false,
                 errorCode: 'server_error',
                 errorMessage: 'Failed to initiate OAuth flow'
+            });
+        }
+    }
+
+    /**
+     * Exchanges an authorization code for tokens.
+     *
+     * This endpoint is used when the frontend handles the OAuth callback.
+     * The frontend receives the code and state from the OAuth provider redirect,
+     * then calls this authenticated endpoint to complete the token exchange.
+     *
+     * @param req - Express request with { code, state } in body
+     * @param res - Express response
+     */
+    private async handleExchange(req: express.Request, res: express.Response): Promise<void> {
+        const { code, state } = req.body;
+        const contextUser = req['mjUser'] as UserInfo;
+
+        if (!contextUser) {
+            res.status(401).json({
+                success: false,
+                errorCode: 'unauthorized',
+                errorMessage: 'Authentication required'
+            });
+            return;
+        }
+
+        if (!code || typeof code !== 'string') {
+            res.status(400).json({
+                success: false,
+                errorCode: 'invalid_request',
+                errorMessage: 'Missing or invalid code parameter'
+            });
+            return;
+        }
+
+        if (!state || typeof state !== 'string') {
+            res.status(400).json({
+                success: false,
+                errorCode: 'invalid_request',
+                errorMessage: 'Missing or invalid state parameter'
+            });
+            return;
+        }
+
+        try {
+            // Load the authorization state to verify user ownership
+            const authState = await this.loadAuthorizationState(state, contextUser);
+
+            if (!authState) {
+                res.status(404).json({
+                    success: false,
+                    errorCode: 'state_not_found',
+                    errorMessage: 'Authorization state not found or expired'
+                });
+                return;
+            }
+
+            // Verify the authenticated user owns this authorization state
+            if (authState.userId !== contextUser.ID) {
+                LogError(`[OAuth Exchange] User ${contextUser.ID} attempted to exchange code for state owned by ${authState.userId}`);
+                res.status(403).json({
+                    success: false,
+                    errorCode: 'forbidden',
+                    errorMessage: 'You are not authorized to complete this authorization flow'
+                });
+                return;
+            }
+
+            // Exchange code for tokens using OAuthManager
+            const result = await this.oauthManager.completeAuthorizationFlow(state, code, contextUser);
+
+            if (result.success) {
+                LogStatus(`[OAuth Exchange] Successfully exchanged code for connection ${authState.connectionId}`);
+
+                // Notify MCPClientManager that authorization has completed
+                MCPClientManager.Instance.notifyOAuthAuthorizationCompleted(authState.connectionId, {
+                    stateParameter: state,
+                    completedAt: new Date().toISOString()
+                });
+
+                res.json({
+                    success: true,
+                    connectionId: authState.connectionId
+                });
+            } else {
+                LogError(`[OAuth Exchange] Token exchange failed: ${result.errorMessage}`);
+                res.status(400).json({
+                    success: false,
+                    errorCode: result.errorCode ?? 'exchange_failed',
+                    errorMessage: result.errorMessage ?? 'Failed to exchange authorization code for tokens',
+                    isRetryable: result.isRetryable ?? false
+                });
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            LogError(`[OAuth Exchange] Unexpected error: ${errorMessage}`);
+            res.status(500).json({
+                success: false,
+                errorCode: 'server_error',
+                errorMessage: 'An unexpected error occurred during token exchange'
             });
         }
     }

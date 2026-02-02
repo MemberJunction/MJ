@@ -22,14 +22,40 @@ export class RedirectComponent implements OnInit {
   constructor(private authService: MJAuthBase) {}
 
   async ngOnInit() {
+    // DIAGNOSTIC: Persistent logging to trace redirect handling
+    const debugLog = JSON.parse(localStorage.getItem('oauth_debug_log') || '[]');
+    debugLog.push({
+      time: new Date().toISOString(),
+      event: 'REDIRECT_COMPONENT_NGONINIT',
+      pathname: window.location.pathname,
+      search: window.location.search,
+      hash: window.location.hash
+    });
+    localStorage.setItem('oauth_debug_log', JSON.stringify(debugLog));
+
     // Only show the processing message if we're actually handling an auth redirect
     // Check for auth codes in the URL that indicate we're in a redirect flow
-    const hasAuthCode = window.location.hash.includes('code=') || 
+    const hasAuthCode = window.location.hash.includes('code=') ||
                        window.location.hash.includes('id_token=') ||
                        window.location.search.includes('code=') ||
                        window.location.search.includes('state=');
-    
-    if (hasAuthCode) {
+
+    // Don't handle MCP OAuth callbacks - those go to /oauth/callback and are handled
+    // by the OAuthCallbackComponent in explorer-core. This component only handles
+    // the main application auth (MSAL/Azure AD).
+    const isMCPOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
+
+    // DIAGNOSTIC: Log the decision
+    debugLog.push({
+      time: new Date().toISOString(),
+      event: 'REDIRECT_COMPONENT_DECISION',
+      hasAuthCode,
+      isMCPOAuthCallback,
+      willProcess: hasAuthCode && !isMCPOAuthCallback
+    });
+    localStorage.setItem('oauth_debug_log', JSON.stringify(debugLog));
+
+    if (hasAuthCode && !isMCPOAuthCallback) {
       this.isProcessing = true;
       try {
         // Handle the callback for the current auth provider

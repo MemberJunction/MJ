@@ -211,6 +211,7 @@ export class OAuthManager {
      * @param contextUser - User context
      * @param options - Additional options
      * @param options.frontendReturnUrl - URL to redirect to after OAuth completion
+     * @param options.frontendCallbackUrl - URL to use as redirect_uri (frontend handles the callback)
      * @returns Authorization initiation result with URL
      */
     public async initiateAuthorizationFlow(
@@ -219,7 +220,7 @@ export class OAuthManager {
         oauthConfig: MCPServerOAuthConfig,
         publicUrl: string,
         contextUser: UserInfo,
-        options?: { frontendReturnUrl?: string }
+        options?: { frontendReturnUrl?: string; frontendCallbackUrl?: string }
     ): Promise<InitiateAuthorizationResult> {
         try {
             if (!oauthConfig.OAuthIssuerURL) {
@@ -237,7 +238,8 @@ export class OAuthManager {
             );
 
             // Get or register client
-            const redirectUri = this.buildRedirectUri(publicUrl);
+            // Use frontend callback URL if provided, otherwise use server callback URL
+            const redirectUri = options?.frontendCallbackUrl || this.buildRedirectUri(publicUrl);
             const clientReg = await this.registration.getOrRegisterClient(
                 connectionId,
                 serverId,

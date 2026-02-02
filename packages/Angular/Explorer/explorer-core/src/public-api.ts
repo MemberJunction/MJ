@@ -40,4 +40,11 @@ export * from './lib/system-validation/system-validation-banner.component'
 // User Menu Plugin System
 export * from './lib/user-menu'
 
+// OAuth Module
+export * from './lib/oauth/oauth.module'
+export * from './lib/oauth/oauth-callback.component'
+
+// Routing Module - must be imported directly in root app module
+export * from './app-routing.module'
+
 export * from './module';

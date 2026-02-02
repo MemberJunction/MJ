@@ -89,6 +89,11 @@ export class ClientRegistration {
             if (existing.clientSecretExpiresAt && new Date() >= existing.clientSecretExpiresAt) {
                 LogStatus(`[OAuth] Client secret expired for connection ${connectionId}, re-registering`);
                 await this.deleteRegistration(existing.id!, contextUser);
+            }
+            // Check if the requested redirect_uri is in the registered redirect_uris
+            else if (!existing.redirectUris.includes(options.redirectUri)) {
+                LogStatus(`[OAuth] Redirect URI changed for connection ${connectionId} (was: ${existing.redirectUris.join(', ')}, now: ${options.redirectUri}), re-registering`);
+                await this.deleteRegistration(existing.id!, contextUser);
             } else {
                 LogStatus(`[OAuth] Using existing client registration for connection ${connectionId}`);
                 return existing;
