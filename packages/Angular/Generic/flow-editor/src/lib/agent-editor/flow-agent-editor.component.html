@@ -1,5 +1,8 @@
 <div class="mj-agent-editor" [class.mj-agent-editor--fullscreen]="FullScreen">
 
+  <!-- ── Fullscreen backdrop ─────────────────────────────────── -->
+  <div *ngIf="FullScreen" class="mj-agent-editor-backdrop" (click)="toggleFullScreen()"></div>
+
   <!-- ── Top Toolbar ───────────────────────────────────────── -->
   <div class="mj-agent-editor-toolbar">
     <div class="mj-agent-editor-toolbar-left">
@@ -10,7 +13,7 @@
         {{ isSaving ? 'Saving...' : 'Save' }}
       </button>
 
-      <div class="mj-agent-editor-btn-divider"></div>
+      <div *ngIf="EditMode" class="mj-agent-editor-btn-divider"></div>
 
       <!-- Undo / Redo -->
       <button *ngIf="EditMode" class="mj-agent-editor-btn"
@@ -24,6 +27,11 @@
     </div>
 
     <div class="mj-agent-editor-toolbar-center">
+      <!-- Fullscreen title -->
+      <span *ngIf="FullScreen" class="mj-agent-editor-title">
+        <i class="fa-solid fa-diagram-project"></i> Flow Configuration
+      </span>
+
       <!-- View Mode Toggle -->
       <div class="mj-agent-editor-view-toggle">
         <button class="mj-agent-editor-view-btn"
@@ -48,9 +56,14 @@
         Saved {{ lastSaved | date:'shortTime' }}
       </span>
 
-      <!-- Full Screen -->
-      <button class="mj-agent-editor-btn" (click)="toggleFullScreen()" [title]="FullScreen ? 'Exit Full Screen' : 'Full Screen'">
-        <i class="fa-solid" [ngClass]="FullScreen ? 'fa-compress' : 'fa-expand'"></i>
+      <!-- Expand / Collapse -->
+      <button *ngIf="!FullScreen" class="mj-agent-editor-btn mj-agent-editor-btn--expand"
+              (click)="toggleFullScreen()" title="Expand to full screen">
+        <i class="fa-solid fa-up-right-and-down-left-from-center"></i> Expand
+      </button>
+      <button *ngIf="FullScreen" class="mj-agent-editor-btn mj-agent-editor-btn--close"
+              (click)="toggleFullScreen()" title="Close full screen (Esc)">
+        <i class="fa-solid fa-xmark"></i> Close
       </button>
     </div>
   </div>

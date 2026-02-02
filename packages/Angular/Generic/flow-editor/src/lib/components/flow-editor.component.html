@@ -38,7 +38,7 @@
               (fSelectionChange)="onSelectionChange($event)"
               (fMoveNodes)="onNodesMoved($event)">
 
-        <f-canvas fZoom
+        <f-canvas fZoom #fZoomRef="fComponent"
                   [fZoomMinimum]="0.15"
                   [fZoomMaximum]="3"
                   [fZoomStep]="0.1"

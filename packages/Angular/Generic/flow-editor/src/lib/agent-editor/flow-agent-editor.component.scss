@@ -14,14 +14,27 @@
 
   &--fullscreen {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 1000;
-    border-radius: 0;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 10000;
+    border-radius: 10px;
     min-height: unset;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.08);
   }
+}
+
+/* ── Backdrop overlay ─────────────────────────────────────── */
+
+.mj-agent-editor-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
 }
 
 /* ── Toolbar ───────────────────────────────────────────────── */
@@ -35,6 +48,13 @@
   border-bottom: 1px solid #e2e8f0;
   gap: 12px;
   flex-shrink: 0;
+
+  .mj-agent-editor--fullscreen & {
+    padding: 10px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #ffffff;
+    border-radius: 10px 10px 0 0;
+  }
 }
 
 .mj-agent-editor-toolbar-left,
@@ -75,6 +95,22 @@
     color: #ffffff;
 
     &:hover:not(:disabled) { background: #2563eb; border-color: #2563eb; }
+  }
+
+  &--expand {
+    background: #f0f9ff;
+    border-color: #bae6fd;
+    color: #0284c7;
+
+    &:hover:not(:disabled) { background: #e0f2fe; border-color: #7dd3fc; color: #0369a1; }
+  }
+
+  &--close {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #dc2626;
+
+    &:hover:not(:disabled) { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
   }
 }
 
@@ -117,6 +153,23 @@
   }
 
   &:hover:not(&--active) { background: #f8fafc; }
+}
+
+/* ── Fullscreen Title ──────────────────────────────────────── */
+
+.mj-agent-editor-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+
+  i {
+    color: #3b82f6;
+    font-size: 14px;
+  }
 }
 
 /* ── Status Indicators ─────────────────────────────────────── */

@@ -2,9 +2,9 @@ import {
   Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy,
   ChangeDetectorRef, ViewEncapsulation, ChangeDetectionStrategy, HostListener
 } from '@angular/core';
-import { Subject, takeUntil } from 'rxjs';
-import { FFlowComponent, FCanvasComponent, FCreateConnectionEvent, FCreateNodeEvent,
-         FSelectionChangeEvent, FCanvasChangeEvent, FMoveNodesEvent } from '@foblex/flow';
+import { Subject } from 'rxjs';
+import { FFlowComponent, FCanvasComponent, FZoomDirective, FCreateConnectionEvent,
+         FCreateNodeEvent, FSelectionChangeEvent, FCanvasChangeEvent, FMoveNodesEvent } from '@foblex/flow';
 import {
   FlowNode, FlowConnection, FlowNodeTypeConfig, FlowNodeAddedEvent,
   FlowNodeMovedEvent, FlowConnectionCreatedEvent, FlowSelectionChangedEvent,
@@ -66,6 +66,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   // ── View Children ───────────────────────────────────────────
   @ViewChild(FFlowComponent) protected fFlow: FFlowComponent | undefined;
   @ViewChild(FCanvasComponent) protected fCanvas: FCanvasComponent | undefined;
+  @ViewChild('fZoomRef') protected fZoom: FZoomDirective | undefined;
 
   // ── Internal State ──────────────────────────────────────────
   protected zoomLevel = 100;
@@ -103,16 +104,24 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Zoom in one step */
   ZoomIn(): void {
-    const newScale = Math.min(this.canvasScale + 0.15, 3);
-    this.fCanvas?.setScale(newScale);
-    this.updateZoomLevel(newScale);
+    if (this.fZoom) {
+      this.fZoom.zoomIn();
+    } else {
+      const newScale = Math.min(this.canvasScale + 0.15, 3);
+      this.fCanvas?.setScale(newScale);
+      this.updateZoomLevel(newScale);
+    }
   }
 
   /** Zoom out one step */
   ZoomOut(): void {
-    const newScale = Math.max(this.canvasScale - 0.15, 0.1);
-    this.fCanvas?.setScale(newScale);
-    this.updateZoomLevel(newScale);
+    if (this.fZoom) {
+      this.fZoom.zoomOut();
+    } else {
+      const newScale = Math.max(this.canvasScale - 0.15, 0.1);
+      this.fCanvas?.setScale(newScale);
+      this.updateZoomLevel(newScale);
+    }
   }
 
   /** Run auto-layout using dagre */

@@ -1,6 +1,6 @@
 import {
   Component, Input, Output, EventEmitter, ViewChild, OnInit, OnChanges,
-  SimpleChanges, ChangeDetectorRef, ViewEncapsulation
+  SimpleChanges, ChangeDetectorRef, ViewEncapsulation, HostListener
 } from '@angular/core';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity, ActionEntity, AIPromptEntity, AIAgentEntity } from '@memberjunction/core-entities';
@@ -444,6 +444,15 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges {
     this.showPropertiesPanel = true;
     this.StepSelected.emit(step);
     this.cdr.detectChanges();
+  }
+
+  // ── Keyboard Shortcuts ─────────────────────────────────────
+
+  @HostListener('document:keydown.escape')
+  protected onEscapeKey(): void {
+    if (this.FullScreen) {
+      this.toggleFullScreen();
+    }
   }
 
   // ── Helpers ─────────────────────────────────────────────────
