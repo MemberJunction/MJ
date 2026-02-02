@@ -270,17 +270,23 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     const targetNodeID = this.findNodeByPortId(event.fInputId);
 
     if (!sourceNodeID || !targetNodeID) return;
+
+    // Resolve actual port IDs — when fConnectOnNode is enabled, Foblex may
+    // send the node ID itself instead of a port ID. Map to the correct port.
+    const sourcePortID = this.resolvePortId(event.fOutputId, sourceNodeID, 'output');
+    const targetPortID = this.resolvePortId(event.fInputId, targetNodeID, 'input');
+
     // Prevent duplicate connections
     const exists = this.Connections.some(
-      c => c.SourcePortID === event.fOutputId && c.TargetPortID === event.fInputId
+      c => c.SourcePortID === sourcePortID && c.TargetPortID === targetPortID
     );
     if (exists) return;
 
     this.ConnectionCreated.emit({
       SourceNodeID: sourceNodeID,
-      SourcePortID: event.fOutputId,
+      SourcePortID: sourcePortID,
       TargetNodeID: targetNodeID,
-      TargetPortID: event.fInputId
+      TargetPortID: targetPortID
     });
   }
 
@@ -435,7 +441,30 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
         }
       }
     }
+    // When fConnectOnNode is enabled, Foblex may send the node ID itself
+    // instead of a port ID. Check for a direct node ID match as fallback.
+    const directMatch = this.Nodes.find(n => n.ID === portId);
+    if (directMatch) {
+      return directMatch.ID;
+    }
     return null;
+  }
+
+  /**
+   * When fConnectOnNode is enabled, Foblex may send a node ID instead of a port ID.
+   * This resolves the raw ID to the correct port ID for the given direction.
+   */
+  private resolvePortId(rawId: string, nodeId: string, direction: 'input' | 'output'): string {
+    const node = this.Nodes.find(n => n.ID === nodeId);
+    if (!node) return rawId;
+
+    // If the rawId already matches a port on this node, use it as-is
+    const exactPort = node.Ports.find(p => p.ID === rawId);
+    if (exactPort) return rawId;
+
+    // Otherwise, find the first port matching the expected direction
+    const dirPort = node.Ports.find(p => p.Direction === direction);
+    return dirPort ? dirPort.ID : rawId;
   }
 
   private createDefaultNode(config: FlowNodeTypeConfig, position: FlowPosition): FlowNode {

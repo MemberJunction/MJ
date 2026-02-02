@@ -2,6 +2,27 @@
    Flow Agent Editor — MJ-specific flow editor wrapper
    ============================================================ */
 
+/* ── Host element fullscreen positioning ──────────────────── */
+
+mj-flow-agent-editor.mj-flow-agent-editor--fullscreen {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  padding-right: 25px;
+  bottom: 12px;
+  z-index: 10000;
+  border-radius: 10px;
+  min-height: unset !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.08);
+
+  .mj-agent-editor {
+    height: 100%;
+    min-height: unset;
+    border-radius: 10px;
+  }
+}
+
 .mj-agent-editor {
   display: flex;
   flex-direction: column;
@@ -11,18 +32,6 @@
   background: #f8fafc;
   border-radius: 8px;
   overflow: hidden;
-
-  &--fullscreen {
-    position: fixed;
-    top: 12px;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    z-index: 10000;
-    border-radius: 10px;
-    min-height: unset;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.08);
-  }
 }
 
 /* ── Backdrop overlay ─────────────────────────────────────── */
@@ -49,7 +58,7 @@
   gap: 12px;
   flex-shrink: 0;
 
-  .mj-agent-editor--fullscreen & {
+  .mj-flow-agent-editor--fullscreen & {
     padding: 10px 16px;
     border-bottom: 1px solid #e2e8f0;
     background: #ffffff;

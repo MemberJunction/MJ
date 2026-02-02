@@ -1,6 +1,7 @@
 import {
-  Component, Input, Output, EventEmitter, ViewChild, OnInit, OnChanges,
-  SimpleChanges, ChangeDetectorRef, ViewEncapsulation, HostListener
+  Component, Input, Output, EventEmitter, ViewChild, OnInit, OnChanges, OnDestroy,
+  SimpleChanges, ChangeDetectorRef, ViewEncapsulation, HostListener, HostBinding,
+  ElementRef, Renderer2
 } from '@angular/core';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity, ActionEntity, AIPromptEntity, AIAgentEntity } from '@memberjunction/core-entities';
@@ -22,7 +23,10 @@ export type AgentEditorViewMode = 'diagram' | 'list';
   encapsulation: ViewEncapsulation.None,
   providers: [AgentFlowTransformerService]
 })
-export class FlowAgentEditorComponent implements OnInit, OnChanges {
+export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
+  // ── Host Bindings ─────────────────────────────────────────────
+  @HostBinding('class.mj-flow-agent-editor--fullscreen') get HostFullScreen(): boolean { return this.FullScreen; }
+
   // ── Inputs ──────────────────────────────────────────────────
   @Input() AgentID: string | null = null;
   @Input() EditMode = true;
@@ -64,9 +68,16 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges {
   protected availablePrompts: Array<{ ID: string; Name: string }> = [];
   protected availableAgents: Array<{ ID: string; Name: string }> = [];
 
+  // Fullscreen DOM relocation state
+  private originalParent: HTMLElement | null = null;
+  private originalNextSibling: Node | null = null;
+  private backdropElement: HTMLElement | null = null;
+
   constructor(
     private cdr: ChangeDetectorRef,
-    private transformer: AgentFlowTransformerService
+    private transformer: AgentFlowTransformerService,
+    private elRef: ElementRef<HTMLElement>,
+    private renderer: Renderer2
   ) {}
 
   // ── Lifecycle ───────────────────────────────────────────────
@@ -80,6 +91,13 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['AgentID'] && !changes['AgentID'].firstChange && this.AgentID) {
       this.loadAll();
+    }
+  }
+
+  ngOnDestroy(): void {
+    // Restore element to original parent if still in fullscreen
+    if (this.FullScreen) {
+      this.restoreFromFullscreen();
     }
   }
 
@@ -431,10 +449,51 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges {
 
   protected toggleFullScreen(): void {
     this.FullScreen = !this.FullScreen;
+
+    if (this.FullScreen) {
+      this.moveToBodyForFullscreen();
+    } else {
+      this.restoreFromFullscreen();
+    }
+
     this.FullScreenToggled.emit(this.FullScreen);
     this.cdr.detectChanges();
     // Re-fit after layout change
     setTimeout(() => this.flowEditor?.ZoomToFit(), 200);
+  }
+
+  private moveToBodyForFullscreen(): void {
+    const hostEl = this.elRef.nativeElement;
+    this.originalParent = hostEl.parentElement;
+    this.originalNextSibling = hostEl.nextSibling;
+
+    // Create backdrop as a separate body-level element so it covers everything
+    this.backdropElement = this.renderer.createElement('div');
+    this.renderer.addClass(this.backdropElement, 'mj-agent-editor-backdrop');
+    this.renderer.listen(this.backdropElement, 'click', () => this.toggleFullScreen());
+    this.renderer.appendChild(document.body, this.backdropElement);
+
+    // Move the host element to body — @HostBinding applies the fixed-position class
+    this.renderer.appendChild(document.body, hostEl);
+  }
+
+  private restoreFromFullscreen(): void {
+    // Remove backdrop
+    if (this.backdropElement) {
+      this.renderer.removeChild(document.body, this.backdropElement);
+      this.backdropElement = null;
+    }
+
+    // Restore host element to original position
+    if (!this.originalParent) return;
+    const hostEl = this.elRef.nativeElement;
+    if (this.originalNextSibling) {
+      this.renderer.insertBefore(this.originalParent, hostEl, this.originalNextSibling);
+    } else {
+      this.renderer.appendChild(this.originalParent, hostEl);
+    }
+    this.originalParent = null;
+    this.originalNextSibling = null;
   }
 
   protected onStepClickedInList(step: AIAgentStepEntity): void {
