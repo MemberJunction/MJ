@@ -2,6 +2,24 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
 import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { FlowConnection } from '../interfaces/flow-types';
 
+/** Step type accent color mapping */
+const STEP_TYPE_COLORS: Record<string, string> = {
+  Action: '#3b82f6',
+  Prompt: '#8b5cf6',
+  'Sub-Agent': '#10b981',
+  ForEach: '#f59e0b',
+  While: '#f59e0b'
+};
+
+/** Step type icon mapping */
+const STEP_TYPE_ICONS: Record<string, string> = {
+  Action: 'fa-bolt',
+  Prompt: 'fa-comment-dots',
+  'Sub-Agent': 'fa-robot',
+  ForEach: 'fa-arrows-spin',
+  While: 'fa-rotate'
+};
+
 /**
  * Properties panel for editing AI Agent step and path configurations.
  * Shows context-aware sections based on the selected step type.
@@ -22,12 +40,17 @@ export class AgentPropertiesPanelComponent {
   @Input() Actions: Array<{ ID: string; Name: string }> = [];
   @Input() Prompts: Array<{ ID: string; Name: string }> = [];
   @Input() Agents: Array<{ ID: string; Name: string }> = [];
+  @Input() AllSteps: AIAgentStepEntity[] = [];
 
   // ── Outputs ─────────────────────────────────────────────────
   @Output() StepChanged = new EventEmitter<AIAgentStepEntity>();
   @Output() PathChanged = new EventEmitter<AIAgentStepPathEntity>();
   @Output() DeleteStepRequested = new EventEmitter<AIAgentStepEntity>();
+  @Output() DeletePathRequested = new EventEmitter<AIAgentStepPathEntity>();
   @Output() CloseRequested = new EventEmitter<void>();
+
+  // ── Collapsible section state ─────────────────────────────
+  protected collapsedSections: Record<string, boolean> = {};
 
   // ── Computed Properties ─────────────────────────────────────
 
@@ -67,6 +90,75 @@ export class AgentPropertiesPanelComponent {
       case 'While': return 'While Loop';
       default: return 'Step';
     }
+  }
+
+  get stepTypeColor(): string {
+    return STEP_TYPE_COLORS[this.Step?.StepType ?? ''] ?? '#64748b';
+  }
+
+  get stepTypeIcon(): string {
+    return STEP_TYPE_ICONS[this.Step?.StepType ?? ''] ?? 'fa-circle-nodes';
+  }
+
+  get statusColor(): string {
+    switch (this.Step?.Status) {
+      case 'Active': return '#10b981';
+      case 'Disabled': return '#94a3b8';
+      case 'Pending': return '#f59e0b';
+      default: return '#94a3b8';
+    }
+  }
+
+  /** Path: origin step name */
+  get originStepName(): string {
+    if (!this.PathEntity) return '';
+    const step = this.AllSteps.find(s => s.ID === this.PathEntity!.OriginStepID);
+    return step?.Name ?? 'Unknown Step';
+  }
+
+  /** Path: destination step name */
+  get destinationStepName(): string {
+    if (!this.PathEntity) return '';
+    const step = this.AllSteps.find(s => s.ID === this.PathEntity!.DestinationStepID);
+    return step?.Name ?? 'Unknown Step';
+  }
+
+  /** Path: whether a condition is set */
+  get isConditionalPath(): boolean {
+    return this.PathEntity?.Condition != null && this.PathEntity.Condition.trim().length > 0;
+  }
+
+  /** Path accent color */
+  get pathAccentColor(): string {
+    return this.isConditionalPath ? '#f59e0b' : '#94a3b8';
+  }
+
+  /** Resolved action name for display */
+  get selectedActionName(): string {
+    if (!this.Step?.ActionID) return 'None selected';
+    return this.Actions.find(a => a.ID === this.Step!.ActionID)?.Name ?? 'Unknown';
+  }
+
+  /** Resolved prompt name for display */
+  get selectedPromptName(): string {
+    if (!this.Step?.PromptID) return 'None selected';
+    return this.Prompts.find(p => p.ID === this.Step!.PromptID)?.Name ?? 'Unknown';
+  }
+
+  /** Resolved agent name for display */
+  get selectedAgentName(): string {
+    if (!this.Step?.SubAgentID) return 'None selected';
+    return this.Agents.find(a => a.ID === this.Step!.SubAgentID)?.Name ?? 'Unknown';
+  }
+
+  // ── Section Collapse ──────────────────────────────────────
+
+  ToggleSection(sectionId: string): void {
+    this.collapsedSections[sectionId] = !this.collapsedSections[sectionId];
+  }
+
+  IsSectionCollapsed(sectionId: string): boolean {
+    return this.collapsedSections[sectionId] === true;
   }
 
   // ── Step Event Handlers ─────────────────────────────────────
@@ -181,6 +273,12 @@ export class AgentPropertiesPanelComponent {
     }
   }
 
+  OnDeletePath(): void {
+    if (this.PathEntity) {
+      this.DeletePathRequested.emit(this.PathEntity);
+    }
+  }
+
   // ── Template Helpers ──────────────────────────────────────
 
   /** Safely extract string value from an input/textarea/select change event */
@@ -196,5 +294,15 @@ export class AgentPropertiesPanelComponent {
   /** Safely extract numeric value from a number input event */
   protected NumericValue(event: Event): number {
     return +(event.target as HTMLInputElement).value;
+  }
+
+  /** Format JSON for display */
+  protected FormatJsonDisplay(value: string | null | undefined): string {
+    if (!value) return '';
+    try {
+      return JSON.stringify(JSON.parse(value), null, 2);
+    } catch {
+      return value;
+    }
   }
 }

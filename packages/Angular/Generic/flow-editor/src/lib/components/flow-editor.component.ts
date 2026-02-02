@@ -341,7 +341,11 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
       this.NodeSelected.emit(node ?? null);
       this.ConnectionSelected.emit(null);
     } else if (this.selectedConnectionIDs.length === 1) {
-      const conn = this.Connections.find(c => c.ID === this.selectedConnectionIDs[0]);
+      const connId = this.selectedConnectionIDs[0];
+      console.log('[FlowEditor] Connection selection event - fConnectionId:', connId);
+      console.log('[FlowEditor] Available connections:', this.Connections.map(c => ({ ID: c.ID, Source: c.SourceNodeID })));
+      const conn = this.Connections.find(c => c.ID === connId);
+      console.log('[FlowEditor] Matched connection:', conn ? conn.ID : 'NULL');
       this.ConnectionSelected.emit(conn ?? null);
       this.NodeSelected.emit(null);
     } else if (this.selectedNodeIDs.length === 0 && this.selectedConnectionIDs.length === 0) {

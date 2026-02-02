@@ -4,20 +4,20 @@
   <div class="mj-agent-editor-toolbar">
     <div class="mj-agent-editor-toolbar-left">
       <!-- Save -->
-      <button *ngIf="EditMode" class="mj-agent-editor-btn mj-agent-editor-btn--primary"
+      <button *ngIf="isEditingActive" class="mj-agent-editor-btn mj-agent-editor-btn--primary"
               [disabled]="isSaving || !hasUnsavedChanges" (click)="Save()">
         <i class="fa-solid" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-floppy-disk'"></i>
         {{ isSaving ? 'Saving...' : 'Save' }}
       </button>
 
-      <div *ngIf="EditMode" class="mj-agent-editor-btn-divider"></div>
+      <div *ngIf="isEditingActive" class="mj-agent-editor-btn-divider"></div>
 
       <!-- Undo / Redo -->
-      <button *ngIf="EditMode" class="mj-agent-editor-btn"
+      <button *ngIf="isEditingActive" class="mj-agent-editor-btn"
               [disabled]="!flowEditor?.CanUndo" (click)="flowEditor?.Undo()" title="Undo (Ctrl+Z)">
         <i class="fa-solid fa-rotate-left"></i>
       </button>
-      <button *ngIf="EditMode" class="mj-agent-editor-btn"
+      <button *ngIf="isEditingActive" class="mj-agent-editor-btn"
               [disabled]="!flowEditor?.CanRedo" (click)="flowEditor?.Redo()" title="Redo (Ctrl+Y)">
         <i class="fa-solid fa-rotate-right"></i>
       </button>
@@ -42,6 +42,14 @@
           <i class="fa-solid fa-list"></i> List
         </button>
       </div>
+
+      <!-- Mode indicator badge -->
+      <span *ngIf="isEditingActive" class="mj-agent-editor-mode-badge mj-agent-editor-mode-badge--editing">
+        <i class="fa-solid fa-pen"></i> Editing
+      </span>
+      <span *ngIf="!isEditingActive" class="mj-agent-editor-mode-badge mj-agent-editor-mode-badge--readonly">
+        <i class="fa-solid fa-lock"></i> Read Only
+      </span>
     </div>
 
     <div class="mj-agent-editor-toolbar-right">
@@ -52,6 +60,18 @@
       <span *ngIf="lastSaved" class="mj-agent-editor-status">
         Saved {{ lastSaved | date:'shortTime' }}
       </span>
+
+      <!-- Fullscreen edit toggle (only in fullscreen, and only when parent is NOT in edit mode) -->
+      <button *ngIf="FullScreen && !EditMode && !fullscreenEditMode"
+              class="mj-agent-editor-btn mj-agent-editor-btn--edit"
+              (click)="toggleFullscreenEditMode()" title="Edit flow">
+        <i class="fa-solid fa-pen-to-square"></i> Edit
+      </button>
+      <button *ngIf="FullScreen && fullscreenEditMode && !EditMode"
+              class="mj-agent-editor-btn"
+              (click)="cancelFullscreenEdit()" title="Cancel editing">
+        <i class="fa-solid fa-xmark"></i> Cancel
+      </button>
 
       <!-- Expand / Collapse -->
       <button *ngIf="!FullScreen" class="mj-agent-editor-btn mj-agent-editor-btn--expand"
@@ -80,9 +100,9 @@
                        [Nodes]="nodes"
                        [Connections]="connections"
                        [NodeTypes]="nodeTypes"
-                       [ReadOnly]="!EditMode"
+                       [ReadOnly]="!isEditingActive"
                        [ShowMinimap]="true"
-                       [ShowPalette]="EditMode"
+                       [ShowPalette]="isEditingActive"
                        [ShowGrid]="true"
                        [ShowStatusBar]="true"
                        [ShowToolbar]="true"
@@ -104,13 +124,15 @@
           [Step]="selectedStep"
           [SelectedConnection]="selectedConnection"
           [PathEntity]="selectedPathEntity"
-          [ReadOnly]="!EditMode"
+          [ReadOnly]="!isEditingActive"
           [Actions]="availableActions"
           [Prompts]="availablePrompts"
           [Agents]="availableAgents"
+          [AllSteps]="steps"
           (StepChanged)="onStepChanged($event)"
           (PathChanged)="onPathChanged($event)"
           (DeleteStepRequested)="onDeleteStepRequested($event)"
+          (DeletePathRequested)="onDeletePathRequested($event)"
           (CloseRequested)="onCloseProperties()">
         </mj-agent-properties-panel>
       </div>
@@ -132,15 +154,41 @@
           [Step]="selectedStep"
           [SelectedConnection]="selectedConnection"
           [PathEntity]="selectedPathEntity"
-          [ReadOnly]="!EditMode"
+          [ReadOnly]="!isEditingActive"
           [Actions]="availableActions"
           [Prompts]="availablePrompts"
           [Agents]="availableAgents"
+          [AllSteps]="steps"
           (StepChanged)="onStepChanged($event)"
           (PathChanged)="onPathChanged($event)"
           (DeleteStepRequested)="onDeleteStepRequested($event)"
+          (DeletePathRequested)="onDeletePathRequested($event)"
           (CloseRequested)="onCloseProperties()">
         </mj-agent-properties-panel>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Unsaved Changes Dialog ──────────────────────────── -->
+  <div *ngIf="showUnsavedDialog" class="mj-agent-editor-dialog-overlay">
+    <div class="mj-agent-editor-dialog">
+      <div class="mj-agent-editor-dialog-icon">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h3 class="mj-agent-editor-dialog-title">Unsaved Changes</h3>
+      <p class="mj-agent-editor-dialog-message">
+        You have unsaved changes to this flow. What would you like to do?
+      </p>
+      <div class="mj-agent-editor-dialog-actions">
+        <button class="mj-agent-editor-btn mj-agent-editor-btn--primary" (click)="onUnsavedDialogSave()">
+          <i class="fa-solid fa-floppy-disk"></i> Save & Close
+        </button>
+        <button class="mj-agent-editor-btn mj-agent-editor-btn--danger-outline" (click)="onUnsavedDialogDiscard()">
+          Discard Changes
+        </button>
+        <button class="mj-agent-editor-btn" (click)="onUnsavedDialogCancel()">
+          Cancel
+        </button>
       </div>
     </div>
   </div>

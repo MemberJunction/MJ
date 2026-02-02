@@ -39,6 +39,7 @@
     "@memberjunction/core": "3.3.0",
     "@memberjunction/core-entities": "3.3.0",
     "@memberjunction/global": "3.3.0",
+    "@memberjunction/ng-code-editor": "3.4.0",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },

@@ -51,6 +51,10 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   protected hasUnsavedChanges = false;
   protected lastSaved: Date | null = null;
 
+  // Fullscreen self-contained edit mode
+  protected fullscreenEditMode = false;
+  protected showUnsavedDialog = false;
+
   // Entity data
   protected steps: AIAgentStepEntity[] = [];
   protected paths: AIAgentStepPathEntity[] = [];
@@ -341,8 +345,11 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
   protected onConnectionSelected(conn: FlowConnection | null): void {
     if (conn) {
+      console.log('[FlowAgentEditor] Connection selected:', conn.ID, 'SourceNodeID:', conn.SourceNodeID, 'TargetNodeID:', conn.TargetNodeID);
+      console.log('[FlowAgentEditor] Available paths:', this.paths.map(p => ({ ID: p.ID, Origin: p.OriginStepID, Dest: p.DestinationStepID })));
       this.selectedConnection = conn;
       this.selectedPathEntity = this.paths.find(p => p.ID === conn.ID) ?? null;
+      console.log('[FlowAgentEditor] Matched PathEntity:', this.selectedPathEntity ? this.selectedPathEntity.ID : 'NULL');
       this.selectedStep = null;
       this.showPropertiesPanel = true;
     } else {
@@ -435,6 +442,22 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  protected onDeletePathRequested(path: AIAgentStepPathEntity): void {
+    const conn = this.connections.find(c => c.ID === path.ID);
+    if (conn) {
+      if (path.IsSaved) {
+        this.deletedPathIDs.push(path.ID);
+      }
+      this.paths = this.paths.filter(p => p.ID !== path.ID);
+      this.rebuildFlowModel();
+      this.markDirty();
+    }
+    this.showPropertiesPanel = false;
+    this.selectedConnection = null;
+    this.selectedPathEntity = null;
+    this.cdr.detectChanges();
+  }
+
   protected onCloseProperties(): void {
     this.showPropertiesPanel = false;
     this.flowEditor?.ClearSelection();
@@ -447,12 +470,63 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  /** Whether editing is currently allowed — combines parent EditMode + fullscreen self-contained edit */
+  get isEditingActive(): boolean {
+    return this.EditMode || this.fullscreenEditMode;
+  }
+
+  protected toggleFullscreenEditMode(): void {
+    this.fullscreenEditMode = !this.fullscreenEditMode;
+    this.cdr.detectChanges();
+  }
+
+  protected cancelFullscreenEdit(): void {
+    if (this.hasUnsavedChanges) {
+      // Reload to discard changes
+      this.fullscreenEditMode = false;
+      this.hasUnsavedChanges = false;
+      this.loadAll();
+    } else {
+      this.fullscreenEditMode = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   protected toggleFullScreen(): void {
+    if (this.FullScreen && this.hasUnsavedChanges) {
+      this.showUnsavedDialog = true;
+      this.cdr.detectChanges();
+      return;
+    }
+    this.performFullscreenToggle();
+  }
+
+  protected onUnsavedDialogSave(): void {
+    this.showUnsavedDialog = false;
+    this.Save().then(() => this.performFullscreenToggle());
+  }
+
+  protected onUnsavedDialogDiscard(): void {
+    this.showUnsavedDialog = false;
+    this.hasUnsavedChanges = false;
+    this.fullscreenEditMode = false;
+    this.performFullscreenToggle();
+    // Reload original data
+    this.loadAll();
+  }
+
+  protected onUnsavedDialogCancel(): void {
+    this.showUnsavedDialog = false;
+    this.cdr.detectChanges();
+  }
+
+  private performFullscreenToggle(): void {
     this.FullScreen = !this.FullScreen;
 
     if (this.FullScreen) {
       this.moveToBodyForFullscreen();
     } else {
+      this.fullscreenEditMode = false;
       this.restoreFromFullscreen();
     }
 
@@ -509,7 +583,9 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
   @HostListener('document:keydown.escape')
   protected onEscapeKey(): void {
-    if (this.FullScreen) {
+    if (this.showUnsavedDialog) {
+      this.onUnsavedDialogCancel();
+    } else if (this.FullScreen) {
       this.toggleFullScreen();
     }
   }
