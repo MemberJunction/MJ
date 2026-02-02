@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-flow-editor",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "MemberJunction: Generic visual flow editor component powered by Foblex Flow, with an agent-specific Flow Agent Editor",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
