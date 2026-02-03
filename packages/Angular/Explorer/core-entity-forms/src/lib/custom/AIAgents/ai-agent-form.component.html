@@ -69,7 +69,8 @@
                             <button kendoButton size="large"
                                     (click)="openPermissionsDialog()"
                                     [title]="IsOpenToEveryone ? 'Open to everyone — click to manage permissions' : 'Restricted — click to manage permissions'">
-                                <i class="fa-solid" [class.fa-globe]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"></i>
+                                <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
+                                   [style.color]="IsOpenToEveryone ? '#16a34a' : null"></i>
                                 {{ IsOpenToEveryone ? 'Open' : 'Restricted' }}
                             </button>
                         }
@@ -105,7 +106,8 @@
                     <button class="agent-header-mini-btn"
                             (click)="openPermissionsDialog()"
                             [title]="IsOpenToEveryone ? 'Open to everyone' : 'Restricted'">
-                        <i class="fa-solid" [class.fa-globe]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"></i>
+                        <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
+                           [style.color]="IsOpenToEveryone ? '#16a34a' : null"></i>
                     </button>
                 }
                 <button class="agent-header-mini-btn"
