@@ -300,6 +300,12 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private syncPositionsFromCanvas(): void {
+    this.syncPositionsToEntities();
+  }
+
+  /** Write current FlowNode positions back to the underlying step entities.
+   *  Called on every node move so that rebuildFlowModel() never loses drag changes. */
+  private syncPositionsToEntities(): void {
     for (const node of this.nodes) {
       const step = this.steps.find(s => s.ID === node.ID);
       if (step) {
@@ -477,7 +483,10 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
   protected onNodesChanged(nodes: FlowNode[]): void {
     this.nodes = nodes;
-    this.markDirty();
+    // Sync canvas positions back to entities immediately so that
+    // any subsequent rebuildFlowModel() preserves drag changes.
+    this.syncPositionsToEntities();
+    this.markDirty(); 
   }
 
   protected onConnectionsChanged(connections: FlowConnection[]): void {

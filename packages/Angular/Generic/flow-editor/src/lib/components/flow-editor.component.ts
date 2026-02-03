@@ -415,10 +415,15 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     const config = this.NodeTypes.find(nt => nt.Type === nodeType);
     if (!config) return;
 
-    const position = this.fFlow?.getPositionInFlow(event.rect);
-    const dropPosition: FlowPosition = position
-      ? { X: position.x, Y: position.y }
-      : { X: 100, Y: 100 };
+    // event.rect is already normalized to canvas coordinates by Foblex's
+    // GetNormalizedElementRectExecution (via RoundedRect.fromCenter).
+    // Do NOT pass it through getPositionInFlow() again — that double-normalizes
+    // and places the node far from the actual drop point.
+    // Use the center of the preview rect (≈ cursor position at drop time).
+    const dropPosition: FlowPosition = {
+      X: event.rect.x + event.rect.width / 2,
+      Y: event.rect.y + event.rect.height / 2
+    };
 
     const newNode = this.createDefaultNode(config, dropPosition);
     this.NodeAdded.emit({ Node: newNode, DropPosition: dropPosition });
