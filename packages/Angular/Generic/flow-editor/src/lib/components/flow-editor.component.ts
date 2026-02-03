@@ -50,6 +50,12 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @Input() ShowToolbar = true;
   @Input() GridSize = 20;
   @Input() AutoLayoutDirection: FlowLayoutDirection = 'vertical';
+  /** Background color for connection labels */
+  @Input() ConnectionLabelBackground = '#fffef5';
+  /** Border color for connection labels */
+  @Input() ConnectionLabelBorderColor = '#cbd5e1';
+  /** Text color for connection labels */
+  @Input() ConnectionLabelTextColor = '#334155';
 
   // ── Outputs ─────────────────────────────────────────────────
   @Output() NodeSelected = new EventEmitter<FlowNode | null>();
@@ -201,7 +207,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   }
 
   /** Update a connection's visual properties in-place (label, color, style, etc.) */
-  UpdateConnection(connId: string, changes: Partial<Pick<FlowConnection, 'Label' | 'Color' | 'Style' | 'Animated'>>): void {
+  UpdateConnection(connId: string, changes: Partial<Pick<FlowConnection, 'Label' | 'LabelIcon' | 'LabelIconColor' | 'LabelDetail' | 'Color' | 'Style' | 'Animated'>>): void {
     const conn = this.Connections.find(c => c.ID === connId);
     if (!conn) return;
     Object.assign(conn, changes);

@@ -6,34 +6,33 @@
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-        <!-- Agent Header — collapsible via toggle -->
-        <div class="agent-header" [class.agent-header--collapsed]="HeaderCollapsed">
-            <div class="agent-header-content">
-                <!-- Collapse toggle -->
-                <button class="agent-header-toggle" (click)="ToggleHeaderCollapsed()"
-                        [title]="HeaderCollapsed ? 'Expand header' : 'Collapse header'">
-                    <i class="fa-solid" [ngClass]="HeaderCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'"></i>
-                </button>
+        <!-- Agent Header — expanded view -->
+        @if (!HeaderCollapsed) {
+            <div class="agent-header">
+                <div class="agent-header-content">
+                    <button class="agent-header-toggle" (click)="ToggleHeaderCollapsed()"
+                            title="Minimize header">
+                        <i class="fa-solid fa-chevron-up"></i>
+                    </button>
 
-                <div class="agent-overview">
-                    <div class="agent-icon-wrapper">
-                        @if (hasLogoURL()) {
-                            <img [src]="record.LogoURL" [alt]="record.Name + ' logo'" class="agent-logo">
-                        } @else {
-                            <i [class]="getAgentIcon()"></i>
-                        }
-                    </div>
-                    <div class="agent-info">
-                        @if (EditMode) {
-                            <kendo-textbox [(ngModel)]="record.Name"
-                                          name="agentName"
-                                          placeholder="Enter agent name..."
-                                          class="agent-name-input">
-                            </kendo-textbox>
-                        } @else {
-                            <h1 class="agent-name">{{ record.Name || 'Untitled AI Agent' }}</h1>
-                        }
-                        @if (!HeaderCollapsed) {
+                    <div class="agent-overview">
+                        <div class="agent-icon-wrapper">
+                            @if (hasLogoURL()) {
+                                <img [src]="record.LogoURL" [alt]="record.Name + ' logo'" class="agent-logo">
+                            } @else {
+                                <i [class]="getAgentIcon()"></i>
+                            }
+                        </div>
+                        <div class="agent-info">
+                            @if (EditMode) {
+                                <kendo-textbox [(ngModel)]="record.Name"
+                                              name="agentName"
+                                              placeholder="Enter agent name..."
+                                              class="agent-name-input">
+                                </kendo-textbox>
+                            } @else {
+                                <h1 class="agent-name">{{ record.Name || 'Untitled AI Agent' }}</h1>
+                            }
                             <div class="agent-meta">
                                 @if (record.Status) {
                                     <span class="status-badge" [style.background-color]="getStatusBadgeColor()">
@@ -56,40 +55,64 @@
                                     </span>
                                 }
                             </div>
-                        } @else {
-                            <!-- Inline status in collapsed mode -->
-                            @if (record.Status) {
-                                <span class="status-badge status-badge--inline" [style.background-color]="getStatusBadgeColor()">
-                                    {{ record.Status }}
-                                </span>
-                            }
+                        </div>
+                    </div>
+
+                    <div class="agent-actions">
+                        @if (record.ID) {
+                            <button kendoButton themeColor="primary" size="large"
+                                        (click)="openTestHarness()"
+                                        [disabled]="record.Status !== 'Active'"
+                                        title="Run this AI agent">
+                                <i class="fa-solid fa-play"></i> Run
+                            </button>
+                            <button kendoButton size="large"
+                                    (click)="openPermissionsDialog()"
+                                    title="Manage permissions">
+                                <i class="fa-solid fa-lock"></i> Permissions
+                            </button>
                         }
+                        <button kendoButton fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
+                            <i class="fa-solid fa-refresh"></i>
+                        </button>
                     </div>
                 </div>
-
-                <!-- Action Buttons -->
-                <div class="agent-actions">
-                    @if (record.ID) {
-                        <button kendoButton themeColor="primary" [size]="HeaderCollapsed ? 'small' : 'large'"
-                                    (click)="openTestHarness()"
-                                    [disabled]="record.Status !== 'Active'"
-                                    title="Run this AI agent">
-                            <i class="fa-solid fa-play"></i>
-                            @if (!HeaderCollapsed) { Run }
-                        </button>
-                        <button kendoButton [size]="HeaderCollapsed ? 'small' : 'large'"
-                                (click)="openPermissionsDialog()"
-                                title="Manage permissions">
-                            <i class="fa-solid fa-lock"></i>
-                            @if (!HeaderCollapsed) { Permissions }
-                        </button>
-                    }
-                    <button kendoButton fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
-                        <i class="fa-solid fa-refresh"></i>
-                    </button>
-                </div>
             </div>
-        </div>
+        }
+
+        <!-- Agent Header — minimized floating bar -->
+        @if (HeaderCollapsed) {
+            <div class="agent-header-mini">
+                <button class="agent-header-mini-expand" (click)="ToggleHeaderCollapsed()"
+                        title="Expand header">
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+                <span class="agent-header-mini-name">{{ record.Name || 'Untitled AI Agent' }}</span>
+                @if (record.Status) {
+                    <span class="agent-header-mini-status" [style.background-color]="getStatusBadgeColor()">
+                        {{ record.Status }}
+                    </span>
+                }
+                <div class="agent-header-mini-spacer"></div>
+                @if (record.ID) {
+                    <button class="agent-header-mini-btn agent-header-mini-btn--primary"
+                            (click)="openTestHarness()"
+                            [disabled]="record.Status !== 'Active'"
+                            title="Run agent">
+                        <i class="fa-solid fa-play"></i>
+                    </button>
+                    <button class="agent-header-mini-btn"
+                            (click)="openPermissionsDialog()"
+                            title="Permissions">
+                        <i class="fa-solid fa-lock"></i>
+                    </button>
+                }
+                <button class="agent-header-mini-btn"
+                        (click)="refreshRelatedData()" title="Refresh">
+                    <i class="fa-solid fa-refresh"></i>
+                </button>
+            </div>
+        }
 
         <!-- Single Pane Layout with Expander Panels -->
         <div class="form-content">

@@ -80,6 +80,10 @@ export interface FlowConnection {
   TargetPortID: string;
   Label?: string;
   LabelDetail?: string;
+  /** Font Awesome icon class shown before the label text (e.g., 'fa-check') */
+  LabelIcon?: string;
+  /** Color for the label icon */
+  LabelIconColor?: string;
   Condition?: string;
   Priority?: number;
   Style?: FlowConnectionStyle;

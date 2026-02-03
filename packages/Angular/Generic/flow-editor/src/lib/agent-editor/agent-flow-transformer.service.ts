@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
-import { FlowNode, FlowConnection, FlowNodeTypeConfig, FlowNodePort } from '../interfaces/flow-types';
+import { FlowNode, FlowConnection, FlowConnectionStyle, FlowNodeTypeConfig, FlowNodePort } from '../interfaces/flow-types';
 
 /** Step types mapped to visual configuration */
 export const AGENT_STEP_TYPE_CONFIGS: FlowNodeTypeConfig[] = [
@@ -74,7 +74,7 @@ export class AgentFlowTransformerService {
 
   /** Convert MJ path entities to generic FlowConnections */
   PathsToConnections(paths: AIAgentStepPathEntity[]): FlowConnection[] {
-    return paths.map(path => this.pathToConnection(path));
+    return paths.map(path => this.pathToConnection(path, paths));
   }
 
   /** Build the subtitle for a step based on its configured action/prompt/agent */
@@ -231,8 +231,26 @@ export class AgentFlowTransformerService {
     };
   }
 
-  private pathToConnection(path: AIAgentStepPathEntity): FlowConnection {
+  private pathToConnection(path: AIAgentStepPathEntity, allPaths: AIAgentStepPathEntity[]): FlowConnection {
     const hasCondition = path.Condition != null && path.Condition.trim().length > 0;
+    const isAlwaysPath = !hasCondition;
+
+    // Analyze sibling paths from the same origin step
+    const siblingPaths = allPaths.filter(p => p.OriginStepID === path.OriginStepID);
+    const isOnlyPath = siblingPaths.length === 1;
+    const unconditionalSiblings = siblingPaths.filter(
+      p => !p.Condition || p.Condition.trim().length === 0
+    );
+    // Only flag as ambiguous when 2+ undescribed unconditional paths exist.
+    // An unconditional path with a description is an intentional "always" path
+    // and should not trigger the duplicate-default warning.
+    const bareDefaultCount = unconditionalSiblings.filter(
+      p => !p.Description || p.Description.trim().length === 0
+    ).length;
+    const hasAmbiguousAlways = isAlwaysPath && bareDefaultCount > 1;
+
+    // Build label, icon, and visual style
+    const visual = this.buildPathVisuals(path, hasCondition, isOnlyPath, hasAmbiguousAlways);
 
     return {
       ID: path.ID,
@@ -240,12 +258,65 @@ export class AgentFlowTransformerService {
       SourcePortID: `${path.OriginStepID}-output`,
       TargetNodeID: path.DestinationStepID,
       TargetPortID: `${path.DestinationStepID}-input`,
-      Label: path.Description || (hasCondition ? this.truncateCondition(path.Condition!) : undefined),
+      Label: visual.label,
+      LabelIcon: visual.labelIcon,
+      LabelIconColor: visual.labelIconColor,
+      LabelDetail: visual.labelDetail,
       Condition: path.Condition ?? undefined,
       Priority: path.Priority,
-      Style: hasCondition ? 'dashed' : 'solid',
-      Color: hasCondition ? '#f59e0b' : '#94a3b8',
-      Data: { PathEntityID: path.ID }
+      Style: visual.style,
+      Color: visual.color,
+      Data: {
+        PathEntityID: path.ID,
+        IsAlwaysPath: !hasCondition,
+        HasAmbiguousAlways: hasAmbiguousAlways
+      }
+    };
+  }
+
+  private buildPathVisuals(
+    path: AIAgentStepPathEntity,
+    hasCondition: boolean,
+    isOnlyPath: boolean,
+    hasAmbiguousAlways: boolean
+  ): { label?: string; labelIcon?: string; labelIconColor?: string; labelDetail?: string; color: string; style: FlowConnectionStyle } {
+    // Conditional path — amber dashed with condition text
+    if (hasCondition) {
+      return {
+        label: path.Description || path.Condition!,
+        color: '#f59e0b',
+        style: 'dashed'
+      };
+    }
+
+    // Sole unconditional (only exit path) — neutral dark slate, no label needed
+    if (isOnlyPath) {
+      return {
+        label: path.Description || undefined,
+        color: '#64748b',
+        style: 'solid'
+      };
+    }
+
+    // Ambiguous: multiple unconditional paths from the same step
+    if (hasAmbiguousAlways) {
+      return {
+        label: path.Description || 'Default',
+        labelIcon: 'fa-triangle-exclamation',
+        labelIconColor: '#ef4444',
+        labelDetail: 'Duplicate default paths: only the highest-priority one will execute',
+        color: '#ef4444',
+        style: 'solid'
+      };
+    }
+
+    // Valid default path (unconditional among conditional siblings) — forest green with checkmark
+    return {
+      label: path.Description || 'Default',
+      labelIcon: 'fa-circle-check',
+      labelIconColor: '#16a34a',
+      color: '#16a34a',
+      style: 'solid'
     };
   }
 

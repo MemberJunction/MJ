@@ -93,7 +93,15 @@
             </svg>
             <!-- Connection label -->
             <div *ngIf="conn.Label" fConnectionContent [position]="0.5"
-                 class="mj-flow-connection-label">
+                 class="mj-flow-connection-label"
+                 [style.backgroundColor]="ConnectionLabelBackground"
+                 [style.borderColor]="ConnectionLabelBorderColor"
+                 [style.color]="ConnectionLabelTextColor"
+                 [title]="conn.LabelDetail || conn.Label || ''">
+              <i *ngIf="conn.LabelIcon"
+                 class="fa-solid mj-flow-connection-label-icon"
+                 [ngClass]="conn.LabelIcon"
+                 [style.color]="conn.LabelIconColor || 'inherit'"></i>
               {{ conn.Label }}
             </div>
           </f-connection>

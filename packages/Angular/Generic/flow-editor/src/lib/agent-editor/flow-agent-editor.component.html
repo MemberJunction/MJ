@@ -1,6 +1,6 @@
 <div class="mj-agent-editor">
 
-  <!-- ── Top Toolbar ───────────────────────────────────────── -->
+  <!-- ── Toolbar ─────────────────────────────────────────────── -->
   <div class="mj-agent-editor-toolbar" [class.mj-agent-editor-toolbar--editing]="isEditingActive">
     <div class="mj-agent-editor-toolbar-left">
       <!-- Undo / Redo (edit mode only) -->
@@ -16,7 +16,7 @@
 
     <div class="mj-agent-editor-toolbar-center">
       <!-- Fullscreen title -->
-      <span *ngIf="FullScreen" class="mj-agent-editor-title">
+      <span class="mj-agent-editor-title">
         <i class="fa-solid fa-diagram-project"></i> Flow Configuration
       </span>
 
@@ -58,7 +58,7 @@
         <i class="fa-solid" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-floppy-disk'"></i>
         {{ isSaving ? 'Saving...' : 'Save' }}
       </button>
-      <button *ngIf="FullScreen && fullscreenEditMode && !EditMode"
+      <button *ngIf="fullscreenEditMode && !EditMode"
               class="mj-agent-editor-btn"
               (click)="cancelFullscreenEdit()" title="Cancel editing">
         <i class="fa-solid fa-xmark"></i> Cancel
@@ -66,14 +66,14 @@
 
       <div *ngIf="isEditingActive" class="mj-agent-editor-btn-divider"></div>
 
-      <!-- Fullscreen edit toggle (only in fullscreen, and only when parent is NOT in edit mode) -->
-      <button *ngIf="FullScreen && !EditMode && !fullscreenEditMode && userCanUpdate"
+      <!-- Fullscreen edit toggle (only when parent is NOT in edit mode) -->
+      <button *ngIf="!EditMode && !fullscreenEditMode && userCanUpdate"
               class="mj-agent-editor-btn mj-agent-editor-btn--edit"
               (click)="toggleFullscreenEditMode()" title="Edit flow">
         <i class="fa-solid fa-pen-to-square"></i> Edit
       </button>
 
-      <!-- Expand / Close -->
+      <!-- Expand / Close fullscreen -->
       <button *ngIf="!FullScreen" class="mj-agent-editor-btn mj-agent-editor-btn--expand"
               (click)="toggleFullScreen()" title="Expand to full screen">
         <i class="fa-solid fa-up-right-and-down-left-from-center"></i> Expand

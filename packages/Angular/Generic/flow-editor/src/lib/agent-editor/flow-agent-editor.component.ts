@@ -547,20 +547,9 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   protected onPathChanged(path: AIAgentStepPathEntity): void {
-    // Update the corresponding connection in-place instead of rebuilding everything
-    const conn = this.connections.find(c => c.ID === path.ID);
-    if (conn) {
-      const hasCondition = path.Condition != null && path.Condition.trim().length > 0;
-      conn.Label = path.Description || (hasCondition ? path.Condition!.substring(0, 30) : undefined);
-      conn.Color = hasCondition ? '#f59e0b' : '#94a3b8';
-      conn.Style = hasCondition ? 'dashed' : 'solid';
-      // Push visual update to the generic flow editor
-      this.flowEditor?.UpdateConnection(conn.ID, {
-        Label: conn.Label,
-        Color: conn.Color,
-        Style: conn.Style
-      });
-    }
+    // Rebuild all connections from the same origin since always/conditional logic
+    // depends on sibling paths (e.g., "Default" label only appears when siblings exist)
+    this.rebuildFlowModel();
     this.markDirty();
     this.cdr.detectChanges();
   }

@@ -33,6 +33,7 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
   background: #f8fafc;
   border-radius: 8px;
   overflow: hidden;
+  position: relative;
 }
 
 /* ── Backdrop overlay ─────────────────────────────────────── */
@@ -208,6 +209,57 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
 }
 
 .mj-agent-editor-status--unsaved i { font-size: 6px; }
+
+/* ── Inline Floating Controls (non-fullscreen) ────────────── */
+
+.mj-agent-editor-inline-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mj-agent-editor-inline-expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #475569;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(4px);
+}
+
+.mj-agent-editor-inline-expand:hover {
+  background: #ffffff;
+  border-color: #94a3b8;
+  color: #1e293b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transform: scale(1.05);
+}
+
+.mj-agent-editor-inline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 6px rgba(245, 158, 11, 0.4);
+  animation: mj-inline-dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes mj-inline-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 
 /* ── Loading ───────────────────────────────────────────────── */
 

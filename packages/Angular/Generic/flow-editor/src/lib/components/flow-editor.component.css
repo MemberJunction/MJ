@@ -167,16 +167,27 @@
 /* ── Connection Labels ─────────────────────────────────────── */
 
 .mj-flow-connection-label {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-size: 10px;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
+  background: #fffef5;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 11px;
   font-weight: 500;
-  color: #475569;
+  color: #334155;
   white-space: nowrap;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   pointer-events: none;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.mj-flow-connection-label-icon {
+  font-size: 10px;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 /* ── Foblex Overrides ──────────────────────────────────────── */
