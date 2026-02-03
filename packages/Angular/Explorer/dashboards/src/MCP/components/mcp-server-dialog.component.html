@@ -133,7 +133,7 @@
         </div>
 
         <!-- OAuth 2.0 Configuration Section (only shown when OAuth2 is selected) -->
-
+        @if (IsOAuth2) {
             <div class="form-section oauth-section">
                 <h3><i class="fa-solid fa-key"></i> OAuth 2.0 Configuration</h3>
 
@@ -193,6 +193,7 @@
                     </div>
                 </div>
             </div>
+          }
 
         <!-- Rate Limiting Section -->
         <div class="form-section">
