@@ -27,6 +27,7 @@ import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult 
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
 import { UserEntity } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+import { KeyboardShortcutsHelpService } from '@memberjunction/ng-shared';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -134,7 +135,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
-    private commandPaletteService: CommandPaletteService
+    private commandPaletteService: CommandPaletteService,
+    private keyboardShortcutsHelpService: KeyboardShortcutsHelpService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -1866,14 +1868,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Global keyboard shortcut handler
    * Cmd+/ (Mac) or Ctrl+/ (Windows) opens the command palette
+   * ? opens the keyboard shortcuts help overlay
    */
   @HostListener('document:keydown', ['$event'])
   handleGlobalKeyboardShortcuts(event: KeyboardEvent): void {
-    // Skip if user is typing in an input/textarea
+    // Check for target element
     const target = event.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-      return;
-    }
+    const isInputField = target.tagName === 'INPUT' ||
+                         target.tagName === 'TEXTAREA' ||
+                         target.isContentEditable;
 
     // Platform detection
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -1881,9 +1884,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Cmd+/ or Ctrl+/ opens command palette
     if (isCtrlOrCmd && event.key === '/') {
+      // Skip if user is typing in an input/textarea
+      if (isInputField) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       this.commandPaletteService.Open();
+      return;
+    }
+
+    // ? opens keyboard shortcuts help
+    if (event.key === '?' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      // Only trigger if not in an input field (allow typing ? character)
+      if (isInputField) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.keyboardShortcutsHelpService.Toggle();
     }
   }
 

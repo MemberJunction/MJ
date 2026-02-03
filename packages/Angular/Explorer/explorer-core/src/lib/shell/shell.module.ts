@@ -8,6 +8,8 @@ import { TabContainerComponent } from './components/tabs/tab-container.component
 import { AppAccessDialogComponent } from './components/dialogs/app-access-dialog.component';
 import { CommandPaletteComponent } from '../command-palette/command-palette.component';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+import { KeyboardShortcutsHelpComponent } from '../keyboard-shortcuts-help/keyboard-shortcuts-help.component';
+import { KeyboardShortcutsHelpService } from '@memberjunction/ng-shared';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
@@ -20,7 +22,8 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
     AppNavComponent,
     TabContainerComponent,
     AppAccessDialogComponent,
-    CommandPaletteComponent
+    CommandPaletteComponent,
+    KeyboardShortcutsHelpComponent
   ],
   imports: [
     CommonModule,
@@ -31,7 +34,8 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
     SharedGenericModule
   ],
   providers: [
-    CommandPaletteService
+    CommandPaletteService,
+    KeyboardShortcutsHelpService
   ],
   exports: [
     ShellComponent

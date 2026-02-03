@@ -1,0 +1,67 @@
+@if (IsOpen) {
+  <!-- Backdrop -->
+  <div class="help-backdrop" (click)="OnBackdropClick()" role="presentation"></div>
+
+  <!-- Modal -->
+  <div class="help-modal" (click)="OnModalClick($event)" role="dialog" aria-labelledby="help-title" aria-modal="true">
+    <!-- Header -->
+    <div class="help-header">
+      <h2 id="help-title" class="help-title">
+        <i class="fa-solid fa-keyboard" aria-hidden="true"></i>
+        Keyboard Shortcuts
+      </h2>
+      <button
+        class="help-close-button"
+        (click)="Close()"
+        aria-label="Close keyboard shortcuts help"
+        type="button"
+      >
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <!-- Content -->
+    <div class="help-content">
+      @if (Categories.length === 0) {
+        <!-- Empty State -->
+        <div class="help-empty">
+          <i class="fa-solid fa-keyboard empty-icon" aria-hidden="true"></i>
+          <p class="empty-text">No keyboard shortcuts registered</p>
+        </div>
+      } @else {
+        <!-- Shortcuts by Category -->
+        @for (category of Categories; track category.name) {
+          <div class="shortcut-category">
+            <h3 class="category-title">{{ category.name }}</h3>
+            <dl class="shortcuts-list">
+              @for (shortcut of category.shortcuts; track shortcut.id) {
+                <div class="shortcut-item">
+                  <dt class="shortcut-name">{{ shortcut.name }}</dt>
+                  <dd class="shortcut-keys">
+                    @for (key of FormatKeyCombination(GetPlatformCombination(shortcut)); track $index) {
+                      <kbd class="key-badge">{{ key }}</kbd>
+                      @if ($index < FormatKeyCombination(GetPlatformCombination(shortcut)).length - 1) {
+                        <span class="key-separator">+</span>
+                      }
+                    }
+                  </dd>
+                </div>
+                @if (shortcut.description) {
+                  <div class="shortcut-description">{{ shortcut.description }}</div>
+                }
+              }
+            </dl>
+          </div>
+        }
+      }
+    </div>
+
+    <!-- Footer -->
+    <div class="help-footer">
+      <p class="footer-text">
+        <i class="fa-solid fa-lightbulb" aria-hidden="true"></i>
+        Press <kbd class="key-badge-small">?</kbd> to toggle this help.
+      </p>
+    </div>
+  </div>
+}
