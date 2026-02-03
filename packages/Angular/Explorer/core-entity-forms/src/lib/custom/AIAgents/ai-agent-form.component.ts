@@ -5,6 +5,7 @@ import { AIAgentRunEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
@@ -17,7 +18,7 @@ import { PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
-import { AgentPermissionsDialogComponent } from './agent-permissions-dialog.component';
+// AgentPermissionsDialogComponent is now from @memberjunction/ng-agents (shown via ShowPermissionsDialog flag)
 
 /**
  * Type for sub-agent filter options
@@ -245,8 +246,19 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         prompts: true,
         actions: true,
         learningCycles: true,
-        notes: true
+        notes: true,
+        customSection: true
     };
+
+    // === User Preferences ===
+    private static readonly PREFS_KEY = 'ai-agent-form/preferences';
+    private preferencesLoaded = false;
+
+    /** Whether the form header is collapsed to a single compact line */
+    public HeaderCollapsed = false;
+
+    /** Tracked expanded/collapsed state for each panelbar section */
+    public SectionStates: Record<string, boolean> = {};
 
     // === Dropdown Data ===
     /** Model selection mode options for the dropdown */
@@ -537,7 +549,10 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      */
     async ngOnInit() {
         await super.ngOnInit();
-        
+
+        // Restore user preferences (header state, section expand/collapse)
+        this.loadUserPreferences();
+
         // Load agent types for dropdown (needed for both new and existing records)
         await AIEngineBase.Instance.Config(false); // in UI context user and provider default to global
         await ActionEngineBase.Instance.Config(false);
@@ -594,7 +609,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             prompts: true,
             actions: true,
             learningCycles: true,
-            notes: true
+            notes: true,
+            customSection: true
         };
         this.cdr.detectChanges(); // update UI
 
@@ -688,6 +704,13 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
                     MaxRows: this.executionHistoryPageSize
+                },
+                // Agent permissions (to determine open-to-everyone state)
+                {
+                    EntityName: 'MJ: AI Agent Permissions',
+                    Fields: ['ID'],
+                    ExtraFilter: `AgentID='${this.record.ID}'`,
+                    ResultType: 'simple'
                 }
             ]);
 
@@ -705,6 +728,10 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
                 // Initialize filtered executions
                 this.filteredExecutions = [...this.recentExecutions];
+
+                // Determine open-to-everyone state from permissions query
+                const permissionRows = results[3]?.Results || [];
+                this.IsOpenToEveryone = permissionRows.length === 0;
             }
 
             // Create snapshot for cancel/revert functionality
@@ -721,7 +748,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 prompts: false,
                 actions: false,
                 learningCycles: false,
-                notes: false
+                notes: false,
+                customSection: false
             };
             this.cdr.detectChanges();
         }
@@ -886,40 +914,43 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         if (!this.agentType?.UIFormSectionKey || !this.customSectionContainer) {
             return;
         }
-        
+
         // Check if component still exists in container
         if (this.customSectionLoaded && this.customSectionContainer.length > 0) {
             return;
         }
-        
+
+        this.loadingStates.customSection = true;
+        this.cdr.markForCheck();
+
         try {
             // Build the full registration key (Entity.Section pattern)
             const sectionKey = `AI Agents.${this.agentType.UIFormSectionKey}`;
-            
+
             // Get the component registration from the class factory
             const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent, sectionKey);
-            
+
             if (registration && registration.SubClass) {
                 // Clear any existing custom section
                 this.customSectionContainer.clear();
-                
+
                 // Create the component
                 const componentRef = this.customSectionContainer.createComponent(registration.SubClass);
                 this.customSectionComponent = componentRef.instance as BaseFormSectionComponent;
                 this.customSectionComponentRef = componentRef;
-                
+
                 // Pass the record and edit mode to the custom section
                 this.customSectionComponent.record = this.record;
                 this.customSectionComponent.EditMode = this.EditMode;
-                
+
                 // Mark as loaded
                 this.customSectionLoaded = true;
-                
-                // Mark for check instead of forcing immediate detection
-                this.cdr.markForCheck();
             }
         } catch (error) {
             console.error('Error loading custom form section:', error);
+        } finally {
+            this.loadingStates.customSection = false;
+            this.cdr.markForCheck();
         }
     }
 
@@ -927,7 +958,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Handles state change events for the custom section panel
      * @param event The panel bar state change event
      */
-    public onCustomSectionStateChange(event: any): void {
+    public onCustomSectionStateChange(event: { expanded: boolean }): void {
         // When panel is expanded, check if we need to load or reload the custom section
         if (event.expanded && this.agentType?.UIFormSectionKey) {
             // Always try to load on expand to handle cases where container might have been recreated
@@ -935,6 +966,67 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 this.loadCustomFormSection();
             }, 0);
         }
+    }
+
+    // === User Preferences (Header & Section State) ===
+
+    /** Load saved preferences for header state and section expand/collapse */
+    private loadUserPreferences(): void {
+        try {
+            const raw = UserInfoEngine.Instance.GetSetting(AIAgentFormComponentExtended.PREFS_KEY);
+            if (raw) {
+                const prefs = JSON.parse(raw);
+                this.HeaderCollapsed = prefs.headerCollapsed ?? false;
+                this.SectionStates = prefs.sectionStates ?? {};
+            }
+        } catch (error) {
+            console.error('Error loading AI Agent form preferences:', error);
+        }
+        this.preferencesLoaded = true;
+    }
+
+    /** Persist preferences with debounce */
+    private persistPreferences(): void {
+        if (!this.preferencesLoaded) return;
+        const prefs = {
+            headerCollapsed: this.HeaderCollapsed,
+            sectionStates: this.SectionStates
+        };
+        UserInfoEngine.Instance.SetSettingDebounced(
+            AIAgentFormComponentExtended.PREFS_KEY,
+            JSON.stringify(prefs)
+        );
+    }
+
+    /** Toggle the header between expanded and collapsed modes */
+    public ToggleHeaderCollapsed(): void {
+        this.HeaderCollapsed = !this.HeaderCollapsed;
+        this.persistPreferences();
+        this.cdr.detectChanges();
+    }
+
+    /** Get the expanded state for a panelbar section, falling back to a default */
+    public GetSectionExpanded(sectionId: string, defaultValue: boolean): boolean {
+        if (this.preferencesLoaded && sectionId in this.SectionStates) {
+            return this.SectionStates[sectionId];
+        }
+        return defaultValue;
+    }
+
+    /** Handle panelbar stateChange — fires when any section expands or collapses */
+    public OnPanelBarStateChange(event: { items: Array<{ id: string; expanded: boolean }> }): void {
+        if (!event?.items) return;
+        for (const item of event.items) {
+            if (item.id) {
+                this.SectionStates[item.id] = item.expanded;
+
+                // Keep existing custom section load logic
+                if (item.id === 'custom' && item.expanded) {
+                    this.onCustomSectionStateChange({ expanded: true });
+                }
+            }
+        }
+        this.persistPreferences();
     }
 
     /**
@@ -1008,6 +1100,12 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Opens the permissions management dialog for this agent.
      * Allows viewing and editing user/role-based permissions for the agent.
      */
+    /** Controls visibility of the new permissions dialog from @memberjunction/ng-agents */
+    public ShowPermissionsDialog = false;
+
+    /** True when no explicit permission records exist (agent is open to everyone) */
+    public IsOpenToEveryone = true;
+
     public openPermissionsDialog() {
         if (!this.record?.ID) {
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -1017,16 +1115,28 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             );
             return;
         }
+        this.ShowPermissionsDialog = true;
+    }
 
-        const dialogRef = this.dialogService.open({
-            content: AgentPermissionsDialogComponent,
-            width: 900,
-            height: 600
+    public async onPermissionsDialogClosed() {
+        this.ShowPermissionsDialog = false;
+        // Refresh open-to-everyone state in case permissions were added/removed
+        await this.refreshPermissionState();
+    }
+
+    private async refreshPermissionState(): Promise<void> {
+        if (!this.record?.ID) return;
+        const rv = new RunView();
+        const result = await rv.RunView<{ID: string}>({
+            EntityName: 'MJ: AI Agent Permissions',
+            Fields: ['ID'],
+            ExtraFilter: `AgentID='${this.record.ID}'`,
+            ResultType: 'simple'
         });
-
-        const dialog = dialogRef.content.instance as AgentPermissionsDialogComponent;
-        dialog.agent = this.record;
-        dialog.dialogRef = dialogRef;
+        if (result.Success) {
+            this.IsOpenToEveryone = (result.Results || []).length === 0;
+            this.cdr.markForCheck();
+        }
     }
 
     /**

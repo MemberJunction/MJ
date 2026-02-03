@@ -785,6 +785,7 @@ If you chose type="Flow", define:
 - **StepPaths**: Connections between steps with conditions and priority
 - Each step needs: Name, StepType, and type-specific ID (ActionID/SubAgentID/PromptID)
 - Paths need: OriginStepID, DestinationStepID, Condition (optional), Priority
+- **Include a Mermaid flowchart** in your TechnicalDesign to visualize the flow (users will see this rendered as a diagram alongside the interactive flow editor)
 
 **Action Steps Need Mappings** (optional but recommended):
 - **actionInputMapping**: How to pass payload data to action (maps payload/static values → action params)
@@ -1187,9 +1188,46 @@ Your `TechnicalDesign` markdown document should include:
    - Output fields
    - Include JSON examples
 
-7. **For Flow Agents Only**: Steps and Paths
+7. **For Flow Agents Only**: Steps, Paths, and Flow Diagram
    - List each step (name, type: Action/Sub-Agent/Prompt)
    - List paths with conditions and priorities
+   - **Include a Mermaid flowchart** visualizing the workflow using `flowchart TD` (top-down) or `flowchart LR` (left-right)
+   - Use color-coded node shapes to distinguish step types:
+     - Action steps: `[Action Name]` with `style` blue (#3B82F6)
+     - Prompt steps: `[/Prompt Name/]` with `style` purple (#8B5CF6)
+     - Sub-Agent steps: `[[Sub-Agent Name]]` with `style` green (#10B981)
+     - ForEach/While steps: `{Loop Name}` with `style` amber (#F59E0B)
+   - Label edges with conditions when present
+   - Example:
+     ````
+     ```mermaid
+     flowchart TD
+       A[Validate Input] -->|valid| B[/Classify Data/]
+       A -->|invalid| C[Return Error]
+       B --> D[[Process Data]]
+       style A fill:#3B82F6,color:#fff
+       style B fill:#8B5CF6,color:#fff
+       style C fill:#3B82F6,color:#fff
+       style D fill:#10B981,color:#fff
+     ```
+     ````
+
+8. **Agent Architecture Diagram** (recommended for all agent types)
+   - Include a Mermaid diagram showing the high-level agent architecture
+   - Show parent/child relationships and related sub-agents
+   - Example:
+     ````
+     ```mermaid
+     graph TD
+       Parent[Parent Agent] --> Child1[Child Sub-Agent]
+       Parent -.->|related| Existing[Existing Agent]
+       Child1 --> Action1[Action: Web Search]
+       style Parent fill:#1E293B,color:#fff
+       style Child1 fill:#334155,color:#fff
+       style Existing fill:#10B981,color:#fff
+       style Action1 fill:#3B82F6,color:#fff
+     ```
+     ````
 
 This document should be detailed enough for the Architect Agent to build the complete AgentSpec structure.
 

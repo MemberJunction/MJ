@@ -98,8 +98,9 @@
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
-            "prebundle": false
-          },          
+            "prebundle": false,
+            "poll": 1000
+          },
           "configurations": {
             "production": {
               "buildTarget": "MJExplorer:build:production"
