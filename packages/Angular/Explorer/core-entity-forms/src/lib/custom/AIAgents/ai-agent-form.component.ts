@@ -702,6 +702,13 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
                     MaxRows: this.executionHistoryPageSize
+                },
+                // Agent permissions (to determine open-to-everyone state)
+                {
+                    EntityName: 'MJ: AI Agent Permissions',
+                    Fields: ['ID'],
+                    ExtraFilter: `AgentID='${this.record.ID}'`,
+                    ResultType: 'simple'
                 }
             ]);
 
@@ -719,6 +726,10 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
                 // Initialize filtered executions
                 this.filteredExecutions = [...this.recentExecutions];
+
+                // Determine open-to-everyone state from permissions query
+                const permissionRows = results[3]?.Results || [];
+                this.IsOpenToEveryone = permissionRows.length === 0;
             }
 
             // Create snapshot for cancel/revert functionality
@@ -1086,6 +1097,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /** Controls visibility of the new permissions dialog from @memberjunction/ng-agents */
     public ShowPermissionsDialog = false;
 
+    /** True when no explicit permission records exist (agent is open to everyone) */
+    public IsOpenToEveryone = true;
+
     public openPermissionsDialog() {
         if (!this.record?.ID) {
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -1098,8 +1112,25 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         this.ShowPermissionsDialog = true;
     }
 
-    public onPermissionsDialogClosed() {
+    public async onPermissionsDialogClosed() {
         this.ShowPermissionsDialog = false;
+        // Refresh open-to-everyone state in case permissions were added/removed
+        await this.refreshPermissionState();
+    }
+
+    private async refreshPermissionState(): Promise<void> {
+        if (!this.record?.ID) return;
+        const rv = new RunView();
+        const result = await rv.RunView<{ID: string}>({
+            EntityName: 'MJ: AI Agent Permissions',
+            Fields: ['ID'],
+            ExtraFilter: `AgentID='${this.record.ID}'`,
+            ResultType: 'simple'
+        });
+        if (result.Success) {
+            this.IsOpenToEveryone = (result.Results || []).length === 0;
+            this.cdr.markForCheck();
+        }
     }
 
     /**
