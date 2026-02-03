@@ -115,6 +115,37 @@ export class AgentFlowTransformerService {
     }
   }
 
+  /**
+   * Returns true when a step is missing its required configuration reference
+   * (e.g., an Action step with no ActionID, a Prompt step with no PromptID).
+   */
+  IsStepMissingConfiguration(step: AIAgentStepEntity): boolean {
+    switch (step.StepType) {
+      case 'Action':
+        return !step.ActionID;
+      case 'Prompt':
+        return !step.PromptID;
+      case 'Sub-Agent':
+        return !step.SubAgentID;
+      case 'ForEach':
+      case 'While':
+        return this.isLoopBodyMissingReference(step);
+      default:
+        return false;
+    }
+  }
+
+  private isLoopBodyMissingReference(step: AIAgentStepEntity): boolean {
+    const bodyType = step.LoopBodyType;
+    if (!bodyType) return true; // No body type selected at all
+    switch (bodyType) {
+      case 'Action': return !step.ActionID;
+      case 'Prompt': return !step.PromptID;
+      case 'Sub-Agent': return !step.SubAgentID;
+      default: return false;
+    }
+  }
+
   // ── Private Helpers ─────────────────────────────────────────
 
   private stepToNode(step: AIAgentStepEntity): FlowNode {
@@ -135,13 +166,20 @@ export class AgentFlowTransformerService {
       }
     ];
 
+    // Show warning status when the step is missing its required configuration,
+    // unless the step is explicitly disabled (respect the user's intent).
+    const baseStatus = this.MapStepStatus(step.Status);
+    const effectiveStatus = (baseStatus !== 'disabled' && this.IsStepMissingConfiguration(step))
+      ? 'warning'
+      : baseStatus;
+
     return {
       ID: stepId,
       Type: step.StepType,
       Label: step.Name,
       Subtitle: this.BuildStepSubtitle(step),
       Icon: this.getIconForType(step.StepType),
-      Status: this.MapStepStatus(step.Status),
+      Status: effectiveStatus,
       IsStartNode: step.StartingStep === true,
       Position: {
         X: step.PositionX ?? 0,

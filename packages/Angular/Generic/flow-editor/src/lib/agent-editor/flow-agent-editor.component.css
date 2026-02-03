@@ -13,6 +13,7 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen {
   bottom: 12px;
   z-index: 10000;
   border-radius: 10px;
+  height: auto !important;
   min-height: unset !important;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
@@ -57,6 +58,12 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
   border-bottom: 1px solid #e2e8f0;
   gap: 12px;
   flex-shrink: 0;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.mj-agent-editor-toolbar--editing {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdf4 100%);
+  border-bottom-color: #bbf7d0;
 }
 
 .mj-flow-agent-editor--fullscreen .mj-agent-editor-toolbar {
@@ -64,6 +71,11 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
   border-bottom: 1px solid #e2e8f0;
   background: #ffffff;
   border-radius: 10px 10px 0 0;
+}
+
+.mj-flow-agent-editor--fullscreen .mj-agent-editor-toolbar--editing {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdf4 100%);
+  border-bottom-color: #bbf7d0;
 }
 
 .mj-agent-editor-toolbar-left,

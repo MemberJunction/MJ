@@ -84,6 +84,7 @@
                         [fReassignDisabled]="ReadOnly"
                         [style.--connection-color]="conn.Color || '#94a3b8'"
                         [class.mj-flow-connection-colored]="!!conn.Color"
+                        (click)="onConnectionClicked($event, conn)"
                         (contextmenu)="onConnectionContextMenu($event, conn)">
             <!-- Arrow marker -->
             <svg viewBox="0 0 10 10" fMarker type="end"

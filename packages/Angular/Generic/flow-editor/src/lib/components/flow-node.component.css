@@ -34,7 +34,18 @@ mj-flow-node {
 
 /* Status variants */
 .mj-flow-node-body--start {
-  border-left: 3px solid #10b981;
+  border: 2px solid #10b981;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 40%);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12), 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
+.mj-flow-node-body--start:hover {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18), 0 4px 16px rgba(16, 185, 129, 0.2);
+}
+
+.f-selected .mj-flow-node-body--start {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3), 0 4px 12px rgba(16, 185, 129, 0.15);
 }
 
 .mj-flow-node-body--disabled {
@@ -50,6 +61,11 @@ mj-flow-node {
 .mj-flow-node-body--running {
   border-color: #3b82f6;
   animation: mj-flow-node-pulse 1.5s ease-in-out infinite;
+}
+
+.mj-flow-node-body--warning {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 40%);
 }
 
 .mj-flow-node-body--error {
@@ -110,12 +126,13 @@ mj-flow-node {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: #10b981;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  color: #ffffff;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: none;
   border-radius: 4px;
-  padding: 1px 5px;
+  padding: 2px 6px;
   line-height: 1.4;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
 }
 
 /* Status indicator */

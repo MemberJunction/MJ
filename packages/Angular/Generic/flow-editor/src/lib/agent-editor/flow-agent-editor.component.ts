@@ -4,7 +4,7 @@ import {
   ElementRef, Renderer2
 } from '@angular/core';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
-import { AIAgentStepEntity, AIAgentStepPathEntity, ActionEntity, AIPromptEntity, AIAgentEntity } from '@memberjunction/core-entities';
+import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowNodeTypeConfig } from '../interfaces/flow-types';
 import { FlowEditorComponent } from '../components/flow-editor.component';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from './agent-flow-transformer.service';
@@ -72,6 +72,10 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   protected availablePrompts: Array<{ ID: string; Name: string }> = [];
   protected availableAgents: Array<{ ID: string; Name: string }> = [];
 
+  // Initial zoom state
+  private needsInitialZoom = false;
+  private resizeObserver: ResizeObserver | null = null;
+
   // Fullscreen DOM relocation state
   private originalParent: HTMLElement | null = null;
   private originalNextSibling: Node | null = null;
@@ -99,6 +103,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.teardownResizeObserver();
     // Restore element to original parent if still in fullscreen
     if (this.FullScreen) {
       this.restoreFromFullscreen();
@@ -120,6 +125,10 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
     } finally {
       this.isLoading = false;
       this.cdr.detectChanges();
+
+      // Flag that we need an initial zoom; it will fire when the host element
+      // first becomes visible (e.g. Kendo PanelBar expands)
+      this.setupInitialZoomObserver();
     }
   }
 
@@ -187,11 +196,47 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   private rebuildFlowModel(): void {
     this.nodes = this.transformer.StepsToNodes(this.steps);
     this.connections = this.transformer.PathsToConnections(this.paths);
+  }
 
-    // Auto-layout if no positions are set (all at 0,0)
+  /**
+   * Observe the host element's size. When it transitions from zero to non-zero height
+   * (i.e. the collapsed Kendo panel expands), trigger the initial auto-arrange or zoom-to-fit.
+   */
+  private setupInitialZoomObserver(): void {
+    if (this.nodes.length === 0) return;
+
+    this.needsInitialZoom = true;
+    this.teardownResizeObserver();
+
+    this.resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height;
+        if (height > 0 && this.needsInitialZoom) {
+          this.needsInitialZoom = false;
+          this.teardownResizeObserver();
+          // Short delay for Foblex canvas to finish its own init after becoming visible
+          setTimeout(() => this.applyInitialZoom(), 100);
+        }
+      }
+    });
+
+    this.resizeObserver.observe(this.elRef.nativeElement);
+  }
+
+  private applyInitialZoom(): void {
+    if (!this.flowEditor || this.nodes.length === 0) return;
     const allAtOrigin = this.nodes.every(n => n.Position.X === 0 && n.Position.Y === 0);
-    if (allAtOrigin && this.nodes.length > 0) {
-      setTimeout(() => this.flowEditor?.AutoArrange(), 300);
+    if (allAtOrigin) {
+      this.flowEditor.AutoArrange();
+    } else {
+      this.flowEditor.ZoomToFit();
+    }
+  }
+
+  private teardownResizeObserver(): void {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
     }
   }
 
@@ -227,6 +272,12 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
       this.hasUnsavedChanges = false;
       this.lastSaved = new Date();
+
+      // Exit self-contained fullscreen edit mode after successful save
+      if (this.fullscreenEditMode) {
+        this.fullscreenEditMode = false;
+      }
+
       this.FlowSaved.emit();
     } catch (err) {
       console.error('Error saving flow:', err);
@@ -337,7 +388,13 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
       this.StepSelected.emit(this.selectedStep);
     } else {
       this.selectedStep = null;
-      this.showPropertiesPanel = false;
+      // Only hide the panel if no connection is currently selected.
+      // When the user clicks a connection, Foblex fires NodeSelected(null) AND
+      // ConnectionSelected(conn) — we must not let the null-node event hide
+      // the panel that the connection event just opened.
+      if (!this.selectedConnection) {
+        this.showPropertiesPanel = false;
+      }
       this.StepSelected.emit(null);
     }
     this.cdr.detectChanges();
@@ -345,11 +402,8 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
   protected onConnectionSelected(conn: FlowConnection | null): void {
     if (conn) {
-      console.log('[FlowAgentEditor] Connection selected:', conn.ID, 'SourceNodeID:', conn.SourceNodeID, 'TargetNodeID:', conn.TargetNodeID);
-      console.log('[FlowAgentEditor] Available paths:', this.paths.map(p => ({ ID: p.ID, Origin: p.OriginStepID, Dest: p.DestinationStepID })));
       this.selectedConnection = conn;
       this.selectedPathEntity = this.paths.find(p => p.ID === conn.ID) ?? null;
-      console.log('[FlowAgentEditor] Matched PathEntity:', this.selectedPathEntity ? this.selectedPathEntity.ID : 'NULL');
       this.selectedStep = null;
       this.showPropertiesPanel = true;
     } else {
@@ -407,26 +461,54 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   // ── Properties Panel Events ─────────────────────────────────
 
   protected onStepChanged(step: AIAgentStepEntity): void {
-    // Update the corresponding flow node
-    const nodeIndex = this.nodes.findIndex(n => n.ID === step.ID);
-    if (nodeIndex >= 0) {
-      this.nodes[nodeIndex].Label = step.Name;
-      this.nodes[nodeIndex].Subtitle = this.transformer.BuildStepSubtitle(step);
-      this.nodes[nodeIndex].Status = this.transformer.MapStepStatus(step.Status);
-      this.nodes[nodeIndex].IsStartNode = step.StartingStep === true;
+    // Update the corresponding flow node in-place and push to generic editor
+    const node = this.nodes.find(n => n.ID === step.ID);
+    if (node) {
+      const newLabel = step.Name;
+      const newSubtitle = this.transformer.BuildStepSubtitle(step);
+      const baseStatus = this.transformer.MapStepStatus(step.Status);
+      const newStatus = (baseStatus !== 'disabled' && this.transformer.IsStepMissingConfiguration(step))
+        ? 'warning'
+        : baseStatus;
+      const newIsStart = step.StartingStep === true;
+
+      node.Label = newLabel;
+      node.Subtitle = newSubtitle;
+      node.Status = newStatus;
+      node.IsStartNode = newIsStart;
 
       // Update input port disabled state for starting steps
-      const inputPort = this.nodes[nodeIndex].Ports.find(p => p.Direction === 'input');
+      const inputPort = node.Ports.find(p => p.Direction === 'input');
       if (inputPort) {
-        inputPort.Disabled = step.StartingStep === true;
+        inputPort.Disabled = newIsStart;
       }
+
+      // Push visual update to the generic flow editor
+      this.flowEditor?.UpdateNode(step.ID, {
+        Label: newLabel,
+        Subtitle: newSubtitle,
+        Status: newStatus,
+        IsStartNode: newIsStart
+      });
     }
     this.markDirty();
-    this.cdr.detectChanges();
   }
 
-  protected onPathChanged(_path: AIAgentStepPathEntity): void {
-    this.rebuildFlowModel();
+  protected onPathChanged(path: AIAgentStepPathEntity): void {
+    // Update the corresponding connection in-place instead of rebuilding everything
+    const conn = this.connections.find(c => c.ID === path.ID);
+    if (conn) {
+      const hasCondition = path.Condition != null && path.Condition.trim().length > 0;
+      conn.Label = path.Description || (hasCondition ? path.Condition!.substring(0, 30) : undefined);
+      conn.Color = hasCondition ? '#f59e0b' : '#94a3b8';
+      conn.Style = hasCondition ? 'dashed' : 'solid';
+      // Push visual update to the generic flow editor
+      this.flowEditor?.UpdateConnection(conn.ID, {
+        Label: conn.Label,
+        Color: conn.Color,
+        Style: conn.Style
+      });
+    }
     this.markDirty();
     this.cdr.detectChanges();
   }

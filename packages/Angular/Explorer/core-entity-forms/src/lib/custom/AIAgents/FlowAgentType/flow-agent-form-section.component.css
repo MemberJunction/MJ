@@ -8,7 +8,12 @@
 mj-flow-agent-editor {
     display: block;
     width: 100%;
-    min-height: 650px;
+    /* Subtract the full stack of containers above:
+       form-toolbar (~40px) + agent-header (~75px) + form-content padding (24px)
+       + panelbar-item header (~52px) + panel-content padding (16px) + margins (~30px)
+       + browser chrome (~50px) ≈ 290px. Use 300px with a safety buffer. */
+    height: calc(100vh - 300px);
+    min-height: 400px;
 }
 
 .flow-empty-state {

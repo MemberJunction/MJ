@@ -94,6 +94,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
   private initialized = false;
+  private lastConnectionClickTime = 0;
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -187,6 +188,22 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
       node.StatusMessage = message;
       this.cdr.detectChanges();
     }
+  }
+
+  /** Update a node's visual properties in-place (label, subtitle, status, badges, etc.) */
+  UpdateNode(nodeId: string, changes: Partial<Pick<FlowNode, 'Label' | 'Subtitle' | 'Icon' | 'Status' | 'StatusMessage' | 'IsStartNode' | 'Badges'>>): void {
+    const node = this.Nodes.find(n => n.ID === nodeId);
+    if (!node) return;
+    Object.assign(node, changes);
+    this.cdr.detectChanges();
+  }
+
+  /** Update a connection's visual properties in-place (label, color, style, etc.) */
+  UpdateConnection(connId: string, changes: Partial<Pick<FlowConnection, 'Label' | 'Color' | 'Style' | 'Animated'>>): void {
+    const conn = this.Connections.find(c => c.ID === connId);
+    if (!conn) return;
+    Object.assign(conn, changes);
+    this.cdr.detectChanges();
   }
 
   /** Highlight a sequence of nodes (e.g., execution path) */
@@ -327,6 +344,14 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Selection changed in Foblex */
   protected onSelectionChange(event: FSelectionChangeEvent): void {
+    const timeSinceClick = Date.now() - this.lastConnectionClickTime;
+
+    // If a direct connection click just fired, skip this Foblex callback
+    // to avoid double-processing / overwriting the direct click result.
+    if (timeSinceClick < 200) {
+      return;
+    }
+
     this.selectedNodeIDs = event.fNodeIds ?? [];
     this.selectedConnectionIDs = event.fConnectionIds ?? [];
 
@@ -335,19 +360,18 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
       SelectedConnectionIDs: this.selectedConnectionIDs
     });
 
-    // Emit specific node/connection selection events
+    // Emit specific node/connection selection events.
+    // IMPORTANT: When selecting a connection, emit NodeSelected(null) FIRST so
+    // that consumers clear their node state before the connection event opens
+    // the connection properties panel.
     if (this.selectedNodeIDs.length === 1) {
       const node = this.Nodes.find(n => n.ID === this.selectedNodeIDs[0]);
-      this.NodeSelected.emit(node ?? null);
       this.ConnectionSelected.emit(null);
+      this.NodeSelected.emit(node ?? null);
     } else if (this.selectedConnectionIDs.length === 1) {
-      const connId = this.selectedConnectionIDs[0];
-      console.log('[FlowEditor] Connection selection event - fConnectionId:', connId);
-      console.log('[FlowEditor] Available connections:', this.Connections.map(c => ({ ID: c.ID, Source: c.SourceNodeID })));
-      const conn = this.Connections.find(c => c.ID === connId);
-      console.log('[FlowEditor] Matched connection:', conn ? conn.ID : 'NULL');
-      this.ConnectionSelected.emit(conn ?? null);
+      const conn = this.Connections.find(c => c.ID === this.selectedConnectionIDs[0]);
       this.NodeSelected.emit(null);
+      this.ConnectionSelected.emit(conn ?? null);
     } else if (this.selectedNodeIDs.length === 0 && this.selectedConnectionIDs.length === 0) {
       this.NodeSelected.emit(null);
       this.ConnectionSelected.emit(null);
@@ -398,6 +422,18 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     event.preventDefault();
     event.stopPropagation();
     this.showContextMenu(event, 'node', node, null);
+  }
+
+  /** Direct click on a connection — ensures ConnectionSelected fires reliably */
+  protected onConnectionClicked(event: MouseEvent, conn: FlowConnection): void {
+    // Do NOT stopPropagation — let Foblex handle its own visual selection.
+    // Record the time so onSelectionChange can skip double-processing.
+    this.lastConnectionClickTime = Date.now();
+    this.selectedConnectionIDs = [conn.ID];
+    this.selectedNodeIDs = [];
+    this.NodeSelected.emit(null);
+    this.ConnectionSelected.emit(conn);
+    this.cdr.detectChanges();
   }
 
   protected onConnectionContextMenu(event: MouseEvent, conn: FlowConnection): void {

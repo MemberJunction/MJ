@@ -1,18 +1,9 @@
 <div class="mj-agent-editor">
 
   <!-- ── Top Toolbar ───────────────────────────────────────── -->
-  <div class="mj-agent-editor-toolbar">
+  <div class="mj-agent-editor-toolbar" [class.mj-agent-editor-toolbar--editing]="isEditingActive">
     <div class="mj-agent-editor-toolbar-left">
-      <!-- Save -->
-      <button *ngIf="isEditingActive" class="mj-agent-editor-btn mj-agent-editor-btn--primary"
-              [disabled]="isSaving || !hasUnsavedChanges" (click)="Save()">
-        <i class="fa-solid" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-floppy-disk'"></i>
-        {{ isSaving ? 'Saving...' : 'Save' }}
-      </button>
-
-      <div *ngIf="isEditingActive" class="mj-agent-editor-btn-divider"></div>
-
-      <!-- Undo / Redo -->
+      <!-- Undo / Redo (edit mode only) -->
       <button *ngIf="isEditingActive" class="mj-agent-editor-btn"
               [disabled]="!flowEditor?.CanUndo" (click)="flowEditor?.Undo()" title="Undo (Ctrl+Z)">
         <i class="fa-solid fa-rotate-left"></i>
@@ -61,11 +52,11 @@
         Saved {{ lastSaved | date:'shortTime' }}
       </span>
 
-      <!-- Fullscreen edit toggle (only in fullscreen, and only when parent is NOT in edit mode) -->
-      <button *ngIf="FullScreen && !EditMode && !fullscreenEditMode"
-              class="mj-agent-editor-btn mj-agent-editor-btn--edit"
-              (click)="toggleFullscreenEditMode()" title="Edit flow">
-        <i class="fa-solid fa-pen-to-square"></i> Edit
+      <!-- Save + Cancel (when editing) -->
+      <button *ngIf="isEditingActive" class="mj-agent-editor-btn mj-agent-editor-btn--primary"
+              [disabled]="isSaving || !hasUnsavedChanges" (click)="Save()">
+        <i class="fa-solid" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-floppy-disk'"></i>
+        {{ isSaving ? 'Saving...' : 'Save' }}
       </button>
       <button *ngIf="FullScreen && fullscreenEditMode && !EditMode"
               class="mj-agent-editor-btn"
@@ -73,7 +64,16 @@
         <i class="fa-solid fa-xmark"></i> Cancel
       </button>
 
-      <!-- Expand / Collapse -->
+      <div *ngIf="isEditingActive" class="mj-agent-editor-btn-divider"></div>
+
+      <!-- Fullscreen edit toggle (only in fullscreen, and only when parent is NOT in edit mode) -->
+      <button *ngIf="FullScreen && !EditMode && !fullscreenEditMode"
+              class="mj-agent-editor-btn mj-agent-editor-btn--edit"
+              (click)="toggleFullscreenEditMode()" title="Edit flow">
+        <i class="fa-solid fa-pen-to-square"></i> Edit
+      </button>
+
+      <!-- Expand / Close -->
       <button *ngIf="!FullScreen" class="mj-agent-editor-btn mj-agent-editor-btn--expand"
               (click)="toggleFullScreen()" title="Expand to full screen">
         <i class="fa-solid fa-up-right-and-down-left-from-center"></i> Expand

@@ -16,40 +16,108 @@
 .agent-header {
     background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
     border-bottom: 1px solid #e0e6ed;
-    padding: 12px 20px;
+    padding: 8px 16px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    transition: padding 0.2s ease;
 }
 
 .agent-header-content {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 20px;
+    gap: 12px;
+}
+
+/* Header collapse toggle button */
+.agent-header-toggle {
+    background: none;
+    border: 1px solid #e0e6ed;
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #94a3b8;
+    flex-shrink: 0;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+
+.agent-header-toggle:hover {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #cbd5e1;
+}
+
+.agent-header-toggle i {
+    font-size: 10px;
 }
 
 .agent-overview {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     flex: 1;
     min-width: 0;
 }
 
 .agent-icon-wrapper {
-    width: 48px;
-    height: 48px;
+    width: 36px;
+    height: 36px;
     background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
-    border-radius: 12px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15);
     flex-shrink: 0;
+    transition: all 0.2s ease;
 }
 
 .agent-icon-wrapper i {
     color: white;
-    font-size: 24px;
+    font-size: 18px;
+}
+
+/* ── Collapsed Header ─────────────────────────────────── */
+.agent-header--collapsed {
+    padding: 4px 16px;
+}
+
+.agent-header--collapsed .agent-icon-wrapper {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+}
+
+.agent-header--collapsed .agent-icon-wrapper i {
+    font-size: 14px;
+}
+
+.agent-header--collapsed .agent-name {
+    font-size: 15px;
+    margin: 0;
+}
+
+.agent-header--collapsed .agent-name-input {
+    height: 26px !important;
+    font-size: 14px !important;
+    max-width: 280px !important;
+}
+
+.agent-header--collapsed .agent-actions {
+    flex-direction: row;
+    gap: 6px;
+}
+
+/* Inline status badge shown in collapsed mode */
+.status-badge--inline {
+    padding: 2px 8px;
+    font-size: 10px;
+    margin-left: 8px;
+    vertical-align: middle;
 }
 
 .agent-icon-wrapper img.agent-logo {
@@ -65,38 +133,38 @@
 }
 
 .agent-name {
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 600;
     color: #2c3e50;
-    margin: 0 0 8px 0;
+    margin: 0 0 4px 0;
     line-height: 1.2;
 }
 
 .agent-name-input {
-    font-size: 18px !important;
+    font-size: 16px !important;
     font-weight: 500 !important;
-    height: 36px !important;
+    height: 30px !important;
     width: 100% !important;
-    max-width: 400px !important;
+    max-width: 350px !important;
 }
 
 .agent-meta {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
 .status-badge {
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-size: 13px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
 }
 
 .status-badge.active {
@@ -199,8 +267,10 @@
 /* Action Buttons Section */
 .agent-actions {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    flex-direction: row;
+    gap: 8px;
+    flex-shrink: 0;
+    align-items: center;
 }
 
 .action-buttons-row {
@@ -261,7 +331,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     background: #f5f7fa;
-    padding: 12px;
+    padding: 8px 12px;
 }
 
 /* Kendo PanelBar Styling */
@@ -272,9 +342,9 @@
 
 ::ng-deep .k-panelbar > .k-panelbar-item {
     border: none;
-    border-radius: 12px;
-    margin-bottom: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
     background: white;
     overflow: hidden;
 }
@@ -282,15 +352,15 @@
 ::ng-deep .k-panelbar > .k-panelbar-item > .k-header {
     background: white;
     border: none;
-    padding: 16px 20px;
+    padding: 10px 16px;
     border-radius: 12px 12px 0 0;
     color: #2c3e50;
     font-weight: 600;
-    font-size: 16px;
+    font-size: 14px;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 ::ng-deep .k-panelbar > .k-panelbar-item > .k-header:hover {

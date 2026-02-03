@@ -5,6 +5,7 @@ import { AIAgentRunEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
@@ -247,6 +248,16 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         learningCycles: true,
         notes: true
     };
+
+    // === User Preferences ===
+    private static readonly PREFS_KEY = 'ai-agent-form/preferences';
+    private preferencesLoaded = false;
+
+    /** Whether the form header is collapsed to a single compact line */
+    public HeaderCollapsed = false;
+
+    /** Tracked expanded/collapsed state for each panelbar section */
+    public SectionStates: Record<string, boolean> = {};
 
     // === Dropdown Data ===
     /** Model selection mode options for the dropdown */
@@ -537,7 +548,10 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      */
     async ngOnInit() {
         await super.ngOnInit();
-        
+
+        // Restore user preferences (header state, section expand/collapse)
+        this.loadUserPreferences();
+
         // Load agent types for dropdown (needed for both new and existing records)
         await AIEngineBase.Instance.Config(false); // in UI context user and provider default to global
         await ActionEngineBase.Instance.Config(false);
@@ -927,7 +941,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Handles state change events for the custom section panel
      * @param event The panel bar state change event
      */
-    public onCustomSectionStateChange(event: any): void {
+    public onCustomSectionStateChange(event: { expanded: boolean }): void {
         // When panel is expanded, check if we need to load or reload the custom section
         if (event.expanded && this.agentType?.UIFormSectionKey) {
             // Always try to load on expand to handle cases where container might have been recreated
@@ -935,6 +949,67 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 this.loadCustomFormSection();
             }, 0);
         }
+    }
+
+    // === User Preferences (Header & Section State) ===
+
+    /** Load saved preferences for header state and section expand/collapse */
+    private loadUserPreferences(): void {
+        try {
+            const raw = UserInfoEngine.Instance.GetSetting(AIAgentFormComponentExtended.PREFS_KEY);
+            if (raw) {
+                const prefs = JSON.parse(raw);
+                this.HeaderCollapsed = prefs.headerCollapsed ?? false;
+                this.SectionStates = prefs.sectionStates ?? {};
+            }
+        } catch (error) {
+            console.error('Error loading AI Agent form preferences:', error);
+        }
+        this.preferencesLoaded = true;
+    }
+
+    /** Persist preferences with debounce */
+    private persistPreferences(): void {
+        if (!this.preferencesLoaded) return;
+        const prefs = {
+            headerCollapsed: this.HeaderCollapsed,
+            sectionStates: this.SectionStates
+        };
+        UserInfoEngine.Instance.SetSettingDebounced(
+            AIAgentFormComponentExtended.PREFS_KEY,
+            JSON.stringify(prefs)
+        );
+    }
+
+    /** Toggle the header between expanded and collapsed modes */
+    public ToggleHeaderCollapsed(): void {
+        this.HeaderCollapsed = !this.HeaderCollapsed;
+        this.persistPreferences();
+        this.cdr.detectChanges();
+    }
+
+    /** Get the expanded state for a panelbar section, falling back to a default */
+    public GetSectionExpanded(sectionId: string, defaultValue: boolean): boolean {
+        if (this.preferencesLoaded && sectionId in this.SectionStates) {
+            return this.SectionStates[sectionId];
+        }
+        return defaultValue;
+    }
+
+    /** Handle panelbar stateChange — fires when any section expands or collapses */
+    public OnPanelBarStateChange(event: { items: Array<{ id: string; expanded: boolean }> }): void {
+        if (!event?.items) return;
+        for (const item of event.items) {
+            if (item.id) {
+                this.SectionStates[item.id] = item.expanded;
+
+                // Keep existing custom section load logic
+                if (item.id === 'custom' && item.expanded) {
+                    this.onCustomSectionStateChange({ expanded: true });
+                }
+            }
+        }
+        this.persistPreferences();
     }
 
     /**
