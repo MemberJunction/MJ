@@ -1,20 +1,57 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener, ChangeDetectorRef, Output, EventEmitter, ViewContainerRef } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { CommandPaletteService } from './command-palette.service';
+import { SettingsDialogService } from '../shell/services/settings-dialog.service';
+
+/**
+ * Base interface for all searchable items in command palette
+ */
+interface SearchableItem {
+  id: string;
+  name: string;
+  description?: string;
+  icon: string;
+  color?: string;
+  type: 'application' | 'system-action';
+}
+
+/**
+ * Application item (existing behavior)
+ */
+interface ApplicationItem extends SearchableItem {
+  type: 'application';
+  application: BaseApplication;
+}
+
+/**
+ * System action item (new concept for non-application actions like settings, help, etc.)
+ */
+interface SystemActionItem extends SearchableItem {
+  type: 'system-action';
+  action: () => void;
+  keywords?: string[]; // Additional search terms for better discoverability
+}
+
+/**
+ * Union type for all command palette items
+ */
+type CommandPaletteItem = ApplicationItem | SystemActionItem;
 
 /**
  * Command Palette Component
  *
- * Provides a Notion-style command palette for quickly searching and navigating to applications.
+ * Provides a Notion-style command palette for quickly searching and navigating to applications and system actions.
  * Triggered by Cmd+K (Mac) or Ctrl+/ (Windows/Linux).
  *
  * Features:
  * - Fuzzy search with relevance scoring
+ * - Keyword matching for system actions
  * - Keyboard navigation (arrow keys, enter, escape)
  * - Loading state during navigation
  * - Empty state with helpful message
+ * - Support for both applications and system actions
  */
 @Component({
   selector: 'mj-command-palette',
@@ -29,15 +66,17 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
 
   IsOpen = false;
   SearchQuery = '';
-  AllApps: BaseApplication[] = [];
-  FilteredApps: BaseApplication[] = [];
+  AllItems: CommandPaletteItem[] = [];
+  FilteredItems: CommandPaletteItem[] = [];
   SelectedIndex = 0;
   IsNavigating = false;
 
   constructor(
     private service: CommandPaletteService,
     private appManager: ApplicationManager,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private settingsDialogService: SettingsDialogService,
+    private viewContainerRef: ViewContainerRef
   ) {}
 
   ngOnInit(): void {
@@ -54,10 +93,25 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
     });
 
-    // Subscribe to application changes
+    // Subscribe to application changes and combine with system actions
     this.appManager.AllApplications.pipe(takeUntil(this.destroy$)).subscribe((apps) => {
-      this.AllApps = apps;
-      this.filterAndSortApps();
+      // Convert apps to ApplicationItem format
+      const appItems: ApplicationItem[] = apps.map(app => ({
+        id: app.ID,
+        name: app.Name,
+        description: app.Description,
+        icon: app.Icon,
+        color: app.Color,
+        type: 'application',
+        application: app
+      }));
+
+      // Get system actions
+      const systemActions = this.getSystemActions();
+
+      // Combine all items
+      this.AllItems = [...appItems, ...systemActions];
+      this.filterAndSortItems();
     });
   }
 
@@ -75,8 +129,8 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     this.SelectedIndex = 0;
     this.IsNavigating = false;
 
-    // Filter apps (will show all initially)
-    this.filterAndSortApps();
+    // Filter items (will show all initially)
+    this.filterAndSortItems();
 
     // Focus search input after view updates
     setTimeout(() => {
@@ -99,36 +153,36 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
    * Handle search query change
    */
   OnSearchChange(): void {
-    this.filterAndSortApps();
+    this.filterAndSortItems();
     this.SelectedIndex = 0; // Reset selection
   }
 
   /**
-   * Filter and sort applications based on search query
+   * Filter and sort items (applications and system actions) based on search query
    */
-  private filterAndSortApps(): void {
+  private filterAndSortItems(): void {
     const query = this.SearchQuery.toLowerCase().trim();
 
-    // If no query, show all apps
+    // If no query, show all items
     if (!query) {
-      this.FilteredApps = [...this.AllApps];
+      this.FilteredItems = [...this.AllItems];
       return;
     }
 
-    // Score all apps
-    const scored = this.AllApps.map(app => ({
-      app,
-      score: this.calculateMatchScore(app, query)
+    // Score all items
+    const scored = this.AllItems.map((item) => ({
+      item,
+      score: this.calculateMatchScore(item, query)
     }));
 
     // Filter to only matches (score > 0)
-    const matches = scored.filter(item => item.score > 0);
+    const matches = scored.filter((scoredItem) => scoredItem.score > 0);
 
     // Sort by score (descending)
     matches.sort((a, b) => b.score - a.score);
 
-    // Extract apps
-    this.FilteredApps = matches.map(item => item.app);
+    // Extract items
+    this.FilteredItems = matches.map((scoredItem) => scoredItem.item);
   }
 
   /**
@@ -138,12 +192,13 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
    * - Exact match: 1000 points
    * - Starts with: 500 points
    * - Contains: 100 points
+   * - Keywords match (system actions): 75 points
    * - Description match: 50 points
    * - Initials match: 25 points (e.g., "de" matches "Data Explorer")
    */
-  private calculateMatchScore(app: BaseApplication, query: string): number {
-    const name = app.Name.toLowerCase();
-    const desc = (app.Description || '').toLowerCase();
+  private calculateMatchScore(item: CommandPaletteItem, query: string): number {
+    const name = item.name.toLowerCase();
+    const desc = (item.description || '').toLowerCase();
 
     // Exact match (highest priority)
     if (name === query) return 1000;
@@ -157,10 +212,19 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     // Description match (medium priority)
     if (desc.includes(query)) return 50;
 
+    // Keywords match for system actions (medium-high priority)
+    if (item.type === 'system-action' && item.keywords) {
+      for (const keyword of item.keywords) {
+        if (keyword.toLowerCase().includes(query)) {
+          return 75; // Between name contains and description
+        }
+      }
+    }
+
     // Fuzzy match - initials (e.g., "de" matches "Data Explorer")
     const initials = name
       .split(' ')
-      .map(word => word[0] || '')
+      .map((word) => word[0] || '')
       .join('')
       .toLowerCase();
     if (initials.includes(query)) return 25;
@@ -169,14 +233,22 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Select an application and emit event for shell to handle navigation
+   * Select an item (application or system action) and handle appropriately
    */
-  SelectApp(app: BaseApplication): void {
+  SelectItem(item: CommandPaletteItem): void {
     if (this.IsNavigating) return;
+
     // Close the palette first
     this.service.Close();
-    // Emit event for shell to handle navigation (same pattern as app-switcher)
-    this.AppSelected.emit(app.ID);
+
+    // Handle based on item type
+    if (item.type === 'application') {
+      // Existing behavior - emit for shell to handle navigation
+      this.AppSelected.emit(item.application.ID);
+    } else if (item.type === 'system-action') {
+      // Execute action directly (no loading state)
+      item.action();
+    }
   }
 
   /**
@@ -203,7 +275,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        this.SelectedIndex = Math.min(this.SelectedIndex + 1, this.FilteredApps.length - 1);
+        this.SelectedIndex = Math.min(this.SelectedIndex + 1, this.FilteredItems.length - 1);
         this.scrollToSelected();
         break;
 
@@ -215,8 +287,8 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
 
       case 'Enter':
         event.preventDefault();
-        if (this.FilteredApps[this.SelectedIndex]) {
-          this.SelectApp(this.FilteredApps[this.SelectedIndex]);
+        if (this.FilteredItems[this.SelectedIndex]) {
+          this.SelectItem(this.FilteredItems[this.SelectedIndex]);
         }
         break;
 
@@ -237,5 +309,36 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
         selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }, 0);
+  }
+
+  /**
+   * Get all system actions (non-application items like settings, help, etc.)
+   * These appear in search results alongside applications.
+   */
+  private getSystemActions(): SystemActionItem[] {
+    return [
+      {
+        id: 'system-action-my-profile',
+        name: 'My Profile',
+        description: 'View and edit your profile settings',
+        icon: 'fa-solid fa-user-circle',
+        type: 'system-action',
+        keywords: ['settings', 'preferences', 'account', 'profile', 'user'],
+        action: () => this.openMyProfile()
+      }
+      // Future system actions can be added here:
+      // - Help Documentation
+      // - Keyboard Shortcuts
+      // - Report a Bug
+      // - Add Applications (marketplace)
+      // - System Status
+    ];
+  }
+
+  /**
+   * Open the My Profile settings dialog
+   */
+  private openMyProfile(): void {
+    this.settingsDialogService.open(this.viewContainerRef);
   }
 }

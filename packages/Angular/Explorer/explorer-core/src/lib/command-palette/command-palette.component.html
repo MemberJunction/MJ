@@ -21,39 +21,39 @@
       type="text"
       [(ngModel)]="SearchQuery"
       (input)="OnSearchChange()"
-      placeholder="Search applications..."
+      placeholder="Search applications and settings..."
       class="search-input"
       autocomplete="off"
       spellcheck="false"
-      aria-label="Search applications">
+      aria-label="Search applications and settings">
   </div>
 
   <!-- Results List -->
-  <div class="results-list" role="listbox" aria-label="Application results">
-    <!-- All Apps -->
-    <div *ngFor="let app of FilteredApps; let i = index"
+  <div class="results-list" role="listbox" aria-label="Search results">
+    <!-- All Items (Applications and System Actions) -->
+    <div *ngFor="let item of FilteredItems; let i = index"
          class="result-item"
          [class.selected]="i === SelectedIndex"
-         (click)="SelectApp(app)"
+         (click)="SelectItem(item)"
          role="option"
          [attr.aria-selected]="i === SelectedIndex">
-      <i [class]="app.Icon"
-         [style.color]="app.GetColor()"
+      <i [class]="item.icon"
+         [style.color]="item.type === 'application' ? item.application.GetColor() : item.color"
          class="result-icon"
          aria-hidden="true"></i>
       <div class="result-info">
-        <div class="result-name">{{ app.Name }}</div>
-        <div class="result-description" *ngIf="app.Description">{{ app.Description }}</div>
+        <div class="result-name">{{ item.name }}</div>
+        <div class="result-description" *ngIf="item.description">{{ item.description }}</div>
       </div>
     </div>
 
     <!-- Empty State -->
     <div class="empty-state"
-         *ngIf="FilteredApps.length === 0 && SearchQuery"
+         *ngIf="FilteredItems.length === 0 && SearchQuery"
          role="status"
          aria-live="polite">
       <i class="fa-solid fa-search empty-icon" aria-hidden="true"></i>
-      <div class="empty-text">No applications found</div>
+      <div class="empty-text">No results found</div>
       <div class="empty-subtext">Try a different search term</div>
     </div>
   </div>
