@@ -8,7 +8,7 @@ import { CommandPaletteService } from './command-palette.service';
  * Command Palette Component
  *
  * Provides a Notion-style command palette for quickly searching and navigating to applications.
- * Triggered by Cmd+/ (Mac) or Ctrl+/ (Windows/Linux).
+ * Triggered by Cmd+K (Mac) or Ctrl+/ (Windows/Linux).
  *
  * Features:
  * - Fuzzy search with relevance scoring
@@ -19,7 +19,7 @@ import { CommandPaletteService } from './command-palette.service';
 @Component({
   selector: 'mj-command-palette',
   templateUrl: './command-palette.component.html',
-  styleUrls: ['./command-palette.component.css'],
+  styleUrls: ['./command-palette.component.css']
 })
 export class CommandPaletteComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
@@ -37,7 +37,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   constructor(
     private service: CommandPaletteService,
     private appManager: ApplicationManager,
-    private cdr: ChangeDetectorRef,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -54,7 +54,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
     });
 
-    // Subscribe to ALL application changes (not just user's installed apps)
+    // Subscribe to application changes
     this.appManager.AllApplications.pipe(takeUntil(this.destroy$)).subscribe((apps) => {
       this.AllApps = apps;
       this.filterAndSortApps();
@@ -100,7 +100,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
    */
   OnSearchChange(): void {
     this.filterAndSortApps();
-    this.SelectedIndex = 0; // Reset selection when search changes
+    this.SelectedIndex = 0; // Reset selection
   }
 
   /**
@@ -116,19 +116,19 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     }
 
     // Score all apps
-    const scored = this.AllApps.map((app) => ({
+    const scored = this.AllApps.map(app => ({
       app,
-      score: this.calculateMatchScore(app, query),
+      score: this.calculateMatchScore(app, query)
     }));
 
     // Filter to only matches (score > 0)
-    const matches = scored.filter((item) => item.score > 0);
+    const matches = scored.filter(item => item.score > 0);
 
     // Sort by score (descending)
     matches.sort((a, b) => b.score - a.score);
 
     // Extract apps
-    this.FilteredApps = matches.map((item) => item.app);
+    this.FilteredApps = matches.map(item => item.app);
   }
 
   /**
@@ -160,7 +160,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     // Fuzzy match - initials (e.g., "de" matches "Data Explorer")
     const initials = name
       .split(' ')
-      .map((word) => word[0] || '')
+      .map(word => word[0] || '')
       .join('')
       .toLowerCase();
     if (initials.includes(query)) return 25;
@@ -173,10 +173,8 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
    */
   SelectApp(app: BaseApplication): void {
     if (this.IsNavigating) return;
-
     // Close the palette first
     this.service.Close();
-
     // Emit event for shell to handle navigation (same pattern as app-switcher)
     this.AppSelected.emit(app.ID);
   }

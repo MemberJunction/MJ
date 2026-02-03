@@ -11,7 +11,7 @@ import {
   WorkspaceConfiguration,
   WorkspaceTab,
   AppAccessResult,
-  NavItem,
+  NavItem
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
@@ -39,7 +39,7 @@ import { CommandPaletteService } from '../command-palette/command-palette.servic
 @Component({
   selector: 'mj-shell',
   templateUrl: './shell.component.html',
-  styleUrls: ['./shell.component.css'],
+  styleUrls: ['./shell.component.css']
 })
 export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
@@ -106,7 +106,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
    */
   get leftOfSwitcherApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of App Switcher').filter((app) => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
+    return this.appManager.GetNavBarApps('Left of App Switcher')
+      .filter(app => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
   }
 
   /**
@@ -114,7 +115,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
    */
   get leftOfUserMenuApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of User Menu').filter((app) => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
+    return this.appManager.GetNavBarApps('Left of User Menu')
+      .filter(app => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
   }
 
   constructor(
@@ -132,7 +134,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
-    private commandPaletteService: CommandPaletteService,
+    private commandPaletteService: CommandPaletteService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -166,23 +168,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     try {
       MJGlobal.Instance.GetEventListener(true).subscribe(async (loginEvent) => {
         if (loginEvent.event === MJEventType.LoggedIn) {
-          if (this.authBase.initialPath === '/') {
+          if (this.authBase.initialPath === "/") {
             // Base route - no need to wait for NavigationEnd
             await this.initializeShell();
-          } else {
+          }
+          else {
             // Deep link route - wait for NavigationEnd to ensure router URL is correct
-            this.router.events
-              .pipe(
-                filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-                filter(() => !this.initialNavigationComplete),
-              )
-              .subscribe(async () => {
-                this.initialNavigationComplete = true;
-                await this.initializeShell();
-              });
+            this.router.events.pipe(
+              filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+              filter(() => !this.initialNavigationComplete)
+            ).subscribe(async () => {
+              this.initialNavigationComplete = true;
+              await this.initializeShell();
+            });
           }
         }
       });
+      
     } catch (error) {
       console.error('Failed to initialize shell:', error);
       this.loading = false;
@@ -196,7 +198,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Initialize application manager (subscribes to LoggedIn event)
     this.appManager.Initialize();
 
-    await StartupManager.Instance.Startup();
+    await StartupManager.Instance.Startup();          
 
     // Get current user
     const md = new Metadata();
@@ -214,22 +216,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Subscribe to tab bar visibility changes
     this.subscriptions.push(
-      this.workspaceManager.TabBarVisible.subscribe((visible) => {
+      this.workspaceManager.TabBarVisible.subscribe(visible => {
         this.tabBarVisible = visible;
-      }),
+      })
     );
 
     // Subscribe to unread notification count changes
     this.subscriptions.push(
-      MJNotificationService.UnreadCount$.subscribe((count) => {
+      MJNotificationService.UnreadCount$.subscribe(count => {
         this.unreadNotificationCount = count;
         this.cdr.detectChanges();
-      }),
+      })
     );
 
     // Subscribe to active app changes
     this.subscriptions.push(
-      this.appManager.ActiveApp.subscribe(async (app) => {
+      this.appManager.ActiveApp.subscribe(async app => {
         this.activeApp = app;
 
         // Create default tab when app is activated ONLY if:
@@ -241,7 +243,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           if (existingTabs.length === 0) {
             // Check if we're loading from a URL that will create a tab
             const currentUrl = this.router.url;
-            const hasResourceUrl = currentUrl.includes('/app/') || currentUrl.includes('/resource/');
+            const hasResourceUrl = currentUrl.includes('/app/') ||
+                                   currentUrl.includes('/resource/');
 
             // Only create default tab if we're NOT loading from a resource URL
             if (!hasResourceUrl) {
@@ -252,7 +255,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             }
           }
         }
-      }),
+      })
     );
 
     // Subscribe to applications loading - set app based on URL or default to first
@@ -309,14 +312,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         if (!appMatch && !currentActiveApp) {
           await this.appManager.SetActiveApp(apps[0].ID);
         }
-      }),
+      })
     );
 
     // Subscribe to tab open requests from TabService
     this.subscriptions.push(
-      this.tabService.TabRequests.subscribe(async (request) => {
+      this.tabService.TabRequests.subscribe(async request => {
         await this.processTabRequest(request);
-      }),
+      })
     );
 
     // Replay any tab requests that were queued before we subscribed
@@ -339,7 +342,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Subscribe to workspace configuration changes to sync URL and active app
     this.subscriptions.push(
-      this.workspaceManager.Configuration.subscribe(async (config) => {
+      this.workspaceManager.Configuration.subscribe(async config => {
         if (config && this.initialized) {
           // Sync active app with active tab's application
           await this.syncActiveAppWithTab(config);
@@ -347,16 +350,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           // Update browser tab title
           this.updateBrowserTitle(config);
         }
-      }),
+      })
     );
 
     // Subscribe to router navigation events (for browser back/forward)
     this.subscriptions.push(
-      this.router.events.pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd)).subscribe((event) => {
+      this.router.events.pipe(
+        filter((event): event is NavigationEnd => event instanceof NavigationEnd)
+      ).subscribe(event => {
         if (this.initialized) {
           this.syncWorkspaceWithUrl(event.urlAfterRedirects || event.url);
         }
-      }),
+      })
     );
 
     // Check for deep link parameters on initialization
@@ -376,7 +381,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           await userEntity.Load(currentUserInfo.ID);
           this.applyUserAvatar(userEntity);
         }
-      }),
+      })
     );
 
     // Load searchable entities for search functionality
@@ -418,7 +423,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Determine if this is a URL-based tab request
     // URL-based tabs have appName/resourceType BUT NOT isAppDefault
     // (isAppDefault indicates workspace restoration, not URL navigation)
-    const isUrlBasedTab = (request.Configuration?.appName || request.Configuration?.resourceType) && !request.Configuration?.isAppDefault;
+    const isUrlBasedTab = (request.Configuration?.appName || request.Configuration?.resourceType) &&
+                         !request.Configuration?.isAppDefault;
 
     const currentActiveApp = this.appManager.GetActiveApp();
 
@@ -426,7 +432,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // 1. We're initialized (past the startup phase)
     // 2. App is different from current
     // 3. Either NOT in URL-based navigation mode, OR this IS a URL-based tab
-    const shouldSetActiveApp = this.initialized && app && currentActiveApp?.ID !== request.ApplicationId && (!this.urlBasedNavigation || isUrlBasedTab);
+    const shouldSetActiveApp = this.initialized &&
+                              app &&
+                              currentActiveApp?.ID !== request.ApplicationId &&
+                              (!this.urlBasedNavigation || isUrlBasedTab);
 
     if (shouldSetActiveApp) {
       await this.appManager.SetActiveApp(request.ApplicationId);
@@ -446,7 +455,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Find the active tab
-    const activeTab = config.tabs?.find((tab) => tab.id === config.activeTabId);
+    const activeTab = config.tabs?.find(tab => tab.id === config.activeTabId);
     if (!activeTab) {
       this.titleService.reset();
       return;
@@ -499,7 +508,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Find the active tab
-    const activeTab = config.tabs?.find((tab) => tab.id === config.activeTabId);
+    const activeTab = config.tabs?.find(tab => tab.id === config.activeTabId);
     if (!activeTab) {
       return;
     }
@@ -687,24 +696,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const appPath = decodeURIComponent(appNavMatch[1]);
       const navItemName = decodeURIComponent(appNavMatch[2]);
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const tabAppName = tabConfig['appName'] as string | undefined;
-          const tabNavItemName = tabConfig['navItemName'] as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const tabAppName = tabConfig['appName'] as string | undefined;
+        const tabNavItemName = tabConfig['navItemName'] as string | undefined;
 
-          if (!tabAppName || !tabNavItemName) return false;
+        if (!tabAppName || !tabNavItemName) return false;
 
-          // Match by app path/name and nav item name (case-insensitive)
-          const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
-          if (!app) return false;
+        // Match by app path/name and nav item name (case-insensitive)
+        const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
+        if (!app) return false;
 
-          const appMatches = tabAppName.toLowerCase() === app.Name.toLowerCase() || tab.applicationId === app.ID;
-          const navMatches = tabNavItemName.toLowerCase() === navItemName.toLowerCase();
+        const appMatches = tabAppName.toLowerCase() === app.Name.toLowerCase() ||
+                          tab.applicationId === app.ID;
+        const navMatches = tabNavItemName.toLowerCase() === navItemName.toLowerCase();
 
-          return appMatches && navMatches;
-        }) || null
-      );
+        return appMatches && navMatches;
+      }) || null;
     }
 
     // Check for app-only URL: /app/:appName
@@ -715,7 +723,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
       if (app) {
         // First, try to find a tab with isAppDefault for this app
-        const defaultTab = tabs.find((tab) => {
+        const defaultTab = tabs.find(tab => {
           const tabConfig = tab.configuration || {};
           return tab.applicationId === app.ID && tabConfig['isAppDefault'] === true;
         });
@@ -727,7 +735,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // This handles the case where the default tab was replaced when navigating away
         const navItems = app.GetNavItems();
         if (navItems.length === 0) {
-          return tabs.find((tab) => tab.applicationId === app.ID) || null;
+          return tabs.find(tab => tab.applicationId === app.ID) || null;
         }
 
         return null;
@@ -742,15 +750,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (appDashboardMatch) {
       const dashboardId = appDashboardMatch[2];
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabDashboardId = (tabConfig['dashboardId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabDashboardId = (tabConfig['dashboardId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return resourceType === 'dashboards' && tabDashboardId === dashboardId;
-        }) || null
-      );
+        return resourceType === 'dashboards' && tabDashboardId === dashboardId;
+      }) || null;
     }
 
     // Record: /app/:appName/record/:entityName/:recordId
@@ -759,15 +765,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const entityName = decodeURIComponent(appRecordMatch[2]);
       const recordId = decodeURIComponent(appRecordMatch[3]);
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
-          const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
+        const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return tabEntity?.toLowerCase() === entityName.toLowerCase() && tabRecordId === recordId;
-        }) || null
-      );
+        return tabEntity?.toLowerCase() === entityName.toLowerCase() &&
+               tabRecordId === recordId;
+      }) || null;
     }
 
     // Dynamic view: /app/:appName/view/dynamic/:entityName
@@ -775,16 +780,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (appDynamicViewMatch) {
       const entityName = decodeURIComponent(appDynamicViewMatch[2]);
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
-          const isDynamic = tabConfig['isDynamic'] as boolean | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
+        const isDynamic = tabConfig['isDynamic'] as boolean | undefined;
 
-          return resourceType === 'user views' && isDynamic && tabEntity?.toLowerCase() === entityName.toLowerCase();
-        }) || null
-      );
+        return resourceType === 'user views' && isDynamic && tabEntity?.toLowerCase() === entityName.toLowerCase();
+      }) || null;
     }
 
     // Saved view: /app/:appName/view/:viewId
@@ -792,15 +795,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (appViewMatch) {
       const viewId = appViewMatch[2];
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabViewId = (tabConfig['viewId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabViewId = (tabConfig['viewId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return resourceType === 'user views' && tabViewId === viewId;
-        }) || null
-      );
+        return resourceType === 'user views' && tabViewId === viewId;
+      }) || null;
     }
 
     // Query: /app/:appName/query/:queryId
@@ -808,15 +809,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (appQueryMatch) {
       const queryId = appQueryMatch[2];
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabQueryId = (tabConfig['queryId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabQueryId = (tabConfig['queryId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return resourceType === 'queries' && tabQueryId === queryId;
-        }) || null
-      );
+        return resourceType === 'queries' && tabQueryId === queryId;
+      }) || null;
     }
 
     // Report: /app/:appName/report/:reportId
@@ -824,15 +823,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (appReportMatch) {
       const reportId = appReportMatch[2];
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabReportId = (tabConfig['reportId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabReportId = (tabConfig['reportId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return resourceType === 'reports' && tabReportId === reportId;
-        }) || null
-      );
+        return resourceType === 'reports' && tabReportId === reportId;
+      }) || null;
     }
 
     // Artifact: /app/:appName/artifact/:artifactId
@@ -840,15 +837,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (appArtifactMatch) {
       const artifactId = appArtifactMatch[2];
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabArtifactId = (tabConfig['artifactId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabArtifactId = (tabConfig['artifactId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return resourceType === 'artifacts' && tabArtifactId === artifactId;
-        }) || null
-      );
+        return resourceType === 'artifacts' && tabArtifactId === artifactId;
+      }) || null;
     }
 
     // Search: /app/:appName/search/:searchInput
@@ -856,15 +851,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (appSearchMatch) {
       const searchInput = decodeURIComponent(appSearchMatch[2]);
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabSearchInput = (tabConfig['SearchInput'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabSearchInput = (tabConfig['SearchInput'] || tab.resourceRecordId) as string | undefined;
 
-          return resourceType === 'search results' && tabSearchInput === searchInput;
-        }) || null
-      );
+        return resourceType === 'search results' && tabSearchInput === searchInput;
+      }) || null;
     }
 
     // Legacy resource URLs (kept for backward compatibility)
@@ -874,15 +867,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const entityName = decodeURIComponent(recordMatch[1]);
       const recordId = decodeURIComponent(recordMatch[2]);
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
-          const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
+        const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return tabEntity?.toLowerCase() === entityName.toLowerCase() && tabRecordId === recordId;
-        }) || null
-      );
+        return tabEntity?.toLowerCase() === entityName.toLowerCase() &&
+               tabRecordId === recordId;
+      }) || null;
     }
 
     // Check for view URL: /resource/view/:viewId
@@ -896,15 +888,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         return null; // Let the resolver handle dynamic views
       }
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabViewId = (tabConfig['viewId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabViewId = (tabConfig['viewId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return resourceType === 'user views' && tabViewId === viewId;
-        }) || null
-      );
+        return resourceType === 'user views' && tabViewId === viewId;
+      }) || null;
     }
 
     // Check for dashboard URL: /resource/dashboard/:dashboardId
@@ -912,15 +902,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (dashboardMatch) {
       const dashboardId = dashboardMatch[1];
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabDashboardId = (tabConfig['dashboardId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabDashboardId = (tabConfig['dashboardId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return resourceType === 'dashboards' && tabDashboardId === dashboardId;
-        }) || null
-      );
+        return resourceType === 'dashboards' && tabDashboardId === dashboardId;
+      }) || null;
     }
 
     // Check for artifact URL: /resource/artifact/:artifactId
@@ -928,15 +916,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (artifactMatch) {
       const artifactId = artifactMatch[1];
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabArtifactId = (tabConfig['artifactId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabArtifactId = (tabConfig['artifactId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return resourceType === 'artifacts' && tabArtifactId === artifactId;
-        }) || null
-      );
+        return resourceType === 'artifacts' && tabArtifactId === artifactId;
+      }) || null;
     }
 
     // Check for query URL: /resource/query/:queryId
@@ -944,15 +930,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (queryMatch) {
       const queryId = queryMatch[1];
 
-      return (
-        tabs.find((tab) => {
-          const tabConfig = tab.configuration || {};
-          const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-          const tabQueryId = (tabConfig['queryId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabQueryId = (tabConfig['queryId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-          return resourceType === 'queries' && tabQueryId === queryId;
-        }) || null
-      );
+        return resourceType === 'queries' && tabQueryId === queryId;
+      }) || null;
     }
 
     return null;
@@ -1019,13 +1003,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
         // If app has nav items, try to find the matching one
         // Filter out dynamic nav items - they're generated from tab state and shouldn't affect URL building
-        const staticNavItems = navItems.filter((item) => !(item as { isDynamic?: boolean }).isDynamic);
+        const staticNavItems = navItems.filter(item => !(item as { isDynamic?: boolean }).isDynamic);
         if (staticNavItems.length > 0) {
           const driverClass = config['driverClass'] as string | undefined;
 
           // Match by DriverClass for Custom resources (more reliable than title matching)
           // or by ResourceType + RecordID for other resource types
-          const navItem = staticNavItems.find((item) => {
+          const navItem = staticNavItems.find(item => {
             if (item.ResourceType === 'Custom' && item.DriverClass && driverClass) {
               return item.DriverClass === driverClass;
             }
@@ -1308,7 +1292,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Find a random unused message index
-    const availableIndices = messages.map((_, i) => i).filter((i) => !this.usedMessageIndices.includes(i));
+    const availableIndices = messages
+      .map((_, i) => i)
+      .filter(i => !this.usedMessageIndices.includes(i));
 
     if (availableIndices.length > 0) {
       const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
@@ -1374,7 +1360,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         this.animationSequence = [{ type: 'pulse' }];
       } else {
         // Random selection for themed holidays without explicit config
-        const randomType = this.allAnimationTypes[Math.floor(Math.random() * this.allAnimationTypes.length)];
+        const randomType = this.allAnimationTypes[
+          Math.floor(Math.random() * this.allAnimationTypes.length)
+        ];
         this.animationSequence = [{ type: randomType }];
       }
     } else if (typeof themeAnimations === 'string') {
@@ -1449,7 +1437,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ngOnDestroy(): void {
     this.stopLoadingAnimation();
-    this.subscriptions.forEach((sub) => sub.unsubscribe());
+    this.subscriptions.forEach(sub => sub.unsubscribe());
     this.layoutManager.Destroy();
 
     // Clean up user menu
@@ -1459,7 +1447,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Handle app switch from app switcher or command palette
+   * Handle app switch from app switcher
    */
   async onAppSwitch(appId: string): Promise<void> {
     // Clear the system tab flag since we're switching to a real app
@@ -1470,10 +1458,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.cdr.detectChanges();
 
     try {
-      // Check if app is in user's active installed apps
-      const app = this.appManager.GetAppById(appId);
 
-      // If not in user's active apps, show "Add Application?" dialog
+      const app = this.appManager.GetAppById(appId);
       if (!app) {
         // Get app info from all system apps to show the name
         const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
@@ -1498,7 +1484,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Get the default nav item for this app (if any)
       const navItems = app.GetNavItems();
-      const defaultNavItem = navItems.find((item) => item.isDefault);
+      const defaultNavItem = navItems.find(item => item.isDefault);
 
       // Check if app has any tabs
       const appTabs = this.workspaceManager.GetAppTabs(appId);
@@ -1548,29 +1534,29 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Find an existing tab that matches the default nav item
    */
   private findTabForDefaultNavItem(tabs: WorkspaceTab[], defaultNavItem: NavItem): WorkspaceTab | null {
-    return (
-      tabs.find((tab) => {
-        const config = tab.configuration || {};
+    return tabs.find(tab => {
+      const config = tab.configuration || {};
 
-        // For Custom resource type, match by DriverClass
-        if (defaultNavItem.ResourceType === 'Custom' && defaultNavItem.DriverClass) {
-          return config['driverClass'] === defaultNavItem.DriverClass || config['resourceTypeDriverClass'] === defaultNavItem.DriverClass;
-        }
+      // For Custom resource type, match by DriverClass
+      if (defaultNavItem.ResourceType === 'Custom' && defaultNavItem.DriverClass) {
+        return config['driverClass'] === defaultNavItem.DriverClass ||
+               config['resourceTypeDriverClass'] === defaultNavItem.DriverClass;
+      }
 
-        // For other resource types, match by navItemName or by ResourceType + RecordID
-        if (config['navItemName'] === defaultNavItem.Label) {
-          return true;
-        }
+      // For other resource types, match by navItemName or by ResourceType + RecordID
+      if (config['navItemName'] === defaultNavItem.Label) {
+        return true;
+      }
 
-        if (defaultNavItem.ResourceType && defaultNavItem.RecordID) {
-          const tabResourceType = (config['resourceType'] as string)?.toLowerCase();
-          const tabRecordId = config['recordId'] || tab.resourceRecordId;
-          return tabResourceType === defaultNavItem.ResourceType.toLowerCase() && tabRecordId === defaultNavItem.RecordID;
-        }
+      if (defaultNavItem.ResourceType && defaultNavItem.RecordID) {
+        const tabResourceType = (config['resourceType'] as string)?.toLowerCase();
+        const tabRecordId = config['recordId'] || tab.resourceRecordId;
+        return tabResourceType === defaultNavItem.ResourceType.toLowerCase() &&
+               tabRecordId === defaultNavItem.RecordID;
+      }
 
-        return false;
-      }) || null
-    );
+      return false;
+    }) || null;
   }
 
   /**
@@ -1624,7 +1610,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.mobileNavOpen = false;
 
     // Use NavigationService with forceNewTab option if shift was pressed or double-clicked
-    this.navigationService.OpenNavItem(this.activeApp.ID, item, this.activeApp.GetColor(), { forceNewTab: shiftKey || dblClick });
+    this.navigationService.OpenNavItem(
+      this.activeApp.ID,
+      item,
+      this.activeApp.GetColor(),
+      { forceNewTab: shiftKey || dblClick }
+    );
   }
 
   /**
@@ -1688,7 +1679,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       currentApplication: this.activeApp as unknown as ApplicationInfoRef | null,
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
-      openSettings: () => this.openSettingsDialog(),
+      openSettings: () => this.openSettingsDialog()
     };
 
     // Initialize menu
@@ -1698,11 +1689,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.refreshMenuElements();
 
     // Subscribe to developer mode changes to refresh menu
-    this.developerModeService.IsEnabled$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+    this.developerModeService.IsEnabled$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
       // Update context and refresh menu
       if (this.userMenu) {
         this.userMenu.UpdateContext({
-          developerModeEnabled: this.developerModeService.IsEnabled,
+          developerModeEnabled: this.developerModeService.IsEnabled
         });
       }
       this.refreshMenuElements();
@@ -1831,29 +1824,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       layout: {
         root: {
           type: 'row' as const,
-          content: [],
-        },
+          content: []
+        }
       },
       activeTabId: newTabId,
       theme: 'light' as const,
       preferences: {
         tabPosition: 'top' as const,
         showTabIcons: true,
-        autoSaveInterval: 5000,
+        autoSaveInterval: 5000
       },
-      tabs: [
-        {
-          id: newTabId,
-          applicationId: defaultTabRequest.ApplicationId,
-          title: defaultTabRequest.Title,
-          resourceTypeId: defaultTabRequest.ResourceTypeId || '',
-          resourceRecordId: defaultTabRequest.ResourceRecordId || '',
-          isPinned: false,
-          sequence: 0,
-          lastAccessedAt: new Date().toISOString(),
-          configuration: defaultTabRequest.Configuration || {},
-        },
-      ],
+      tabs: [{
+        id: newTabId,
+        applicationId: defaultTabRequest.ApplicationId,
+        title: defaultTabRequest.Title,
+        resourceTypeId: defaultTabRequest.ResourceTypeId || '',
+        resourceRecordId: defaultTabRequest.ResourceRecordId || '',
+        isPinned: false,
+        sequence: 0,
+        lastAccessedAt: new Date().toISOString(),
+        configuration: defaultTabRequest.Configuration || {}
+      }]
     };
 
     console.log('🔄 Resetting layout to fresh state:', freshConfig);
@@ -1976,7 +1967,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private updateBrowserTitle(config: WorkspaceConfiguration): void {
     // Find the active tab
-    const activeTab = config.tabs?.find((tab) => tab.id === config.activeTabId);
+    const activeTab = config.tabs?.find(tab => tab.id === config.activeTabId);
 
     // Get app name
     const appName = this.activeApp?.Name || null;
@@ -2051,12 +2042,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       MJGlobal.Instance.RaiseEvent({
         component: this,
         event: MJEventType.DisplaySimpleNotificationRequest,
-        eventCode: '',
+        eventCode: "",
         args: {
           message: 'Please enter at least 3 characters to search',
           style: 'warning',
-          DisplayDuration: 1500,
-        },
+          DisplayDuration: 1500
+        }
       });
     }
   }
@@ -2073,7 +2064,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       event: MJEventType.ComponentEvent,
       component: this,
       eventCode: EventCodes.ViewNotifications,
-      args: {},
+      args: {}
     });
 
     // Open notifications in a tab
@@ -2084,9 +2075,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       Configuration: {
         resourceType: 'Custom',
         driverClass: 'NotificationsResource',
-        route: 'notifications',
+        route: 'notifications'
       },
-      IsPinned: false,
+      IsPinned: false
     });
   }
 
@@ -2140,35 +2131,35 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       case 'not_found':
         return {
           type: 'not_found',
-          appName: accessResult.appName,
+          appName: accessResult.appName
         };
 
       case 'inactive':
         return {
           type: 'inactive',
           appName: accessResult.appName,
-          appId: accessResult.appId,
+          appId: accessResult.appId
         };
 
       case 'not_installed':
         return {
           type: 'not_installed',
           appName: accessResult.appName,
-          appId: accessResult.appId,
+          appId: accessResult.appId
         };
 
       case 'disabled':
         return {
           type: 'disabled',
           appName: accessResult.appName,
-          appId: accessResult.appId,
+          appId: accessResult.appId
         };
 
       default:
         // 'accessible' shouldn't reach here, but handle it as a generic error
         return {
           type: 'no_access',
-          appName: accessResult.appName,
+          appName: accessResult.appName
         };
     }
   }
@@ -2232,27 +2223,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       case 'redirect':
       case 'dismissed':
       default:
-        // Only redirect if there's no active app (e.g., during initial URL-based navigation)
-        // If user is already in an app (e.g., command palette cancel), just close dialog
-        if (!this.activeApp) {
-          this.redirectToFirstApp(availableApps);
-        }
+        this.redirectToFirstApp(availableApps);
         break;
     }
   }
 
   /**
-   * Add an app to user's applications and navigate to it.
-   * InstallAppForUser handles both new apps and re-enabling disabled apps.
+   * Install an app for the user and navigate to it
    */
   private async installAndNavigateToApp(appId: string): Promise<void> {
     // Clear pendingAppPath to allow fresh handling after installation
     this.pendingAppPath = null;
 
     try {
-      // InstallAppForUser handles both cases:
-      // - Creates new UserApplication record if not exists
-      // - Enables existing record if disabled (IsActive=false)
       const userApp = await this.appManager.InstallAppForUser(appId);
 
       if (userApp) {
@@ -2261,10 +2244,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
         // App added successfully - wait for observable to sync then navigate
         await this.waitForAppAndNavigate(appId);
-      } else {
-        console.error('[ShellComponent] Failed to add application');
-        this.appAccessDialog?.completeProcessing();
-        this.redirectToFirstApp(this.appManager.GetAllApps());
+
+        } else {
+        
+          console.error('[ShellComponent] Failed to add application');
+          this.appAccessDialog?.completeProcessing();
+          this.redirectToFirstApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error adding app:', error);
