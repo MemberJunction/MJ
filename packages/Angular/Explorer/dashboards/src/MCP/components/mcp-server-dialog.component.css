@@ -103,6 +103,36 @@
     color: #666;
 }
 
+/* OAuth Section Styles */
+.oauth-section {
+    background-color: rgba(33, 150, 243, 0.04);
+    border-color: rgba(33, 150, 243, 0.3);
+}
+
+.oauth-section h3 i {
+    color: #ff9800;
+}
+
+.oauth-client-section {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px dashed #ccc;
+}
+
+.oauth-client-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-color, #333);
+}
+
+.section-hint {
+    margin: 0 0 16px 0;
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+}
+
 /* Kendo overrides */
 :host ::ng-deep .k-dialog-actions {
     padding: 16px;

@@ -183,6 +183,64 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OAuthIssuerURL"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OAuthScopes"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OAuthMetadataCacheTTLMinutes"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OAuthClientID"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OAuthClientSecretEncrypted"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OAuthRequirePKCE"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel slot="field-panels"
         sectionKey="systemMetadata"
@@ -211,6 +269,28 @@
     <!-- ========================================
          RELATED ENTITY PANELS - AFTER
          ======================================== -->
+
+    <!-- MJ: O Auth Client Registrations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJOAuthClientRegistrations"
+        sectionName="MJ: O Auth Client Registrations"
+        icon="fa fa-table"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJOAuthClientRegistrations')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Client Registrations','MCPServerID')"
+                [NewRecordValues]="NewRecordValues('MJ: O Auth Client Registrations')"
+                [AllowLoad]="IsSectionExpanded('mJOAuthClientRegistrations')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJOAuthClientRegistrations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
 
     <!-- MJ: MCP Server Connections Section -->
     <mj-collapsible-panel slot="after-panels"

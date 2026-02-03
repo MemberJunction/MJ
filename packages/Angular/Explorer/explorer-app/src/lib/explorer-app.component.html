@@ -1,9 +1,14 @@
-<div *ngIf="authBase.isAuthenticated() | async" class="app-main">
+<!-- OAuth callback route - shown regardless of auth state, component handles waiting for auth -->
+<router-outlet *ngIf="isOAuthCallback"></router-outlet>
+
+<!-- Normal authenticated view (not OAuth callback) -->
+<div *ngIf="(authBase.isAuthenticated() | async) && !isOAuthCallback" class="app-main">
   <mj-system-validation-banner></mj-system-validation-banner>
   <mj-shell *ngIf="!HasError" class="app-body"></mj-shell>
   <div *ngIf="HasError && !showValidationOnly"><h1>System Error</h1><hr/>{{this.ErrorMessage}}</div>
 </div>
-<div class="login-wrapper" *ngIf="!(authBase.isAuthenticated() | async)">
+<!-- Login - shows when NOT authenticated AND not on OAuth callback -->
+<div class="login-wrapper" *ngIf="!(authBase.isAuthenticated() | async) && !isOAuthCallback">
   <div class="main-banner">
     <div class="logo-icon">
       <svg width="62" height="44" viewBox="0 0 62 44" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
