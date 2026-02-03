@@ -73,6 +73,12 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       description: 'Manage visible applications and ordering'
     },
     {
+      id: 'keyboard-shortcuts',
+      label: 'Keyboard Shortcuts',
+      icon: 'fa-solid fa-keyboard',
+      description: 'View and customize keyboard shortcuts'
+    },
+    {
       id: 'appearance',
       label: 'Appearance',
       icon: 'fa-solid fa-palette',
@@ -117,6 +123,15 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       label: 'Application Settings',
       keywords: ['applications', 'apps', 'switcher', 'order', 'visibility', 'menu'],
       description: 'Choose which applications appear in your app switcher'
+    },
+    // Keyboard Shortcuts tab
+    {
+      id: 'keyboard-shortcuts',
+      tabId: 'keyboard-shortcuts',
+      sectionId: 'keyboard-shortcuts',
+      label: 'Keyboard Shortcuts',
+      keywords: ['keyboard', 'shortcuts', 'hotkeys', 'keys', 'keybindings', 'ctrl', 'cmd', 'alt'],
+      description: 'View and customize keyboard shortcuts for faster navigation'
     },
     // Appearance tab
     {

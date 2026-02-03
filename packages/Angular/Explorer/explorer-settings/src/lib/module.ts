@@ -30,6 +30,7 @@ import { GeneralSettingsComponent } from './general-settings/general-settings.co
 import { AccountInfoComponent } from './account-info/account-info.component';
 import { ApplicationSettingsComponent } from './application-settings/application-settings.component';
 import { AppearanceSettingsComponent } from './appearance-settings/appearance-settings.component';
+import { KeyboardShortcutsSettingsComponent } from './keyboard-shortcuts-settings/keyboard-shortcuts-settings.component';
 
 // Admin components (used by Admin app dashboards)
 import { SqlLoggingComponent } from './sql-logging/sql-logging.component';
@@ -57,6 +58,7 @@ import { ApplicationDialogComponent } from './application-management/application
     AccountInfoComponent,
     ApplicationSettingsComponent,
     AppearanceSettingsComponent,
+    KeyboardShortcutsSettingsComponent,
     // Admin components (used by Admin app dashboards)
     SqlLoggingComponent,
     UserManagementComponent,
@@ -97,6 +99,7 @@ import { ApplicationDialogComponent } from './application-management/application
     AccountInfoComponent,
     ApplicationSettingsComponent,
     AppearanceSettingsComponent,
+    KeyboardShortcutsSettingsComponent,
     // Admin components (used by Admin app dashboards)
     SqlLoggingComponent,
     UserManagementComponent,

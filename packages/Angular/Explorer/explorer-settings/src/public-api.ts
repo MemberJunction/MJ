@@ -14,6 +14,7 @@ export * from './lib/application-management/application-management.component';
 export * from './lib/entity-permissions/entity-permissions.component';
 export * from './lib/user-profile-settings/user-profile-settings.component';
 export * from './lib/notification-preferences/notification-preferences.component';
+export * from './lib/keyboard-shortcuts-settings/keyboard-shortcuts-settings.component';
 
 // Dialog components
 export * from './lib/role-management/role-dialog/role-dialog.component';
@@ -29,6 +30,7 @@ import { EntityPermissionsComponent } from './lib/entity-permissions/entity-perm
 import { ApplicationManagementComponent } from './lib/application-management/application-management.component';
 import { SqlLoggingComponent } from './lib/sql-logging/sql-logging.component';
 import { SettingsComponent } from './lib/settings/settings.component';
+import { KeyboardShortcutsSettingsComponent } from './lib/keyboard-shortcuts-settings/keyboard-shortcuts-settings.component';
 
 export function LoadRoleManagementDashboard() {
   // Prevents tree-shaking of RoleManagementComponent
@@ -60,6 +62,11 @@ export function LoadSettingsComponent() {
   return SettingsComponent;
 }
 
+export function LoadKeyboardShortcutsSettingsComponent() {
+  // Prevents tree-shaking of KeyboardShortcutsSettingsComponent
+  return KeyboardShortcutsSettingsComponent;
+}
+
 // Call all loader functions to register dashboard components
 LoadRoleManagementDashboard();
 LoadUserManagementDashboard();
@@ -67,3 +74,4 @@ LoadEntityPermissionsDashboard();
 LoadApplicationManagementDashboard();
 LoadSqlLoggingDashboard();
 LoadSettingsComponent();
+LoadKeyboardShortcutsSettingsComponent();
