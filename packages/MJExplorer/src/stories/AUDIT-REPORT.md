@@ -1,19 +1,21 @@
 # UI Component Audit Report
 
 **Date:** February 2, 2026
+**Updated:** February 3, 2026
 **Purpose:** Audit all UI components and inline patterns in MJExplorer for consolidation and cohesive look/feel.
 
 ---
 
 ## Executive Summary
 
-- **106 stories** across **13 components** already documented in Storybook
-- **15 components** identified that need Storybook stories (8 high priority)
+- **~170 stories** across **21 components** now documented in Storybook ✅
+- **7 components** still need Storybook stories (medium priority)
 - **8 inline patterns** found across **200+ files** that should become reusable components
+- **Phase 1 Complete**: All 8 high-priority components now have Storybook stories
 
 ---
 
-## Already Documented in Storybook (13 Components)
+## Documented in Storybook (21 Components) ✅
 
 | Component | Selector | Stories | Package |
 |-----------|----------|---------|---------|
@@ -30,6 +32,14 @@
 | ActionCard | `mj-action-card` | 8 | `@memberjunction/ng-dashboards` |
 | ActionListItem | `mj-action-list-item` | 8 | `@memberjunction/ng-dashboards` |
 | ActionItemSimple | (inline pattern) | 6 | N/A |
+| **ScoreIndicator** | `app-score-indicator` | **8** | **Testing** |
+| **ReviewStatusIndicator** | `app-review-status-indicator` | **8** | **Testing** |
+| **EvaluationModeToggle** | `app-evaluation-mode-toggle` | **6** | **Testing** |
+| **EntityLinkPill** | `mj-entity-link-pill` | **8** | **core-entity-forms** |
+| **StepInfoControl** | `mj-step-info-control` | **7** | **core-entity-forms** |
+| **ActiveAgentIndicator** | `mj-active-agent-indicator` | **9** | **ng-conversations** |
+| **ActionableCommands** | `mj-actionable-commands` | **8** | **ng-conversations** |
+| **ArtifactMessageCard** | `mj-artifact-message-card` | **8** | **ng-artifacts** |
 
 **Story Files:**
 - `src/stories/loading.stories.ts`
@@ -45,35 +55,24 @@
 - `src/stories/action-card.stories.ts`
 - `src/stories/action-list-item.stories.ts`
 - `src/stories/action-item-simple.stories.ts`
+- `src/stories/score-indicator.stories.ts` *(new)*
+- `src/stories/review-status-indicator.stories.ts` *(new)*
+- `src/stories/evaluation-mode-toggle.stories.ts` *(new)*
+- `src/stories/entity-link-pill.stories.ts` *(new)*
+- `src/stories/step-info-control.stories.ts` *(new)*
+- `src/stories/active-agent-indicator.stories.ts` *(new)*
+- `src/stories/actionable-commands.stories.ts` *(new)*
+- `src/stories/artifact-message-card.stories.ts` *(new)*
 
 ---
 
 ## Components NOT Yet in Storybook
 
-### High Priority (8 components)
+### ~~High Priority (8 components)~~ ✅ COMPLETED
 
-| Component | Selector | Package | Description |
-|-----------|----------|---------|-------------|
-| ActiveAgentIndicator | `mj-active-agent-indicator` | `ng-conversations` | AI agent processing indicator |
-| EntityLinkPill | `mj-entity-link-pill` | `core-entity-forms` | Entity navigation pill/link |
-| ScoreIndicator | `app-score-indicator` | Testing | Numerical score with color coding |
-| ReviewStatusIndicator | `app-review-status-indicator` | Testing | Review state display |
-| StepInfoControl | `mj-step-info-control` | `core-entity-forms` | Workflow step display |
-| ArtifactMessageCard | `mj-artifact-message-card` | `ng-artifacts` | Artifact messages in conversations |
-| EvaluationModeToggle | `app-evaluation-mode-toggle` | Testing | Testing mode selection |
-| ActionableCommands | `mj-actionable-commands` | `ng-conversations` | Message action buttons |
+All 8 high-priority components now have Storybook stories. Stories use mock components to replicate visual behavior without requiring actual Angular services/dependencies.
 
-**Source Files:**
-- `/packages/Angular/Generic/conversations/src/lib/components/agent/active-agent-indicator.component.ts`
-- `/packages/Angular/Explorer/core-entity-forms/src/lib/custom/Tests/entity-link-pill.component.ts`
-- `/packages/Angular/Generic/Testing/src/lib/components/widgets/score-indicator.component.ts`
-- `/packages/Angular/Generic/Testing/src/lib/components/widgets/review-status-indicator.component.ts`
-- `/packages/Angular/Explorer/core-entity-forms/src/lib/custom/AIAgents/FlowAgentType/step-info-control.component.ts`
-- `/packages/Angular/Generic/artifacts/src/lib/components/artifact-message-card.component.ts`
-- `/packages/Angular/Generic/Testing/src/lib/components/widgets/evaluation-mode-toggle.component.ts`
-- `/packages/Angular/Generic/conversations/src/lib/components/message/actionable-commands.component.ts`
-
-### Medium Priority (5 components)
+### Medium Priority (5 components) - Remaining
 
 | Component | Selector | Package | Description |
 |-----------|----------|---------|-------------|
@@ -205,8 +204,31 @@ These are **repeated inline code patterns** found across 200+ files that should 
 
 ## Next Steps
 
-### Phase 1: Document Remaining Components
-Add Storybook stories for the 8 high-priority undocumented components.
+### ~~Phase 1: Document Remaining Components~~ ✅ COMPLETED
+All 8 high-priority components now have Storybook stories:
+- `score-indicator.stories.ts` - 8 stories showing all score tiers, display options, table context
+- `review-status-indicator.stories.ts` - 8 stories showing badge/count/progress modes
+- `evaluation-mode-toggle.stories.ts` - 6 stories showing toggle behavior and contexts
+- `entity-link-pill.stories.ts` - 8 stories showing entity links, truncation, contexts
+- `step-info-control.stories.ts` - 7 stories showing all step types and workflow context
+- `active-agent-indicator.stories.ts` - 9 stories showing all statuses, animations, expansion
+- `actionable-commands.stories.ts` - 8 stories showing command types, disabled state, visibility
+- `artifact-message-card.stories.ts` - 8 stories showing loading/error/success states, types
+
+### Phase 1.5: Refactor Stories to Use Real Components ✅ IN PROGRESS
+Refactored stories to import real Angular modules instead of mock components:
+
+**Completed:**
+- `score-indicator.stories.ts` - Uses `TestingModule` (was already using real component)
+- `review-status-indicator.stories.ts` - Uses `TestingModule` (was already using real component)
+- `actionable-commands.stories.ts` - Now imports `ConversationsModule` instead of mock component
+- `step-info-control.stories.ts` - Now imports `MemberJunctionCoreEntityFormsModule` instead of mock component
+
+**Remaining (Tier 2-3 with complex dependencies):**
+- `entity-link-pill.stories.ts` - Uses `Metadata` and `SharedService.Instance` internally
+- `evaluation-mode-toggle.stories.ts` - Uses `EvaluationPreferencesService`
+- `active-agent-indicator.stories.ts` - Uses `AgentStateService` (Observable-based)
+- `artifact-message-card.stories.ts` - Uses `RunView`, `ArtifactIconService`
 
 ### Phase 2: Create Consolidated Components
 Extract the 3 most impactful inline patterns:
@@ -216,6 +238,9 @@ Extract the 3 most impactful inline patterns:
 
 ### Phase 3: Migrate Inline Patterns
 Replace inline code with new components across the codebase.
+
+### Phase 4: Document Medium Priority Components
+Add stories for remaining 5 medium-priority components.
 
 ---
 

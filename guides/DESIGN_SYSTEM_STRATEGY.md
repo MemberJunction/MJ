@@ -12,9 +12,10 @@ This document outlines the strategy for creating a consistent, themeable design 
 4. [Architecture Overview](#architecture-overview)
 5. [Token Strategy](#token-strategy)
 6. [Component Patterns](#component-patterns)
-7. [UI Library Integration](#ui-library-integration)
-8. [Migration Strategy](#migration-strategy)
-9. [Implementation Checklist](#implementation-checklist)
+7. [Information Architecture Patterns](#information-architecture-patterns)
+8. [UI Library Integration](#ui-library-integration)
+9. [Migration Strategy](#migration-strategy)
+10. [Implementation Checklist](#implementation-checklist)
 
 ---
 
@@ -76,6 +77,7 @@ This document outlines the strategy for creating a consistent, themeable design 
 - Expanded token system with component-specific tokens
 - Replace Kendo with PrimeNG (themed to MJ design language)
 - Create shared MJ component library with documented patterns
+- Information Architecture patterns (layout templates, interaction patterns)
 - Storybook documentation
 - Systematic migration of custom components
 
@@ -83,6 +85,7 @@ This document outlines the strategy for creating a consistent, themeable design 
 - Complete design system documentation
 - PrimeNG integrated and themed
 - Shared component library (`mj-card`, `mj-panel`, `mj-button`, etc.)
+- IA pattern documentation and templates
 - Migration guide and component mapping
 
 **Timeline**: Phased implementation over multiple releases
@@ -692,6 +695,290 @@ export class MJAIChatComponent {
 
 ---
 
+## Information Architecture Patterns
+
+Information Architecture (IA) ensures consistent user experiences across all MemberJunction views and applications. These patterns define how content is organized, how users navigate, and how interactions are structured.
+
+### Page Layout Templates
+
+#### Standard Page Structure
+
+Every page should follow this consistent structure:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Page Header                                                │
+│  [Icon] Page Title                        [Primary Actions] │
+│  Optional subtitle/breadcrumb                               │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Content Area                                               │
+│  • Primary content fills available space                    │
+│  • Scrollable when content exceeds viewport                 │
+│  • Consistent padding using --mj-space-* tokens             │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│  Optional Footer (actions, pagination, status)              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Page Header Guidelines
+
+- **Always present**: Every page has a header with title
+- **Typography**: Use `--mj-font-size-2xl` or `--mj-font-size-3xl` for page titles
+- **Icons**: Use Font Awesome icons to the left of titles for visual identification
+- **Actions**: Primary actions positioned in the top-right
+- **Spacing**: Consistent `--mj-space-4` to `--mj-space-6` below header
+
+### Container Patterns
+
+Choose the appropriate container type based on user task and context:
+
+#### Modal/Dialog
+
+**Use when**:
+- User must make a decision before continuing
+- Task requires focused attention
+- Confirmation is needed for destructive actions
+- Quick data entry that doesn't need reference to background
+
+**Characteristics**:
+- Blocks interaction with background content
+- Centered on screen with overlay
+- Has clear "close" affordance (X button or Cancel)
+- Should be dismissable via Escape key
+
+```html
+<!-- Example structure -->
+<p-dialog [header]="'Confirm Action'" [modal]="true">
+  <div class="mj-dialog-content">
+    <!-- Content -->
+  </div>
+  <div class="mj-dialog-footer">
+    <button pButton label="Confirm" (click)="confirm()"></button>
+    <button pButton label="Cancel" severity="secondary" (click)="cancel()"></button>
+  </div>
+</p-dialog>
+```
+
+#### Side Panel / Drawer
+
+**Use when**:
+- User needs to reference main content while working
+- Detail view for selected item
+- Editing context that relates to visible data
+- Secondary information or filters
+
+**Characteristics**:
+- Slides in from edge (typically right)
+- Main content remains visible but may be dimmed
+- Can be resizable
+- User can interact with both panel and background (optional)
+
+#### Inline/Accordion
+
+**Use when**:
+- Progressive disclosure of details
+- User doesn't need full attention on expanded content
+- Content is part of a list or collection
+- Toggling between sections frequently
+
+**Characteristics**:
+- Expands in place within the page flow
+- Multiple sections can be open (optional)
+- Minimal visual disruption
+- Good for dense information displays
+
+#### Full Page
+
+**Use when**:
+- Complex, multi-step workflows
+- Content requires full screen real estate
+- Task is a primary focus (not auxiliary)
+- Deep navigation or sub-navigation needed
+
+**Characteristics**:
+- Replaces current view entirely
+- Has its own navigation/breadcrumb back
+- May have its own header and footer
+- Used for major features (Record forms, Dashboards, Query Builder)
+
+### Container Decision Tree
+
+```
+Is this a destructive action requiring confirmation?
+├─ Yes → Modal/Dialog
+└─ No
+   Does the user need to reference the background content?
+   ├─ Yes → Side Panel
+   └─ No
+      Is this a multi-step workflow or complex task?
+      ├─ Yes → Full Page
+      └─ No
+         Is this progressive disclosure of existing content?
+         ├─ Yes → Inline/Accordion
+         └─ No → Modal/Dialog (default for focused tasks)
+```
+
+### Action Consistency
+
+#### Button Ordering
+
+**MemberJunction follows left-to-right priority ordering**:
+
+```
+[Primary Action] [Secondary Action] [Cancel/Close]
+```
+
+- **Primary actions** (Save, Submit, Confirm): Left-most position
+- **Secondary actions** (Update, Apply): Middle position
+- **Cancel/Dismiss actions**: Right-most position
+
+This is documented in `CLAUDE.md` and applies to all dialogs, forms, and action groups.
+
+#### Toolbar Placement
+
+- **Page-level toolbars**: Top of content area, below page header
+- **Sticky behavior**: Toolbars should stick to top on scroll for long content
+- **Grouping**: Related actions grouped together with visual separation between groups
+- **Overflow**: Use dropdown menu for secondary actions when space is limited
+
+```html
+<div class="mj-toolbar">
+  <div class="mj-toolbar__primary">
+    <button pButton label="New" icon="fa-solid fa-plus"></button>
+    <button pButton label="Edit" icon="fa-solid fa-pen"></button>
+  </div>
+  <div class="mj-toolbar__secondary">
+    <button pButton label="Export" icon="fa-solid fa-download" severity="secondary"></button>
+    <button pButton label="More" icon="fa-solid fa-ellipsis" severity="secondary"></button>
+  </div>
+</div>
+```
+
+#### Contextual/Row Actions
+
+- **Position**: Right side of row or in overflow menu
+- **Visibility**: Show on hover or always visible for critical actions
+- **Icons**: Use recognizable icons with tooltips
+- **Destructive actions**: Visually distinct (use `--mj-color-error`) and may require confirmation
+
+```html
+<div class="mj-row-actions">
+  <button pButton icon="fa-solid fa-pen" pTooltip="Edit" [text]="true"></button>
+  <button pButton icon="fa-solid fa-copy" pTooltip="Duplicate" [text]="true"></button>
+  <button pButton icon="fa-solid fa-trash" pTooltip="Delete" [text]="true" severity="danger"></button>
+</div>
+```
+
+### Feedback Patterns
+
+Consistent feedback helps users understand system state and the results of their actions.
+
+#### Loading States
+
+**Always use the standard `<mj-loading>` component** (per `CLAUDE.md`):
+
+```html
+<!-- Basic loading -->
+<mj-loading></mj-loading>
+
+<!-- With context -->
+<mj-loading text="Loading records..."></mj-loading>
+
+<!-- Size variants: small, medium, large, auto -->
+<mj-loading size="medium" text="Please wait..."></mj-loading>
+```
+
+**When to show loading**:
+- Any async operation taking > 200ms
+- Data fetching, saving, or processing
+- Navigation to new views with data dependencies
+
+#### Empty States
+
+Empty states should be informative and actionable:
+
+```html
+<div class="mj-empty-state">
+  <i class="fa-solid fa-inbox mj-empty-state__icon"></i>
+  <h3 class="mj-empty-state__title">No items found</h3>
+  <p class="mj-empty-state__description">
+    Get started by creating your first item.
+  </p>
+  <button pButton label="Create Item" icon="fa-solid fa-plus"></button>
+</div>
+```
+
+**Guidelines**:
+- Use relevant icon for context
+- Clear, non-technical messaging
+- Provide next action when possible
+- Don't leave users in a dead end
+
+#### Error States
+
+**Inline validation** (form fields):
+- Show immediately below the invalid field
+- Use `--mj-color-error` for text and border
+- Provide specific, actionable message
+
+**Toast notifications** (async errors):
+- Use for errors from background operations
+- Position: top-right of viewport
+- Auto-dismiss after appropriate time (longer for errors)
+- Include action to retry when applicable
+
+```typescript
+// Using toast service
+this.toastService.showError('Failed to save record. Please try again.');
+
+// With action
+this.toastService.showError('Connection lost', {
+  action: { label: 'Retry', callback: () => this.reconnect() }
+});
+```
+
+#### Success Confirmation
+
+**Quick actions** (save, update, delete):
+- Toast notification: brief, non-blocking
+- Auto-dismiss after 3-5 seconds
+
+**Significant changes** (major workflow completion, destructive actions):
+- Dialog confirmation with summary
+- May include next steps or related actions
+
+```html
+<!-- Toast for quick save -->
+<p-toast></p-toast>
+<!-- In component: this.messageService.add({ severity: 'success', summary: 'Saved', detail: 'Record updated successfully' }); -->
+
+<!-- Dialog for significant action -->
+<p-dialog [header]="'Export Complete'" [visible]="exportComplete">
+  <p>Your data has been exported successfully.</p>
+  <p>File: {{ exportFileName }}</p>
+  <button pButton label="Download" icon="fa-solid fa-download" (click)="download()"></button>
+  <button pButton label="Close" severity="secondary" (click)="close()"></button>
+</p-dialog>
+```
+
+### IA Checklist for New Views
+
+When creating new views or features, verify:
+
+- [ ] Page has consistent header with title and appropriate actions
+- [ ] Container type (modal/panel/inline/full page) matches the use case
+- [ ] Button ordering follows left-to-right priority
+- [ ] Loading states use `<mj-loading>` component
+- [ ] Empty states are informative with clear next actions
+- [ ] Error states provide specific, actionable feedback
+- [ ] Success feedback is appropriate to action significance
+- [ ] Toolbar actions are logically grouped
+- [ ] Row/contextual actions are consistently positioned
+
+---
+
 ## UI Library Integration
 
 ### Recommended Library: PrimeNG
@@ -810,6 +1097,12 @@ These are simpler to migrate and high-frequency.
   - [ ] `mj-dialog`
   - [ ] `mj-entity-picker`
 - [ ] Document component patterns and guidelines
+- [ ] Information Architecture patterns:
+  - [ ] Document standard page layout template
+  - [ ] Document modal vs side panel vs inline decision tree
+  - [ ] Document action button placement rules
+  - [ ] Document feedback pattern standards
+  - [ ] Audit existing views for IA consistency violations
 - [ ] Migrate Phase 2 components (forms/inputs)
 - [ ] Migrate Phase 3 components (dialogs)
 - [ ] Migrate Phase 4 components (grids)

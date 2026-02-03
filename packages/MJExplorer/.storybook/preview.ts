@@ -1,4 +1,5 @@
 import type { Preview } from '@storybook/angular';
+// Note: stories.css is loaded via staticDirs + previewHead in main.ts
 
 const preview: Preview = {
   parameters: {

@@ -1,0 +1,402 @@
+/**
+ * Shared CSS utilities for Storybook stories
+ * These classes replace inline styles for consistent layouts across all stories
+ */
+
+/* =============================================================================
+   LAYOUT CLASSES
+   ============================================================================= */
+
+/* Container with standard padding */
+.story-container {
+  padding: 20px;
+}
+
+/* Flex layouts */
+.story-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.story-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.story-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Grid layouts */
+.story-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.story-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.story-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+/* Gap modifiers */
+.story-gap-sm {
+  gap: 8px;
+}
+
+.story-gap-md {
+  gap: 12px;
+}
+
+.story-gap-lg {
+  gap: 24px;
+}
+
+/* Width constraints */
+.story-width-xs {
+  width: 200px;
+}
+
+.story-width-sm {
+  width: 300px;
+}
+
+.story-width-md {
+  width: 400px;
+}
+
+.story-width-lg {
+  width: 600px;
+}
+
+.story-width-xl {
+  width: 700px;
+}
+
+.story-width-full {
+  width: 100%;
+}
+
+.story-max-width-sm {
+  max-width: 300px;
+}
+
+.story-max-width-md {
+  max-width: 500px;
+}
+
+.story-max-width-lg {
+  max-width: 700px;
+}
+
+.story-max-width-xl {
+  max-width: 900px;
+}
+
+.story-max-width-xxl {
+  max-width: 1000px;
+}
+
+/* =============================================================================
+   TYPOGRAPHY CLASSES
+   ============================================================================= */
+
+/* Labels */
+.story-label {
+  font-size: 13px;
+  color: #666;
+  font-weight: 500;
+}
+
+.story-label-sm {
+  width: 80px;
+}
+
+.story-label-md {
+  width: 100px;
+}
+
+.story-label-lg {
+  width: 120px;
+}
+
+.story-label-xl {
+  width: 140px;
+}
+
+.story-label-xxl {
+  width: 160px;
+}
+
+/* Captions and headings */
+.story-caption {
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.story-caption-sm {
+  font-size: 11px;
+  color: #666;
+}
+
+.story-heading {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 12px 0;
+}
+
+.story-heading-lg {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+}
+
+.story-section-heading {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.story-section-heading-margin {
+  margin: 16px 0 8px 0;
+}
+
+/* Monospace text */
+.story-mono {
+  font-family: monospace;
+  font-size: 12px;
+  color: #666;
+}
+
+/* =============================================================================
+   CARD/PANEL CLASSES
+   ============================================================================= */
+
+.story-card {
+  padding: 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.story-card-lg {
+  padding: 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.story-card-highlight {
+  border-color: #22c55e;
+  border-width: 2px;
+}
+
+.story-card-highlight-blue {
+  border-color: #3b82f6;
+  border-width: 2px;
+}
+
+.story-card-min-width {
+  min-width: 200px;
+}
+
+.story-placeholder {
+  padding: 16px;
+  background: #f9fafb;
+  border: 1px dashed #e5e7eb;
+  border-radius: 6px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+/* Background panels */
+.story-panel {
+  padding: 24px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+/* =============================================================================
+   TABLE CLASSES
+   ============================================================================= */
+
+.story-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.story-table th {
+  text-align: left;
+  padding: 12px;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.story-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.story-table th.pad-x,
+.story-table td.pad-x {
+  padding: 12px 16px;
+}
+
+.story-table td.label {
+  font-weight: 500;
+}
+
+/* =============================================================================
+   COLOR SWATCH CLASSES
+   ============================================================================= */
+
+.story-color-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.story-color-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* =============================================================================
+   WORKFLOW DIAGRAM CLASSES
+   ============================================================================= */
+
+.story-workflow-step-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.story-workflow-connector {
+  width: 32px;
+  display: flex;
+  justify-content: center;
+}
+
+.story-workflow-connector-line {
+  width: 2px;
+  height: 24px;
+  background: #e5e7eb;
+}
+
+.story-workflow-step-content {
+  flex: 1;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+/* =============================================================================
+   UTILITY CLASSES
+   ============================================================================= */
+
+/* Flexbox utilities */
+.story-flex-1 {
+  flex: 1;
+}
+
+.story-items-center {
+  align-items: center;
+}
+
+.story-justify-center {
+  justify-content: center;
+}
+
+/* Text alignment */
+.story-text-center {
+  text-align: center;
+}
+
+.story-text-left {
+  text-align: left;
+}
+
+/* Status colors (for text) */
+.story-text-success {
+  color: #4caf50;
+}
+
+.story-text-warning {
+  color: #ffc107;
+}
+
+.story-text-danger {
+  color: #f44336;
+}
+
+.story-text-info {
+  color: #3b82f6;
+}
+
+.story-text-muted {
+  color: #9ca3af;
+}
+
+/* Background colors */
+.story-bg-success {
+  background: #4caf50;
+}
+
+.story-bg-success-light {
+  background: #8bc34a;
+}
+
+.story-bg-warning {
+  background: #ffc107;
+}
+
+.story-bg-danger {
+  background: #f44336;
+}
+
+.story-bg-orange {
+  background: #ff9800;
+}
+
+.story-bg-blue {
+  background: #3b82f6;
+}
+
+.story-bg-purple {
+  background: #8b5cf6;
+}
+
+.story-bg-green {
+  background: #22c55e;
+}
+
+.story-bg-amber {
+  background: #f59e0b;
+}
