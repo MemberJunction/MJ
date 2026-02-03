@@ -4,10 +4,12 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { FFlowComponent, FCanvasComponent, FZoomDirective, FCreateConnectionEvent,
-         FCreateNodeEvent, FSelectionChangeEvent, FCanvasChangeEvent, FMoveNodesEvent } from '@foblex/flow';
+         FCreateNodeEvent, FSelectionChangeEvent, FCanvasChangeEvent, FMoveNodesEvent,
+         FReassignConnectionEvent } from '@foblex/flow';
 import {
   FlowNode, FlowConnection, FlowNodeTypeConfig, FlowNodeAddedEvent,
-  FlowNodeMovedEvent, FlowConnectionCreatedEvent, FlowSelectionChangedEvent,
+  FlowNodeMovedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent,
+  FlowSelectionChangedEvent,
   FlowCanvasClickEvent, FlowPosition, FlowLayoutDirection,
   FlowContextMenuTarget, FlowContextMenuAction
 } from '../interfaces/flow-types';
@@ -65,6 +67,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @Output() NodeMoved = new EventEmitter<FlowNodeMovedEvent>();
   @Output() ConnectionCreated = new EventEmitter<FlowConnectionCreatedEvent>();
   @Output() ConnectionRemoved = new EventEmitter<FlowConnection>();
+  @Output() ConnectionReassigned = new EventEmitter<FlowConnectionReassignedEvent>();
   @Output() ConnectionSelected = new EventEmitter<FlowConnection | null>();
   @Output() SelectionChanged = new EventEmitter<FlowSelectionChangedEvent>();
   @Output() CanvasClicked = new EventEmitter<FlowCanvasClickEvent>();
@@ -334,6 +337,73 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
       TargetNodeID: targetNodeID,
       TargetPortID: targetPortID
     });
+  }
+
+  /** User reassigned (dragged) an existing connection endpoint to a new node */
+  protected onReassignConnection(event: FReassignConnectionEvent): void {
+    if (this.ReadOnly) return;
+
+    const conn = this.Connections.find(c => c.ID === event.connectionId);
+    if (!conn) return;
+
+    // If dropped on empty space (no new target/source), discard the reassignment
+    if (event.isTargetReassign && !event.newTargetId) return;
+    if (event.isSourceReassign && !event.newSourceId) return;
+
+    this.pushUndoState();
+
+    const oldSourceNodeID = conn.SourceNodeID;
+    const oldSourcePortID = conn.SourcePortID;
+    const oldTargetNodeID = conn.TargetNodeID;
+    const oldTargetPortID = conn.TargetPortID;
+
+    // Resolve new endpoints
+    let newSourceNodeID = oldSourceNodeID;
+    let newSourcePortID = oldSourcePortID;
+    let newTargetNodeID = oldTargetNodeID;
+    let newTargetPortID = oldTargetPortID;
+
+    if (event.isSourceReassign && event.newSourceId) {
+      newSourceNodeID = this.findNodeByPortId(event.newSourceId) ?? oldSourceNodeID;
+      newSourcePortID = this.resolvePortId(event.newSourceId, newSourceNodeID, 'output');
+    }
+
+    if (event.isTargetReassign && event.newTargetId) {
+      newTargetNodeID = this.findNodeByPortId(event.newTargetId) ?? oldTargetNodeID;
+      newTargetPortID = this.resolvePortId(event.newTargetId, newTargetNodeID, 'input');
+    }
+
+    // Prevent self-connections
+    if (newSourceNodeID === newTargetNodeID) return;
+
+    // Prevent duplicates
+    const duplicate = this.Connections.some(
+      c => c.ID !== conn.ID &&
+           c.SourcePortID === newSourcePortID &&
+           c.TargetPortID === newTargetPortID
+    );
+    if (duplicate) return;
+
+    // Update the connection in-place
+    conn.SourceNodeID = newSourceNodeID;
+    conn.SourcePortID = newSourcePortID;
+    conn.TargetNodeID = newTargetNodeID;
+    conn.TargetPortID = newTargetPortID;
+
+    this.ConnectionReassigned.emit({
+      ConnectionID: conn.ID,
+      OldSourceNodeID: oldSourceNodeID,
+      OldSourcePortID: oldSourcePortID,
+      OldTargetNodeID: oldTargetNodeID,
+      OldTargetPortID: oldTargetPortID,
+      NewSourceNodeID: newSourceNodeID,
+      NewSourcePortID: newSourcePortID,
+      NewTargetNodeID: newTargetNodeID,
+      NewTargetPortID: newTargetPortID
+    });
+
+    this.ConnectionsChanged.emit(this.Connections);
+    this.cdr.detectChanges();
   }
 
   /** External item dropped from palette */

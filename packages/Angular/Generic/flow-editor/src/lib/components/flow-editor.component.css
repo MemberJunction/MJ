@@ -193,19 +193,9 @@
 
 /* ── Foblex Overrides ──────────────────────────────────────── */
 
-/* Canvas background — transparent so the wrapper's grid pattern shows through.
-   The wrapper (.mj-flow-editor-canvas) provides the white background + grid dots. */
+/* Canvas background */
 f-canvas {
-  background: transparent;
-}
-
-/* CSS-based grid dot pattern — applied to the static canvas wrapper so dots
-   stay fixed across the entire viewport regardless of canvas pan/zoom. */
-.mj-flow-editor-canvas--grid-dots {
-  background:
-    radial-gradient(circle, #c0c8d4 1px, transparent 1px),
-    #ffffff;
-  background-size: 20px 20px;
+  background: #ffffff;
 }
 
 /* Selection area */
@@ -317,18 +307,17 @@ f-line-alignment {
   color: #475569;
 }
 
-.mj-flow-editor-legend-line {
-  display: inline-block;
-  width: 20px;
-  height: 2px;
-  border-radius: 1px;
+.mj-flow-editor-legend-svg,
+.mj-flow-editor-legend-line-svg {
   flex-shrink: 0;
 }
 
-.mj-flow-editor-legend-line--dashed {
-  background: none !important;
-  border-top: 2px dashed #f59e0b;
-  height: 0;
+.mj-flow-editor-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .mj-flow-editor-legend-box {

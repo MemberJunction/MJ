@@ -5,7 +5,7 @@ import {
 } from '@angular/core';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowNodeTypeConfig } from '../interfaces/flow-types';
+import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig } from '../interfaces/flow-types';
 import { FlowEditorComponent } from '../components/flow-editor.component';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from './agent-flow-transformer.service';
 
@@ -458,6 +458,21 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
       this.paths = this.paths.filter(p => p.ID !== conn.ID);
       this.markDirty();
     }
+  }
+
+  protected onConnectionReassigned(event: FlowConnectionReassignedEvent): void {
+    const path = this.paths.find(p => p.ID === event.ConnectionID);
+    if (!path) return;
+
+    // Update the entity's origin/destination to match the new visual endpoints
+    path.OriginStepID = event.NewSourceNodeID;
+    path.DestinationStepID = event.NewTargetNodeID;
+
+    // Rebuild all connections so sibling-based visual logic recalculates
+    // (e.g., Default vs Duplicate Default labels depend on sibling analysis)
+    this.rebuildFlowModel();
+    this.markDirty();
+    this.cdr.detectChanges();
   }
 
   protected onNodesChanged(nodes: FlowNode[]): void {

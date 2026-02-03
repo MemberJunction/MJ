@@ -31,8 +31,7 @@
 
     <!-- Foblex Canvas -->
     <div class="mj-flow-editor-canvas"
-         [class.mj-flow-editor-canvas--pan-mode]="panMode"
-         [class.mj-flow-editor-canvas--grid-dots]="ShowGrid">
+         [class.mj-flow-editor-canvas--pan-mode]="panMode">
       <f-flow fDraggable
               [fDraggableDisabled]="false"
               [fCanvasMoveTrigger]="canvasMoveTriggerFn"
@@ -41,9 +40,18 @@
               [fCellSizeWhileDragging]="ShowGrid"
               (fLoaded)="onFlowLoaded()"
               (fCreateConnection)="onCreateConnection($event)"
+              (fReassignConnection)="onReassignConnection($event)"
               (fCreateNode)="onCreateNode($event)"
               (fSelectionChange)="onSelectionChange($event)"
               (fMoveNodes)="onNodesMoved($event)">
+
+        <!-- Background grid — MUST be direct child of f-flow (Foblex content projection requires it) -->
+        <f-background *ngIf="ShowGrid">
+          <f-circle-pattern [color]="'#94a3b8'" [radius]="24"></f-circle-pattern>
+        </f-background>
+
+        <!-- Alignment snap lines — direct child of f-flow -->
+        <f-line-alignment *ngIf="!ReadOnly" [fAlignThreshold]="10"></f-line-alignment>
 
         <f-canvas fZoom #fZoomRef="fComponent"
                   [fZoomMinimum]="0.15"
@@ -52,9 +60,6 @@
                   [position]="canvasPosition"
                   [scale]="canvasScale"
                   (fCanvasChange)="onCanvasChange($event)">
-
-          <!-- Alignment snap lines (edit mode only) -->
-          <f-line-alignment *ngIf="!ReadOnly" [fAlignThreshold]="10"></f-line-alignment>
 
           <!-- Interactive connection drawing -->
           <f-connection-for-create *ngIf="!ReadOnly"
@@ -66,9 +71,6 @@
               <path d="M0 0L10 5L0 10Z" fill="#94a3b8"/>
             </svg>
           </f-connection-for-create>
-
-          <!-- Rubber-band selection (edit mode only) -->
-          <f-selection-area *ngIf="!ReadOnly"></f-selection-area>
 
           <!-- Connections -->
           <f-connection *ngFor="let conn of Connections; trackBy: trackConnectionById"
@@ -124,6 +126,9 @@
 
         </f-canvas>
 
+        <!-- Rubber-band selection — direct child of f-flow -->
+        <f-selection-area *ngIf="!ReadOnly"></f-selection-area>
+
         <!-- Minimap -->
         <div *ngIf="ShowMinimap" class="mj-flow-editor-minimap" fDragBlocker>
           <f-minimap [fMinSize]="1500"></f-minimap>
@@ -136,36 +141,52 @@
         <div class="mj-flow-editor-legend-section">
           <div class="mj-flow-editor-legend-heading">Connections</div>
           <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-line" style="background:#64748b;"></span>
-            <span>Default (sole path)</span>
+            <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#64748b" stroke-width="2"/></svg>
+            <span>Only exit path</span>
           </div>
           <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-line" style="background:#16a34a;"></span>
-            <span>Default (with siblings)</span>
+            <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#16a34a" stroke-width="2"/></svg>
+            <i class="fa-solid fa-circle-check" style="color:#16a34a;font-size:10px;"></i>
+            <span>Default (fallback)</span>
           </div>
           <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-line mj-flow-editor-legend-line--dashed" style="background:#f59e0b;"></span>
+            <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 3"/></svg>
             <span>Conditional</span>
           </div>
           <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-line" style="background:#ef4444;"></span>
+            <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#ef4444" stroke-width="2"/></svg>
             <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;font-size:10px;"></i>
             <span>Duplicate defaults</span>
           </div>
         </div>
         <div class="mj-flow-editor-legend-section">
-          <div class="mj-flow-editor-legend-heading">Node Borders</div>
+          <div class="mj-flow-editor-legend-heading">Step Types</div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-swatch" style="background:#3B82F6"></span>
+            <span>Action</span>
+          </div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-swatch" style="background:#8B5CF6"></span>
+            <span>Prompt</span>
+          </div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-swatch" style="background:#10B981"></span>
+            <span>Sub-Agent</span>
+          </div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-swatch" style="background:#F59E0B"></span>
+            <span>For Each</span>
+          </div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-swatch" style="background:#F97316"></span>
+            <span>While</span>
+          </div>
+        </div>
+        <div class="mj-flow-editor-legend-section">
+          <div class="mj-flow-editor-legend-heading">Borders</div>
           <div class="mj-flow-editor-legend-item">
             <span class="mj-flow-editor-legend-box" style="border-color:#16a34a;background:#f0fdf4;"></span>
             <span>Start node</span>
-          </div>
-          <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-box" style="border-color:#3b82f6;background:#eff6ff;"></span>
-            <span>Default / Active</span>
-          </div>
-          <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-box" style="border-color:#f59e0b;background:#fffbeb;"></span>
-            <span>Loop</span>
           </div>
           <div class="mj-flow-editor-legend-item">
             <span class="mj-flow-editor-legend-box" style="border-color:#ef4444;background:#fef2f2;"></span>

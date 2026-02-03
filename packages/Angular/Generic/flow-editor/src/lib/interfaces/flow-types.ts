@@ -143,6 +143,19 @@ export interface FlowConnectionCreatedEvent {
   TargetPortID: string;
 }
 
+/** Emitted when an existing connection is reassigned (endpoint dragged to a different node) */
+export interface FlowConnectionReassignedEvent {
+  ConnectionID: string;
+  OldSourceNodeID: string;
+  OldSourcePortID: string;
+  OldTargetNodeID: string;
+  OldTargetPortID: string;
+  NewSourceNodeID: string;
+  NewSourcePortID: string;
+  NewTargetNodeID: string;
+  NewTargetPortID: string;
+}
+
 /** Emitted when the selection state changes */
 export interface FlowSelectionChangedEvent {
   SelectedNodeIDs: string[];
