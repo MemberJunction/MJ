@@ -116,6 +116,37 @@ export class AgentFlowTransformerService {
   }
 
   /**
+   * Returns a short human-readable message describing what's missing,
+   * or null if the step is fully configured.
+   */
+  BuildConfigWarningMessage(step: AIAgentStepEntity): string | null {
+    switch (step.StepType) {
+      case 'Action':
+        return !step.ActionID ? 'No action selected' : null;
+      case 'Prompt':
+        return !step.PromptID ? 'No prompt selected' : null;
+      case 'Sub-Agent':
+        return !step.SubAgentID ? 'No sub-agent selected' : null;
+      case 'ForEach':
+      case 'While':
+        return this.buildLoopWarningMessage(step);
+      default:
+        return null;
+    }
+  }
+
+  private buildLoopWarningMessage(step: AIAgentStepEntity): string | null {
+    const bodyType = step.LoopBodyType;
+    if (!bodyType) return 'No loop body type selected';
+    switch (bodyType) {
+      case 'Action': return !step.ActionID ? 'No action selected for loop body' : null;
+      case 'Prompt': return !step.PromptID ? 'No prompt selected for loop body' : null;
+      case 'Sub-Agent': return !step.SubAgentID ? 'No sub-agent selected for loop body' : null;
+      default: return null;
+    }
+  }
+
+  /**
    * Returns true when a step is missing its required configuration reference
    * (e.g., an Action step with no ActionID, a Prompt step with no PromptID).
    */
@@ -169,9 +200,8 @@ export class AgentFlowTransformerService {
     // Show warning status when the step is missing its required configuration,
     // unless the step is explicitly disabled (respect the user's intent).
     const baseStatus = this.MapStepStatus(step.Status);
-    const effectiveStatus = (baseStatus !== 'disabled' && this.IsStepMissingConfiguration(step))
-      ? 'warning'
-      : baseStatus;
+    const warningMessage = (baseStatus !== 'disabled') ? this.BuildConfigWarningMessage(step) : null;
+    const effectiveStatus = warningMessage ? 'warning' : baseStatus;
 
     return {
       ID: stepId,
@@ -180,6 +210,7 @@ export class AgentFlowTransformerService {
       Subtitle: this.BuildStepSubtitle(step),
       Icon: this.getIconForType(step.StepType),
       Status: effectiveStatus,
+      StatusMessage: warningMessage ?? undefined,
       IsStartNode: step.StartingStep === true,
       Position: {
         X: step.PositionX ?? 0,

@@ -47,6 +47,14 @@
     {{ TypeConfig?.Label || Node.Type }}
   </div>
 
+  <!-- Warning banner (shown inline when step is misconfigured) -->
+  <div *ngIf="Node.Status === 'warning' && Node.StatusMessage"
+       class="mj-flow-node-warning-banner"
+       [title]="Node.StatusMessage">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <span>{{ Node.StatusMessage }}</span>
+  </div>
+
   <!-- Badges row -->
   <div *ngIf="Node.Badges && Node.Badges.length > 0" class="mj-flow-node-badges">
     <span *ngFor="let badge of Node.Badges"

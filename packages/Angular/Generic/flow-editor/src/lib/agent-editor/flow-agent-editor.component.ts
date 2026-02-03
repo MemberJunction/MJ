@@ -72,6 +72,9 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   protected availablePrompts: Array<{ ID: string; Name: string }> = [];
   protected availableAgents: Array<{ ID: string; Name: string }> = [];
 
+  // Permission state — cached once on init
+  protected userCanUpdate = false;
+
   // Initial zoom state
   private needsInitialZoom = false;
   private resizeObserver: ResizeObserver | null = null;
@@ -91,6 +94,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   // ── Lifecycle ───────────────────────────────────────────────
 
   ngOnInit(): void {
+    this.checkUpdatePermission();
     if (this.AgentID) {
       this.loadAll();
     }
@@ -467,14 +471,14 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
       const newLabel = step.Name;
       const newSubtitle = this.transformer.BuildStepSubtitle(step);
       const baseStatus = this.transformer.MapStepStatus(step.Status);
-      const newStatus = (baseStatus !== 'disabled' && this.transformer.IsStepMissingConfiguration(step))
-        ? 'warning'
-        : baseStatus;
+      const warningMessage = (baseStatus !== 'disabled') ? this.transformer.BuildConfigWarningMessage(step) : null;
+      const newStatus = warningMessage ? 'warning' : baseStatus;
       const newIsStart = step.StartingStep === true;
 
       node.Label = newLabel;
       node.Subtitle = newSubtitle;
       node.Status = newStatus;
+      node.StatusMessage = warningMessage ?? undefined;
       node.IsStartNode = newIsStart;
 
       // Update input port disabled state for starting steps
@@ -488,10 +492,12 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
         Label: newLabel,
         Subtitle: newSubtitle,
         Status: newStatus,
+        StatusMessage: warningMessage ?? undefined,
         IsStartNode: newIsStart
       });
     }
     this.markDirty();
+    this.cdr.detectChanges();
   }
 
   protected onPathChanged(path: AIAgentStepPathEntity): void {
@@ -669,6 +675,17 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
       this.onUnsavedDialogCancel();
     } else if (this.FullScreen) {
       this.toggleFullScreen();
+    }
+  }
+
+  // ── Permission Check ────────────────────────────────────────
+
+  private checkUpdatePermission(): void {
+    const md = new Metadata();
+    const entity = md.EntityByName('AI Agents');
+    if (entity) {
+      const perms = entity.GetUserPermisions(md.CurrentUser);
+      this.userCanUpdate = perms?.CanUpdate === true;
     }
   }
 

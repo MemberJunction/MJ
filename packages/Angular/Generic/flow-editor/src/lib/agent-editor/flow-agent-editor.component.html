@@ -67,7 +67,7 @@
       <div *ngIf="isEditingActive" class="mj-agent-editor-btn-divider"></div>
 
       <!-- Fullscreen edit toggle (only in fullscreen, and only when parent is NOT in edit mode) -->
-      <button *ngIf="FullScreen && !EditMode && !fullscreenEditMode"
+      <button *ngIf="FullScreen && !EditMode && !fullscreenEditMode && userCanUpdate"
               class="mj-agent-editor-btn mj-agent-editor-btn--edit"
               (click)="toggleFullscreenEditMode()" title="Edit flow">
         <i class="fa-solid fa-pen-to-square"></i> Edit
