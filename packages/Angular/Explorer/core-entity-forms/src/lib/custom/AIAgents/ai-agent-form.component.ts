@@ -18,7 +18,7 @@ import { PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
-import { AgentPermissionsDialogComponent } from './agent-permissions-dialog.component';
+// AgentPermissionsDialogComponent is now from @memberjunction/ng-agents (shown via ShowPermissionsDialog flag)
 
 /**
  * Type for sub-agent filter options
@@ -1083,6 +1083,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Opens the permissions management dialog for this agent.
      * Allows viewing and editing user/role-based permissions for the agent.
      */
+    /** Controls visibility of the new permissions dialog from @memberjunction/ng-agents */
+    public ShowPermissionsDialog = false;
+
     public openPermissionsDialog() {
         if (!this.record?.ID) {
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -1092,16 +1095,11 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             );
             return;
         }
+        this.ShowPermissionsDialog = true;
+    }
 
-        const dialogRef = this.dialogService.open({
-            content: AgentPermissionsDialogComponent,
-            width: 900,
-            height: 600
-        });
-
-        const dialog = dialogRef.content.instance as AgentPermissionsDialogComponent;
-        dialog.agent = this.record;
-        dialog.dialogRef = dialogRef;
+    public onPermissionsDialogClosed() {
+        this.ShowPermissionsDialog = false;
     }
 
     /**

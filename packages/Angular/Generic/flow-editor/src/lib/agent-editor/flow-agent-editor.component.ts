@@ -4,7 +4,7 @@ import {
   ElementRef, Renderer2
 } from '@angular/core';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
-import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { AIAgentStepEntity, AIAgentStepPathEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowNodeTypeConfig } from '../interfaces/flow-types';
 import { FlowEditorComponent } from '../components/flow-editor.component';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from './agent-flow-transformer.service';
@@ -75,6 +75,13 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   // Permission state — cached once on init
   protected userCanUpdate = false;
 
+  // User view preferences (persisted via UserInfoEngine)
+  protected prefShowGrid = true;
+  protected prefShowMinimap = true;
+  protected prefShowLegend = true;
+
+  private static readonly PREF_KEY = 'flow-editor/view-prefs';
+
   // Initial zoom state
   private needsInitialZoom = false;
   private resizeObserver: ResizeObserver | null = null;
@@ -94,6 +101,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   // ── Lifecycle ───────────────────────────────────────────────
 
   ngOnInit(): void {
+    this.loadViewPreferences();
     this.checkUpdatePermission();
     if (this.AgentID) {
       this.loadAll();
@@ -722,6 +730,47 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
       const perms = entity.GetUserPermisions(md.CurrentUser);
       this.userCanUpdate = perms?.CanUpdate === true;
     }
+  }
+
+  // ── View Preference Persistence ─────────────────────────────
+
+  private loadViewPreferences(): void {
+    const raw = UserInfoEngine.Instance.GetSetting(FlowAgentEditorComponent.PREF_KEY);
+    if (raw) {
+      try {
+        const prefs = JSON.parse(raw) as { grid?: boolean; minimap?: boolean; legend?: boolean };
+        if (prefs.grid != null) this.prefShowGrid = prefs.grid;
+        if (prefs.minimap != null) this.prefShowMinimap = prefs.minimap;
+        if (prefs.legend != null) this.prefShowLegend = prefs.legend;
+      } catch {
+        // Ignore malformed preference data
+      }
+    }
+  }
+
+  private saveViewPreferences(): void {
+    const prefs = JSON.stringify({
+      grid: this.prefShowGrid,
+      minimap: this.prefShowMinimap,
+      legend: this.prefShowLegend
+    });
+    // Fire-and-forget — preference save errors are non-critical
+    UserInfoEngine.Instance.SetSetting(FlowAgentEditorComponent.PREF_KEY, prefs);
+  }
+
+  protected onGridPrefChanged(show: boolean): void {
+    this.prefShowGrid = show;
+    this.saveViewPreferences();
+  }
+
+  protected onMinimapPrefChanged(show: boolean): void {
+    this.prefShowMinimap = show;
+    this.saveViewPreferences();
+  }
+
+  protected onLegendPrefChanged(show: boolean): void {
+    this.prefShowLegend = show;
+    this.saveViewPreferences();
   }
 
   // ── Helpers ─────────────────────────────────────────────────

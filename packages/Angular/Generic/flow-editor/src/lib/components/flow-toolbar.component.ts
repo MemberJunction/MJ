@@ -61,6 +61,12 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
                 title="Toggle Minimap">
           <i class="fa-solid fa-map"></i>
         </button>
+        <button class="mj-flow-toolbar-btn"
+                [class.mj-flow-toolbar-btn--active]="ShowLegend"
+                (click)="LegendToggled.emit(!ShowLegend)"
+                title="Toggle Legend">
+          <i class="fa-solid fa-list-check"></i>
+        </button>
       </div>
     </div>
   `,
@@ -135,6 +141,7 @@ export class FlowToolbarComponent {
   @Input() ZoomLevel = 100;
   @Input() ShowGrid = true;
   @Input() ShowMinimap = true;
+  @Input() ShowLegend = true;
   @Input() ReadOnly = false;
   @Input() PanMode = false;
 
@@ -144,5 +151,6 @@ export class FlowToolbarComponent {
   @Output() AutoLayoutClicked = new EventEmitter<void>();
   @Output() GridToggled = new EventEmitter<boolean>();
   @Output() MinimapToggled = new EventEmitter<boolean>();
+  @Output() LegendToggled = new EventEmitter<boolean>();
   @Output() PanModeToggled = new EventEmitter<boolean>();
 }

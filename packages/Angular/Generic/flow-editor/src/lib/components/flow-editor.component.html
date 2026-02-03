@@ -6,6 +6,7 @@
       [ZoomLevel]="zoomLevel"
       [ShowGrid]="ShowGrid"
       [ShowMinimap]="ShowMinimap"
+      [ShowLegend]="ShowLegend"
       [ReadOnly]="ReadOnly"
       [PanMode]="panMode"
       (ZoomInClicked)="ZoomIn()"
@@ -14,6 +15,7 @@
       (AutoLayoutClicked)="AutoArrange()"
       (GridToggled)="onGridToggled($event)"
       (MinimapToggled)="onMinimapToggled($event)"
+      (LegendToggled)="onLegendToggled($event)"
       (PanModeToggled)="onPanModeToggled($event)">
     </mj-flow-toolbar>
   </div>
@@ -28,7 +30,9 @@
     </mj-flow-palette>
 
     <!-- Foblex Canvas -->
-    <div class="mj-flow-editor-canvas" [class.mj-flow-editor-canvas--pan-mode]="panMode">
+    <div class="mj-flow-editor-canvas"
+         [class.mj-flow-editor-canvas--pan-mode]="panMode"
+         [class.mj-flow-editor-canvas--grid-dots]="ShowGrid">
       <f-flow fDraggable
               [fDraggableDisabled]="false"
               [fCanvasMoveTrigger]="canvasMoveTriggerFn"
@@ -48,11 +52,6 @@
                   [position]="canvasPosition"
                   [scale]="canvasScale"
                   (fCanvasChange)="onCanvasChange($event)">
-
-          <!-- Background grid -->
-          <f-background *ngIf="ShowGrid">
-            <f-circle-pattern [color]="'#cbd5e1'" [radius]="20"></f-circle-pattern>
-          </f-background>
 
           <!-- Alignment snap lines (edit mode only) -->
           <f-line-alignment *ngIf="!ReadOnly" [fAlignThreshold]="10"></f-line-alignment>
@@ -84,6 +83,8 @@
                         [fReassignDisabled]="ReadOnly"
                         [style.--connection-color]="conn.Color || '#94a3b8'"
                         [class.mj-flow-connection-colored]="!!conn.Color"
+                        [class.mj-flow-connection-dashed]="conn.Style === 'dashed'"
+                        [class.mj-flow-connection-dotted]="conn.Style === 'dotted'"
                         (click)="onConnectionClicked($event, conn)"
                         (contextmenu)="onConnectionContextMenu($event, conn)">
             <!-- Arrow marker -->
@@ -128,6 +129,51 @@
           <f-minimap [fMinSize]="1500"></f-minimap>
         </div>
       </f-flow>
+
+      <!-- Legend -->
+      <div *ngIf="ShowLegend && Nodes.length > 0" class="mj-flow-editor-legend">
+        <div class="mj-flow-editor-legend-title">Legend</div>
+        <div class="mj-flow-editor-legend-section">
+          <div class="mj-flow-editor-legend-heading">Connections</div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-line" style="background:#64748b;"></span>
+            <span>Default (sole path)</span>
+          </div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-line" style="background:#16a34a;"></span>
+            <span>Default (with siblings)</span>
+          </div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-line mj-flow-editor-legend-line--dashed" style="background:#f59e0b;"></span>
+            <span>Conditional</span>
+          </div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-line" style="background:#ef4444;"></span>
+            <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;font-size:10px;"></i>
+            <span>Duplicate defaults</span>
+          </div>
+        </div>
+        <div class="mj-flow-editor-legend-section">
+          <div class="mj-flow-editor-legend-heading">Node Borders</div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-box" style="border-color:#16a34a;background:#f0fdf4;"></span>
+            <span>Start node</span>
+          </div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-box" style="border-color:#3b82f6;background:#eff6ff;"></span>
+            <span>Default / Active</span>
+          </div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-box" style="border-color:#f59e0b;background:#fffbeb;"></span>
+            <span>Loop</span>
+          </div>
+          <div class="mj-flow-editor-legend-item">
+            <span class="mj-flow-editor-legend-box" style="border-color:#ef4444;background:#fef2f2;"></span>
+            <i class="fa-solid fa-triangle-exclamation" style="color:#ea580c;font-size:10px;"></i>
+            <span>Missing config</span>
+          </div>
+        </div>
+      </div>
 
       <!-- Empty state overlay -->
       <div *ngIf="Nodes.length === 0" class="mj-flow-editor-empty">

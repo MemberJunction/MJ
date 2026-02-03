@@ -31,8 +31,8 @@ import { SubAgentAdvancedSettingsDialogComponent } from "./AIAgents/sub-agent-ad
 import { SubAgentSelectorDialogComponent } from "./AIAgents/sub-agent-selector-dialog.component";
 import { CreatePromptDialogComponent } from "./AIAgents/create-prompt-dialog.component";
 import { CreateSubAgentDialogComponent } from "./AIAgents/create-sub-agent-dialog.component";
-import { AgentPermissionsDialogComponent } from "./AIAgents/agent-permissions-dialog.component";
 import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
+import { AgentsModule } from "@memberjunction/ng-agents";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { TestingModule } from "@memberjunction/ng-testing";
@@ -86,7 +86,6 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         SubAgentSelectorDialogComponent,
         CreatePromptDialogComponent,
         CreateSubAgentDialogComponent,
-        AgentPermissionsDialogComponent,
         EntitySelectorDialogComponent,
         AIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
@@ -153,7 +152,8 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         SharedGenericModule,
         EntityRelationshipDiagramModule,
         ListManagementModule,
-        ActionsModule
+        ActionsModule,
+        AgentsModule
     ],
     exports: [
         EntityFormComponentExtended,

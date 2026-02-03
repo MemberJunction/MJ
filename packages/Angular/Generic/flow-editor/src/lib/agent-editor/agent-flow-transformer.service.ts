@@ -241,13 +241,10 @@ export class AgentFlowTransformerService {
     const unconditionalSiblings = siblingPaths.filter(
       p => !p.Condition || p.Condition.trim().length === 0
     );
-    // Only flag as ambiguous when 2+ undescribed unconditional paths exist.
-    // An unconditional path with a description is an intentional "always" path
-    // and should not trigger the duplicate-default warning.
-    const bareDefaultCount = unconditionalSiblings.filter(
-      p => !p.Description || p.Description.trim().length === 0
-    ).length;
-    const hasAmbiguousAlways = isAlwaysPath && bareDefaultCount > 1;
+    // Flag as ambiguous when 2+ unconditional paths exist from the same source.
+    // Multiple unconditional paths are always ambiguous because only the
+    // highest-priority one will execute — regardless of whether they have descriptions.
+    const hasAmbiguousAlways = isAlwaysPath && unconditionalSiblings.length > 1;
 
     // Build label, icon, and visual style
     const visual = this.buildPathVisuals(path, hasCondition, isOnlyPath, hasAmbiguousAlways);
@@ -289,10 +286,12 @@ export class AgentFlowTransformerService {
       };
     }
 
-    // Sole unconditional (only exit path) — neutral dark slate, no label needed
+    // Sole unconditional (only exit path) — neutral dark slate with Default indicator
     if (isOnlyPath) {
       return {
-        label: path.Description || undefined,
+        label: path.Description || 'Default',
+        labelIcon: 'fa-circle-check',
+        labelIconColor: '#16a34a',
         color: '#64748b',
         style: 'solid'
       };

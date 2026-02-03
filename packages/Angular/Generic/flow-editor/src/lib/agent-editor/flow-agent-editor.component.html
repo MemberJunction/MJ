@@ -101,9 +101,10 @@
                        [Connections]="connections"
                        [NodeTypes]="nodeTypes"
                        [ReadOnly]="!isEditingActive"
-                       [ShowMinimap]="true"
+                       [ShowMinimap]="prefShowMinimap"
                        [ShowPalette]="isEditingActive"
-                       [ShowGrid]="true"
+                       [ShowGrid]="prefShowGrid"
+                       [ShowLegend]="prefShowLegend"
                        [ShowStatusBar]="true"
                        [ShowToolbar]="true"
                        [AutoLayoutDirection]="'vertical'"
@@ -114,7 +115,10 @@
                        (ConnectionRemoved)="onConnectionRemoved($event)"
                        (ConnectionSelected)="onConnectionSelected($event)"
                        (NodesChanged)="onNodesChanged($event)"
-                       (ConnectionsChanged)="onConnectionsChanged($event)">
+                       (ConnectionsChanged)="onConnectionsChanged($event)"
+                       (GridToggled)="onGridPrefChanged($event)"
+                       (MinimapToggled)="onMinimapPrefChanged($event)"
+                       (LegendToggled)="onLegendPrefChanged($event)">
       </mj-flow-editor>
 
       <!-- Properties Panel -->

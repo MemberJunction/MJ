@@ -45,6 +45,7 @@
   flex: 1;
   position: relative;
   overflow: hidden;
+  background: #ffffff;
 }
 
 .mj-flow-editor-canvas f-flow {
@@ -192,9 +193,19 @@
 
 /* ── Foblex Overrides ──────────────────────────────────────── */
 
-/* Canvas background */
+/* Canvas background — transparent so the wrapper's grid pattern shows through.
+   The wrapper (.mj-flow-editor-canvas) provides the white background + grid dots. */
 f-canvas {
-  background: #ffffff;
+  background: transparent;
+}
+
+/* CSS-based grid dot pattern — applied to the static canvas wrapper so dots
+   stay fixed across the entire viewport regardless of canvas pan/zoom. */
+.mj-flow-editor-canvas--grid-dots {
+  background:
+    radial-gradient(circle, #c0c8d4 1px, transparent 1px),
+    #ffffff;
+  background-size: 20px 20px;
 }
 
 /* Selection area */
@@ -236,11 +247,97 @@ f-line-alignment {
   filter: brightness(0.85);
 }
 
+/* Dashed connection style */
+.mj-flow-connection-dashed path {
+  stroke-dasharray: 8 4;
+}
+
+/* Dotted connection style */
+.mj-flow-connection-dotted path {
+  stroke-dasharray: 3 3;
+}
+
 /* Connection for create (dragging) */
 .f-connection-for-create path {
   stroke: #94a3b8;
   stroke-dasharray: 6 3;
   stroke-width: 2;
+}
+
+/* ── Legend ────────────────────────────────────────────────── */
+
+.mj-flow-editor-legend {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 15;
+  font-size: 11px;
+  color: #475569;
+  max-width: 200px;
+}
+
+.mj-flow-editor-legend-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mj-flow-editor-legend-section {
+  margin-bottom: 8px;
+}
+
+.mj-flow-editor-legend-section:last-child {
+  margin-bottom: 0;
+}
+
+.mj-flow-editor-legend-heading {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+.mj-flow-editor-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+  color: #475569;
+}
+
+.mj-flow-editor-legend-line {
+  display: inline-block;
+  width: 20px;
+  height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.mj-flow-editor-legend-line--dashed {
+  background: none !important;
+  border-top: 2px dashed #f59e0b;
+  height: 0;
+}
+
+.mj-flow-editor-legend-box {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border: 2px solid;
+  border-radius: 3px;
+  flex-shrink: 0;
 }
 
 /* ── Context Menu ─────────────────────────────────────────── */

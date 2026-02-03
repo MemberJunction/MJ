@@ -48,6 +48,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @Input() ShowGrid = true;
   @Input() ShowStatusBar = true;
   @Input() ShowToolbar = true;
+  @Input() ShowLegend = true;
   @Input() GridSize = 20;
   @Input() AutoLayoutDirection: FlowLayoutDirection = 'vertical';
   /** Background color for connection labels */
@@ -71,6 +72,9 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @Output() ConnectionsChanged = new EventEmitter<FlowConnection[]>();
   @Output() NodeEditRequested = new EventEmitter<FlowNode>();
   @Output() ConnectionEditRequested = new EventEmitter<FlowConnection>();
+  @Output() GridToggled = new EventEmitter<boolean>();
+  @Output() MinimapToggled = new EventEmitter<boolean>();
+  @Output() LegendToggled = new EventEmitter<boolean>();
 
   // ── View Children ───────────────────────────────────────────
   @ViewChild(FFlowComponent) protected fFlow: FFlowComponent | undefined;
@@ -410,11 +414,19 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   protected onGridToggled(show: boolean): void {
     this.ShowGrid = show;
+    this.GridToggled.emit(show);
     this.cdr.detectChanges();
   }
 
   protected onMinimapToggled(show: boolean): void {
     this.ShowMinimap = show;
+    this.MinimapToggled.emit(show);
+    this.cdr.detectChanges();
+  }
+
+  protected onLegendToggled(show: boolean): void {
+    this.ShowLegend = show;
+    this.LegendToggled.emit(show);
     this.cdr.detectChanges();
   }
 

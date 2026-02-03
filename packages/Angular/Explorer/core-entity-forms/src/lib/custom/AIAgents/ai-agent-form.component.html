@@ -1631,4 +1631,11 @@
         </div>
     </form>
 
+    <!-- Permissions Dialog (from @memberjunction/ng-agents) -->
+    <mj-agent-permissions-dialog
+        *ngIf="ShowPermissionsDialog"
+        [Agent]="record"
+        (Closed)="onPermissionsDialogClosed()"
+        (PermissionsChanged)="refreshRelatedData()">
+    </mj-agent-permissions-dialog>
 </div>

@@ -37,6 +37,7 @@
     "@memberjunction/graphql-dataprovider": "3.4.0",
     "@memberjunction/ng-action-gallery": "3.4.0",
     "@memberjunction/ng-actions": "3.4.0",
+    "@memberjunction/ng-agents": "3.4.0",
     "@memberjunction/ng-ai-test-harness": "3.4.0",
     "@memberjunction/ng-base-application": "3.4.0",
     "@memberjunction/ng-base-forms": "3.4.0",
