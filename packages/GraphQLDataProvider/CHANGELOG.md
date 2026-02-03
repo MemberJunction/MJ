@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 3.4.0
+
+### Patch Changes
+
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ai-core-plus@3.4.0
+  - @memberjunction/actions-base@3.4.0
+  - @memberjunction/interactive-component-types@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

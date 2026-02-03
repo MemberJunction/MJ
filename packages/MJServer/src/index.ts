@@ -27,6 +27,7 @@ import { contextFunction, getUserPayload } from './context.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
+import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 
 import { LoadAllCoreActions } from '@memberjunction/core-actions';
 LoadAllCoreActions(); // prevent tree shaking for this dynamic module
@@ -106,7 +107,6 @@ export * from './generic/DeleteOptionsInput.js';
 export * from './agents/skip-agent.js';
 export * from './agents/skip-sdk.js';
 
-export * from './resolvers/AskSkipResolver.js';
 export * from './resolvers/ColorResolver.js';
 export * from './resolvers/ComponentRegistryResolver.js';
 export * from './resolvers/DatasetResolver.js';
@@ -301,20 +301,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     level: 6
   }));
 
-  app.use(
-    graphqlRootPath,
-    cors<cors.CorsRequest>(),
-    BodyParser.json({ limit: '50mb' }),
-    expressMiddleware(apolloServer, {
-      context: contextFunction({ 
-                                 setupComplete$, 
-                                 dataSource: extendConnectionPoolWithQuery(pool), // default read-write data source
-                                 dataSources // all data source
-                               }),
-    })
-  );
-  
-  // Setup REST API endpoints
+  // Setup REST API endpoints BEFORE GraphQL (since graphqlRootPath may be '/' which catches all routes)
   const authMiddleware = async (req, res, next) => {
     try {
       const sessionIdRaw = req.headers['x-session-id'];
@@ -327,27 +314,58 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       if (!userPayload) {
         return res.status(401).json({ error: 'Invalid token' });
       }
-      
+
+      // Set both req.user (standard Express convention) and req['mjUser'] (MJ REST convention)
+      // Note: userPayload contains { userRecord: UserInfo, email, sessionId }
+      // The mjUser property expects the UserInfo directly (userRecord)
       req.user = userPayload;
+      req['mjUser'] = userPayload.userRecord;
       next();
     } catch (error) {
       console.error('Auth error:', error);
       return res.status(401).json({ error: 'Authentication failed' });
     }
   };
-  
-  // Get REST API configuration from the config file
-  const restApiConfig: RESTApiOptions = {
-    enabled: configInfo.restApiOptions?.enabled ?? true,
+
+  // Build public URL for OAuth callbacks
+  const oauthPublicUrl = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
+  console.log(`[OAuth] publicUrl: ${oauthPublicUrl}`);
+
+  // Set up OAuth callback routes at /oauth (independent of REST API)
+  // These must be registered BEFORE GraphQL middleware since graphqlRootPath may be '/'
+  if (oauthPublicUrl) {
+    const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
+      publicUrl: oauthPublicUrl,
+      // TODO: These should be configurable to point to the MJ Explorer UI
+      successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
+      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`
+    });
+
+    // Create CORS middleware for OAuth routes (needed for cross-origin requests from frontend)
+    const oauthCors = cors<cors.CorsRequest>();
+
+    // OAuth callback is unauthenticated (called by external auth server)
+    app.use('/oauth', oauthCors, callbackRouter);
+    console.log('[OAuth] Callback route registered at /oauth/callback');
+
+    // OAuth status, initiate, and exchange endpoints require authentication
+    // Must also have CORS for frontend requests and JSON body parsing
+    app.use('/oauth', oauthCors, BodyParser.json(), authMiddleware, authenticatedRouter);
+    console.log('[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
+  }
+
+  // Get REST API configuration
+  const restApiConfig = {
+    enabled: configInfo.restApiOptions?.enabled ?? false,
     includeEntities: configInfo.restApiOptions?.includeEntities,
-    excludeEntities: configInfo.restApiOptions?.excludeEntities
+    excludeEntities: configInfo.restApiOptions?.excludeEntities,
   };
-  
+
   // Apply options from server options if provided (these override the config file)
   if (options?.restApiOptions) {
     Object.assign(restApiConfig, options.restApiOptions);
   }
-  
+
   // Get REST API configuration from environment variables if present (env vars override everything)
   if (process.env.MJ_REST_API_ENABLED !== undefined) {
     restApiConfig.enabled = process.env.MJ_REST_API_ENABLED === 'true';
@@ -355,17 +373,31 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       console.log('REST API is enabled via environment variable');
     }
   }
-  
+
   if (process.env.MJ_REST_API_INCLUDE_ENTITIES) {
     restApiConfig.includeEntities = process.env.MJ_REST_API_INCLUDE_ENTITIES.split(',').map(e => e.trim());
   }
-  
+
   if (process.env.MJ_REST_API_EXCLUDE_ENTITIES) {
     restApiConfig.excludeEntities = process.env.MJ_REST_API_EXCLUDE_ENTITIES.split(',').map(e => e.trim());
   }
-  
+
   // Set up REST endpoints with the configured options and auth middleware
   setupRESTEndpoints(app, restApiConfig, authMiddleware);
+
+  // GraphQL middleware (after REST so /api/v1/* routes are handled first)
+  app.use(
+    graphqlRootPath,
+    cors<cors.CorsRequest>(),
+    BodyParser.json({ limit: '50mb' }),
+    expressMiddleware(apolloServer, {
+      context: contextFunction({
+                                 setupComplete$,
+                                 dataSource: extendConnectionPoolWithQuery(pool), // default read-write data source
+                                 dataSources // all data source
+                               }),
+    })
+  );
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;

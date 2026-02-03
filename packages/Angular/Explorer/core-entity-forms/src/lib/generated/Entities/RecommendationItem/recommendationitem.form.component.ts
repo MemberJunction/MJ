@@ -16,7 +16,7 @@ export class RecommendationItemFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'technicalIdentifiers', sectionName: 'Technical Identifiers', isExpanded: true },
             { sectionKey: 'recommendationData', sectionName: 'Recommendation Data', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'recommendationDetails', sectionName: 'Recommendation Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

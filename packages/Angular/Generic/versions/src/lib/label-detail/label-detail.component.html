@@ -1,0 +1,538 @@
+<!-- Backdrop overlay -->
+<div class="panel-backdrop" [class.visible]="IsVisible" (click)="OnBackdropClick()"></div>
+
+<!-- Slide-in panel -->
+<div class="detail-panel" [class.visible]="IsVisible" [style.width.px]="PanelWidthPx">
+    <!-- Resize handle -->
+    <div class="resize-handle" (mousedown)="OnResizeStart($event)">
+        <div class="resize-handle-grip"></div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- HEADER -->
+    <!-- ============================================================ -->
+    <div class="panel-header">
+        <div class="header-info">
+            <div class="header-title-row">
+                <i [class]="GetScopeIcon(Label.Scope)" class="header-scope-icon"></i>
+                <h2 class="header-title">{{Label.Name}}</h2>
+                <span class="header-status" [ngClass]="GetStatusClass(Label.Status)">
+                    {{Label.Status}}
+                </span>
+                <span class="header-scope-badge">{{Label.Scope}}</span>
+            </div>
+            <p class="header-description" *ngIf="Label.Description">{{Label.Description}}</p>
+        </div>
+        <div class="header-actions">
+            <button class="header-action-btn" (click)="OnArchive()"
+                    [disabled]="IsArchiving || Label.Status === 'Archived'"
+                    title="Archive this label">
+                <i class="fa-solid fa-box-archive"></i>
+            </button>
+            <button class="header-action-btn" (click)="OnTabChange('changes')" title="View changes">
+                <i class="fa-solid fa-code-compare"></i>
+            </button>
+            <button class="close-btn" (click)="OnClose()">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SUMMARY KPIs -->
+    <!-- ============================================================ -->
+    <div class="summary-kpis">
+        <div class="summary-kpi">
+            <div class="kpi-mini-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+                <i class="fa-solid fa-camera"></i>
+            </div>
+            <div class="kpi-mini-content">
+                <span class="kpi-mini-value">{{LabelItems.length || Label.ItemCount || GetItemCount(Label.ID)}}</span>
+                <span class="kpi-mini-label">Items</span>
+            </div>
+        </div>
+        <div class="summary-kpi">
+            <div class="kpi-mini-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                <i class="fa-solid fa-table"></i>
+            </div>
+            <div class="kpi-mini-content">
+                <span class="kpi-mini-value">{{UniqueEntityCount}}</span>
+                <span class="kpi-mini-label">Entities</span>
+            </div>
+        </div>
+        <div class="summary-kpi" *ngIf="Label.CreationDurationMS">
+            <div class="kpi-mini-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                <i class="fa-solid fa-stopwatch"></i>
+            </div>
+            <div class="kpi-mini-content">
+                <span class="kpi-mini-value">{{FormatDuration(Label.CreationDurationMS)}}</span>
+                <span class="kpi-mini-label">Duration</span>
+            </div>
+        </div>
+        <div class="summary-kpi" *ngIf="ChildLabels.length > 0">
+            <div class="kpi-mini-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                <i class="fa-solid fa-layer-group"></i>
+            </div>
+            <div class="kpi-mini-content">
+                <span class="kpi-mini-value">{{ChildLabels.length}}</span>
+                <span class="kpi-mini-label">Children</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB BAR (hidden when micro-view is active) -->
+    <!-- ============================================================ -->
+    <div class="tab-bar" *ngIf="!ShowMicroView">
+        <button class="tab" [class.active]="ActiveTab === 'overview'" (click)="OnTabChange('overview')">
+            <i class="fa-solid fa-info-circle tab-icon"></i> Overview
+        </button>
+        <button class="tab" [class.active]="ActiveTab === 'snapshots'" (click)="OnTabChange('snapshots')">
+            <i class="fa-solid fa-camera tab-icon"></i> Snapshots
+            <span class="tab-count" *ngIf="LabelItems.length > 0">{{LabelItems.length}}</span>
+        </button>
+        <button class="tab" [class.active]="ActiveTab === 'dependencies'" (click)="OnTabChange('dependencies')">
+            <i class="fa-solid fa-diagram-project tab-icon"></i> Dependencies
+        </button>
+        <button class="tab" [class.active]="ActiveTab === 'changes'" (click)="OnTabChange('changes')">
+            <i class="fa-solid fa-code-compare tab-icon"></i> Changes
+        </button>
+        <button class="tab" [class.active]="ActiveTab === 'history'" (click)="OnTabChange('history')">
+            <i class="fa-solid fa-clock-rotate-left tab-icon"></i> History
+        </button>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- BREADCRUMB (shown when micro-view is active) -->
+    <!-- ============================================================ -->
+    <div class="breadcrumb-bar" *ngIf="ShowMicroView">
+        <button class="breadcrumb-back" (click)="OnBackFromMicroView()">
+            <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <div class="breadcrumb-trail">
+            <span class="breadcrumb-item clickable" (click)="OnBackFromMicroView()">
+                <i class="fa-solid fa-camera breadcrumb-icon"></i> Snapshots
+            </span>
+            <i class="fa-solid fa-chevron-right breadcrumb-separator"></i>
+            <span class="breadcrumb-item current">
+                <i class="fa-solid fa-file-lines breadcrumb-icon"></i> {{BreadcrumbLabel}}
+            </span>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB CONTENT (scrollable) - or inline micro-view -->
+    <!-- ============================================================ -->
+    <div class="tab-content" *ngIf="!ShowMicroView">
+
+        <!-- Loading state for items -->
+        <mj-loading *ngIf="IsLoadingItems && ActiveTab !== 'dependencies'" text="Loading label data..."></mj-loading>
+
+        <!-- ======================================================== -->
+        <!-- OVERVIEW TAB -->
+        <!-- ======================================================== -->
+        <div class="tab-pane" *ngIf="ActiveTab === 'overview' && !IsLoadingItems">
+            <!-- Metadata section -->
+            <div class="detail-section">
+                <h3 class="section-title">
+                    <i class="fa-solid fa-info-circle section-icon"></i> Label Details
+                </h3>
+                <div class="detail-grid">
+                    <div class="detail-field">
+                        <span class="field-label">Name</span>
+                        <span class="field-value">{{Label.Name}}</span>
+                    </div>
+                    <div class="detail-field">
+                        <span class="field-label">Status</span>
+                        <span class="field-value">
+                            <span class="inline-badge" [ngClass]="GetStatusClass(Label.Status)">{{Label.Status}}</span>
+                        </span>
+                    </div>
+                    <div class="detail-field">
+                        <span class="field-label">Scope</span>
+                        <span class="field-value">
+                            <i [class]="GetScopeIcon(Label.Scope)" style="margin-right: 6px;"></i>{{Label.Scope}}
+                        </span>
+                    </div>
+                    <div class="detail-field" *ngIf="Label.EntityID">
+                        <span class="field-label">Entity</span>
+                        <span class="field-value">
+                            <i [class]="OverviewEntityIcon" style="margin-right: 6px; color: #3b82f6;"></i>{{Label.Entity ?? resolveEntityName(Label.EntityID)}}
+                        </span>
+                    </div>
+                    <div class="detail-field" *ngIf="Label.RecordID && Label.Scope !== 'Record'">
+                        <span class="field-label">Record ID</span>
+                        <span class="field-value field-mono">{{FormatRecordID(Label.RecordID)}}</span>
+                    </div>
+                    <div class="detail-field" *ngIf="Label.ExternalSystemID">
+                        <span class="field-label">External Ref</span>
+                        <span class="field-value field-mono">{{Label.ExternalSystemID}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Record card (Record-scoped labels) -->
+            <div class="record-card" *ngIf="Label.Scope === 'Record' && Label.RecordID">
+                <div class="record-card-main">
+                    <i [class]="OverviewEntityIcon" class="record-card-icon"></i>
+                    <div class="record-card-info">
+                        <span class="record-card-name" *ngIf="OverviewRecordName">{{OverviewRecordName}}</span>
+                        <span class="record-card-name record-card-name-loading" *ngIf="!OverviewRecordName">Loading...</span>
+                        <span class="record-card-entity">{{Label.Entity ?? resolveEntityName(Label.EntityID)}}</span>
+                        <span class="record-card-id">{{FormatRecordID(Label.RecordID)}}</span>
+                    </div>
+                </div>
+                <button class="record-card-open-btn" (click)="OnOpenOverviewRecord()" title="Open record">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open
+                </button>
+            </div>
+
+            <!-- Description -->
+            <div class="detail-section" *ngIf="Label.Description">
+                <h3 class="section-title">
+                    <i class="fa-solid fa-align-left section-icon"></i> Description
+                </h3>
+                <p class="description-text">{{Label.Description}}</p>
+            </div>
+
+            <!-- Creation info -->
+            <div class="detail-section">
+                <h3 class="section-title">
+                    <i class="fa-solid fa-clock section-icon"></i> Creation
+                </h3>
+                <div class="detail-grid">
+                    <div class="detail-field">
+                        <span class="field-label">Created</span>
+                        <span class="field-value">{{FormatDate(Label.__mj_CreatedAt)}}</span>
+                    </div>
+                    <div class="detail-field" *ngIf="Label.CreatedByUser">
+                        <span class="field-label">Created By</span>
+                        <span class="field-value">
+                            <i class="fa-solid fa-user" style="margin-right: 6px; opacity: 0.5;"></i>{{Label.CreatedByUser}}
+                        </span>
+                    </div>
+                    <div class="detail-field" *ngIf="Label.CreationDurationMS">
+                        <span class="field-label">Capture Duration</span>
+                        <span class="field-value">{{FormatDuration(Label.CreationDurationMS)}}</span>
+                    </div>
+                    <div class="detail-field">
+                        <span class="field-label">Items Captured</span>
+                        <span class="field-value">{{LabelItems.length}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parent / Children -->
+            <div class="detail-section" *ngIf="Label.ParentID || ChildLabels.length > 0">
+                <h3 class="section-title">
+                    <i class="fa-solid fa-sitemap section-icon"></i> Hierarchy
+                </h3>
+
+                <!-- Parent reference -->
+                <div class="hierarchy-item parent" *ngIf="Label.ParentID">
+                    <i class="fa-solid fa-arrow-up hierarchy-icon"></i>
+                    <span class="hierarchy-label">Parent:</span>
+                    <span class="hierarchy-name">
+                        <ng-container *ngFor="let pl of AllLabels">
+                            <span *ngIf="pl.ID === Label.ParentID">{{pl.Name}}</span>
+                        </ng-container>
+                    </span>
+                </div>
+
+                <!-- Children -->
+                <div class="hierarchy-children" *ngIf="ChildLabels.length > 0">
+                    <div class="hierarchy-item child" *ngFor="let child of ChildLabels">
+                        <i class="fa-solid fa-arrow-turn-down-right hierarchy-icon"></i>
+                        <span class="hierarchy-name">{{child.Name}}</span>
+                        <span class="hierarchy-meta" *ngIf="child.RecordID">{{child.RecordID | slice:0:12}}...</span>
+                        <span class="hierarchy-meta" *ngIf="child.ItemCount">{{child.ItemCount}} items</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- SNAPSHOTS TAB -->
+        <!-- ======================================================== -->
+        <div class="tab-pane" *ngIf="ActiveTab === 'snapshots' && !IsLoadingItems">
+            <!-- Snapshot toolbar -->
+            <div class="snapshot-toolbar">
+                <div class="snapshot-search">
+                    <i class="fa-solid fa-search snapshot-search-icon"></i>
+                    <input type="text" class="snapshot-search-input"
+                           placeholder="Search by entity or record..."
+                           [ngModel]="SnapshotSearch"
+                           (ngModelChange)="OnSnapshotSearchChange($event)" />
+                </div>
+                <div class="snapshot-sort-toggle">
+                    <button class="toggle-btn-sm" [class.active]="SnapshotSortBy === 'name'"
+                            (click)="OnSnapshotSortChange('name')" title="Sort by name">
+                        <i class="fa-solid fa-arrow-down-a-z" *ngIf="SnapshotSortBy === 'name' && SnapshotSortDir === 'asc'"></i>
+                        <i class="fa-solid fa-arrow-up-z-a" *ngIf="SnapshotSortBy === 'name' && SnapshotSortDir === 'desc'"></i>
+                        <i class="fa-solid fa-arrow-down-a-z" *ngIf="SnapshotSortBy !== 'name'"></i>
+                    </button>
+                    <button class="toggle-btn-sm" [class.active]="SnapshotSortBy === 'count'"
+                            (click)="OnSnapshotSortChange('count')" title="Sort by record count">
+                        <i class="fa-solid fa-arrow-down-9-1" *ngIf="SnapshotSortBy === 'count' && SnapshotSortDir === 'desc'"></i>
+                        <i class="fa-solid fa-arrow-up-1-9" *ngIf="SnapshotSortBy === 'count' && SnapshotSortDir === 'asc'"></i>
+                        <i class="fa-solid fa-arrow-down-9-1" *ngIf="SnapshotSortBy !== 'count'"></i>
+                    </button>
+                </div>
+                <div class="snapshot-view-toggle">
+                    <button class="toggle-btn-sm" [class.active]="SnapshotViewMode === 'list'" (click)="SnapshotViewMode = 'list'">
+                        <i class="fa-solid fa-list"></i>
+                    </button>
+                    <button class="toggle-btn-sm" [class.active]="SnapshotViewMode === 'card'" (click)="SnapshotViewMode = 'card'">
+                        <i class="fa-solid fa-grip"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Entity groups -->
+            <div class="snapshot-groups">
+                <div class="snapshot-group" *ngFor="let group of FilteredSnapshotGroups">
+                    <div class="group-header" (click)="ToggleSnapshotGroup(group)">
+                        <i class="fa-solid fa-chevron-right group-chevron" [class.expanded]="group.IsExpanded"></i>
+                        <i [class]="group.EntityIcon" class="group-entity-icon"></i>
+                        <span class="group-name">{{group.EntityName}} <span class="group-count-inline">{{group.Items.length}}</span></span>
+                    </div>
+
+                    <div class="group-content" *ngIf="group.IsExpanded">
+                        <!-- Loading names indicator -->
+                        <div class="group-names-loading" *ngIf="group.IsLoadingNames">
+                            <mj-loading text="Loading record names..." size="small"></mj-loading>
+                        </div>
+
+                        <!-- List mode -->
+                        <ng-container *ngIf="SnapshotViewMode === 'list'">
+                            <div class="snapshot-list-item" *ngFor="let item of group.Items"
+                                 (click)="OpenMicroView(group.EntityName, item.RecordID, item.RecordChangeID, item.DisplayName)">
+                                <i class="fa-solid fa-file-lines snapshot-item-icon"></i>
+                                <span class="snapshot-item-name">{{item.DisplayName}}</span>
+                                <i class="fa-solid fa-chevron-right snapshot-item-arrow"></i>
+                            </div>
+                        </ng-container>
+
+                        <!-- Card mode -->
+                        <ng-container *ngIf="SnapshotViewMode === 'card'">
+                            <div class="snapshot-cards">
+                                <div class="snapshot-card" *ngFor="let item of group.Items"
+                                     (click)="OpenMicroView(group.EntityName, item.RecordID, item.RecordChangeID, item.DisplayName)">
+                                    <div class="snapshot-card-header">
+                                        <i class="fa-solid fa-file-lines"></i>
+                                        <span class="snapshot-card-name">{{item.DisplayName}}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </ng-container>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty state -->
+            <div class="tab-empty" *ngIf="FilteredSnapshotGroups.length === 0">
+                <i class="fa-solid fa-camera tab-empty-icon"></i>
+                <p>No snapshot items found.</p>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- DEPENDENCIES TAB -->
+        <!-- ======================================================== -->
+        <div class="tab-pane" *ngIf="ActiveTab === 'dependencies'">
+            <mj-loading *ngIf="IsLoadingDependencies" text="Loading dependencies..."></mj-loading>
+
+            <div class="dep-root" *ngIf="!IsLoadingDependencies && Label.EntityID">
+                <div class="dep-root-entity">
+                    <i [class]="GetScopeIcon(Label.Scope)" class="dep-root-icon"></i>
+                    <span class="dep-root-name">{{Label.Entity ?? resolveEntityName(Label.EntityID)}}</span>
+                    <span class="dep-root-badge">Root</span>
+                </div>
+
+                <ng-container *ngIf="DependencyTree.length > 0">
+                    <ng-container *ngFor="let node of DependencyTree">
+                        <ng-container *ngTemplateOutlet="depNode; context: { $implicit: node }"></ng-container>
+                    </ng-container>
+                </ng-container>
+
+                <div class="dep-empty" *ngIf="DependencyTree.length === 0">
+                    <p>No dependent entities found.</p>
+                </div>
+            </div>
+
+            <div class="tab-empty" *ngIf="!IsLoadingDependencies && !Label.EntityID">
+                <i class="fa-solid fa-diagram-project tab-empty-icon"></i>
+                <p>No entity associated with this label.</p>
+            </div>
+        </div>
+
+        <!-- Dependency tree node template -->
+        <ng-template #depNode let-node>
+            <div class="dep-node" [style.padding-left.px]="node.Depth * 24">
+                <div class="dep-node-header" (click)="ToggleDependencyNode(node)">
+                    <i class="fa-solid fa-chevron-right dep-chevron"
+                       [class.expanded]="node.IsExpanded"
+                       *ngIf="node.Children.length > 0"></i>
+                    <span class="dep-node-spacer" *ngIf="node.Children.length === 0"></span>
+                    <i [class]="resolveEntityIconByName(node.EntityName)" class="dep-node-icon"></i>
+                    <span class="dep-node-name">{{node.EntityName}}</span>
+                    <span class="dep-node-field">via {{node.RelationshipField}}</span>
+                    <span class="dep-node-count" *ngIf="node.Children.length > 0">
+                        {{node.Children.length}} dep{{node.Children.length !== 1 ? 's' : ''}}
+                    </span>
+                </div>
+                <ng-container *ngIf="node.IsExpanded && node.Children.length > 0">
+                    <ng-container *ngFor="let child of node.Children">
+                        <ng-container *ngTemplateOutlet="depNode; context: { $implicit: child }"></ng-container>
+                    </ng-container>
+                </ng-container>
+            </div>
+        </ng-template>
+
+        <!-- ======================================================== -->
+        <!-- CHANGES TAB -->
+        <!-- ======================================================== -->
+        <div class="tab-pane" *ngIf="ActiveTab === 'changes'">
+            <mj-loading *ngIf="IsLoadingDiff" text="Computing differences..."></mj-loading>
+
+            <ng-container *ngIf="!IsLoadingDiff && DiffResult">
+                <!-- Diff summary -->
+                <div class="diff-summary">
+                    <div class="diff-stat">
+                        <span class="diff-stat-value change-modified">{{DiffResult.Summary.Changed}}</span>
+                        <span class="diff-stat-label">Changed</span>
+                    </div>
+                    <div class="diff-stat">
+                        <span class="diff-stat-value">{{DiffResult.Summary.Unchanged}}</span>
+                        <span class="diff-stat-label">Unchanged</span>
+                    </div>
+                    <div class="diff-stat">
+                        <span class="diff-stat-value">{{DiffResult.Summary.EntitiesAffected}}</span>
+                        <span class="diff-stat-label">Entities</span>
+                    </div>
+                </div>
+
+                <!-- Expand/collapse all -->
+                <div class="diff-toolbar" *ngIf="DiffResult.EntityGroups.length > 0">
+                    <button class="toolbar-action-btn" (click)="ExpandAllDiffGroups()" title="Expand all">
+                        <i class="fa-solid fa-angles-down"></i>
+                        <span>Expand All</span>
+                    </button>
+                    <button class="toolbar-action-btn" (click)="CollapseAllDiffGroups()" title="Collapse all">
+                        <i class="fa-solid fa-angles-up"></i>
+                        <span>Collapse All</span>
+                    </button>
+                </div>
+
+                <!-- Entity diff groups -->
+                <div class="diff-groups" *ngIf="DiffResult.EntityGroups.length > 0">
+                    <div class="diff-group" *ngFor="let group of DiffResult.EntityGroups">
+                        <div class="diff-group-header" (click)="ToggleDiffGroup(group)">
+                            <i class="fa-solid fa-chevron-right diff-chevron" [class.expanded]="group.IsExpanded"></i>
+                            <i [class]="resolveEntityIconByName(group.EntityName)" class="diff-group-icon"></i>
+                            <span class="diff-group-name">{{group.EntityName}}</span>
+                            <span class="diff-group-count change-modified">
+                                {{group.Records.length}} modified
+                            </span>
+                        </div>
+
+                        <div class="diff-group-content" *ngIf="group.IsExpanded">
+                            <div class="diff-record" *ngFor="let record of group.Records">
+                                <div class="diff-record-header">
+                                    <i [class]="GetChangeTypeIcon(record.ChangeType)" [ngClass]="GetChangeTypeClass(record.ChangeType)"></i>
+                                    <span class="diff-record-id">{{record.RecordID | slice:0:20}}...</span>
+                                </div>
+                                <div class="diff-fields" *ngIf="record.FieldChanges.length > 0">
+                                    <div class="diff-field" *ngFor="let field of record.FieldChanges"
+                                         [ngClass]="GetChangeTypeClass(field.ChangeType)">
+                                        <span class="diff-field-name">{{field.FieldName}}</span>
+                                        <span class="diff-field-old" *ngIf="field.OldValue">{{field.OldValue | slice:0:40}}</span>
+                                        <i class="fa-solid fa-arrow-right diff-field-arrow" *ngIf="field.OldValue && field.NewValue"></i>
+                                        <span class="diff-field-new" *ngIf="field.NewValue">{{field.NewValue | slice:0:40}}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- No changes -->
+                <div class="tab-empty" *ngIf="DiffResult.EntityGroups.length === 0 && DiffResult.Summary.Changed === 0">
+                    <i class="fa-solid fa-circle-check tab-empty-icon" style="color: #10b981;"></i>
+                    <p>No changes detected since this label was created.</p>
+                </div>
+            </ng-container>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- HISTORY TAB -->
+        <!-- ======================================================== -->
+        <div class="tab-pane" *ngIf="ActiveTab === 'history'">
+            <mj-loading *ngIf="IsLoadingHistory" text="Loading history..."></mj-loading>
+
+            <ng-container *ngIf="!IsLoadingHistory">
+                <!-- Restores -->
+                <div class="detail-section" *ngIf="Restores.length > 0">
+                    <h3 class="section-title">
+                        <i class="fa-solid fa-clock-rotate-left section-icon"></i> Restore Operations
+                    </h3>
+                    <div class="history-list">
+                        <div class="history-item" *ngFor="let restore of Restores">
+                            <div class="history-item-icon" [ngClass]="'status-' + (restore.Status ?? '').toLowerCase().replace(' ', '-')">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                            </div>
+                            <div class="history-item-content">
+                                <span class="history-item-title">Restore {{restore.Status}}</span>
+                                <span class="history-item-meta">
+                                    {{restore.CompletedItems ?? 0}}/{{restore.TotalItems ?? 0}} items
+                                    <span *ngIf="restore.FailedItems"> &middot; {{restore.FailedItems}} failed</span>
+                                </span>
+                            </div>
+                            <span class="history-item-date">{{FormatRelativeDate(restore.__mj_CreatedAt)}}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Related labels -->
+                <div class="detail-section" *ngIf="RelatedLabels.length > 0">
+                    <h3 class="section-title">
+                        <i class="fa-solid fa-tags section-icon"></i> Related Labels
+                    </h3>
+                    <div class="history-list">
+                        <div class="history-item" *ngFor="let related of RelatedLabels">
+                            <div class="history-item-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+                                <i class="fa-solid fa-tag"></i>
+                            </div>
+                            <div class="history-item-content">
+                                <span class="history-item-title">{{related.Name}}</span>
+                                <span class="history-item-meta">
+                                    <span class="inline-badge small" [ngClass]="GetStatusClass(related.Status)">{{related.Status}}</span>
+                                </span>
+                            </div>
+                            <span class="history-item-date">{{FormatRelativeDate(related.__mj_CreatedAt)}}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty -->
+                <div class="tab-empty" *ngIf="Restores.length === 0 && RelatedLabels.length === 0">
+                    <i class="fa-solid fa-clock-rotate-left tab-empty-icon"></i>
+                    <p>No restore history or related labels found.</p>
+                </div>
+            </ng-container>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- INLINE MICRO VIEW (replaces tab content when active) -->
+    <!-- ============================================================ -->
+    <div class="tab-content" *ngIf="ShowMicroView && MicroViewRecord">
+        <mj-record-micro-view
+            [Data]="MicroViewRecord"
+            [Inline]="true"
+            (Close)="OnBackFromMicroView()"
+            (EntityLinkClick)="OnEntityLinkClick($event)"
+            (OpenRecord)="OnOpenRecordClick($event)">
+        </mj-record-micro-view>
+    </div>
+</div>

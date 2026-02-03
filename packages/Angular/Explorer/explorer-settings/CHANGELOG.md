@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 3.4.0
+
+### Patch Changes
+
+- 252794e: Refactor settings UI into modular components for better organization
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ng-base-application@3.4.0
+  - @memberjunction/ng-base-forms@3.4.0
+  - @memberjunction/ng-compare-records@3.4.0
+  - @memberjunction/ng-entity-form-dialog@3.4.0
+  - @memberjunction/ng-entity-permissions@3.4.0
+  - @memberjunction/ng-shared@3.4.0
+  - @memberjunction/ng-simple-record-list@3.4.0
+  - @memberjunction/ng-code-editor@3.4.0
+  - @memberjunction/ng-join-grid@3.4.0
+  - @memberjunction/ng-notifications@3.4.0
+  - @memberjunction/ng-shared-generic@3.4.0
+  - @memberjunction/ng-user-avatar@3.4.0
+  - @memberjunction/graphql-dataprovider@3.4.0
+  - @memberjunction/ng-container-directives@3.4.0
+  - @memberjunction/ng-tabstrip@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

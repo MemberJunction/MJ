@@ -11,7 +11,7 @@ import 'mj_generatedentities';
 import 'mj_generatedactions';
 
 // Import class registrations manifest to prevent tree-shaking
-import './generated/class-registrations-manifest';
+import './generated/class-registrations-manifest.js';
 
 // Optional: Import communication providers if needed
 // import '@memberjunction/communication-sendgrid';

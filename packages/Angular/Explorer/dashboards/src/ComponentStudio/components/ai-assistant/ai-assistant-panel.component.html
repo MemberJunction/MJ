@@ -1,0 +1,125 @@
+<div class="ai-assistant-panel">
+  <!-- Header -->
+  <div class="panel-header">
+    <div class="header-title">
+      <i class="fa-solid fa-robot"></i>
+      <span>AI Assistant</span>
+    </div>
+    <button class="collapse-btn" (click)="OnCollapsePanel()" title="Collapse panel">
+      <i class="fa-solid fa-chevron-right"></i>
+    </button>
+  </div>
+
+  <!-- Model Selector -->
+  <div class="model-selector">
+    <label class="model-label">Model</label>
+    <div class="model-dropdown-wrapper">
+      @if (IsLoadingModels) {
+        <div class="model-loading">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span>Loading models...</span>
+        </div>
+      } @else {
+        <select
+          class="model-dropdown"
+          [(ngModel)]="SelectedModelID"
+          [disabled]="AvailableModels.length === 0">
+          @for (model of AvailableModels; track model.ID) {
+            <option [value]="model.ID">{{ model.DisplayLabel }}</option>
+          }
+          @if (AvailableModels.length === 0) {
+            <option [value]="null" disabled>No models available</option>
+          }
+        </select>
+      }
+    </div>
+  </div>
+
+  <!-- Quick Actions Bar -->
+  <div class="quick-actions">
+    @for (action of QuickActions; track action.Label) {
+      <button
+        class="quick-action-btn"
+        [class.disabled]="!IsQuickActionEnabled(action)"
+        [disabled]="!IsQuickActionEnabled(action) || IsWaitingForResponse"
+        (click)="OnQuickAction(action)"
+        [title]="action.Label">
+        <i class="fa-solid {{ action.Icon }}"></i>
+        <span>{{ action.Label }}</span>
+      </button>
+    }
+  </div>
+
+  <!-- Chat Thread -->
+  <div class="chat-thread" #chatThread>
+    @if (Messages.length === 0) {
+      <div class="empty-thread">
+        <i class="fa-solid fa-comments"></i>
+        <p>No messages yet. Start a conversation or use a quick action above.</p>
+      </div>
+    }
+
+    @for (message of Messages; track TrackByTimestamp($index, message)) {
+      <div class="message-wrapper" [class.user]="message.Role === 'user'" [class.assistant]="message.Role === 'assistant'" [class.system]="message.Role === 'system'">
+        @if (message.Role === 'assistant') {
+          <div class="message-avatar assistant-avatar">
+            <i class="fa-solid fa-robot"></i>
+          </div>
+        }
+
+        <div class="message-bubble" [class.user-bubble]="message.Role === 'user'" [class.assistant-bubble]="message.Role === 'assistant'" [class.system-bubble]="message.Role === 'system'">
+          <div class="message-content">{{ message.Content }}</div>
+          <div class="message-timestamp">{{ FormatTimestamp(message.Timestamp) }}</div>
+        </div>
+
+        @if (message.Role === 'user') {
+          <div class="message-avatar user-avatar">
+            <i class="fa-solid fa-user"></i>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Typing Indicator -->
+    @if (IsWaitingForResponse) {
+      <div class="message-wrapper assistant">
+        <div class="message-avatar assistant-avatar">
+          <i class="fa-solid fa-robot"></i>
+        </div>
+        <div class="message-bubble assistant-bubble typing-bubble">
+          <div class="typing-indicator">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Chat Input Area -->
+  <div class="chat-input-area">
+    <div class="input-wrapper">
+      <textarea
+        #chatInput
+        class="chat-textarea"
+        [(ngModel)]="InputText"
+        (keydown)="OnInputKeydown($event)"
+        (input)="OnInputChange()"
+        [disabled]="IsWaitingForResponse"
+        placeholder="Ask the AI assistant..."
+        rows="1"></textarea>
+      <button
+        class="send-btn"
+        [class.active]="InputText.trim().length > 0 && !IsWaitingForResponse"
+        [disabled]="InputText.trim().length === 0 || IsWaitingForResponse"
+        (click)="OnSendMessage()"
+        title="Send message">
+        <i class="fa-solid fa-paper-plane"></i>
+      </button>
+    </div>
+    <div class="input-hint">
+      <span>Press <kbd>Enter</kbd> to send, <kbd>Shift+Enter</kbd> for new line</span>
+    </div>
+  </div>
+</div>

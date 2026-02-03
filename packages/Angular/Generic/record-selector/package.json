@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-record-selector",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "MemberJunction: Angular Components to allow a user to select/deselect items from a possible set",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -28,11 +28,11 @@
     "@progress/kendo-angular-listbox": "16.2.0"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "3.3.0",
-    "@memberjunction/global": "3.3.0",
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/ng-container-directives": "3.3.0",
-    "@memberjunction/ng-shared": "3.3.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/global": "3.4.0",
+    "@memberjunction/core": "3.4.0",
+    "@memberjunction/ng-container-directives": "3.4.0",
+    "@memberjunction/ng-shared": "3.4.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

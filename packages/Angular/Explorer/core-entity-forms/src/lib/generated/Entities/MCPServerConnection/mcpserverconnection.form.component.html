@@ -264,6 +264,72 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- MJ: O Auth Authorization States Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJOAuthAuthorizationStates"
+        sectionName="MJ: O Auth Authorization States"
+        icon="fa fa-table"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJOAuthAuthorizationStates')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Authorization States','MCPServerConnectionID')"
+                [NewRecordValues]="NewRecordValues('MJ: O Auth Authorization States')"
+                [AllowLoad]="IsSectionExpanded('mJOAuthAuthorizationStates')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJOAuthAuthorizationStates', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: O Auth Client Registrations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJOAuthClientRegistrations"
+        sectionName="MJ: O Auth Client Registrations"
+        icon="fa fa-table"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJOAuthClientRegistrations')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Client Registrations','MCPServerConnectionID')"
+                [NewRecordValues]="NewRecordValues('MJ: O Auth Client Registrations')"
+                [AllowLoad]="IsSectionExpanded('mJOAuthClientRegistrations')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJOAuthClientRegistrations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: O Auth Tokens Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJOAuthTokens"
+        sectionName="MJ: O Auth Tokens"
+        icon="fa fa-table"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJOAuthTokens')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Tokens','MCPServerConnectionID')"
+                [NewRecordValues]="NewRecordValues('MJ: O Auth Tokens')"
+                [AllowLoad]="IsSectionExpanded('mJOAuthTokens')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJOAuthTokens', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- MJ: MCP Server Connection Permissions Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJMCPServerConnectionPermissions"

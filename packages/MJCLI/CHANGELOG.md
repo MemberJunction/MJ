@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/cli
 
+## 3.4.0
+
+### Minor Changes
+
+- 3a71e4e: Fix large text field corruptions, cross-platform improvements, more robust environment variable parsing for boolean values
+
+### Patch Changes
+
+- b0944c9: Add multi-schema support with configurable schema placeholders to MJCLI migrate command, add configurable entity package name to CodeGen, and fix node-flyway diagnostic issues
+- e552e5f: no migration
+- Updated dependencies [b0944c9]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [e552e5f]
+- Updated dependencies [38d9596]
+- Updated dependencies [a3961d5]
+  - @memberjunction/codegen-lib@3.4.0
+  - @memberjunction/sqlserver-dataprovider@3.4.0
+  - @memberjunction/metadata-sync@3.4.0
+  - @memberjunction/db-auto-doc@3.4.0
+  - @memberjunction/query-gen@3.4.0
+  - @memberjunction/config@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ai-cli@3.4.0
+  - @memberjunction/testing-cli@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

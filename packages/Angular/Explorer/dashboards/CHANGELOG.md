@@ -1,5 +1,56 @@
 # @memberjunction/ng-dashboards
 
+## 3.4.0
+
+### Minor Changes
+
+- ef7acd8: migration
+- 079dd6f: metadata change -> migration file
+
+### Patch Changes
+
+- a7db1cc: no migration
+- 18b4e65: Add field-level encryption for credential values with automatic decryption, Box.com OAuth credential type, comprehensive JSON Schema validation, and fix credential editor to prevent "undefined" text in fields
+- Updated dependencies [252794e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [079dd6f]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ng-explorer-settings@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/ng-actions@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ai-engine-base@3.4.0
+  - @memberjunction/ai-core-plus@3.4.0
+  - @memberjunction/api-keys-base@3.4.0
+  - @memberjunction/actions-base@3.4.0
+  - @memberjunction/ng-base-application@3.4.0
+  - @memberjunction/ng-core-entity-forms@3.4.0
+  - @memberjunction/ng-shared@3.4.0
+  - @memberjunction/ng-testing@3.4.0
+  - @memberjunction/ng-action-gallery@3.4.0
+  - @memberjunction/ng-ai-test-harness@3.4.0
+  - @memberjunction/ng-code-editor@3.4.0
+  - @memberjunction/ng-credentials@3.4.0
+  - @memberjunction/ng-dashboard-viewer@3.4.0
+  - @memberjunction/ng-entity-viewer@3.4.0
+  - @memberjunction/ng-list-management@3.4.0
+  - @memberjunction/ng-notifications@3.4.0
+  - @memberjunction/ng-query-viewer@3.4.0
+  - @memberjunction/ng-react@3.4.0
+  - @memberjunction/ng-shared-generic@3.4.0
+  - @memberjunction/graphql-dataprovider@3.4.0
+  - @memberjunction/templates-base-types@3.4.0
+  - @memberjunction/testing-engine-base@3.4.0
+  - @memberjunction/ng-container-directives@3.4.0
+  - @memberjunction/ng-entity-relationship-diagram@3.4.0
+  - @memberjunction/ng-filter-builder@3.4.0
+  - @memberjunction/interactive-component-types@3.4.0
+  - @memberjunction/skip-types@3.4.0
+  - @memberjunction/ng-export-service@3.4.0
+  - @memberjunction/ng-markdown@3.4.0
+  - @memberjunction/export-engine@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Minor Changes

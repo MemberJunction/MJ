@@ -17,7 +17,7 @@ import { TemplateEditorConfig } from '../../shared/components/template-editor.co
 @Component({
     selector: 'mj-templates-form',
     templateUrl: './templates-form.component.html',
-    styleUrls: ['../../../shared/form-styles.css']
+    styleUrls: ['../../../shared/form-styles.css', './templates-form.component.css']
 })
 export class TemplatesFormExtendedComponent extends TemplateFormComponent implements OnInit, OnDestroy, AfterViewInit {
     public record!: TemplateEntity;

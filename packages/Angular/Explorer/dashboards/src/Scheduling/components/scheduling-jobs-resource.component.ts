@@ -1,5 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
+import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -12,7 +11,7 @@ export function LoadSchedulingJobsResource() {
 }
 
 /**
- * Scheduling Jobs Resource - manage and configure scheduled jobs
+ * Scheduling Jobs Resource - manage and configure scheduled jobs with slideout panels
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingJobsResource')
 @Component({
@@ -32,15 +31,10 @@ export function LoadSchedulingJobsResource() {
     }
   `]
 })
-export class SchedulingJobsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class SchedulingJobsResourceComponent extends BaseResourceComponent implements OnInit {
 
   ngOnInit(): void {
-    // Notify that loading is complete
     this.NotifyLoadComplete();
-  }
-
-  ngOnDestroy(): void {
-    // Cleanup if needed
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
@@ -48,6 +42,6 @@ export class SchedulingJobsResourceComponent extends BaseResourceComponent imple
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {
-    return 'fa-solid fa-calendar-alt';
+    return 'fa-solid fa-calendar-check';
   }
 }

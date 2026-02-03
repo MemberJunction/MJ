@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, from, combineLatest } from 'rxjs';
-import { map, switchMap, shareReplay, tap } from 'rxjs/operators';
+import { switchMap, shareReplay, tap } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
 import { ScheduledJobEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity } from '@memberjunction/core-entities';
 
@@ -14,7 +14,6 @@ export interface SchedulingKPIs {
   totalCost24h: number;
   failureRate7d: number;
   totalFailures7d: number;
-  pollingInterval: number;
 }
 
 export interface JobExecution {
@@ -28,7 +27,6 @@ export interface JobExecution {
   duration?: number;
   success?: boolean;
   errorMessage?: string;
-  lockedBy?: string;
 }
 
 export interface UpcomingExecution {
@@ -44,14 +42,26 @@ export interface JobStatistics {
   jobId: string;
   jobName: string;
   jobType: string;
+  jobTypeId: string;
   status: string;
+  description: string | null;
+  cronExpression: string;
+  timezone: string;
   totalRuns: number;
   successCount: number;
   failureCount: number;
   successRate: number;
   lastRunAt?: Date;
   nextRunAt?: Date;
-  averageDuration?: number;
+  concurrencyMode: string;
+  configuration: string | null;
+  ownerUserID: string | null;
+  ownerUser: string | null;
+  notifyOnSuccess: boolean;
+  notifyOnFailure: boolean;
+  startAt?: Date;
+  endAt?: Date;
+  createdAt: Date;
 }
 
 export interface JobTypeStatistics {
@@ -79,24 +89,29 @@ export interface LockInfo {
   isStale: boolean;
 }
 
+export interface AlertCondition {
+  type: 'stale-lock' | 'high-failure' | 'job-expired';
+  severity: 'warning' | 'error';
+  title: string;
+  message: string;
+  jobId?: string;
+  jobName?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class SchedulingInstrumentationService {
   private readonly _dateRange$ = new BehaviorSubject<{ start: Date; end: Date }>({
-    start: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+    start: new Date(Date.now() - 24 * 60 * 60 * 1000),
     end: new Date()
   });
 
   private readonly _refreshTrigger$ = new BehaviorSubject<number>(0);
   private readonly _isLoading$ = new BehaviorSubject<boolean>(false);
-  private readonly metadata = new Metadata();
 
   readonly isLoading$ = this._isLoading$.asObservable();
 
-  constructor() {}
-
-  // Main data streams
   readonly kpis$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadKPIs())),
@@ -105,51 +120,42 @@ export class SchedulingInstrumentationService {
   );
 
   readonly liveExecutions$ = this._refreshTrigger$.pipe(
-    tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadLiveExecutions())),
-    tap(() => this._isLoading$.next(false)),
     shareReplay(1)
   );
 
   readonly upcomingExecutions$ = this._refreshTrigger$.pipe(
-    tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadUpcomingExecutions())),
-    tap(() => this._isLoading$.next(false)),
     shareReplay(1)
   );
 
   readonly executionHistory$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
-    tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadExecutionHistory())),
-    tap(() => this._isLoading$.next(false)),
     shareReplay(1)
   );
 
   readonly executionTrends$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
-    tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadExecutionTrends())),
-    tap(() => this._isLoading$.next(false)),
     shareReplay(1)
   );
 
   readonly jobStatistics$ = this._refreshTrigger$.pipe(
-    tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadJobStatistics())),
-    tap(() => this._isLoading$.next(false)),
     shareReplay(1)
   );
 
   readonly jobTypes$ = this._refreshTrigger$.pipe(
-    tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadJobTypes())),
-    tap(() => this._isLoading$.next(false)),
     shareReplay(1)
   );
 
   readonly lockInfo$ = this._refreshTrigger$.pipe(
-    tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadLockInfo())),
-    tap(() => this._isLoading$.next(false)),
+    shareReplay(1)
+  );
+
+  readonly alerts$ = combineLatest([this.lockInfo$, this.kpis$, this.jobStatistics$]).pipe(
+    switchMap(([locks, kpis, jobs]) => from(this.buildAlerts(locks, kpis, jobs))),
     shareReplay(1)
   );
 
@@ -157,10 +163,15 @@ export class SchedulingInstrumentationService {
     this._dateRange$.next({ start, end });
   }
 
+  get CurrentDateRange(): { start: Date; end: Date } {
+    return this._dateRange$.value;
+  }
+
   refresh(): void {
     this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
   }
 
+  // ── KPIs ──────────────────────────────────────────────────
   private async loadKPIs(): Promise<SchedulingKPIs> {
     const { start, end } = this._dateRange$.value;
     const now = new Date();
@@ -168,8 +179,7 @@ export class SchedulingInstrumentationService {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const rv = new RunView();
-
-    const [jobsResult, runsResult, runs7dResult] = await rv.RunViews<any>([
+    const [jobsResult, runsResult, runs7dResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Scheduled Jobs',
         ExtraFilter: "Status='Active'",
@@ -191,55 +201,49 @@ export class SchedulingInstrumentationService {
     const runs24h = runsResult.Results as ScheduledJobRunEntity[];
     const runs7d = runs7dResult.Results as ScheduledJobRunEntity[];
 
-    const totalActiveJobs = jobs.length;
     const jobsDueInNextHour = jobs.filter(j => {
       if (!j.NextRunAt) return false;
       const nextRun = new Date(j.NextRunAt);
       return nextRun >= now && nextRun <= oneHourFromNow;
     }).length;
 
-    const recentExecutions24h = runs24h.length;
     const successfulRuns24h = runs24h.filter(r => r.Success).length;
-    const successRate24h = runs24h.length > 0 ? successfulRuns24h / runs24h.length : 0;
-
     const currentlyRunning = runs24h.filter(r => r.Status === 'Running').length;
-    const lockedJobs = jobs.filter(j => j.LockToken != null).length;
 
-    // Calculate total cost from runs that have Details with cost information
     let totalCost24h = 0;
     for (const run of runs24h) {
-      if (run.Details) {
-        try {
-          const details = JSON.parse(run.Details);
-          if (details.Cost) totalCost24h += details.Cost;
-          if (details.TotalCost) totalCost24h += details.TotalCost;
-        } catch {
-          // Ignore parsing errors
-        }
-      }
+      totalCost24h += this.extractCostFromRun(run);
     }
 
     const failedRuns7d = runs7d.filter(r => !r.Success && r.Status !== 'Running');
-    const totalFailures7d = failedRuns7d.length;
-    const failureRate7d = runs7d.length > 0 ? totalFailures7d / runs7d.length : 0;
 
     return {
-      totalActiveJobs,
+      totalActiveJobs: jobs.length,
       jobsDueInNextHour,
-      recentExecutions24h,
-      successRate24h,
+      recentExecutions24h: runs24h.length,
+      successRate24h: runs24h.length > 0 ? successfulRuns24h / runs24h.length : 0,
       currentlyRunning,
-      lockedJobs,
+      lockedJobs: jobs.filter(j => j.LockToken != null).length,
       totalCost24h,
-      failureRate7d,
-      totalFailures7d,
-      pollingInterval: 60000 // Default, would need to query engine for actual
+      failureRate7d: runs7d.length > 0 ? failedRuns7d.length / runs7d.length : 0,
+      totalFailures7d: failedRuns7d.length
     };
   }
 
+  private extractCostFromRun(run: ScheduledJobRunEntity): number {
+    if (!run.Details) return 0;
+    try {
+      const details = JSON.parse(run.Details);
+      return (details.Cost || 0) + (details.TotalCost || 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  // ── Live Executions ───────────────────────────────────────
   private async loadLiveExecutions(): Promise<JobExecution[]> {
     const now = new Date();
-    const recentTime = new Date(now.getTime() - 5 * 60 * 1000); // Last 5 minutes
+    const recentTime = new Date(now.getTime() - 5 * 60 * 1000);
 
     const rv = new RunView();
     const result = await rv.RunView<ScheduledJobRunEntity>({
@@ -249,33 +253,11 @@ export class SchedulingInstrumentationService {
       ResultType: 'entity_object'
     });
 
-    if (!result.Success) {
-      console.error('Failed to load live executions:', result.ErrorMessage);
-      return [];
-    }
-
-    const runs = result.Results || [];
-
-    return runs.map(run => {
-      const duration = run.CompletedAt
-        ? new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime()
-        : now.getTime() - new Date(run.StartedAt).getTime();
-
-      return {
-        id: run.ID,
-        jobId: run.ScheduledJobID,
-        jobName: run.ScheduledJob || 'Unknown Job',
-        jobType: 'Job', // Note: Job type not available in view, would need separate lookup
-        status: run.Status as any,
-        startedAt: new Date(run.StartedAt),
-        completedAt: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
-        duration: duration,
-        success: run.Success != null ? run.Success : undefined,
-        errorMessage: run.ErrorMessage || undefined
-      };
-    });
+    if (!result.Success) return [];
+    return this.mapRunsToExecutions(result.Results || [], now);
   }
 
+  // ── Upcoming Executions ───────────────────────────────────
   private async loadUpcomingExecutions(): Promise<UpcomingExecution[]> {
     const now = new Date();
     const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -288,23 +270,19 @@ export class SchedulingInstrumentationService {
       ResultType: 'entity_object'
     });
 
-    if (!result.Success) {
-      console.error('Failed to load upcoming executions:', result.ErrorMessage);
-      return [];
-    }
+    if (!result.Success) return [];
 
-    const jobs = result.Results || [];
-
-    return jobs.map(job => ({
+    return (result.Results || []).map(job => ({
       jobId: job.ID,
       jobName: job.Name,
-      jobType: job.JobType || 'Unknown Type',
+      jobType: job.JobType || 'Unknown',
       nextRunAt: new Date(job.NextRunAt!),
       cronExpression: job.CronExpression,
       timezone: job.Timezone || 'UTC'
     }));
   }
 
+  // ── Execution History ─────────────────────────────────────
   private async loadExecutionHistory(): Promise<JobExecution[]> {
     const { start, end } = this._dateRange$.value;
 
@@ -316,36 +294,14 @@ export class SchedulingInstrumentationService {
       ResultType: 'entity_object'
     });
 
-    if (!result.Success) {
-      console.error('Failed to load execution history:', result.ErrorMessage);
-      return [];
-    }
-
-    const runs = result.Results || [];
-
-    return runs.map(run => {
-      const duration = run.CompletedAt
-        ? new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime()
-        : undefined;
-
-      return {
-        id: run.ID,
-        jobId: run.ScheduledJobID,
-        jobName: run.ScheduledJob || 'Unknown Job',
-        jobType: 'Job', // Note: Job type not available in view, would need separate lookup
-        status: run.Status as any,
-        startedAt: new Date(run.StartedAt),
-        completedAt: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
-        duration: duration,
-        success: run.Success != null ? run.Success : undefined,
-        errorMessage: run.ErrorMessage || undefined
-      };
-    });
+    if (!result.Success) return [];
+    return this.mapRunsToExecutions(result.Results || []);
   }
 
+  // ── Execution Trends ──────────────────────────────────────
   private async loadExecutionTrends(): Promise<ExecutionTrendData[]> {
     const { start, end } = this._dateRange$.value;
-    const hourlyBuckets = this.createTimeBuckets(start, end);
+    const buckets = this.createTimeBuckets(start, end);
 
     const rv = new RunView();
     const result = await rv.RunView<ScheduledJobRunEntity>({
@@ -354,49 +310,27 @@ export class SchedulingInstrumentationService {
       ResultType: 'entity_object'
     });
 
-    if (!result.Success) {
-      console.error('Failed to load execution trends:', result.ErrorMessage);
-      return [];
-    }
+    if (!result.Success) return [];
 
     const allRuns = result.Results || [];
-    const trends: ExecutionTrendData[] = [];
+    const bucketSizeMs = this.getBucketSizeMs(start, end);
 
-    const duration = end.getTime() - start.getTime();
-    const hours = duration / (1000 * 60 * 60);
-    let bucketSizeMs: number;
-
-    if (hours <= 24) {
-      bucketSizeMs = 60 * 60 * 1000; // 1 hour
-    } else if (hours <= 24 * 7) {
-      bucketSizeMs = 4 * 60 * 60 * 1000; // 4 hours
-    } else {
-      bucketSizeMs = 24 * 60 * 60 * 1000; // 24 hours
-    }
-
-    for (const bucket of hourlyBuckets) {
-      const bucketStart = bucket;
+    return buckets.map(bucket => {
       const bucketEnd = new Date(bucket.getTime() + bucketSizeMs);
-
       const runsInBucket = allRuns.filter(r => {
-        const startedAt = new Date(r.StartedAt);
-        return startedAt >= bucketStart && startedAt < bucketEnd;
+        const started = new Date(r.StartedAt);
+        return started >= bucket && started < bucketEnd;
       });
-
-      const successes = runsInBucket.filter(r => r.Success).length;
-      const failures = runsInBucket.filter(r => !r.Success && r.Status !== 'Running').length;
-
-      trends.push({
+      return {
         timestamp: bucket,
         executions: runsInBucket.length,
-        successes,
-        failures
-      });
-    }
-
-    return trends;
+        successes: runsInBucket.filter(r => r.Success).length,
+        failures: runsInBucket.filter(r => !r.Success && r.Status !== 'Running').length
+      };
+    });
   }
 
+  // ── Job Statistics ────────────────────────────────────────
   private async loadJobStatistics(): Promise<JobStatistics[]> {
     const rv = new RunView();
     const result = await rv.RunView<ScheduledJobEntity>({
@@ -405,31 +339,39 @@ export class SchedulingInstrumentationService {
       ResultType: 'entity_object'
     });
 
-    if (!result.Success) {
-      console.error('Failed to load job statistics:', result.ErrorMessage);
-      return [];
-    }
+    if (!result.Success) return [];
 
-    const jobs = result.Results || [];
-
-    return jobs.map(job => ({
+    return (result.Results || []).map(job => ({
       jobId: job.ID,
       jobName: job.Name,
-      jobType: job.JobType || 'Unknown Type',
+      jobType: job.JobType || 'Unknown',
+      jobTypeId: job.JobTypeID,
       status: job.Status,
+      description: job.Description,
+      cronExpression: job.CronExpression,
+      timezone: job.Timezone || 'UTC',
       totalRuns: job.RunCount || 0,
       successCount: job.SuccessCount || 0,
       failureCount: job.FailureCount || 0,
       successRate: job.RunCount > 0 ? (job.SuccessCount || 0) / job.RunCount : 0,
       lastRunAt: job.LastRunAt ? new Date(job.LastRunAt) : undefined,
-      nextRunAt: job.NextRunAt ? new Date(job.NextRunAt) : undefined
+      nextRunAt: job.NextRunAt ? new Date(job.NextRunAt) : undefined,
+      concurrencyMode: job.ConcurrencyMode,
+      configuration: job.Configuration,
+      ownerUserID: job.OwnerUserID,
+      ownerUser: job.OwnerUser,
+      notifyOnSuccess: job.NotifyOnSuccess,
+      notifyOnFailure: job.NotifyOnFailure,
+      startAt: job.StartAt ? new Date(job.StartAt) : undefined,
+      endAt: job.EndAt ? new Date(job.EndAt) : undefined,
+      createdAt: new Date(job.__mj_CreatedAt)
     }));
   }
 
+  // ── Job Types ─────────────────────────────────────────────
   private async loadJobTypes(): Promise<JobTypeStatistics[]> {
     const rv = new RunView();
-
-    const [typesResult, jobsResult, runsResult] = await rv.RunViews<any>([
+    const [typesResult, jobsResult, runsResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Scheduled Job Types',
         OrderBy: 'Name ASC',
@@ -457,21 +399,20 @@ export class SchedulingInstrumentationService {
       const jobIds = new Set(jobsOfType.map(j => j.ID));
       const runsOfType = allRuns.filter(r => jobIds.has(r.ScheduledJobID));
       const successfulRuns = runsOfType.filter(r => r.Success).length;
-      const successRate = runsOfType.length > 0 ? successfulRuns / runsOfType.length : 0;
 
       return {
         typeId: type.ID,
         typeName: type.Name,
         activeJobsCount: activeJobs.length,
         totalRuns: runsOfType.length,
-        successRate
+        successRate: runsOfType.length > 0 ? successfulRuns / runsOfType.length : 0
       };
     });
   }
 
+  // ── Lock Info ─────────────────────────────────────────────
   private async loadLockInfo(): Promise<LockInfo[]> {
     const now = new Date();
-
     const rv = new RunView();
     const result = await rv.RunView<ScheduledJobEntity>({
       EntityName: 'MJ: Scheduled Jobs',
@@ -479,17 +420,10 @@ export class SchedulingInstrumentationService {
       ResultType: 'entity_object'
     });
 
-    if (!result.Success) {
-      console.error('Failed to load lock info:', result.ErrorMessage);
-      return [];
-    }
+    if (!result.Success) return [];
 
-    const jobs = result.Results || [];
-
-    return jobs.map(job => {
+    return (result.Results || []).map(job => {
       const expectedCompletion = job.ExpectedCompletionAt ? new Date(job.ExpectedCompletionAt) : now;
-      const isStale = expectedCompletion < now;
-
       return {
         jobId: job.ID,
         jobName: job.Name,
@@ -497,7 +431,72 @@ export class SchedulingInstrumentationService {
         lockedAt: new Date(job.LockedAt!),
         lockedBy: job.LockedByInstance || 'Unknown',
         expectedCompletion,
-        isStale
+        isStale: expectedCompletion < now
+      };
+    });
+  }
+
+  // ── Alerts ────────────────────────────────────────────────
+  private async buildAlerts(locks: LockInfo[], kpis: SchedulingKPIs, jobs: JobStatistics[]): Promise<AlertCondition[]> {
+    const alerts: AlertCondition[] = [];
+
+    for (const lock of locks) {
+      if (lock.isStale) {
+        alerts.push({
+          type: 'stale-lock',
+          severity: 'error',
+          title: 'Stale Lock Detected',
+          message: `Job "${lock.jobName}" has a stale lock held by ${lock.lockedBy}`,
+          jobId: lock.jobId,
+          jobName: lock.jobName
+        });
+      }
+    }
+
+    if (kpis.failureRate7d > 0.1) {
+      alerts.push({
+        type: 'high-failure',
+        severity: 'warning',
+        title: 'High Failure Rate',
+        message: `${(kpis.failureRate7d * 100).toFixed(1)}% failure rate over the last 7 days (${kpis.totalFailures7d} failures)`
+      });
+    }
+
+    for (const job of jobs) {
+      if (job.status === 'Expired') {
+        alerts.push({
+          type: 'job-expired',
+          severity: 'warning',
+          title: 'Expired Job',
+          message: `Job "${job.jobName}" has expired and is no longer running`,
+          jobId: job.jobId,
+          jobName: job.jobName
+        });
+      }
+    }
+
+    return alerts;
+  }
+
+  // ── Helpers ───────────────────────────────────────────────
+  private mapRunsToExecutions(runs: ScheduledJobRunEntity[], now?: Date): JobExecution[] {
+    const currentTime = now || new Date();
+    return runs.map(run => {
+      const duration = run.CompletedAt
+        ? new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime()
+        : currentTime.getTime() - new Date(run.StartedAt).getTime();
+
+      return {
+        id: run.ID,
+        jobId: run.ScheduledJobID,
+        jobName: run.ScheduledJob || 'Unknown Job',
+        jobType: 'Job',
+        status: run.Status as JobExecution['status'],
+        startedAt: new Date(run.StartedAt),
+        completedAt: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
+        duration,
+        success: run.Success != null ? run.Success : undefined,
+        errorMessage: run.ErrorMessage || undefined
       };
     });
   }
@@ -505,8 +504,7 @@ export class SchedulingInstrumentationService {
   private createTimeBuckets(start: Date, end: Date): Date[] {
     const buckets: Date[] = [];
     const current = new Date(start);
-    const duration = end.getTime() - start.getTime();
-    const hours = duration / (1000 * 60 * 60);
+    const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
 
     let bucketSize: number;
     if (hours <= 24) {
@@ -528,19 +526,14 @@ export class SchedulingInstrumentationService {
     return buckets;
   }
 
-  async executeJobManually(jobId: string): Promise<boolean> {
-    try {
-      // This would call the scheduling engine's ExecuteScheduledJob method
-      // For now, just return true as a placeholder
-      console.log('Manually executing job:', jobId);
-      this.refresh();
-      return true;
-    } catch (error) {
-      console.error('Failed to execute job manually:', error);
-      return false;
-    }
+  private getBucketSizeMs(start: Date, end: Date): number {
+    const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    if (hours <= 24) return 60 * 60 * 1000;
+    if (hours <= 24 * 7) return 4 * 60 * 60 * 1000;
+    return 24 * 60 * 60 * 1000;
   }
 
+  // ── CRUD Operations ───────────────────────────────────────
   async updateJobStatus(jobId: string, status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired'): Promise<boolean> {
     try {
       const md = new Metadata();
@@ -548,12 +541,70 @@ export class SchedulingInstrumentationService {
       await job.Load(jobId);
       job.Status = status;
       const result = await job.Save();
-      if (result) {
-        this.refresh();
-      }
+      if (result) this.refresh();
       return result;
     } catch (error) {
       console.error('Failed to update job status:', error);
+      return false;
+    }
+  }
+
+  async saveJob(jobId: string | null, data: Partial<{
+    Name: string;
+    Description: string | null;
+    JobTypeID: string;
+    CronExpression: string;
+    Timezone: string;
+    Status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired';
+    Configuration: string | null;
+    ConcurrencyMode: 'Concurrent' | 'Queue' | 'Skip';
+    StartAt: Date | null;
+    EndAt: Date | null;
+    NotifyOnSuccess: boolean;
+    NotifyOnFailure: boolean;
+  }>): Promise<boolean> {
+    try {
+      const md = new Metadata();
+      const job = await md.GetEntityObject<ScheduledJobEntity>('MJ: Scheduled Jobs');
+
+      if (jobId) {
+        await job.Load(jobId);
+      } else {
+        job.NewRecord();
+      }
+
+      if (data.Name !== undefined) job.Name = data.Name;
+      if (data.Description !== undefined) job.Description = data.Description;
+      if (data.JobTypeID !== undefined) job.JobTypeID = data.JobTypeID;
+      if (data.CronExpression !== undefined) job.CronExpression = data.CronExpression;
+      if (data.Timezone !== undefined) job.Timezone = data.Timezone;
+      if (data.Status !== undefined) job.Status = data.Status;
+      if (data.Configuration !== undefined) job.Configuration = data.Configuration;
+      if (data.ConcurrencyMode !== undefined) job.ConcurrencyMode = data.ConcurrencyMode;
+      if (data.StartAt !== undefined) job.StartAt = data.StartAt;
+      if (data.EndAt !== undefined) job.EndAt = data.EndAt;
+      if (data.NotifyOnSuccess !== undefined) job.NotifyOnSuccess = data.NotifyOnSuccess;
+      if (data.NotifyOnFailure !== undefined) job.NotifyOnFailure = data.NotifyOnFailure;
+
+      const result = await job.Save();
+      if (result) this.refresh();
+      return result;
+    } catch (error) {
+      console.error('Failed to save job:', error);
+      return false;
+    }
+  }
+
+  async deleteJob(jobId: string): Promise<boolean> {
+    try {
+      const md = new Metadata();
+      const job = await md.GetEntityObject<ScheduledJobEntity>('MJ: Scheduled Jobs');
+      await job.Load(jobId);
+      const result = await job.Delete();
+      if (result) this.refresh();
+      return result;
+    } catch (error) {
+      console.error('Failed to delete job:', error);
       return false;
     }
   }
@@ -568,13 +619,24 @@ export class SchedulingInstrumentationService {
       job.LockedByInstance = null;
       job.ExpectedCompletionAt = null;
       const result = await job.Save();
-      if (result) {
-        this.refresh();
-      }
+      if (result) this.refresh();
       return result;
     } catch (error) {
       console.error('Failed to release lock:', error);
       return false;
     }
+  }
+
+  async loadJobTypesForDropdown(): Promise<{ id: string; name: string }[]> {
+    const rv = new RunView();
+    const result = await rv.RunView<ScheduledJobTypeEntity>({
+      EntityName: 'MJ: Scheduled Job Types',
+      OrderBy: 'Name ASC',
+      ResultType: 'entity_object',
+      CacheLocal: true
+    });
+
+    if (!result.Success) return [];
+    return (result.Results || []).map(t => ({ id: t.ID, name: t.Name }));
   }
 }
