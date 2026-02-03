@@ -26,7 +26,7 @@ LoadCoreCustomForms(); // prevent tree shaking - dynamic loaded components don't
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
 
 // Import class registrations manifest to prevent tree-shaking of @RegisterClass decorated classes
-import './generated/class-registrations-manifest';
+// import './generated/class-registrations-manifest';
 
 //***********************************************************
 //MSAL

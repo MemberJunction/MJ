@@ -98,12 +98,12 @@
     "karma-jasmine-html-reporter": "~2.1.0",
     "typed-assert": "^1.0.9",
     "typescript": "^5.4.5",
-    "@storybook/angular": "^8.4.7",
-    "@storybook/addon-essentials": "^8.4.7",
-    "@storybook/addon-interactions": "^8.4.7",
-    "@storybook/addon-links": "^8.4.7",
-    "@storybook/blocks": "^8.4.7",
-    "storybook": "^8.4.7"
+    "@storybook/angular": "8.4.7",
+    "@storybook/addon-essentials": "8.4.7",
+    "@storybook/addon-interactions": "8.4.7",
+    "@storybook/addon-links": "8.4.7",
+    "@storybook/blocks": "8.4.7",
+    "storybook": "8.4.7"
   },
   "optionalDependencies": {
     "@lmdb/lmdb-darwin-arm64": "3.0.8",
