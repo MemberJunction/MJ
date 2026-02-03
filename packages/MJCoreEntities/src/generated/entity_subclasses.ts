@@ -5077,7 +5077,7 @@ export const DuplicateRunDetailSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunID: z.string().describe(`
         * * Field Name: DuplicateRunID
-        * * Display Name: Duplicate Run
+        * * Display Name: Duplicate Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)`),
     RecordID: z.string().describe(`
@@ -5136,7 +5136,7 @@ export const DuplicateRunDetailSchema = z.object({
         * * Default Value: getutcdate()`),
     DuplicateRun: z.string().describe(`
         * * Field Name: DuplicateRun
-        * * Display Name: Duplicate Run Name
+        * * Display Name: Duplicate Run
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -5264,7 +5264,7 @@ export const EmployeeCompanyIntegrationSchema = z.object({
         * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)`),
     ExternalSystemRecordID: z.string().describe(`
         * * Field Name: ExternalSystemRecordID
-        * * Display Name: External System Record ID
+        * * Display Name: External System Record
         * * SQL Data Type: nvarchar(750)
         * * Description: The employee's unique identifier in the external integrated system.`),
     IsActive: z.boolean().describe(`
@@ -5371,7 +5371,7 @@ export const EmployeeSkillSchema = z.object({
         * * SQL Data Type: nvarchar(81)`),
     Skill: z.string().describe(`
         * * Field Name: Skill
-        * * Display Name: Skill Name
+        * * Display Name: Skill
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -5839,12 +5839,12 @@ export const EntityActionFilterSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action ID
+        * * Display Name: Entity Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)`),
     ActionFilterID: z.string().describe(`
         * * Field Name: ActionFilterID
-        * * Display Name: Action Filter ID
+        * * Display Name: Action Filter
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)`),
     Sequence: z.number().describe(`
@@ -5966,7 +5966,7 @@ export const EntityActionInvocationSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Entity Action Name
+        * * Display Name: Entity Action
         * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
@@ -6028,11 +6028,11 @@ export const EntityActionParamSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Entity Action
+        * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
-        * * Display Name: Parameter Name
+        * * Display Name: Action Parameter
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -7459,12 +7459,12 @@ export const ErrorLogSchema = z.object({
         * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
-        * * Display Name: Error Code
+        * * Display Name: Code
         * * SQL Data Type: nchar(20)
         * * Description: Error code for categorizing and handling specific error types.`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Error Message
+        * * Display Name: Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The primary error message describing what went wrong.`),
     CreatedBy: z.string().nullable().describe(`
@@ -7475,16 +7475,16 @@ export const ErrorLogSchema = z.object({
         * * Description: User or system process that encountered this error.`),
     Status: z.string().nullable().describe(`
         * * Field Name: Status
-        * * Display Name: Error Status
+        * * Display Name: Status
         * * SQL Data Type: nvarchar(10)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Error Category
+        * * Display Name: Category
         * * SQL Data Type: nvarchar(20)
         * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).`),
     Details: z.string().nullable().describe(`
         * * Field Name: Details
-        * * Display Name: Error Details
+        * * Display Name: Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Full error details including stack trace, inner exceptions, and context data.`),
     __mj_CreatedAt: z.date().describe(`
@@ -7499,11 +7499,11 @@ export const ErrorLogSchema = z.object({
         * * Default Value: getutcdate()`),
     CompanyIntegrationRun: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRun
-        * * Display Name: Integration Run
+        * * Display Name: Company Integration Run
         * * SQL Data Type: nvarchar(100)`),
     CompanyIntegrationRunDetail: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunDetail
-        * * Display Name: Integration Run Detail
+        * * Display Name: Company Integration Run Detail
         * * SQL Data Type: nvarchar(450)`),
 });
 
@@ -9503,7 +9503,7 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Step
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -13589,7 +13589,7 @@ export const ConversationDetailArtifactSchema = z.object({
         * * Default Value: getutcdate()`),
     ConversationDetail: z.string().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Message Content
+        * * Display Name: Conversation Message
         * * SQL Data Type: nvarchar(MAX)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
@@ -13713,7 +13713,7 @@ export const ConversationDetailRatingSchema = z.object({
         * * Default Value: newsequentialid()`),
     ConversationDetailID: z.string().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail ID
+        * * Display Name: Conversation Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: The conversation message being rated.`),
@@ -15256,6 +15256,38 @@ export const MCPServerSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    OAuthIssuerURL: z.string().nullable().describe(`
+        * * Field Name: OAuthIssuerURL
+        * * Display Name: O Auth Issuer URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Authorization server issuer URL for OAuth 2.1 authentication (e.g., https://auth.example.com).`),
+    OAuthScopes: z.string().nullable().describe(`
+        * * Field Name: OAuthScopes
+        * * Display Name: O Auth Scopes
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Space-delimited OAuth scopes to request (e.g., "read write admin").`),
+    OAuthMetadataCacheTTLMinutes: z.number().nullable().describe(`
+        * * Field Name: OAuthMetadataCacheTTLMinutes
+        * * Display Name: O Auth Metadata Cache TTL Minutes
+        * * SQL Data Type: int
+        * * Default Value: 1440
+        * * Description: Cache TTL for authorization server metadata in minutes. Default 1440 (24 hours).`),
+    OAuthClientID: z.string().nullable().describe(`
+        * * Field Name: OAuthClientID
+        * * Display Name: O Auth Client ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Pre-configured OAuth client ID (when DCR is not supported).`),
+    OAuthClientSecretEncrypted: z.string().nullable().describe(`
+        * * Field Name: OAuthClientSecretEncrypted
+        * * Display Name: O Auth Client Secret Encrypted
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Pre-configured OAuth client secret (encrypted at rest, when DCR is not supported).`),
+    OAuthRequirePKCE: z.boolean().describe(`
+        * * Field Name: OAuthRequirePKCE
+        * * Display Name: O Auth Require PKCE
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether to require PKCE for OAuth flows. Always true for OAuth 2.1 compliance.`),
     CredentialType: z.string().nullable().describe(`
         * * Field Name: CredentialType
         * * Display Name: Credential Type
@@ -15275,12 +15307,12 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     MCPServerConnectionID: z.string().describe(`
         * * Field Name: MCPServerConnectionID
-        * * Display Name: Connection ID
+        * * Display Name: MCP Server Connection
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
     MCPServerToolID: z.string().nullable().describe(`
         * * Field Name: MCPServerToolID
-        * * Display Name: Tool ID
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
         * * Description: FK to MCP Server Tool (null if tool not cached)`),
@@ -15291,18 +15323,18 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Description: Tool name (stored directly for resilience)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: FK to User who initiated the call`),
     StartedAt: z.date().describe(`
         * * Field Name: StartedAt
-        * * Display Name: Start Time
+        * * Display Name: Started At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
-        * * Display Name: End Time
+        * * Display Name: Ended At
         * * SQL Data Type: datetimeoffset`),
     DurationMs: z.number().nullable().describe(`
         * * Field Name: DurationMs
@@ -15346,19 +15378,384 @@ export const MCPToolExecutionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: Connection Name
+        * * Display Name: MCP Server Connection
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: Tool Name (Cached)
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MCPToolExecutionLogEntityType = z.infer<typeof MCPToolExecutionLogSchema>;
+
+/**
+ * zod schema definition for the entity MJ: O Auth Auth Server Metadata Caches
+ */
+export const OAuthAuthServerMetadataCacheSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    IssuerURL: z.string().describe(`
+        * * Field Name: IssuerURL
+        * * Display Name: Issuer URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Authorization server issuer identifier URL.`),
+    AuthorizationEndpoint: z.string().describe(`
+        * * Field Name: AuthorizationEndpoint
+        * * Display Name: Authorization Endpoint
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL of the authorization endpoint.`),
+    TokenEndpoint: z.string().describe(`
+        * * Field Name: TokenEndpoint
+        * * Display Name: Token Endpoint
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL of the token endpoint.`),
+    RegistrationEndpoint: z.string().nullable().describe(`
+        * * Field Name: RegistrationEndpoint
+        * * Display Name: Registration Endpoint
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL of the dynamic client registration endpoint (RFC 7591).`),
+    RevocationEndpoint: z.string().nullable().describe(`
+        * * Field Name: RevocationEndpoint
+        * * Display Name: Revocation Endpoint
+        * * SQL Data Type: nvarchar(1000)`),
+    JwksURI: z.string().nullable().describe(`
+        * * Field Name: JwksURI
+        * * Display Name: Jwks URI
+        * * SQL Data Type: nvarchar(1000)`),
+    ScopesSupported: z.string().nullable().describe(`
+        * * Field Name: ScopesSupported
+        * * Display Name: Scopes Supported
+        * * SQL Data Type: nvarchar(MAX)`),
+    ResponseTypesSupported: z.string().describe(`
+        * * Field Name: ResponseTypesSupported
+        * * Display Name: Response Types Supported
+        * * SQL Data Type: nvarchar(MAX)`),
+    GrantTypesSupported: z.string().nullable().describe(`
+        * * Field Name: GrantTypesSupported
+        * * Display Name: Grant Types Supported
+        * * SQL Data Type: nvarchar(MAX)`),
+    TokenEndpointAuthMethods: z.string().nullable().describe(`
+        * * Field Name: TokenEndpointAuthMethods
+        * * Display Name: Token Endpoint Auth Methods
+        * * SQL Data Type: nvarchar(MAX)`),
+    CodeChallengeMethodsSupported: z.string().nullable().describe(`
+        * * Field Name: CodeChallengeMethodsSupported
+        * * Display Name: Code Challenge Methods Supported
+        * * SQL Data Type: nvarchar(MAX)`),
+    MetadataJSON: z.string().describe(`
+        * * Field Name: MetadataJSON
+        * * Display Name: Metadata JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Full authorization server metadata JSON for debugging and extensibility.`),
+    CachedAt: z.date().describe(`
+        * * Field Name: CachedAt
+        * * Display Name: Cached At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ExpiresAt: z.date().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type OAuthAuthServerMetadataCacheEntityType = z.infer<typeof OAuthAuthServerMetadataCacheSchema>;
+
+/**
+ * zod schema definition for the entity MJ: O Auth Authorization States
+ */
+export const OAuthAuthorizationStateSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MCPServerConnectionID: z.string().describe(`
+        * * Field Name: MCPServerConnectionID
+        * * Display Name: MCP Server Connection ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    StateParameter: z.string().describe(`
+        * * Field Name: StateParameter
+        * * Display Name: State Parameter
+        * * SQL Data Type: nvarchar(128)
+        * * Description: Cryptographic state parameter for CSRF protection.`),
+    CodeVerifier: z.string().describe(`
+        * * Field Name: CodeVerifier
+        * * Display Name: Code Verifier
+        * * SQL Data Type: nvarchar(128)
+        * * Description: PKCE code verifier for token exchange (stored securely, never sent to auth server).`),
+    CodeChallenge: z.string().describe(`
+        * * Field Name: CodeChallenge
+        * * Display Name: Code Challenge
+        * * SQL Data Type: nvarchar(128)
+        * * Description: PKCE code challenge sent to authorization server.`),
+    RedirectURI: z.string().describe(`
+        * * Field Name: RedirectURI
+        * * Display Name: Redirect URI
+        * * SQL Data Type: nvarchar(1000)`),
+    RequestedScopes: z.string().nullable().describe(`
+        * * Field Name: RequestedScopes
+        * * Display Name: Requested Scopes
+        * * SQL Data Type: nvarchar(500)`),
+    Status: z.union([z.literal('Completed'), z.literal('Expired'), z.literal('Failed'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * Expired
+    *   * Failed
+    *   * Pending
+        * * Description: Flow status: Pending, Completed, Failed, or Expired.`),
+    AuthorizationURL: z.string().describe(`
+        * * Field Name: AuthorizationURL
+        * * Display Name: Authorization URL
+        * * SQL Data Type: nvarchar(MAX)`),
+    ErrorCode: z.string().nullable().describe(`
+        * * Field Name: ErrorCode
+        * * Display Name: Error Code
+        * * SQL Data Type: nvarchar(100)`),
+    ErrorDescription: z.string().nullable().describe(`
+        * * Field Name: ErrorDescription
+        * * Display Name: Error Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    InitiatedAt: z.date().describe(`
+        * * Field Name: InitiatedAt
+        * * Display Name: Initiated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ExpiresAt: z.date().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset`),
+    FrontendReturnURL: z.string().nullable().describe(`
+        * * Field Name: FrontendReturnURL
+        * * Display Name: Frontend Return URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL to redirect the user to after OAuth completion. If set, the OAuth callback will redirect here instead of showing a static HTML page.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    MCPServerConnection: z.string().describe(`
+        * * Field Name: MCPServerConnection
+        * * Display Name: MCP Server Connection
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type OAuthAuthorizationStateEntityType = z.infer<typeof OAuthAuthorizationStateSchema>;
+
+/**
+ * zod schema definition for the entity MJ: O Auth Client Registrations
+ */
+export const OAuthClientRegistrationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MCPServerConnectionID: z.string().describe(`
+        * * Field Name: MCPServerConnectionID
+        * * Display Name: MCP Server Connection ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
+        * * Description: The MCP Server Connection this registration belongs to.`),
+    MCPServerID: z.string().describe(`
+        * * Field Name: MCPServerID
+        * * Display Name: MCP Server ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Servers (vwMCPServers.ID)`),
+    IssuerURL: z.string().describe(`
+        * * Field Name: IssuerURL
+        * * Display Name: Issuer URL
+        * * SQL Data Type: nvarchar(1000)`),
+    ClientID: z.string().describe(`
+        * * Field Name: ClientID
+        * * Display Name: Client ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: OAuth client ID assigned by the authorization server.`),
+    ClientSecretEncrypted: z.string().nullable().describe(`
+        * * Field Name: ClientSecretEncrypted
+        * * Display Name: Client Secret Encrypted
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: OAuth client secret (encrypted at rest) for confidential clients.`),
+    ClientIDIssuedAt: z.date().nullable().describe(`
+        * * Field Name: ClientIDIssuedAt
+        * * Display Name: Client ID Issued At
+        * * SQL Data Type: datetimeoffset`),
+    ClientSecretExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ClientSecretExpiresAt
+        * * Display Name: Client Secret Expires At
+        * * SQL Data Type: datetimeoffset`),
+    RegistrationAccessToken: z.string().nullable().describe(`
+        * * Field Name: RegistrationAccessToken
+        * * Display Name: Registration Access Token
+        * * SQL Data Type: nvarchar(MAX)`),
+    RegistrationClientURI: z.string().nullable().describe(`
+        * * Field Name: RegistrationClientURI
+        * * Display Name: Registration Client URI
+        * * SQL Data Type: nvarchar(1000)`),
+    RedirectURIs: z.string().describe(`
+        * * Field Name: RedirectURIs
+        * * Display Name: Redirect UR Is
+        * * SQL Data Type: nvarchar(MAX)`),
+    GrantTypes: z.string().describe(`
+        * * Field Name: GrantTypes
+        * * Display Name: Grant Types
+        * * SQL Data Type: nvarchar(MAX)`),
+    ResponseTypes: z.string().describe(`
+        * * Field Name: ResponseTypes
+        * * Display Name: Response Types
+        * * SQL Data Type: nvarchar(MAX)`),
+    Scope: z.string().nullable().describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(500)`),
+    Status: z.union([z.literal('Active'), z.literal('Expired'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Expired
+    *   * Revoked
+        * * Description: Registration status: Active, Expired, or Revoked.`),
+    RegistrationResponse: z.string().describe(`
+        * * Field Name: RegistrationResponse
+        * * Display Name: Registration Response
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Full DCR response JSON for debugging and extensibility.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    MCPServerConnection: z.string().describe(`
+        * * Field Name: MCPServerConnection
+        * * Display Name: MCP Server Connection
+        * * SQL Data Type: nvarchar(255)`),
+    MCPServer: z.string().describe(`
+        * * Field Name: MCPServer
+        * * Display Name: MCP Server
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type OAuthClientRegistrationEntityType = z.infer<typeof OAuthClientRegistrationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: O Auth Tokens
+ */
+export const OAuthTokenSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MCPServerConnectionID: z.string().describe(`
+        * * Field Name: MCPServerConnectionID
+        * * Display Name: MCP Server Connection ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Foreign key to Credential table where the OAuth tokens (access and refresh) are stored securely via CredentialEngine.`),
+    TokenType: z.string().describe(`
+        * * Field Name: TokenType
+        * * Display Name: Token Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Bearer`),
+    ExpiresAt: z.date().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the access token expires.`),
+    Scope: z.string().nullable().describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(500)`),
+    IssuerURL: z.string().describe(`
+        * * Field Name: IssuerURL
+        * * Display Name: Issuer URL
+        * * SQL Data Type: nvarchar(1000)`),
+    LastRefreshAt: z.date().nullable().describe(`
+        * * Field Name: LastRefreshAt
+        * * Display Name: Last Refresh At
+        * * SQL Data Type: datetimeoffset`),
+    RefreshCount: z.number().describe(`
+        * * Field Name: RefreshCount
+        * * Display Name: Refresh Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of times the token has been refreshed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    MCPServerConnection: z.string().describe(`
+        * * Field Name: MCPServerConnection
+        * * Display Name: MCP Server Connection
+        * * SQL Data Type: nvarchar(255)`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type OAuthTokenEntityType = z.infer<typeof OAuthTokenSchema>;
 
 /**
  * zod schema definition for the entity MJ: Projects
@@ -18352,7 +18749,7 @@ export const RecommendationItemSchema = z.object({
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     DestinationEntityRecordID: z.string().describe(`
         * * Field Name: DestinationEntityRecordID
-        * * Display Name: Destination Record ID
+        * * Display Name: Destination Entity Record ID
         * * SQL Data Type: nvarchar(450)
         * * Description: The record ID of the destination entity`),
     MatchProbability: z.number().nullable().describe(`
@@ -18501,7 +18898,7 @@ export const RecommendationSchema = z.object({
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     SourceEntityRecordID: z.string().describe(`
         * * Field Name: SourceEntityRecordID
-        * * Display Name: Source Entity Record ID
+        * * Display Name: Source Record ID
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The record ID of the source entity`),
     __mj_CreatedAt: z.date().describe(`
@@ -18664,12 +19061,12 @@ export const RecordChangeSchema = z.object({
         * * Description: Field ErrorLog for entity Record Changes.`),
     ReplayRunID: z.string().nullable().describe(`
         * * Field Name: ReplayRunID
-        * * Display Name: Replay Run ID
+        * * Display Name: Replay Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Record Change Replay Runs (vwRecordChangeReplayRuns.ID)`),
     IntegrationID: z.string().nullable().describe(`
         * * Field Name: IntegrationID
-        * * Display Name: Integration ID
+        * * Display Name: Integration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)`),
     Comments: z.string().nullable().describe(`
@@ -18690,11 +19087,11 @@ export const RecordChangeSchema = z.object({
         * * Description: Field UpdatedAt for entity Record Changes.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     ReplayRun: z.string().nullable().describe(`
         * * Field Name: ReplayRun
@@ -18702,7 +19099,7 @@ export const RecordChangeSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     Integration: z.string().nullable().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration Name
+        * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -18724,7 +19121,7 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)`),
     DeletedRecordID: z.string().describe(`
         * * Field Name: DeletedRecordID
-        * * Display Name: Deleted Record
+        * * Display Name: Deleted Record ID
         * * SQL Data Type: nvarchar(750)
         * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -19951,7 +20348,7 @@ export const TemplateParamSchema = z.object({
         * * Description: Default value of the parameter`),
     IsRequired: z.boolean().describe(`
         * * Field Name: IsRequired
-        * * Display Name: Required
+        * * Display Name: Is Required
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this parameter must be provided when using the template.`),
@@ -34476,7 +34873,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
 
     /**
     * * Field Name: DuplicateRunID
-    * * Display Name: Duplicate Run
+    * * Display Name: Duplicate Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)
     */
@@ -34601,7 +34998,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
 
     /**
     * * Field Name: DuplicateRun
-    * * Display Name: Duplicate Run Name
+    * * Display Name: Duplicate Run
     * * SQL Data Type: nvarchar(255)
     */
     get DuplicateRun(): string {
@@ -34924,7 +35321,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
 
     /**
     * * Field Name: ExternalSystemRecordID
-    * * Display Name: External System Record ID
+    * * Display Name: External System Record
     * * SQL Data Type: nvarchar(750)
     * * Description: The employee's unique identifier in the external integrated system.
     */
@@ -35198,7 +35595,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
 
     /**
     * * Field Name: Skill
-    * * Display Name: Skill Name
+    * * Display Name: Skill
     * * SQL Data Type: nvarchar(50)
     */
     get Skill(): string {
@@ -36364,7 +36761,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action ID
+    * * Display Name: Entity Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
@@ -36377,7 +36774,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
 
     /**
     * * Field Name: ActionFilterID
-    * * Display Name: Action Filter ID
+    * * Display Name: Action Filter
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)
     */
@@ -36675,7 +37072,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Entity Action Name
+    * * Display Name: Entity Action
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -36829,7 +37226,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Entity Action
+    * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -36838,7 +37235,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
 
     /**
     * * Field Name: ActionParam
-    * * Display Name: Parameter Name
+    * * Display Name: Action Parameter
     * * SQL Data Type: nvarchar(255)
     */
     get ActionParam(): string {
@@ -40371,7 +40768,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Code
-    * * Display Name: Error Code
+    * * Display Name: Code
     * * SQL Data Type: nchar(20)
     * * Description: Error code for categorizing and handling specific error types.
     */
@@ -40384,7 +40781,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Error Message
+    * * Display Name: Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The primary error message describing what went wrong.
     */
@@ -40411,7 +40808,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Status
-    * * Display Name: Error Status
+    * * Display Name: Status
     * * SQL Data Type: nvarchar(10)
     */
     get Status(): string | null {
@@ -40423,7 +40820,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Error Category
+    * * Display Name: Category
     * * SQL Data Type: nvarchar(20)
     * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).
     */
@@ -40436,7 +40833,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: Details
-    * * Display Name: Error Details
+    * * Display Name: Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Full error details including stack trace, inner exceptions, and context data.
     */
@@ -40469,7 +40866,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRun
-    * * Display Name: Integration Run
+    * * Display Name: Company Integration Run
     * * SQL Data Type: nvarchar(100)
     */
     get CompanyIntegrationRun(): string | null {
@@ -40478,7 +40875,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunDetail
-    * * Display Name: Integration Run Detail
+    * * Display Name: Company Integration Run Detail
     * * SQL Data Type: nvarchar(450)
     */
     get CompanyIntegrationRunDetail(): string | null {
@@ -45695,7 +46092,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Step
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -56591,7 +56988,7 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Message Content
+    * * Display Name: Conversation Message
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string {
@@ -56978,7 +57375,7 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail ID
+    * * Display Name: Conversation Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     * * Description: The conversation message being rated.
@@ -60936,6 +61333,86 @@ export class MCPServerEntity extends BaseEntity<MCPServerEntityType> {
     }
 
     /**
+    * * Field Name: OAuthIssuerURL
+    * * Display Name: O Auth Issuer URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Authorization server issuer URL for OAuth 2.1 authentication (e.g., https://auth.example.com).
+    */
+    get OAuthIssuerURL(): string | null {
+        return this.Get('OAuthIssuerURL');
+    }
+    set OAuthIssuerURL(value: string | null) {
+        this.Set('OAuthIssuerURL', value);
+    }
+
+    /**
+    * * Field Name: OAuthScopes
+    * * Display Name: O Auth Scopes
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Space-delimited OAuth scopes to request (e.g., "read write admin").
+    */
+    get OAuthScopes(): string | null {
+        return this.Get('OAuthScopes');
+    }
+    set OAuthScopes(value: string | null) {
+        this.Set('OAuthScopes', value);
+    }
+
+    /**
+    * * Field Name: OAuthMetadataCacheTTLMinutes
+    * * Display Name: O Auth Metadata Cache TTL Minutes
+    * * SQL Data Type: int
+    * * Default Value: 1440
+    * * Description: Cache TTL for authorization server metadata in minutes. Default 1440 (24 hours).
+    */
+    get OAuthMetadataCacheTTLMinutes(): number | null {
+        return this.Get('OAuthMetadataCacheTTLMinutes');
+    }
+    set OAuthMetadataCacheTTLMinutes(value: number | null) {
+        this.Set('OAuthMetadataCacheTTLMinutes', value);
+    }
+
+    /**
+    * * Field Name: OAuthClientID
+    * * Display Name: O Auth Client ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Pre-configured OAuth client ID (when DCR is not supported).
+    */
+    get OAuthClientID(): string | null {
+        return this.Get('OAuthClientID');
+    }
+    set OAuthClientID(value: string | null) {
+        this.Set('OAuthClientID', value);
+    }
+
+    /**
+    * * Field Name: OAuthClientSecretEncrypted
+    * * Display Name: O Auth Client Secret Encrypted
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Pre-configured OAuth client secret (encrypted at rest, when DCR is not supported).
+    */
+    get OAuthClientSecretEncrypted(): string | null {
+        return this.Get('OAuthClientSecretEncrypted');
+    }
+    set OAuthClientSecretEncrypted(value: string | null) {
+        this.Set('OAuthClientSecretEncrypted', value);
+    }
+
+    /**
+    * * Field Name: OAuthRequirePKCE
+    * * Display Name: O Auth Require PKCE
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether to require PKCE for OAuth flows. Always true for OAuth 2.1 compliance.
+    */
+    get OAuthRequirePKCE(): boolean {
+        return this.Get('OAuthRequirePKCE');
+    }
+    set OAuthRequirePKCE(value: boolean) {
+        this.Set('OAuthRequirePKCE', value);
+    }
+
+    /**
     * * Field Name: CredentialType
     * * Display Name: Credential Type
     * * SQL Data Type: nvarchar(100)
@@ -60990,7 +61467,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerConnectionID
-    * * Display Name: Connection ID
+    * * Display Name: MCP Server Connection
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
     */
@@ -61003,7 +61480,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerToolID
-    * * Display Name: Tool ID
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
     * * Description: FK to MCP Server Tool (null if tool not cached)
@@ -61030,7 +61507,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: FK to User who initiated the call
@@ -61044,7 +61521,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: StartedAt
-    * * Display Name: Start Time
+    * * Display Name: Started At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -61057,7 +61534,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: EndedAt
-    * * Display Name: End Time
+    * * Display Name: Ended At
     * * SQL Data Type: datetimeoffset
     */
     get EndedAt(): Date | null {
@@ -61167,7 +61644,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: Connection Name
+    * * Display Name: MCP Server Connection
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -61176,7 +61653,7 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: Tool Name (Cached)
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -61185,11 +61662,990 @@ export class MCPToolExecutionLogEntity extends BaseEntity<MCPToolExecutionLogEnt
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
         return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: O Auth Auth Server Metadata Caches - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: OAuthAuthServerMetadataCache
+ * * Base View: vwOAuthAuthServerMetadataCaches
+ * * @description Caches OAuth 2.0 Authorization Server Metadata (RFC 8414) to reduce discovery requests.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: O Auth Auth Server Metadata Caches')
+export class OAuthAuthServerMetadataCacheEntity extends BaseEntity<OAuthAuthServerMetadataCacheEntityType> {
+    /**
+    * Loads the MJ: O Auth Auth Server Metadata Caches record from the database
+    * @param ID: string - primary key value to load the MJ: O Auth Auth Server Metadata Caches record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof OAuthAuthServerMetadataCacheEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: IssuerURL
+    * * Display Name: Issuer URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Authorization server issuer identifier URL.
+    */
+    get IssuerURL(): string {
+        return this.Get('IssuerURL');
+    }
+    set IssuerURL(value: string) {
+        this.Set('IssuerURL', value);
+    }
+
+    /**
+    * * Field Name: AuthorizationEndpoint
+    * * Display Name: Authorization Endpoint
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL of the authorization endpoint.
+    */
+    get AuthorizationEndpoint(): string {
+        return this.Get('AuthorizationEndpoint');
+    }
+    set AuthorizationEndpoint(value: string) {
+        this.Set('AuthorizationEndpoint', value);
+    }
+
+    /**
+    * * Field Name: TokenEndpoint
+    * * Display Name: Token Endpoint
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL of the token endpoint.
+    */
+    get TokenEndpoint(): string {
+        return this.Get('TokenEndpoint');
+    }
+    set TokenEndpoint(value: string) {
+        this.Set('TokenEndpoint', value);
+    }
+
+    /**
+    * * Field Name: RegistrationEndpoint
+    * * Display Name: Registration Endpoint
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL of the dynamic client registration endpoint (RFC 7591).
+    */
+    get RegistrationEndpoint(): string | null {
+        return this.Get('RegistrationEndpoint');
+    }
+    set RegistrationEndpoint(value: string | null) {
+        this.Set('RegistrationEndpoint', value);
+    }
+
+    /**
+    * * Field Name: RevocationEndpoint
+    * * Display Name: Revocation Endpoint
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get RevocationEndpoint(): string | null {
+        return this.Get('RevocationEndpoint');
+    }
+    set RevocationEndpoint(value: string | null) {
+        this.Set('RevocationEndpoint', value);
+    }
+
+    /**
+    * * Field Name: JwksURI
+    * * Display Name: Jwks URI
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get JwksURI(): string | null {
+        return this.Get('JwksURI');
+    }
+    set JwksURI(value: string | null) {
+        this.Set('JwksURI', value);
+    }
+
+    /**
+    * * Field Name: ScopesSupported
+    * * Display Name: Scopes Supported
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ScopesSupported(): string | null {
+        return this.Get('ScopesSupported');
+    }
+    set ScopesSupported(value: string | null) {
+        this.Set('ScopesSupported', value);
+    }
+
+    /**
+    * * Field Name: ResponseTypesSupported
+    * * Display Name: Response Types Supported
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ResponseTypesSupported(): string {
+        return this.Get('ResponseTypesSupported');
+    }
+    set ResponseTypesSupported(value: string) {
+        this.Set('ResponseTypesSupported', value);
+    }
+
+    /**
+    * * Field Name: GrantTypesSupported
+    * * Display Name: Grant Types Supported
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get GrantTypesSupported(): string | null {
+        return this.Get('GrantTypesSupported');
+    }
+    set GrantTypesSupported(value: string | null) {
+        this.Set('GrantTypesSupported', value);
+    }
+
+    /**
+    * * Field Name: TokenEndpointAuthMethods
+    * * Display Name: Token Endpoint Auth Methods
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get TokenEndpointAuthMethods(): string | null {
+        return this.Get('TokenEndpointAuthMethods');
+    }
+    set TokenEndpointAuthMethods(value: string | null) {
+        this.Set('TokenEndpointAuthMethods', value);
+    }
+
+    /**
+    * * Field Name: CodeChallengeMethodsSupported
+    * * Display Name: Code Challenge Methods Supported
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get CodeChallengeMethodsSupported(): string | null {
+        return this.Get('CodeChallengeMethodsSupported');
+    }
+    set CodeChallengeMethodsSupported(value: string | null) {
+        this.Set('CodeChallengeMethodsSupported', value);
+    }
+
+    /**
+    * * Field Name: MetadataJSON
+    * * Display Name: Metadata JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Full authorization server metadata JSON for debugging and extensibility.
+    */
+    get MetadataJSON(): string {
+        return this.Get('MetadataJSON');
+    }
+    set MetadataJSON(value: string) {
+        this.Set('MetadataJSON', value);
+    }
+
+    /**
+    * * Field Name: CachedAt
+    * * Display Name: Cached At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get CachedAt(): Date {
+        return this.Get('CachedAt');
+    }
+    set CachedAt(value: Date) {
+        this.Set('CachedAt', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    */
+    get ExpiresAt(): Date {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: O Auth Authorization States - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: OAuthAuthorizationState
+ * * Base View: vwOAuthAuthorizationStates
+ * * @description Tracks in-progress OAuth authorization flows with PKCE data for security.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: O Auth Authorization States')
+export class OAuthAuthorizationStateEntity extends BaseEntity<OAuthAuthorizationStateEntityType> {
+    /**
+    * Loads the MJ: O Auth Authorization States record from the database
+    * @param ID: string - primary key value to load the MJ: O Auth Authorization States record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof OAuthAuthorizationStateEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerConnectionID
+    * * Display Name: MCP Server Connection ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
+    */
+    get MCPServerConnectionID(): string {
+        return this.Get('MCPServerConnectionID');
+    }
+    set MCPServerConnectionID(value: string) {
+        this.Set('MCPServerConnectionID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: StateParameter
+    * * Display Name: State Parameter
+    * * SQL Data Type: nvarchar(128)
+    * * Description: Cryptographic state parameter for CSRF protection.
+    */
+    get StateParameter(): string {
+        return this.Get('StateParameter');
+    }
+    set StateParameter(value: string) {
+        this.Set('StateParameter', value);
+    }
+
+    /**
+    * * Field Name: CodeVerifier
+    * * Display Name: Code Verifier
+    * * SQL Data Type: nvarchar(128)
+    * * Description: PKCE code verifier for token exchange (stored securely, never sent to auth server).
+    */
+    get CodeVerifier(): string {
+        return this.Get('CodeVerifier');
+    }
+    set CodeVerifier(value: string) {
+        this.Set('CodeVerifier', value);
+    }
+
+    /**
+    * * Field Name: CodeChallenge
+    * * Display Name: Code Challenge
+    * * SQL Data Type: nvarchar(128)
+    * * Description: PKCE code challenge sent to authorization server.
+    */
+    get CodeChallenge(): string {
+        return this.Get('CodeChallenge');
+    }
+    set CodeChallenge(value: string) {
+        this.Set('CodeChallenge', value);
+    }
+
+    /**
+    * * Field Name: RedirectURI
+    * * Display Name: Redirect URI
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get RedirectURI(): string {
+        return this.Get('RedirectURI');
+    }
+    set RedirectURI(value: string) {
+        this.Set('RedirectURI', value);
+    }
+
+    /**
+    * * Field Name: RequestedScopes
+    * * Display Name: Requested Scopes
+    * * SQL Data Type: nvarchar(500)
+    */
+    get RequestedScopes(): string | null {
+        return this.Get('RequestedScopes');
+    }
+    set RequestedScopes(value: string | null) {
+        this.Set('RequestedScopes', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * Expired
+    *   * Failed
+    *   * Pending
+    * * Description: Flow status: Pending, Completed, Failed, or Expired.
+    */
+    get Status(): 'Completed' | 'Expired' | 'Failed' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Completed' | 'Expired' | 'Failed' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: AuthorizationURL
+    * * Display Name: Authorization URL
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get AuthorizationURL(): string {
+        return this.Get('AuthorizationURL');
+    }
+    set AuthorizationURL(value: string) {
+        this.Set('AuthorizationURL', value);
+    }
+
+    /**
+    * * Field Name: ErrorCode
+    * * Display Name: Error Code
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ErrorCode(): string | null {
+        return this.Get('ErrorCode');
+    }
+    set ErrorCode(value: string | null) {
+        this.Set('ErrorCode', value);
+    }
+
+    /**
+    * * Field Name: ErrorDescription
+    * * Display Name: Error Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ErrorDescription(): string | null {
+        return this.Get('ErrorDescription');
+    }
+    set ErrorDescription(value: string | null) {
+        this.Set('ErrorDescription', value);
+    }
+
+    /**
+    * * Field Name: InitiatedAt
+    * * Display Name: Initiated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get InitiatedAt(): Date {
+        return this.Get('InitiatedAt');
+    }
+    set InitiatedAt(value: Date) {
+        this.Set('InitiatedAt', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    */
+    get ExpiresAt(): Date {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: FrontendReturnURL
+    * * Display Name: Frontend Return URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL to redirect the user to after OAuth completion. If set, the OAuth callback will redirect here instead of showing a static HTML page.
+    */
+    get FrontendReturnURL(): string | null {
+        return this.Get('FrontendReturnURL');
+    }
+    set FrontendReturnURL(value: string | null) {
+        this.Set('FrontendReturnURL', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MCPServerConnection
+    * * Display Name: MCP Server Connection
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerConnection(): string {
+        return this.Get('MCPServerConnection');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: O Auth Client Registrations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: OAuthClientRegistration
+ * * Base View: vwOAuthClientRegistrations
+ * * @description Stores OAuth Dynamic Client Registration (DCR) results per RFC 7591.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: O Auth Client Registrations')
+export class OAuthClientRegistrationEntity extends BaseEntity<OAuthClientRegistrationEntityType> {
+    /**
+    * Loads the MJ: O Auth Client Registrations record from the database
+    * @param ID: string - primary key value to load the MJ: O Auth Client Registrations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof OAuthClientRegistrationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerConnectionID
+    * * Display Name: MCP Server Connection ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
+    * * Description: The MCP Server Connection this registration belongs to.
+    */
+    get MCPServerConnectionID(): string {
+        return this.Get('MCPServerConnectionID');
+    }
+    set MCPServerConnectionID(value: string) {
+        this.Set('MCPServerConnectionID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerID
+    * * Display Name: MCP Server ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Servers (vwMCPServers.ID)
+    */
+    get MCPServerID(): string {
+        return this.Get('MCPServerID');
+    }
+    set MCPServerID(value: string) {
+        this.Set('MCPServerID', value);
+    }
+
+    /**
+    * * Field Name: IssuerURL
+    * * Display Name: Issuer URL
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get IssuerURL(): string {
+        return this.Get('IssuerURL');
+    }
+    set IssuerURL(value: string) {
+        this.Set('IssuerURL', value);
+    }
+
+    /**
+    * * Field Name: ClientID
+    * * Display Name: Client ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: OAuth client ID assigned by the authorization server.
+    */
+    get ClientID(): string {
+        return this.Get('ClientID');
+    }
+    set ClientID(value: string) {
+        this.Set('ClientID', value);
+    }
+
+    /**
+    * * Field Name: ClientSecretEncrypted
+    * * Display Name: Client Secret Encrypted
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: OAuth client secret (encrypted at rest) for confidential clients.
+    */
+    get ClientSecretEncrypted(): string | null {
+        return this.Get('ClientSecretEncrypted');
+    }
+    set ClientSecretEncrypted(value: string | null) {
+        this.Set('ClientSecretEncrypted', value);
+    }
+
+    /**
+    * * Field Name: ClientIDIssuedAt
+    * * Display Name: Client ID Issued At
+    * * SQL Data Type: datetimeoffset
+    */
+    get ClientIDIssuedAt(): Date | null {
+        return this.Get('ClientIDIssuedAt');
+    }
+    set ClientIDIssuedAt(value: Date | null) {
+        this.Set('ClientIDIssuedAt', value);
+    }
+
+    /**
+    * * Field Name: ClientSecretExpiresAt
+    * * Display Name: Client Secret Expires At
+    * * SQL Data Type: datetimeoffset
+    */
+    get ClientSecretExpiresAt(): Date | null {
+        return this.Get('ClientSecretExpiresAt');
+    }
+    set ClientSecretExpiresAt(value: Date | null) {
+        this.Set('ClientSecretExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: RegistrationAccessToken
+    * * Display Name: Registration Access Token
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get RegistrationAccessToken(): string | null {
+        return this.Get('RegistrationAccessToken');
+    }
+    set RegistrationAccessToken(value: string | null) {
+        this.Set('RegistrationAccessToken', value);
+    }
+
+    /**
+    * * Field Name: RegistrationClientURI
+    * * Display Name: Registration Client URI
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get RegistrationClientURI(): string | null {
+        return this.Get('RegistrationClientURI');
+    }
+    set RegistrationClientURI(value: string | null) {
+        this.Set('RegistrationClientURI', value);
+    }
+
+    /**
+    * * Field Name: RedirectURIs
+    * * Display Name: Redirect UR Is
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get RedirectURIs(): string {
+        return this.Get('RedirectURIs');
+    }
+    set RedirectURIs(value: string) {
+        this.Set('RedirectURIs', value);
+    }
+
+    /**
+    * * Field Name: GrantTypes
+    * * Display Name: Grant Types
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get GrantTypes(): string {
+        return this.Get('GrantTypes');
+    }
+    set GrantTypes(value: string) {
+        this.Set('GrantTypes', value);
+    }
+
+    /**
+    * * Field Name: ResponseTypes
+    * * Display Name: Response Types
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ResponseTypes(): string {
+        return this.Get('ResponseTypes');
+    }
+    set ResponseTypes(value: string) {
+        this.Set('ResponseTypes', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Scope(): string | null {
+        return this.Get('Scope');
+    }
+    set Scope(value: string | null) {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Expired
+    *   * Revoked
+    * * Description: Registration status: Active, Expired, or Revoked.
+    */
+    get Status(): 'Active' | 'Expired' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Expired' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: RegistrationResponse
+    * * Display Name: Registration Response
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Full DCR response JSON for debugging and extensibility.
+    */
+    get RegistrationResponse(): string {
+        return this.Get('RegistrationResponse');
+    }
+    set RegistrationResponse(value: string) {
+        this.Set('RegistrationResponse', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MCPServerConnection
+    * * Display Name: MCP Server Connection
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerConnection(): string {
+        return this.Get('MCPServerConnection');
+    }
+
+    /**
+    * * Field Name: MCPServer
+    * * Display Name: MCP Server
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServer(): string {
+        return this.Get('MCPServer');
+    }
+}
+
+
+/**
+ * MJ: O Auth Tokens - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: OAuthToken
+ * * Base View: vwOAuthTokens
+ * * @description Stores OAuth token metadata for MCP server connections. Actual tokens are stored via CredentialEngine for consistent encryption and audit logging.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: O Auth Tokens')
+export class OAuthTokenEntity extends BaseEntity<OAuthTokenEntityType> {
+    /**
+    * Loads the MJ: O Auth Tokens record from the database
+    * @param ID: string - primary key value to load the MJ: O Auth Tokens record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof OAuthTokenEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerConnectionID
+    * * Display Name: MCP Server Connection ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
+    */
+    get MCPServerConnectionID(): string {
+        return this.Get('MCPServerConnectionID');
+    }
+    set MCPServerConnectionID(value: string) {
+        this.Set('MCPServerConnectionID', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Foreign key to Credential table where the OAuth tokens (access and refresh) are stored securely via CredentialEngine.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: TokenType
+    * * Display Name: Token Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Bearer
+    */
+    get TokenType(): string {
+        return this.Get('TokenType');
+    }
+    set TokenType(value: string) {
+        this.Set('TokenType', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the access token expires.
+    */
+    get ExpiresAt(): Date {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Scope(): string | null {
+        return this.Get('Scope');
+    }
+    set Scope(value: string | null) {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: IssuerURL
+    * * Display Name: Issuer URL
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get IssuerURL(): string {
+        return this.Get('IssuerURL');
+    }
+    set IssuerURL(value: string) {
+        this.Set('IssuerURL', value);
+    }
+
+    /**
+    * * Field Name: LastRefreshAt
+    * * Display Name: Last Refresh At
+    * * SQL Data Type: datetimeoffset
+    */
+    get LastRefreshAt(): Date | null {
+        return this.Get('LastRefreshAt');
+    }
+    set LastRefreshAt(value: Date | null) {
+        this.Set('LastRefreshAt', value);
+    }
+
+    /**
+    * * Field Name: RefreshCount
+    * * Display Name: Refresh Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of times the token has been refreshed.
+    */
+    get RefreshCount(): number {
+        return this.Get('RefreshCount');
+    }
+    set RefreshCount(value: number) {
+        this.Set('RefreshCount', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MCPServerConnection
+    * * Display Name: MCP Server Connection
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerConnection(): string {
+        return this.Get('MCPServerConnection');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 
@@ -69073,7 +70529,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
 
     /**
     * * Field Name: DestinationEntityRecordID
-    * * Display Name: Destination Record ID
+    * * Display Name: Destination Entity Record ID
     * * SQL Data Type: nvarchar(450)
     * * Description: The record ID of the destination entity
     */
@@ -69464,7 +70920,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
 
     /**
     * * Field Name: SourceEntityRecordID
-    * * Display Name: Source Entity Record ID
+    * * Display Name: Source Record ID
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The record ID of the source entity
     */
@@ -69854,7 +71310,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: ReplayRunID
-    * * Display Name: Replay Run ID
+    * * Display Name: Replay Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Record Change Replay Runs (vwRecordChangeReplayRuns.ID)
     */
@@ -69867,7 +71323,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: IntegrationID
-    * * Display Name: Integration ID
+    * * Display Name: Integration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)
     */
@@ -69914,7 +71370,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -69923,7 +71379,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -69941,7 +71397,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration Name
+    * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string | null {
@@ -70008,7 +71464,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
 
     /**
     * * Field Name: DeletedRecordID
-    * * Display Name: Deleted Record
+    * * Display Name: Deleted Record ID
     * * SQL Data Type: nvarchar(750)
     * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.
     */
@@ -73260,7 +74716,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
 
     /**
     * * Field Name: IsRequired
-    * * Display Name: Required
+    * * Display Name: Is Required
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this parameter must be provided when using the template.
