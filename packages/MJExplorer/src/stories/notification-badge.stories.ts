@@ -108,6 +108,11 @@ export const Default: Story = {
 
 // Count badge variants
 export const CountBadge: Story = {
+  args: {
+    count: 1000,
+    type: 'dot',
+  },
+
   render: () => ({
     template: `
       <div style="display: flex; gap: 24px; align-items: center;">
@@ -130,10 +135,12 @@ export const CountBadge: Story = {
       </div>
     `,
   }),
+
   parameters: {
     docs: {
       description: {
-        story: 'Count badges display numeric values. Counts over 99 show as "99+". Colors change based on priority.',
+        story:
+          'Count badges display numeric values. Counts over 99 show as "99+". Colors change based on priority.',
       },
     },
   },
@@ -141,6 +148,10 @@ export const CountBadge: Story = {
 
 // Dot badge variants
 export const DotBadge: Story = {
+  args: {
+    count: 1,
+  },
+
   render: () => ({
     template: `
       <div style="display: flex; gap: 32px; align-items: center;">
@@ -159,10 +170,12 @@ export const DotBadge: Story = {
       </div>
     `,
   }),
+
   parameters: {
     docs: {
       description: {
-        story: 'Dot badges are simple circular indicators without numbers. Useful for presence or unread status.',
+        story:
+          'Dot badges are simple circular indicators without numbers. Useful for presence or unread status.',
       },
     },
   },
@@ -195,7 +208,8 @@ export const PulseBadge: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Pulse badges have animated expanding rings to draw attention. Great for real-time notifications.',
+        story:
+          'Pulse badges have animated expanding rings to draw attention. Great for real-time notifications.',
       },
     },
   },
@@ -220,7 +234,8 @@ export const NewBadge: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'New badges display a green "NEW" label with gradient background. Perfect for highlighting new features or items.',
+        story:
+          'New badges display a green "NEW" label with gradient background. Perfect for highlighting new features or items.',
       },
     },
   },
@@ -259,7 +274,8 @@ export const AnimationShowcase: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Various animation effects: pop-in on appear, shake for urgent priority, and continuous pulse rings.',
+        story:
+          'Various animation effects: pop-in on appear, shake for urgent priority, and continuous pulse rings.',
       },
     },
   },
@@ -359,7 +375,8 @@ export const InContext: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Badges positioned on buttons as they would appear in a real UI.',
+        story:
+          'Badges positioned on buttons as they would appear in a real UI.',
       },
     },
   },
@@ -400,7 +417,8 @@ export const PriorityColors: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'All badge types shown with each priority level. Low/Normal = Blue, High = Orange, Urgent = Red.',
+        story:
+          'All badge types shown with each priority level. Low/Normal = Blue, High = Orange, Urgent = Red.',
       },
     },
   },
