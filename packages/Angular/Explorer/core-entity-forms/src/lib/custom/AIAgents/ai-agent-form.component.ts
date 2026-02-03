@@ -246,7 +246,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         prompts: true,
         actions: true,
         learningCycles: true,
-        notes: true
+        notes: true,
+        customSection: true
     };
 
     // === User Preferences ===
@@ -608,7 +609,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             prompts: true,
             actions: true,
             learningCycles: true,
-            notes: true
+            notes: true,
+            customSection: true
         };
         this.cdr.detectChanges(); // update UI
 
@@ -746,7 +748,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 prompts: false,
                 actions: false,
                 learningCycles: false,
-                notes: false
+                notes: false,
+                customSection: false
             };
             this.cdr.detectChanges();
         }
@@ -911,40 +914,43 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         if (!this.agentType?.UIFormSectionKey || !this.customSectionContainer) {
             return;
         }
-        
+
         // Check if component still exists in container
         if (this.customSectionLoaded && this.customSectionContainer.length > 0) {
             return;
         }
-        
+
+        this.loadingStates.customSection = true;
+        this.cdr.markForCheck();
+
         try {
             // Build the full registration key (Entity.Section pattern)
             const sectionKey = `AI Agents.${this.agentType.UIFormSectionKey}`;
-            
+
             // Get the component registration from the class factory
             const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent, sectionKey);
-            
+
             if (registration && registration.SubClass) {
                 // Clear any existing custom section
                 this.customSectionContainer.clear();
-                
+
                 // Create the component
                 const componentRef = this.customSectionContainer.createComponent(registration.SubClass);
                 this.customSectionComponent = componentRef.instance as BaseFormSectionComponent;
                 this.customSectionComponentRef = componentRef;
-                
+
                 // Pass the record and edit mode to the custom section
                 this.customSectionComponent.record = this.record;
                 this.customSectionComponent.EditMode = this.EditMode;
-                
+
                 // Mark as loaded
                 this.customSectionLoaded = true;
-                
-                // Mark for check instead of forcing immediate detection
-                this.cdr.markForCheck();
             }
         } catch (error) {
             console.error('Error loading custom form section:', error);
+        } finally {
+            this.loadingStates.customSection = false;
+            this.cdr.markForCheck();
         }
     }
 
