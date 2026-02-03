@@ -487,17 +487,63 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
         inputPort.Disabled = newIsStart;
       }
 
-      // Push visual update to the generic flow editor
+      // For loop nodes, rebuild the loop-specific Data properties so the
+      // inner body card updates immediately when the user changes body type / config
+      if (step.StepType === 'ForEach' || step.StepType === 'While') {
+        this.updateLoopNodeData(step, node);
+      }
+
+      // Push visual update to the generic flow editor (creates new object ref for OnPush)
       this.flowEditor?.UpdateNode(step.ID, {
         Label: newLabel,
         Subtitle: newSubtitle,
         Status: newStatus,
         StatusMessage: warningMessage ?? undefined,
-        IsStartNode: newIsStart
+        IsStartNode: newIsStart,
+        Data: node.Data
       });
     }
     this.markDirty();
     this.cdr.detectChanges();
+  }
+
+  /** Update loop-specific data fields on a FlowNode from the step entity */
+  private updateLoopNodeData(step: AIAgentStepEntity, node: FlowNode): void {
+    if (!node.Data) node.Data = {};
+    // Delegate to the transformer's public methods for consistency
+    const bodyType = step.LoopBodyType;
+    node.Data['LoopBodyType'] = bodyType ?? null;
+    node.Data['LoopBodyName'] = this.resolveLoopBodyNameFromStep(step);
+    node.Data['LoopBodyIcon'] = this.getBodyTypeIcon(bodyType);
+    node.Data['LoopBodyColor'] = this.getBodyTypeColor(bodyType);
+    node.Data['LoopIterationSummary'] = this.transformer.BuildLoopIterationSummary(step);
+  }
+
+  private resolveLoopBodyNameFromStep(step: AIAgentStepEntity): string | null {
+    switch (step.LoopBodyType) {
+      case 'Action': return step.Action ?? null;
+      case 'Prompt': return step.Prompt ?? null;
+      case 'Sub-Agent': return step.SubAgent ?? null;
+      default: return null;
+    }
+  }
+
+  private getBodyTypeIcon(bodyType: string | null): string {
+    switch (bodyType) {
+      case 'Action': return 'fa-bolt';
+      case 'Prompt': return 'fa-comment-dots';
+      case 'Sub-Agent': return 'fa-robot';
+      default: return 'fa-circle-nodes';
+    }
+  }
+
+  private getBodyTypeColor(bodyType: string | null): string {
+    switch (bodyType) {
+      case 'Action': return '#3B82F6';
+      case 'Prompt': return '#8B5CF6';
+      case 'Sub-Agent': return '#10B981';
+      default: return '#6B7280';
+    }
   }
 
   protected onPathChanged(path: AIAgentStepPathEntity): void {

@@ -203,6 +203,12 @@ export class AgentFlowTransformerService {
     const warningMessage = (baseStatus !== 'disabled') ? this.BuildConfigWarningMessage(step) : null;
     const effectiveStatus = warningMessage ? 'warning' : baseStatus;
 
+    // Build loop-specific data for ForEach/While nodes
+    const data: Record<string, unknown> = { StepEntityID: stepId };
+    if (step.StepType === 'ForEach' || step.StepType === 'While') {
+      this.populateLoopData(step, data);
+    }
+
     return {
       ID: stepId,
       Type: step.StepType,
@@ -221,7 +227,7 @@ export class AgentFlowTransformerService {
         Height: step.Height ?? 100
       },
       Ports: ports,
-      Data: { StepEntityID: stepId }
+      Data: data
     };
   }
 
@@ -243,14 +249,86 @@ export class AgentFlowTransformerService {
     };
   }
 
+  /** Populate loop-specific display data on the node's Data payload */
+  private populateLoopData(step: AIAgentStepEntity, data: Record<string, unknown>): void {
+    const bodyType = step.LoopBodyType;
+    data['LoopBodyType'] = bodyType ?? null;
+    data['LoopBodyName'] = bodyType ? this.resolveLoopBodyName(step) : null;
+    data['LoopBodyIcon'] = bodyType ? this.getBodyTypeIcon(bodyType) : null;
+    data['LoopBodyColor'] = bodyType ? this.getBodyTypeColor(bodyType) : null;
+    data['LoopIterationSummary'] = this.BuildLoopIterationSummary(step);
+
+    const config = this.parseLoopConfig(step);
+    if (config) {
+      data['MaxIterations'] = config['maxIterations'] ?? null;
+      data['LoopItemVariable'] = config['itemVariable'] ?? null;
+    }
+  }
+
+  /** Get icon for a loop body type */
+  private getBodyTypeIcon(bodyType: string): string {
+    switch (bodyType) {
+      case 'Action': return 'fa-bolt';
+      case 'Prompt': return 'fa-comment-dots';
+      case 'Sub-Agent': return 'fa-robot';
+      default: return 'fa-circle-nodes';
+    }
+  }
+
+  /** Get color for a loop body type */
+  private getBodyTypeColor(bodyType: string): string {
+    switch (bodyType) {
+      case 'Action': return '#3B82F6';
+      case 'Prompt': return '#8B5CF6';
+      case 'Sub-Agent': return '#10B981';
+      default: return '#6B7280';
+    }
+  }
+
   private getIconForType(stepType: string): string {
     const config = AGENT_STEP_TYPE_CONFIGS.find(c => c.Type === stepType);
     return config?.Icon ?? 'fa-circle-nodes';
   }
 
   private buildLoopSubtitle(step: AIAgentStepEntity, prefix: string): string {
-    const bodyType = step.LoopBodyType ?? 'Action';
-    return `${prefix} → ${bodyType}`;
+    const bodyType = step.LoopBodyType;
+    if (!bodyType) return `${prefix} (no body type)`;
+    const bodyName = this.resolveLoopBodyName(step);
+    return bodyName ? `${prefix} → ${bodyName}` : `${prefix} → ${bodyType}`;
+  }
+
+  /** Resolve the display name for the loop body operation */
+  private resolveLoopBodyName(step: AIAgentStepEntity): string | null {
+    switch (step.LoopBodyType) {
+      case 'Action': return step.Action ?? null;
+      case 'Prompt': return step.Prompt ?? null;
+      case 'Sub-Agent': return step.SubAgent ?? null;
+      default: return null;
+    }
+  }
+
+  /** Parse the Configuration JSON, returning null on failure */
+  private parseLoopConfig(step: AIAgentStepEntity): Record<string, unknown> | null {
+    if (!step.Configuration) return null;
+    try {
+      return JSON.parse(step.Configuration) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Build a short iteration summary for display on loop nodes */
+  BuildLoopIterationSummary(step: AIAgentStepEntity): string {
+    const config = this.parseLoopConfig(step);
+    if (step.StepType === 'ForEach') {
+      const collection = config?.['collectionPath'] as string | undefined;
+      return collection ? `over ${collection}` : 'over collection';
+    }
+    if (step.StepType === 'While') {
+      const condition = config?.['condition'] as string | undefined;
+      return condition ? `while ${this.truncateCondition(condition)}` : 'while condition';
+    }
+    return '';
   }
 
   private truncateCondition(condition: string): string {

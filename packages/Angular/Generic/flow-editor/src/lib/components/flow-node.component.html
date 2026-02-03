@@ -11,6 +11,7 @@
 <!-- Node Body -->
 <div class="mj-flow-node-body"
      [class.mj-flow-node-body--start]="Node.IsStartNode"
+     [class.mj-flow-node-body--loop]="isLoopNode"
      [class.mj-flow-node-body--disabled]="Node.Status === 'disabled'"
      [class.mj-flow-node-body--pending]="Node.Status === 'pending'"
      [class.mj-flow-node-body--running]="Node.Status === 'running'"
@@ -37,14 +38,51 @@
     </div>
   </div>
 
-  <!-- Subtitle / Configured Item -->
-  <div *ngIf="Node.Subtitle" class="mj-flow-node-subtitle">
+  <!-- Subtitle / Configured Item (hidden for loop nodes — they use the body card instead) -->
+  <div *ngIf="Node.Subtitle && !isLoopNode" class="mj-flow-node-subtitle">
     {{ Node.Subtitle }}
   </div>
 
   <!-- Type badge -->
   <div class="mj-flow-node-type-badge" [style.color]="headerColor">
     {{ TypeConfig?.Label || Node.Type }}
+  </div>
+
+  <!-- ═══ Loop Body Card — shown only for ForEach/While nodes ═══ -->
+  <div *ngIf="isLoopNode" class="mj-flow-loop-section">
+    <!-- Iteration summary line -->
+    <div *ngIf="loopIterationSummary" class="mj-flow-loop-iteration">
+      <i class="fa-solid fa-repeat mj-flow-loop-iteration-icon"></i>
+      <span>{{ loopIterationSummary }}</span>
+      <span *ngIf="loopMaxIterations != null" class="mj-flow-loop-max">(max {{ loopMaxIterations }})</span>
+    </div>
+
+    <!-- Body type inner card -->
+    <div class="mj-flow-loop-body"
+         [class.mj-flow-loop-body--empty]="!loopBodyType">
+      <div *ngIf="loopBodyType" class="mj-flow-loop-body-inner">
+        <div class="mj-flow-loop-body-header">
+          <i class="fa-solid" [ngClass]="loopBodyIcon" [style.color]="loopBodyColor"></i>
+          <span class="mj-flow-loop-body-type" [style.color]="loopBodyColor">{{ loopBodyType }}</span>
+        </div>
+        <div *ngIf="loopBodyName" class="mj-flow-loop-body-name" [title]="loopBodyName">
+          {{ loopBodyName }}
+        </div>
+        <div *ngIf="!loopBodyName" class="mj-flow-loop-body-name mj-flow-loop-body-name--empty">
+          Not configured
+        </div>
+      </div>
+      <div *ngIf="!loopBodyType" class="mj-flow-loop-body-empty">
+        <i class="fa-solid fa-circle-question"></i>
+        <span>No body type selected</span>
+      </div>
+    </div>
+
+    <!-- Item variable badge -->
+    <div *ngIf="loopItemVariable" class="mj-flow-loop-variable">
+      <i class="fa-solid fa-tag"></i>
+      <span>{{ loopItemVariable }}</span>
+    </div>
   </div>
 
   <!-- Warning banner (shown inline when step is misconfigured) -->

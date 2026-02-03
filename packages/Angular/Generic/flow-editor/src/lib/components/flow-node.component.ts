@@ -68,4 +68,47 @@ export class FlowNodeComponent {
       Disabled: port.Disabled === true
     };
   }
+
+  // ── Loop Node Properties ───────────────────────────────────
+
+  /** Whether this node represents a loop (ForEach or While) */
+  get isLoopNode(): boolean {
+    return this.Node?.Type === 'ForEach' || this.Node?.Type === 'While';
+  }
+
+  /** Loop body type label (e.g., 'Action', 'Prompt', 'Sub-Agent') */
+  get loopBodyType(): string | null {
+    return (this.Node?.Data?.['LoopBodyType'] as string) ?? null;
+  }
+
+  /** Resolved name of the loop body operation */
+  get loopBodyName(): string | null {
+    return (this.Node?.Data?.['LoopBodyName'] as string) ?? null;
+  }
+
+  /** Icon for the loop body type */
+  get loopBodyIcon(): string {
+    return (this.Node?.Data?.['LoopBodyIcon'] as string) ?? 'fa-circle-nodes';
+  }
+
+  /** Color for the loop body type */
+  get loopBodyColor(): string {
+    return (this.Node?.Data?.['LoopBodyColor'] as string) ?? '#6B7280';
+  }
+
+  /** Short iteration summary (e.g., "over items" or "while condition") */
+  get loopIterationSummary(): string {
+    return (this.Node?.Data?.['LoopIterationSummary'] as string) ?? '';
+  }
+
+  /** Max iterations limit, if configured */
+  get loopMaxIterations(): number | null {
+    const val = this.Node?.Data?.['MaxIterations'];
+    return typeof val === 'number' ? val : null;
+  }
+
+  /** Loop item variable name */
+  get loopItemVariable(): string | null {
+    return (this.Node?.Data?.['LoopItemVariable'] as string) ?? null;
+  }
 }

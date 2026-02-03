@@ -192,7 +192,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Update a node's visual properties and push a new object reference so
    *  OnPush child components (FlowNodeComponent) detect the change. */
-  UpdateNode(nodeId: string, changes: Partial<Pick<FlowNode, 'Label' | 'Subtitle' | 'Icon' | 'Status' | 'StatusMessage' | 'IsStartNode' | 'Badges'>>): void {
+  UpdateNode(nodeId: string, changes: Partial<Pick<FlowNode, 'Label' | 'Subtitle' | 'Icon' | 'Status' | 'StatusMessage' | 'IsStartNode' | 'Badges' | 'Data'>>): void {
     const idx = this.Nodes.findIndex(n => n.ID === nodeId);
     if (idx === -1) return;
     // Create a new object reference so the OnPush FlowNodeComponent picks up the change
