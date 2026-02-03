@@ -23,18 +23,18 @@
       </div>
 
       <div class="dashboard-content">
-        @if (activeTab === 'overview' && hasVisited('overview')) {
-          <app-testing-overview
-            [initialState]="overviewState"
-            (stateChange)="onOverviewStateChange($event)"
-          ></app-testing-overview>
+        @if (activeTab === 'dashboard' && hasVisited('dashboard')) {
+          <app-testing-dashboard-tab
+            [initialState]="dashboardState"
+            (stateChange)="onDashboardStateChange($event)"
+          ></app-testing-dashboard-tab>
         }
 
-        @if (activeTab === 'execution' && hasVisited('execution')) {
-          <app-testing-execution
-            [initialState]="executionState"
-            (stateChange)="onExecutionStateChange($event)"
-          ></app-testing-execution>
+        @if (activeTab === 'runs' && hasVisited('runs')) {
+          <app-testing-runs
+            [initialState]="runsState"
+            (stateChange)="onRunsStateChange($event)"
+          ></app-testing-runs>
         }
 
         @if (activeTab === 'analytics' && hasVisited('analytics')) {
@@ -44,18 +44,11 @@
           ></app-testing-analytics>
         }
 
-        @if (activeTab === 'version' && hasVisited('version')) {
-          <app-testing-version-comparison
-            [initialState]="versionState"
-            (stateChange)="onVersionStateChange($event)"
-          ></app-testing-version-comparison>
-        }
-
-        @if (activeTab === 'feedback' && hasVisited('feedback')) {
-          <app-testing-feedback
-            [initialState]="feedbackState"
-            (stateChange)="onFeedbackStateChange($event)"
-          ></app-testing-feedback>
+        @if (activeTab === 'review' && hasVisited('review')) {
+          <app-testing-review
+            [initialState]="reviewState"
+            (stateChange)="onReviewStateChange($event)"
+          ></app-testing-review>
         }
       </div>
     </div>

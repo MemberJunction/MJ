@@ -21,7 +21,6 @@ export class EntityFieldFormComponent extends BaseFormComponent {
             { sectionKey: 'relationshipsLinking', sectionName: 'Relationships & Linking', isExpanded: false },
             { sectionKey: 'systemAuditMetadata', sectionName: 'System & Audit Metadata', isExpanded: false },
             { sectionKey: 'securityEncryption', sectionName: 'Security & Encryption', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'entityFieldValues', sectionName: 'Entity Field Values', isExpanded: false }
         ]);

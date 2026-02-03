@@ -6,6 +6,8 @@ import { AppSwitcherComponent } from './components/header/app-switcher.component
 import { AppNavComponent } from './components/header/app-nav.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { AppAccessDialogComponent } from './components/dialogs/app-access-dialog.component';
+import { CommandPaletteComponent } from '../command-palette/command-palette.component';
+import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
@@ -17,7 +19,8 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
     AppSwitcherComponent,
     AppNavComponent,
     TabContainerComponent,
-    AppAccessDialogComponent
+    AppAccessDialogComponent,
+    CommandPaletteComponent
   ],
   imports: [
     CommonModule,
@@ -26,6 +29,9 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
     InputsModule,
     ExplorerSettingsModule,
     SharedGenericModule
+  ],
+  providers: [
+    CommandPaletteService
   ],
   exports: [
     ShellComponent

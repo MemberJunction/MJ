@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/storage
 
+## 3.4.0
+
+### Patch Changes
+
+- fca3ce4: Implement unified initialize() pattern with optional accountId to support both simple deployments using environment variables and multi-tenant deployments with database credentials
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/credentials@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

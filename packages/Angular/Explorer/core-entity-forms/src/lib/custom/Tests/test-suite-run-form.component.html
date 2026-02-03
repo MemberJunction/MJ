@@ -1,15 +1,28 @@
 <div class="test-suite-run-form" kendoDialogContainer>
   <!-- Header Section -->
   <div class="suite-run-header">
-    <!-- Breadcrumb -->
-    <div class="breadcrumb" *ngIf="testSuite">
-      <a href="javascript:void(0)" (click)="openTestSuite()">
-        <i class="fas fa-layer-group"></i>
-        {{ testSuite.Name }}
-      </a>
-      <i class="fas fa-chevron-right separator"></i>
-      <span class="current">Run #{{ record.ID.substring(0, 8) }}</span>
-    </div>
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li>
+          <a href="javascript:void(0)" (click)="navigateToTestingDashboard()">
+            <i class="fas fa-vial"></i>
+            <span class="breadcrumb-text">Testing</span>
+          </a>
+        </li>
+        <li *ngIf="testSuite">
+          <i class="fas fa-chevron-right separator"></i>
+          <a href="javascript:void(0)" (click)="openTestSuite()">
+            <i class="fas fa-layer-group"></i>
+            <span class="breadcrumb-text">{{ testSuite.Name }}</span>
+          </a>
+        </li>
+        <li class="current">
+          <i class="fas fa-chevron-right separator"></i>
+          <span>Run #{{ record.ID.substring(0, 8) }}</span>
+        </li>
+      </ol>
+    </nav>
 
     <!-- Header Content -->
     <div class="header-content">

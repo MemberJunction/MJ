@@ -238,6 +238,9 @@ import { TestFormComponent, LoadTestFormComponent } from "./Entities/Test/test.f
 import { UserNotificationPreferenceFormComponent, LoadUserNotificationPreferenceFormComponent } from "./Entities/UserNotificationPreference/usernotificationpreference.form.component";
 import { UserNotificationTypeFormComponent, LoadUserNotificationTypeFormComponent } from "./Entities/UserNotificationType/usernotificationtype.form.component";
 import { UserSettingFormComponent, LoadUserSettingFormComponent } from "./Entities/UserSetting/usersetting.form.component";
+import { VersionLabelItemFormComponent, LoadVersionLabelItemFormComponent } from "./Entities/VersionLabelItem/versionlabelitem.form.component";
+import { VersionLabelRestoreFormComponent, LoadVersionLabelRestoreFormComponent } from "./Entities/VersionLabelRestore/versionlabelrestore.form.component";
+import { VersionLabelFormComponent, LoadVersionLabelFormComponent } from "./Entities/VersionLabel/versionlabel.form.component";
 import { OutputDeliveryTypeFormComponent, LoadOutputDeliveryTypeFormComponent } from "./Entities/OutputDeliveryType/outputdeliverytype.form.component";
 import { OutputFormatTypeFormComponent, LoadOutputFormatTypeFormComponent } from "./Entities/OutputFormatType/outputformattype.form.component";
 import { OutputTriggerTypeFormComponent, LoadOutputTriggerTypeFormComponent } from "./Entities/OutputTriggerType/outputtriggertype.form.component";
@@ -762,14 +765,14 @@ declarations: [
     UserNotificationPreferenceFormComponent,
     UserNotificationTypeFormComponent,
     UserSettingFormComponent,
+    VersionLabelItemFormComponent,
+    VersionLabelRestoreFormComponent,
+    VersionLabelFormComponent,
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
     OutputTriggerTypeFormComponent,
     QueryFormComponent,
-    QueryCategoryFormComponent,
-    QueryEntityFormComponent,
-    QueryFieldFormComponent,
-    QueryPermissionFormComponent],
+    QueryCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -795,6 +798,9 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    QueryEntityFormComponent,
+    QueryFieldFormComponent,
+    QueryPermissionFormComponent,
     QueueTaskFormComponent,
     QueueTypeFormComponent,
     QueueFormComponent,
@@ -811,10 +817,7 @@ declarations: [
     ReportFormComponent,
     ResourceLinkFormComponent,
     ResourcePermissionFormComponent,
-    ResourceTypeFormComponent,
-    RoleFormComponent,
-    RowLevelSecurityFilterFormComponent,
-    ScheduledActionParamFormComponent],
+    ResourceTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -840,6 +843,9 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    RoleFormComponent,
+    RowLevelSecurityFilterFormComponent,
+    ScheduledActionParamFormComponent,
     ScheduledActionFormComponent,
     SchemaInfoFormComponent,
     SkillFormComponent,
@@ -856,10 +862,7 @@ declarations: [
     UserNotificationFormComponent,
     UserRecordLogFormComponent,
     UserRoleFormComponent,
-    UserViewCategoryFormComponent,
-    UserViewRunDetailFormComponent,
-    UserViewRunFormComponent,
-    UserViewFormComponent],
+    UserViewCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -885,6 +888,9 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    UserViewRunDetailFormComponent,
+    UserViewRunFormComponent,
+    UserViewFormComponent,
     UserFormComponent,
     VectorDatabaseFormComponent,
     VectorIndexFormComponent,
@@ -1157,6 +1163,9 @@ export function LoadCoreGeneratedForms() {
     LoadUserNotificationPreferenceFormComponent();
     LoadUserNotificationTypeFormComponent();
     LoadUserSettingFormComponent();
+    LoadVersionLabelItemFormComponent();
+    LoadVersionLabelRestoreFormComponent();
+    LoadVersionLabelFormComponent();
     LoadOutputDeliveryTypeFormComponent();
     LoadOutputFormatTypeFormComponent();
     LoadOutputTriggerTypeFormComponent();

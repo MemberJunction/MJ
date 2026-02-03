@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ng-chat
 
+## 3.4.0
+
+### Patch Changes
+
+- Updated dependencies [a3961d5]
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ng-shared-generic@3.4.0
+  - @memberjunction/ng-container-directives@3.4.0
+  - @memberjunction/ng-markdown@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

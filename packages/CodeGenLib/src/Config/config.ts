@@ -294,6 +294,21 @@ const sqlOutputConfigSchema = z.object({
    * If true, scripts that are being emitted via SQL logging that are marked by CodeGen as recurring will be SKIPPED. Defaults to false
    */
   omitRecurringScriptsFromLog: z.boolean().default(false),
+  /**
+   * Optional array of schema-to-placeholder mappings for Flyway migrations.
+   * Each mapping specifies a database schema name and its corresponding Flyway placeholder.
+   * If not provided, defaults to replacing the MJ core schema with ${flyway:defaultSchema}.
+   *
+   * Example:
+   * [
+   *   { schema: '__mj', placeholder: '${mjSchema}' },
+   *   { schema: '__BCSaaS', placeholder: '${flyway:defaultSchema}' }
+   * ]
+   */
+  schemaPlaceholders: z.array(z.object({
+    schema: z.string(),
+    placeholder: z.string()
+  })).optional(),
 });
 
 export type NewSchemaDefaults = z.infer<typeof newSchemaDefaultsSchema>;
@@ -441,6 +456,7 @@ const configInfoSchema = z.object({
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
+  entityPackageName: z.string().default('mj_generatedentities'),
 
   verboseOutput: z.boolean().optional().default(false),
 });

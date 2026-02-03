@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core-entities
 
+## 3.4.0
+
+### Patch Changes
+
+- 18b4e65: Add field-level encryption for credential values with automatic decryption, Box.com OAuth credential type, comprehensive JSON Schema validation, and fix credential editor to prevent "undefined" text in fields
+- Updated dependencies [a3961d5]
+  - @memberjunction/core@3.4.0
+  - @memberjunction/interactive-component-types@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes
