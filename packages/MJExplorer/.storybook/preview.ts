@@ -19,7 +19,12 @@ const preview: Preview = {
     },
     docs: {
       toc: true,
+      story: {
+        inline: true,
+        height: 'auto',
+      },
     },
+    layout: 'padded',
   },
 };
 

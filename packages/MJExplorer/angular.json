@@ -158,7 +158,8 @@
             "compodoc": false,
             "port": 6006,
             "styles": [
-              "src/styles.scss"
+              "src/styles.scss",
+              "src/storybook-overrides.scss"
             ]
           }
         },
@@ -170,7 +171,8 @@
             "compodoc": false,
             "outputDir": "storybook-static",
             "styles": [
-              "src/styles.scss"
+              "src/styles.scss",
+              "src/storybook-overrides.scss"
             ]
           }
         }

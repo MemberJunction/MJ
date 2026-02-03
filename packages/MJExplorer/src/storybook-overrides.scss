@@ -1,0 +1,7 @@
+/* Storybook-specific overrides */
+/* This file is loaded AFTER styles.scss to fix scrolling in docs */
+
+html, body {
+  overflow: auto !important;
+  height: auto !important;
+}

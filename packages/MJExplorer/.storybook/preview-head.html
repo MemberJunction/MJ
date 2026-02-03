@@ -52,4 +52,10 @@
   body {
     font-family: var(--mj-font-primary);
   }
+
+  /* Override app's overflow: hidden that breaks Storybook docs scrolling */
+  html, body {
+    overflow: auto !important;
+    height: auto !important;
+  }
 </style>
