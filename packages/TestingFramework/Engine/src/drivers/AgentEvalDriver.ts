@@ -677,7 +677,6 @@ export class AgentEvalDriver extends BaseTestDriver {
         // Build execution parameters with cancellation token and onAgentRunCreated callback
         const runParams = {
             agent: params.agent as any,
-            conversationId: params.conversationId,  // Continue same conversation for multi-turn
             conversationMessages,
             contextUser: params.contextUser,
             payload: params.inputPayload,  // Pass payload from previous turn
@@ -709,6 +708,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         // Execute agent - cancellation is handled via AbortSignal, not Promise.race
         // Note: BaseAgent already sets AgentRun.TestRunID from the testRunId param and invokes onAgentRunCreated callback
         const runResult = await runner.RunAgentInConversation(runParams, {
+            conversationId: params.conversationId,  // Continue same conversation for multi-turn
             userMessage: params.turn.userMessage,
             createArtifacts: true,
             conversationName: conversationName,
