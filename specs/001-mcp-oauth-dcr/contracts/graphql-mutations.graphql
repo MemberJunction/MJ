@@ -1,0 +1,400 @@
+# MemberJunction MCP OAuth GraphQL Schema Extensions
+# Feature: 001-mcp-oauth-dcr
+#
+# These types and mutations extend the existing MCP GraphQL schema
+# to support OAuth 2.1 authorization flows.
+
+# =============================================================================
+# Input Types
+# =============================================================================
+
+"""
+Input for initiating an OAuth authorization flow for an MCP connection
+"""
+input InitiateMCPOAuthInput {
+  """
+  The ID of the MCP Server Connection to authorize
+  """
+  connectionId: ID!
+
+  """
+  Additional OAuth scopes to request beyond server defaults (space-delimited)
+  """
+  additionalScopes: String
+}
+
+"""
+Input for checking OAuth authorization status
+"""
+input GetMCPOAuthStatusInput {
+  """
+  The state parameter from the authorization flow
+  """
+  stateParameter: String!
+}
+
+"""
+Input for revoking OAuth credentials for a connection
+"""
+input RevokeMCPOAuthInput {
+  """
+  The ID of the MCP Server Connection to revoke OAuth for
+  """
+  connectionId: ID!
+
+  """
+  Optional reason for revocation (for audit log)
+  """
+  reason: String
+}
+
+"""
+Input for refreshing OAuth tokens manually
+"""
+input RefreshMCPOAuthTokenInput {
+  """
+  The ID of the MCP Server Connection to refresh tokens for
+  """
+  connectionId: ID!
+}
+
+# =============================================================================
+# Result Types
+# =============================================================================
+
+"""
+Result from initiating an OAuth authorization flow
+"""
+type InitiateMCPOAuthResult {
+  """
+  Whether the initialization succeeded
+  """
+  success: Boolean!
+
+  """
+  Error message if initialization failed
+  """
+  errorMessage: String
+
+  """
+  URL to redirect the user to for authorization (open in browser)
+  """
+  authorizationUrl: String
+
+  """
+  State parameter for tracking this authorization flow
+  """
+  stateParameter: String
+
+  """
+  When this authorization flow expires
+  """
+  expiresAt: DateTime
+
+  """
+  Whether DCR was used (true) or pre-configured client credentials (false)
+  """
+  usedDynamicRegistration: Boolean
+}
+
+"""
+Result from checking OAuth authorization status
+"""
+type MCPOAuthStatusResult {
+  """
+  Whether the status check succeeded
+  """
+  success: Boolean!
+
+  """
+  Error message if status check failed
+  """
+  errorMessage: String
+
+  """
+  Current status of the authorization flow
+  """
+  status: MCPOAuthStatus
+
+  """
+  Associated MCP Server Connection ID
+  """
+  connectionId: ID
+
+  """
+  When the authorization flow was initiated
+  """
+  initiatedAt: DateTime
+
+  """
+  When the authorization flow completed (if applicable)
+  """
+  completedAt: DateTime
+
+  """
+  Error code from the authorization server (if failed)
+  """
+  authErrorCode: String
+
+  """
+  User-friendly error description (if failed)
+  """
+  authErrorDescription: String
+
+  """
+  Whether the authorization can be retried
+  """
+  isRetryable: Boolean
+}
+
+"""
+Result from revoking OAuth credentials
+"""
+type RevokeMCPOAuthResult {
+  """
+  Whether the revocation succeeded
+  """
+  success: Boolean!
+
+  """
+  Error message if revocation failed
+  """
+  errorMessage: String
+
+  """
+  The connection ID that was revoked
+  """
+  connectionId: ID
+}
+
+"""
+Result from refreshing OAuth tokens
+"""
+type RefreshMCPOAuthTokenResult {
+  """
+  Whether the refresh succeeded
+  """
+  success: Boolean!
+
+  """
+  Error message if refresh failed
+  """
+  errorMessage: String
+
+  """
+  When the new access token expires
+  """
+  expiresAt: DateTime
+
+  """
+  Whether re-authorization is required (if refresh failed)
+  """
+  requiresReauthorization: Boolean
+}
+
+"""
+OAuth connection status information
+"""
+type MCPOAuthConnectionStatus {
+  """
+  The connection ID
+  """
+  connectionId: ID!
+
+  """
+  Whether OAuth is configured for this connection
+  """
+  isOAuthEnabled: Boolean!
+
+  """
+  Whether valid OAuth tokens exist
+  """
+  hasValidTokens: Boolean!
+
+  """
+  Whether the access token is expired
+  """
+  isAccessTokenExpired: Boolean
+
+  """
+  When the access token expires (if tokens exist)
+  """
+  tokenExpiresAt: DateTime
+
+  """
+  Whether a refresh token exists
+  """
+  hasRefreshToken: Boolean
+
+  """
+  Whether re-authorization is required
+  """
+  requiresReauthorization: Boolean!
+
+  """
+  Reason re-authorization is required (if applicable)
+  """
+  reauthorizationReason: String
+
+  """
+  OAuth issuer URL configured for this connection
+  """
+  issuerUrl: String
+
+  """
+  Scopes that were granted (if tokens exist)
+  """
+  grantedScopes: String
+}
+
+# =============================================================================
+# Enums
+# =============================================================================
+
+"""
+Status of an OAuth authorization flow
+"""
+enum MCPOAuthStatus {
+  """
+  Authorization is in progress, waiting for user consent
+  """
+  PENDING
+
+  """
+  Authorization completed successfully, tokens stored
+  """
+  COMPLETED
+
+  """
+  Authorization failed due to error or user denial
+  """
+  FAILED
+
+  """
+  Authorization flow timed out (default: 5 minutes)
+  """
+  EXPIRED
+}
+
+# =============================================================================
+# Query Extensions
+# =============================================================================
+
+type Query {
+  """
+  Get OAuth status for an MCP connection.
+  Returns token validity, expiration, and whether re-authorization is needed.
+  """
+  getMCPOAuthConnectionStatus(connectionId: ID!): MCPOAuthConnectionStatus!
+
+  """
+  Get OAuth authorization flow status by state parameter.
+  Used to poll for completion of an in-progress authorization.
+  """
+  getMCPOAuthStatus(input: GetMCPOAuthStatusInput!): MCPOAuthStatusResult!
+}
+
+# =============================================================================
+# Mutation Extensions
+# =============================================================================
+
+type Mutation {
+  """
+  Initiate an OAuth authorization flow for an MCP connection.
+  Returns the authorization URL that should be opened in the user's browser.
+  The user will be redirected back to the MJ callback URL after consent.
+  """
+  initiateMCPOAuth(input: InitiateMCPOAuthInput!): InitiateMCPOAuthResult!
+
+  """
+  Revoke OAuth credentials for an MCP connection.
+  Deletes stored tokens and marks the connection as requiring re-authorization.
+  Requires CanModify permission on the connection.
+  """
+  revokeMCPOAuth(input: RevokeMCPOAuthInput!): RevokeMCPOAuthResult!
+
+  """
+  Manually trigger a token refresh for an MCP connection.
+  Normally tokens are refreshed automatically, but this can be used to
+  proactively refresh before a long operation.
+  """
+  refreshMCPOAuthToken(input: RefreshMCPOAuthTokenInput!): RefreshMCPOAuthTokenResult!
+}
+
+# =============================================================================
+# Subscription Extensions
+# =============================================================================
+
+type Subscription {
+  """
+  Subscribe to OAuth authorization completion for a specific state parameter.
+  Fires when the authorization completes (success or failure).
+  """
+  onMCPOAuthCompleted(stateParameter: String!): MCPOAuthStatusResult!
+
+  """
+  Subscribe to OAuth events for a specific connection.
+  Fires on token refresh, expiration warnings, and re-authorization requirements.
+  """
+  onMCPOAuthEvent(connectionId: ID!): MCPOAuthEventPayload!
+}
+
+"""
+Payload for OAuth event subscriptions
+"""
+type MCPOAuthEventPayload {
+  """
+  Type of OAuth event
+  """
+  eventType: MCPOAuthEventType!
+
+  """
+  Connection ID the event relates to
+  """
+  connectionId: ID!
+
+  """
+  Timestamp of the event
+  """
+  timestamp: DateTime!
+
+  """
+  Event-specific message
+  """
+  message: String
+
+  """
+  Whether action is required from the user
+  """
+  requiresUserAction: Boolean!
+}
+
+"""
+Types of OAuth events
+"""
+enum MCPOAuthEventType {
+  """
+  Tokens were successfully refreshed
+  """
+  TOKEN_REFRESHED
+
+  """
+  Token expiration is approaching (default: 5 minutes warning)
+  """
+  TOKEN_EXPIRING_SOON
+
+  """
+  Token refresh failed, re-authorization may be needed
+  """
+  TOKEN_REFRESH_FAILED
+
+  """
+  Re-authorization is required
+  """
+  REAUTHORIZATION_REQUIRED
+
+  """
+  OAuth credentials were revoked
+  """
+  CREDENTIALS_REVOKED
+}

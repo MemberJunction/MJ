@@ -120,7 +120,8 @@
                     [data]="authTypes"
                     textField="label"
                     valueField="value"
-                    [valuePrimitive]="true">
+                    [valuePrimitive]="true"
+                    (valueChange)="onAuthTypeChange()">
                     <ng-template kendoDropDownListItemTemplate let-dataItem>
                         <div class="auth-option">
                             <span class="auth-label">{{ dataItem.label }}</span>
@@ -130,6 +131,69 @@
                 </kendo-dropdownlist>
             </div>
         </div>
+
+        <!-- OAuth 2.0 Configuration Section (only shown when OAuth2 is selected) -->
+        @if (IsOAuth2) {
+            <div class="form-section oauth-section">
+                <h3><i class="fa-solid fa-key"></i> OAuth 2.0 Configuration</h3>
+
+                <div class="form-group">
+                    <label for="oauthIssuerUrl">OAuth Issuer URL <span class="required">*</span></label>
+                    <input kendoTextBox
+                           id="oauthIssuerUrl"
+                           formControlName="OAuthIssuerURL"
+                           placeholder="https://auth.example.com" />
+                    @if (hasError('OAuthIssuerURL', 'required')) {
+                        <span class="error-text">OAuth Issuer URL is required for OAuth 2.0 authentication</span>
+                    }
+                    <span class="hint">The authorization server's issuer URL (e.g., https://login.microsoftonline.com/tenant-id or https://your-domain.auth0.com)</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="oauthScopes">OAuth Scopes</label>
+                    <input kendoTextBox
+                           id="oauthScopes"
+                           formControlName="OAuthScopes"
+                           placeholder="openid profile email" />
+                    <span class="hint">Space-separated list of OAuth scopes to request</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="oauthCacheTtl">Metadata Cache TTL (minutes)</label>
+                    <kendo-numerictextbox
+                        id="oauthCacheTtl"
+                        formControlName="OAuthMetadataCacheTTLMinutes"
+                        [min]="5"
+                        [format]="'n0'"
+                        placeholder="1440">
+                    </kendo-numerictextbox>
+                    <span class="hint">How long to cache OAuth metadata (default: 1440 minutes = 24 hours)</span>
+                </div>
+
+                <div class="oauth-client-section">
+                    <h4>Pre-configured Client (Optional)</h4>
+                    <p class="section-hint">Leave blank to use Dynamic Client Registration (DCR). If the auth server doesn't support DCR, configure your client credentials here.</p>
+
+                    <div class="form-group">
+                        <label for="oauthClientId">Client ID</label>
+                        <input kendoTextBox
+                               id="oauthClientId"
+                               formControlName="OAuthClientID"
+                               placeholder="your-client-id" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="oauthClientSecret">Client Secret</label>
+                        <input kendoTextBox
+                               id="oauthClientSecret"
+                               formControlName="OAuthClientSecretEncrypted"
+                               type="password"
+                               placeholder="your-client-secret" />
+                        <span class="hint">The secret will be encrypted before storage</span>
+                    </div>
+                </div>
+            </div>
+          }
 
         <!-- Rate Limiting Section -->
         <div class="form-section">

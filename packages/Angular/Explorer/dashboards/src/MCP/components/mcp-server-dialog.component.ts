@@ -81,6 +81,14 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
         return this.SelectedTransportType === 'Stdio';
     }
 
+    public get SelectedAuthType(): string {
+        return this.serverForm?.get('DefaultAuthType')?.value ?? 'None';
+    }
+
+    public get IsOAuth2(): boolean {
+        return this.SelectedAuthType === 'OAuth2';
+    }
+
     constructor(
         private fb: FormBuilder,
         private cdr: ChangeDetectorRef
@@ -112,7 +120,13 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
             RateLimitPerMinute: [null, [Validators.min(0)]],
             RateLimitPerHour: [null, [Validators.min(0)]],
             RequestTimeoutMs: [60000, [Validators.min(1000), Validators.max(600000)]],
-            Status: ['Active']
+            Status: ['Active'],
+            // OAuth configuration fields
+            OAuthIssuerURL: [''],
+            OAuthScopes: [''],
+            OAuthMetadataCacheTTLMinutes: [1440, [Validators.min(5)]],
+            OAuthClientID: [''],
+            OAuthClientSecretEncrypted: ['']
         });
     }
 
@@ -129,7 +143,13 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
                 RateLimitPerMinute: this.server.RateLimitPerMinute,
                 RateLimitPerHour: this.server.RateLimitPerHour,
                 RequestTimeoutMs: 60000,
-                Status: this.server.Status
+                Status: this.server.Status,
+                // OAuth configuration fields
+                OAuthIssuerURL: this.server.OAuthIssuerURL ?? '',
+                OAuthScopes: this.server.OAuthScopes ?? '',
+                OAuthMetadataCacheTTLMinutes: this.server.OAuthMetadataCacheTTLMinutes ?? 1440,
+                OAuthClientID: this.server.OAuthClientID ?? '',
+                OAuthClientSecretEncrypted: this.server.OAuthClientSecretEncrypted ?? ''
             });
         } else {
             this.serverForm.reset({
@@ -143,7 +163,13 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
                 RateLimitPerMinute: null,
                 RateLimitPerHour: null,
                 RequestTimeoutMs: 60000,
-                Status: 'Active'
+                Status: 'Active',
+                // OAuth configuration fields
+                OAuthIssuerURL: '',
+                OAuthScopes: '',
+                OAuthMetadataCacheTTLMinutes: 1440,
+                OAuthClientID: '',
+                OAuthClientSecretEncrypted: ''
             });
         }
         this.ErrorMessage = null;
@@ -154,6 +180,7 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
     private updateValidators(): void {
         const urlControl = this.serverForm.get('ServerURL');
         const commandControl = this.serverForm.get('Command');
+        const oauthIssuerControl = this.serverForm.get('OAuthIssuerURL');
 
         if (this.RequiresURL) {
             urlControl?.setValidators([Validators.required]);
@@ -166,11 +193,23 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
             commandControl?.clearValidators();
         }
 
+        // OAuth2 requires an issuer URL
+        if (this.IsOAuth2) {
+            oauthIssuerControl?.setValidators([Validators.required]);
+        } else {
+            oauthIssuerControl?.clearValidators();
+        }
+
         urlControl?.updateValueAndValidity();
         commandControl?.updateValueAndValidity();
+        oauthIssuerControl?.updateValueAndValidity();
     }
 
     public onTransportTypeChange(): void {
+        this.updateValidators();
+    }
+
+    public onAuthTypeChange(): void {
         this.updateValidators();
     }
 
@@ -207,6 +246,22 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
             entity.RateLimitPerHour = formValue.RateLimitPerHour || null;
             entity.RequestTimeoutMs = formValue.RequestTimeoutMs || 60000;
             entity.Status = formValue.Status;
+
+            // OAuth configuration fields (only set if OAuth2 is selected)
+            if (formValue.DefaultAuthType === 'OAuth2') {
+                entity.OAuthIssuerURL = formValue.OAuthIssuerURL || null;
+                entity.OAuthScopes = formValue.OAuthScopes || null;
+                entity.OAuthMetadataCacheTTLMinutes = formValue.OAuthMetadataCacheTTLMinutes || 1440;
+                entity.OAuthClientID = formValue.OAuthClientID || null;
+                entity.OAuthClientSecretEncrypted = formValue.OAuthClientSecretEncrypted || null;
+            } else {
+                // Clear OAuth fields when not using OAuth2
+                entity.OAuthIssuerURL = null;
+                entity.OAuthScopes = null;
+                entity.OAuthMetadataCacheTTLMinutes = null;
+                entity.OAuthClientID = null;
+                entity.OAuthClientSecretEncrypted = null;
+            }
 
             const saved = await entity.Save();
             if (!saved) {

@@ -20,6 +20,7 @@ import { LoadBettyBotLLM } from '@memberjunction/ai-betty-bot';
 import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
 import { LoadCohereReranker } from '@memberjunction/ai-cohere';
 import { LoadElevenLabsAudioGenerator } from '@memberjunction/ai-elevenlabs';
+import { LoadFireworksLLM } from '@memberjunction/ai-fireworks';
 import { LoadGeminiLLM, LoadGeminiImageGenerator } from '@memberjunction/ai-gemini';
 import { LoadGroqLLM } from '@memberjunction/ai-groq';
 import { LoadHeyGenVideoGenerator } from '@memberjunction/ai-heygen';
@@ -56,6 +57,7 @@ export function LoadAIProviders(): void {
     LoadBedrockLLM();
     LoadBettyBotLLM();
     LoadCerebrasLLM();
+    LoadFireworksLLM();
     LoadGeminiLLM();
     LoadGroqLLM();
     LoadLMStudioLLM();

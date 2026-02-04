@@ -1,0 +1,167 @@
+<div class="restore-container">
+    <mj-loading *ngIf="IsLoading" text="Loading restore history..."></mj-loading>
+
+    <ng-container *ngIf="!IsLoading">
+        <!-- Header -->
+        <div class="page-header">
+            <div class="header-left">
+                <h2 class="page-title">Restore History</h2>
+                <p class="page-subtitle">Track all restore operations and their outcomes</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn-icon" (click)="Refresh()" title="Refresh">
+                    <i class="fa-solid fa-refresh"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value">{{TotalRestores}}</div>
+                    <div class="kpi-label">Total Restores</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value">{{SuccessfulRestores}}</div>
+                    <div class="kpi-label">Successful</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value">{{FailedRestores}}</div>
+                    <div class="kpi-label">Failed</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                    <i class="fa-solid fa-circle-half-stroke"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value">{{PartialRestores}}</div>
+                    <div class="kpi-label">Partial</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-row">
+            <button class="filter-chip"
+                    [class.active]="StatusFilter === 'Complete'"
+                    (click)="OnStatusFilterChange('Complete')">
+                <i class="fa-solid fa-circle-check"></i> Complete
+            </button>
+            <button class="filter-chip"
+                    [class.active]="StatusFilter === 'Error'"
+                    (click)="OnStatusFilterChange('Error')">
+                <i class="fa-solid fa-circle-xmark"></i> Error
+            </button>
+            <button class="filter-chip"
+                    [class.active]="StatusFilter === 'Partial'"
+                    (click)="OnStatusFilterChange('Partial')">
+                <i class="fa-solid fa-circle-half-stroke"></i> Partial
+            </button>
+        </div>
+
+        <!-- Restore List -->
+        <div class="restore-list" *ngIf="FilteredRestores.length > 0">
+            <div class="restore-card" *ngFor="let restore of FilteredRestores"
+                 [ngClass]="{'expanded': IsExpanded(restore.ID)}">
+                <div class="restore-header" (click)="ToggleExpand(restore.ID)">
+                    <div class="restore-header-left">
+                        <i [class]="GetStatusIcon(restore.Status)"
+                           [ngClass]="GetStatusClass(restore.Status)"
+                           class="status-icon"></i>
+                        <div class="restore-info">
+                            <div class="restore-label-name">
+                                {{restore.VersionLabel}}
+                            </div>
+                            <div class="restore-date" *ngIf="restore.StartedAt">{{FormatDate(restore.StartedAt)}}</div>
+                        </div>
+                    </div>
+                    <div class="restore-header-right">
+                        <div class="restore-progress-bar">
+                            <div class="progress-fill"
+                                 [ngClass]="GetStatusClass(restore.Status)"
+                                 [style.width.%]="GetProgressPercent(restore)">
+                            </div>
+                        </div>
+                        <span class="restore-count">
+                            {{restore.CompletedItems ?? 0}} / {{restore.TotalItems ?? 0}} items
+                        </span>
+                        <i class="fa-solid"
+                           [ngClass]="IsExpanded(restore.ID) ? 'fa-chevron-up' : 'fa-chevron-down'"
+                           class="expand-icon">
+                        </i>
+                    </div>
+                </div>
+
+                <!-- Expanded Details -->
+                <div class="restore-details" *ngIf="IsExpanded(restore.ID)">
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">Status</span>
+                            <span class="detail-value" [ngClass]="GetStatusClass(restore.Status)">
+                                {{restore.Status}}
+                            </span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Items Completed</span>
+                            <span class="detail-value">{{restore.CompletedItems ?? 0}}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Items Failed</span>
+                            <span class="detail-value" [class.text-error]="(restore.FailedItems ?? 0) > 0">
+                                {{restore.FailedItems ?? 0}}
+                            </span>
+                        </div>
+                        <div class="detail-item" *ngIf="restore.User">
+                            <span class="detail-label">Restored By</span>
+                            <span class="detail-value">{{restore.User}}</span>
+                        </div>
+                        <div class="detail-item" *ngIf="restore.PreRestoreLabelID">
+                            <span class="detail-label">Pre-Restore Label</span>
+                            <span class="detail-value detail-mono" *ngIf="restore.PreRestoreLabel">
+                                {{restore.PreRestoreLabel}}
+                            </span>
+                            <span class="detail-value detail-mono" *ngIf="!restore.PreRestoreLabel">
+                                {{restore.PreRestoreLabelID | slice:0:20}}...
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="error-log" *ngIf="restore.ErrorLog">
+                        <div class="error-log-header">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            Error Log
+                        </div>
+                        <pre class="error-log-content">{{restore.ErrorLog}}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" *ngIf="FilteredRestores.length === 0 && !IsLoading">
+            <i class="fa-solid fa-clock-rotate-left empty-icon"></i>
+            <h3>No restore operations found</h3>
+            <p *ngIf="StatusFilter">
+                Try adjusting your filters.
+            </p>
+            <p *ngIf="!StatusFilter">
+                No restores have been performed yet. Use the VersionHistoryEngine to restore records to a labeled state.
+            </p>
+        </div>
+    </ng-container>
+</div>

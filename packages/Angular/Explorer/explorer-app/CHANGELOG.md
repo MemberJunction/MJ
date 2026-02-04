@@ -1,5 +1,19 @@
 # @memberjunction/ng-explorer-app
 
+## 3.4.0
+
+### Patch Changes
+
+- 3a71e4e: Fix large text field corruptions, cross-platform improvements, more robust environment variable parsing for boolean values
+- Updated dependencies [a7db1cc]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ng-explorer-core@3.4.0
+  - @memberjunction/ng-bootstrap@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ng-workspace-initializer@3.4.0
+  - @memberjunction/ng-auth-services@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

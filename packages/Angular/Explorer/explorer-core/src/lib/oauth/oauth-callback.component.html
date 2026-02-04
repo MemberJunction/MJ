@@ -1,0 +1,47 @@
+<div class="oauth-callback-container">
+    <div class="oauth-callback-card">
+        <!-- Loading State -->
+        @if (IsLoading) {
+            <div class="oauth-status loading">
+                <mj-loading text="{{ StatusMessage }}"></mj-loading>
+            </div>
+        }
+
+        <!-- Error State -->
+        @if (HasError) {
+            <div class="oauth-status error">
+                <div class="icon-container error-icon">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                </div>
+                <h2>Authorization Failed</h2>
+                @if (ErrorCode) {
+                    <div class="error-code">{{ ErrorCode }}</div>
+                }
+                <p class="error-message">{{ ErrorMessage }}</p>
+                <div class="button-group">
+                    @if (IsRetryable) {
+                        <button kendoButton (click)="onRetry()">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            Try Again
+                        </button>
+                    }
+                    <button kendoButton [look]="IsRetryable ? 'outline' : 'default'" (click)="onClose()">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        Return to Dashboard
+                    </button>
+                </div>
+            </div>
+        }
+
+        <!-- Success State (brief - redirects quickly) -->
+        @if (!IsLoading && !HasError) {
+            <div class="oauth-status success">
+                <div class="icon-container success-icon">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <h2>Authorization Successful</h2>
+                <p>{{ StatusMessage }}</p>
+            </div>
+        }
+    </div>
+</div>

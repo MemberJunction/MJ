@@ -30,6 +30,8 @@ export class MJExplorerAppComponent implements OnInit {
   public ErrorMessage: any = '';
   public subHeaderText: string = "Welcome back! Please log in to your account.";
   public showValidationOnly = false;
+  /** True when the current URL is the OAuth callback route - used for conditional rendering */
+  public isOAuthCallback = false;
 
   constructor(
     private router: Router,
@@ -151,6 +153,13 @@ export class MJExplorerAppComponent implements OnInit {
 
   ngOnInit() {
     SetProductionStatus(this.environment.production);
+
+    // Check if this is the OAuth callback route - used for conditional rendering in template
+    // Note: We still run setupAuth() to restore the user's session
+    this.isOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
+
+    // Always run auth setup - this restores the user's session
+    // For OAuth callback, once authenticated, the OAuthCallbackComponent handles the code exchange
     this.setupAuth();
   }
 }

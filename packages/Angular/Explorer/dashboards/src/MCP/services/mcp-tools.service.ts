@@ -22,6 +22,16 @@ export interface MCPSyncResult {
     Total: number;
     ServerName?: string;
     ConnectionName?: string;
+    /** Whether OAuth authorization is required before connecting */
+    RequiresOAuth?: boolean;
+    /** OAuth authorization URL if authorization is required */
+    AuthorizationUrl?: string;
+    /** OAuth state parameter for tracking the authorization flow */
+    StateParameter?: string;
+    /** Whether OAuth re-authorization is required */
+    RequiresReauthorization?: boolean;
+    /** Reason for re-authorization if required */
+    ReauthorizationReason?: string;
 }
 
 /**
@@ -71,6 +81,11 @@ const SyncMCPToolsMutation = gql`
             Total
             ServerName
             ConnectionName
+            RequiresOAuth
+            AuthorizationUrl
+            StateParameter
+            RequiresReauthorization
+            ReauthorizationReason
         }
     }
 `;

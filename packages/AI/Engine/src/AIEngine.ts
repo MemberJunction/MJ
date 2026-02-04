@@ -369,7 +369,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             await AIEngineBase.Instance.Config(forceRefresh ?? false, contextUser, provider);
 
             // Now load server-specific capabilities
-            await this.loadServerCapabilities(contextUser);
+            await this.RefreshServerSpecificMetadata(contextUser);
 
             this._loaded = true;
         } catch (error) {
@@ -379,18 +379,30 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
-     * Load server-specific capabilities: actions and embeddings
+     * Refreshes the server metadata including active actions. 
+     * Refreshes the embeddings in the engine's vector service for  
+     *  - Agents (dynamic recalc of embeddings)
+     *  - Actions (dynamic recalc of embeddings)
+     *  - Notes (parsed from DB)
+     *  - Examples (parsed from DB)
+     * 
+     * If you only need to refresh specific elements noted above, call the individual methods:
+     *  - RefreshActions (refreshes just the server side action metadata - e.g. 'Active' Actions)
+     *  - RefreshActionEmbeddings (dynamic recalc of embedings from stored data)
+     *  - RefreshAgentEmbeddings (dynamic recalc of embeddings from stored data)
+     *  - RefreshNoteEmbeddings
+     *  - RefreshExampleEmbeddings
      */
-    private async loadServerCapabilities(contextUser?: UserInfo): Promise<void> {
+    public async RefreshServerSpecificMetadata(contextUser?: UserInfo): Promise<void> {
         // Load actions from the Action system
-        await this.loadActions(contextUser);
+        await this.RefreshActions(contextUser);
 
         // Load all embeddings in parallel since they are independent
         await Promise.all([
-            this.loadAgentEmbeddings(),
-            this.loadActionEmbeddings(),
-            this.loadNoteEmbeddings(contextUser),
-            this.loadExampleEmbeddings(contextUser)
+            this.RefreshAgentEmbeddings(),
+            this.RefreshActionEmbeddings(),
+            this.RefreshNoteEmbeddings(contextUser),
+            this.RefreshExampleEmbeddings(contextUser)
         ]);
 
         this._embeddingsGenerated = true;
@@ -426,9 +438,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             this._actionVectorService = null;
 
             // Reload actions and regenerate embeddings
-            await this.loadActions(contextUser);
-            await this.loadAgentEmbeddings();
-            await this.loadActionEmbeddings();
+            await this.RefreshActions(contextUser);
+            await this.RefreshAgentEmbeddings();
+            await this.RefreshActionEmbeddings();
             this._embeddingsGenerated = true;
 
         } catch (error) {
@@ -438,12 +450,11 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
-     * Load embeddings for all agents.
-     * Uses agents already loaded by AIEngineBase - no database round trip needed.
-     * Only generates embeddings for agents that don't already have them cached.
-     * @private
+     * Refreshes Agent embeddings - agents are pre-loaded at this point, but we need
+     * to generate, dynamically, embeddings from the text stored in the agent. This is not a
+     * cheap operation, use it sparingly.
      */
-    private async loadAgentEmbeddings(): Promise<void> {
+    public async RefreshAgentEmbeddings(): Promise<void> {
         try {
             // Use agents already loaded by base class
             const agents = this.Agents;  // Delegates to AIEngineBase
@@ -488,11 +499,10 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
-     * Load Actions from database.
-     * Called during Config to populate the Actions list.
-     * @private
+     * Loads Active actions from the base engine (contained within this class). Does **not** refresh from the database, simply
+     * pulls the latest `Active` actions from the base class into its server side only array.
      */
-    private async loadActions(contextUser?: UserInfo): Promise<void> {
+    public async RefreshActions(contextUser?: UserInfo): Promise<void> {
         try {
             await ActionEngineBase.Instance.Config(false, contextUser);
             const actions = ActionEngineBase.Instance.Actions.filter(a => a.Status === 'Active');
@@ -511,12 +521,13 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
-     * Load embeddings for all actions.
-     * Uses actions loaded in loadActions() - no additional database round trip needed.
-     * Only generates embeddings for actions that don't already have them cached.
-     * @private
+     * Dynamically calculation of embeddings for all `Active` actions. Assumes that the internal Actions array is up to date, call
+     * @see RefreshActions first if you do not think they are already.
+     * 
+     * This operation dynamically calculates embeddings from the text in the Action metadata and is an expensive operation, use it
+     * sparingly.
      */
-    private async loadActionEmbeddings(): Promise<void> {
+    public async RefreshActionEmbeddings(): Promise<void> {
         try {
             const actions = this._actions;
 
@@ -557,26 +568,19 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
-     * Load note embeddings from database and build vector service.
-     * Only loads active notes with embeddings already generated.
-     * @private
+     * Refresh the vector service with the latest persisted vectors that are stored in the Agent Notes
+     * table. This does **not** calculate embeddings, that is done by the AI Agent Note sub-class upon save 
+     * as needed. This method simply uses the stored vectors and parses them from their JSON serialized format into
+     * vectors that are used by the vector service.
      */
-    private async loadNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
+    public async RefreshNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
             const notes = this.AgentNotes.filter(n => n.Status === 'Active' && n.EmbeddingVector);
 
             const entries = notes.map(note => ({
                 key: note.ID,
                 vector: JSON.parse(note.EmbeddingVector!),
-                metadata: {
-                    id: note.ID,
-                    agentId: note.AgentID,
-                    userId: note.UserID,
-                    companyId: note.CompanyID,
-                    type: note.Type,
-                    noteText: note.Note!,
-                    noteEntity: note
-                }
+                metadata: this.packageNoteMetadata(note)
             }));
 
             this._noteVectorService = new SimpleVectorService();
@@ -587,28 +591,79 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
-     * Load example embeddings from database and build vector service.
-     * Only loads active examples with embeddings already generated.
-     * @private
+     * Takes in a note and packages up the metadata for the vector service
+     * @param note 
      */
-    private async loadExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
+    protected packageNoteMetadata(note: AIAgentNoteEntity): NoteEmbeddingMetadata {
+        return {
+            id: note.ID,
+            agentId: note.AgentID,
+            userId: note.UserID,
+            companyId: note.CompanyID,
+            type: note.Type,
+            noteText: note.Note!,
+            noteEntity: note
+        }
+    }
+
+    /**
+     * Updates the vector service to the latest vector containd within the specified agent note that is passed in
+     * @param note 
+     */
+    public AddOrUpdateSingleNoteEmbedding(note: AIAgentNoteEntity) {
+        if (this._noteVectorService) {
+            this._noteVectorService.AddOrUpdateVector(note.ID, JSON.parse(note.EmbeddingVector),  this.packageNoteMetadata(note));
+        }
+        else {
+            throw new Error('note vector service not initialized, error state')
+        }
+    }
+
+    /**
+     * Takes in an example and packages up the metadata for the vector service
+     * @param example
+     */
+    protected packageExampleMetadata(example: AIAgentExampleEntity): ExampleEmbeddingMetadata {
+        return {
+            id: example.ID,
+            agentId: example.AgentID,
+            userId: example.UserID,
+            companyId: example.CompanyID,
+            type: example.Type,
+            exampleInput: example.ExampleInput,
+            exampleOutput: example.ExampleOutput,
+            successScore: example.SuccessScore,
+            exampleEntity: example
+        }
+    }
+
+    /**
+     * Updates the vector service to the latest vector contained within the specified agent example that is passed in
+     * @param example
+     */
+    public AddOrUpdateSingleExampleEmbedding(example: AIAgentExampleEntity) {
+        if (this._exampleVectorService) {
+            this._exampleVectorService.AddOrUpdateVector(example.ID, JSON.parse(example.EmbeddingVector), this.packageExampleMetadata(example));
+        }
+        else {
+            throw new Error('example vector service not initialized, error state')
+        }
+    }
+
+    /**
+     * Refresh the vector service with the latest persisted vectors that are stored in the Agent Examples
+     * table. This does **not** calculate embeddings, that is done by the AI Agent Example sub-class upon save 
+     * as needed. This method simply uses the stored vectors and parses them from their JSON serialized format into
+     * vectors that are used by the vector service.
+     */
+    public async RefreshExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
             const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
 
             const entries = examples.map(example => ({
                 key: example.ID,
                 vector: JSON.parse(example.EmbeddingVector!),
-                metadata: {
-                    id: example.ID,
-                    agentId: example.AgentID,
-                    userId: example.UserID,
-                    companyId: example.CompanyID,
-                    type: example.Type,
-                    exampleInput: example.ExampleInput,
-                    exampleOutput: example.ExampleOutput,
-                    successScore: example.SuccessScore,
-                    exampleEntity: example
-                }
+                metadata: this.packageExampleMetadata(example)
             }));
 
             this._exampleVectorService = new SimpleVectorService();
@@ -617,62 +672,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             LogError(`AIEngine: Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
-
-    /**
-     * Generate embedding for a single agent and add it to the vector service.
-     * Used for incremental updates when new agents are created.
-     * @param agent - The agent to generate embeddings for
-     * @private
-     */
-    private async generateSingleAgentEmbedding(agent: AIAgentEntityExtended): Promise<void> {
-        try {
-            // Skip restricted agents - they should not be discoverable
-            if (agent.IsRestricted) {
-                return;
-            }
-
-            const entries = await AgentEmbeddingService.GenerateAgentEmbeddings(
-                [agent],
-                (text) => this.EmbedTextLocal(text)
-            );
-
-            if (entries.length > 0) {
-                this._agentEmbeddingsCache.set(agent.ID, true);
-                if (!this._agentVectorService) {
-                    this._agentVectorService = new SimpleVectorService();
-                }
-                this._agentVectorService.LoadVectors(entries);
-            }
-        } catch (error) {
-            LogError(`AIEngine: Failed to generate embedding for agent ${agent.Name}: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }
-
-    /**
-     * Generate embedding for a single action and add it to the vector service.
-     * Used for incremental updates when new actions are created.
-     * @param action - The action to generate embeddings for
-     * @private
-     */
-    private async generateSingleActionEmbedding(action: ActionEntity): Promise<void> {
-        try {
-            const entries = await ActionEmbeddingService.GenerateActionEmbeddings(
-                [action],
-                (text) => this.EmbedTextLocal(text)
-            );
-
-            if (entries.length > 0) {
-                this._actionEmbeddingsCache.set(action.ID, true);
-                if (!this._actionVectorService) {
-                    this._actionVectorService = new SimpleVectorService();
-                }
-                this._actionVectorService.LoadVectors(entries);
-            }
-        } catch (error) {
-            LogError(`AIEngine: Failed to generate embedding for action ${action.Name}: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }
-
+ 
     // ========================================================================
     // LLM Utility Methods
     // ========================================================================

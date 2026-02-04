@@ -1,0 +1,392 @@
+<div class="mj-agent-props">
+
+  <!-- Empty State -->
+  <div *ngIf="!isStepSelected && !isConnectionSelected" class="mj-agent-props-empty">
+    <i class="fa-solid fa-mouse-pointer"></i>
+    <p>Select a step or connection to view its properties</p>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- STEP PROPERTIES                              -->
+  <!-- ============================================ -->
+  <ng-container *ngIf="isStepSelected">
+
+    <!-- Step Header -->
+    <div class="mj-agent-props-header mj-agent-props-header--step"
+         [style.border-left-color]="stepTypeColor">
+      <div class="mj-agent-props-header-top">
+        <span class="mj-agent-props-header-label">STEP</span>
+        <button class="mj-agent-props-close" (click)="CloseRequested.emit()" title="Close">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+      <!-- Identity card -->
+      <div class="mj-agent-props-identity">
+        <div class="mj-agent-props-identity-icon" [style.background]="stepTypeColor">
+          <i class="fa-solid" [ngClass]="stepTypeIcon"></i>
+        </div>
+        <div class="mj-agent-props-identity-info">
+          <span class="mj-agent-props-identity-name">{{ Step!.Name }}</span>
+          <span class="mj-agent-props-identity-meta">
+            <span class="mj-agent-props-type-pill" [style.color]="stepTypeColor"
+                  [style.background]="stepTypeColor + '18'">{{ stepTypeLabel }}</span>
+            <span class="mj-agent-props-status-dot" [style.background]="statusColor"></span>
+            <span class="mj-agent-props-status-label">{{ Step!.Status }}</span>
+            <span *ngIf="Step!.StartingStep" class="mj-agent-props-start-badge">Start</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mj-agent-props-content">
+
+      <!-- ── General Section ─────────────────── -->
+      <div class="mj-agent-props-section">
+        <button class="mj-agent-props-section-header" (click)="ToggleSection('general')">
+          <span class="mj-agent-props-section-title">General</span>
+          <i class="fa-solid" [ngClass]="IsSectionCollapsed('general') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
+        </button>
+
+        <div *ngIf="!IsSectionCollapsed('general')" class="mj-agent-props-section-body">
+          <div class="mj-agent-props-field">
+            <label>Name</label>
+            <input *ngIf="!ReadOnly" type="text" [value]="Step!.Name"
+                   (input)="OnNameChange(InputValue($event))"
+                   placeholder="Step name..." class="mj-agent-props-input">
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">{{ Step!.Name }}</div>
+          </div>
+
+          <div class="mj-agent-props-field">
+            <label>Description</label>
+            <textarea *ngIf="!ReadOnly" [value]="Step!.Description || ''"
+                      (input)="OnDescriptionChange(InputValue($event))"
+                      placeholder="Optional description..." rows="2"
+                      class="mj-agent-props-input mj-agent-props-textarea"></textarea>
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">
+              {{ Step!.Description || '—' }}
+            </div>
+          </div>
+
+          <div class="mj-agent-props-field">
+            <label>Status</label>
+            <select *ngIf="!ReadOnly" [value]="Step!.Status"
+                    (change)="OnStatusChange(InputValue($event))"
+                    class="mj-agent-props-input">
+              <option value="Active">Active</option>
+              <option value="Disabled">Disabled</option>
+              <option value="Pending">Pending</option>
+            </select>
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">
+              <span class="mj-agent-props-status-dot" [style.background]="statusColor"></span>
+              {{ Step!.Status }}
+            </div>
+          </div>
+
+          <div *ngIf="!ReadOnly" class="mj-agent-props-field mj-agent-props-field--row">
+            <label class="mj-agent-props-checkbox-label">
+              <input type="checkbox" [checked]="Step!.StartingStep"
+                     (change)="OnStartingStepChange(CheckedValue($event))">
+              Starting Step
+            </label>
+          </div>
+          <div *ngIf="ReadOnly && Step!.StartingStep" class="mj-agent-props-field">
+            <label>Starting Step</label>
+            <div class="mj-agent-props-readonly-value">
+              <span class="mj-agent-props-start-badge">Yes — this is the entry point</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Configuration Section ───────────── -->
+      <div class="mj-agent-props-section">
+        <button class="mj-agent-props-section-header" (click)="ToggleSection('config')">
+          <span class="mj-agent-props-section-title">Configuration</span>
+          <i class="fa-solid" [ngClass]="IsSectionCollapsed('config') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
+        </button>
+
+        <div *ngIf="!IsSectionCollapsed('config')" class="mj-agent-props-section-body">
+
+          <!-- Loop Body Type (ForEach / While) -->
+          <div *ngIf="showLoopConfig" class="mj-agent-props-field">
+            <label>Loop Body Type</label>
+            <select *ngIf="!ReadOnly" [value]="Step!.LoopBodyType || 'Action'"
+                    (change)="OnLoopBodyTypeChange(InputValue($event))"
+                    class="mj-agent-props-input">
+              <option value="Action">Action</option>
+              <option value="Prompt">Prompt</option>
+              <option value="Sub-Agent">Sub-Agent</option>
+            </select>
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">
+              {{ Step!.LoopBodyType || 'Action' }}
+            </div>
+          </div>
+
+          <!-- Action Picker -->
+          <div *ngIf="showActionPicker" class="mj-agent-props-field">
+            <label>Action</label>
+            <select *ngIf="!ReadOnly" [value]="Step!.ActionID || ''"
+                    (change)="OnActionChange(InputValue($event))"
+                    class="mj-agent-props-input">
+              <option value="">-- Select Action --</option>
+              <option *ngFor="let action of Actions" [value]="action.ID">{{ action.Name }}</option>
+            </select>
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">{{ selectedActionName }}</div>
+          </div>
+
+          <!-- Prompt Picker -->
+          <div *ngIf="showPromptPicker" class="mj-agent-props-field">
+            <label>Prompt</label>
+            <select *ngIf="!ReadOnly" [value]="Step!.PromptID || ''"
+                    (change)="OnPromptChange(InputValue($event))"
+                    class="mj-agent-props-input">
+              <option value="">-- Select Prompt --</option>
+              <option *ngFor="let prompt of Prompts" [value]="prompt.ID">{{ prompt.Name }}</option>
+            </select>
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">{{ selectedPromptName }}</div>
+          </div>
+
+          <!-- Sub-Agent Picker -->
+          <div *ngIf="showAgentPicker" class="mj-agent-props-field">
+            <label>Sub-Agent</label>
+            <select *ngIf="!ReadOnly" [value]="Step!.SubAgentID || ''"
+                    (change)="OnSubAgentChange(InputValue($event))"
+                    class="mj-agent-props-input">
+              <option value="">-- Select Agent --</option>
+              <option *ngFor="let agent of Agents" [value]="agent.ID">{{ agent.Name }}</option>
+            </select>
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">{{ selectedAgentName }}</div>
+          </div>
+
+          <!-- Loop Configuration (JSON) -->
+          <div *ngIf="showLoopConfig" class="mj-agent-props-field">
+            <label>Loop Configuration</label>
+            <mj-code-editor
+              [value]="FormatJsonDisplay(Step!.Configuration)"
+              language="json"
+              [readonly]="ReadOnly"
+              setup="minimal"
+              [lineWrapping]="true"
+              (change)="OnConfigurationChange($any($event))">
+            </mj-code-editor>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Data Mapping Section (Action steps) ─── -->
+      <div *ngIf="Step!.StepType === 'Action' || showActionPicker" class="mj-agent-props-section">
+        <button class="mj-agent-props-section-header" (click)="ToggleSection('mapping')">
+          <span class="mj-agent-props-section-title">Data Mapping</span>
+          <i class="fa-solid" [ngClass]="IsSectionCollapsed('mapping') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
+        </button>
+
+        <div *ngIf="!IsSectionCollapsed('mapping')" class="mj-agent-props-section-body">
+          <div class="mj-agent-props-field">
+            <label>Input Mapping</label>
+            <mj-code-editor
+              [value]="FormatJsonDisplay(Step!.ActionInputMapping)"
+              language="json"
+              [readonly]="ReadOnly"
+              setup="minimal"
+              [lineWrapping]="true"
+              placeholder="Enter JSON input mapping..."
+              (change)="OnInputMappingChange($any($event))">
+            </mj-code-editor>
+          </div>
+
+          <div class="mj-agent-props-field">
+            <label>Output Mapping</label>
+            <mj-code-editor
+              [value]="FormatJsonDisplay(Step!.ActionOutputMapping)"
+              language="json"
+              [readonly]="ReadOnly"
+              setup="minimal"
+              [lineWrapping]="true"
+              placeholder="Enter JSON output mapping..."
+              (change)="OnOutputMappingChange($any($event))">
+            </mj-code-editor>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Error Handling Section ──────────── -->
+      <div class="mj-agent-props-section">
+        <button class="mj-agent-props-section-header" (click)="ToggleSection('errors')">
+          <span class="mj-agent-props-section-title">Error Handling</span>
+          <i class="fa-solid" [ngClass]="IsSectionCollapsed('errors') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
+        </button>
+
+        <div *ngIf="!IsSectionCollapsed('errors')" class="mj-agent-props-section-body">
+          <div class="mj-agent-props-field">
+            <label>On Error</label>
+            <select *ngIf="!ReadOnly" [value]="Step!.OnErrorBehavior"
+                    (change)="OnErrorBehaviorChange(InputValue($event))"
+                    class="mj-agent-props-input">
+              <option value="fail">Fail (stop flow)</option>
+              <option value="continue">Continue (ignore error)</option>
+              <option value="retry">Retry</option>
+            </select>
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">
+              {{ Step!.OnErrorBehavior === 'fail' ? 'Fail (stop flow)' :
+                 Step!.OnErrorBehavior === 'continue' ? 'Continue (ignore error)' : 'Retry' }}
+            </div>
+          </div>
+
+          <div *ngIf="Step!.OnErrorBehavior === 'retry'" class="mj-agent-props-field">
+            <label>Retry Count</label>
+            <input *ngIf="!ReadOnly" type="number" [value]="Step!.RetryCount" min="0" max="10"
+                   (input)="OnRetryCountChange(NumericValue($event))"
+                   class="mj-agent-props-input">
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">{{ Step!.RetryCount }}</div>
+          </div>
+
+          <div class="mj-agent-props-field">
+            <label>Timeout (seconds)</label>
+            <input *ngIf="!ReadOnly" type="number" [value]="Step!.TimeoutSeconds" min="1"
+                   (input)="OnTimeoutChange(NumericValue($event))"
+                   class="mj-agent-props-input">
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">{{ Step!.TimeoutSeconds }}s</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Danger Zone ─────────────────────── -->
+      <div *ngIf="!ReadOnly" class="mj-agent-props-section mj-agent-props-danger">
+        <button class="mj-agent-props-delete-btn" (click)="OnDeleteStep()">
+          <i class="fa-solid fa-trash-can"></i> Delete Step
+        </button>
+      </div>
+    </div>
+  </ng-container>
+
+  <!-- ============================================ -->
+  <!-- PATH PROPERTIES                              -->
+  <!-- ============================================ -->
+  <ng-container *ngIf="isConnectionSelected">
+
+    <!-- Path Header -->
+    <div class="mj-agent-props-header mj-agent-props-header--path"
+         [style.border-left-color]="pathAccentColor">
+      <div class="mj-agent-props-header-top">
+        <span class="mj-agent-props-header-label">PATH</span>
+        <button class="mj-agent-props-close" (click)="CloseRequested.emit()" title="Close">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+      <!-- Path identity card -->
+      <div class="mj-agent-props-identity">
+        <div class="mj-agent-props-identity-icon mj-agent-props-identity-icon--path"
+             [style.background]="pathAccentColor">
+          <i class="fa-solid fa-arrow-right"></i>
+        </div>
+        <div class="mj-agent-props-identity-info">
+          <span class="mj-agent-props-path-route">
+            <span class="mj-agent-props-path-step-name">{{ originStepName }}</span>
+            <i class="fa-solid fa-arrow-right mj-agent-props-path-arrow"></i>
+            <span class="mj-agent-props-path-step-name">{{ destinationStepName }}</span>
+          </span>
+          <span class="mj-agent-props-identity-meta">
+            <span class="mj-agent-props-type-pill"
+                  [style.color]="pathAccentColor"
+                  [style.background]="pathAccentColor + '18'">
+              {{ isConditionalPath ? 'Conditional' : 'Always' }}
+            </span>
+            <span *ngIf="PathEntity!.Priority !== 0" class="mj-agent-props-priority-badge">
+              Priority: {{ PathEntity!.Priority }}
+            </span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mj-agent-props-content">
+
+      <!-- ── Overview Section ────────────────── -->
+      <div class="mj-agent-props-section">
+        <button class="mj-agent-props-section-header" (click)="ToggleSection('path-overview')">
+          <span class="mj-agent-props-section-title">Route</span>
+          <i class="fa-solid" [ngClass]="IsSectionCollapsed('path-overview') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
+        </button>
+
+        <div *ngIf="!IsSectionCollapsed('path-overview')" class="mj-agent-props-section-body">
+          <div class="mj-agent-props-field">
+            <label>From</label>
+            <div class="mj-agent-props-readonly-value mj-agent-props-readonly-value--muted">
+              {{ originStepName }}
+            </div>
+          </div>
+          <div class="mj-agent-props-field">
+            <label>To</label>
+            <div class="mj-agent-props-readonly-value mj-agent-props-readonly-value--muted">
+              {{ destinationStepName }}
+            </div>
+          </div>
+          <span class="mj-agent-props-hint">To change the route, rewire the connection on the canvas.</span>
+        </div>
+      </div>
+
+      <!-- ── Path Settings Section ───────────── -->
+      <div class="mj-agent-props-section">
+        <button class="mj-agent-props-section-header" (click)="ToggleSection('path-settings')">
+          <span class="mj-agent-props-section-title">Settings</span>
+          <i class="fa-solid" [ngClass]="IsSectionCollapsed('path-settings') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
+        </button>
+
+        <div *ngIf="!IsSectionCollapsed('path-settings')" class="mj-agent-props-section-body">
+          <div class="mj-agent-props-field">
+            <label>Description</label>
+            <input *ngIf="!ReadOnly" type="text" [value]="PathEntity!.Description || ''"
+                   (input)="OnPathDescriptionChange(InputValue($event))"
+                   placeholder="Path label..." class="mj-agent-props-input">
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">
+              {{ PathEntity!.Description || '—' }}
+            </div>
+            <span *ngIf="!ReadOnly" class="mj-agent-props-hint">Displayed as a label on the connection line</span>
+          </div>
+
+          <div class="mj-agent-props-field">
+            <label>Condition</label>
+            <mj-code-editor *ngIf="!ReadOnly"
+              [value]="PathEntity!.Condition || ''"
+              language="javascript"
+              [readonly]="false"
+              setup="minimal"
+              [lineWrapping]="true"
+              placeholder="e.g. payload.status === 'active'"
+              (change)="OnPathConditionChange($any($event))">
+            </mj-code-editor>
+            <mj-code-editor *ngIf="ReadOnly && PathEntity!.Condition"
+              [value]="PathEntity!.Condition"
+              language="javascript"
+              [readonly]="true"
+              setup="minimal"
+              [lineWrapping]="true">
+            </mj-code-editor>
+            <div *ngIf="ReadOnly && !PathEntity!.Condition" class="mj-agent-props-readonly-value mj-agent-props-readonly-value--muted">
+              No condition (always taken)
+            </div>
+            <span *ngIf="!ReadOnly" class="mj-agent-props-hint">
+              JavaScript expression evaluated at runtime. Leave empty for unconditional.
+            </span>
+          </div>
+
+          <div class="mj-agent-props-field">
+            <label>Priority</label>
+            <input *ngIf="!ReadOnly" type="number" [value]="PathEntity!.Priority" min="-100" max="100"
+                   (input)="OnPathPriorityChange(NumericValue($event))"
+                   class="mj-agent-props-input">
+            <div *ngIf="ReadOnly" class="mj-agent-props-readonly-value">{{ PathEntity!.Priority }}</div>
+            <span class="mj-agent-props-hint">Higher priority paths are evaluated first when multiple paths leave a step.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Danger Zone ─────────────────────── -->
+      <div *ngIf="!ReadOnly" class="mj-agent-props-section mj-agent-props-danger">
+        <button class="mj-agent-props-delete-btn" (click)="OnDeletePath()">
+          <i class="fa-solid fa-trash-can"></i> Delete Path
+        </button>
+      </div>
+    </div>
+  </ng-container>
+</div>

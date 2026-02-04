@@ -59,6 +59,7 @@
             "development": {
               "optimization": false,
               "extractLicenses": false,
+              "preserveSymlinks": true,
               "sourceMap": true,
               "namedChunks": true,
               "fileReplacements": [
@@ -96,6 +97,10 @@
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "prebundle": false,
+            "poll": 1000
+          },
           "configurations": {
             "production": {
               "buildTarget": "MJExplorer:build:production"

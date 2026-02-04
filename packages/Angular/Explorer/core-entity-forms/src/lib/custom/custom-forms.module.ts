@@ -31,8 +31,8 @@ import { SubAgentAdvancedSettingsDialogComponent } from "./AIAgents/sub-agent-ad
 import { SubAgentSelectorDialogComponent } from "./AIAgents/sub-agent-selector-dialog.component";
 import { CreatePromptDialogComponent } from "./AIAgents/create-prompt-dialog.component";
 import { CreateSubAgentDialogComponent } from "./AIAgents/create-sub-agent-dialog.component";
-import { AgentPermissionsDialogComponent } from "./AIAgents/agent-permissions-dialog.component";
 import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
+import { AgentsModule } from "@memberjunction/ng-agents";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { TestingModule } from "@memberjunction/ng-testing";
@@ -58,9 +58,7 @@ import { QueryFormExtendedComponent, LoadQueryFormExtendedComponent } from "./Qu
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
-import { StepInfoControlComponent } from "./AIAgents/FlowAgentType/step-info-control.component";
-import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-diagram.component";
-import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-integrated-flow-editor.component";
+import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
 import { TestRunFormComponentExtended, LoadTestRunFormComponentExtended } from "./Tests/test-run-form.component";
 import { TestFormComponentExtended, LoadTestFormComponentExtended } from "./Tests/test-form.component";
 import { TestSuiteRunFormComponentExtended, LoadTestSuiteRunFormComponentExtended } from "./Tests/test-suite-run-form.component";
@@ -88,7 +86,6 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         SubAgentSelectorDialogComponent,
         CreatePromptDialogComponent,
         CreateSubAgentDialogComponent,
-        AgentPermissionsDialogComponent,
         EntitySelectorDialogComponent,
         AIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
@@ -104,8 +101,6 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         QueryRunDialogComponent,
         QueryCategoryDialogComponent,
         FlowAgentFormSectionComponent,
-        StepInfoControlComponent,
-        FlowAgentDiagramComponent,
         TestRunFormComponentExtended,
         TestFormComponentExtended,
         TestSuiteRunFormComponentExtended,
@@ -153,11 +148,12 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         AITestHarnessModule,
         ActionGalleryModule,
         TestingModule,
-        MJIntegratedFlowEditorComponent,
+        FlowEditorModule,
         SharedGenericModule,
         EntityRelationshipDiagramModule,
         ListManagementModule,
-        ActionsModule
+        ActionsModule,
+        AgentsModule
     ],
     exports: [
         EntityFormComponentExtended,
@@ -176,9 +172,6 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         AIAgentRunAnalyticsComponent,
         QueryFormExtendedComponent,
         FlowAgentFormSectionComponent,
-        StepInfoControlComponent,
-        FlowAgentDiagramComponent,
-        MJIntegratedFlowEditorComponent,
         TestRunFormComponentExtended,
         TestFormComponentExtended,
         TestSuiteRunFormComponentExtended,

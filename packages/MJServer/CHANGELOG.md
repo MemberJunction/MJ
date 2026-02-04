@@ -1,5 +1,69 @@
 # Change Log - @memberjunction/server
 
+## 3.4.0
+
+### Minor Changes
+
+- ef7acd8: migration
+
+### Patch Changes
+
+- 3a71e4e: Fix large text field corruptions, cross-platform improvements, more robust environment variable parsing for boolean values
+- e552e5f: no migration
+- Updated dependencies [d596467]
+- Updated dependencies [cf1df5b]
+- Updated dependencies [fca3ce4]
+- Updated dependencies [ef7acd8]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ai-provider-bundle@3.4.0
+  - @memberjunction/ai-prompts@3.4.0
+  - @memberjunction/ai-mcp-client@3.4.0
+  - @memberjunction/core-actions@3.4.0
+  - @memberjunction/storage@3.4.0
+  - @memberjunction/sqlserver-dataprovider@3.4.0
+  - @memberjunction/config@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/communication-ms-graph@3.4.0
+  - @memberjunction/core-entities-server@3.4.0
+  - @memberjunction/queue@3.4.0
+  - @memberjunction/templates@3.4.0
+  - @memberjunction/ai-agents@3.4.0
+  - @memberjunction/actions@3.4.0
+  - @memberjunction/testing-engine@3.4.0
+  - @memberjunction/aiengine@3.4.0
+  - @memberjunction/notifications@3.4.0
+  - @memberjunction/external-change-detection@3.4.0
+  - @memberjunction/scheduling-engine@3.4.0
+  - @memberjunction/ai-agent-manager-actions@3.4.0
+  - @memberjunction/ai-agent-manager@3.4.0
+  - @memberjunction/ai-core-plus@3.4.0
+  - @memberjunction/api-keys@3.4.0
+  - @memberjunction/actions-apollo@3.4.0
+  - @memberjunction/actions-bizapps-accounting@3.4.0
+  - @memberjunction/actions-bizapps-crm@3.4.0
+  - @memberjunction/actions-bizapps-formbuilders@3.4.0
+  - @memberjunction/actions-bizapps-lms@3.4.0
+  - @memberjunction/actions-bizapps-social@3.4.0
+  - @memberjunction/entity-communications-server@3.4.0
+  - @memberjunction/communication-sendgrid@3.4.0
+  - @memberjunction/doc-utils@3.4.0
+  - @memberjunction/encryption@3.4.0
+  - @memberjunction/graphql-dataprovider@3.4.0
+  - @memberjunction/data-context@3.4.0
+  - @memberjunction/scheduling-actions@3.4.0
+  - @memberjunction/scheduling-engine-base@3.4.0
+  - @memberjunction/ai-vectors-pinecone@3.4.0
+  - @memberjunction/component-registry-client-sdk@3.4.0
+  - @memberjunction/interactive-component-types@3.4.0
+  - @memberjunction/data-context-server@3.4.0
+  - @memberjunction/skip-types@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/global@3.4.0
+  - @memberjunction/scheduling-base-types@3.4.0
+
 ## 3.3.0
 
 ### Minor Changes

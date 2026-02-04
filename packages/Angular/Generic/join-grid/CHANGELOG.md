@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-join-grid
 
+## 3.4.0
+
+### Patch Changes
+
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ng-shared@3.4.0
+  - @memberjunction/ng-base-types@3.4.0
+  - @memberjunction/ng-shared-generic@3.4.0
+  - @memberjunction/ng-container-directives@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

@@ -2,6 +2,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntitySaveOptions, LogError, SimpleEmbeddingResult } from "@memberjunction/core";
 import { AIAgentExampleEntity } from "@memberjunction/core-entities";
 import { EmbedTextLocalHelper } from "./util";
+import { AIEngine } from "@memberjunction/aiengine";
 
 /**
  * Server-side extension of AIAgentExampleEntity that auto-generates embeddings
@@ -25,6 +26,9 @@ export class AIAgentExampleEntityExtended extends AIAgentExampleEntity {
             // Generate embedding for ExampleInput field if needed
             if (shouldGenerateEmbedding && this.ExampleInput && this.ExampleInput.trim().length > 0) {
                 await this.GenerateEmbeddingByFieldName("ExampleInput", "EmbeddingVector", "EmbeddingModelID");
+
+                // update AI Engine to know about this updated embedding for the example
+                AIEngine.Instance.AddOrUpdateSingleExampleEmbedding(this);
             } else if (!this.ExampleInput || this.ExampleInput.trim().length === 0) {
                 // Clear embedding if input is empty
                 this.EmbeddingVector = null;
