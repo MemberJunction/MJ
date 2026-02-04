@@ -37,9 +37,9 @@ export class AgentPropertiesPanelComponent {
   @Input() SelectedConnection: FlowConnection | null = null;
   @Input() PathEntity: AIAgentStepPathEntity | null = null;
   @Input() ReadOnly = false;
-  @Input() Actions: Array<{ ID: string; Name: string }> = [];
+  @Input() Actions: Array<{ ID: string; Name: string; IconClass?: string | null }> = [];
   @Input() Prompts: Array<{ ID: string; Name: string }> = [];
-  @Input() Agents: Array<{ ID: string; Name: string }> = [];
+  @Input() Agents: Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }> = [];
   @Input() AllSteps: AIAgentStepEntity[] = [];
 
   // ── Outputs ─────────────────────────────────────────────────

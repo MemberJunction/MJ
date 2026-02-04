@@ -67,10 +67,10 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   protected selectedPathEntity: AIAgentStepPathEntity | null = null;
   protected showPropertiesPanel = false;
 
-  // Picker data
-  protected availableActions: Array<{ ID: string; Name: string }> = [];
+  // Picker data (includes icon fields for node rendering)
+  protected availableActions: Array<{ ID: string; Name: string; IconClass?: string | null }> = [];
   protected availablePrompts: Array<{ ID: string; Name: string }> = [];
-  protected availableAgents: Array<{ ID: string; Name: string }> = [];
+  protected availableAgents: Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }> = [];
 
   // Permission state — cached once on init
   protected userCanUpdate = false;
@@ -173,7 +173,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
     const [actionsResult, promptsResult, agentsResult] = await rv.RunViews([
       {
         EntityName: 'Actions',
-        Fields: ['ID', 'Name'],
+        Fields: ['ID', 'Name', 'IconClass'],
         ExtraFilter: `Status='Active'`,
         OrderBy: 'Name ASC',
         ResultType: 'simple'
@@ -187,7 +187,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
       },
       {
         EntityName: 'AI Agents',
-        Fields: ['ID', 'Name'],
+        Fields: ['ID', 'Name', 'IconClass', 'LogoURL'],
         ExtraFilter: this.AgentID ? `ID <> '${this.AgentID}'` : '',
         OrderBy: 'Name ASC',
         ResultType: 'simple'
@@ -195,18 +195,18 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
     ]);
 
     this.availableActions = actionsResult.Success
-      ? (actionsResult.Results as Array<{ ID: string; Name: string }>)
+      ? (actionsResult.Results as Array<{ ID: string; Name: string; IconClass?: string | null }>)
       : [];
     this.availablePrompts = promptsResult.Success
       ? (promptsResult.Results as Array<{ ID: string; Name: string }>)
       : [];
     this.availableAgents = agentsResult.Success
-      ? (agentsResult.Results as Array<{ ID: string; Name: string }>)
+      ? (agentsResult.Results as Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }>)
       : [];
   }
 
   private rebuildFlowModel(): void {
-    this.nodes = this.transformer.StepsToNodes(this.steps);
+    this.nodes = this.transformer.StepsToNodes(this.steps, this.availableActions, this.availableAgents);
     this.connections = this.transformer.PathsToConnections(this.paths);
   }
 
@@ -519,6 +519,12 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
         inputPort.Disabled = newIsStart;
       }
 
+      // Re-resolve icon from picker data (handles action/agent assignment changes)
+      const resolved = this.transformer.ResolveStepIcon(step, this.availableActions, this.availableAgents);
+      node.Icon = resolved.Icon;
+      if (!node.Data) node.Data = {};
+      node.Data['LogoURL'] = resolved.LogoURL ?? null;
+
       // For loop nodes, rebuild the loop-specific Data properties so the
       // inner body card updates immediately when the user changes body type / config
       if (step.StepType === 'ForEach' || step.StepType === 'While') {
@@ -532,6 +538,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
         Status: newStatus,
         StatusMessage: warningMessage ?? undefined,
         IsStartNode: newIsStart,
+        Icon: resolved.Icon,
         Data: node.Data
       });
     }

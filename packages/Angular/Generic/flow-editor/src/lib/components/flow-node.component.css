@@ -122,6 +122,14 @@ mj-flow-node {
   flex-shrink: 0;
 }
 
+.mj-flow-node-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .mj-flow-node-label {
   font-size: 13px;
   font-weight: 600;

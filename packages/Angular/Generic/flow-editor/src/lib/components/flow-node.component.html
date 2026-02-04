@@ -25,7 +25,8 @@
   <!-- Header -->
   <div class="mj-flow-node-header">
     <div class="mj-flow-node-header-left">
-      <i class="fa-solid mj-flow-node-icon" [ngClass]="nodeIcon" [style.color]="headerColor"></i>
+      <img *ngIf="logoURL" class="mj-flow-node-logo" [src]="logoURL" [alt]="Node.Label" />
+      <i *ngIf="!logoURL" class="fa-solid mj-flow-node-icon" [ngClass]="nodeIcon" [style.color]="headerColor"></i>
       <span class="mj-flow-node-label">{{ Node.Label }}</span>
     </div>
     <div class="mj-flow-node-header-right">
