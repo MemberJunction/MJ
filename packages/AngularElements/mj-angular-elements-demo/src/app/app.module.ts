@@ -17,7 +17,6 @@ import { createCustomElement } from '@angular/elements';
 import { HelloMJComponent } from './hello-mj/hello-mj.component';
 import { MJListenerDemo } from './listener-demo/listener-demo.component';
 import { UserViewGridWrapperComponent } from './user-view-grid-wrapper/user-view-grid-wrapper.component';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { EntityListDemoComponent } from './entity-list-demo/entity-list-demo.component';
 import { EntityDetailDemoComponent } from './entity-detail-demo/entity-detail-demo.component';
 
@@ -39,8 +38,7 @@ import { EntityDetailDemoComponent } from './entity-detail-demo/entity-detail-de
   ],
   imports: [
     BrowserModule,
-    BrowserAnimationsModule,
-    UserViewGridModule
+    BrowserAnimationsModule
   ],
   providers: []
   // Note: entryComponents is no longer needed in newer Angular versions
