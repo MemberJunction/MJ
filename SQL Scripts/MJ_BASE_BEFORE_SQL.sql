@@ -790,37 +790,53 @@ DROP VIEW IF EXISTS [__mj].[vwSQLTablesAndEntities]
 GO
 CREATE VIEW [__mj].[vwSQLTablesAndEntities]
 AS
-SELECT 
+SELECT
 	e.ID EntityID,
 	e.Name EntityName,
 	e.VirtualEntity,
 	t.name TableName,
 	s.name SchemaName,
-	t.*,
-	v.object_id view_object_id,
-	v.name ViewName,
-    EP_Table.value AS TableDescription, -- Join with sys.extended_properties to get the table description
-    EP_View.value AS ViewDescription, -- Join with sys.extended_properties to get the view description
-	COALESCE(EP_View.value, EP_Table.value) AS EntityDescription -- grab the view description first and if that doesn't exist, grab the table description and we'll use this as the description for the entity
-FROM 
+	t.object_id,
+	t.principal_id,
+	t.schema_id,
+	t.parent_object_id,
+	t.type,
+	t.type_desc,
+	t.create_date,
+	t.modify_date,
+	t.is_ms_shipped,
+	t.is_published,
+	t.is_schema_published,
+	CASE 
+	    WHEN s_v.name = e.SchemaName THEN v.object_id 
+	    ELSE NULL 
+	END as view_object_id,  -- Only use view if it's in the correct schema
+	CASE 
+	    WHEN s_v.name = e.SchemaName THEN v.name 
+	    ELSE NULL 
+	END as ViewName,
+    EP_Table.value AS TableDescription,
+    EP_View.value AS ViewDescription,
+	COALESCE(EP_View.value, EP_Table.value) AS EntityDescription
+FROM
 	sys.all_objects t
 INNER JOIN
-	sys.schemas s 
+	sys.schemas s
 ON
 	t.schema_id = s.schema_id
 LEFT OUTER JOIN
-	__mj.Entity e 
+	__mj.Entity e
 ON
 	t.name = e.BaseTable AND
-	s.name = e.SchemaName 
+	s.name = e.SchemaName
 LEFT OUTER JOIN
 	sys.all_objects v
 ON
-	e.BaseView = v.name AND 
-	v.type = 'V' 
+	e.BaseView = v.name AND
+	v.type = 'V'
 LEFT OUTER JOIN
     sys.schemas s_v
-ON   
+ON
     v.schema_id = s_v.schema_id
 LEFT OUTER JOIN
     sys.extended_properties EP_Table
@@ -834,20 +850,15 @@ ON
     EP_View.major_id = v.object_id
     AND EP_View.minor_id = 0
     AND EP_View.name = 'MS_Description'
-WHERE   
-    (s_v.name = e.SchemaName OR s_v.name IS NULL) AND
-	( t.TYPE = 'U' OR (t.Type='V' AND e.VirtualEntity=1)) -- TABLE - non-virtual entities 
+WHERE
+	t.TYPE = 'U'  -- Include all tables (both with and without existing entities)
+	OR (t.TYPE = 'V' AND e.VirtualEntity = 1)  -- Include views only when marked as VirtualEntity 
 GO
 
 DROP VIEW IF EXISTS [__mj].[vwSQLColumnsAndEntityFields]
 GO
 CREATE VIEW [__mj].[vwSQLColumnsAndEntityFields]
 AS
-WITH FilteredColumns AS (
-    SELECT *
-    FROM sys.all_columns
-    WHERE default_object_id IS NOT NULL
-)
 SELECT 
 	e.EntityID,
 	e.EntityName Entity,
@@ -857,26 +868,26 @@ SELECT
 	ef.Sequence EntityFieldSequence,
 	ef.Name EntityFieldName,
 	c.column_id Sequence,
-  basetable_columns.column_id BaseTableSequence,
+    basetable_columns.column_id BaseTableSequence,
 	c.name FieldName,
-	COALESCE(bt.name, t.name) Type, -- get the type from the base type (bt) if it exists, this is in the case of a user-defined type being used, t.name would be the UDT name.
-	IIF(t.is_user_defined = 1, t.name, NULL) UserDefinedType, -- we have a user defined type, so pass that to the view caller too
+	COALESCE(bt.name, t.name) Type,
+	IIF(t.is_user_defined = 1, t.name, NULL) UserDefinedType,
 	c.max_length Length,
 	c.precision Precision,
 	c.scale Scale,
 	c.is_nullable AllowsNull,
 	IIF(COALESCE(bt.name, t.name) IN ('timestamp', 'rowversion'), 1, IIF(basetable_columns.is_identity IS NULL, 0, basetable_columns.is_identity)) AutoIncrement,
 	c.column_id,
-	IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0) IsVirtual, -- updated so that we take into account that computed columns are virtual always, previously only looked for existence of a column in table vs. a view
+	IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0) IsVirtual,
 	basetable_columns.object_id,
 	dc.name AS DefaultConstraintName,
-  dc.definition AS DefaultValue,
+    dc.definition AS DefaultValue,
 	cc.definition ComputedColumnDefinition,
-	COALESCE(EP_View.value, EP_Table.value) AS [Description], -- Dynamically choose description - first look at view level if a description was defined there (rare) and then go to table if it was defined there (often not there either)
+	COALESCE(EP_View.value, EP_Table.value) AS [Description],
 	EP_View.value AS ViewColumnDescription,
 	EP_Table.value AS TableColumnDescription
 FROM
-	FilteredColumns c
+	sys.all_columns c  -- No FilteredColumns CTE - use sys.all_columns directly
 INNER JOIN
 	[__mj].vwSQLTablesAndEntities e
 ON
