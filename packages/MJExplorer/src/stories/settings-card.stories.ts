@@ -22,94 +22,96 @@ import { Component } from '@angular/core';
       </div>
     </div>
   `,
-  styles: [`
-    .settings-card {
-      background: white;
-      border-radius: 12px;
-      border: 1px solid #e5e7eb;
-      overflow: hidden;
-      transition: all 0.2s ease;
-    }
-
-    .settings-card:hover {
-      border-color: #c7d2fe;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    }
-
-    .card-header {
-      display: flex;
-      align-items: center;
-      padding: 16px 20px;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .card-header:hover {
-      background: #f9fafb;
-    }
-
-    .card-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-right: 16px;
-      color: #4f46e5;
-      font-size: 16px;
-    }
-
-    .card-title {
-      flex: 1;
-      margin: 0;
-      font-size: 16px;
-      font-weight: 600;
-      color: #1e293b;
-    }
-
-    .expand-button {
-      width: 32px;
-      height: 32px;
-      border: none;
-      background: transparent;
-      border-radius: 8px;
-      cursor: pointer;
-      color: #64748b;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .expand-button:hover {
-      background: #f1f5f9;
-      color: #334155;
-    }
-
-    .settings-card.expanded .expand-button i {
-      transform: rotate(180deg);
-    }
-
-    .card-content {
-      padding: 0 20px 20px 76px;
-      border-top: 1px solid #f1f5f9;
-      animation: slideDown 0.2s ease;
-    }
-
-    @keyframes slideDown {
-      from {
-        opacity: 0;
-        transform: translateY(-8px);
+  styles: [
+    `
+      .settings-card {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+        transition: all 0.2s ease;
       }
-      to {
-        opacity: 1;
-        transform: translateY(0);
+
+      .settings-card:hover {
+        border-color: #c7d2fe;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
       }
-    }
-  `],
-  standalone: false
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        padding: 16px 20px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .card-header:hover {
+        background: #f9fafb;
+      }
+
+      .card-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16px;
+        color: #4f46e5;
+        font-size: 16px;
+      }
+
+      .card-title {
+        flex: 1;
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #1e293b;
+      }
+
+      .expand-button {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: transparent;
+        border-radius: 8px;
+        cursor: pointer;
+        color: #64748b;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .expand-button:hover {
+        background: #f1f5f9;
+        color: #334155;
+      }
+
+      .settings-card.expanded .expand-button i {
+        transform: rotate(180deg);
+      }
+
+      .card-content {
+        padding: 0 20px 20px 76px;
+        border-top: 1px solid #f1f5f9;
+        animation: slideDown 0.2s ease;
+      }
+
+      @keyframes slideDown {
+        from {
+          opacity: 0;
+          transform: translateY(-8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    `,
+  ],
+  standalone: false,
 })
 class StorySettingsCardComponent {
   title = '';
@@ -125,7 +127,7 @@ import { NgModule } from '@angular/core';
 @NgModule({
   declarations: [StorySettingsCardComponent],
   imports: [CommonModule],
-  exports: [StorySettingsCardComponent]
+  exports: [StorySettingsCardComponent],
 })
 class SettingsCardStoryModule {}
 
@@ -274,6 +276,12 @@ export const Expanded: Story = {
 
 // Multiple cards
 export const MultipleCards: Story = {
+  args: {
+    title: 'Hello World',
+    icon: 'f',
+    expanded: true,
+  },
+
   render: () => ({
     template: `
       <div style="width: 450px; display: flex; flex-direction: column; gap: 12px;">
@@ -309,10 +317,12 @@ export const MultipleCards: Story = {
       </div>
     `,
   }),
+
   parameters: {
     docs: {
       description: {
-        story: 'Multiple settings cards in a list, typically used in a settings page layout.',
+        story:
+          'Multiple settings cards in a list, typically used in a settings page layout.',
       },
     },
   },
@@ -432,7 +442,8 @@ export const WithFormContent: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Settings card with various form controls - dropdowns, sliders, inputs, and checkboxes.',
+        story:
+          'Settings card with various form controls - dropdowns, sliders, inputs, and checkboxes.',
       },
     },
   },
@@ -484,7 +495,8 @@ export const SettingsPageLayout: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Complete settings page layout with header and multiple collapsible sections.',
+        story:
+          'Complete settings page layout with header and multiple collapsible sections.',
       },
     },
   },

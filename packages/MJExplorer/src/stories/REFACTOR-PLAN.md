@@ -197,8 +197,7 @@ const meta: Meta = {
 packages/MJExplorer/src/stories/
 ├── .storybook-mocks/
 │   ├── index.ts
-│   ├── metadata.mock.ts
-│   ├── shared-service.mock.ts
+│   ├── mock-user-info.ts
 │   ├── agent-state.mock.ts
 │   ├── evaluation-preferences.mock.ts
 │   └── artifact-icon.mock.ts
@@ -237,6 +236,42 @@ packages/MJExplorer/src/stories/
 
 | Phase | Status |
 |-------|--------|
-| Phase 1 (Tier 1) | Not started |
-| Phase 2 (Tier 2) | Not started |
-| Phase 3 (Tier 3) | Not started |
+| Phase 1 (Tier 1) | ✅ Complete |
+| Phase 2 (Tier 2) | ✅ Complete |
+| Phase 3 (Tier 3) | ✅ Complete |
+
+### Detailed Progress
+
+**✅ Using real components:**
+- `score-indicator.stories.ts` → TestingModule
+- `review-status-indicator.stories.ts` → TestingModule
+- `step-info-control.stories.ts` → MemberJunctionCoreEntityFormsModule
+- `actionable-commands.stories.ts` → ConversationsModule
+- `entity-link-pill.stories.ts` → MemberJunctionCoreEntityFormsModule ✅
+- `evaluation-mode-toggle.stories.ts` → TestingModule + MockEvaluationPreferencesService ✅
+- `active-agent-indicator.stories.ts` → ConversationsModule + MockAgentStateService ✅
+- `artifact-message-card.stories.ts` → ArtifactsModule + MockArtifactIconService ✅
+
+### Mock Utilities Created
+
+```
+packages/MJExplorer/src/stories/.storybook-mocks/
+├── index.ts                        # Re-exports all mocks
+├── mock-user-info.ts               # createMockUserInfo() helper
+├── evaluation-preferences.mock.ts  # MockEvaluationPreferencesService
+├── agent-state.mock.ts             # MockAgentStateService + createMockAgent()
+└── artifact-icon.mock.ts           # MockArtifactIconService
+```
+
+### Refactoring Approach Summary
+
+| Component | Approach |
+|-----------|----------|
+| `entity-link-pill` | Direct swap - uses Metadata internally, SharedService for click (logs in Storybook) |
+| `evaluation-mode-toggle` | Mock EvaluationPreferencesService with BehaviorSubject |
+| `active-agent-indicator` | Mock AgentStateService.getActiveAgents() with per-story factory |
+| `artifact-message-card` | Pass pre-loaded artifact/artifactVersion inputs to skip DB queries |
+
+---
+
+## Completed: Feb 3, 2026

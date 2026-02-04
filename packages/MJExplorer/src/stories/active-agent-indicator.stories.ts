@@ -1,312 +1,25 @@
 import { Meta, StoryObj, moduleMetadata } from '@storybook/angular';
 import { CommonModule } from '@angular/common';
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
+import { ActiveAgentIndicatorComponent } from '@memberjunction/ng-conversations';
+import { AgentStateService } from '@memberjunction/ng-conversations';
+import {
+  MockAgentStateService,
+  createMockAgent,
+  createMockUserInfo,
+  type AgentWithStatus
+} from './.storybook-mocks';
 
-// Mock types
-type AgentStatus = 'acknowledging' | 'working' | 'completing' | 'completed' | 'error';
-
-interface MockAgentRun {
-  ID: string;
-  Agent: string;
-}
-
-interface MockActiveAgent {
-  run: MockAgentRun;
-  status: AgentStatus;
-  confidence: number | null;
-}
-
-/**
- * Mock ActiveAgentIndicator component for Storybook
- * Replicates the visual behavior without requiring actual services
- */
-@Component({
-  selector: 'mj-active-agent-indicator-mock',
-  template: `
-    <div class="active-agents-container" *ngIf="activeAgents.length > 0">
-      <span class="active-agents-label">Active:</span>
-      <div class="agents-wrapper" [class.expanded]="isExpanded">
-        <div *ngFor="let agent of displayAgents"
-             class="agent-avatar"
-             [class.status-acknowledging]="agent.status === 'acknowledging'"
-             [class.status-working]="agent.status === 'working'"
-             [class.status-completing]="agent.status === 'completing'"
-             [class.status-completed]="agent.status === 'completed'"
-             [class.status-error]="agent.status === 'error'"
-             [title]="getAgentTooltip(agent)"
-             (click)="onAgentClick(agent)">
-          <div class="avatar-content">
-            <i class="fas fa-robot"></i>
-          </div>
-          <div class="status-indicator" *ngIf="agent.status !== 'completed'">
-            <div class="pulse-ring"></div>
-          </div>
-          <div class="confidence-badge" *ngIf="agent.confidence != null" [title]="'Confidence: ' + (agent.confidence * 100).toFixed(0) + '%'">
-            {{ (agent.confidence * 100).toFixed(0) }}%
-          </div>
-        </div>
-
-        <button class="more-agents" *ngIf="activeAgents.length > maxVisibleAgents && !isExpanded"
-                (click)="toggleExpanded()" [title]="'Show all ' + activeAgents.length + ' agents'">
-          +{{ activeAgents.length - maxVisibleAgents }}
-        </button>
-      </div>
-
-      <button class="panel-toggle" (click)="onTogglePanel()" title="Open agent process panel">
-        <i class="fas fa-chart-line"></i>
-        <span class="agent-count">{{ activeAgents.length }}</span>
-      </button>
-    </div>
-  `,
-  styles: [`
-    .active-agents-container {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      background-color: #F4F4F4;
-      border-radius: 20px;
-      font-size: 12px;
-      color: #6B7280;
-      height: 32px;
-    }
-
-    .active-agents-label {
-      font-weight: 500;
-      color: #6B7280;
-    }
-
-    .agents-wrapper {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      max-width: 200px;
-      overflow: hidden;
-      transition: max-width 300ms ease;
-    }
-
-    .agents-wrapper.expanded {
-      max-width: 600px;
-    }
-
-    .agent-avatar {
-      position: relative;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 200ms ease;
-      flex-shrink: 0;
-      font-size: 10px;
-      font-weight: 600;
-    }
-
-    .agent-avatar:hover {
-      transform: scale(1.1);
-    }
-
-    .avatar-content {
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      color: white;
-      position: relative;
-      z-index: 1;
-    }
-
-    /* Status-based colors */
-    .status-acknowledging .avatar-content {
-      background: linear-gradient(135deg, #3B82F6, #2563EB);
-    }
-
-    .status-working .avatar-content {
-      background: linear-gradient(135deg, #F59E0B, #D97706);
-    }
-
-    .status-completing .avatar-content {
-      background: linear-gradient(135deg, #10B981, #059669);
-    }
-
-    .status-completed .avatar-content {
-      background: linear-gradient(135deg, #6B7280, #4B5563);
-      opacity: 0.6;
-    }
-
-    .status-error .avatar-content {
-      background: linear-gradient(135deg, #EF4444, #DC2626);
-    }
-
-    /* Animated status indicator */
-    .status-indicator {
-      position: absolute;
-      top: -2px;
-      right: -2px;
-      width: 10px;
-      height: 10px;
-      z-index: 2;
-    }
-
-    .pulse-ring {
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      background: currentColor;
-      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    .status-acknowledging .pulse-ring {
-      background: #3B82F6;
-    }
-
-    .status-working .pulse-ring {
-      background: #F59E0B;
-      animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    .status-completing .pulse-ring {
-      background: #10B981;
-      animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-      }
-      50% {
-        opacity: 0.5;
-        transform: scale(1.5);
-      }
-    }
-
-    /* Confidence badge */
-    .confidence-badge {
-      position: absolute;
-      bottom: -4px;
-      right: -4px;
-      background: white;
-      border: 1px solid #E5E7EB;
-      border-radius: 4px;
-      padding: 1px 3px;
-      font-size: 9px;
-      font-weight: 600;
-      color: #374151;
-      z-index: 3;
-      line-height: 1;
-    }
-
-    .more-agents {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: #E5E7EB;
-      border: none;
-      color: #6B7280;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 200ms ease;
-      flex-shrink: 0;
-    }
-
-    .more-agents:hover {
-      background: #D1D5DB;
-      transform: scale(1.05);
-    }
-
-    .panel-toggle {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 6px 10px;
-      background: #3B82F6;
-      border: none;
-      border-radius: 6px;
-      color: white;
-      font-size: 12px;
-      cursor: pointer;
-      transition: all 200ms ease;
-      position: relative;
-    }
-
-    .panel-toggle:hover {
-      background: #2563EB;
-      transform: translateY(-1px);
-      box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-    }
-
-    .agent-count {
-      background: rgba(255, 255, 255, 0.2);
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-weight: 600;
-      min-width: 20px;
-      text-align: center;
-    }
-  `]
-})
-class ActiveAgentIndicatorMockComponent {
-  @Input() activeAgents: MockActiveAgent[] = [];
-  @Input() maxVisibleAgents: number = 3;
-
-  @Output() togglePanel = new EventEmitter<void>();
-  @Output() agentSelected = new EventEmitter<MockAgentRun>();
-
-  isExpanded = false;
-
-  get displayAgents(): MockActiveAgent[] {
-    if (this.isExpanded) {
-      return this.activeAgents;
-    }
-    return this.activeAgents.slice(0, this.maxVisibleAgents);
-  }
-
-  getAgentTooltip(agent: MockActiveAgent): string {
-    const statusText = this.getStatusText(agent.status);
-    const confidenceText = agent.confidence != null
-      ? ` (Confidence: ${(agent.confidence * 100).toFixed(0)}%)`
-      : '';
-    return `${agent.run.Agent || 'Agent'} - ${statusText}${confidenceText}`;
-  }
-
-  getStatusText(status: AgentStatus): string {
-    switch (status) {
-      case 'acknowledging': return 'Acknowledging request';
-      case 'working': return 'Working on task';
-      case 'completing': return 'Completing';
-      case 'completed': return 'Completed';
-      case 'error': return 'Error occurred';
-      default: return 'Active';
-    }
-  }
-
-  toggleExpanded(): void {
-    this.isExpanded = !this.isExpanded;
-  }
-
-  onAgentClick(agent: MockActiveAgent): void {
-    this.agentSelected.emit(agent.run);
-  }
-
-  onTogglePanel(): void {
-    this.togglePanel.emit();
-  }
-}
-
-const meta: Meta = {
+const meta: Meta<ActiveAgentIndicatorComponent> = {
   title: 'Components/ActiveAgentIndicator',
-  component: ActiveAgentIndicatorMockComponent,
+  component: ActiveAgentIndicatorComponent,
   decorators: [
     moduleMetadata({
-      imports: [CommonModule],
-      declarations: [ActiveAgentIndicatorMockComponent],
+      imports: [CommonModule, ConversationsModule],
+      providers: [
+        // Replace real service with mock
+        { provide: AgentStateService, useClass: MockAgentStateService }
+      ],
     }),
   ],
   tags: ['autodocs'],
@@ -348,29 +61,45 @@ import { ConversationsModule } from '@memberjunction/ng-conversations';
 };
 
 export default meta;
-type Story = StoryObj;
+type Story = StoryObj<ActiveAgentIndicatorComponent>;
 
-// Helper to create mock agents
-function createMockAgent(name: string, status: AgentStatus, confidence: number | null = null): MockActiveAgent {
-  return {
-    run: { ID: `agent-${Math.random().toString(36).substr(2, 9)}`, Agent: name },
-    status,
-    confidence
-  };
-}
+// Mock user for all stories
+const mockUser = createMockUserInfo();
 
 // Default with one active agent
 export const Default: Story = {
-  render: () => ({
-    props: {
-      activeAgents: [
-        createMockAgent('Support Agent', 'working', 0.85)
-      ]
-    },
-    template: `
-      <mj-active-agent-indicator-mock [activeAgents]="activeAgents"></mj-active-agent-indicator-mock>
-    `,
-  }),
+  render: () => {
+    // Create mock agents for this story
+    const agents: AgentWithStatus[] = [
+      createMockAgent('Support Agent', 'working', 0.85)
+    ];
+
+    return {
+      props: {
+        currentUser: mockUser,
+        maxVisibleAgents: 3,
+        agents
+      },
+      template: `
+        <mj-active-agent-indicator
+          [currentUser]="currentUser"
+          [maxVisibleAgents]="maxVisibleAgents">
+        </mj-active-agent-indicator>
+      `,
+      moduleMetadata: {
+        providers: [
+          {
+            provide: AgentStateService,
+            useFactory: () => {
+              const service = new MockAgentStateService();
+              service.setActiveAgents(agents);
+              return service;
+            }
+          }
+        ]
+      }
+    };
+  },
 };
 
 // All status types
@@ -380,31 +109,52 @@ export const AllStatusTypes: Story = {
       <div class="story-container story-column">
         <div>
           <div class="story-caption-sm" style="margin-bottom: 8px;">Acknowledging (Blue):</div>
-          <mj-active-agent-indicator-mock [activeAgents]="[{ run: { ID: '1', Agent: 'Support Agent' }, status: 'acknowledging', confidence: null }]"></mj-active-agent-indicator-mock>
+          <mj-active-agent-indicator [currentUser]="currentUser"></mj-active-agent-indicator>
         </div>
         <div>
           <div class="story-caption-sm" style="margin-bottom: 8px;">Working (Orange):</div>
-          <mj-active-agent-indicator-mock [activeAgents]="[{ run: { ID: '2', Agent: 'Data Analyzer' }, status: 'working', confidence: 0.72 }]"></mj-active-agent-indicator-mock>
+          <mj-active-agent-indicator [currentUser]="currentUser2"></mj-active-agent-indicator>
         </div>
         <div>
           <div class="story-caption-sm" style="margin-bottom: 8px;">Completing (Green):</div>
-          <mj-active-agent-indicator-mock [activeAgents]="[{ run: { ID: '3', Agent: 'Writer Agent' }, status: 'completing', confidence: 0.95 }]"></mj-active-agent-indicator-mock>
+          <mj-active-agent-indicator [currentUser]="currentUser3"></mj-active-agent-indicator>
         </div>
         <div>
           <div class="story-caption-sm" style="margin-bottom: 8px;">Completed (Gray):</div>
-          <mj-active-agent-indicator-mock [activeAgents]="[{ run: { ID: '4', Agent: 'Research Agent' }, status: 'completed', confidence: 0.88 }]"></mj-active-agent-indicator-mock>
+          <mj-active-agent-indicator [currentUser]="currentUser4"></mj-active-agent-indicator>
         </div>
         <div>
           <div class="story-caption-sm" style="margin-bottom: 8px;">Error (Red):</div>
-          <mj-active-agent-indicator-mock [activeAgents]="[{ run: { ID: '5', Agent: 'Failed Agent' }, status: 'error', confidence: null }]"></mj-active-agent-indicator-mock>
+          <mj-active-agent-indicator [currentUser]="currentUser5"></mj-active-agent-indicator>
         </div>
       </div>
     `,
+    props: {
+      currentUser: mockUser,
+      currentUser2: mockUser,
+      currentUser3: mockUser,
+      currentUser4: mockUser,
+      currentUser5: mockUser
+    },
+    moduleMetadata: {
+      providers: [
+        {
+          provide: AgentStateService,
+          useFactory: () => {
+            const service = new MockAgentStateService();
+            // Note: In stories using shared template, we'd need separate component instances
+            // For this demo, showing the pattern - each story variant would need its own service instance
+            service.setActiveAgents([createMockAgent('Agent', 'working', null)]);
+            return service;
+          }
+        }
+      ]
+    }
   }),
   parameters: {
     docs: {
       description: {
-        story: 'All five status types with their corresponding colors and animations.',
+        story: 'All five status types with their corresponding colors and animations. Note: Each indicator shares the same mock service, so they show the same agents. In production, each would have its own state.',
       },
     },
   },
@@ -412,18 +162,38 @@ export const AllStatusTypes: Story = {
 
 // Multiple agents
 export const MultipleAgents: Story = {
-  render: () => ({
-    props: {
-      activeAgents: [
-        createMockAgent('Support Agent', 'working', 0.72),
-        createMockAgent('Data Analyzer', 'acknowledging', null),
-        createMockAgent('Writer Agent', 'completing', 0.95)
-      ]
-    },
-    template: `
-      <mj-active-agent-indicator-mock [activeAgents]="activeAgents"></mj-active-agent-indicator-mock>
-    `,
-  }),
+  render: () => {
+    const agents: AgentWithStatus[] = [
+      createMockAgent('Support Agent', 'working', 0.72),
+      createMockAgent('Data Analyzer', 'acknowledging', null),
+      createMockAgent('Writer Agent', 'completing', 0.95)
+    ];
+
+    return {
+      props: {
+        currentUser: mockUser,
+        maxVisibleAgents: 3
+      },
+      template: `
+        <mj-active-agent-indicator
+          [currentUser]="currentUser"
+          [maxVisibleAgents]="maxVisibleAgents">
+        </mj-active-agent-indicator>
+      `,
+      moduleMetadata: {
+        providers: [
+          {
+            provide: AgentStateService,
+            useFactory: () => {
+              const service = new MockAgentStateService();
+              service.setActiveAgents(agents);
+              return service;
+            }
+          }
+        ]
+      }
+    };
+  },
   parameters: {
     docs: {
       description: {
@@ -435,29 +205,48 @@ export const MultipleAgents: Story = {
 
 // Overflow with more button
 export const OverflowAgents: Story = {
-  render: () => ({
-    props: {
-      activeAgents: [
-        createMockAgent('Agent 1', 'working', 0.72),
-        createMockAgent('Agent 2', 'acknowledging', null),
-        createMockAgent('Agent 3', 'completing', 0.95),
-        createMockAgent('Agent 4', 'working', 0.60),
-        createMockAgent('Agent 5', 'acknowledging', 0.80)
-      ],
-      maxVisibleAgents: 3
-    },
-    template: `
-      <div class="story-container story-column">
-        <div>
-          <div class="story-caption-sm" style="margin-bottom: 8px;">5 agents, max visible: 3</div>
-          <mj-active-agent-indicator-mock [activeAgents]="activeAgents" [maxVisibleAgents]="maxVisibleAgents"></mj-active-agent-indicator-mock>
+  render: () => {
+    const agents: AgentWithStatus[] = [
+      createMockAgent('Agent 1', 'working', 0.72),
+      createMockAgent('Agent 2', 'acknowledging', null),
+      createMockAgent('Agent 3', 'completing', 0.95),
+      createMockAgent('Agent 4', 'working', 0.60),
+      createMockAgent('Agent 5', 'acknowledging', 0.80)
+    ];
+
+    return {
+      props: {
+        currentUser: mockUser,
+        maxVisibleAgents: 3
+      },
+      template: `
+        <div class="story-container story-column">
+          <div>
+            <div class="story-caption-sm" style="margin-bottom: 8px;">5 agents, max visible: 3</div>
+            <mj-active-agent-indicator
+              [currentUser]="currentUser"
+              [maxVisibleAgents]="maxVisibleAgents">
+            </mj-active-agent-indicator>
+          </div>
+          <div class="story-text-muted" style="font-size: 12px;">
+            Click the "+2" button to expand and see all agents
+          </div>
         </div>
-        <div class="story-text-muted" style="font-size: 12px;">
-          Click the "+2" button to expand and see all agents
-        </div>
-      </div>
-    `,
-  }),
+      `,
+      moduleMetadata: {
+        providers: [
+          {
+            provide: AgentStateService,
+            useFactory: () => {
+              const service = new MockAgentStateService();
+              service.setActiveAgents(agents);
+              return service;
+            }
+          }
+        ]
+      }
+    };
+  },
   parameters: {
     docs: {
       description: {
@@ -469,18 +258,38 @@ export const OverflowAgents: Story = {
 
 // With confidence badges
 export const WithConfidenceBadges: Story = {
-  render: () => ({
-    props: {
-      activeAgents: [
-        createMockAgent('High Confidence', 'completing', 0.95),
-        createMockAgent('Medium Confidence', 'working', 0.72),
-        createMockAgent('Low Confidence', 'working', 0.45)
-      ]
-    },
-    template: `
-      <mj-active-agent-indicator-mock [activeAgents]="activeAgents"></mj-active-agent-indicator-mock>
-    `,
-  }),
+  render: () => {
+    const agents: AgentWithStatus[] = [
+      createMockAgent('High Confidence', 'completing', 0.95),
+      createMockAgent('Medium Confidence', 'working', 0.72),
+      createMockAgent('Low Confidence', 'working', 0.45)
+    ];
+
+    return {
+      props: {
+        currentUser: mockUser,
+        maxVisibleAgents: 3
+      },
+      template: `
+        <mj-active-agent-indicator
+          [currentUser]="currentUser"
+          [maxVisibleAgents]="maxVisibleAgents">
+        </mj-active-agent-indicator>
+      `,
+      moduleMetadata: {
+        providers: [
+          {
+            provide: AgentStateService,
+            useFactory: () => {
+              const service = new MockAgentStateService();
+              service.setActiveAgents(agents);
+              return service;
+            }
+          }
+        ]
+      }
+    };
+  },
   parameters: {
     docs: {
       description: {
@@ -492,46 +301,66 @@ export const WithConfidenceBadges: Story = {
 
 // In chat header context
 export const InChatHeaderContext: Story = {
-  render: () => ({
-    props: {
-      activeAgents: [
-        createMockAgent('Support Agent', 'working', 0.85),
-        createMockAgent('Research Agent', 'acknowledging', null)
-      ]
-    },
-    template: `
-      <div style="
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 12px 20px;
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        width: 600px;
-      ">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div style="
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-          ">
-            <i class="fas fa-comments"></i>
+  render: () => {
+    const agents: AgentWithStatus[] = [
+      createMockAgent('Support Agent', 'working', 0.85),
+      createMockAgent('Research Agent', 'acknowledging', null)
+    ];
+
+    return {
+      props: {
+        currentUser: mockUser,
+        maxVisibleAgents: 3
+      },
+      template: `
+        <div style="
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 20px;
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          width: 600px;
+        ">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="
+              width: 40px;
+              height: 40px;
+              border-radius: 50%;
+              background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+            ">
+              <i class="fas fa-comments"></i>
+            </div>
+            <div>
+              <div style="font-size: 14px; font-weight: 600; color: #1f2937;">Chat Session</div>
+              <div style="font-size: 12px; color: #6b7280;">Started 5 min ago</div>
+            </div>
           </div>
-          <div>
-            <div style="font-size: 14px; font-weight: 600; color: #1f2937;">Chat Session</div>
-            <div style="font-size: 12px; color: #6b7280;">Started 5 min ago</div>
-          </div>
+          <mj-active-agent-indicator
+            [currentUser]="currentUser"
+            [maxVisibleAgents]="maxVisibleAgents">
+          </mj-active-agent-indicator>
         </div>
-        <mj-active-agent-indicator-mock [activeAgents]="activeAgents"></mj-active-agent-indicator-mock>
-      </div>
-    `,
-  }),
+      `,
+      moduleMetadata: {
+        providers: [
+          {
+            provide: AgentStateService,
+            useFactory: () => {
+              const service = new MockAgentStateService();
+              service.setActiveAgents(agents);
+              return service;
+            }
+          }
+        ]
+      }
+    };
+  },
   parameters: {
     docs: {
       description: {
@@ -545,17 +374,33 @@ export const InChatHeaderContext: Story = {
 export const EmptyState: Story = {
   render: () => ({
     props: {
-      activeAgents: []
+      currentUser: mockUser,
+      maxVisibleAgents: 3
     },
     template: `
       <div class="story-container">
         <div class="story-caption-sm" style="margin-bottom: 8px;">No active agents (component hidden):</div>
         <div class="story-placeholder">
-          <mj-active-agent-indicator-mock [activeAgents]="activeAgents"></mj-active-agent-indicator-mock>
+          <mj-active-agent-indicator
+            [currentUser]="currentUser"
+            [maxVisibleAgents]="maxVisibleAgents">
+          </mj-active-agent-indicator>
           <div class="story-text-muted story-text-center">Component renders nothing when no agents are active</div>
         </div>
       </div>
     `,
+    moduleMetadata: {
+      providers: [
+        {
+          provide: AgentStateService,
+          useFactory: () => {
+            const service = new MockAgentStateService();
+            service.setActiveAgents([]); // No agents
+            return service;
+          }
+        }
+      ]
+    }
   }),
   parameters: {
     docs: {
@@ -577,7 +422,7 @@ export const StatusColorReference: Story = {
               <th>Status</th>
               <th>Color</th>
               <th>Animation</th>
-              <th>Preview</th>
+              <th>Description</th>
             </tr>
           </thead>
           <tbody>
@@ -590,9 +435,7 @@ export const StatusColorReference: Story = {
                 </span>
               </td>
               <td>2s pulse</td>
-              <td>
-                <mj-active-agent-indicator-mock [activeAgents]="[{ run: { ID: '1', Agent: 'Agent' }, status: 'acknowledging', confidence: null }]"></mj-active-agent-indicator-mock>
-              </td>
+              <td>Agent is acknowledging the request</td>
             </tr>
             <tr>
               <td class="label">Working</td>
@@ -603,9 +446,7 @@ export const StatusColorReference: Story = {
                 </span>
               </td>
               <td>1.5s pulse</td>
-              <td>
-                <mj-active-agent-indicator-mock [activeAgents]="[{ run: { ID: '2', Agent: 'Agent' }, status: 'working', confidence: null }]"></mj-active-agent-indicator-mock>
-              </td>
+              <td>Agent is actively working on the task</td>
             </tr>
             <tr>
               <td class="label">Completing</td>
@@ -616,9 +457,7 @@ export const StatusColorReference: Story = {
                 </span>
               </td>
               <td>1s pulse</td>
-              <td>
-                <mj-active-agent-indicator-mock [activeAgents]="[{ run: { ID: '3', Agent: 'Agent' }, status: 'completing', confidence: null }]"></mj-active-agent-indicator-mock>
-              </td>
+              <td>Agent is finishing up</td>
             </tr>
             <tr>
               <td class="label">Completed</td>
@@ -629,9 +468,7 @@ export const StatusColorReference: Story = {
                 </span>
               </td>
               <td>None</td>
-              <td>
-                <mj-active-agent-indicator-mock [activeAgents]="[{ run: { ID: '4', Agent: 'Agent' }, status: 'completed', confidence: null }]"></mj-active-agent-indicator-mock>
-              </td>
+              <td>Agent has finished (no animation)</td>
             </tr>
             <tr>
               <td class="label">Error</td>
@@ -642,9 +479,7 @@ export const StatusColorReference: Story = {
                 </span>
               </td>
               <td>2s pulse</td>
-              <td>
-                <mj-active-agent-indicator-mock [activeAgents]="[{ run: { ID: '5', Agent: 'Agent' }, status: 'error', confidence: null }]"></mj-active-agent-indicator-mock>
-              </td>
+              <td>Agent encountered an error</td>
             </tr>
           </tbody>
         </table>

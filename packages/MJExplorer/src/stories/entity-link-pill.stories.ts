@@ -1,106 +1,15 @@
 import { Meta, StoryObj, moduleMetadata } from '@storybook/angular';
 import { CommonModule } from '@angular/common';
-import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
-
-/**
- * Mock EntityLinkPill component for Storybook
- * Replicates the visual behavior without requiring real Metadata/SharedService
- */
-@Component({
-  selector: 'mj-entity-link-pill-mock',
-  template: `
-    <span class="entity-link-pill" *ngIf="entityName && recordId" (click)="openRecord()" [title]="tooltipText">
-      <i class="entity-icon" [ngClass]="iconClass"></i>
-      <span class="entity-label">{{ displayLabel }}</span>
-      <i class="fas fa-external-link-alt pill-action"></i>
-    </span>
-  `,
-  styles: [`
-    .entity-link-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(99, 102, 241, 0.08));
-      border: 1px solid rgba(59, 130, 246, 0.2);
-      border-radius: 16px;
-      font-size: 12px;
-      font-weight: 500;
-      color: #3b82f6;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      white-space: nowrap;
-      max-width: 200px;
-    }
-
-    .entity-link-pill:hover {
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.15));
-      border-color: rgba(59, 130, 246, 0.4);
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-    }
-
-    .entity-icon {
-      font-size: 11px;
-      opacity: 0.9;
-    }
-
-    .entity-label {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 150px;
-    }
-
-    .pill-action {
-      font-size: 9px;
-      opacity: 0.6;
-      transition: opacity 0.2s ease;
-    }
-
-    .entity-link-pill:hover .pill-action {
-      opacity: 1;
-    }
-  `],
-  changeDetection: ChangeDetectionStrategy.OnPush
-})
-class EntityLinkPillMockComponent {
-  @Input() entityName: string | null = null;
-  @Input() recordId: string | null = null;
-  @Input() recordName: string | null = null;
-  @Input() iconClass: string = 'fas fa-link';
-
-  get displayLabel(): string {
-    if (this.recordName) {
-      return this.recordName;
-    }
-    if (this.entityName) {
-      // Simple entity name display (without the 'MJ: ' prefix)
-      return this.entityName.replace('MJ: ', '');
-    }
-    return 'View Record';
-  }
-
-  get tooltipText(): string {
-    const entityLabel = this.entityName || 'Record';
-    if (this.recordName) {
-      return `Open ${entityLabel}: ${this.recordName}`;
-    }
-    return `Open ${entityLabel}`;
-  }
-
-  openRecord(): void {
-    console.log(`Opening record: ${this.entityName} - ${this.recordId}`);
-    // In Storybook, we just log - the real component uses SharedService.OpenEntityRecord
-  }
-}
+import { MemberJunctionCoreEntityFormsModule } from '@memberjunction/ng-core-entity-forms';
 
 const meta: Meta = {
   title: 'Components/EntityLinkPill',
-  component: EntityLinkPillMockComponent,
   decorators: [
     moduleMetadata({
-      imports: [CommonModule],
-      declarations: [EntityLinkPillMockComponent],
+      imports: [
+        CommonModule,
+        MemberJunctionCoreEntityFormsModule
+      ],
     }),
   ],
   tags: ['autodocs'],
@@ -125,7 +34,7 @@ The \`mj-entity-link-pill\` component displays a clickable pill that links to a 
 
 The component is part of the custom-forms module in core-entity-forms:
 \`\`\`typescript
-import { CustomFormsModule } from '@memberjunction/ng-core-entity-forms';
+import { MemberJunctionCoreEntityFormsModule } from '@memberjunction/ng-core-entity-forms';
 \`\`\`
 
 ## Features
@@ -134,6 +43,10 @@ import { CustomFormsModule } from '@memberjunction/ng-core-entity-forms';
 - Hover effect with external link indicator
 - Opens record in new tab when clicked
 - Tooltip shows full entity and record name
+
+## Note
+In Storybook, clicking the pill logs to console instead of opening the record
+(SharedService is not initialized in this environment).
         `,
       },
     },
@@ -147,12 +60,11 @@ type Story = StoryObj;
 export const Default: Story = {
   render: () => ({
     template: `
-      <mj-entity-link-pill-mock
+      <mj-entity-link-pill
         entityName="MJ: AI Agent Runs"
         recordId="abc-123"
-        recordName="Customer Support Agent Run #42"
-        iconClass="fas fa-robot">
-      </mj-entity-link-pill-mock>
+        recordName="Customer Support Agent Run #42">
+      </mj-entity-link-pill>
     `,
   }),
 };
@@ -161,11 +73,10 @@ export const Default: Story = {
 export const WithoutRecordName: Story = {
   render: () => ({
     template: `
-      <mj-entity-link-pill-mock
+      <mj-entity-link-pill
         entityName="Users"
-        recordId="user-456"
-        iconClass="fas fa-user">
-      </mj-entity-link-pill-mock>
+        recordId="user-456">
+      </mj-entity-link-pill>
     `,
   }),
   parameters: {
@@ -182,54 +93,48 @@ export const DifferentEntities: Story = {
   render: () => ({
     template: `
       <div class="story-container story-grid story-gap-md">
-        <mj-entity-link-pill-mock
+        <mj-entity-link-pill
           entityName="MJ: AI Agent Runs"
           recordId="run-1"
-          recordName="Agent Run #1"
-          iconClass="fas fa-robot">
-        </mj-entity-link-pill-mock>
+          recordName="Agent Run #1">
+        </mj-entity-link-pill>
 
-        <mj-entity-link-pill-mock
+        <mj-entity-link-pill
           entityName="MJ: AI Prompt Runs"
           recordId="prompt-1"
-          recordName="Prompt Run #1"
-          iconClass="fas fa-brain">
-        </mj-entity-link-pill-mock>
+          recordName="Prompt Run #1">
+        </mj-entity-link-pill>
 
-        <mj-entity-link-pill-mock
+        <mj-entity-link-pill
           entityName="Users"
           recordId="user-1"
-          recordName="John Smith"
-          iconClass="fas fa-user">
-        </mj-entity-link-pill-mock>
+          recordName="John Smith">
+        </mj-entity-link-pill>
 
-        <mj-entity-link-pill-mock
+        <mj-entity-link-pill
           entityName="Actions"
           recordId="action-1"
-          recordName="Send Email"
-          iconClass="fas fa-bolt">
-        </mj-entity-link-pill-mock>
+          recordName="Send Email">
+        </mj-entity-link-pill>
 
-        <mj-entity-link-pill-mock
+        <mj-entity-link-pill
           entityName="Reports"
           recordId="report-1"
-          recordName="Monthly Summary"
-          iconClass="fas fa-chart-bar">
-        </mj-entity-link-pill-mock>
+          recordName="Monthly Summary">
+        </mj-entity-link-pill>
 
-        <mj-entity-link-pill-mock
+        <mj-entity-link-pill
           entityName="Entities"
           recordId="entity-1"
-          recordName="Customer"
-          iconClass="fas fa-database">
-        </mj-entity-link-pill-mock>
+          recordName="Customer">
+        </mj-entity-link-pill>
       </div>
     `,
   }),
   parameters: {
     docs: {
       description: {
-        story: 'Pills displaying links to various entity types with appropriate icons.',
+        story: 'Pills displaying links to various entity types. Icons are determined by entity metadata.',
       },
     },
   },
@@ -242,30 +147,27 @@ export const LongNameTruncation: Story = {
       <div class="story-container story-column story-gap-md">
         <div>
           <span class="story-caption-sm" style="display: block; margin-bottom: 4px;">Short name:</span>
-          <mj-entity-link-pill-mock
+          <mj-entity-link-pill
             entityName="Users"
             recordId="1"
-            recordName="John"
-            iconClass="fas fa-user">
-          </mj-entity-link-pill-mock>
+            recordName="John">
+          </mj-entity-link-pill>
         </div>
         <div>
           <span class="story-caption-sm" style="display: block; margin-bottom: 4px;">Medium name:</span>
-          <mj-entity-link-pill-mock
+          <mj-entity-link-pill
             entityName="Users"
             recordId="2"
-            recordName="Customer Support Agent"
-            iconClass="fas fa-user">
-          </mj-entity-link-pill-mock>
+            recordName="Customer Support Agent">
+          </mj-entity-link-pill>
         </div>
         <div>
           <span class="story-caption-sm" style="display: block; margin-bottom: 4px;">Long name (truncated):</span>
-          <mj-entity-link-pill-mock
+          <mj-entity-link-pill
             entityName="Users"
             recordId="3"
-            recordName="Very Long Customer Support Agent Name That Will Be Truncated"
-            iconClass="fas fa-user">
-          </mj-entity-link-pill-mock>
+            recordName="Very Long Customer Support Agent Name That Will Be Truncated">
+          </mj-entity-link-pill>
         </div>
       </div>
     `,
@@ -296,39 +198,35 @@ export const InTableContext: Story = {
             <tr>
               <td class="pad-x">Test #1</td>
               <td class="pad-x">
-                <mj-entity-link-pill-mock
+                <mj-entity-link-pill
                   entityName="AI Agents"
                   recordId="agent-1"
-                  recordName="Support Bot"
-                  iconClass="fas fa-robot">
-                </mj-entity-link-pill-mock>
+                  recordName="Support Bot">
+                </mj-entity-link-pill>
               </td>
               <td class="pad-x">
-                <mj-entity-link-pill-mock
+                <mj-entity-link-pill
                   entityName="MJ: AI Prompt Runs"
                   recordId="prompt-1"
-                  recordName="Prompt Run #142"
-                  iconClass="fas fa-brain">
-                </mj-entity-link-pill-mock>
+                  recordName="Prompt Run #142">
+                </mj-entity-link-pill>
               </td>
             </tr>
             <tr>
               <td class="pad-x">Test #2</td>
               <td class="pad-x">
-                <mj-entity-link-pill-mock
+                <mj-entity-link-pill
                   entityName="AI Agents"
                   recordId="agent-2"
-                  recordName="Data Analyzer"
-                  iconClass="fas fa-robot">
-                </mj-entity-link-pill-mock>
+                  recordName="Data Analyzer">
+                </mj-entity-link-pill>
               </td>
               <td class="pad-x">
-                <mj-entity-link-pill-mock
+                <mj-entity-link-pill
                   entityName="MJ: AI Prompt Runs"
                   recordId="prompt-2"
-                  recordName="Prompt Run #143"
-                  iconClass="fas fa-brain">
-                </mj-entity-link-pill-mock>
+                  recordName="Prompt Run #143">
+                </mj-entity-link-pill>
               </td>
             </tr>
           </tbody>
@@ -374,18 +272,16 @@ export const InCardLayout: Story = {
         <div style="border-top: 1px solid #e5e7eb; padding-top: 12px;">
           <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px; text-transform: uppercase;">Related Records</div>
           <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-            <mj-entity-link-pill-mock
+            <mj-entity-link-pill
               entityName="AI Agents"
               recordId="agent-1"
-              recordName="Support Bot"
-              iconClass="fas fa-robot">
-            </mj-entity-link-pill-mock>
-            <mj-entity-link-pill-mock
+              recordName="Support Bot">
+            </mj-entity-link-pill>
+            <mj-entity-link-pill
               entityName="MJ: AI Prompt Runs"
               recordId="prompt-1"
-              recordName="Prompt #142"
-              iconClass="fas fa-brain">
-            </mj-entity-link-pill-mock>
+              recordName="Prompt #142">
+            </mj-entity-link-pill>
           </div>
         </div>
       </div>
@@ -405,23 +301,23 @@ export const DefaultIconFallback: Story = {
   render: () => ({
     template: `
       <div class="story-container story-grid story-gap-md">
-        <mj-entity-link-pill-mock
+        <mj-entity-link-pill
           entityName="Custom Entity"
           recordId="1"
           recordName="Record #1">
-        </mj-entity-link-pill-mock>
-        <mj-entity-link-pill-mock
+        </mj-entity-link-pill>
+        <mj-entity-link-pill
           entityName="Another Entity"
           recordId="2"
           recordName="Record #2">
-        </mj-entity-link-pill-mock>
+        </mj-entity-link-pill>
       </div>
     `,
   }),
   parameters: {
     docs: {
       description: {
-        story: 'When no icon is specified, the default link icon is used.',
+        story: 'When no entity icon is specified in metadata, the default link icon is used.',
       },
     },
   },

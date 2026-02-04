@@ -1,257 +1,25 @@
 import { Meta, StoryObj, moduleMetadata } from '@storybook/angular';
 import { CommonModule } from '@angular/common';
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { ArtifactsModule } from '@memberjunction/ng-artifacts';
+import { ArtifactMessageCardComponent } from '@memberjunction/ng-artifacts';
+import { ArtifactIconService } from '@memberjunction/ng-artifacts';
+import {
+  MockArtifactIconService,
+  createMockUserInfo,
+  type MockArtifact,
+  type MockArtifactVersion
+} from './.storybook-mocks';
 
-// Mock interfaces
-interface MockArtifact {
-  ID: string;
-  Name: string;
-  Type: string;
-  Description?: string;
-}
-
-interface MockArtifactVersion {
-  ID: string;
-  VersionNumber: number;
-  Name?: string;
-  Description?: string;
-}
-
-/**
- * Mock ArtifactMessageCard component for Storybook
- * Replicates the visual behavior without requiring actual services
- */
-@Component({
-  selector: 'mj-artifact-message-card-mock',
-  template: `
-    <div class="artifact-message-card" [class.loading]="loading" [class.error]="error">
-      <div class="artifact-skeleton" *ngIf="loading">
-        <div class="skeleton-icon"></div>
-        <div class="skeleton-text"></div>
-      </div>
-
-      <div class="artifact-error" *ngIf="error && !loading">
-        <i class="fa-solid fa-exclamation-circle"></i>
-        <span>Failed to load artifact</span>
-      </div>
-
-      <div class="artifact-info-bar" *ngIf="!loading && !error && artifact" (click)="openFullView()">
-        <div class="artifact-icon">
-          <i class="fa-solid" [ngClass]="getArtifactIcon()"></i>
-        </div>
-        <div class="artifact-info">
-          <span class="artifact-name">{{ displayName }}</span>
-          <div class="artifact-meta">
-            <span class="artifact-type-badge" [style.background]="getTypeBadgeColor()">
-              {{ artifact.Type }}
-            </span>
-            <span class="artifact-version">v{{ artifactVersion?.VersionNumber || 1 }}</span>
-          </div>
-        </div>
-        <div class="open-icon">
-          <i class="fa-solid fa-arrow-up-right-from-square"></i>
-        </div>
-      </div>
-    </div>
-  `,
-  styles: [`
-    .artifact-message-card {
-      margin: 12px 0;
-    }
-
-    .artifact-skeleton {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
-      border-radius: 6px;
-    }
-
-    .skeleton-icon {
-      width: 32px;
-      height: 32px;
-      background: #E5E7EB;
-      border-radius: 6px;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    .skeleton-text {
-      flex: 1;
-      height: 32px;
-      background: #E5E7EB;
-      border-radius: 4px;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    .artifact-error {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 16px;
-      background: #FEE2E2;
-      border: 1px solid #FECACA;
-      border-radius: 6px;
-      color: #DC2626;
-      font-size: 14px;
-    }
-
-    .artifact-error i {
-      font-size: 16px;
-    }
-
-    .artifact-info-bar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
-      background: white;
-      border: 1px solid #E5E7EB;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 200ms ease;
-    }
-
-    .artifact-info-bar:hover {
-      border-color: #1e40af;
-      box-shadow: 0 2px 8px rgba(30, 64, 175, 0.1);
-    }
-
-    .artifact-icon {
-      width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #F3F4F6;
-      border-radius: 6px;
-      flex-shrink: 0;
-      color: #6B7280;
-      font-size: 16px;
-    }
-
-    .artifact-info {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 0;
-    }
-
-    .artifact-name {
-      font-size: 14px;
-      font-weight: 600;
-      color: #111827;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .artifact-meta {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .artifact-type-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      color: white;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      border-radius: 3px;
-      text-transform: uppercase;
-    }
-
-    .artifact-version {
-      font-size: 11px;
-      color: #6B7280;
-      font-weight: 500;
-    }
-
-    .open-icon {
-      flex-shrink: 0;
-      color: #9CA3AF;
-      font-size: 14px;
-      transition: color 200ms ease;
-    }
-
-    .artifact-info-bar:hover .open-icon {
-      color: #1e40af;
-    }
-  `]
-})
-class ArtifactMessageCardMockComponent {
-  @Input() artifact: MockArtifact | null = null;
-  @Input() artifactVersion: MockArtifactVersion | null = null;
-  @Input() loading: boolean = false;
-  @Input() error: boolean = false;
-
-  @Output() actionPerformed = new EventEmitter<{ action: string; artifact: MockArtifact; version?: MockArtifactVersion }>();
-
-  get displayName(): string {
-    if (this.artifactVersion?.Name) {
-      return this.artifactVersion.Name;
-    }
-    return this.artifact?.Name || 'Untitled';
-  }
-
-  getArtifactIcon(): string {
-    if (!this.artifact) return 'fa-file';
-
-    const type = this.artifact.Type?.toLowerCase() || '';
-
-    if (type.includes('code')) return 'fa-code';
-    if (type.includes('report')) return 'fa-chart-bar';
-    if (type.includes('dashboard')) return 'fa-gauge';
-    if (type.includes('document')) return 'fa-file-lines';
-    if (type.includes('image')) return 'fa-image';
-    if (type.includes('component')) return 'fa-puzzle-piece';
-
-    return 'fa-file';
-  }
-
-  getTypeBadgeColor(): string {
-    if (!this.artifact) return '#6B7280';
-
-    const type = this.artifact.Type?.toLowerCase() || '';
-
-    if (type.includes('code')) return '#8B5CF6'; // Purple
-    if (type.includes('report')) return '#3B82F6'; // Blue
-    if (type.includes('dashboard')) return '#10B981'; // Green
-    if (type.includes('document')) return '#F59E0B'; // Orange
-    if (type.includes('image')) return '#EC4899'; // Pink
-    if (type.includes('component')) return '#6366F1'; // Indigo
-
-    return '#6B7280'; // Gray
-  }
-
-  openFullView(): void {
-    if (this.artifact) {
-      this.actionPerformed.emit({
-        action: 'open',
-        artifact: this.artifact,
-        version: this.artifactVersion || undefined
-      });
-      console.log('Opening artifact:', this.artifact.Name);
-    }
-  }
-}
-
-const meta: Meta = {
+const meta: Meta<ArtifactMessageCardComponent> = {
   title: 'Components/ArtifactMessageCard',
-  component: ArtifactMessageCardMockComponent,
+  component: ArtifactMessageCardComponent,
   decorators: [
     moduleMetadata({
-      imports: [CommonModule],
-      declarations: [ArtifactMessageCardMockComponent],
+      imports: [CommonModule, ArtifactsModule],
+      providers: [
+        // Replace real service with mock
+        { provide: ArtifactIconService, useClass: MockArtifactIconService }
+      ],
     }),
   ],
   tags: ['autodocs'],
@@ -273,6 +41,17 @@ The \`mj-artifact-message-card\` component displays a compact info bar for artif
 </mj-artifact-message-card>
 \`\`\`
 
+Or with pre-loaded entities (skips DB queries):
+
+\`\`\`html
+<mj-artifact-message-card
+  [artifact]="artifactEntity"
+  [artifactVersion]="versionEntity"
+  [currentUser]="currentUser"
+  (actionPerformed)="onArtifactAction($event)">
+</mj-artifact-message-card>
+\`\`\`
+
 ## Module Import
 
 \`\`\`typescript
@@ -286,9 +65,9 @@ import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 
 ## Artifact Types
 Different types display different icons and badge colors:
-- **Code** (Purple): fa-code
-- **Report** (Blue): fa-chart-bar
-- **Dashboard** (Green): fa-gauge
+- **Code** (Purple): fa-file-code
+- **Report** (Blue): fa-chart-line
+- **Dashboard** (Green): fa-chart-bar
 - **Document** (Orange): fa-file-lines
 - **Image** (Pink): fa-image
 - **Component** (Indigo): fa-puzzle-piece
@@ -299,48 +78,101 @@ Different types display different icons and badge colors:
 };
 
 export default meta;
-type Story = StoryObj;
+type Story = StoryObj<ArtifactMessageCardComponent>;
+
+// Mock user for all stories
+const mockUser = createMockUserInfo();
+
+// Helper to create mock artifact data objects
+// Note: The real component expects ArtifactEntity and ArtifactVersionEntity,
+// but in Storybook we pass mock objects that have the same shape
+function createMockArtifactData(name: string, type: string, description?: string): MockArtifact {
+  return {
+    ID: `artifact-${Math.random().toString(36).substr(2, 9)}`,
+    Name: name,
+    Type: type,
+    Description: description
+  };
+}
+
+function createMockVersionData(versionNumber: number, name?: string): MockArtifactVersion {
+  return {
+    ID: `version-${Math.random().toString(36).substr(2, 9)}`,
+    VersionNumber: versionNumber,
+    Name: name
+  };
+}
 
 // Default with code artifact
 export const Default: Story = {
   render: () => ({
     props: {
-      artifact: {
-        ID: 'artifact-1',
-        Name: 'data-processor.ts',
-        Type: 'Code',
-        Description: 'TypeScript data processing utility'
-      },
-      artifactVersion: {
-        ID: 'version-1',
-        VersionNumber: 3,
-        Name: null
-      }
+      currentUser: mockUser,
+      artifact: createMockArtifactData('data-processor.ts', 'Code', 'TypeScript data processing utility'),
+      artifactVersion: createMockVersionData(3)
     },
     template: `
       <div class="story-width-md">
-        <mj-artifact-message-card-mock
+        <mj-artifact-message-card
           [artifact]="artifact"
-          [artifactVersion]="artifactVersion">
-        </mj-artifact-message-card-mock>
+          [artifactVersion]="artifactVersion"
+          [currentUser]="currentUser">
+        </mj-artifact-message-card>
       </div>
     `,
   }),
 };
 
-// Loading state
+// Loading state - use artifactId without artifact to trigger loading
+// Note: In Storybook the RunView will fail, so we show the error state instead
+// To show true loading, we'd need to mock RunView
 export const LoadingState: Story = {
   render: () => ({
+    props: {
+      currentUser: mockUser
+    },
     template: `
       <div class="story-width-md">
-        <mj-artifact-message-card-mock [loading]="true"></mj-artifact-message-card-mock>
+        <div class="story-caption-sm" style="margin-bottom: 8px;">Loading state simulation:</div>
+        <div class="artifact-message-card" style="margin: 12px 0;">
+          <div style="
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #F9FAFB;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+          ">
+            <div style="
+              width: 32px;
+              height: 32px;
+              background: #E5E7EB;
+              border-radius: 6px;
+              animation: pulse 1.5s ease-in-out infinite;
+            "></div>
+            <div style="
+              flex: 1;
+              height: 32px;
+              background: #E5E7EB;
+              border-radius: 4px;
+              animation: pulse 1.5s ease-in-out infinite;
+            "></div>
+          </div>
+        </div>
+        <style>
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+          }
+        </style>
       </div>
     `,
   }),
   parameters: {
     docs: {
       description: {
-        story: 'Skeleton loading state while artifact data is being fetched.',
+        story: 'Skeleton loading state while artifact data is being fetched. (Simulated in Storybook)',
       },
     },
   },
@@ -349,9 +181,27 @@ export const LoadingState: Story = {
 // Error state
 export const ErrorState: Story = {
   render: () => ({
+    props: {
+      currentUser: mockUser
+    },
     template: `
       <div class="story-width-md">
-        <mj-artifact-message-card-mock [error]="true"></mj-artifact-message-card-mock>
+        <div class="artifact-message-card" style="margin: 12px 0;">
+          <div style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: #FEE2E2;
+            border: 1px solid #FECACA;
+            border-radius: 6px;
+            color: #DC2626;
+            font-size: 14px;
+          ">
+            <i class="fa-solid fa-exclamation-circle" style="font-size: 16px;"></i>
+            <span>Failed to load artifact</span>
+          </div>
+        </div>
       </div>
     `,
   }),
@@ -367,54 +217,53 @@ export const ErrorState: Story = {
 // All artifact types
 export const AllArtifactTypes: Story = {
   render: () => ({
+    props: {
+      currentUser: mockUser,
+      codeArtifact: createMockArtifactData('api-handler.ts', 'Code'),
+      codeVersion: createMockVersionData(2),
+      reportArtifact: createMockArtifactData('Q4 Sales Analysis', 'Report'),
+      reportVersion: createMockVersionData(5),
+      dashboardArtifact: createMockArtifactData('Executive Overview', 'Dashboard'),
+      dashboardVersion: createMockVersionData(1),
+      documentArtifact: createMockArtifactData('Project Requirements', 'Document'),
+      documentVersion: createMockVersionData(12)
+    },
     template: `
       <div class="story-column story-width-md">
         <div>
           <div class="story-caption">Code Artifact</div>
-          <mj-artifact-message-card-mock
-            [artifact]="{ ID: '1', Name: 'api-handler.ts', Type: 'Code' }"
-            [artifactVersion]="{ ID: 'v1', VersionNumber: 2 }">
-          </mj-artifact-message-card-mock>
+          <mj-artifact-message-card
+            [artifact]="codeArtifact"
+            [artifactVersion]="codeVersion"
+            [currentUser]="currentUser">
+          </mj-artifact-message-card>
         </div>
 
         <div>
           <div class="story-caption">Report Artifact</div>
-          <mj-artifact-message-card-mock
-            [artifact]="{ ID: '2', Name: 'Q4 Sales Analysis', Type: 'Report' }"
-            [artifactVersion]="{ ID: 'v2', VersionNumber: 5 }">
-          </mj-artifact-message-card-mock>
+          <mj-artifact-message-card
+            [artifact]="reportArtifact"
+            [artifactVersion]="reportVersion"
+            [currentUser]="currentUser">
+          </mj-artifact-message-card>
         </div>
 
         <div>
           <div class="story-caption">Dashboard Artifact</div>
-          <mj-artifact-message-card-mock
-            [artifact]="{ ID: '3', Name: 'Executive Overview', Type: 'Dashboard' }"
-            [artifactVersion]="{ ID: 'v3', VersionNumber: 1 }">
-          </mj-artifact-message-card-mock>
+          <mj-artifact-message-card
+            [artifact]="dashboardArtifact"
+            [artifactVersion]="dashboardVersion"
+            [currentUser]="currentUser">
+          </mj-artifact-message-card>
         </div>
 
         <div>
           <div class="story-caption">Document Artifact</div>
-          <mj-artifact-message-card-mock
-            [artifact]="{ ID: '4', Name: 'Project Requirements', Type: 'Document' }"
-            [artifactVersion]="{ ID: 'v4', VersionNumber: 12 }">
-          </mj-artifact-message-card-mock>
-        </div>
-
-        <div>
-          <div class="story-caption">Image Artifact</div>
-          <mj-artifact-message-card-mock
-            [artifact]="{ ID: '5', Name: 'Architecture Diagram', Type: 'Image' }"
-            [artifactVersion]="{ ID: 'v5', VersionNumber: 3 }">
-          </mj-artifact-message-card-mock>
-        </div>
-
-        <div>
-          <div class="story-caption">Component Artifact</div>
-          <mj-artifact-message-card-mock
-            [artifact]="{ ID: '6', Name: 'UserProfile Widget', Type: 'Component' }"
-            [artifactVersion]="{ ID: 'v6', VersionNumber: 8 }">
-          </mj-artifact-message-card-mock>
+          <mj-artifact-message-card
+            [artifact]="documentArtifact"
+            [artifactVersion]="documentVersion"
+            [currentUser]="currentUser">
+          </mj-artifact-message-card>
         </div>
       </div>
     `,
@@ -432,15 +281,9 @@ export const AllArtifactTypes: Story = {
 export const InConversationContext: Story = {
   render: () => ({
     props: {
-      artifact: {
-        ID: 'artifact-1',
-        Name: 'Sales Analysis Report',
-        Type: 'Report'
-      },
-      artifactVersion: {
-        ID: 'version-1',
-        VersionNumber: 2
-      }
+      currentUser: mockUser,
+      artifact: createMockArtifactData('Sales Analysis Report', 'Report'),
+      artifactVersion: createMockVersionData(2)
     },
     template: `
       <div style="width: 600px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
@@ -472,10 +315,11 @@ export const InConversationContext: Story = {
           </div>
 
           <!-- Artifact card -->
-          <mj-artifact-message-card-mock
+          <mj-artifact-message-card
             [artifact]="artifact"
-            [artifactVersion]="artifactVersion">
-          </mj-artifact-message-card-mock>
+            [artifactVersion]="artifactVersion"
+            [currentUser]="currentUser">
+          </mj-artifact-message-card>
 
           <div style="font-size: 14px; color: #374151; line-height: 1.6; margin-top: 4px;">
             Click to view the full report with interactive charts.
@@ -496,22 +340,31 @@ export const InConversationContext: Story = {
 // Version-specific name override
 export const VersionSpecificName: Story = {
   render: () => ({
+    props: {
+      currentUser: mockUser,
+      artifact1: createMockArtifactData('analysis.ts', 'Code'),
+      version1: createMockVersionData(1, undefined),
+      artifact2: createMockArtifactData('analysis.ts', 'Code'),
+      version2: createMockVersionData(2, 'analysis-v2-refactored.ts')
+    },
     template: `
       <div class="story-column story-width-md">
         <div>
           <div class="story-caption-sm" style="margin-bottom: 8px;">Artifact name (no version override):</div>
-          <mj-artifact-message-card-mock
-            [artifact]="{ ID: '1', Name: 'analysis.ts', Type: 'Code' }"
-            [artifactVersion]="{ ID: 'v1', VersionNumber: 1, Name: null }">
-          </mj-artifact-message-card-mock>
+          <mj-artifact-message-card
+            [artifact]="artifact1"
+            [artifactVersion]="version1"
+            [currentUser]="currentUser">
+          </mj-artifact-message-card>
         </div>
 
         <div>
           <div class="story-caption-sm" style="margin-bottom: 8px;">Version-specific name override:</div>
-          <mj-artifact-message-card-mock
-            [artifact]="{ ID: '1', Name: 'analysis.ts', Type: 'Code' }"
-            [artifactVersion]="{ ID: 'v2', VersionNumber: 2, Name: 'analysis-v2-refactored.ts' }">
-          </mj-artifact-message-card-mock>
+          <mj-artifact-message-card
+            [artifact]="artifact2"
+            [artifactVersion]="version2"
+            [currentUser]="currentUser">
+          </mj-artifact-message-card>
         </div>
       </div>
     `,
@@ -529,15 +382,9 @@ export const VersionSpecificName: Story = {
 export const AllStatesComparison: Story = {
   render: () => ({
     props: {
-      artifact: {
-        ID: 'artifact-1',
-        Name: 'component.tsx',
-        Type: 'Code'
-      },
-      artifactVersion: {
-        ID: 'version-1',
-        VersionNumber: 4
-      }
+      currentUser: mockUser,
+      artifact: createMockArtifactData('component.tsx', 'Code'),
+      artifactVersion: createMockVersionData(4)
     },
     template: `
       <div class="story-container story-column story-width-md">
@@ -546,7 +393,32 @@ export const AllStatesComparison: Story = {
             <i class="fa-solid fa-spinner fa-spin story-text-info"></i>
             Loading State
           </div>
-          <mj-artifact-message-card-mock [loading]="true"></mj-artifact-message-card-mock>
+          <div class="artifact-message-card" style="margin: 12px 0;">
+            <div style="
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              padding: 12px 16px;
+              background: #F9FAFB;
+              border: 1px solid #E5E7EB;
+              border-radius: 6px;
+            ">
+              <div style="
+                width: 32px;
+                height: 32px;
+                background: #E5E7EB;
+                border-radius: 6px;
+                animation: pulse 1.5s ease-in-out infinite;
+              "></div>
+              <div style="
+                flex: 1;
+                height: 32px;
+                background: #E5E7EB;
+                border-radius: 4px;
+                animation: pulse 1.5s ease-in-out infinite;
+              "></div>
+            </div>
+          </div>
         </div>
 
         <div>
@@ -554,7 +426,22 @@ export const AllStatesComparison: Story = {
             <i class="fa-solid fa-exclamation-circle story-text-danger"></i>
             Error State
           </div>
-          <mj-artifact-message-card-mock [error]="true"></mj-artifact-message-card-mock>
+          <div class="artifact-message-card" style="margin: 12px 0;">
+            <div style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              padding: 12px 16px;
+              background: #FEE2E2;
+              border: 1px solid #FECACA;
+              border-radius: 6px;
+              color: #DC2626;
+              font-size: 14px;
+            ">
+              <i class="fa-solid fa-exclamation-circle" style="font-size: 16px;"></i>
+              <span>Failed to load artifact</span>
+            </div>
+          </div>
         </div>
 
         <div>
@@ -562,12 +449,19 @@ export const AllStatesComparison: Story = {
             <i class="fa-solid fa-check-circle story-text-success"></i>
             Success State
           </div>
-          <mj-artifact-message-card-mock
+          <mj-artifact-message-card
             [artifact]="artifact"
-            [artifactVersion]="artifactVersion">
-          </mj-artifact-message-card-mock>
+            [artifactVersion]="artifactVersion"
+            [currentUser]="currentUser">
+          </mj-artifact-message-card>
         </div>
       </div>
+      <style>
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      </style>
     `,
   }),
   parameters: {
@@ -602,7 +496,7 @@ export const TypeBadgeColorReference: Story = {
                   Purple
                 </span>
               </td>
-              <td><i class="fa-solid fa-code story-text-muted"></i></td>
+              <td><i class="fa-solid fa-file-code story-text-muted"></i></td>
               <td>
                 <span style="padding: 2px 8px; background: #8B5CF6; color: white; font-size: 10px; font-weight: 600; border-radius: 3px; text-transform: uppercase;">Code</span>
               </td>
@@ -615,7 +509,7 @@ export const TypeBadgeColorReference: Story = {
                   Blue
                 </span>
               </td>
-              <td><i class="fa-solid fa-chart-bar story-text-muted"></i></td>
+              <td><i class="fa-solid fa-chart-line story-text-muted"></i></td>
               <td>
                 <span style="padding: 2px 8px; background: #3B82F6; color: white; font-size: 10px; font-weight: 600; border-radius: 3px; text-transform: uppercase;">Report</span>
               </td>
@@ -628,7 +522,7 @@ export const TypeBadgeColorReference: Story = {
                   Green
                 </span>
               </td>
-              <td><i class="fa-solid fa-gauge story-text-muted"></i></td>
+              <td><i class="fa-solid fa-chart-bar story-text-muted"></i></td>
               <td>
                 <span style="padding: 2px 8px; background: #10B981; color: white; font-size: 10px; font-weight: 600; border-radius: 3px; text-transform: uppercase;">Dashboard</span>
               </td>
