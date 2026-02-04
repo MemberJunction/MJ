@@ -48,7 +48,6 @@
     "@memberjunction/ng-shared": "3.4.0",
     "@memberjunction/ng-tabstrip": "3.4.0",
     "@memberjunction/ng-timeline": "3.4.0",
-    "@memberjunction/ng-user-view-grid": "3.3.0",
     "@okta/okta-auth-js": "^7.0.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dateinputs": "16.2.0",
