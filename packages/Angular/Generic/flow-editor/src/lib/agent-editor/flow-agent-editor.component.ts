@@ -336,9 +336,6 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   // ── Flow Editor Event Handlers ──────────────────────────────
 
   protected async onNodeAdded(event: FlowNodeAddedEvent): Promise<void> {
-    const x=1;
-    console.log(x);
-
     if (!this.AgentID) return;
 
     const md = new Metadata();
