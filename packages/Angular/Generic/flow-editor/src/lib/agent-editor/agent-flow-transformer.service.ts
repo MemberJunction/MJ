@@ -2,6 +2,12 @@ import { Injectable } from '@angular/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { FlowNode, FlowConnection, FlowConnectionStyle, FlowNodeTypeConfig, FlowNodePort } from '../interfaces/flow-types';
 
+/** Picker item shape for Actions with optional icon */
+export interface ActionPickerItem { ID: string; Name: string; IconClass?: string | null; }
+
+/** Picker item shape for Agents with optional icon and logo */
+export interface AgentPickerItem { ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null; }
+
 /** Step types mapped to visual configuration */
 export const AGENT_STEP_TYPE_CONFIGS: FlowNodeTypeConfig[] = [
   {
@@ -68,8 +74,12 @@ export const AGENT_STEP_TYPE_CONFIGS: FlowNodeTypeConfig[] = [
 export class AgentFlowTransformerService {
 
   /** Convert MJ step entities to generic FlowNodes */
-  StepsToNodes(steps: AIAgentStepEntity[]): FlowNode[] {
-    return steps.map(step => this.stepToNode(step));
+  StepsToNodes(
+    steps: AIAgentStepEntity[],
+    actions?: ActionPickerItem[],
+    agents?: AgentPickerItem[]
+  ): FlowNode[] {
+    return steps.map(step => this.stepToNode(step, actions, agents));
   }
 
   /** Convert MJ path entities to generic FlowConnections */
@@ -177,9 +187,70 @@ export class AgentFlowTransformerService {
     }
   }
 
+  /**
+   * Resolve the best icon and optional logo URL for a step based on its
+   * configured action/agent and available picker data.
+   *
+   * Resolution chain:
+   * - Action step: action's IconClass -> step-type fallback
+   * - Sub-Agent step: agent's LogoURL (stored in Data) -> agent's IconClass -> step-type fallback
+   * - Other steps: step-type icon
+   */
+  ResolveStepIcon(
+    step: AIAgentStepEntity,
+    actions?: ActionPickerItem[],
+    agents?: AgentPickerItem[]
+  ): { Icon: string; LogoURL?: string | null } {
+    const fallbackIcon = this.getIconForType(step.StepType);
+
+    if (step.StepType === 'Action' && step.ActionID && actions) {
+      const action = actions.find(a => a.ID === step.ActionID);
+      return { Icon: action?.IconClass || fallbackIcon };
+    }
+
+    if (step.StepType === 'Sub-Agent' && step.SubAgentID && agents) {
+      const agent = agents.find(a => a.ID === step.SubAgentID);
+      if (agent?.LogoURL) {
+        return { Icon: agent.IconClass || fallbackIcon, LogoURL: agent.LogoURL };
+      }
+      return { Icon: agent?.IconClass || fallbackIcon };
+    }
+
+    // For loop steps, resolve based on loop body type
+    if ((step.StepType === 'ForEach' || step.StepType === 'While') && step.LoopBodyType) {
+      return this.resolveLoopBodyIcon(step, actions, agents);
+    }
+
+    return { Icon: fallbackIcon };
+  }
+
+  private resolveLoopBodyIcon(
+    step: AIAgentStepEntity,
+    actions?: ActionPickerItem[],
+    agents?: AgentPickerItem[]
+  ): { Icon: string; LogoURL?: string | null } {
+    const fallbackIcon = this.getIconForType(step.StepType);
+
+    if (step.LoopBodyType === 'Action' && step.ActionID && actions) {
+      const action = actions.find(a => a.ID === step.ActionID);
+      if (action?.IconClass) return { Icon: fallbackIcon }; // Loop keeps its own icon; body icon handled separately
+    }
+
+    if (step.LoopBodyType === 'Sub-Agent' && step.SubAgentID && agents) {
+      const agent = agents.find(a => a.ID === step.SubAgentID);
+      if (agent?.LogoURL) return { Icon: fallbackIcon, LogoURL: agent.LogoURL };
+    }
+
+    return { Icon: fallbackIcon };
+  }
+
   // ── Private Helpers ─────────────────────────────────────────
 
-  private stepToNode(step: AIAgentStepEntity): FlowNode {
+  private stepToNode(
+    step: AIAgentStepEntity,
+    actions?: ActionPickerItem[],
+    agents?: AgentPickerItem[]
+  ): FlowNode {
     const stepId = step.ID;
     const ports: FlowNodePort[] = [
       {
@@ -206,7 +277,13 @@ export class AgentFlowTransformerService {
     // Build loop-specific data for ForEach/While nodes
     const data: Record<string, unknown> = { StepEntityID: stepId };
     if (step.StepType === 'ForEach' || step.StepType === 'While') {
-      this.populateLoopData(step, data);
+      this.populateLoopData(step, data, actions, agents);
+    }
+
+    // Resolve icon (and optional logo URL) from picker data
+    const resolved = this.ResolveStepIcon(step, actions, agents);
+    if (resolved.LogoURL) {
+      data['LogoURL'] = resolved.LogoURL;
     }
 
     return {
@@ -214,7 +291,7 @@ export class AgentFlowTransformerService {
       Type: step.StepType,
       Label: step.Name,
       Subtitle: this.BuildStepSubtitle(step),
-      Icon: this.getIconForType(step.StepType),
+      Icon: resolved.Icon,
       Status: effectiveStatus,
       StatusMessage: warningMessage ?? undefined,
       IsStartNode: step.StartingStep === true,
@@ -320,19 +397,52 @@ export class AgentFlowTransformerService {
   }
 
   /** Populate loop-specific display data on the node's Data payload */
-  private populateLoopData(step: AIAgentStepEntity, data: Record<string, unknown>): void {
+  private populateLoopData(
+    step: AIAgentStepEntity,
+    data: Record<string, unknown>,
+    actions?: ActionPickerItem[],
+    agents?: AgentPickerItem[]
+  ): void {
     const bodyType = step.LoopBodyType;
     data['LoopBodyType'] = bodyType ?? null;
     data['LoopBodyName'] = bodyType ? this.resolveLoopBodyName(step) : null;
-    data['LoopBodyIcon'] = bodyType ? this.getBodyTypeIcon(bodyType) : null;
+    data['LoopBodyIcon'] = bodyType ? this.resolveLoopBodySpecificIcon(step, actions, agents) : null;
     data['LoopBodyColor'] = bodyType ? this.getBodyTypeColor(bodyType) : null;
     data['LoopIterationSummary'] = this.BuildLoopIterationSummary(step);
+
+    // Store logo URL for loop body sub-agents
+    if (bodyType === 'Sub-Agent' && step.SubAgentID && agents) {
+      const agent = agents.find(a => a.ID === step.SubAgentID);
+      if (agent?.LogoURL) {
+        data['LoopBodyLogoURL'] = agent.LogoURL;
+      }
+    }
 
     const config = this.parseLoopConfig(step);
     if (config) {
       data['MaxIterations'] = config['maxIterations'] ?? null;
       data['LoopItemVariable'] = config['itemVariable'] ?? null;
     }
+  }
+
+  /** Resolve the best icon for a loop body, checking picker data first */
+  private resolveLoopBodySpecificIcon(
+    step: AIAgentStepEntity,
+    actions?: ActionPickerItem[],
+    agents?: AgentPickerItem[]
+  ): string {
+    const bodyType = step.LoopBodyType;
+    const fallback = this.getBodyTypeIcon(bodyType ?? '');
+
+    if (bodyType === 'Action' && step.ActionID && actions) {
+      const action = actions.find(a => a.ID === step.ActionID);
+      return action?.IconClass || fallback;
+    }
+    if (bodyType === 'Sub-Agent' && step.SubAgentID && agents) {
+      const agent = agents.find(a => a.ID === step.SubAgentID);
+      return agent?.IconClass || fallback;
+    }
+    return fallback;
   }
 
   /** Get icon for a loop body type */

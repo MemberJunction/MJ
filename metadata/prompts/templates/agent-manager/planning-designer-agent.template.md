@@ -1198,7 +1198,8 @@ Your `TechnicalDesign` markdown document should include:
      - Sub-Agent steps: `[[Sub-Agent Name]]` with `style` green (#10B981)
      - ForEach/While steps: `{Loop Name}` with `style` amber (#F59E0B)
    - Label edges with conditions when present
-   - Example:
+   - For conditional paths, use `-->|condition text|` edge labels to show branching logic
+   - Example (simple flow):
      ````
      ```mermaid
      flowchart TD
@@ -1211,27 +1212,103 @@ Your `TechnicalDesign` markdown document should include:
        style D fill:#10B981,color:#fff
      ```
      ````
+   - Example (flow with loops and decision branching):
+     ````
+     ```mermaid
+     flowchart TD
+       Start[Receive Request] --> Validate[/Validate Input/]
+       Validate -->|valid| Loop{For Each Item}
+       Validate -->|invalid| Error[Return Error]
+       Loop --> Process[[Process Item]]
+       Process --> Check{Quality Check?}
+       Check -->|pass| Save[Save Result]
+       Check -->|fail| Retry[Retry Processing]
+       Retry --> Process
+       Save --> Loop
+       Loop -->|done| Summary[/Generate Summary/]
+       style Start fill:#3B82F6,color:#fff
+       style Validate fill:#8B5CF6,color:#fff
+       style Loop fill:#F59E0B,color:#fff
+       style Process fill:#10B981,color:#fff
+       style Check fill:#F59E0B,color:#fff
+       style Save fill:#3B82F6,color:#fff
+       style Retry fill:#3B82F6,color:#fff
+       style Summary fill:#8B5CF6,color:#fff
+       style Error fill:#ef4444,color:#fff
+     ```
+     ````
 
-8. **Agent Architecture Diagram** (recommended for all agent types)
-   - Include a Mermaid diagram showing the high-level agent architecture
-   - Show parent/child relationships and related sub-agents
+8. **Agent Architecture Diagram** (MANDATORY for all agent types)
+   - **Always include** a Mermaid diagram showing the high-level agent architecture
+   - Use consistent node shapes: `[[agents]]`, `[actions]`, `([prompts])`
+   - Show parent/child relationships with solid arrows and related sub-agents with dashed arrows
+   - Color convention: dark slate (#1E293B) for main agent, green (#10B981) for sub-agents, blue (#3B82F6) for actions, purple (#8B5CF6) for prompts
    - Example:
      ````
      ```mermaid
      graph TD
-       Parent[Parent Agent] --> Child1[Child Sub-Agent]
-       Parent -.->|related| Existing[Existing Agent]
-       Child1 --> Action1[Action: Web Search]
+       Parent[[Parent Agent]]
+       Parent --> Child1[[Child Sub-Agent]]
+       Parent -.->|related| Existing[[Existing Agent]]
+       Parent --> Action1[Web Search]
+       Parent --> Action2[Create Record]
+       Child1 --> Action3[Analyze Data]
        style Parent fill:#1E293B,color:#fff
        style Child1 fill:#334155,color:#fff
        style Existing fill:#10B981,color:#fff
        style Action1 fill:#3B82F6,color:#fff
+       style Action2 fill:#3B82F6,color:#fff
+       style Action3 fill:#3B82F6,color:#fff
      ```
      ````
 
+9. **Workflow Sequence Diagram** (MANDATORY when agent has 3+ components)
+   - Include a `sequenceDiagram` showing the execution flow between participants
+   - Show which component calls which and what data flows between them
+   - Use solid arrows (`->>`) for requests and dashed arrows (`-->>`) for responses
+   - Example:
+     ````
+     ```mermaid
+     sequenceDiagram
+       participant User
+       participant Main as Main Agent
+       participant SA as Sub-Agent
+       participant Act as Action
+       participant DB as Database
+       User->>Main: Request
+       Main->>SA: Delegate research
+       SA-->>Main: Research results
+       Main->>Act: Process results
+       Act-->>Main: Processed data
+       Main->>DB: Save records
+       Main-->>User: Summary response
+     ```
+     ````
+
+10. **Data Flow Diagram** (include when agent has database operations)
+    - Show how data transforms as it flows through the agent pipeline
+    - Use `flowchart LR` for left-to-right data flow
+    - Example:
+      ````
+      ```mermaid
+      flowchart LR
+        Input[/User Query/] --> Parse[Parse Request]
+        Parse --> Fetch[(Database)]
+        Fetch --> Transform[Transform Data]
+        Transform --> Enrich[[AI Analysis]]
+        Enrich --> Output[/Formatted Report/]
+        style Input fill:#f1f5f9,color:#334155
+        style Parse fill:#3B82F6,color:#fff
+        style Fetch fill:#6366f1,color:#fff
+        style Transform fill:#3B82F6,color:#fff
+        style Enrich fill:#10B981,color:#fff
+        style Output fill:#f1f5f9,color:#334155
+      ```
+      ````
+
 This document should be detailed enough for the Architect Agent to build the complete AgentSpec structure.
 
-### 9. Final Validation - NO Template Syntax in Generated Prompts
+### 11. Final Validation - NO Template Syntax in Generated Prompts
 
 **CRITICAL CHECK**: Before returning your TechnicalDesign, scan every prompt you've written.
 
@@ -1243,7 +1320,7 @@ This document should be detailed enough for the Architect Agent to build the com
 
 **If you find template syntax**: Remove it immediately and rewrite as plain markdown instructions before returning.
 
-### 10. Present Design Plan to User
+### 12. Present Design Plan to User
 
 **CRITICAL**: When presenting the design plan for user confirmation, provide a conversational summary of what will be built.
 

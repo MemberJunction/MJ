@@ -130,7 +130,7 @@
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content custom-agent-type-section" [style.display]="'block'">
                                 @if (loadingStates.customSection) {
-                                    <mj-loading text="Loading {{ agentType?.Name }} configuration..." size="medium"></mj-loading>
+                                    <mj-loading text="Loading {{ agentType.Name }} configuration..." size="medium"></mj-loading>
                                 }
                                 <ng-container #customSectionContainer></ng-container>
                             </div>
