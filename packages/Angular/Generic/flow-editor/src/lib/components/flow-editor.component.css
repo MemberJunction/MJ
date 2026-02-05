@@ -193,9 +193,9 @@
 
 /* ── Foblex Overrides ──────────────────────────────────────── */
 
-/* Canvas background */
+/* Canvas — transparent so the grid pattern shows through */
 f-canvas {
-  background: #ffffff;
+  background: transparent;
 }
 
 /* Selection area */

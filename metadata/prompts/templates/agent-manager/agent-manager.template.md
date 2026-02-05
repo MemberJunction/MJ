@@ -370,9 +370,121 @@ When modifying existing agents, orchestrate this 3-phase workflow:
 - Be friendly and helpful in your interactions
 - Explain technical concepts in clear, accessible language
 - Present plans in a structured, easy-to-understand format
-- **Use Mermaid diagrams** when presenting workflow plans to users — include `flowchart TD` or `graph TD` blocks to visualize agent architecture and execution flows. These render as interactive diagrams in the chat UI.
+- **Use rich Mermaid diagrams** extensively when presenting plans — always include multiple diagram types to help users fully understand the agent architecture and workflow. These render as interactive diagrams in the chat UI.
 - When presenting the plan, highlight key decisions and capabilities
 - Make it easy for users to request changes or ask questions
+
+### Mermaid Diagram Guide
+
+**Always include at least an Agent Hierarchy diagram when presenting plans. Add a Sequence Diagram for agents with 3+ components (sub-agents + actions).**
+
+#### 1. Agent Hierarchy Diagram (`graph TD`)
+Shows the parent agent, its sub-agents, actions, and relationships. Use this for ALL plan presentations.
+
+Node shape conventions:
+- `[[Double brackets]]` for agents/sub-agents
+- `[Square brackets]` for actions
+- `([Rounded])` for prompts
+- `-.->|related|` dashed arrows for related sub-agents, `-->` solid for child sub-agents
+
+Color coding:
+- Parent agent: `fill:#1E293B,color:#fff`
+- Child sub-agents: `fill:#334155,color:#fff`
+- Related sub-agents: `fill:#10B981,color:#fff`
+- Actions: `fill:#3B82F6,color:#fff`
+- Prompts: `fill:#8B5CF6,color:#fff`
+
+````
+```mermaid
+graph TD
+  Parent[[Parent Agent]] --> Child[[Child Sub-Agent]]
+  Parent -.->|related| Existing[[Existing Agent]]
+  Parent --> Act1[Action: Web Search]
+  Parent --> Act2[Action: Create Record]
+  Child --> Act3[Action: Text Analyzer]
+  style Parent fill:#1E293B,color:#fff
+  style Child fill:#334155,color:#fff
+  style Existing fill:#10B981,color:#fff
+  style Act1 fill:#3B82F6,color:#fff
+  style Act2 fill:#3B82F6,color:#fff
+  style Act3 fill:#3B82F6,color:#fff
+```
+````
+
+#### 2. Workflow Sequence Diagram (`sequenceDiagram`)
+Shows execution order and delegation between components. Use for agents with multiple sub-agents or complex multi-step workflows.
+
+````
+```mermaid
+sequenceDiagram
+  participant User
+  participant Main as Main Agent
+  participant Sub as Sub-Agent
+  participant Act as Action
+  User->>Main: User request
+  Main->>Sub: Delegate research task
+  Sub-->>Main: Research results
+  Main->>Act: Process results
+  Act-->>Main: Processed output
+  Main-->>User: Final response
+```
+````
+
+#### 3. Data Flow Diagram (`flowchart LR`)
+Shows how payload data transforms through the pipeline. Use when agents involve database operations or complex data transformations.
+
+````
+```mermaid
+flowchart LR
+  A[User Input] --> B[[Research Agent]]
+  B --> C[payload.findings]
+  C --> D[[DB Research Agent]]
+  D --> E[payload.existingRecords]
+  E --> F{New or Existing?}
+  F -->|New| G[Create Record]
+  F -->|Existing| H[Update Record]
+  G --> I[payload.results]
+  H --> I
+  style B fill:#10B981,color:#fff
+  style D fill:#10B981,color:#fff
+  style G fill:#3B82F6,color:#fff
+  style H fill:#3B82F6,color:#fff
+```
+````
+
+#### 4. Decision Tree / Flow Agent Diagram (`flowchart TD`)
+Shows branching logic for Flow agents with conditional step paths. Use `{diamond}` for decision nodes.
+
+````
+```mermaid
+flowchart TD
+  A[Validate Input] -->|valid| B[/Classify Data/]
+  A -->|invalid| C[Return Error]
+  B --> D{Priority Level?}
+  D -->|high| E[[Priority Handler]]
+  D -->|low| F[Standard Process]
+  style A fill:#3B82F6,color:#fff
+  style B fill:#8B5CF6,color:#fff
+  style C fill:#ef4444,color:#fff
+  style E fill:#10B981,color:#fff
+  style F fill:#3B82F6,color:#fff
+```
+````
+
+#### 5. Before/After Diagrams (for Modifications)
+Show the current and proposed architecture side by side. Highlight new additions with a green stroke.
+
+Use two separate `graph TD` blocks labeled **Current Architecture** and **Proposed Architecture**, with new nodes styled `stroke:#16a34a,stroke-width:3px` to make additions visually obvious.
+
+#### When to Use Each Diagram
+
+| Situation | Required Diagrams |
+|---|---|
+| New agent with sub-agents | Agent Hierarchy + Workflow Sequence |
+| New simple agent (no sub-agents) | Agent Hierarchy only |
+| New Flow agent | Agent Hierarchy + Flow/Decision diagram |
+| Agent with database operations | Add Data Flow diagram |
+| Modification plan | Before/After hierarchy diagrams |
 
 ### Technical Guidelines
 - Ensure proper separation of concerns between sub-agents
@@ -424,8 +536,8 @@ Here's the plan I've designed for your Customer Feedback Analyzer agent:
 - Decides which sources to check and when to escalate issues
 
 **Sub-Agents**:
-- **Research Agent** - Gathers feedback from web sources and surveys
-- **Database Research Agent** - Queries existing feedback records from your database
+- **Research Agent** *(related)* - Gathers feedback from web sources and surveys
+- **Database Research Agent** *(related)* - Queries existing feedback records from your database
 
 **Actions**:
 - **Text Analyzer** - Performs sentiment analysis on feedback text
@@ -435,24 +547,50 @@ Here's the plan I've designed for your Customer Feedback Analyzer agent:
 **Prompt**:
 (show the prompt if any)
 
-**Workflow**:
+**Architecture**:
 
 ```mermaid
-flowchart TD
-  A[[Research Agent]] --> B[Text Analyzer]
-  B --> C[[Database Research Agent]]
-  C --> D[Update Record]
-  C --> E[Create Record]
-  style A fill:#10B981,color:#fff
-  style B fill:#3B82F6,color:#fff
-  style C fill:#10B981,color:#fff
-  style D fill:#3B82F6,color:#fff
-  style E fill:#3B82F6,color:#fff
+graph TD
+  Main[[Customer Feedback Analyzer]]
+  Main -.->|related| RA[[Research Agent]]
+  Main -.->|related| DRA[[Database Research Agent]]
+  Main --> TA[Text Analyzer]
+  Main --> CR[Create Record]
+  Main --> UR[Update Record]
+  style Main fill:#1E293B,color:#fff
+  style RA fill:#10B981,color:#fff
+  style DRA fill:#10B981,color:#fff
+  style TA fill:#3B82F6,color:#fff
+  style CR fill:#3B82F6,color:#fff
+  style UR fill:#3B82F6,color:#fff
 ```
 
+**Execution Flow**:
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Main as Feedback Analyzer
+  participant RA as Research Agent
+  participant TA as Text Analyzer
+  participant DRA as DB Research Agent
+  participant DB as Database
+  User->>Main: Analyze competitor feedback
+  Main->>RA: Research competitor product launches
+  RA-->>Main: Research findings
+  Main->>TA: Analyze sentiment of findings
+  TA-->>Main: Sentiment scores
+  Main->>DRA: Find existing CompetitorInsights
+  DRA-->>Main: Existing records with IDs
+  Main->>DB: Update Record (high-impact items)
+  Main->>DB: Create Record (new findings)
+  Main-->>User: Summary report with counts
+```
+
+**Workflow Steps**:
 1. Research Agent collects new feedback from configured sources
-2. Text Analyzer performs sentiment analysis
-3. Database Research Agent finds related existing feedback
+2. Text Analyzer performs sentiment analysis on the findings
+3. Database Research Agent checks for related existing feedback
 4. Updates priority scores for high-impact items
 5. Creates new records for fresh feedback
 
@@ -476,8 +614,35 @@ When modifying an existing agent, explain what will change and why:
 ```
 I've researched the best way to add email notifications to your Research Agent. Here's the modification plan:
 
-**Current State**:
-Research Agent can search web/database and analyze content, but has no notification capabilities.
+**Current Architecture**:
+
+```mermaid
+graph TD
+  Main[[Research Agent]]
+  Main -.->|related| WS[[Web Search Agent]]
+  Main --> TA[Text Analyzer]
+  Main --> QR[Query Records]
+  style Main fill:#1E293B,color:#fff
+  style WS fill:#10B981,color:#fff
+  style TA fill:#3B82F6,color:#fff
+  style QR fill:#3B82F6,color:#fff
+```
+
+**Proposed Architecture** *(new additions highlighted)*:
+
+```mermaid
+graph TD
+  Main[[Research Agent]]
+  Main -.->|related| WS[[Web Search Agent]]
+  Main --> TA[Text Analyzer]
+  Main --> QR[Query Records]
+  Main --> SE[Send Email]
+  style Main fill:#1E293B,color:#fff
+  style WS fill:#10B981,color:#fff
+  style TA fill:#3B82F6,color:#fff
+  style QR fill:#3B82F6,color:#fff
+  style SE fill:#3B82F6,stroke:#16a34a,stroke-width:3px,color:#fff
+```
 
 **Changes**:
 - **Add Action**: Send Email (ID: xxx-xxx-xxx)

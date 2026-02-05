@@ -26,6 +26,7 @@ import { SharedPipesModule } from '../shared/shared-pipes.module';
 // MCP Components
 import { MCPDashboardComponent, LoadMCPDashboard } from './mcp-dashboard.component';
 import { MCPResourceComponent, LoadMCPResource } from './mcp-resource.component';
+import { MCPFilterPanelComponent, LoadMCPFilterPanel } from './mcp-filter-panel.component';
 import { MCPServerDialogComponent, LoadMCPServerDialog } from './components/mcp-server-dialog.component';
 import { MCPConnectionDialogComponent, LoadMCPConnectionDialog } from './components/mcp-connection-dialog.component';
 import { MCPTestToolDialogComponent, LoadMCPTestToolDialog } from './components/mcp-test-tool-dialog.component';
@@ -38,6 +39,7 @@ import { LoadMCPToolsService } from './services/mcp-tools.service';
     declarations: [
         MCPDashboardComponent,
         MCPResourceComponent,
+        MCPFilterPanelComponent,
         MCPServerDialogComponent,
         MCPConnectionDialogComponent,
         MCPTestToolDialogComponent,
@@ -59,6 +61,7 @@ import { LoadMCPToolsService } from './services/mcp-tools.service';
     exports: [
         MCPDashboardComponent,
         MCPResourceComponent,
+        MCPFilterPanelComponent,
         MCPServerDialogComponent,
         MCPConnectionDialogComponent,
         MCPTestToolDialogComponent,
@@ -73,6 +76,7 @@ export class MCPModule { }
 export function LoadMCPModule(): void {
     LoadMCPDashboard();
     LoadMCPResource();
+    LoadMCPFilterPanel();
     LoadMCPServerDialog();
     LoadMCPConnectionDialog();
     LoadMCPTestToolDialog();

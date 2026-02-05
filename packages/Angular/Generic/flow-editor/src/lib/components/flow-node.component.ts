@@ -27,6 +27,10 @@ export class FlowNodeComponent {
     return this.Node?.Icon ?? this.TypeConfig?.Icon ?? 'fa-circle-nodes';
   }
 
+  get logoURL(): string | null {
+    return (this.Node?.Data?.['LogoURL'] as string) ?? null;
+  }
+
   get statusClass(): string {
     return this.Node?.Status ?? 'default';
   }

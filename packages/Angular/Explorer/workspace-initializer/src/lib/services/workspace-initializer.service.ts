@@ -93,7 +93,14 @@ export class WorkspaceInitializerService {
         success: true
       };
     } catch (err: any) {
+      console.error('[Workspace] initializeWorkspace caught error:', err);
+      console.error('[Workspace] Error message:', err?.message);
+      console.error('[Workspace] Error stack:', err?.stack);
+      if (err?.response?.errors) {
+        console.error('[Workspace] GraphQL errors:', JSON.stringify(err.response.errors, null, 2));
+      }
       const error = this.classifyError(err);
+      console.error('[Workspace] Classified as:', error.type, '-', error.message);
       return {
         success: false,
         error

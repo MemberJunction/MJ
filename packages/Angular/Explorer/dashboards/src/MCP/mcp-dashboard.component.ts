@@ -44,6 +44,7 @@ interface MCPDashboardUserPreferences {
     connectionStatus: string;
     toolStatus: string;
     logStatus: string;
+    filterPanelVisible: boolean;
 }
 
 /**
@@ -275,6 +276,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public SyncStates = new Map<string, MCPSyncState>();
     private syncSubscriptions = new Map<string, Subscription>();
 
+    // Filter panel state
+    public FilterPanelVisible = true;
+
     // ========================================
     // Lifecycle
     // ========================================
@@ -434,6 +438,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             toolStatus: prefs.toolStatus || 'all',
             logStatus: prefs.logStatus || 'all'
         });
+        // Apply filter panel visibility
+        if (prefs.filterPanelVisible !== undefined) {
+            this.FilterPanelVisible = prefs.filterPanelVisible;
+        }
     }
 
     /**
@@ -451,7 +459,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             serverStatus: currentFilters.serverStatus,
             connectionStatus: currentFilters.connectionStatus,
             toolStatus: currentFilters.toolStatus,
-            logStatus: currentFilters.logStatus
+            logStatus: currentFilters.logStatus,
+            filterPanelVisible: this.FilterPanelVisible
         };
     }
 
@@ -817,6 +826,70 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 break;
         }
         this.saveUserPreferencesDebounced();
+    }
+
+    // ========================================
+    // Filter Panel
+    // ========================================
+
+    /**
+     * Toggle filter panel visibility
+     */
+    public toggleFilterPanel(): void {
+        this.FilterPanelVisible = !this.FilterPanelVisible;
+        this.saveUserPreferencesDebounced();
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Handle filter changes from the filter panel component
+     */
+    public onFiltersChange(filters: MCPDashboardFilters): void {
+        this.filters$.next(filters);
+        this.saveUserPreferencesDebounced();
+    }
+
+    /**
+     * Get the current filtered count based on active tab
+     */
+    public get CurrentFilteredCount(): number {
+        switch (this.ActiveTab) {
+            case 'servers':
+                return this.filteredServers.length;
+            case 'connections':
+                return this.filteredConnections.length;
+            case 'tools':
+                return this.filteredTools.length;
+            case 'logs':
+                return this.filteredLogs.length;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Get the total count based on active tab
+     */
+    public get CurrentTotalCount(): number {
+        switch (this.ActiveTab) {
+            case 'servers':
+                return this.servers.length;
+            case 'connections':
+                return this.connections.length;
+            case 'tools':
+                return this.tools.length;
+            case 'logs':
+                return this.executionLogs.length;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Get current filters value (non-observable)
+     */
+    public get CurrentFilters(): MCPDashboardFilters {
+        return this.filters$.value;
     }
 
     // ========================================

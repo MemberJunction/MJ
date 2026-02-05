@@ -1,8 +1,12 @@
 import { Field, ObjectType, Int, Query, Resolver, Ctx, Info as RequestInfo } from 'type-graphql';
 import { Public, RequireSystemUser } from '../directives/index.js';
-import packageJson from '../../package.json' with { type: 'json' };
+import { createRequire } from 'node:module';
 import { AppContext } from '../types.js';
 import os from 'node:os';
+
+// Use createRequire to import JSON (compatible with module: es2022)
+const require = createRequire(import.meta.url);
+const packageJson = require('../../package.json') as { version: string };
 
 @ObjectType()
 export class Info {
