@@ -79,7 +79,7 @@ export class AgentFlowTransformerService {
     actions?: ActionPickerItem[],
     agents?: AgentPickerItem[]
   ): FlowNode[] {
-    return steps.map(step => this.stepToNode(step, actions, agents));
+    return steps.map(step => this.StepToNode(step, actions, agents));
   }
 
   /** Convert MJ path entities to generic FlowConnections */
@@ -244,9 +244,10 @@ export class AgentFlowTransformerService {
     return { Icon: fallbackIcon };
   }
 
-  // ── Private Helpers ─────────────────────────────────────────
+  // ── Public Conversion Methods ───────────────────────────────
 
-  private stepToNode(
+  /** Convert a single MJ step entity to a FlowNode (public for direct use when adding nodes) */
+  StepToNode(
     step: AIAgentStepEntity,
     actions?: ActionPickerItem[],
     agents?: AgentPickerItem[]
