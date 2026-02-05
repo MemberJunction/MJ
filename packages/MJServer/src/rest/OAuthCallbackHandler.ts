@@ -264,7 +264,8 @@ export class OAuthCallbackHandler {
      * @param res - Express response
      */
     private async getStatus(req: express.Request, res: express.Response): Promise<void> {
-        const { stateParameter } = req.params;
+        const stateParam = req.params.stateParameter;
+        const stateParameter = Array.isArray(stateParam) ? stateParam[0] : stateParam || '';
         const contextUser = req['mjUser'] as UserInfo;
 
         if (!contextUser) {

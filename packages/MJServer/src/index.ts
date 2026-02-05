@@ -386,6 +386,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   setupRESTEndpoints(app, restApiConfig, authMiddleware);
 
   // GraphQL middleware (after REST so /api/v1/* routes are handled first)
+  // Note: Type assertion needed due to @apollo/server bundling older @types/express types
+  // that are incompatible with Express 5.x types (missing 'param' property)
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>(),
@@ -396,7 +398,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
                                  dataSource: extendConnectionPoolWithQuery(pool), // default read-write data source
                                  dataSources // all data source
                                }),
-    })
+    }) as unknown as express.RequestHandler
   );
 
   // Initialize and start scheduled jobs service if enabled
