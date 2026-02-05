@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "vitest run",
     "test:watch": "vitest"
   },

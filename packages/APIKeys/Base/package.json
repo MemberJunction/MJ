@@ -2,13 +2,14 @@
   "name": "@memberjunction/api-keys-base",
   "version": "3.4.0",
   "description": "MemberJunction: Base API Keys Engine Package - provides metadata caching for API scopes, applications, and key bindings. Can be used anywhere (client or server).",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "/dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "tsc-alias": "^1.8.15",
     "typescript": "^5.4.5"
   },
   "repository": {
