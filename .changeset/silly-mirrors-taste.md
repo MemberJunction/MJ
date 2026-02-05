@@ -1,0 +1,5 @@
+---
+"@memberjunction/core": patch
+---
+
+EntityByName
