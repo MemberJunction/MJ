@@ -271,8 +271,8 @@
               "SearchResults": "loopResults[index]"
             },
             "Status": "Active",
-            "PositionX": -400,
-            "PositionY": 420,
+            "PositionX": -1260,
+            "PositionY": 480,
             "Width": 200,
             "Height": 80
           },
@@ -301,8 +301,8 @@
               "countArray": "[1,2,3,4,5]"
             },
             "Status": "Active",
-            "PositionX": -760,
-            "PositionY": 200,
+            "PositionX": -1620,
+            "PositionY": 100,
             "Width": 200,
             "Height": 80
           },
@@ -350,8 +350,8 @@
               "countArray": "[1,2,3,4,5]"
             },
             "Status": "Active",
-            "PositionX": -80,
-            "PositionY": 120,
+            "PositionX": -860,
+            "PositionY": 220,
             "Width": 200,
             "Height": 80
           },
@@ -398,8 +398,8 @@
               "CurrentPrice": "stockPrice"
             },
             "Status": "Active",
-            "PositionX": -600,
-            "PositionY": -40,
+            "PositionX": -1200,
+            "PositionY": -240,
             "Width": 200,
             "Height": 80
           },
