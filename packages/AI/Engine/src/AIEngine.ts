@@ -577,10 +577,6 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         try {
             const notes = this.AgentNotes.filter(n => n.Status === 'Active' && n.EmbeddingVector);
 
-            if (notes.length === 0) {
-                return;
-            }
-
             const entries = notes.map(note => ({
                 key: note.ID,
                 vector: JSON.parse(note.EmbeddingVector!),
@@ -663,10 +659,6 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public async RefreshExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
             const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
-
-            if (examples.length === 0) {
-                return;
-            }
 
             const entries = examples.map(example => ({
                 key: example.ID,
