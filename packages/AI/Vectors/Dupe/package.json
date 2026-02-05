@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/ai-vector-dupe",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: AI Vector/Entity Sync Package - Handles synchronization between Vector DB and MJ CDP Data",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",

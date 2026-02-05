@@ -1,4 +1,4 @@
-import * as sql from 'mssql';
+import sql from 'mssql';
 
 export async function generateReorderTableColumnsScript(
     tableName: string, 

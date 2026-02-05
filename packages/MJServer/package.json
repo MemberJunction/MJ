@@ -15,7 +15,7 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "bundle": "tsc -noEmit && pkgroll --sourcemap --minify",
     "watch": "tsc -w",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",

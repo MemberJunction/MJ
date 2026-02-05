@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/ai-fireworks",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction Wrapper for Fireworks.ai AI Models",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "jest",
     "test:watch": "jest --watch"
   },

@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/testing-engine-base",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction Testing Framework Engine Base - Metadata cache for test types, suites, and tests (UI-safe, no execution)",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",

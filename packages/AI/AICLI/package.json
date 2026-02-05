@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/ai-cli",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction AI agent, prompt and action execution CLI, integrated with the main MJ CLI.",
   "keywords": [
@@ -29,7 +30,7 @@
     "/oclif.manifest.json"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && tsc-alias -f",
     "prepack": "npm run build && oclif manifest && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
     "version": "oclif readme && git add README.md"

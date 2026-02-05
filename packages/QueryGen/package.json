@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/query-gen",
+  "type": "module",
   "version": "3.4.0",
   "description": "AI-powered generation of domain-specific SQL query templates with automatic testing, refinement, and metadata export",
   "main": "dist/index.js",
@@ -8,7 +9,7 @@
     "mj-querygen": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",

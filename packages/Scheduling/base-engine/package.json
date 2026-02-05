@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/scheduling-engine-base",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: Base Scheduling Engine Package - extended entity types and metadata caching, can be used anywhere.",
   "main": "dist/index.js",
@@ -8,7 +9,7 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch"
   },
   "author": "MemberJunction.com",

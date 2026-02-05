@@ -3,7 +3,7 @@
  * Uses mssql driver for database connectivity
  */
 
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver } from './BaseAutoDocDriver.js';
 import {

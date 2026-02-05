@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/ai-azure",
+  "type": "module",
   "version": "3.4.0",
   "description": "Azure AI Provider for MemberJunction",
   "main": "dist/index.js",
@@ -8,7 +9,7 @@
     "dist/**/*"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "clean": "rimraf dist"
   },
   "author": "MemberJunction",

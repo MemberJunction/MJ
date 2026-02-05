@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/codegen-lib",
+  "type": "module",
   "version": "3.4.0",
   "description": "Library used by the CodeGen executable to generate code for the MemberJunction platform. Contains a reusable object model that can be called by any other server-side application/library.",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",

@@ -1,11 +1,12 @@
 {
   "name": "@memberjunction/ai-mcp-client",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: Model Context Protocol (MCP) - Client Implementation for consuming external MCP servers",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "vitest run",
     "test:watch": "vitest"
   },

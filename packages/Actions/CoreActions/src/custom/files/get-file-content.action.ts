@@ -2,8 +2,8 @@ import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunctio
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { BaseFileStorageAction } from "./base-file-storage.action";
-const pdfParse = require('pdf-parse');
-const mammoth = require('mammoth');
+import pdfParse from 'pdf-parse';
+import mammoth from 'mammoth';
 import * as ExcelJS from 'exceljs';
 
 /**

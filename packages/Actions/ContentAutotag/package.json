@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/actions-content-autotag",
+  "type": "module",
   "version": "3.4.0",
   "description": "Action classes that execute the content autotagging and vectorization actions.",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",

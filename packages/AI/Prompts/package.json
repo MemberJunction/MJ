@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/ai-prompts",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: AI Prompt Execution and Management",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"

@@ -3,7 +3,7 @@ import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-bas
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { ScheduledJobEntity } from '@memberjunction/core-entities';
-import * as cronParser from 'cron-parser';
+import cronParser from 'cron-parser';
 
 /**
  * Base class for all Scheduled Job-related actions.

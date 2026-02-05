@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/external-change-detection",
+  "type": "module",
   "version": "3.4.0",
   "description": "Library used by server side applications to determine if changes have been made to entities by external systems/integrations",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",

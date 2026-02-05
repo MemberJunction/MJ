@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/storage",
+  "type": "module",
   "version": "3.4.0",
   "description": "This library provides a set of objects that handle the interface between the server-side API and various cloud storage providers.",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "test": "jest",
     "test:watch": "jest --watch",

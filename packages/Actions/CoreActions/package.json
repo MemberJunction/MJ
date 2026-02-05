@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/core-actions",
+  "type": "module",
   "version": "3.4.0",
   "description": "Library of generated and custom actions for the core MemberJunction framework. This library is maintained by MemberJunction and includes actions for use within the framework itself.",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",

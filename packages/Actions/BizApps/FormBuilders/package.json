@@ -1,11 +1,12 @@
 {
   "name": "@memberjunction/actions-bizapps-formbuilders",
+  "type": "module",
   "version": "3.4.0",
   "description": "Form builder and survey platform integration actions for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf dist",
     "test": "echo \"No tests yet\""

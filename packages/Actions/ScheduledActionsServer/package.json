@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/scheduled-actions-server",
+  "type": "module",
   "version": "3.4.0",
   "description": "Simple application server that can be called via URL to invoke Scheduled Actions",
   "main": "src/index.ts",
@@ -7,7 +8,7 @@
     "dev:debug": "ts-node-dev --transpile-only --respawn --inspect=4321 --project tsconfig.json src/index.ts",
     "dev": "ts-node-dev --transpile-only --respawn --project tsconfig.json src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf output",
     "start": "ts-node-dev src/index.ts",

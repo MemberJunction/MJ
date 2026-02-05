@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/cli",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction command line tools",
   "keywords": [
@@ -26,7 +27,7 @@
     "/oclif.manifest.json"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "prepack": "npm run build && oclif manifest && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
     "version": "oclif readme && git add README.md"

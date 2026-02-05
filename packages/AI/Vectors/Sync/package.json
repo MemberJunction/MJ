@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/ai-vector-sync",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: AI Vector/Entity Sync Package - handles synchronization between MemberJunction entities and vector databases",
   "main": "./dist/index.js",
@@ -8,7 +9,7 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "buld:pgk": "pkgroll --sourcemap --minify",
     "watch": "pkgroll --sourcemap --watch"
   },

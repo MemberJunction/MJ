@@ -13,7 +13,7 @@
     "MemberJunction": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
+    "build": "tsc && tsc-alias -f && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
     "start": "node dist/index.js"
   },
   "files": [

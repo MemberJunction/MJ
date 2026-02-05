@@ -2,7 +2,7 @@ import { EntityInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunc
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import express, { Request, Response, NextFunction } from 'express';
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, a2aServerSettings } from './config.js';
 import { EntityOperations, OperationResult } from './EntityOperations.js';

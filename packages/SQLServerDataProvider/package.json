@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/sqlserver-dataprovider",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: SQL Server Client Data Provider",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"

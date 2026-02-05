@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/version-history",
+  "type": "module",
   "version": "3.4.0",
   "description": "Server-side version history engine providing label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore for MemberJunction record changes",
   "main": "dist/index.js",
@@ -8,7 +9,7 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",

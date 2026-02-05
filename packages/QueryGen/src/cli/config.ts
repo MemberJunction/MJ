@@ -4,6 +4,13 @@
  * Loads configuration from mj.config.cjs and merges with CLI options
  */
 
+import fs from 'fs';
+import path from 'path';
+import { createRequire } from 'node:module';
+
+// Use createRequire to load CommonJS config files
+const require = createRequire(import.meta.url);
+
 /**
  * QueryGen configuration options
  */
@@ -170,8 +177,7 @@ export function loadConfig(cliOptions: Record<string, unknown>): QueryGenConfig 
  */
 function loadMjConfig(): { queryGen?: Partial<QueryGenConfig> } | null {
   try {
-    const configPath = require('path').join(process.cwd(), 'mj.config.cjs');
-    const fs = require('fs');
+    const configPath = path.join(process.cwd(), 'mj.config.cjs');
     if (fs.existsSync(configPath)) {
       return require(configPath);
     }

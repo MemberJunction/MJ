@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/encryption",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: Field-level encryption engine with pluggable key sources. Server-side only - provides AES-256-GCM/CBC encryption with environment variable, config file, AWS KMS, and Azure Key Vault key sources.",
   "main": "dist/index.js",
@@ -8,7 +9,7 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
