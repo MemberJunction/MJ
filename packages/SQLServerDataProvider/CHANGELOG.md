@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 3.4.0
+
+### Minor Changes
+
+- 3a71e4e: Fix large text field corruptions, cross-platform improvements, more robust environment variable parsing for boolean values
+
+### Patch Changes
+
+- 18b4e65: Add field-level encryption for credential values with automatic decryption, Box.com OAuth credential type, comprehensive JSON Schema validation, and fix credential editor to prevent "undefined" text in fields
+- Updated dependencies [d596467]
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ai-provider-bundle@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/queue@3.4.0
+  - @memberjunction/actions@3.4.0
+  - @memberjunction/aiengine@3.4.0
+  - @memberjunction/ai-vector-dupe@3.4.0
+  - @memberjunction/actions-base@3.4.0
+  - @memberjunction/encryption@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

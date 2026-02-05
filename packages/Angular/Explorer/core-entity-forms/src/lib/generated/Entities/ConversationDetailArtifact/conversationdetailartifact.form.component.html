@@ -51,25 +51,15 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ArtifactVersion"
+            FieldName="ConversationDetail"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Conversation Content Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="conversationContent"
-        sectionName="Conversation Content"
-        icon="fa fa-comment-dots"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="false"
-            FieldName="ConversationDetail"
+            [ShowLabel]="true"
+            FieldName="ArtifactVersion"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"

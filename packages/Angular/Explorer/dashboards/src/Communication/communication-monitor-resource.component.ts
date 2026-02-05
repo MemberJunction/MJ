@@ -121,7 +121,7 @@ export function LoadCommunicationMonitorResource() {
                                     <span class="activity-title">{{log.CommunicationProviderMessageType || 'Message'}}</span>
                                     <span class="activity-meta">{{log.CommunicationProvider}} &bull; {{log.MessageDate | date:'shortTime'}}</span>
                                 </div>
-                                <span class="activity-status" [ngClass]="log.Status?.toLowerCase()">
+                                <span class="activity-status" [ngClass]="log.Status.toLowerCase()">
                                     {{log.Status}}
                                 </span>
                             </div>

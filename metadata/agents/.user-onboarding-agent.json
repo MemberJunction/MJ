@@ -124,8 +124,10 @@
             "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:Users\"}",
             "ActionOutputMapping": "{\"CanCreate\": \"permissions.users.canCreate\", \"CanUpdate\": \"permissions.users.canUpdate\"}",
             "Status": "Active",
-            "PositionX": 100,
-            "PositionY": 100
+            "PositionX": 280,
+            "PositionY": -60,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "AF1A0DE4-E0DB-4290-A316-FB1CB35FEF11"
@@ -145,8 +147,10 @@
             "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:User Roles\"}",
             "ActionOutputMapping": "{\"CanCreate\": \"permissions.userRoles.canCreate\"}",
             "Status": "Active",
-            "PositionX": 200,
-            "PositionY": 100
+            "PositionX": 170,
+            "PositionY": 220,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "AE444D5A-0CDC-41B2-A369-3BA12A7E1AAA"
@@ -166,8 +170,10 @@
             "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:Employees\"}",
             "ActionOutputMapping": "{\"CanCreate\": \"permissions.employees.canCreate\"}",
             "Status": "Active",
-            "PositionX": 300,
-            "PositionY": 100
+            "PositionX": -380,
+            "PositionY": 400,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "B6431F43-41DA-4405-9EF5-C98F21409FA6"
@@ -185,8 +191,10 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Permission Denied - Users",
             "Status": "Active",
-            "PositionX": 100,
-            "PositionY": 250
+            "PositionX": 720,
+            "PositionY": 320,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "620AD7B8-8BA8-4615-AF66-6BB38F1B5DDB"
@@ -204,8 +212,10 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Permission Denied - User Roles",
             "Status": "Active",
-            "PositionX": 200,
-            "PositionY": 250
+            "PositionX": 520,
+            "PositionY": 500,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "8DE19F37-02DF-4717-A8FA-98085F62FE2D"
@@ -223,8 +233,10 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Permission Denied - Employees",
             "Status": "Active",
-            "PositionX": 300,
-            "PositionY": 250
+            "PositionX": 630,
+            "PositionY": 40,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "CB7B4615-1CCB-403F-B406-25F51130D703"
@@ -242,8 +254,10 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Collect User Information - Prompt Step",
             "Status": "Active",
-            "PositionX": 400,
-            "PositionY": 100
+            "PositionX": 40,
+            "PositionY": 580,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "3DB38E5E-FB94-401C-94AB-0B2D7E18302C"
@@ -263,8 +277,10 @@
             "ActionInputMapping": "{\"Email\": \"payload.userData.email\"}",
             "ActionOutputMapping": "{\"IsUnique\": \"emailIsUnique\", \"ExistingUserID\": \"existingUserID\"}",
             "Status": "Active",
-            "PositionX": 600,
-            "PositionY": 100
+            "PositionX": 40,
+            "PositionY": 760,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "286C4DE2-133C-42CD-9BA9-96F46156AF95"
@@ -284,8 +300,10 @@
             "ActionInputMapping": "{\"FirstName\": \"payload.userData.firstName\", \"LastName\": \"payload.userData.lastName\", \"Email\": \"payload.userData.email\", \"Title\": \"payload.userData.title\", \"Phone\": \"payload.userData.employeeData.phone\", \"CompanyID\": \"payload.userData.employeeData.companyID\", \"SupervisorID\": \"payload.userData.employeeData.supervisorID\"}",
             "ActionOutputMapping": "{\"EmployeeID\": \"createdEmployeeID\"}",
             "Status": "Active",
-            "PositionX": 800,
-            "PositionY": 50
+            "PositionX": 500,
+            "PositionY": 960,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "5A421648-5261-4A49-862D-465C71F5A87E"
@@ -305,8 +323,10 @@
             "ActionInputMapping": "{\"FirstName\": \"payload.userData.firstName\", \"LastName\": \"payload.userData.lastName\", \"Email\": \"payload.userData.email\", \"Title\": \"payload.userData.title\", \"Type\": \"payload.userData.type\", \"IsActive\": \"true\", \"EmployeeID\": \"payload.createdEmployeeID\"}",
             "ActionOutputMapping": "{\"UserID\": \"createdUserID\", \"Name\": \"createdUserName\"}",
             "Status": "Active",
-            "PositionX": 800,
-            "PositionY": 150
+            "PositionX": -20,
+            "PositionY": 1100,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "8297F22F-76CC-4C2F-B3E7-3650CC25AFDE"
@@ -326,8 +346,10 @@
             "ActionInputMapping": "{\"UserID\": \"payload.createdUserID\", \"RoleNames\": \"payload.userData.roles\"}",
             "ActionOutputMapping": "{\"AssignedUserRoleIDs\": \"assignedUserRoleIDs\", \"AssignedCount\": \"assignedRoleCount\"}",
             "Status": "Active",
-            "PositionX": 1000,
-            "PositionY": 100
+            "PositionX": 80,
+            "PositionY": 1300,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "5A977380-2AA5-4119-A329-4450FC603025"
@@ -345,8 +367,10 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Prepare Welcome Email - User Onboarding",
             "Status": "Active",
-            "PositionX": 1200,
-            "PositionY": 100
+            "PositionX": 20,
+            "PositionY": 1500,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "D4F0E61E-9E0C-420D-9F92-6CECF0884C81"
@@ -366,8 +390,10 @@
             "ActionInputMapping": "{\"Subject\": \"payload.emailSubject\", \"Body\": \"payload.emailBody\", \"To\": \"payload.userData.email\", \"From\": \"static:noreply@memberjunction.com\", \"Provider\": \"static:SendGrid\", \"MessageType\": \"static:Email\"}",
             "ActionOutputMapping": "{}",
             "Status": "Active",
-            "PositionX": 1400,
-            "PositionY": 100
+            "PositionX": 240,
+            "PositionY": 1700,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "EA96D877-DEDB-4C7F-9ADC-CB74E6C2A291"
@@ -385,8 +411,10 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Generic Error Message",
             "Status": "Active",
-            "PositionX": 600,
-            "PositionY": 250
+            "PositionX": -320,
+            "PositionY": 1000,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "23157416-28D0-422A-AF69-6E4D46E0E212"

@@ -3093,11 +3093,11 @@ function addEntityGetTool(addToolWithFilter: AddToolFn, entity: EntityInfo): voi
  * Configuration interface for entity tool matching.
  */
 interface EntityToolConfig {
-    get: boolean;
-    create: boolean;
-    update: boolean;
-    delete: boolean;
-    runView: boolean;
+    get?: boolean;
+    create?: boolean;
+    update?: boolean;
+    delete?: boolean;
+    runView?: boolean;
     entityName?: string;
     schemaName?: string;
 }

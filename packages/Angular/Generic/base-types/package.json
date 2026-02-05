@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-base-types",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "MemberJunction: Simple types that are used across many generic Angular UI components for coordination",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -23,9 +23,9 @@
     "@angular/core": "18.2.14"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "3.3.0",
-    "@memberjunction/global": "3.3.0",
-    "@memberjunction/core": "3.3.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/global": "3.4.0",
+    "@memberjunction/core": "3.4.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

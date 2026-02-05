@@ -6,90 +6,132 @@
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-        <!-- Compact Header with Agent Overview -->
-        <div class="agent-header">
-            <div class="agent-header-content">
-                <div class="agent-overview">
-                    <div class="agent-icon-wrapper">
-                        @if (hasLogoURL()) {
-                            <img [src]="record.LogoURL" [alt]="record.Name + ' logo'" class="agent-logo">
-                        } @else {
-                            <i [class]="getAgentIcon()"></i>
-                        }
-                    </div>
-                    <div class="agent-info">
-                        @if (EditMode) {
-                            <kendo-textbox [(ngModel)]="record.Name" 
-                                          name="agentName"
-                                          placeholder="Enter agent name..."
-                                          class="agent-name-input">
-                            </kendo-textbox>
-                        } @else {
-                            <h1 class="agent-name">{{ record.Name || 'Untitled AI Agent' }}</h1>
-                        }
-                        <div class="agent-meta">
-                            @if (record.Status) {
-                                <span class="status-badge" [style.background-color]="getStatusBadgeColor()">
-                                    <i class="fa-solid fa-circle"></i>
-                                    {{ record.Status }}
-                                </span>
-                            }
-                            @if (record.Type) {
-                                <span class="execution-mode">
-                                    Agent Type: {{ record.Type }}
-                                </span>
-                            }
-                            @if (record.Parent) {
-                                <span class="parent-agent clickable"
-                                      (click)="navigateToParentAgent()"
-                                      title="Open parent agent: {{ record.Parent }}">
-                                    <i class="fa-solid fa-sitemap"></i>
-                                    Child of {{ record.Parent }}
-                                    <i class="fa-solid fa-external-link" style="margin-left: 4px; font-size: 10px;"></i>
-                                </span>
+        <!-- Agent Header — expanded view -->
+        @if (!HeaderCollapsed) {
+            <div class="agent-header">
+                <div class="agent-header-content">
+                    <button class="agent-header-toggle" (click)="ToggleHeaderCollapsed()"
+                            title="Minimize header">
+                        <i class="fa-solid fa-chevron-up"></i>
+                    </button>
+
+                    <div class="agent-overview">
+                        <div class="agent-icon-wrapper">
+                            @if (hasLogoURL()) {
+                                <img [src]="record.LogoURL" [alt]="record.Name + ' logo'" class="agent-logo">
+                            } @else {
+                                <i [class]="getAgentIcon()"></i>
                             }
                         </div>
+                        <div class="agent-info">
+                            @if (EditMode) {
+                                <kendo-textbox [(ngModel)]="record.Name"
+                                              name="agentName"
+                                              placeholder="Enter agent name..."
+                                              class="agent-name-input">
+                                </kendo-textbox>
+                            } @else {
+                                <h1 class="agent-name">{{ record.Name || 'Untitled AI Agent' }}</h1>
+                            }
+                            <div class="agent-meta">
+                                @if (record.Status) {
+                                    <span class="status-badge" [style.background-color]="getStatusBadgeColor()">
+                                        <i class="fa-solid fa-circle"></i>
+                                        {{ record.Status }}
+                                    </span>
+                                }
+                                @if (record.Type) {
+                                    <span class="execution-mode">
+                                        Agent Type: {{ record.Type }}
+                                    </span>
+                                }
+                                @if (record.Parent) {
+                                    <span class="parent-agent clickable"
+                                          (click)="navigateToParentAgent()"
+                                          title="Open parent agent: {{ record.Parent }}">
+                                        <i class="fa-solid fa-sitemap"></i>
+                                        Child of {{ record.Parent }}
+                                        <i class="fa-solid fa-external-link" style="margin-left: 4px; font-size: 10px;"></i>
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="agent-actions">
+                        @if (record.ID) {
+                            <button kendoButton themeColor="primary" size="large"
+                                        (click)="openTestHarness()"
+                                        [disabled]="record.Status !== 'Active'"
+                                        title="Run this AI agent">
+                                <i class="fa-solid fa-play"></i> Run
+                            </button>
+                            <button kendoButton size="large"
+                                    (click)="openPermissionsDialog()"
+                                    [title]="IsOpenToEveryone ? 'Open to everyone — click to manage permissions' : 'Restricted — click to manage permissions'">
+                                <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
+                                   [style.color]="IsOpenToEveryone ? '#16a34a' : null"></i>
+                                {{ IsOpenToEveryone ? 'Open' : 'Restricted' }}
+                            </button>
+                        }
+                        <button kendoButton fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
+                            <i class="fa-solid fa-refresh"></i>
+                        </button>
                     </div>
                 </div>
-                
-                <!-- Action Buttons -->
-                <div class="agent-actions">
-                    @if (record.ID) {
-                        <button kendoButton themeColor="primary" size="large"
-                                    (click)="openTestHarness()"
-                                    [disabled]="record.Status !== 'Active'"
-                                    title="Run this AI agent">
-                            <i class="fa-solid fa-play"></i>
-                            Run
-                        </button>
-                        <button kendoButton size="large" 
-                                (click)="openPermissionsDialog()" 
-                                title="Manage permissions"
-                                >
-                            <i class="fa-solid fa-lock"></i>
-                            Permissions
-                        </button>
-                    }
-                    <button kendoButton fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
-                        <i class="fa-solid fa-refresh"></i>
-                    </button>
-                </div>
             </div>
-        </div>
+        }
+
+        <!-- Agent Header — minimized floating bar -->
+        @if (HeaderCollapsed) {
+            <div class="agent-header-mini">
+                <button class="agent-header-mini-expand" (click)="ToggleHeaderCollapsed()"
+                        title="Expand header">
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+                <span class="agent-header-mini-name">{{ record.Name || 'Untitled AI Agent' }}</span>
+                @if (record.Status) {
+                    <span class="agent-header-mini-status" [style.background-color]="getStatusBadgeColor()">
+                        {{ record.Status }}
+                    </span>
+                }
+                <div class="agent-header-mini-spacer"></div>
+                @if (record.ID) {
+                    <button class="agent-header-mini-btn agent-header-mini-btn--primary"
+                            (click)="openTestHarness()"
+                            [disabled]="record.Status !== 'Active'"
+                            title="Run agent">
+                        <i class="fa-solid fa-play"></i>
+                    </button>
+                    <button class="agent-header-mini-btn"
+                            (click)="openPermissionsDialog()"
+                            [title]="IsOpenToEveryone ? 'Open to everyone' : 'Restricted'">
+                        <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
+                           [style.color]="IsOpenToEveryone ? '#16a34a' : null"></i>
+                    </button>
+                }
+                <button class="agent-header-mini-btn"
+                        (click)="refreshRelatedData()" title="Refresh">
+                    <i class="fa-solid fa-refresh"></i>
+                </button>
+            </div>
+        }
 
         <!-- Single Pane Layout with Expander Panels -->
         <div class="form-content">
-            <kendo-panelbar [keepItemContent]="true">
+            <kendo-panelbar [keepItemContent]="true" (stateChange)="OnPanelBarStateChange($event)">
                 <!-- Custom Agent Type Section (if defined) -->
                 @if (record.ID && agentType && agentType.UIFormSectionKey) {
-                    <kendo-panelbar-item 
-                        [expanded]="agentType.UIFormSectionExpandedByDefault" 
-                        (stateChange)="onCustomSectionStateChange($event)">
+                    <kendo-panelbar-item id="custom"
+                        [expanded]="GetSectionExpanded('custom', agentType.UIFormSectionExpandedByDefault)">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-puzzle-piece"></i> {{ agentType.Name }} Configuration
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content custom-agent-type-section" [style.display]="'block'">
+                                @if (loadingStates.customSection) {
+                                    <mj-loading text="Loading {{ agentType.Name }} configuration..." size="medium"></mj-loading>
+                                }
                                 <ng-container #customSectionContainer></ng-container>
                             </div>
                         </ng-template>
@@ -98,7 +140,7 @@
 
                 <!-- Requests & History -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.executionHistory">
+                    <kendo-panelbar-item id="history" [expanded]="GetSectionExpanded('history', false)" [disabled]="loadingStates.executionHistory">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-history"></i> Execution History
                             @if (loadingStates.executionHistory) {
@@ -351,7 +393,7 @@
 
                 <!-- Actions -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.actions">
+                    <kendo-panelbar-item id="actions" [expanded]="GetSectionExpanded('actions', false)" [disabled]="loadingStates.actions">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-bolt"></i> Actions
                             @if (loadingStates.actions) {
@@ -441,7 +483,7 @@
 
                 <!-- Sub-Agents (Unified View with Filter) -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.subAgents">
+                    <kendo-panelbar-item id="subagents" [expanded]="GetSectionExpanded('subagents', false)" [disabled]="loadingStates.subAgents">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-sitemap"></i> Sub-Agents
                             @if (loadingStates.subAgents) {
@@ -647,7 +689,7 @@
 
                 <!-- Prompts (With Model Selection) -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.prompts">
+                    <kendo-panelbar-item id="prompts" [expanded]="GetSectionExpanded('prompts', false)" [disabled]="loadingStates.prompts">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-comments"></i> Prompts
                             @if (loadingStates.prompts) {
@@ -759,7 +801,7 @@
 
                 <!-- Learning & Analytics -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.learningCycles">
+                    <kendo-panelbar-item id="learning" [expanded]="GetSectionExpanded('learning', false)" [disabled]="loadingStates.learningCycles">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-brain"></i> Learning Cycles{{ learningCycleCount > 0 ? ' (' + learningCycleCount + ')' : '' }}
                             @if (loadingStates.learningCycles) {
@@ -820,7 +862,7 @@
 
                 <!-- Notes & Documentation -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.notes">
+                    <kendo-panelbar-item id="notes" [expanded]="GetSectionExpanded('notes', false)" [disabled]="loadingStates.notes">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-sticky-note"></i> Notes{{ noteCount > 0 ? ' (' + noteCount + ')' : '' }}
                             @if (loadingStates.notes) {
@@ -894,7 +936,7 @@
 
 
                 <!-- Payload -->
-                <kendo-panelbar-item [expanded]="false">
+                <kendo-panelbar-item id="payload" [expanded]="GetSectionExpanded('payload', false)">
                     <ng-template kendoPanelBarItemTitle>
                         <i class="fa-solid fa-exchange-alt"></i> Payload Management
                     </ng-template>
@@ -1129,7 +1171,7 @@
 
 
                 <!-- Execution Guardrails (New Separate Panel) -->
-                <kendo-panelbar-item [expanded]="false">
+                <kendo-panelbar-item id="guardrails" [expanded]="GetSectionExpanded('guardrails', false)">
                     <ng-template kendoPanelBarItemTitle>
                         <i class="fa-solid fa-shield-halved"></i> Execution Guardrails
                     </ng-template>
@@ -1183,7 +1225,7 @@
                 </kendo-panelbar-item>
 
                 <!-- Configuration (Settings Panel) -->
-                <kendo-panelbar-item [expanded]="false">
+                <kendo-panelbar-item id="config" [expanded]="GetSectionExpanded('config', false)">
                     <ng-template kendoPanelBarItemTitle>
                         <i class="fa-solid fa-cogs"></i> Configuration
                     </ng-template>
@@ -1595,4 +1637,11 @@
         </div>
     </form>
 
+    <!-- Permissions Dialog (from @memberjunction/ng-agents) -->
+    <mj-agent-permissions-dialog
+        *ngIf="ShowPermissionsDialog"
+        [Agent]="record"
+        (Closed)="onPermissionsDialogClosed()"
+        (PermissionsChanged)="refreshRelatedData()">
+    </mj-agent-permissions-dialog>
 </div>

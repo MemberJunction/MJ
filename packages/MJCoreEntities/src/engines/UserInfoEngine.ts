@@ -713,9 +713,27 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     }
 
     // Check if already installed
-    if (this.HasApplication(applicationId)) {
-      console.warn(`UserInfoEngine.InstallApplication: Application ${applicationId} is already installed`);
-      return this.GetUserApplicationByAppId(applicationId) || null;
+    const existingApp = this.GetUserApplicationByAppId(applicationId);
+    if (existingApp) {
+      // If already active, just return it
+      if (existingApp.IsActive) {
+        return existingApp;
+      }
+      // If disabled, enable it
+      try {
+        existingApp.IsActive = true;
+        const saved = await existingApp.Save();
+        if (saved) {
+          console.log(`UserInfoEngine.InstallApplication: Enabled existing application ${applicationId}`);
+          return existingApp;
+        } else {
+          console.error('UserInfoEngine.InstallApplication: Failed to enable:', existingApp.LatestResult);
+          return null;
+        }
+      } catch (error) {
+        console.error('UserInfoEngine.InstallApplication: Error enabling:', error instanceof Error ? error.message : String(error));
+        return null;
+      }
     }
 
     // Get the next sequence number
