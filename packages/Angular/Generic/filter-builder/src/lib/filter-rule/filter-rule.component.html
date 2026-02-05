@@ -2,6 +2,7 @@
   <!-- Field Selector - Custom Dropdown -->
   <div class="custom-dropdown field-dropdown" [class.open]="fieldDropdownOpen" [class.disabled]="disabled">
     <button
+      #fieldDropdownBtn
       type="button"
       class="dropdown-trigger"
       (click)="toggleFieldDropdown()"
@@ -31,6 +32,7 @@
   <!-- Operator Selector - Custom Dropdown -->
   <div class="custom-dropdown operator-dropdown" [class.open]="operatorDropdownOpen" [class.disabled]="disabled || !selectedField">
     <button
+      #operatorDropdownBtn
       type="button"
       class="dropdown-trigger"
       (click)="toggleOperatorDropdown()"
@@ -60,6 +62,7 @@
     @if (selectedField.type === 'string' && hasValueList()) {
       <div class="custom-dropdown value-dropdown" [class.open]="valueDropdownOpen" [class.disabled]="disabled">
         <button
+          #valueDropdownBtn
           type="button"
           class="dropdown-trigger"
           (click)="toggleValueDropdown()"
