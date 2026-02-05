@@ -8,7 +8,34 @@ This document outlines a strategy for building [Claude Cowork Plugins](https://g
 2. **MJ Agent Builder Plugin** — Direct agent interaction through Cowork/MCP
 3. **Association Management Plugin** — Standalone plugin for associations, extended by MJ
 
-All plugins follow the standard Cowork plugin architecture: markdown skills, slash commands, MCP connectors, and sub-agents — no runtime code, no build steps.
+**Repository:** https://github.com/MemberJunction/co-work-plugins
+
+All plugins live in a single monorepo, each in its own directory. This allows shared documentation, consistent structure, and easy cross-plugin discovery while keeping each plugin independently installable.
+
+```
+co-work-plugins/
+├── README.md                    # Repo overview, installation instructions
+├── association/                 # Association Management plugin
+│   ├── .claude-plugin/plugin.json
+│   ├── .mcp.json
+│   ├── commands/
+│   ├── skills/
+│   └── README.md
+├── mj-admin/                    # MJ Admin/Developer plugin
+│   ├── .claude-plugin/plugin.json
+│   ├── .mcp.json
+│   ├── commands/
+│   ├── skills/
+│   └── README.md
+└── mj-agent-builder/            # MJ Agent Builder plugin
+    ├── .claude-plugin/plugin.json
+    ├── .mcp.json
+    ├── commands/
+    ├── skills/
+    └── README.md
+```
+
+Each plugin follows the standard Cowork plugin architecture: markdown skills, slash commands, MCP connectors, and sub-agents — no runtime code, no build steps.
 
 ```
 plugin-name/
@@ -32,7 +59,7 @@ Turn Cowork into an MJ-aware development assistant. A developer working in Cowor
 ### Directory Structure
 
 ```
-memberjunction-admin/
+mj-admin/
 ├── .claude-plugin/
 │   └── plugin.json
 ├── .mcp.json
@@ -53,7 +80,8 @@ memberjunction-admin/
 │   ├── runview-patterns.md        # RunView vs RunViews, ResultType, Fields optimization
 │   ├── mcp-server-config.md       # How to configure MJ's MCP server (entity/agent/action tools)
 │   └── monorepo-structure.md      # Package organization, build system, dependency rules
-└── settings.local.json.example    # Template for user-specific config
+├── settings.local.json.example    # Template for user-specific config
+└── README.md
 ```
 
 ### MCP Connector Configuration
@@ -624,7 +652,7 @@ When MJ is not connected, the `.mcp.json` can optionally wire to other common as
 
 | Step | Description |
 |------|-------------|
-| 1a | Create repo structure: `memberjunction/cowork-plugins` |
+| 1a | Create `association/` directory in `MemberJunction/co-work-plugins` repo |
 | 1b | Write all 12 skills files with deep association domain knowledge |
 | 1c | Write all 16 command files with structured workflows |
 | 1d | Create `plugin.json` manifest and `settings.local.json.example` |
