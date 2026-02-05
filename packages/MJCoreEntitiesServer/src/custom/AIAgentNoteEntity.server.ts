@@ -2,6 +2,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntitySaveOptions, LogError, SimpleEmbeddingResult } from "@memberjunction/core";
 import { AIAgentNoteEntity } from "@memberjunction/core-entities";
 import { EmbedTextLocalHelper } from "./util";
+import { AIEngine } from "@memberjunction/aiengine";
 
 /**
  * Server-side extension of AIAgentNoteEntity that auto-generates embeddings
@@ -25,6 +26,9 @@ export class AIAgentNoteEntityExtended extends AIAgentNoteEntity {
             // Generate embedding for Note field if needed
             if (shouldGenerateEmbedding && this.Note && this.Note.trim().length > 0) {
                 await this.GenerateEmbeddingByFieldName("Note", "EmbeddingVector", "EmbeddingModelID");
+
+                // now let the AIEngine know that the note has been updated so it can have the latest vector in memory
+                AIEngine.Instance.AddOrUpdateSingleNoteEmbedding(this);
             } else if (!this.Note || this.Note.trim().length === 0) {
                 // Clear embedding if note is empty
                 this.EmbeddingVector = null;

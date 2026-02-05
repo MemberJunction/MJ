@@ -57,13 +57,20 @@
       "url": "http://localhost:4201",
       "cwd": "${workspaceFolder}/packages/MJExplorer",
       "sourceMaps": true,
-      "webRoot": "${workspaceFolder}/packages",
+      "webRoot": "${workspaceFolder}",
       "sourceMapPathOverrides": {
         "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*",
+        "webpack:///src/*": "${workspaceFolder}/packages/MJExplorer/src/*",
+        "webpack:///./packages/*": "${workspaceFolder}/packages/*",
+        "webpack:///packages/*": "${workspaceFolder}/packages/*",
+        "webpack:///./node_modules/@memberjunction/ng-explorer-core/*": "${workspaceFolder}/packages/Angular/Explorer/explorer-core/*",
+        "webpack:///node_modules/@memberjunction/ng-explorer-core/*": "${workspaceFolder}/packages/Angular/Explorer/explorer-core/*",
+        "webpack:///./node_modules/@memberjunction/*": "${workspaceFolder}/packages/*",
+        "webpack:///node_modules/@memberjunction/*": "${workspaceFolder}/packages/*",
         "../src/*": "${workspaceFolder}/packages/GraphQLDataProvider/src/*",
-        "*/packages/*": "${workspaceFolder}/*"
+        "webpack:///*": "${workspaceFolder}/*"
       },
-      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"]
+      "skipFiles": ["<node_internals>/**", "**/zone/**"]
     },
     {
       "type": "node",
