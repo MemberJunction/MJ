@@ -531,15 +531,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     public get AgentNotes(): AIAgentNoteEntity[] {
         return this._agentNotes;
     }
-    public set AgentNotes(notes: AIAgentNoteEntity[]) {
-        this._agentNotes = notes;
-    }
 
     public get AgentExamples(): AIAgentExampleEntity[] {
         return this._agentExamples;
-    }
-    public set AgentExamples(examples: AIAgentExampleEntity[]) {
-        this._agentExamples = examples;
     }
 
     public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] {
