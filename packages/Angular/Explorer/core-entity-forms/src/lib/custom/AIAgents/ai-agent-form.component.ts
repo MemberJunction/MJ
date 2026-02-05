@@ -18,6 +18,7 @@ import { PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
+import { CreateAgentService, CreateAgentResult } from '@memberjunction/ng-agents';
 // AgentPermissionsDialogComponent is now from @memberjunction/ng-agents (shown via ShowPermissionsDialog flag)
 
 /**
@@ -539,9 +540,11 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         private dialogService: DialogService,
         private viewContainerRef: ViewContainerRef,
         private agentManagementService: AIAgentManagementService,
-        private testHarnessService: AITestHarnessDialogService
+        private testHarnessService: AITestHarnessDialogService,
+        private createAgentService: CreateAgentService
     ) {
         super(elementRef, sharedService, router, route, cdr);
+        // Note: navigationService is inherited from BaseFormComponent
     }
     
     /**
@@ -1241,108 +1244,24 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
-     * Creates a new sub-agent using the create sub-agent dialog
+     * Creates a new sub-agent using the CreateAgentService slide-in panel.
+     * Uses the new unified agent creation UI from @memberjunction/ng-agents.
      */
     public async createSubAgent() {
         try {
-            this.agentManagementService.openCreateSubAgentDialog({
-                title: `Create Sub-Agent for ${this.record.Name || 'Agent'}`,
-                initialName: '',
-                parentAgentId: this.record.ID,
-                parentAgentName: this.record.Name || 'Agent',
-                viewContainerRef: this.viewContainerRef
-            }).pipe(takeUntil(this.destroy$)).subscribe({
-                next: async (result) => {
-                    if (result && result.subAgent) {
-                        try {
-                            // Handle deferred sub-agent creation if parent is not saved
-                            if (!this.record.IsSaved) {
-                                // Store a temporary reference to the parent - will be resolved during save
-                                result.subAgent.Set('_tempParentId', this.record.ID);
-                            }
-
-                            // Add the sub-agent to pending records
-                            this.PendingRecords.push({
-                                entityObject: result.subAgent,
-                                action: 'save'
-                            });
-
-                            // Add any newly created prompts to pending records
-                            if (result.newPrompts) {
-                                for (const prompt of result.newPrompts) {
-                                    this.PendingRecords.push({
-                                        entityObject: prompt,
-                                        action: 'save'
-                                    });
-                                }
-                            }
-
-                            // Add any newly created prompt templates to pending records
-                            if (result.newPromptTemplates) {
-                                for (const template of result.newPromptTemplates) {
-                                    this.PendingRecords.push({
-                                        entityObject: template,
-                                        action: 'save'
-                                    });
-                                }
-                            }
-
-                            // Add any newly created template contents to pending records
-                            if (result.newTemplateContents) {
-                                for (const content of result.newTemplateContents) {
-                                    this.PendingRecords.push({
-                                        entityObject: content,
-                                        action: 'save'
-                                    });
-                                }
-                            }
-
-                            // Add agent prompt links to pending records
-                            if (result.agentPrompts) {
-                                for (const agentPrompt of result.agentPrompts) {
-                                    this.PendingRecords.push({
-                                        entityObject: agentPrompt,
-                                        action: 'save'
-                                    });
-                                }
-                            }
-
-                            // Add agent action links to pending records
-                            if (result.agentActions) {
-                                for (const agentAction of result.agentActions) {
-                                    this.PendingRecords.push({
-                                        entityObject: agentAction,
-                                        action: 'save'
-                                    });
-                                }
-                            }
-
-                            // Update UI to show the new sub-agent
-                            this.subAgents.push(result.subAgent);
-                            this.hasUnsavedChanges = true;
-
-                            // Mark for check instead of forcing immediate detection
-                            this.cdr.markForCheck();
-
-                            MJNotificationService.Instance.CreateSimpleNotification(
-                                `Sub-agent "${result.subAgent.Name}" created and will be saved when you save the parent agent`,
-                                'success',
-                                4000
-                            );
-                        } catch (error) {
-                            console.error('Error processing created sub-agent:', error);
-                            MJNotificationService.Instance.CreateSimpleNotification(
-                                'Error processing created sub-agent. Please try again.',
-                                'error',
-                                3000
-                            );
-                        }
+            this.createAgentService.OpenSubAgentSlideIn(
+                this.record.ID,
+                this.record.Name || 'Agent'
+            ).pipe(takeUntil(this.destroy$)).subscribe({
+                next: async (dialogResult) => {
+                    if (!dialogResult.Cancelled && dialogResult.Result) {
+                        await this.handleSubAgentCreated(dialogResult.Result);
                     }
                 },
                 error: (error) => {
-                    console.error('Error in create sub-agent dialog:', error);
+                    console.error('Error in create sub-agent slide-in:', error);
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        'Error opening sub-agent creation dialog. Please try again.',
+                        'Error opening sub-agent creation panel. Please try again.',
                         'error',
                         3000
                     );
@@ -1352,6 +1271,68 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             console.error('Error in createSubAgent:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Error creating sub-agent. Please try again.',
+                'error',
+                3000
+            );
+        }
+    }
+
+    /**
+     * Handles the result from the create sub-agent slide-in.
+     * Adds entities to PendingRecords for atomic save with parent.
+     */
+    private async handleSubAgentCreated(result: CreateAgentResult): Promise<void> {
+        try {
+            const subAgent = result.Agent;
+
+            // Handle deferred sub-agent creation if parent is not saved
+            if (!this.record.IsSaved) {
+                // Store a temporary reference to the parent - will be resolved during save
+                subAgent.Set('_tempParentId', this.record.ID);
+            }
+
+            // Add the sub-agent to pending records
+            this.PendingRecords.push({
+                entityObject: subAgent,
+                action: 'save'
+            });
+
+            // Add agent prompt links to pending records
+            if (result.AgentPrompts) {
+                for (const agentPrompt of result.AgentPrompts) {
+                    this.PendingRecords.push({
+                        entityObject: agentPrompt,
+                        action: 'save'
+                    });
+                }
+            }
+
+            // Add agent action links to pending records
+            if (result.AgentActions) {
+                for (const agentAction of result.AgentActions) {
+                    this.PendingRecords.push({
+                        entityObject: agentAction,
+                        action: 'save'
+                    });
+                }
+            }
+
+            // Update UI to show the new sub-agent
+            this.subAgents.push(subAgent);
+            this.hasUnsavedChanges = true;
+
+            // Mark for check instead of forcing immediate detection
+            this.cdr.markForCheck();
+
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Sub-agent "${subAgent.Name}" created and will be saved when you save the parent agent`,
+                'success',
+                4000
+            );
+        } catch (error) {
+            console.error('Error processing created sub-agent:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error processing created sub-agent. Please try again.',
                 'error',
                 3000
             );

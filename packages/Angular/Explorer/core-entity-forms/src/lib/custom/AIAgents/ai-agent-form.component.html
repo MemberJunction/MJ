@@ -533,7 +533,6 @@
                                                 size="small"
                                                 (click)="createChildSubAgent()"
                                                 title="Create a new child sub-agent that shares this agent's payload">
-                                                <i class="fa-solid fa-plus"></i>
                                                 <i class="fa-solid fa-link"></i>
                                                 Create Child
                                             </button>
@@ -542,7 +541,6 @@
                                                 size="small"
                                                 (click)="linkRelatedSubAgent()"
                                                 title="Link an existing agent as a related sub-agent with payload mapping">
-                                                <i class="fa-solid fa-plus"></i>
                                                 <i class="fa-solid fa-share-nodes"></i>
                                                 Link Related
                                             </button>
@@ -568,16 +566,6 @@
                                                 <p>Reusable agents with payload mapping</p>
                                             </div>
                                         </div>
-                                        @if (EditMode && UserCanCreateSubAgents) {
-                                            <div class="empty-state-actions">
-                                                <button kendoButton themeColor="primary" (click)="createChildSubAgent()">
-                                                    <i class="fa-solid fa-plus"></i> Create Child Sub-Agent
-                                                </button>
-                                                <button kendoButton themeColor="secondary" (click)="linkRelatedSubAgent()">
-                                                    <i class="fa-solid fa-plus"></i> Link Related Sub-Agent
-                                                </button>
-                                            </div>
-                                        }
                                     </div>
                                 } @else {
                                     <!-- Unified Sub-Agent List -->

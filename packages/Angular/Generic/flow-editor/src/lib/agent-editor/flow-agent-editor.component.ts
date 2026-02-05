@@ -340,7 +340,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
     const md = new Metadata();
     const step = await md.GetEntityObject<AIAgentStepEntity>('MJ: AI Agent Steps');
-    step.NewRecord();
+    step.NewRecord(); // This generates a UUID immediately - available before Save()
     step.AgentID = this.AgentID;
     step.Name = event.Node.Label;
     step.StepType = event.Node.Type as 'Action' | 'Prompt' | 'Sub-Agent' | 'ForEach' | 'While';
@@ -352,21 +352,21 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
     step.RetryCount = 0;
     step.TimeoutSeconds = 600;
 
-    // Save immediately to get an ID
-    const saved = await step.Save();
-    if (saved) {
-      this.steps.push(step);
-      this.rebuildFlowModel();
-      this.markDirty();
+    // Add the unsaved step to the array - it already has a UUID from NewRecord()
+    // This allows connections to be drawn immediately without waiting for a database save
+    this.steps.push(step);
 
-      // Select the new node
-      setTimeout(() => {
-        this.flowEditor?.SelectNode(step.ID);
-        this.onNodeSelected(this.nodes.find(n => n.ID === step.ID) ?? null);
-      }, 100);
-    } else {
-      console.error('Failed to save new step:', step.LatestResult);
-    }
+    // Build a FlowNode using the entity's pre-generated ID so Foblex can track it
+    const newNode = this.transformer.StepToNode(step, this.availableActions, this.availableAgents);
+    this.nodes.push(newNode);
+    this.markDirty();
+
+    // Select the new node
+    setTimeout(() => {
+      this.flowEditor?.SelectNode(step.ID);
+      this.onNodeSelected(newNode);
+    }, 100);
+
     this.cdr.detectChanges();
   }
 
@@ -381,19 +381,15 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
     const md = new Metadata();
     const path = await md.GetEntityObject<AIAgentStepPathEntity>('MJ: AI Agent Step Paths');
-    path.NewRecord();
+    path.NewRecord(); // Generates UUID immediately - available before Save()
     path.OriginStepID = event.SourceNodeID;
     path.DestinationStepID = event.TargetNodeID;
     path.Priority = 0;
 
-    const saved = await path.Save();
-    if (saved) {
-      this.paths.push(path);
-      this.rebuildFlowModel();
-      this.markDirty();
-    } else {
-      console.error('Failed to save new path:', path.LatestResult);
-    }
+    // Add unsaved path to the array - save will happen on main Save() button
+    this.paths.push(path);
+    this.rebuildFlowModel();
+    this.markDirty();
     this.cdr.detectChanges();
   }
 

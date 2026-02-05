@@ -130,7 +130,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Fit all nodes within the viewport */
   ZoomToFit(): void {
-    this.fCanvas?.fitToScreen({ x: 50, y: 50 }, true);
+    this.fCanvas?.fitToScreen({ x: 150, y: 150 }, true);
   }
 
   /** Zoom in one step */
