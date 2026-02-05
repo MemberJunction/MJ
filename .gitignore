@@ -6,6 +6,9 @@
 # Turbo local cache
 .turbo/
 
+# Angular local cache
+.angular/
+
 # Node artifact files
 node_modules/
 dist/
