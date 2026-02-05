@@ -932,7 +932,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     // Display helpers
     // =========================================================================
 
-    public resolveEntityName(entityId: string): string {
+    public resolveEntityName(entityId: string | undefined): string {
         if (!entityId) return 'Unknown';
         const entity = this.metadata.Entities.find(e => e.ID === entityId);
         return entity ? entity.Name : 'Unknown';

@@ -69,7 +69,7 @@ export async function loadMJConfig(): Promise<MJConfig> {
         throw new Error(`No mj.config.cjs configuration found. Ensure you're running from the MJ repository root.`);
     }
 
-    cachedConfig = result.config;
+    cachedConfig = result.config as MJConfig;
     return cachedConfig;
 }
 

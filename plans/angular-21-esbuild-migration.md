@@ -72,70 +72,91 @@ This phase establishes a clean, consistent build foundation before upgrading Ang
 ---
 
 #### Phase 1a: Preparation & Baseline
-**Status**: In Progress
+**Status**: Complete ✓
+**Completed**: 2026-02-05
 **Estimated Complexity**: Low
 
 - [x] **1a.1** Create feature branch `angular-21-upgrade`
-- [ ] **1a.2** Document current working state
-  - [ ] Record current build times for comparison
-  - [ ] Note current HMR behavior (full reload on all changes)
-  - [ ] Document current Node.js version: 22.14.0
-- [ ] **1a.3** Verify full build succeeds on current state
-  ```bash
-  npm run build
-  ```
-- [ ] **1a.4** Create inventory of packages by category:
-  - Angular packages: ~46
-  - Server packages: ~100
-  - Special cases: ~10
+- [x] **1a.2** Document current working state
+  - [x] Record current build times for comparison
+  - [x] Note current HMR behavior (full reload on all changes)
+  - [x] Document current Node.js version: 22.14.0
 
-**Verification**: Baseline documented, build succeeds
+##### Baseline Metrics (2026-02-05)
+| Metric | Value |
+|--------|-------|
+| Node.js | v22.14.0 |
+| NPM | 11.4.2 |
+| Full Build Time | 33.2s (156/168 cached) |
+| HMR Behavior | Full page reload on all changes |
+| Total Packages | 175 |
+| Packages Extending Root TSConfig | 8 (4.6%) |
+
+- [x] **1a.3** Verify full build succeeds on current state
+  ```
+  Tasks:    168 successful, 168 total
+  Cached:   156 cached, 168 total
+  Time:     33.181s
+  ```
+
+- [x] **1a.4** Create inventory of packages by category:
+  - Angular packages: 62
+  - Server packages: 88
+  - Other packages: 25
+  - **Currently extending tsconfig.angular.json**: 5
+  - **Currently extending tsconfig.server.json**: 3
+
+**Verification**: ✓ Baseline documented, build succeeds
 
 ---
 
 #### Phase 1b: TSConfig Quick Wins
-**Status**: Not Started
+**Status**: Partially Complete ✓ (ServerBootstrap blocked)
+**Completed**: 2026-02-05
 **Estimated Complexity**: Low
 **Risk**: Low
 
 Fix packages that incorrectly have `strict: false` due to missing type definitions only.
 
-- [ ] **1b.1** ServerBootstrap
-  - [ ] Add `@types/node` to devDependencies
-  - [ ] Enable `strict: true`
-  - [ ] Verify build passes (expected: 0 errors)
+- [ ] **1b.1** ServerBootstrap - **BLOCKED**
+  - ⚠️ Cannot enable strict mode because `composite: true` causes TypeScript to check referenced projects
+  - MJServer has hundreds of strict mode errors that must be fixed first
+  - Defer to Phase 1e (MJCore strict mode) or separate effort
 
-- [ ] **1b.2** TestingFramework/CLI
-  - [ ] Add `@types/jest` to devDependencies
-  - [ ] Enable `strict: true`
-  - [ ] Verify build passes
+- [x] **1b.2** TestingFramework/CLI
+  - [x] Enable `strict: true`
+  - [x] Fixed 4 errors: added `|| 'console'` fallback for format, type assertion for config
+  - [x] Verify build passes ✓
 
-- [ ] **1b.3** TestingFramework/Engine
-  - [ ] Add `@types/jest` to devDependencies
-  - [ ] Enable `strict: true`
-  - [ ] Verify build passes
+- [x] **1b.3** TestingFramework/Engine
+  - [x] Enable `strict: true`
+  - [x] Fixed 6 errors: catch block type assertions, null coalescing for undefined/null mismatches
+  - [x] Verify build passes ✓
 
-- [ ] **1b.4** TestingFramework/EngineBase
-  - [ ] Add `@types/jest` to devDependencies
-  - [ ] Enable `strict: true`
-  - [ ] Verify build passes
+- [x] **1b.4** TestingFramework/EngineBase
+  - [x] Enable `strict: true`
+  - [x] Fixed 1 error: non-null assertion for provider parameter
+  - [x] Verify build passes ✓
 
-- [ ] **1b.5** MJExportEngine
-  - [ ] Fix 2 implicit any errors on `cell` parameters
-  - [ ] Enable `strict: true`
-  - [ ] Verify build passes
+- [x] **1b.5** MJExportEngine
+  - [x] Enable `strict: true`
+  - [x] Fixed 1 error: non-null assertion for workbook title
+  - [x] Verify build passes ✓
 
-- [ ] **1b.6** Run full build to verify no regressions
-  ```bash
-  npm run build
+- [x] **1b.6** Run full build to verify no regressions
+  ```
+  Tasks:    168 successful, 168 total
+  Cached:   136 cached, 168 total
+  Time:     42.658s
   ```
 
-**Verification**: All quick win packages have `strict: true`, full build passes
+**Verification**: 4/5 quick win packages have `strict: true`, full build passes. ServerBootstrap deferred.
 
 ---
 
 #### Phase 1c: TSConfig Angular Package Standardization
-**Status**: Not Started
+**Status**: In Progress
+**Started**: 2026-02-05
 **Estimated Complexity**: Medium
 **Risk**: Medium
 

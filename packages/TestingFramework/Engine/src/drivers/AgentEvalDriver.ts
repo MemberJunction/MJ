@@ -604,7 +604,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                 this.logToTestRun(context, 'info', `Turn ${turnNumber} completed: ${turnResult.agentRun.Status}`);
 
                 // Update context for next turn
-                conversationId = turnResult.agentRun.ConversationID;
+                conversationId = turnResult.agentRun.ConversationID ?? undefined;
                 previousOutputPayload = this.extractOutputPayload(turnResult.agentRun);
             }
         } finally {
@@ -758,7 +758,7 @@ export class AgentEvalDriver extends BaseTestDriver {
     private extractOutputPayload(agentRun: AIAgentRunEntity): Record<string, unknown> {
         // Parse the FinalPayload string property (which exists on base AIAgentRunEntity)
         // SafeJSONParse returns the parsed object or an empty object if parsing fails
-        const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload);
+        const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload ?? '');
         return finalPayloadObject || {};
     }
 

@@ -117,7 +117,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
                 CacheLocal: true
             }
         ];
-        return await this.Load(params, provider, forceRefresh, contextUser);
+        return await this.Load(params, provider!, forceRefresh, contextUser);
     }
 
     /**
