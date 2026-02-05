@@ -1,21 +1,14 @@
 {
+  "extends": "../../../tsconfig.server.json",
   "compilerOptions": {
-    "target": "es2020",
-    "module": "commonjs",
-    "jsx": "react-jsx",
-    "lib": ["es2020", "dom"],
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "inlineSources": true,
     "outDir": "./dist",
     "rootDir": "./src",
+    "jsx": "react-jsx",
+    "lib": ["es2022", "dom"],
+    "inlineSources": true,
     "composite": false,
     "removeComments": true,
     "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
     "strictNullChecks": true,
     "noImplicitAny": true,
     "noImplicitReturns": true,
@@ -24,16 +17,8 @@
     "noUnusedParameters": false,
     "noImplicitOverride": true,
     "strictPropertyInitialization": false,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }
