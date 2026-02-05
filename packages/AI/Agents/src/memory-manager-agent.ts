@@ -10,7 +10,7 @@ import {
     AIAgentRunStepEntity
 } from '@memberjunction/core-entities';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 /**
@@ -531,7 +531,7 @@ export class MemoryManagerAgent extends BaseAgent {
         params.data = promptData;
         params.contextUser = contextUser;
 
-        const result = await runner.ExecutePrompt<{ notes: ExtractedNote[] }>(params);
+        const result = await this.executePromptWithRetry<{ notes: ExtractedNote[] }>(runner, params);
 
         // Finalize Step 3 after extraction
         await this.FinalizeRunStep(step3, result.success, {
@@ -709,7 +709,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 };
                 dedupeParams.contextUser = contextUser;
 
-                const dedupeResult = await runner.ExecutePrompt<{ shouldAdd: boolean; reason: string }>(dedupeParams);
+                const dedupeResult = await this.executePromptWithRetry<{ shouldAdd: boolean; reason: string }>(runner, dedupeParams);
                 dedupeLlmCallCount++;
 
                 if (dedupeResult.success && dedupeResult.result && dedupeResult.result.shouldAdd) {
@@ -815,7 +815,7 @@ export class MemoryManagerAgent extends BaseAgent {
         extractParams.data = { qaPairs };
         extractParams.contextUser = contextUser;
 
-        const extractResult = await runner.ExecutePrompt<{ examples: ExtractedExample[] }>(extractParams);
+        const extractResult = await this.executePromptWithRetry<{ examples: ExtractedExample[] }>(runner, extractParams);
 
         if (!extractResult.success || !extractResult.result) {
             await this.FinalizeRunStep(step5, false, {
@@ -893,7 +893,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 };
                 dedupeParams.contextUser = contextUser;
 
-                const dedupeResult = await runner.ExecutePrompt<{ shouldAdd: boolean; reason: string }>(dedupeParams);
+                const dedupeResult = await this.executePromptWithRetry<{ shouldAdd: boolean; reason: string }>(runner, dedupeParams);
                 exampleDedupeLlmCallCount++;
 
                 if (dedupeResult.success && dedupeResult.result && dedupeResult.result.shouldAdd) {
@@ -929,6 +929,43 @@ export class MemoryManagerAgent extends BaseAgent {
     private isValidUUID(str: string): boolean {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         return uuidRegex.test(str);
+    }
+
+    /**
+     * Wraps AIPromptRunner.ExecutePrompt with retry logic for transient network errors.
+     * Only retries on fetch/network failures (fetch failed, ECONNRESET, ETIMEDOUT, ENOTFOUND).
+     * Non-transient errors (validation, auth, etc.) are returned immediately without retry.
+     *
+     * NOTE: Checks errorMessage regardless of success flag because AIPromptRunner's
+     * "Warn mode" can return success=true with degraded output on fetch failures.
+     */
+    private async executePromptWithRetry<T>(
+        runner: AIPromptRunner,
+        params: AIPromptParams,
+        maxAttempts: number = 3,
+        baseDelayMs: number = 2000
+    ): Promise<AIPromptRunResult<T>> {
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const result = await runner.ExecutePrompt<T>(params);
+
+            // Check for transient network errors even when success=true (Warn mode)
+            const errMsg = result.errorMessage?.toLowerCase() ?? '';
+            const isTransient = errMsg.includes('fetch failed')
+                || errMsg.includes('econnreset')
+                || errMsg.includes('etimedout')
+                || errMsg.includes('enotfound');
+
+            if (!isTransient || attempt === maxAttempts) {
+                return result;
+            }
+
+            const delayMs = baseDelayMs * Math.pow(2, attempt - 1);
+            LogStatus(`Memory Manager: Transient error on attempt ${attempt}/${maxAttempts}, retrying in ${delayMs}ms: ${result.errorMessage}`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+
+        // Unreachable — loop always returns — but TypeScript needs it
+        throw new Error('executePromptWithRetry: unexpected exit');
     }
 
     /**
@@ -1320,7 +1357,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 params.data = promptData;
                 params.contextUser = contextUser;
 
-                const result = await runner.ExecutePrompt<{
+                const result = await this.executePromptWithRetry<{
                     shouldConsolidate: boolean;
                     consolidatedNote?: {
                         type: string;
@@ -1330,7 +1367,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     };
                     sourceNoteIds?: string[];
                     reason: string;
-                }>(params);
+                }>(runner, params);
 
                 if (!result.success || !result.result) {
                     LogError(`Memory Manager: Consolidation prompt failed for cluster: ${result.errorMessage}`);
@@ -1613,8 +1650,11 @@ export class MemoryManagerAgent extends BaseAgent {
                 return { finalStep, stepCount: 1 };
             }
 
-            // Refresh vector services so dedup can use semantic similarity
-            // (vector service may be null if no notes existed at server startup)
+            // Initialization guard: ensure vector services exist for semantic dedup.
+            // If no notes existed at server startup, _noteVectorService is null and
+            // AddOrUpdateSingleNoteEmbedding will throw when saving new notes.
+            // The two post-creation/post-consolidation Config(true) calls were removed
+            // because entity save hooks now update vectors incrementally.
             await AIEngine.Instance.Config(true, params.contextUser);
 
             // Extract notes from conversations (with rating context)
@@ -1685,12 +1725,6 @@ export class MemoryManagerAgent extends BaseAgent {
 
             LogStatus(`Memory Manager: Created ${notesCreated} notes and ${examplesCreated} examples`);
 
-            // Refresh note/example vector services so consolidation can use semantic similarity
-            // on the newly created records (which now have embeddings from the extended entity save).
-            if (notesCreated > 0 || examplesCreated > 0) {
-                await AIEngine.Instance.Config(true, params.contextUser);
-            }
-
             // Step 9: Consolidate related notes
             // This finds clusters of similar notes and synthesizes them into single comprehensive notes
             let consolidatedCount = 0;
@@ -1705,14 +1739,6 @@ export class MemoryManagerAgent extends BaseAgent {
                 } else {
                     LogStatus(`Memory Manager: No notes to consolidate`);
                 }
-            }
-
-            // Step 10: Refresh AIEngine memory cache if consolidation created/archived notes.
-            // (Pre-consolidation refresh already handled new notes above; this catches consolidation changes.)
-            if (consolidatedCount > 0) {
-                LogStatus(`Memory Manager: Refreshing AIEngine memory cache after consolidation...`);
-                await AIEngine.Instance.Config(true, params.contextUser);
-                LogStatus(`Memory Manager: Memory cache refreshed`);
             }
 
             const consolidationSummary = consolidatedCount > 0 ? ` Consolidated ${consolidatedCount} clusters (${archivedCount} notes archived).` : '';
