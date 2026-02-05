@@ -1817,4 +1817,3 @@ BEGIN
     DROP TABLE #Procedures;
     DROP TABLE #ExcludedSchemas;
 END
-GO
