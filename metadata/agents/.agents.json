@@ -270,7 +270,11 @@
             "ActionOutputMapping": {
               "SearchResults": "loopResults[index]"
             },
-            "Status": "Active"
+            "Status": "Active",
+            "PositionX": -400,
+            "PositionY": 420,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "DBA4B3D9-19A3-4ECE-9F35-BC1B127CD045"
@@ -296,7 +300,11 @@
               "currentConditions": "weatherConditions",
               "countArray": "[1,2,3,4,5]"
             },
-            "Status": "Active"
+            "Status": "Active",
+            "PositionX": -760,
+            "PositionY": 200,
+            "Width": 200,
+            "Height": 80
           },
           "relatedEntities": {
             "MJ: AI Agent Step Paths": [
@@ -341,7 +349,11 @@
               "SearchResults": "webSearchResults",
               "countArray": "[1,2,3,4,5]"
             },
-            "Status": "Active"
+            "Status": "Active",
+            "PositionX": -80,
+            "PositionY": 120,
+            "Width": 200,
+            "Height": 80
           },
           "relatedEntities": {
             "MJ: AI Agent Step Paths": [
@@ -385,7 +397,11 @@
             "ActionOutputMapping": {
               "CurrentPrice": "stockPrice"
             },
-            "Status": "Active"
+            "Status": "Active",
+            "PositionX": -600,
+            "PositionY": -40,
+            "Width": 200,
+            "Height": 80
           },
           "relatedEntities": {
             "MJ: AI Agent Step Paths": [
