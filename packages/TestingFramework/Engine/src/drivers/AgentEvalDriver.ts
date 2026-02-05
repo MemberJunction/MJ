@@ -759,7 +759,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         // Parse the FinalPayload string property (which exists on base AIAgentRunEntity)
         // SafeJSONParse returns the parsed object or an empty object if parsing fails
         const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload ?? '');
-        return finalPayloadObject || {};
+        return finalPayloadObject ?? {};
     }
 
 

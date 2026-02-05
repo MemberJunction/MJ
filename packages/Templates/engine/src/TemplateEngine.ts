@@ -75,8 +75,11 @@ export class TemplateEngineServer extends TemplateEngineBase {
             const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
             if (extensions && extensions.length > 0) {
                 for (const ext of extensions) {
-                    const instance = new ext.SubClass(contextUser);                
-                    this._nunjucksEnv.addExtension(ext.Key, instance);
+                    const SubClassConstructor = ext.SubClass as new (contextUser: UserInfo) => TemplateExtensionBase;
+                    const instance = new SubClassConstructor(contextUser!);
+                    if (ext.Key) {
+                        this._nunjucksEnv.addExtension(ext.Key, instance);
+                    }
                 }
             }
         }
@@ -269,7 +272,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
                 if (err) {
                     reject(err);
                 } else {
-                    resolve(result);
+                    resolve(result!);
                 }
             });
         });

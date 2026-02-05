@@ -1,23 +1,9 @@
 {
+  "extends": "../../../../tsconfig.server.json",
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "es2020",
     "outDir": "dist",
-    "rootDir": "src",
-    "sourceMap": true,
-    "experimentalDecorators": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "moduleResolution": "node",
-    "removeComments": true,
-    "noImplicitThis": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "allowSyntheticDefaultImports": true,
-    "emitDecoratorMetadata": true,
-    "strict": true,
-    "skipLibCheck": true
+    "rootDir": "src"
   },
-  "exclude": ["node_modules"],
-  "include": ["./src/**/*.ts"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
 }

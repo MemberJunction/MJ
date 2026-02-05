@@ -68,12 +68,15 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
                 throw new Error(`AI prompt execution failed: ${result.errorMessage}`);
             }
 
-            if (!result.result) {
+            if (!result.rawResult) {
                 throw new Error('AI returned empty result');
             }
 
             // Process the response
-            const llmResponse = SafeJSONParse(result.rawResult);
+            const llmResponse = SafeJSONParse<SmartFilterResponse>(result.rawResult);
+            if (!llmResponse) {
+                throw new Error('Failed to parse AI response as JSON');
+            }
 
             // Handle the whereClause - sometimes LLM prefixes with WHERE
             if (llmResponse.whereClause && llmResponse.whereClause.length > 0) {

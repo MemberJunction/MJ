@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.server.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "module": "es2022"
   },
   "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts", "**/__tests__/**"],
   "include": ["./src/**/*.ts"]
