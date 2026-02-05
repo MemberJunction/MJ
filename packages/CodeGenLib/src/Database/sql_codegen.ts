@@ -365,7 +365,7 @@ export class SQLCodeGenBase {
                 const promises = batch.map(async (e) => {
                     const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
                     if (!pkeyField) {
-                        logError(`SKIPPING ENTITY: Entity ${e.Name}, because it does not have a primary key field defined. A table must have a primary key defined to quality to be a MemberJunction entity`);
+                        logError(`SKIPPING SQL GENERATION: Entity ${e.Name} has no primary key field in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
                         return {Success: false, Files: []};
                     }
                     return this.generateAndExecuteSingleEntitySQLToSeparateFiles({
