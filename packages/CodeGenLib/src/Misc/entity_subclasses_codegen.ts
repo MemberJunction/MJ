@@ -59,7 +59,7 @@ export const loadModule = () => {
    */
   public async generateEntitySubClass(pool: sql.ConnectionPool, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
-      console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`);
+      console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
       return '';
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
@@ -357,7 +357,7 @@ ${validationFunctions}`
   public GenerateSchemaAndType(entity: EntityInfo): string {
     let content: string = '';
     if (entity.PrimaryKeys.length === 0) {
-      logStatus(`Entity ${entity.Name} has no primary keys.  Skipping.`);
+      logStatus(`SKIPPING SCHEMA GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
       const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);

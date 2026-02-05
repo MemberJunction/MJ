@@ -593,6 +593,16 @@ export class ManageMetadataBase {
       }
       logStatus(`      Applied soft PK/FK configuration in ${(new Date().getTime() - stepConfigStartTime.getTime()) / 1000} seconds`);
 
+      // CRITICAL: Refresh metadata to pick up soft PK/FK flags
+      // Without this, downstream SQL and TypeScript generation will fail
+      // because entity.Fields and entity.PrimaryKeys won't reflect the updated flags
+      if (configInfo.additionalSchemaInfo) {
+         logStatus('      Refreshing metadata after applying soft PK/FK configuration...');
+         const md = new Metadata();
+         await md.Refresh();
+         logStatus('      Metadata refresh complete');
+      }
+
       const step4StartTime: Date = new Date();
       if (! await this.setDefaultColumnWidthWhereNeeded(pool, excludeSchemas)) {
          logError ('Error setting default column width where needed')
@@ -2023,7 +2033,7 @@ NumberedRows AS (
             }
             else {
                // this is an error condition, we should have an application for this schema, if we don't, log an error, non fatal, but should be logged
-               LogError(`   >>>> ERROR: Unable to add new entity ${newEntityName} to an application because an Application record for schema ${newEntity.SchemaName} does not exist.`);
+               LogError(`   >>>> ERROR: Unable to add new entity ${newEntityName} to an application because no Application has SchemaAutoAddNewEntities='${newEntity.SchemaName}'. To fix this, update an existing Application record or create a new one with SchemaAutoAddNewEntities='${newEntity.SchemaName}'.`);
             }
 
             // next up, we need to check if we're configured to add permissions for new entities, and if so, add them
