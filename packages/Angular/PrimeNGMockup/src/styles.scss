@@ -10,6 +10,9 @@
 /* Layer 2: MJ -> PrimeNG bridge (overrides PrimeNG vars with MJ tokens) */
 @import "styles/primeng-theme";
 
+/* Layer 3: MJ Layout Utilities (grid, flex, gap, alignment) */
+@import "styles/grid";
+
 /* Icons */
 @import "primeicons/primeicons.css";
 

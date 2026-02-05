@@ -12,9 +12,9 @@ import { ChartModule } from 'primeng/chart';
         <section class="token-section">
             <h2>Bar Chart</h2>
             <p class="section-desc">Monthly revenue comparison across two fiscal years. Uses grouped bars with MJ brand primary and success colors.</p>
-            <div class="chart-grid">
-                <div class="chart-container">
-                    <p-chart type="bar" [data]="BarData" [options]="BarOptions"></p-chart>
+            <div class="mj-grid mj-gap-6">
+                <div class="mj-col-12 chart-container mj-grid mj-flex-column">
+                    <p-chart class="mj-col" type="bar" [data]="BarData" [options]="BarOptions"></p-chart>
                 </div>
             </div>
         </section>
@@ -23,9 +23,9 @@ import { ChartModule } from 'primeng/chart';
         <section class="token-section">
             <h2>Line Chart</h2>
             <p class="section-desc">Weekly user activity trends with smooth curves. Demonstrates tension-based line interpolation and fill areas.</p>
-            <div class="chart-grid">
-                <div class="chart-container">
-                    <p-chart type="line" [data]="LineData" [options]="LineOptions"></p-chart>
+            <div class="mj-grid mj-gap-6">
+                <div class="mj-col-12 chart-container mj-grid mj-flex-column">
+                    <p-chart class="mj-col" type="line" [data]="LineData" [options]="LineOptions"></p-chart>
                 </div>
             </div>
         </section>
@@ -34,14 +34,14 @@ import { ChartModule } from 'primeng/chart';
         <section class="token-section">
             <h2>Pie &amp; Doughnut Charts</h2>
             <p class="section-desc">Proportional data visualization. Pie shows market share breakdown; Doughnut shows budget allocation with a center cutout.</p>
-            <div class="chart-grid chart-grid-2col">
-                <div class="chart-container">
+            <div class="mj-grid mj-gap-6">
+                <div class="mj-col-md-6 chart-container mj-grid mj-flex-column">
                     <h3 class="chart-subtitle">Market Share</h3>
-                    <p-chart type="pie" [data]="PieData" [options]="PieOptions"></p-chart>
+                    <p-chart class="mj-col" type="pie" [data]="PieData" [options]="PieOptions"></p-chart>
                 </div>
-                <div class="chart-container">
+                <div class="mj-col-md-6 chart-container mj-grid mj-flex-column">
                     <h3 class="chart-subtitle">Budget Allocation</h3>
-                    <p-chart type="doughnut" [data]="DoughnutData" [options]="DoughnutOptions"></p-chart>
+                    <p-chart class="mj-col" type="doughnut" [data]="DoughnutData" [options]="DoughnutOptions"></p-chart>
                 </div>
             </div>
         </section>
@@ -50,14 +50,14 @@ import { ChartModule } from 'primeng/chart';
         <section class="token-section">
             <h2>Radar &amp; Polar Area Charts</h2>
             <p class="section-desc">Multi-axis data comparison. Radar overlays two skill profiles; Polar Area maps quarterly performance metrics by magnitude.</p>
-            <div class="chart-grid chart-grid-2col">
-                <div class="chart-container">
+            <div class="mj-grid mj-gap-6">
+                <div class="mj-col-md-6 chart-container mj-grid mj-flex-column">
                     <h3 class="chart-subtitle">Skill Assessment</h3>
-                    <p-chart type="radar" [data]="RadarData" [options]="RadarOptions"></p-chart>
+                    <p-chart class="mj-col" type="radar" [data]="RadarData" [options]="RadarOptions"></p-chart>
                 </div>
-                <div class="chart-container">
+                <div class="mj-col-md-6 chart-container mj-grid mj-flex-column">
                     <h3 class="chart-subtitle">Quarterly Performance</h3>
-                    <p-chart type="polarArea" [data]="PolarAreaData" [options]="PolarAreaOptions"></p-chart>
+                    <p-chart class="mj-col" type="polarArea" [data]="PolarAreaData" [options]="PolarAreaOptions"></p-chart>
                 </div>
             </div>
         </section>
@@ -93,28 +93,15 @@ import { ChartModule } from 'primeng/chart';
         margin: 0 0 var(--mj-space-3) 0;
     }
 
-    .chart-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: var(--mj-space-6);
-    }
-
-    .chart-grid-2col {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
     .chart-container {
         background: var(--mj-bg-surface-elevated);
         border: 1px solid var(--mj-border-subtle);
         border-radius: var(--mj-radius-lg);
         padding: var(--mj-space-5);
         height: 300px;
-        display: flex;
-        flex-direction: column;
     }
 
     .chart-container p-chart {
-        flex: 1;
         min-height: 0;
     }
     `]

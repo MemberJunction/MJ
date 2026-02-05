@@ -94,7 +94,7 @@ interface TimelineEvent {
                     selectionMode="single"
                     [(selection)]="selectedOrgNode">
                     <ng-template let-node pTemplate="default">
-                        <div class="org-node">
+                        <div class="mj-grid mj-flex-column mj-align-center mj-gap-1 org-node">
                             <span class="org-node-name">{{ node.label }}</span>
                             @if (node.data?.title) {
                                 <span class="org-node-title">{{ node.data.title }}</span>
@@ -184,10 +184,6 @@ interface TimelineEvent {
     }
 
     .org-node {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: var(--mj-space-1);
         padding: var(--mj-space-2) var(--mj-space-4);
     }
 

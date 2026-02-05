@@ -99,10 +99,10 @@ interface PaginatorPageEvent {
             <p class="section-desc">Alternative data display as a list or grid of items.</p>
             <p-dataView [value]="products" layout="list">
                 <ng-template pTemplate="list" let-products>
-                    <div class="dataview-list">
+                    <div class="mj-grid mj-flex-column">
                         @for (product of products; track product.name) {
-                            <div class="dataview-item">
-                                <div class="dataview-item-content">
+                            <div class="dataview-item mj-grid mj-flex-nowrap mj-gap-3 mj-align-center mj-justify-between">
+                                <div class="dataview-item-content mj-grid mj-flex-column mj-gap-1">
                                     <span class="dataview-item-name">{{ product.name }}</span>
                                     <span class="dataview-item-category">{{ product.category }}</span>
                                 </div>
@@ -170,7 +170,7 @@ interface PaginatorPageEvent {
             <p class="section-desc">PrimeNG cards using MJ surface and shadow tokens for elevation.</p>
             <p class="token-mapping">Background: --mj-bg-surface-elevated | Shadow: --mj-shadow-sm | Radius: --mj-radius-lg</p>
 
-            <div class="card-grid">
+            <div class="mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
                 <p-card header="Basic Card" subheader="Using MJ tokens">
                     <p>This card uses <code>--mj-bg-surface-elevated</code> for its background and
                     <code>--mj-shadow-sm</code> for subtle elevation.</p>
@@ -179,7 +179,7 @@ interface PaginatorPageEvent {
                 <p-card header="Card with Actions">
                     <p>Cards can contain any content including buttons and interactive elements.</p>
                     <ng-template pTemplate="footer">
-                        <div class="card-footer-actions">
+                        <div class="card-footer-actions mj-grid mj-gap-2">
                             <button pButton label="Save" class="p-button-primary p-button-sm"></button>
                             <button pButton label="Cancel" class="p-button-text p-button-sm"></button>
                         </div>
@@ -192,7 +192,7 @@ interface PaginatorPageEvent {
                             <i class="pi pi-chart-line card-icon"></i>
                         </div>
                     </ng-template>
-                    <div class="metric-card-content">
+                    <div class="metric-card-content mj-grid mj-flex-column mj-gap-1">
                         <span class="metric-value">2,847</span>
                         <span class="metric-label">Total Records</span>
                     </div>
@@ -206,7 +206,7 @@ interface PaginatorPageEvent {
             <p class="section-desc">Collapsible panels with MJ-themed headers and content areas.</p>
             <p class="token-mapping">Header: --mj-bg-surface-elevated | Content: --mj-bg-surface | Border: --mj-border-default</p>
 
-            <div class="panel-stack">
+            <div class="mj-grid mj-flex-column mj-gap-4">
                 <p-panel header="Collapsible Panel" [toggleable]="true">
                     <p>This panel uses <code>--mj-bg-surface-elevated</code> for the header and
                     <code>--mj-bg-surface</code> for the content area. The toggle animation
@@ -226,7 +226,7 @@ interface PaginatorPageEvent {
 
             <h3 class="subsection-title">Tags</h3>
             <p class="token-mapping">success: --mj-status-success-* | warning: --mj-status-warning-* | danger: --mj-status-error-* | info: --mj-status-info-*</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <p-tag value="Success" severity="success"></p-tag>
                 <p-tag value="Warning" severity="warning"></p-tag>
                 <p-tag value="Danger" severity="danger"></p-tag>
@@ -235,7 +235,7 @@ interface PaginatorPageEvent {
             </div>
 
             <h3 class="subsection-title">Tags with Icons</h3>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <p-tag value="Active" severity="success" icon="pi pi-check"></p-tag>
                 <p-tag value="Pending" severity="warning" icon="pi pi-clock"></p-tag>
                 <p-tag value="Failed" severity="danger" icon="pi pi-times"></p-tag>
@@ -243,7 +243,7 @@ interface PaginatorPageEvent {
             </div>
 
             <h3 class="subsection-title">Badges</h3>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <span class="badge-demo">
                     Notifications <p-badge value="4"></p-badge>
                 </span>
@@ -295,31 +295,13 @@ interface PaginatorPageEvent {
     }
 
     .component-row {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--mj-space-3);
         margin-bottom: var(--mj-space-4);
     }
 
     /* DataView */
-    .dataview-list {
-        display: flex;
-        flex-direction: column;
-    }
-
     .dataview-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         padding: var(--mj-space-3) var(--mj-space-4);
         border-bottom: 1px solid var(--mj-border-subtle);
-    }
-
-    .dataview-item-content {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-1);
     }
 
     .dataview-item-name {
@@ -338,16 +320,6 @@ interface PaginatorPageEvent {
     }
 
     /* Cards Grid */
-    .card-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: var(--mj-space-5);
-    }
-
-    .card-footer-actions {
-        display: flex;
-        gap: var(--mj-space-2);
-    }
 
     .card-custom-header {
         padding: var(--mj-space-5);
@@ -362,9 +334,6 @@ interface PaginatorPageEvent {
 
     .metric-card-content {
         text-align: center;
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-1);
     }
 
     .metric-value {
@@ -376,13 +345,6 @@ interface PaginatorPageEvent {
     .metric-label {
         font-size: var(--mj-text-sm);
         color: var(--mj-text-secondary);
-    }
-
-    /* Panel Stack */
-    .panel-stack {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-4);
     }
 
     /* Badges */

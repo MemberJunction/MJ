@@ -259,7 +259,8 @@ export class StyleGuideComponent {
             label: 'Layout',
             Collapsed: false,
             items: [
-                { label: 'Panels & Layout', icon: 'pi pi-objects-column', route: 'panels' }
+                { label: 'Panels & Layout', icon: 'pi pi-objects-column', route: 'panels' },
+                { label: 'Grid System', icon: 'pi pi-th-large', route: 'grid' }
             ]
         },
         {

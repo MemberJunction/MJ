@@ -71,7 +71,7 @@ interface AutoCompleteEvent {
             <!-- Primary Buttons -->
             <h3 class="subsection-title">Primary</h3>
             <p class="subsection-desc">Token mapping: background &#8594; --mj-brand-primary, text &#8594; --mj-brand-on-primary</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <button pButton label="Primary" class="p-button-primary"></button>
                 <button pButton label="Primary" icon="pi pi-check" class="p-button-primary"></button>
                 <button pButton icon="pi pi-search" class="p-button-primary p-button-icon-only"></button>
@@ -81,7 +81,7 @@ interface AutoCompleteEvent {
             <!-- Secondary Buttons -->
             <h3 class="subsection-title">Secondary</h3>
             <p class="subsection-desc">Token mapping: border &#8594; --mj-border-default, bg &#8594; --mj-bg-surface</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <button pButton label="Secondary" class="p-button-secondary"></button>
                 <button pButton label="Secondary" icon="pi pi-cog" class="p-button-secondary"></button>
             </div>
@@ -89,7 +89,7 @@ interface AutoCompleteEvent {
             <!-- Outlined Buttons -->
             <h3 class="subsection-title">Outlined</h3>
             <p class="subsection-desc">Token mapping: border & text &#8594; --mj-brand-primary</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <button pButton label="Outlined" class="p-button-outlined"></button>
                 <button pButton label="Outlined" icon="pi pi-download" class="p-button-outlined"></button>
             </div>
@@ -97,7 +97,7 @@ interface AutoCompleteEvent {
             <!-- Text Buttons -->
             <h3 class="subsection-title">Text</h3>
             <p class="subsection-desc">Token mapping: text &#8594; --mj-brand-primary, hover bg &#8594; 8% brand mix</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <button pButton label="Text Button" class="p-button-text"></button>
                 <button pButton label="Text" icon="pi pi-plus" class="p-button-text"></button>
             </div>
@@ -105,7 +105,7 @@ interface AutoCompleteEvent {
             <!-- Status Buttons -->
             <h3 class="subsection-title">Status Variants</h3>
             <p class="subsection-desc">Token mapping: success/warning/danger &#8594; --mj-status-* tokens</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <button pButton label="Success" class="p-button-success"></button>
                 <button pButton label="Warning" class="p-button-warning"></button>
                 <button pButton label="Danger" class="p-button-danger"></button>
@@ -113,7 +113,7 @@ interface AutoCompleteEvent {
 
             <!-- Button Sizes -->
             <h3 class="subsection-title">Sizes</h3>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <button pButton label="Small" class="p-button-primary p-button-sm"></button>
                 <button pButton label="Normal" class="p-button-primary"></button>
                 <button pButton label="Large" class="p-button-primary p-button-lg"></button>
@@ -124,7 +124,7 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>SplitButton</h2>
             <p class="section-desc">Button with an attached dropdown for additional actions.</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <p-splitButton label="Save" icon="pi pi-check" [model]="splitItems" styleClass="p-button-primary"></p-splitButton>
                 <p-splitButton label="Actions" icon="pi pi-cog" [model]="splitItems" styleClass="p-button-secondary"></p-splitButton>
                 <p-splitButton label="Outlined" icon="pi pi-download" [model]="splitItems" styleClass="p-button-outlined"></p-splitButton>
@@ -145,19 +145,19 @@ interface AutoCompleteEvent {
             <h2>Text Inputs</h2>
             <p class="section-desc">PrimeNG input fields with MJ token-based borders, focus rings, and spacing.</p>
 
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Default</label>
                     <input type="text" pInputText placeholder="Enter text..." />
                     <span class="token-hint">border: --mj-border-default, focus: --mj-border-focus</span>
                 </div>
 
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Disabled</label>
                     <input type="text" pInputText placeholder="Disabled input" [disabled]="true" />
                 </div>
 
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>With Value</label>
                     <input type="text" pInputText value="Sample value" />
                 </div>
@@ -168,12 +168,12 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>AutoComplete</h2>
             <p class="section-desc">Typeahead input with suggestion dropdown.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Basic AutoComplete</label>
                     <p-autoComplete [(ngModel)]="autoCompleteValue" [suggestions]="filteredItems" (completeMethod)="FilterItems($event)" placeholder="Type a fruit..."></p-autoComplete>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Multiple</label>
                     <p-autoComplete [(ngModel)]="autoCompleteMultiple" [suggestions]="filteredItems" (completeMethod)="FilterItems($event)" [multiple]="true" placeholder="Add items..."></p-autoComplete>
                 </div>
@@ -184,16 +184,16 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>InputNumber</h2>
             <p class="section-desc">Numeric input with increment/decrement and formatting.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Integer</label>
                     <p-inputNumber [(ngModel)]="numericValue" [showButtons]="true" [min]="0" [max]="100"></p-inputNumber>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Currency</label>
                     <p-inputNumber [(ngModel)]="currencyValue" mode="currency" currency="USD" locale="en-US"></p-inputNumber>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Percentage</label>
                     <p-inputNumber [(ngModel)]="percentValue" suffix="%" [min]="0" [max]="100"></p-inputNumber>
                 </div>
@@ -204,16 +204,16 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>InputMask</h2>
             <p class="section-desc">Masked text input for formatted values (phone, date, serial numbers).</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Phone</label>
                     <p-inputMask mask="(999) 999-9999" placeholder="(999) 999-9999" [(ngModel)]="phoneMask"></p-inputMask>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Date</label>
                     <p-inputMask mask="99/99/9999" placeholder="MM/DD/YYYY" [(ngModel)]="dateMask"></p-inputMask>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Serial Number</label>
                     <p-inputMask mask="a*-999-a999" placeholder="a*-999-a999" [(ngModel)]="serialMask"></p-inputMask>
                 </div>
@@ -224,7 +224,7 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>InputOtp</h2>
             <p class="section-desc">One-time password input with individual character fields.</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3 mj-align-center">
                 <p-inputOtp [(ngModel)]="otpValue" [length]="6"></p-inputOtp>
             </div>
         </section>
@@ -233,12 +233,12 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>Password</h2>
             <p class="section-desc">Password input with strength meter and toggle visibility.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Basic Password</label>
                     <p-password [(ngModel)]="passwordValue" [toggleMask]="true" [feedback]="false" placeholder="Enter password"></p-password>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>With Strength Meter</label>
                     <p-password [(ngModel)]="passwordStrength" [toggleMask]="true" placeholder="Enter password"></p-password>
                 </div>
@@ -249,8 +249,8 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>Chips</h2>
             <p class="section-desc">Tag-style input for entering multiple values.</p>
-            <div class="input-grid">
-                <div class="input-group" style="grid-column: span 2;">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Enter tags</label>
                     <p-chips [(ngModel)]="chipValues" placeholder="Type and press Enter"></p-chips>
                 </div>
@@ -261,14 +261,14 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>FloatLabel</h2>
             <p class="section-desc">Labels that float above inputs when focused or filled.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <p-floatLabel>
                         <input pInputText id="float-name" [(ngModel)]="floatName" />
                         <label for="float-name">Full Name</label>
                     </p-floatLabel>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <p-floatLabel>
                         <input pInputText id="float-email" [(ngModel)]="floatEmail" />
                         <label for="float-email">Email Address</label>
@@ -281,15 +281,15 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>IconField &amp; InputIcon</h2>
             <p class="section-desc">Inputs with embedded icons on the left or right side.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Left Icon</label>
                     <p-iconField iconPosition="left">
                         <p-inputIcon styleClass="pi pi-search"></p-inputIcon>
                         <input pInputText placeholder="Search..." />
                     </p-iconField>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Right Icon</label>
                     <p-iconField iconPosition="right">
                         <p-inputIcon styleClass="pi pi-spin pi-spinner"></p-inputIcon>
@@ -303,15 +303,15 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>InputGroup</h2>
             <p class="section-desc">Input fields grouped with addons (text, icons, buttons).</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>With Icon Addon</label>
                     <p-inputGroup>
                         <p-inputGroupAddon><i class="pi pi-user"></i></p-inputGroupAddon>
                         <input pInputText placeholder="Username" />
                     </p-inputGroup>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>With Text Addon</label>
                     <p-inputGroup>
                         <p-inputGroupAddon>$</p-inputGroupAddon>
@@ -319,7 +319,7 @@ interface AutoCompleteEvent {
                         <p-inputGroupAddon>.00</p-inputGroupAddon>
                     </p-inputGroup>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>With Button</label>
                     <p-inputGroup>
                         <input pInputText placeholder="Search..." />
@@ -333,16 +333,16 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>KeyFilter</h2>
             <p class="section-desc">Directive that restricts input to certain character patterns.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Integers Only</label>
                     <input pInputText pKeyFilter="int" placeholder="Type numbers only" />
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Alphabetic Only</label>
                     <input pInputText pKeyFilter="alpha" placeholder="Type letters only" />
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Hex Values</label>
                     <input pInputText pKeyFilter="hex" placeholder="Type hex chars" />
                 </div>
@@ -353,8 +353,8 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>Textarea</h2>
             <p class="section-desc">Multi-line input using the same token-based styling as text inputs.</p>
-            <div class="input-grid">
-                <div class="input-group" style="grid-column: span 2;">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Default Textarea</label>
                     <textarea pInputTextarea rows="4" placeholder="Enter longer text here..."></textarea>
                     <span class="token-hint">Shares --mj-border-* and --mj-radius-md with text inputs</span>
@@ -366,8 +366,8 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>Dropdown</h2>
             <p class="section-desc">PrimeNG dropdown with MJ-themed borders, surfaces, and hover states.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Basic Dropdown</label>
                     <p-dropdown
                         [options]="dropdownOptions"
@@ -385,19 +385,19 @@ interface AutoCompleteEvent {
             <h2>Checkbox & Radio</h2>
             <p class="section-desc">Selection controls with MJ brand colors for checked state.</p>
 
-            <div class="selection-grid">
+            <div class="selection-grid mj-row mj-row-cols-md-2 mj-gap-8">
                 <div class="selection-group">
                     <h3 class="subsection-title">Checkboxes</h3>
                     <p class="subsection-desc">Checked state: --mj-brand-primary</p>
-                    <div class="selection-row">
+                    <div class="selection-row mj-grid mj-flex-nowrap mj-gap-2 mj-align-center">
                         <p-checkbox [(ngModel)]="checkA" [binary]="true" inputId="check-a"></p-checkbox>
                         <label for="check-a">Option A (checked)</label>
                     </div>
-                    <div class="selection-row">
+                    <div class="selection-row mj-grid mj-flex-nowrap mj-gap-2 mj-align-center">
                         <p-checkbox [(ngModel)]="checkB" [binary]="true" inputId="check-b"></p-checkbox>
                         <label for="check-b">Option B</label>
                     </div>
-                    <div class="selection-row">
+                    <div class="selection-row mj-grid mj-flex-nowrap mj-gap-2 mj-align-center">
                         <p-checkbox [binary]="true" [disabled]="true" inputId="check-disabled"></p-checkbox>
                         <label for="check-disabled">Disabled</label>
                     </div>
@@ -406,15 +406,15 @@ interface AutoCompleteEvent {
                 <div class="selection-group">
                     <h3 class="subsection-title">Radio Buttons</h3>
                     <p class="subsection-desc">Selected state: --mj-brand-primary</p>
-                    <div class="selection-row">
+                    <div class="selection-row mj-grid mj-flex-nowrap mj-gap-2 mj-align-center">
                         <p-radioButton name="radio" value="A" [(ngModel)]="selectedRadio" inputId="radio-a"></p-radioButton>
                         <label for="radio-a">Option A</label>
                     </div>
-                    <div class="selection-row">
+                    <div class="selection-row mj-grid mj-flex-nowrap mj-gap-2 mj-align-center">
                         <p-radioButton name="radio" value="B" [(ngModel)]="selectedRadio" inputId="radio-b"></p-radioButton>
                         <label for="radio-b">Option B</label>
                     </div>
-                    <div class="selection-row">
+                    <div class="selection-row mj-grid mj-flex-nowrap mj-gap-2 mj-align-center">
                         <p-radioButton name="radio" value="C" [(ngModel)]="selectedRadio" inputId="radio-c"></p-radioButton>
                         <label for="radio-c">Option C</label>
                     </div>
@@ -426,12 +426,12 @@ interface AutoCompleteEvent {
         <section class="token-section">
             <h2>Input Switch</h2>
             <p class="section-desc">Toggle switch with MJ brand primary color when active.</p>
-            <div class="component-row" style="gap: var(--mj-space-8);">
-                <div class="switch-group">
+            <div class="component-row mj-grid mj-gap-8 mj-align-center">
+                <div class="switch-group mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                     <p-inputSwitch [(ngModel)]="switchA"></p-inputSwitch>
                     <span>{{ switchA ? 'On' : 'Off' }}</span>
                 </div>
-                <div class="switch-group">
+                <div class="switch-group mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                     <p-inputSwitch [(ngModel)]="switchB"></p-inputSwitch>
                     <span>{{ switchB ? 'Enabled' : 'Disabled' }}</span>
                 </div>
@@ -477,25 +477,12 @@ interface AutoCompleteEvent {
     }
 
     .component-row {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--mj-space-3);
         margin-bottom: var(--mj-space-4);
     }
 
     /* Input Grid */
-    .input-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: var(--mj-space-5);
-    }
 
     .input-group {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-2);
-
         label {
             font-size: var(--mj-text-sm);
             font-weight: var(--mj-font-medium);
@@ -514,22 +501,8 @@ interface AutoCompleteEvent {
     }
 
     /* Selection Controls */
-    .selection-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        gap: var(--mj-space-8);
-    }
-
-    .selection-group {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-1);
-    }
 
     .selection-row {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-2);
         padding: var(--mj-space-1) 0;
 
         label {
@@ -540,10 +513,6 @@ interface AutoCompleteEvent {
     }
 
     .switch-group {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-3);
-
         span {
             font-size: var(--mj-text-sm);
             color: var(--mj-text-secondary);

@@ -13,7 +13,7 @@ import { CommonModule } from '@angular/common';
             <p class="section-desc">MJ uses Inter as the primary font and JetBrains Mono for code/monospace.</p>
 
             <div class="font-sample-card">
-                <div class="font-sample-header">
+                <div class="font-sample-header mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                     <span class="font-name">Inter (Primary)</span>
                     <code class="token-code">--mj-font-family</code>
                 </div>
@@ -23,7 +23,7 @@ import { CommonModule } from '@angular/common';
             </div>
 
             <div class="font-sample-card">
-                <div class="font-sample-header">
+                <div class="font-sample-header mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                     <span class="font-name">JetBrains Mono (Code)</span>
                     <code class="token-code">--mj-font-family-mono</code>
                 </div>
@@ -38,10 +38,10 @@ import { CommonModule } from '@angular/common';
             <h2>Size Scale</h2>
             <p class="section-desc">Type sizes from xs (12px) through 4xl (36px).</p>
 
-            <div class="size-table">
+            <div class="mj-grid mj-flex-column mj-gap-1">
                 @for (size of sizeScale; track size.token) {
-                    <div class="size-row">
-                        <div class="size-meta">
+                    <div class="size-row mj-grid mj-flex-nowrap mj-gap-6 mj-align-baseline">
+                        <div class="size-meta mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                             <code class="token-code">{{ size.token }}</code>
                             <span class="size-value">{{ size.value }}</span>
                         </div>
@@ -58,11 +58,11 @@ import { CommonModule } from '@angular/common';
             <h2>Font Weights</h2>
             <p class="section-desc">Available weight variants for text hierarchy and emphasis.</p>
 
-            <div class="weight-grid">
+            <div class="mj-row mj-row-cols-sm-2 mj-row-cols-md-3 mj-row-cols-lg-4 mj-gap-4">
                 @for (weight of fontWeights; track weight.token) {
                     <div class="weight-card">
                         <span class="weight-sample" [style.font-weight]="'var(' + weight.token + ')'">Aa</span>
-                        <div class="weight-info">
+                        <div class="mj-grid mj-flex-column mj-gap-1">
                             <span class="weight-name">{{ weight.name }}</span>
                             <code class="token-code">{{ weight.token }}</code>
                             <span class="weight-value">{{ weight.value }}</span>
@@ -77,10 +77,10 @@ import { CommonModule } from '@angular/common';
             <h2>Line Heights</h2>
             <p class="section-desc">Line height tokens control vertical rhythm and readability.</p>
 
-            <div class="line-height-samples">
+            <div class="mj-grid mj-flex-column mj-gap-4">
                 @for (lh of lineHeights; track lh.token) {
                     <div class="lh-card">
-                        <div class="lh-header">
+                        <div class="lh-header mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                             <code class="token-code">{{ lh.token }}</code>
                             <span class="lh-value">{{ lh.value }}</span>
                         </div>
@@ -99,10 +99,10 @@ import { CommonModule } from '@angular/common';
             <h2>Letter Spacing</h2>
             <p class="section-desc">Tracking values for fine-tuning text appearance.</p>
 
-            <div class="tracking-samples">
+            <div class="mj-grid mj-flex-column mj-gap-4">
                 @for (t of letterSpacings; track t.token) {
                     <div class="tracking-card">
-                        <div class="tracking-header">
+                        <div class="tracking-header mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                             <code class="token-code">{{ t.token }}</code>
                             <span class="tracking-value">{{ t.value }}</span>
                         </div>
@@ -157,9 +157,6 @@ import { CommonModule } from '@angular/common';
     }
 
     .font-sample-header {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-3);
         margin-bottom: var(--mj-space-3);
     }
 
@@ -177,16 +174,7 @@ import { CommonModule } from '@angular/common';
     }
 
     /* Size Scale Table */
-    .size-table {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-1);
-    }
-
     .size-row {
-        display: flex;
-        align-items: baseline;
-        gap: var(--mj-space-6);
         padding: var(--mj-space-3) var(--mj-space-4);
         background: var(--mj-bg-surface);
         border: 1px solid var(--mj-border-subtle);
@@ -195,9 +183,6 @@ import { CommonModule } from '@angular/common';
 
     .size-meta {
         min-width: 220px;
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-3);
     }
 
     .size-value {
@@ -214,12 +199,6 @@ import { CommonModule } from '@angular/common';
     }
 
     /* Font Weights */
-    .weight-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: var(--mj-space-4);
-    }
-
     .weight-card {
         background: var(--mj-bg-surface);
         border: 1px solid var(--mj-border-default);
@@ -235,12 +214,6 @@ import { CommonModule } from '@angular/common';
         margin-bottom: var(--mj-space-3);
     }
 
-    .weight-info {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-1);
-    }
-
     .weight-name {
         font-weight: var(--mj-font-semibold);
         font-size: var(--mj-text-sm);
@@ -254,12 +227,6 @@ import { CommonModule } from '@angular/common';
     }
 
     /* Line Heights */
-    .line-height-samples {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-4);
-    }
-
     .lh-card {
         background: var(--mj-bg-surface);
         border: 1px solid var(--mj-border-default);
@@ -268,9 +235,6 @@ import { CommonModule } from '@angular/common';
     }
 
     .lh-header {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-3);
         margin-bottom: var(--mj-space-3);
     }
 
@@ -288,12 +252,6 @@ import { CommonModule } from '@angular/common';
     }
 
     /* Letter Spacing */
-    .tracking-samples {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-4);
-    }
-
     .tracking-card {
         background: var(--mj-bg-surface);
         border: 1px solid var(--mj-border-default);
@@ -302,9 +260,6 @@ import { CommonModule } from '@angular/common';
     }
 
     .tracking-header {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-3);
         margin-bottom: var(--mj-space-3);
     }
 

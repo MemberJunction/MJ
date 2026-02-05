@@ -53,8 +53,8 @@ interface CascadeOption {
         <section class="token-section">
             <h2>MultiSelect</h2>
             <p class="section-desc">Dropdown that allows selecting multiple items with checkboxes, chips display, and filtering.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Basic MultiSelect</label>
                     <p-multiSelect
                         [options]="cities"
@@ -64,7 +64,7 @@ interface CascadeOption {
                     </p-multiSelect>
                     <span class="token-hint">Panel bg: --mj-bg-surface-elevated</span>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>With Max Selected Labels</label>
                     <p-multiSelect
                         [options]="cities"
@@ -81,8 +81,8 @@ interface CascadeOption {
         <section class="token-section">
             <h2>Listbox</h2>
             <p class="section-desc">A list-based selection component supporting single and multiple selection with keyboard navigation.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Single Selection</label>
                     <p-listbox
                         [options]="cities"
@@ -91,7 +91,7 @@ interface CascadeOption {
                         [listStyle]="{'max-height': '180px'}">
                     </p-listbox>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Multiple Selection</label>
                     <p-listbox
                         [options]="cities"
@@ -109,8 +109,8 @@ interface CascadeOption {
         <section class="token-section">
             <h2>CascadeSelect</h2>
             <p class="section-desc">Hierarchical dropdown for selecting nested options such as country, state, and city.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Country / State / City</label>
                     <p-cascadeSelect
                         [options]="$any(cascadeCountries)"
@@ -130,8 +130,8 @@ interface CascadeOption {
         <section class="token-section">
             <h2>TreeSelect</h2>
             <p class="section-desc">Tree-based selection dropdown with expandable nodes, ideal for hierarchical data.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Single Selection</label>
                     <p-treeSelect
                         [options]="treeNodes"
@@ -140,7 +140,7 @@ interface CascadeOption {
                         [style]="{'width': '100%'}">
                     </p-treeSelect>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Checkbox Selection</label>
                     <p-treeSelect
                         [options]="treeNodes"
@@ -157,10 +157,10 @@ interface CascadeOption {
         <section class="token-section">
             <h2>SelectButton</h2>
             <p class="section-desc">A group of toggle buttons for single or multiple selection, often used as a segmented control.</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3">
                 <p-selectButton [options]="viewOptions" [(ngModel)]="selectedView" optionLabel="label" optionValue="value"></p-selectButton>
             </div>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3">
                 <p-selectButton [options]="sizeOptions" [(ngModel)]="selectedSizes" [multiple]="true" optionLabel="label" optionValue="value"></p-selectButton>
             </div>
             <span class="token-hint">Active: --mj-brand-primary | Inactive: --mj-bg-surface</span>
@@ -170,7 +170,7 @@ interface CascadeOption {
         <section class="token-section">
             <h2>ToggleButton</h2>
             <p class="section-desc">A binary toggle button with on/off states and customizable labels and icons.</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3">
                 <p-toggleButton
                     [(ngModel)]="toggleValue1"
                     onLabel="Enabled"
@@ -192,8 +192,8 @@ interface CascadeOption {
         <section class="token-section">
             <h2>TriStateCheckbox</h2>
             <p class="section-desc">A checkbox with three states: checked, unchecked, and indeterminate (null). Useful for partial selections.</p>
-            <div class="component-row">
-                <div class="selection-row">
+            <div class="component-row mj-grid mj-gap-3">
+                <div class="selection-row mj-grid mj-flex-nowrap mj-gap-2 mj-align-center">
                     <p-triStateCheckbox [(ngModel)]="triStateValue" inputId="tri-state"></p-triStateCheckbox>
                     <label for="tri-state">
                         {{ triStateValue === null ? 'Indeterminate' : (triStateValue ? 'Checked' : 'Unchecked') }}
@@ -206,13 +206,13 @@ interface CascadeOption {
         <section class="token-section">
             <h2>Rating</h2>
             <p class="section-desc">Star-based rating input for capturing user feedback or displaying scores.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Interactive Rating</label>
                     <p-rating [(ngModel)]="ratingValue"></p-rating>
                     <span class="token-hint">Selected: {{ ratingValue }} / 5</span>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Read-Only</label>
                     <p-rating [(ngModel)]="ratingReadOnly" [readonly]="true" [cancel]="false"></p-rating>
                 </div>
@@ -223,12 +223,12 @@ interface CascadeOption {
         <section class="token-section">
             <h2>Slider</h2>
             <p class="section-desc">Range slider input for selecting numeric values or ranges.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Basic Slider: {{ sliderValue }}</label>
                     <p-slider [(ngModel)]="sliderValue" [min]="0" [max]="100"></p-slider>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Range Slider: {{ sliderRange[0] }} - {{ sliderRange[1] }}</label>
                     <p-slider [(ngModel)]="sliderRange" [range]="true" [min]="0" [max]="100"></p-slider>
                 </div>
@@ -239,7 +239,7 @@ interface CascadeOption {
         <section class="token-section">
             <h2>Knob</h2>
             <p class="section-desc">A circular dial input for selecting numeric values with a visual arc indicator.</p>
-            <div class="component-row">
+            <div class="component-row mj-grid mj-gap-3">
                 <p-knob [(ngModel)]="knobValue" [min]="0" [max]="100" valueTemplate="{value}%"></p-knob>
                 <p-knob [(ngModel)]="knobValueAlt" [min]="0" [max]="360" [step]="10" valueTemplate="{value}" [strokeWidth]="5" [size]="100"></p-knob>
                 <p-knob [(ngModel)]="knobReadOnly" [readonly]="true" valueTemplate="{value}" [size]="80"></p-knob>
@@ -251,8 +251,8 @@ interface CascadeOption {
         <section class="token-section">
             <h2>ColorPicker</h2>
             <p class="section-desc">Color selection input with a preview swatch and full color spectrum panel.</p>
-            <div class="component-row">
-                <div class="color-group">
+            <div class="component-row mj-grid mj-gap-3">
+                <div class="color-group mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                     <label>Inline Swatch</label>
                     <p-colorPicker [(ngModel)]="colorValue"></p-colorPicker>
                     <span class="token-hint">{{ colorValue }}</span>
@@ -264,20 +264,20 @@ interface CascadeOption {
         <section class="token-section">
             <h2>Calendar</h2>
             <p class="section-desc">Date and time picker with inline and popup modes, range selection, and various display formats.</p>
-            <div class="input-grid">
-                <div class="input-group">
+            <div class="input-grid mj-row mj-row-cols-md-2 mj-row-cols-lg-3 mj-gap-5">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Basic Date</label>
                     <p-calendar [(ngModel)]="calendarDate" [style]="{'width': '100%'}" placeholder="Select a date"></p-calendar>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Date &amp; Time</label>
                     <p-calendar [(ngModel)]="calendarDateTime" [showTime]="true" [hourFormat]="'12'" [style]="{'width': '100%'}" placeholder="Date and time"></p-calendar>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Date Range</label>
                     <p-calendar [(ngModel)]="calendarRange" selectionMode="range" [style]="{'width': '100%'}" placeholder="Select range"></p-calendar>
                 </div>
-                <div class="input-group">
+                <div class="input-group mj-grid mj-flex-column mj-gap-2">
                     <label>Month Picker</label>
                     <p-calendar [(ngModel)]="calendarMonth" view="month" dateFormat="mm/yy" [style]="{'width': '100%'}" placeholder="Select month"></p-calendar>
                 </div>
@@ -319,24 +319,10 @@ interface CascadeOption {
     }
 
     .component-row {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--mj-space-3);
         margin-bottom: var(--mj-space-4);
     }
 
-    .input-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: var(--mj-space-5);
-    }
-
     .input-group {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-2);
-
         label {
             font-size: var(--mj-text-sm);
             font-weight: var(--mj-font-medium);
@@ -351,9 +337,6 @@ interface CascadeOption {
     }
 
     .selection-row {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-2);
         padding: var(--mj-space-1) 0;
 
         label {
@@ -364,10 +347,6 @@ interface CascadeOption {
     }
 
     .color-group {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-3);
-
         label {
             font-size: var(--mj-text-sm);
             font-weight: var(--mj-font-medium);

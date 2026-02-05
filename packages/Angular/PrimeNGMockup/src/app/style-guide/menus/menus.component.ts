@@ -39,7 +39,7 @@ import { MenuItem, MegaMenuItem } from 'primeng/api';
             <h2>Menu</h2>
             <p class="section-desc">Basic popup menu activated by a button. Uses MJ surface tokens for the overlay panel and brand tokens for active/hover states.</p>
             <p class="token-mapping">Panel bg: --mj-bg-surface-elevated | Hover: --mj-bg-surface-hover | Active text: --mj-brand-primary</p>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Toggle Menu" icon="pi pi-bars" class="p-button-outlined" (click)="menu.toggle($event)"></button>
                 <p-menu #menu [model]="menuItems" [popup]="true"></p-menu>
             </div>
@@ -66,7 +66,7 @@ import { MenuItem, MegaMenuItem } from 'primeng/api';
             <h2>ContextMenu</h2>
             <p class="section-desc">Menu triggered by right-clicking on a target element. Uses the same surface and hover tokens as the standard menu.</p>
             <p class="token-mapping">Panel bg: --mj-bg-surface-elevated | Hover: --mj-bg-surface-hover | Border: --mj-border-subtle</p>
-            <div class="context-menu-area" (contextmenu)="OnContextMenu($event)">
+            <div class="mj-grid mj-align-center mj-justify-center mj-gap-3 context-menu-area" (contextmenu)="OnContextMenu($event)">
                 <i class="pi pi-mouse"></i>
                 <span>Right-click here to open context menu</span>
             </div>
@@ -169,19 +169,11 @@ import { MenuItem, MegaMenuItem } from 'primeng/api';
     }
 
     .component-row {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--mj-space-3);
         margin-bottom: var(--mj-space-4);
     }
 
     /* Context Menu Target Area */
     .context-menu-area {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: var(--mj-space-3);
         padding: var(--mj-space-8) var(--mj-space-6);
         border: 2px dashed var(--mj-border-default);
         border-radius: var(--mj-radius-lg);

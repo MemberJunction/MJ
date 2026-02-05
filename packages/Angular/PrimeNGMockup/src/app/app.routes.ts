@@ -36,6 +36,10 @@ export const routes: Routes = [
                 loadComponent: () => import('./style-guide/panels/panels.component').then(m => m.PanelsComponent)
             },
             {
+                path: 'grid',
+                loadComponent: () => import('./style-guide/grid/grid.component').then(m => m.GridComponent)
+            },
+            {
                 path: 'overlays',
                 loadComponent: () => import('./style-guide/overlays/overlays.component').then(m => m.OverlaysComponent)
             },

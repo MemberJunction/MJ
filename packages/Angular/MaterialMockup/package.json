@@ -1,0 +1,44 @@
+{
+  "name": "material-mockup",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/animations": "18.2.14",
+    "@angular/cdk": "18.2.14",
+    "@angular/common": "18.2.14",
+    "@angular/compiler": "18.2.14",
+    "@angular/core": "18.2.14",
+    "@angular/forms": "18.2.14",
+    "@angular/material": "18.2.14",
+    "@angular/platform-browser": "18.2.14",
+    "@angular/router": "18.2.14",
+    "chart.js": "^4.5.1",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.14.10"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "18.2.14",
+    "@angular/cli": "18.2.14",
+    "@angular/compiler-cli": "18.2.14",
+    "typescript": "~5.5.4"
+  }
+}

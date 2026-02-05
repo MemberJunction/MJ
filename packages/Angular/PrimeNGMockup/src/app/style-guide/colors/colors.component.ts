@@ -25,14 +25,14 @@ interface ColorGroup {
         <section class="token-section">
             <h2>Brand Colors</h2>
             <p class="section-desc">Primary blue palette. The 500 value is MJ's signature blue (#0076b6), 900 is MJ Navy (#092340).</p>
-            <div class="swatch-grid">
+            <div class="mj-row mj-row-cols-2 mj-row-cols-sm-3 mj-row-cols-md-4 mj-row-cols-lg-6 mj-gap-3">
                 @for (s of brandSwatches; track s.token) {
                     <div class="swatch-card">
-                        <div class="swatch-color" [style.background-color]="'var(' + s.cssVar + ')'"
+                        <div class="swatch-color mj-grid mj-align-end mj-justify-start" [style.background-color]="'var(' + s.cssVar + ')'"
                              [class.light-text]="s.textClass === 'light'">
                             <span class="swatch-value" [id]="'val-' + s.token">{{ GetComputedValue(s.cssVar) }}</span>
                         </div>
-                        <div class="swatch-info">
+                        <div class="swatch-info mj-grid mj-flex-column mj-gap-0">
                             <span class="swatch-token">{{ s.cssVar }}</span>
                             <span class="swatch-label">{{ s.label }}</span>
                         </div>
@@ -45,14 +45,14 @@ interface ColorGroup {
         <section class="token-section">
             <h2>Accent Colors</h2>
             <p class="section-desc">Light blue highlights from the MJ website. Used for emphasis and callouts.</p>
-            <div class="swatch-grid">
+            <div class="mj-row mj-row-cols-2 mj-row-cols-sm-3 mj-row-cols-md-4 mj-row-cols-lg-6 mj-gap-3">
                 @for (s of accentSwatches; track s.token) {
                     <div class="swatch-card">
-                        <div class="swatch-color" [style.background-color]="'var(' + s.cssVar + ')'"
+                        <div class="swatch-color mj-grid mj-align-end mj-justify-start" [style.background-color]="'var(' + s.cssVar + ')'"
                              [class.light-text]="s.textClass === 'light'">
                             <span class="swatch-value">{{ GetComputedValue(s.cssVar) }}</span>
                         </div>
-                        <div class="swatch-info">
+                        <div class="swatch-info mj-grid mj-flex-column mj-gap-0">
                             <span class="swatch-token">{{ s.cssVar }}</span>
                             <span class="swatch-label">{{ s.label }}</span>
                         </div>
@@ -65,14 +65,14 @@ interface ColorGroup {
         <section class="token-section">
             <h2>Tertiary Colors</h2>
             <p class="section-desc">Cyan/Teal palette for secondary actions and complementary highlights.</p>
-            <div class="swatch-grid">
+            <div class="mj-row mj-row-cols-2 mj-row-cols-sm-3 mj-row-cols-md-4 mj-row-cols-lg-6 mj-gap-3">
                 @for (s of tertiarySwatches; track s.token) {
                     <div class="swatch-card">
-                        <div class="swatch-color" [style.background-color]="'var(' + s.cssVar + ')'"
+                        <div class="swatch-color mj-grid mj-align-end mj-justify-start" [style.background-color]="'var(' + s.cssVar + ')'"
                              [class.light-text]="s.textClass === 'light'">
                             <span class="swatch-value">{{ GetComputedValue(s.cssVar) }}</span>
                         </div>
-                        <div class="swatch-info">
+                        <div class="swatch-info mj-grid mj-flex-column mj-gap-0">
                             <span class="swatch-token">{{ s.cssVar }}</span>
                             <span class="swatch-label">{{ s.label }}</span>
                         </div>
@@ -85,15 +85,15 @@ interface ColorGroup {
         <section class="token-section">
             <h2>Neutral Colors</h2>
             <p class="section-desc">Slate palette used for backgrounds, text, borders, and surfaces.</p>
-            <div class="swatch-grid">
+            <div class="mj-row mj-row-cols-2 mj-row-cols-sm-3 mj-row-cols-md-4 mj-row-cols-lg-6 mj-gap-3">
                 @for (s of neutralSwatches; track s.token) {
                     <div class="swatch-card">
-                        <div class="swatch-color" [style.background-color]="'var(' + s.cssVar + ')'"
+                        <div class="swatch-color mj-grid mj-align-end mj-justify-start" [style.background-color]="'var(' + s.cssVar + ')'"
                              [class.light-text]="s.textClass === 'light'"
                              [class.bordered]="s.textClass === 'bordered'">
                             <span class="swatch-value">{{ GetComputedValue(s.cssVar) }}</span>
                         </div>
-                        <div class="swatch-info">
+                        <div class="swatch-info mj-grid mj-flex-column mj-gap-0">
                             <span class="swatch-token">{{ s.cssVar }}</span>
                             <span class="swatch-label">{{ s.label }}</span>
                         </div>
@@ -106,15 +106,15 @@ interface ColorGroup {
         <section class="token-section">
             <h2>Semantic: Backgrounds</h2>
             <p class="section-desc">Purpose-based background tokens. These change automatically between light and dark mode.</p>
-            <div class="swatch-grid">
+            <div class="mj-row mj-row-cols-2 mj-row-cols-sm-3 mj-row-cols-md-4 mj-row-cols-lg-6 mj-gap-3">
                 @for (s of bgSwatches; track s.token) {
                     <div class="swatch-card">
-                        <div class="swatch-color" [style.background-color]="'var(' + s.cssVar + ')'"
+                        <div class="swatch-color mj-grid mj-align-end mj-justify-start" [style.background-color]="'var(' + s.cssVar + ')'"
                              [class.light-text]="s.textClass === 'light'"
                              [class.bordered]="s.textClass === 'bordered' || s.textClass === 'dark'">
                             <span class="swatch-value">{{ GetComputedValue(s.cssVar) }}</span>
                         </div>
-                        <div class="swatch-info">
+                        <div class="swatch-info mj-grid mj-flex-column mj-gap-0">
                             <span class="swatch-token">{{ s.cssVar }}</span>
                             <span class="swatch-label">{{ s.label }}</span>
                         </div>
@@ -127,12 +127,12 @@ interface ColorGroup {
         <section class="token-section">
             <h2>Status Colors</h2>
             <p class="section-desc">Semantic status indicators with background, text, and border variants.</p>
-            <div class="status-grid">
+            <div class="mj-row mj-row-cols-sm-2 mj-row-cols-lg-3 mj-gap-4">
                 @for (status of statusGroups; track status.name) {
                     <div class="status-group">
                         <h4>{{ status.name }}</h4>
                         <div class="status-variants">
-                            <div class="status-variant"
+                            <div class="status-variant mj-grid mj-flex-column mj-gap-1"
                                  [style.background-color]="'var(--mj-status-' + status.key + '-bg)'"
                                  [style.color]="'var(--mj-status-' + status.key + '-text)'"
                                  [style.border]="'1px solid var(--mj-status-' + status.key + '-border)'">
@@ -149,15 +149,15 @@ interface ColorGroup {
         <section class="token-section">
             <h2>Highlight & App Accent</h2>
             <p class="section-desc">Special-purpose tokens for important callouts, notifications, and per-application accent colors.</p>
-            <div class="swatch-grid">
+            <div class="mj-row mj-row-cols-2 mj-row-cols-sm-3 mj-row-cols-md-4 mj-row-cols-lg-6 mj-gap-3">
                 @for (s of highlightSwatches; track s.token) {
                     <div class="swatch-card">
-                        <div class="swatch-color" [style.background-color]="'var(' + s.cssVar + ')'"
+                        <div class="swatch-color mj-grid mj-align-end mj-justify-start" [style.background-color]="'var(' + s.cssVar + ')'"
                              [class.light-text]="s.textClass === 'light'"
                              [class.bordered]="s.textClass === 'bordered'">
                             <span class="swatch-value">{{ GetComputedValue(s.cssVar) }}</span>
                         </div>
-                        <div class="swatch-info">
+                        <div class="swatch-info mj-grid mj-flex-column mj-gap-0">
                             <span class="swatch-token">{{ s.cssVar }}</span>
                             <span class="swatch-label">{{ s.label }}</span>
                         </div>
@@ -190,12 +190,6 @@ interface ColorGroup {
         line-height: var(--mj-leading-relaxed);
     }
 
-    .swatch-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-        gap: var(--mj-space-3);
-    }
-
     .swatch-card {
         border-radius: var(--mj-radius-lg);
         overflow: hidden;
@@ -211,9 +205,6 @@ interface ColorGroup {
 
     .swatch-color {
         height: 80px;
-        display: flex;
-        align-items: flex-end;
-        justify-content: flex-start;
         padding: var(--mj-space-2);
         color: var(--mj-color-neutral-900);
 
@@ -236,9 +227,6 @@ interface ColorGroup {
 
     .swatch-info {
         padding: var(--mj-space-2);
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-0-5);
     }
 
     .swatch-token {
@@ -253,12 +241,6 @@ interface ColorGroup {
         color: var(--mj-text-secondary);
     }
 
-    .status-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: var(--mj-space-4);
-    }
-
     .status-group h4 {
         margin: 0 0 var(--mj-space-2) 0;
         font-size: var(--mj-text-sm);
@@ -269,9 +251,6 @@ interface ColorGroup {
     .status-variant {
         padding: var(--mj-space-3) var(--mj-space-4);
         border-radius: var(--mj-radius-md);
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-1);
     }
 
     .status-label {
@@ -285,11 +264,6 @@ interface ColorGroup {
         opacity: 0.7;
     }
 
-    .highlight-swatches {
-        display: flex;
-        gap: var(--mj-space-4);
-        flex-wrap: wrap;
-    }
   `]
 })
 export class ColorsComponent implements OnInit {

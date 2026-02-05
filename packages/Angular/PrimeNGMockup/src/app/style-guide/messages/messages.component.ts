@@ -30,7 +30,7 @@ import { MessageService, Message } from 'primeng/api';
             <p class="section-desc">Static inline messages for contextual feedback. Each severity maps to MJ status tokens for consistent semantic coloring.</p>
             <p class="token-mapping">success: --mj-status-success-* | info: --mj-status-info-* | warn: --mj-status-warning-* | error: --mj-status-error-*</p>
 
-            <div class="message-stack">
+            <div class="mj-grid mj-flex-column mj-gap-3">
                 <p-message severity="success" text="Operation completed successfully."></p-message>
                 <p-message severity="info" text="This is an informational message."></p-message>
                 <p-message severity="warn" text="Please review the highlighted fields before continuing."></p-message>
@@ -45,7 +45,7 @@ import { MessageService, Message } from 'primeng/api';
 
             <p-messages [value]="Messages" [closable]="true"></p-messages>
 
-            <div class="component-row" style="margin-top: var(--mj-space-3);">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row" style="margin-top: var(--mj-space-3);">
                 <button pButton label="Reset Messages" icon="pi pi-refresh" class="p-button-outlined p-button-sm" (click)="ResetMessages()"></button>
             </div>
         </section>
@@ -55,7 +55,7 @@ import { MessageService, Message } from 'primeng/api';
             <h2>Toast</h2>
             <p class="section-desc">Non-blocking notification popups triggered programmatically via MessageService. Toasts appear in the top-right corner and auto-dismiss after 3 seconds.</p>
 
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Success" icon="pi pi-check" class="p-button-success" (click)="ShowSuccess()"></button>
                 <button pButton label="Info" icon="pi pi-info-circle" class="p-button-primary" (click)="ShowInfo()"></button>
                 <button pButton label="Warning" icon="pi pi-exclamation-triangle" class="p-button-warning" (click)="ShowWarn()"></button>
@@ -64,7 +64,7 @@ import { MessageService, Message } from 'primeng/api';
 
             <h3 class="subsection-title">Sticky Toast</h3>
             <p class="subsection-desc">Sticky toasts remain visible until manually dismissed by the user.</p>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Sticky Toast" icon="pi pi-thumbtack" class="p-button-secondary" (click)="ShowSticky()"></button>
                 <button pButton label="Clear All" icon="pi pi-times-circle" class="p-button-text" (click)="ClearToasts()"></button>
             </div>
@@ -77,7 +77,7 @@ import { MessageService, Message } from 'primeng/api';
 
             <h3 class="subsection-title">Basic Mode</h3>
             <p class="subsection-desc">Single-file selection with a simple choose button.</p>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <p-fileUpload
                     mode="basic"
                     chooseLabel="Choose File"
@@ -99,7 +99,7 @@ import { MessageService, Message } from 'primeng/api';
                 [showUploadButton]="true"
                 [showCancelButton]="true">
                 <ng-template pTemplate="empty">
-                    <div class="upload-empty-state">
+                    <div class="mj-grid mj-flex-column mj-align-center mj-justify-center mj-gap-2 upload-empty-state">
                         <i class="pi pi-cloud-upload upload-empty-icon"></i>
                         <p>Drag and drop files here to upload.</p>
                         <p class="upload-hint">Accepts images, PDFs, and Word documents up to 5 MB each.</p>
@@ -154,25 +154,11 @@ import { MessageService, Message } from 'primeng/api';
     }
 
     .component-row {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--mj-space-3);
         margin-bottom: var(--mj-space-4);
-    }
-
-    .message-stack {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-3);
     }
 
     /* FileUpload empty state */
     .upload-empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
         padding: var(--mj-space-8) var(--mj-space-4);
         color: var(--mj-text-secondary);
         text-align: center;

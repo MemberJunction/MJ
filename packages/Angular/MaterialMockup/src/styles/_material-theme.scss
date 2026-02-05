@@ -1,0 +1,471 @@
+/**
+ * Angular Material ↔ MJ Design Token Bridge
+ * ===========================================
+ *
+ * This file maps Angular Material's --mat-sys-* design tokens
+ * to MJ's --mj-* semantic tokens, ensuring Material components
+ * render using the MJ design language.
+ *
+ * Angular Material 18 uses CSS custom properties (--mat-sys-*)
+ * for theming via the new Material Design 3 token system.
+ */
+
+:root {
+  /* ========================================
+     Core Surface & Background
+     ======================================== */
+  --mat-sys-background: var(--mj-bg-page);
+  --mat-sys-surface: var(--mj-bg-surface);
+  --mat-sys-surface-variant: var(--mj-bg-surface-sunken);
+  --mat-sys-surface-container: var(--mj-bg-surface);
+  --mat-sys-surface-container-low: var(--mj-bg-surface-sunken);
+  --mat-sys-surface-container-high: var(--mj-bg-surface-elevated);
+  --mat-sys-surface-container-highest: var(--mj-bg-surface-elevated);
+  --mat-sys-surface-bright: var(--mj-bg-surface-elevated);
+  --mat-sys-surface-dim: var(--mj-bg-surface-sunken);
+  --mat-sys-inverse-surface: var(--mj-color-neutral-800);
+  --mat-sys-surface-tint: var(--mj-brand-primary);
+
+  /* ========================================
+     Primary Color (MJ Brand Blue)
+     ======================================== */
+  --mat-sys-primary: var(--mj-brand-primary);
+  --mat-sys-on-primary: var(--mj-brand-on-primary);
+  --mat-sys-primary-container: var(--mj-color-brand-100);
+  --mat-sys-on-primary-container: var(--mj-color-brand-900);
+  --mat-sys-inverse-primary: var(--mj-color-brand-300);
+  --mat-sys-primary-fixed: var(--mj-color-brand-100);
+  --mat-sys-primary-fixed-dim: var(--mj-color-brand-200);
+  --mat-sys-on-primary-fixed: var(--mj-color-brand-900);
+  --mat-sys-on-primary-fixed-variant: var(--mj-color-brand-700);
+
+  /* ========================================
+     Secondary Color (MJ Accent Light Blue)
+     ======================================== */
+  --mat-sys-secondary: var(--mj-brand-accent);
+  --mat-sys-on-secondary: var(--mj-brand-on-accent);
+  --mat-sys-secondary-container: var(--mj-color-accent-100);
+  --mat-sys-on-secondary-container: var(--mj-color-accent-900);
+  --mat-sys-secondary-fixed: var(--mj-color-accent-100);
+  --mat-sys-secondary-fixed-dim: var(--mj-color-accent-200);
+  --mat-sys-on-secondary-fixed: var(--mj-color-accent-900);
+  --mat-sys-on-secondary-fixed-variant: var(--mj-color-accent-700);
+
+  /* ========================================
+     Tertiary Color (MJ Cyan/Teal)
+     ======================================== */
+  --mat-sys-tertiary: var(--mj-brand-tertiary);
+  --mat-sys-on-tertiary: var(--mj-brand-on-tertiary);
+  --mat-sys-tertiary-container: var(--mj-color-tertiary-100);
+  --mat-sys-on-tertiary-container: var(--mj-color-tertiary-900);
+  --mat-sys-tertiary-fixed: var(--mj-color-tertiary-100);
+  --mat-sys-tertiary-fixed-dim: var(--mj-color-tertiary-200);
+  --mat-sys-on-tertiary-fixed: var(--mj-color-tertiary-900);
+  --mat-sys-on-tertiary-fixed-variant: var(--mj-color-tertiary-700);
+
+  /* ========================================
+     Error Color (MJ Status Error)
+     ======================================== */
+  --mat-sys-error: var(--mj-status-error);
+  --mat-sys-on-error: var(--mj-color-neutral-0);
+  --mat-sys-error-container: var(--mj-status-error-bg);
+  --mat-sys-on-error-container: var(--mj-status-error-text);
+
+  /* ========================================
+     Text / On-Surface Colors
+     ======================================== */
+  --mat-sys-on-surface: var(--mj-text-primary);
+  --mat-sys-on-surface-variant: var(--mj-text-secondary);
+  --mat-sys-inverse-on-surface: var(--mj-text-inverse);
+
+  /* ========================================
+     Outline / Border Colors
+     ======================================== */
+  --mat-sys-outline: var(--mj-border-default);
+  --mat-sys-outline-variant: var(--mj-border-subtle);
+
+  /* ========================================
+     Scrim & Shadow
+     ======================================== */
+  --mat-sys-scrim: rgba(0, 0, 0, 0.32);
+  --mat-sys-shadow: rgba(0, 0, 0, 0.15);
+
+  /* ========================================
+     Typography Overrides
+     ======================================== */
+  --mat-sys-body-large-font: var(--mj-font-family);
+  --mat-sys-body-medium-font: var(--mj-font-family);
+  --mat-sys-body-small-font: var(--mj-font-family);
+  --mat-sys-label-large-font: var(--mj-font-family);
+  --mat-sys-label-medium-font: var(--mj-font-family);
+  --mat-sys-label-small-font: var(--mj-font-family);
+  --mat-sys-title-large-font: var(--mj-font-family);
+  --mat-sys-title-medium-font: var(--mj-font-family);
+  --mat-sys-title-small-font: var(--mj-font-family);
+  --mat-sys-headline-large-font: var(--mj-font-family);
+  --mat-sys-headline-medium-font: var(--mj-font-family);
+  --mat-sys-headline-small-font: var(--mj-font-family);
+  --mat-sys-display-large-font: var(--mj-font-family);
+  --mat-sys-display-medium-font: var(--mj-font-family);
+  --mat-sys-display-small-font: var(--mj-font-family);
+
+  /* ========================================
+     Component-Specific Overrides
+     ======================================== */
+
+  /* Form Field */
+  --mdc-outlined-text-field-outline-color: var(--mj-border-default);
+  --mdc-outlined-text-field-hover-outline-color: var(--mj-border-strong);
+  --mdc-outlined-text-field-focus-outline-color: var(--mj-border-focus);
+  --mdc-outlined-text-field-label-text-color: var(--mj-text-secondary);
+  --mdc-outlined-text-field-input-text-color: var(--mj-text-primary);
+  --mdc-outlined-text-field-caret-color: var(--mj-brand-primary);
+  --mdc-outlined-text-field-disabled-outline-color: var(--mj-border-subtle);
+  --mdc-outlined-text-field-disabled-label-text-color: var(--mj-text-disabled);
+  --mdc-outlined-text-field-disabled-input-text-color: var(--mj-text-disabled);
+
+  --mdc-filled-text-field-container-color: var(--mj-bg-surface-sunken);
+  --mdc-filled-text-field-label-text-color: var(--mj-text-secondary);
+  --mdc-filled-text-field-input-text-color: var(--mj-text-primary);
+  --mdc-filled-text-field-caret-color: var(--mj-brand-primary);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--mj-brand-primary);
+  --mdc-filled-text-field-hover-active-indicator-color: var(--mj-border-strong);
+
+  /* Checkbox */
+  --mdc-checkbox-selected-checkmark-color: var(--mj-brand-on-primary);
+  --mdc-checkbox-selected-focus-icon-color: var(--mj-brand-primary);
+  --mdc-checkbox-selected-hover-icon-color: var(--mj-brand-primary-hover);
+  --mdc-checkbox-selected-icon-color: var(--mj-brand-primary);
+  --mdc-checkbox-selected-pressed-icon-color: var(--mj-brand-primary-active);
+  --mdc-checkbox-unselected-icon-color: var(--mj-text-muted);
+  --mdc-checkbox-unselected-hover-icon-color: var(--mj-text-secondary);
+
+  /* Radio */
+  --mdc-radio-selected-icon-color: var(--mj-brand-primary);
+  --mdc-radio-selected-hover-icon-color: var(--mj-brand-primary-hover);
+  --mdc-radio-selected-pressed-icon-color: var(--mj-brand-primary-active);
+  --mdc-radio-unselected-icon-color: var(--mj-text-muted);
+  --mdc-radio-unselected-hover-icon-color: var(--mj-text-secondary);
+
+  /* Slide Toggle */
+  --mdc-switch-selected-track-color: var(--mj-brand-primary);
+  --mdc-switch-selected-hover-track-color: var(--mj-brand-primary-hover);
+  --mdc-switch-selected-handle-color: var(--mj-brand-on-primary);
+
+  /* Slider */
+  --mdc-slider-active-track-color: var(--mj-brand-primary);
+  --mdc-slider-handle-color: var(--mj-brand-primary);
+  --mdc-slider-inactive-track-color: var(--mj-border-default);
+  --mdc-slider-hover-handle-color: var(--mj-brand-primary-hover);
+
+  /* Tabs */
+  --mat-tab-header-active-label-text-color: var(--mj-brand-primary);
+  --mat-tab-header-active-focus-label-text-color: var(--mj-brand-primary);
+  --mat-tab-header-active-hover-label-text-color: var(--mj-brand-primary-hover);
+  --mat-tab-header-inactive-label-text-color: var(--mj-text-secondary);
+  --mat-tab-header-active-focus-indicator-color: var(--mj-brand-primary);
+  --mat-tab-header-active-hover-indicator-color: var(--mj-brand-primary-hover);
+
+  /* Select / Option / Optgroup */
+  --mat-select-panel-background-color: var(--mj-bg-surface-elevated);
+  --mat-select-enabled-trigger-text-color: var(--mj-text-primary);
+  --mat-select-disabled-trigger-text-color: var(--mj-text-disabled);
+  --mat-select-placeholder-text-color: var(--mj-text-muted);
+  --mat-select-enabled-arrow-color: var(--mj-text-secondary);
+  --mat-select-disabled-arrow-color: var(--mj-text-disabled);
+  --mat-select-focused-arrow-color: var(--mj-brand-primary);
+  --mat-select-invalid-arrow-color: var(--mj-status-error);
+  --mat-select-trigger-text-font: var(--mj-font-family);
+  --mat-select-container-elevation-shadow: var(--mj-shadow-lg);
+  --mat-option-selected-state-label-text-color: var(--mj-brand-primary);
+  --mat-option-label-text-color: var(--mj-text-primary);
+  --mat-option-hover-state-layer-color: var(--mj-bg-surface-hover);
+  --mat-option-focus-state-layer-color: var(--mj-bg-surface-hover);
+  --mat-option-selected-state-layer-color: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  --mat-option-label-text-font: var(--mj-font-family);
+  --mat-optgroup-label-text-color: var(--mj-text-muted);
+  --mat-optgroup-label-text-font: var(--mj-font-family);
+
+  /* Autocomplete */
+  --mat-autocomplete-background-color: var(--mj-bg-surface-elevated);
+  --mat-autocomplete-container-shape: var(--mj-radius-lg);
+  --mat-autocomplete-container-elevation-shadow: var(--mj-shadow-lg);
+
+  /* Datepicker */
+  --mat-datepicker-calendar-container-background-color: var(--mj-bg-surface-elevated);
+  --mat-datepicker-calendar-container-shape: var(--mj-radius-lg);
+  --mat-datepicker-calendar-container-text-color: var(--mj-text-primary);
+  --mat-datepicker-calendar-container-elevation-shadow: var(--mj-shadow-lg);
+  --mat-datepicker-calendar-date-selected-state-background-color: var(--mj-brand-primary);
+  --mat-datepicker-calendar-date-selected-state-text-color: var(--mj-brand-on-primary);
+  --mat-datepicker-calendar-date-text-color: var(--mj-text-primary);
+  --mat-datepicker-calendar-date-today-outline-color: var(--mj-brand-primary);
+  --mat-datepicker-calendar-date-hover-state-background-color: var(--mj-bg-surface-hover);
+  --mat-datepicker-calendar-date-focus-state-background-color: var(--mj-bg-surface-hover);
+  --mat-datepicker-calendar-date-in-range-state-background-color: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+  --mat-datepicker-calendar-date-preview-state-outline-color: var(--mj-border-default);
+  --mat-datepicker-calendar-date-disabled-state-text-color: var(--mj-text-disabled);
+  --mat-datepicker-calendar-header-text-color: var(--mj-text-secondary);
+  --mat-datepicker-calendar-header-divider-color: var(--mj-border-default);
+  --mat-datepicker-calendar-body-label-text-color: var(--mj-text-secondary);
+  --mat-datepicker-calendar-navigation-button-icon-color: var(--mj-text-secondary);
+  --mat-datepicker-calendar-period-button-text-color: var(--mj-text-primary);
+  --mat-datepicker-calendar-period-button-icon-color: var(--mj-text-secondary);
+  --mat-datepicker-calendar-text-font: var(--mj-font-family);
+  --mat-datepicker-toggle-icon-color: var(--mj-text-secondary);
+  --mat-datepicker-toggle-active-state-icon-color: var(--mj-brand-primary);
+  --mat-datepicker-range-input-separator-color: var(--mj-text-muted);
+  --mat-datepicker-range-input-disabled-state-separator-color: var(--mj-text-disabled);
+  --mat-datepicker-range-input-disabled-state-text-color: var(--mj-text-disabled);
+  --mat-datepicker-calendar-date-outline-color: transparent;
+
+  /* Menu */
+  --mat-menu-container-color: var(--mj-bg-surface-elevated);
+  --mat-menu-container-shape: var(--mj-radius-lg);
+  --mat-menu-divider-color: var(--mj-border-default);
+  --mat-menu-item-label-text-color: var(--mj-text-primary);
+  --mat-menu-item-label-text-font: var(--mj-font-family);
+  --mat-menu-item-icon-color: var(--mj-text-secondary);
+  --mat-menu-item-hover-state-layer-color: var(--mj-bg-surface-hover);
+  --mat-menu-item-focus-state-layer-color: var(--mj-bg-surface-hover);
+
+  /* Dialog */
+  --mdc-dialog-container-color: var(--mj-bg-surface-elevated);
+  --mdc-dialog-container-shape: var(--mj-radius-xl);
+  --mdc-dialog-subhead-color: var(--mj-text-primary);
+  --mdc-dialog-subhead-font: var(--mj-font-family);
+  --mdc-dialog-supporting-text-color: var(--mj-text-secondary);
+  --mdc-dialog-supporting-text-font: var(--mj-font-family);
+  --mat-dialog-container-elevation-shadow: var(--mj-shadow-xl);
+
+  /* Bottom Sheet */
+  --mat-bottom-sheet-container-background-color: var(--mj-bg-surface-elevated);
+  --mat-bottom-sheet-container-shape: var(--mj-radius-xl);
+  --mat-bottom-sheet-container-text-color: var(--mj-text-primary);
+  --mat-bottom-sheet-container-text-font: var(--mj-font-family);
+
+  /* Snack Bar (inverted: dark bg in light mode) */
+  --mdc-snackbar-container-color: var(--mj-color-neutral-800);
+  --mdc-snackbar-container-shape: var(--mj-radius-md);
+  --mdc-snackbar-supporting-text-color: var(--mj-color-neutral-50);
+  --mdc-snackbar-supporting-text-font: var(--mj-font-family);
+  --mat-snack-bar-button-color: var(--mj-color-brand-300);
+
+  /* Tooltip (inverted: dark bg in light mode) */
+  --mdc-plain-tooltip-container-color: var(--mj-color-neutral-800);
+  --mdc-plain-tooltip-container-shape: var(--mj-radius-sm);
+  --mdc-plain-tooltip-supporting-text-color: var(--mj-color-neutral-50);
+  --mdc-plain-tooltip-supporting-text-font: var(--mj-font-family);
+
+  /* Card */
+  --mdc-elevated-card-container-color: var(--mj-bg-surface-elevated);
+  --mdc-elevated-card-container-elevation: var(--mj-shadow-md);
+  --mdc-elevated-card-container-shape: var(--mj-radius-lg);
+  --mdc-outlined-card-container-color: var(--mj-bg-surface);
+  --mdc-outlined-card-outline-color: var(--mj-border-default);
+  --mdc-outlined-card-outline-width: 1px;
+  --mdc-outlined-card-container-shape: var(--mj-radius-lg);
+  --mat-card-title-text-font: var(--mj-font-family);
+  --mat-card-subtitle-text-font: var(--mj-font-family);
+  --mat-card-subtitle-text-color: var(--mj-text-muted);
+
+  /* Expansion Panel */
+  --mat-expansion-container-background-color: var(--mj-bg-surface);
+  --mat-expansion-container-shape: var(--mj-radius-lg);
+  --mat-expansion-container-text-color: var(--mj-text-primary);
+  --mat-expansion-container-text-font: var(--mj-font-family);
+  --mat-expansion-header-text-color: var(--mj-text-primary);
+  --mat-expansion-header-text-font: var(--mj-font-family);
+  --mat-expansion-header-description-color: var(--mj-text-muted);
+  --mat-expansion-header-indicator-color: var(--mj-text-secondary);
+  --mat-expansion-header-hover-state-layer-color: var(--mj-bg-surface-hover);
+  --mat-expansion-header-focus-state-layer-color: var(--mj-bg-surface-hover);
+  --mat-expansion-header-disabled-state-text-color: var(--mj-text-disabled);
+  --mat-expansion-actions-divider-color: var(--mj-border-default);
+
+  /* Table */
+  --mat-table-background-color: var(--mj-bg-surface);
+  --mat-table-header-headline-color: var(--mj-text-secondary);
+  --mat-table-header-headline-font: var(--mj-font-family);
+  --mat-table-row-item-label-text-color: var(--mj-text-primary);
+  --mat-table-row-item-label-text-font: var(--mj-font-family);
+  --mat-table-row-item-outline-color: var(--mj-border-default);
+  --mat-table-row-item-outline-width: 1px;
+
+  /* Paginator */
+  --mat-paginator-container-background-color: var(--mj-bg-surface);
+  --mat-paginator-container-text-color: var(--mj-text-secondary);
+  --mat-paginator-container-text-font: var(--mj-font-family);
+  --mat-paginator-enabled-icon-color: var(--mj-text-secondary);
+  --mat-paginator-disabled-icon-color: var(--mj-text-disabled);
+
+  /* Sort Header */
+  --mat-sort-arrow-color: var(--mj-text-secondary);
+
+  /* List */
+  --mdc-list-list-item-label-text-color: var(--mj-text-primary);
+  --mdc-list-list-item-label-text-font: var(--mj-font-family);
+  --mdc-list-list-item-supporting-text-color: var(--mj-text-secondary);
+  --mdc-list-list-item-leading-icon-color: var(--mj-text-muted);
+  --mdc-list-list-item-trailing-icon-color: var(--mj-text-muted);
+  --mdc-list-list-item-hover-state-layer-color: var(--mj-bg-surface-hover);
+  --mdc-list-list-item-focus-state-layer-color: var(--mj-bg-surface-hover);
+  --mdc-list-list-item-hover-label-text-color: var(--mj-text-primary);
+  --mdc-list-list-item-focus-label-text-color: var(--mj-text-primary);
+  --mdc-list-list-item-selected-trailing-icon-color: var(--mj-brand-primary);
+  --mdc-list-list-item-disabled-label-text-color: var(--mj-text-disabled);
+  --mat-list-active-indicator-color: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+
+  /* Divider */
+  --mat-divider-color: var(--mj-border-default);
+  --mat-divider-width: 1px;
+
+  /* Tree */
+  --mat-tree-container-background-color: var(--mj-bg-surface);
+  --mat-tree-node-text-color: var(--mj-text-primary);
+  --mat-tree-node-text-font: var(--mj-font-family);
+
+  /* Badge */
+  --mat-badge-background-color: var(--mj-status-error);
+  --mat-badge-text-color: var(--mj-color-neutral-0);
+  --mat-badge-text-font: var(--mj-font-family);
+  --mat-badge-disabled-state-background-color: var(--mj-text-disabled);
+  --mat-badge-disabled-state-text-color: var(--mj-color-neutral-0);
+  --mat-badge-container-shape: var(--mj-radius-full);
+
+  /* Chips */
+  --mdc-chip-elevated-container-color: var(--mj-bg-surface-sunken);
+  --mdc-chip-elevated-selected-container-color: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+  --mdc-chip-label-text-color: var(--mj-text-primary);
+  --mdc-chip-label-text-font: var(--mj-font-family);
+  --mdc-chip-selected-label-text-color: var(--mj-brand-primary);
+  --mdc-chip-outline-color: var(--mj-border-default);
+  --mdc-chip-with-icon-icon-color: var(--mj-text-secondary);
+  --mdc-chip-with-icon-selected-icon-color: var(--mj-brand-primary);
+  --mdc-chip-hover-state-layer-color: var(--mj-bg-surface-hover);
+  --mdc-chip-focus-state-layer-color: var(--mj-bg-surface-hover);
+  --mdc-chip-container-shape-radius: var(--mj-radius-md);
+  --mdc-chip-with-trailing-icon-trailing-icon-color: var(--mj-text-muted);
+  --mdc-chip-disabled-label-text-color: var(--mj-text-disabled);
+  --mdc-chip-disabled-outline-color: var(--mj-border-subtle);
+
+  /* Toolbar */
+  --mat-toolbar-container-background-color: var(--mj-bg-surface);
+  --mat-toolbar-container-text-color: var(--mj-text-primary);
+  --mat-toolbar-title-text-font: var(--mj-font-family);
+
+  /* Sidenav */
+  --mat-sidenav-container-background-color: var(--mj-bg-surface-sunken);
+  --mat-sidenav-container-text-color: var(--mj-text-primary);
+  --mat-sidenav-container-divider-color: var(--mj-border-default);
+  --mat-sidenav-container-shape: 0;
+  --mat-sidenav-content-background-color: var(--mj-bg-surface-sunken);
+  --mat-sidenav-content-text-color: var(--mj-text-primary);
+  --mat-sidenav-scrim-color: var(--mj-bg-overlay);
+
+  /* Stepper */
+  --mat-stepper-container-color: var(--mj-bg-surface);
+  --mat-stepper-container-text-font: var(--mj-font-family);
+  --mat-stepper-header-icon-background-color: var(--mj-text-muted);
+  --mat-stepper-header-icon-foreground-color: var(--mj-text-inverse);
+  --mat-stepper-header-selected-state-icon-background-color: var(--mj-brand-primary);
+  --mat-stepper-header-selected-state-icon-foreground-color: var(--mj-brand-on-primary);
+  --mat-stepper-header-edit-state-icon-background-color: var(--mj-brand-primary);
+  --mat-stepper-header-edit-state-icon-foreground-color: var(--mj-brand-on-primary);
+  --mat-stepper-header-error-state-icon-foreground-color: var(--mj-status-error);
+  --mat-stepper-header-error-state-label-text-color: var(--mj-status-error);
+  --mat-stepper-header-label-text-color: var(--mj-text-muted);
+  --mat-stepper-header-label-text-font: var(--mj-font-family);
+  --mat-stepper-header-optional-label-text-color: var(--mj-text-muted);
+  --mat-stepper-header-selected-state-label-text-color: var(--mj-text-primary);
+  --mat-stepper-header-hover-state-layer-color: var(--mj-bg-surface-hover);
+  --mat-stepper-header-focus-state-layer-color: var(--mj-bg-surface-hover);
+  --mat-stepper-line-color: var(--mj-border-default);
+
+  /* Button Toggle */
+  --mat-standard-button-toggle-text-color: var(--mj-text-primary);
+  --mat-standard-button-toggle-background-color: var(--mj-bg-surface);
+  --mat-standard-button-toggle-state-layer-color: var(--mj-bg-surface-hover);
+  --mat-standard-button-toggle-selected-state-background-color: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  --mat-standard-button-toggle-selected-state-text-color: var(--mj-brand-primary);
+  --mat-standard-button-toggle-disabled-state-text-color: var(--mj-text-disabled);
+  --mat-standard-button-toggle-disabled-state-background-color: var(--mj-bg-surface-sunken);
+  --mat-standard-button-toggle-divider-color: var(--mj-border-default);
+  --mat-standard-button-toggle-label-text-font: var(--mj-font-family);
+  --mat-standard-button-toggle-shape: var(--mj-radius-md);
+
+  /* Progress Bar */
+  --mdc-linear-progress-active-indicator-color: var(--mj-brand-primary);
+  --mdc-linear-progress-track-color: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+
+  /* Progress Spinner */
+  --mdc-circular-progress-active-indicator-color: var(--mj-brand-primary);
+
+  /* Ripple & Global */
+  --mat-ripple-color: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+  --mat-app-background-color: var(--mj-bg-page);
+  --mat-app-text-color: var(--mj-text-primary);
+}
+
+/* ========================================
+   Dark Mode Adjustments
+   ======================================== */
+[data-theme="dark"] {
+  --mat-sys-background: var(--mj-bg-page);
+  --mat-sys-surface: var(--mj-bg-surface);
+  --mat-sys-surface-variant: var(--mj-bg-surface-sunken);
+  --mat-sys-surface-container: var(--mj-bg-surface);
+  --mat-sys-surface-container-low: var(--mj-bg-surface-sunken);
+  --mat-sys-surface-container-high: var(--mj-bg-surface-elevated);
+  --mat-sys-surface-container-highest: var(--mj-bg-surface-elevated);
+  --mat-sys-inverse-surface: var(--mj-color-neutral-100);
+
+  --mat-sys-primary: var(--mj-brand-primary);
+  --mat-sys-on-primary: var(--mj-color-neutral-900);
+  --mat-sys-primary-container: var(--mj-color-brand-800);
+  --mat-sys-on-primary-container: var(--mj-color-brand-100);
+
+  --mat-sys-secondary: var(--mj-brand-accent);
+  --mat-sys-on-secondary: var(--mj-color-neutral-900);
+  --mat-sys-secondary-container: var(--mj-color-accent-800);
+  --mat-sys-on-secondary-container: var(--mj-color-accent-100);
+
+  --mat-sys-tertiary: var(--mj-brand-tertiary);
+  --mat-sys-on-tertiary: var(--mj-color-neutral-900);
+  --mat-sys-tertiary-container: var(--mj-color-tertiary-800);
+  --mat-sys-on-tertiary-container: var(--mj-color-tertiary-100);
+
+  --mat-sys-error: var(--mj-color-error-500);
+  --mat-sys-on-error: var(--mj-color-neutral-900);
+  --mat-sys-error-container: var(--mj-status-error-bg);
+  --mat-sys-on-error-container: var(--mj-status-error-text);
+
+  --mat-sys-on-surface: var(--mj-text-primary);
+  --mat-sys-on-surface-variant: var(--mj-text-secondary);
+  --mat-sys-inverse-on-surface: var(--mj-color-neutral-900);
+
+  --mat-sys-outline: var(--mj-border-default);
+  --mat-sys-outline-variant: var(--mj-border-subtle);
+  --mat-sys-shadow: rgba(0, 0, 0, 0.4);
+  --mat-sys-scrim: rgba(0, 0, 0, 0.6);
+
+  /* Form Field dark mode */
+  --mdc-outlined-text-field-outline-color: var(--mj-border-default);
+  --mdc-outlined-text-field-hover-outline-color: var(--mj-border-strong);
+  --mdc-outlined-text-field-focus-outline-color: var(--mj-border-focus);
+  --mdc-outlined-text-field-label-text-color: var(--mj-text-secondary);
+  --mdc-outlined-text-field-input-text-color: var(--mj-text-primary);
+
+  --mdc-filled-text-field-container-color: var(--mj-bg-surface-sunken);
+  --mdc-filled-text-field-label-text-color: var(--mj-text-secondary);
+  --mdc-filled-text-field-input-text-color: var(--mj-text-primary);
+
+  /* Snack Bar dark mode (inverted container) */
+  --mdc-snackbar-container-color: var(--mj-color-neutral-200);
+  --mdc-snackbar-supporting-text-color: var(--mj-color-neutral-900);
+  --mat-snack-bar-button-color: var(--mj-color-brand-600);
+
+  /* Tooltip dark mode (inverted container) */
+  --mdc-plain-tooltip-container-color: var(--mj-color-neutral-200);
+  --mdc-plain-tooltip-supporting-text-color: var(--mj-color-neutral-900);
+}

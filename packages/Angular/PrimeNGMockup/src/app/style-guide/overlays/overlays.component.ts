@@ -31,7 +31,7 @@ import { ConfirmationService } from 'primeng/api';
             <p class="section-desc">Modal dialog with header, content, and footer actions. Uses MJ surface and shadow tokens for elevation.</p>
             <p class="token-mapping">Background: --mj-bg-surface-elevated | Shadow: --mj-shadow-lg | Header border: --mj-border-default</p>
 
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Open Dialog" icon="pi pi-external-link" class="p-button-primary" (click)="ShowDialog = true"></button>
             </div>
 
@@ -48,7 +48,7 @@ import { ConfirmationService } from 'primeng/api';
                     for the bottom border. The backdrop uses a semi-transparent overlay.
                 </p>
                 <ng-template pTemplate="footer">
-                    <div class="dialog-footer">
+                    <div class="mj-grid mj-gap-2 dialog-footer">
                         <button pButton label="Confirm" icon="pi pi-check" class="p-button-primary" (click)="ShowDialog = false"></button>
                         <button pButton label="Cancel" class="p-button-text" (click)="ShowDialog = false"></button>
                     </div>
@@ -62,7 +62,7 @@ import { ConfirmationService } from 'primeng/api';
             <p class="section-desc">Declarative confirmation dialog driven by the ConfirmationService. Ideal for delete/destructive actions.</p>
             <p class="token-mapping">Accept button: --mj-status-error-* | Reject button: --mj-text-secondary</p>
 
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Delete Record" icon="pi pi-trash" class="p-button-danger" (click)="ConfirmDelete($event)"></button>
                 <button pButton label="Save Changes" icon="pi pi-save" class="p-button-primary" (click)="ConfirmSave($event)"></button>
             </div>
@@ -82,7 +82,7 @@ import { ConfirmationService } from 'primeng/api';
             <h2>ConfirmPopup</h2>
             <p class="section-desc">Lightweight confirmation popup that appears inline near the trigger element instead of a centered modal.</p>
 
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Archive Item" icon="pi pi-inbox" class="p-button-warning" (click)="ConfirmPopup($event)"></button>
             </div>
 
@@ -102,7 +102,7 @@ import { ConfirmationService } from 'primeng/api';
             <p class="section-desc">Floating panel that appears on click, useful for contextual information, quick actions, or preview cards.</p>
             <p class="token-mapping">Background: --mj-bg-surface-elevated | Shadow: --mj-shadow-md | Border: --mj-border-default</p>
 
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Show Details" icon="pi pi-info-circle" class="p-button-outlined" (click)="op.toggle($event)"></button>
                 <button pButton label="Quick Actions" icon="pi pi-bolt" class="p-button-secondary" (click)="opActions.toggle($event)"></button>
             </div>
@@ -110,19 +110,19 @@ import { ConfirmationService } from 'primeng/api';
             <p-overlayPanel #op>
                 <div class="overlay-content">
                     <h4>Record Details</h4>
-                    <div class="overlay-detail-row">
+                    <div class="mj-grid mj-flex-nowrap mj-justify-between mj-align-center overlay-detail-row">
                         <span class="overlay-label">Entity:</span>
                         <span class="overlay-value">AI Prompts</span>
                     </div>
-                    <div class="overlay-detail-row">
+                    <div class="mj-grid mj-flex-nowrap mj-justify-between mj-align-center overlay-detail-row">
                         <span class="overlay-label">Status:</span>
                         <span class="overlay-value status-active">Active</span>
                     </div>
-                    <div class="overlay-detail-row">
+                    <div class="mj-grid mj-flex-nowrap mj-justify-between mj-align-center overlay-detail-row">
                         <span class="overlay-label">Last Modified:</span>
                         <span class="overlay-value">Feb 4, 2026</span>
                     </div>
-                    <div class="overlay-detail-row">
+                    <div class="mj-grid mj-flex-nowrap mj-justify-between mj-align-center overlay-detail-row">
                         <span class="overlay-label">Owner:</span>
                         <span class="overlay-value">Admin User</span>
                     </div>
@@ -130,7 +130,7 @@ import { ConfirmationService } from 'primeng/api';
             </p-overlayPanel>
 
             <p-overlayPanel #opActions>
-                <div class="overlay-actions">
+                <div class="mj-grid mj-flex-column overlay-actions">
                     <button pButton label="Edit" icon="pi pi-pencil" class="p-button-text p-button-sm" (click)="opActions.hide()"></button>
                     <button pButton label="Duplicate" icon="pi pi-copy" class="p-button-text p-button-sm" (click)="opActions.hide()"></button>
                     <button pButton label="Export" icon="pi pi-download" class="p-button-text p-button-sm" (click)="opActions.hide()"></button>
@@ -145,33 +145,33 @@ import { ConfirmationService } from 'primeng/api';
             <p class="section-desc">Off-canvas panel that slides in from any edge. Commonly used for navigation, filters, or detail views.</p>
             <p class="token-mapping">Background: --mj-bg-surface | Border: --mj-border-default | Overlay: semi-transparent backdrop</p>
 
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Left Sidebar" icon="pi pi-arrow-right" class="p-button-primary" (click)="ShowSidebarLeft = true"></button>
                 <button pButton label="Right Sidebar" icon="pi pi-arrow-left" class="p-button-secondary" (click)="ShowSidebarRight = true"></button>
             </div>
 
             <p-sidebar [(visible)]="ShowSidebarLeft" [modal]="true" header="Navigation">
-                <div class="sidebar-content">
+                <div class="mj-grid mj-flex-column mj-gap-4 sidebar-content">
                     <p class="sidebar-text">This sidebar slides in from the left. It uses <code>--mj-bg-surface</code> for the background and
                     <code>--mj-border-default</code> for the edge border.</p>
-                    <div class="sidebar-nav-list">
-                        <div class="sidebar-nav-item">
+                    <div class="mj-grid mj-flex-column mj-gap-1 sidebar-nav-list">
+                        <div class="mj-grid mj-flex-nowrap mj-gap-3 mj-align-center sidebar-nav-item">
                             <i class="pi pi-home"></i>
                             <span>Dashboard</span>
                         </div>
-                        <div class="sidebar-nav-item">
+                        <div class="mj-grid mj-flex-nowrap mj-gap-3 mj-align-center sidebar-nav-item">
                             <i class="pi pi-users"></i>
                             <span>Users</span>
                         </div>
-                        <div class="sidebar-nav-item">
+                        <div class="mj-grid mj-flex-nowrap mj-gap-3 mj-align-center sidebar-nav-item">
                             <i class="pi pi-cog"></i>
                             <span>Settings</span>
                         </div>
-                        <div class="sidebar-nav-item">
+                        <div class="mj-grid mj-flex-nowrap mj-gap-3 mj-align-center sidebar-nav-item">
                             <i class="pi pi-chart-bar"></i>
                             <span>Analytics</span>
                         </div>
-                        <div class="sidebar-nav-item">
+                        <div class="mj-grid mj-flex-nowrap mj-gap-3 mj-align-center sidebar-nav-item">
                             <i class="pi pi-question-circle"></i>
                             <span>Help &amp; Support</span>
                         </div>
@@ -180,28 +180,28 @@ import { ConfirmationService } from 'primeng/api';
             </p-sidebar>
 
             <p-sidebar [(visible)]="ShowSidebarRight" position="right" [modal]="true" header="Record Details">
-                <div class="sidebar-content">
+                <div class="mj-grid mj-flex-column mj-gap-4 sidebar-content">
                     <p class="sidebar-text">Right-positioned sidebar for detail views and contextual information.</p>
                     <div class="sidebar-detail-card">
                         <h4>AI Prompt #1247</h4>
-                        <div class="sidebar-detail-row">
+                        <div class="mj-grid mj-flex-nowrap mj-justify-between mj-align-center sidebar-detail-row">
                             <span class="sidebar-detail-label">Name</span>
                             <span class="sidebar-detail-value">Summarize Content</span>
                         </div>
-                        <div class="sidebar-detail-row">
+                        <div class="mj-grid mj-flex-nowrap mj-justify-between mj-align-center sidebar-detail-row">
                             <span class="sidebar-detail-label">Category</span>
                             <span class="sidebar-detail-value">Text Processing</span>
                         </div>
-                        <div class="sidebar-detail-row">
+                        <div class="mj-grid mj-flex-nowrap mj-justify-between mj-align-center sidebar-detail-row">
                             <span class="sidebar-detail-label">Status</span>
                             <span class="sidebar-detail-value status-active">Active</span>
                         </div>
-                        <div class="sidebar-detail-row">
+                        <div class="mj-grid mj-flex-nowrap mj-justify-between mj-align-center sidebar-detail-row">
                             <span class="sidebar-detail-label">Created</span>
                             <span class="sidebar-detail-value">Jan 15, 2026</span>
                         </div>
                     </div>
-                    <div class="sidebar-actions">
+                    <div class="mj-grid mj-gap-2 sidebar-actions">
                         <button pButton label="Edit Record" icon="pi pi-pencil" class="p-button-primary p-button-sm"></button>
                         <button pButton label="Close" class="p-button-text p-button-sm" (click)="ShowSidebarRight = false"></button>
                     </div>
@@ -216,7 +216,7 @@ import { ConfirmationService } from 'primeng/api';
             <p class="token-mapping">Background: --mj-text-primary (inverted) | Text: --mj-bg-surface | Radius: --mj-radius-md</p>
 
             <h3 class="subsection-title">Positions</h3>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Top" class="p-button-outlined" pTooltip="Tooltip on top" tooltipPosition="top"></button>
                 <button pButton label="Right" class="p-button-outlined" pTooltip="Tooltip on right" tooltipPosition="right"></button>
                 <button pButton label="Bottom" class="p-button-outlined" pTooltip="Tooltip on bottom" tooltipPosition="bottom"></button>
@@ -224,7 +224,7 @@ import { ConfirmationService } from 'primeng/api';
             </div>
 
             <h3 class="subsection-title">On Various Elements</h3>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <span class="tooltip-badge" pTooltip="3 unread notifications" tooltipPosition="top">
                     <i class="pi pi-bell"></i>
                     Notifications
@@ -240,7 +240,7 @@ import { ConfirmationService } from 'primeng/api';
             </div>
 
             <h3 class="subsection-title">Icon Buttons with Tooltips</h3>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton icon="pi pi-pencil" class="p-button-rounded p-button-text" pTooltip="Edit" tooltipPosition="top"></button>
                 <button pButton icon="pi pi-trash" class="p-button-rounded p-button-text p-button-danger" pTooltip="Delete" tooltipPosition="top"></button>
                 <button pButton icon="pi pi-copy" class="p-button-rounded p-button-text" pTooltip="Duplicate" tooltipPosition="top"></button>
@@ -288,10 +288,6 @@ import { ConfirmationService } from 'primeng/api';
     }
 
     .component-row {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--mj-space-3);
         margin-bottom: var(--mj-space-4);
     }
 
@@ -304,8 +300,6 @@ import { ConfirmationService } from 'primeng/api';
     }
 
     .dialog-footer {
-        display: flex;
-        gap: var(--mj-space-2);
     }
 
     /* Result message */
@@ -339,9 +333,6 @@ import { ConfirmationService } from 'primeng/api';
     }
 
     .overlay-detail-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         padding: var(--mj-space-1-5) 0;
         border-bottom: 1px solid var(--mj-border-subtle);
 
@@ -366,8 +357,6 @@ import { ConfirmationService } from 'primeng/api';
     }
 
     .overlay-actions {
-        display: flex;
-        flex-direction: column;
         min-width: 160px;
 
         button {
@@ -377,9 +366,6 @@ import { ConfirmationService } from 'primeng/api';
 
     /* Sidebar content */
     .sidebar-content {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-4);
     }
 
     .sidebar-text {
@@ -390,15 +376,9 @@ import { ConfirmationService } from 'primeng/api';
     }
 
     .sidebar-nav-list {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-1);
     }
 
     .sidebar-nav-item {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-3);
         padding: var(--mj-space-2-5) var(--mj-space-3);
         border-radius: var(--mj-radius-md);
         cursor: pointer;
@@ -433,9 +413,6 @@ import { ConfirmationService } from 'primeng/api';
     }
 
     .sidebar-detail-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         padding: var(--mj-space-2) 0;
         border-bottom: 1px solid var(--mj-border-subtle);
 
@@ -456,8 +433,6 @@ import { ConfirmationService } from 'primeng/api';
     }
 
     .sidebar-actions {
-        display: flex;
-        gap: var(--mj-space-2);
         padding-top: var(--mj-space-2);
     }
 

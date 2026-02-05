@@ -67,16 +67,16 @@ import { ButtonModule } from 'primeng/button';
                         <h3 class="subsection-title">Project Overview</h3>
                         <p>This project is currently in the development phase with 12 active contributors.
                         The sprint deadline is set for February 15, 2026. All milestones are on track.</p>
-                        <div class="stat-row">
-                            <div class="stat-item">
+                        <div class="stat-row mj-grid mj-gap-6">
+                            <div class="mj-grid mj-flex-column mj-gap-1">
                                 <span class="stat-value">87%</span>
                                 <span class="stat-label">Complete</span>
                             </div>
-                            <div class="stat-item">
+                            <div class="mj-grid mj-flex-column mj-gap-1">
                                 <span class="stat-value">24</span>
                                 <span class="stat-label">Open Tasks</span>
                             </div>
-                            <div class="stat-item">
+                            <div class="mj-grid mj-flex-column mj-gap-1">
                                 <span class="stat-value">3</span>
                                 <span class="stat-label">Blockers</span>
                             </div>
@@ -118,20 +118,20 @@ import { ButtonModule } from 'primeng/button';
                 <div class="fieldset-content">
                     <p>Configure the connection parameters for the external data source.
                     These settings are used when synchronizing records.</p>
-                    <div class="fieldset-grid">
-                        <div class="fieldset-item">
+                    <div class="mj-row mj-row-cols-sm-2 mj-row-cols-md-3 mj-row-cols-lg-4 mj-gap-4">
+                        <div class="mj-grid mj-flex-column mj-gap-1">
                             <span class="fieldset-label">Host</span>
                             <span class="fieldset-value">db.memberjunction.com</span>
                         </div>
-                        <div class="fieldset-item">
+                        <div class="mj-grid mj-flex-column mj-gap-1">
                             <span class="fieldset-label">Port</span>
                             <span class="fieldset-value">5432</span>
                         </div>
-                        <div class="fieldset-item">
+                        <div class="mj-grid mj-flex-column mj-gap-1">
                             <span class="fieldset-label">Database</span>
                             <span class="fieldset-value">mj_production</span>
                         </div>
-                        <div class="fieldset-item">
+                        <div class="mj-grid mj-flex-column mj-gap-1">
                             <span class="fieldset-label">SSL</span>
                             <span class="fieldset-value">Enabled</span>
                         </div>
@@ -250,7 +250,7 @@ import { ButtonModule } from 'primeng/button';
                 <p>Divider with right-aligned icon.</p>
 
                 <h3 class="subsection-title">Vertical Divider</h3>
-                <div class="vertical-divider-demo">
+                <div class="vertical-divider-demo mj-grid mj-flex-nowrap mj-gap-5 mj-align-center mj-justify-center">
                     <span>Left Content</span>
                     <p-divider layout="vertical"></p-divider>
                     <span>Center Content</span>
@@ -278,7 +278,7 @@ import { ButtonModule } from 'primeng/button';
                                 <li>PostgreSQL - Analytics warehouse</li>
                                 <li>CSV Upload - Manual data import</li>
                             </ul>
-                            <div class="stepper-actions">
+                            <div class="stepper-actions mj-grid mj-gap-3">
                                 <button pButton label="Next" icon="pi pi-arrow-right" iconPos="right"
                                     class="p-button-primary p-button-sm" (click)="nextCallback.emit()"></button>
                             </div>
@@ -292,23 +292,23 @@ import { ButtonModule } from 'primeng/button';
                             <p>Map source fields to destination entity fields. The system will attempt
                             to auto-match fields based on name similarity.</p>
                             <div class="mapping-preview">
-                                <div class="mapping-row">
+                                <div class="mapping-row mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                                     <span class="mapping-source">source.first_name</span>
                                     <i class="pi pi-arrow-right mapping-arrow"></i>
                                     <span class="mapping-target">FirstName</span>
                                 </div>
-                                <div class="mapping-row">
+                                <div class="mapping-row mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                                     <span class="mapping-source">source.last_name</span>
                                     <i class="pi pi-arrow-right mapping-arrow"></i>
                                     <span class="mapping-target">LastName</span>
                                 </div>
-                                <div class="mapping-row">
+                                <div class="mapping-row mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                                     <span class="mapping-source">source.email</span>
                                     <i class="pi pi-arrow-right mapping-arrow"></i>
                                     <span class="mapping-target">Email</span>
                                 </div>
                             </div>
-                            <div class="stepper-actions">
+                            <div class="stepper-actions mj-grid mj-gap-3">
                                 <button pButton label="Back" icon="pi pi-arrow-left"
                                     class="p-button-secondary p-button-sm" (click)="prevCallback.emit()"></button>
                                 <button pButton label="Next" icon="pi pi-arrow-right" iconPos="right"
@@ -324,20 +324,20 @@ import { ButtonModule } from 'primeng/button';
                             <p>Review the import configuration below before proceeding. Once started,
                             the import process cannot be cancelled.</p>
                             <div class="review-summary">
-                                <div class="review-item">
+                                <div class="review-item mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                                     <span class="review-label">Source:</span>
                                     <span class="review-value">SQL Server - Production</span>
                                 </div>
-                                <div class="review-item">
+                                <div class="review-item mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                                     <span class="review-label">Records:</span>
                                     <span class="review-value">2,847 rows</span>
                                 </div>
-                                <div class="review-item">
+                                <div class="review-item mj-grid mj-flex-nowrap mj-gap-3 mj-align-center">
                                     <span class="review-label">Mapped Fields:</span>
                                     <span class="review-value">3 of 3</span>
                                 </div>
                             </div>
-                            <div class="stepper-actions">
+                            <div class="stepper-actions mj-grid mj-gap-3">
                                 <button pButton label="Back" icon="pi pi-arrow-left"
                                     class="p-button-secondary p-button-sm" (click)="prevCallback.emit()"></button>
                                 <button pButton label="Start Import" icon="pi pi-check"
@@ -418,16 +418,7 @@ import { ButtonModule } from 'primeng/button';
     }
 
     .stat-row {
-        display: flex;
-        gap: var(--mj-space-6);
         margin-top: var(--mj-space-4);
-    }
-
-    .stat-item {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: var(--mj-space-1);
     }
 
     .stat-value {
@@ -451,18 +442,6 @@ import { ButtonModule } from 'primeng/button';
             line-height: var(--mj-leading-relaxed);
             margin: 0 0 var(--mj-space-4) 0;
         }
-    }
-
-    .fieldset-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: var(--mj-space-4);
-    }
-
-    .fieldset-item {
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-1);
     }
 
     .fieldset-label {
@@ -534,10 +513,6 @@ import { ButtonModule } from 'primeng/button';
     }
 
     .vertical-divider-demo {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: var(--mj-space-4);
         padding: var(--mj-space-4) 0;
         height: 60px;
 
@@ -568,8 +543,6 @@ import { ButtonModule } from 'primeng/button';
     }
 
     .stepper-actions {
-        display: flex;
-        gap: var(--mj-space-3);
         margin-top: var(--mj-space-5);
     }
 
@@ -582,9 +555,6 @@ import { ButtonModule } from 'primeng/button';
     }
 
     .mapping-row {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-3);
         padding: var(--mj-space-2) var(--mj-space-3);
 
         &:not(:last-child) {
@@ -620,9 +590,6 @@ import { ButtonModule } from 'primeng/button';
     }
 
     .review-item {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-3);
         padding: var(--mj-space-2) 0;
 
         &:not(:last-child) {

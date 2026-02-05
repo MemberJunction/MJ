@@ -75,7 +75,7 @@ interface MeterValue {
             <p class="token-mapping">Background: --mj-brand-primary | Text: --mj-brand-on-primary | Shape: circle &amp; square</p>
 
             <h3 class="subsection-title">Individual Avatars</h3>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <p-avatar label="MJ" shape="circle" size="large" [style]="{'background-color': 'var(--mj-brand-primary)', 'color': 'var(--mj-brand-on-primary)'}"></p-avatar>
                 <p-avatar label="AB" shape="circle" size="large" [style]="{'background-color': 'var(--mj-status-success)', 'color': 'var(--mj-brand-on-primary)'}"></p-avatar>
                 <p-avatar icon="pi pi-user" shape="circle" size="large" [style]="{'background-color': 'var(--mj-bg-surface-sunken)', 'color': 'var(--mj-text-secondary)'}"></p-avatar>
@@ -99,7 +99,7 @@ interface MeterValue {
             <p class="token-mapping">Background: --mj-bg-surface-sunken | Border: --mj-border-subtle | Text: --mj-text-primary</p>
 
             <h3 class="subsection-title">Standard Chips</h3>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <p-chip label="Angular"></p-chip>
                 <p-chip label="PrimeNG" icon="pi pi-prime"></p-chip>
                 <p-chip label="TypeScript" icon="pi pi-code"></p-chip>
@@ -107,7 +107,7 @@ interface MeterValue {
             </div>
 
             <h3 class="subsection-title">Removable Chips</h3>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 @for (chip of removableChips; track chip) {
                     <p-chip [label]="chip" [removable]="true" (onRemove)="OnChipRemove(chip)"></p-chip>
                 }
@@ -119,7 +119,7 @@ interface MeterValue {
             <h2>BlockUI</h2>
             <p class="section-desc">Blocks a target element with an overlay to prevent user interaction during operations.</p>
 
-            <div class="component-row" style="margin-bottom: var(--mj-space-3);">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row" style="margin-bottom: var(--mj-space-3);">
                 <button pButton [label]="BlockPanel ? 'Unblock' : 'Block'" [icon]="BlockPanel ? 'pi pi-unlock' : 'pi pi-lock'" (click)="BlockPanel = !BlockPanel" class="p-button-outlined"></button>
             </div>
 
@@ -154,9 +154,9 @@ interface MeterValue {
             <p class="token-mapping">Segments use custom colors | Track: --mj-bg-surface-sunken</p>
 
             <p-meterGroup [value]="meterValues" [max]="100"></p-meterGroup>
-            <div class="meter-legend">
+            <div class="mj-grid mj-gap-5 meter-legend">
                 @for (val of meterValues; track val.label) {
-                    <div class="meter-legend-item">
+                    <div class="mj-grid mj-flex-nowrap mj-gap-2 mj-align-center meter-legend-item">
                         <span class="meter-legend-color" [style.background-color]="val.color"></span>
                         <span class="meter-legend-label">{{ val.label }}</span>
                         <span class="meter-legend-value">{{ val.value }}%</span>
@@ -184,7 +184,7 @@ interface MeterValue {
             <p class="section-desc">An animated circular spinner indicating loading or processing state.</p>
             <p class="token-mapping">Stroke: --mj-brand-primary</p>
 
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <p-progressSpinner [style]="{width: '50px', height: '50px'}" strokeWidth="4"></p-progressSpinner>
                 <p-progressSpinner [style]="{width: '30px', height: '30px'}" strokeWidth="6" animationDuration="1s"></p-progressSpinner>
             </div>
@@ -196,19 +196,19 @@ interface MeterValue {
             <p class="section-desc">Skeleton placeholders provide a loading preview of content before data is available.</p>
             <p class="token-mapping">Background: --mj-bg-surface-sunken | Animation: shimmer</p>
 
-            <div class="skeleton-demo">
-                <div class="skeleton-card">
+            <div class="mj-grid mj-gap-5">
+                <div class="mj-col-md-6 skeleton-card mj-grid mj-flex-nowrap mj-gap-4">
                     <p-skeleton shape="circle" size="4rem"></p-skeleton>
-                    <div class="skeleton-lines">
+                    <div class="mj-grid mj-flex-column mj-gap-2 skeleton-lines">
                         <p-skeleton width="70%" height="1rem"></p-skeleton>
                         <p-skeleton width="50%" height="0.75rem"></p-skeleton>
                         <p-skeleton width="90%" height="0.75rem"></p-skeleton>
                     </div>
                 </div>
-                <div class="skeleton-block">
+                <div class="mj-col-md-6 skeleton-block">
                     <p-skeleton width="100%" height="8rem" borderRadius="var(--mj-radius-md)"></p-skeleton>
                 </div>
-                <div class="skeleton-list">
+                <div class="mj-col-12 mj-grid mj-flex-column mj-gap-2">
                     <p-skeleton width="100%" height="2rem"></p-skeleton>
                     <p-skeleton width="100%" height="2rem"></p-skeleton>
                     <p-skeleton width="100%" height="2rem"></p-skeleton>
@@ -281,7 +281,7 @@ interface MeterValue {
             <p class="token-mapping">Default: --mj-brand-primary | Severities: --mj-status-*</p>
 
             <h3 class="subsection-title">Standalone Badges</h3>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <p-badge value="4"></p-badge>
                 <p-badge value="8" severity="success"></p-badge>
                 <p-badge value="2" severity="warning"></p-badge>
@@ -290,7 +290,7 @@ interface MeterValue {
             </div>
 
             <h3 class="subsection-title">Badge Directive on Buttons</h3>
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Notifications" icon="pi pi-bell" pBadge value="5" class="p-button-outlined"></button>
                 <button pButton label="Messages" icon="pi pi-envelope" pBadge value="3" badgeSeverity="danger" class="p-button-outlined"></button>
                 <i class="pi pi-bell" style="font-size: 1.5rem; color: var(--mj-text-primary);" pBadge value="2"></i>
@@ -302,7 +302,7 @@ interface MeterValue {
             <h2>Ripple</h2>
             <p class="section-desc">The pRipple directive adds a Material Design-style ripple effect on click to any element.</p>
 
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <div class="ripple-box" pRipple>
                     Click me for ripple
                 </div>
@@ -317,7 +317,7 @@ interface MeterValue {
             <h2>FocusTrap</h2>
             <p class="section-desc">Traps keyboard Tab focus within a container. Useful for modal-like sections. Try pressing Tab inside the box below.</p>
 
-            <div class="focustrap-demo" pFocusTrap>
+            <div class="mj-grid mj-gap-3 mj-align-center focustrap-demo" pFocusTrap>
                 <label class="focustrap-label">Focus is trapped in this container:</label>
                 <input type="text" pInputText placeholder="First field" class="focustrap-input" />
                 <input type="text" pInputText placeholder="Second field" class="focustrap-input" />
@@ -330,7 +330,7 @@ interface MeterValue {
             <h2>AutoFocus</h2>
             <p class="section-desc">The pAutoFocus directive automatically focuses an element when it appears in the DOM.</p>
 
-            <div class="component-row">
+            <div class="mj-grid mj-gap-3 mj-align-center component-row">
                 <button pButton label="Toggle Input" class="p-button-outlined p-button-sm" (click)="ShowAutoFocusInput = !ShowAutoFocusInput"></button>
             </div>
             @if (ShowAutoFocusInput) {
@@ -345,11 +345,11 @@ interface MeterValue {
             <h2>Drag &amp; Drop</h2>
             <p class="section-desc">Drag items from the Available list and drop them into the Selected list using PrimeNG pDraggable and pDroppable directives.</p>
 
-            <div class="dragdrop-container">
-                <div class="dragdrop-list">
+            <div class="mj-grid mj-gap-5 dragdrop-container">
+                <div class="mj-col dragdrop-list">
                     <h4 class="dragdrop-header">Available</h4>
                     @for (item of AvailableItems; track item) {
-                        <div class="dragdrop-item" pDraggable="items" (onDragStart)="OnDragStart(item)" (onDragEnd)="OnDragEnd()">
+                        <div class="mj-grid mj-flex-nowrap mj-gap-3 mj-align-center dragdrop-item" pDraggable="items" (onDragStart)="OnDragStart(item)" (onDragEnd)="OnDragEnd()">
                             <i class="pi pi-bars drag-handle"></i>
                             <span>{{ item }}</span>
                         </div>
@@ -363,10 +363,10 @@ interface MeterValue {
                     <i class="pi pi-arrow-right"></i>
                 </div>
 
-                <div class="dragdrop-list" pDroppable="items" (onDrop)="OnDrop()">
+                <div class="mj-col dragdrop-list" pDroppable="items" (onDrop)="OnDrop()">
                     <h4 class="dragdrop-header">Selected</h4>
                     @for (item of SelectedItems; track item) {
-                        <div class="dragdrop-item dragdrop-item-selected">
+                        <div class="mj-grid mj-flex-nowrap mj-gap-3 mj-align-center dragdrop-item dragdrop-item-selected">
                             <i class="pi pi-check"></i>
                             <span>{{ item }}</span>
                         </div>
@@ -417,10 +417,6 @@ interface MeterValue {
     }
 
     .component-row {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--mj-space-3);
         margin-bottom: var(--mj-space-4);
     }
 
@@ -440,16 +436,10 @@ interface MeterValue {
 
     /* MeterGroup Legend */
     .meter-legend {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--mj-space-5);
         margin-top: var(--mj-space-4);
     }
 
     .meter-legend-item {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-2);
     }
 
     .meter-legend-color {
@@ -471,15 +461,7 @@ interface MeterValue {
     }
 
     /* Skeleton Demo */
-    .skeleton-demo {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: var(--mj-space-5);
-    }
-
     .skeleton-card {
-        display: flex;
-        gap: var(--mj-space-4);
         padding: var(--mj-space-4);
         background: var(--mj-bg-surface-elevated);
         border-radius: var(--mj-radius-lg);
@@ -487,22 +469,10 @@ interface MeterValue {
     }
 
     .skeleton-lines {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-2);
         justify-content: center;
     }
 
     .skeleton-block {
-        grid-column: span 1;
-    }
-
-    .skeleton-list {
-        grid-column: span 2;
-        display: flex;
-        flex-direction: column;
-        gap: var(--mj-space-2);
     }
 
     /* ScrollTop Demo */
@@ -622,10 +592,6 @@ interface MeterValue {
 
     /* FocusTrap */
     .focustrap-demo {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: var(--mj-space-3);
         padding: var(--mj-space-5);
         background: var(--mj-bg-surface-elevated);
         border: 2px dashed var(--mj-border-default);
@@ -656,13 +622,9 @@ interface MeterValue {
 
     /* DragDrop */
     .dragdrop-container {
-        display: flex;
-        gap: var(--mj-space-5);
-        align-items: flex-start;
     }
 
     .dragdrop-list {
-        flex: 1;
         background: var(--mj-bg-surface-elevated);
         border: 1px solid var(--mj-border-default);
         border-radius: var(--mj-radius-lg);
@@ -682,9 +644,6 @@ interface MeterValue {
     }
 
     .dragdrop-item {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-3);
         padding: var(--mj-space-2-5) var(--mj-space-3);
         margin-bottom: var(--mj-space-2);
         background: var(--mj-bg-surface);
