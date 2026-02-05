@@ -643,72 +643,560 @@ When MJ is not connected, the `.mcp.json` can optionally wire to other common as
 
 ---
 
-## Implementation Roadmap
+## Implementation Checklist
 
-### Phase 1: Association Plugin (Standalone)
+This section provides a detailed, file-by-file checklist for building all three plugins. A new Claude session can pick up this document and execute systematically.
 
-**Goal:** Ship a free, high-quality association plugin that works without MJ.
-**Effort:** Content authoring only — markdown skills and command files.
+---
 
-| Step | Description |
-|------|-------------|
-| 1a | Create `association/` directory in `MemberJunction/co-work-plugins` repo |
-| 1b | Write all 12 skills files with deep association domain knowledge |
-| 1c | Write all 16 command files with structured workflows |
-| 1d | Create `plugin.json` manifest and `settings.local.json.example` |
-| 1e | Write README with installation instructions and customization guide |
-| 1f | Test with real association scenarios (draft newsletter, plan event, etc.) |
-| 1g | Submit to Anthropic plugin marketplace |
+### Phase 1: Repository Setup
 
-### Phase 2: MJ Admin Plugin
+**Goal:** Initialize the repo structure with all directories and boilerplate files.
 
-**Goal:** MJ developers can manage their instance through Cowork.
-**Effort:** Markdown content + validate against existing MCP tools.
+#### 1.1 Root Level Files
 
-| Step | Description |
-|------|-------------|
-| 2a | Write skills files distilled from CLAUDE.md and guides |
-| 2b | Write command files that map to existing MCP entity/action/agent tools |
-| 2c | Test each command against a live MJ MCP server |
-| 2d | Document required MCP server configuration |
+- [ ] **`README.md`** — Repo overview explaining what Cowork plugins are, listing all three plugins, installation instructions, and contribution guide
+- [ ] **`LICENSE`** — Apache 2.0 (matching Anthropic's knowledge-work-plugins)
+- [ ] **`.gitignore`** — Standard ignores (`.DS_Store`, `node_modules/`, `*.local.json`)
 
-### Phase 3: Agent Builder Plugin
+#### 1.2 Create Directory Structure
 
-**Goal:** Non-developers can create and manage MJ agents through Cowork.
-**Effort:** Markdown content + potential MCP server enhancements.
+```bash
+mkdir -p association/.claude-plugin association/commands association/skills
+mkdir -p mj-admin/.claude-plugin mj-admin/commands mj-admin/skills
+mkdir -p mj-agent-builder/.claude-plugin mj-agent-builder/commands mj-agent-builder/skills
+```
 
-| Step | Description |
-|------|-------------|
-| 3a | Write skills covering agent architecture and prompt engineering |
-| 3b | Write commands for the create → test → iterate workflow |
-| 3c | Evaluate if existing MCP tools suffice or need enhancements |
-| 3d | If needed: add `List_Agent_Types`, `Get_Agent_Prompts`, `Update_Agent_Prompt` to MCP server |
-| 3e | Test the full agent creation and tuning workflow end-to-end |
+---
 
-### Phase 4: Association Plugin + MJ Integration
+### Phase 2: Association Plugin (Standalone)
 
-**Goal:** Association plugin detects MJ and unlocks extended capabilities.
-**Effort:** Additional skills/commands + potential MCP server tools for association-specific entities.
+**Goal:** Complete, standalone plugin for association management — no MJ required.
+**Priority:** HIGH — This is the lead-gen / thought-leadership plugin.
 
-| Step | Description |
-|------|-------------|
-| 4a | Add MJ-aware skills that describe association entities (Members, Events, Committees, etc.) |
-| 4b | Add MJ-specific commands: `/assoc:member-lookup`, `/assoc:engagement-report`, etc. |
-| 4c | Build association-focused MJ Agents (Member Concierge, Engagement Analyst, etc.) |
-| 4d | Create metadata for association-specific entities if not already present in MJ |
-| 4e | Test full MJ-integrated workflow: Cowork → MCP → MJ → member data → back to user |
+#### 2.1 Manifest and Config Files
 
-### Phase 5: Enterprise Plugin Catalog
+- [ ] **`association/.claude-plugin/plugin.json`**
+  ```json
+  {
+    "name": "association",
+    "displayName": "Association Management",
+    "description": "AI-powered assistant for trade associations, professional societies, and membership organizations. Helps with board prep, newsletters, events, advocacy, membership retention, and more.",
+    "version": "1.0.0",
+    "author": "MemberJunction",
+    "homepage": "https://github.com/MemberJunction/co-work-plugins",
+    "keywords": ["association", "membership", "nonprofit", "trade association", "professional society"],
+    "commands": "commands/",
+    "skills": "skills/"
+  }
+  ```
 
-**Goal:** MJ customers can have org-specific plugins pre-installed for their staff.
-**Timing:** After Anthropic ships org-wide plugin catalog support.
+- [ ] **`association/.mcp.json`** — Empty by default (standalone), with comments showing MJ integration
+  ```json
+  {
+    "mcpServers": {}
+  }
+  ```
 
-| Step | Description |
-|------|-------------|
-| 5a | Build tooling for MJ admins to generate org-specific plugin configs |
-| 5b | Auto-generate settings.local.json from MJ instance metadata |
-| 5c | Custom skills populated from org's actual entity model and business rules |
-| 5d | Distribution via Anthropic's enterprise plugin catalog |
+- [ ] **`association/settings.local.json.example`** — Template for org-specific config (copy the Settings Template from this doc)
+
+- [ ] **`association/README.md`** — Plugin-specific README with:
+  - What this plugin does
+  - Available commands (table with `/assoc:*` commands)
+  - Available skills (list with descriptions)
+  - Customization instructions
+  - Optional MJ integration section
+
+#### 2.2 Skills Files (12 files)
+
+Each skill file should be 200-500 lines of markdown encoding deep domain knowledge. Use headers, bullet points, and examples liberally.
+
+- [ ] **`association/skills/association-fundamentals.md`**
+  - 501(c)(3) vs (c)(6) vs (c)(4) distinctions and implications
+  - Membership models (individual, organizational, tiered, hybrid)
+  - Revenue mix benchmarks (ASAE data)
+  - Org structure patterns (board → committees → staff → chapters)
+  - Fiscal year cycles and seasonal rhythms
+  - Common association software landscape (iMIS, Nimble, Aptify, etc.)
+
+- [ ] **`association/skills/membership-lifecycle.md`**
+  - Recruitment: value propositions, segmentation, referral programs
+  - Onboarding: first 90 days, welcome series, mentor matching
+  - Engagement: scoring models, personalization, escalation triggers
+  - Renewal: multi-touch campaigns, timing, lapsed segmentation
+  - Retention: early warning indicators, ROI calculators, exit surveys
+
+- [ ] **`association/skills/event-management.md`**
+  - Timeline templates (12-month, 6-month, 90-day)
+  - Budget frameworks with typical allocations
+  - Speaker management and content curation
+  - Sponsor/exhibitor tier structures
+  - Hybrid event considerations
+  - CE/CPE credit processes
+  - Post-event analysis frameworks
+
+- [ ] **`association/skills/governance-best-practices.md`**
+  - Robert's Rules essentials
+  - Board meeting agenda patterns (consent agenda)
+  - Board orientation materials
+  - Fiduciary duties (care, loyalty, obedience)
+  - Committee types and charter templates
+  - Succession planning
+  - Conflict of interest policies
+
+- [ ] **`association/skills/association-communications.md`**
+  - Newsletter frameworks and cadence
+  - Email fatigue management
+  - Social media for associations (LinkedIn-heavy)
+  - Press release templates
+  - Crisis communication playbooks
+  - Member segmentation strategies
+
+- [ ] **`association/skills/advocacy-campaigns.md`**
+  - Legislative tracking methodology
+  - Position paper structure
+  - Action alert templates
+  - Grassroots campaign design
+  - Lobby day planning
+  - Coalition building
+  - Regulatory comment drafting
+
+- [ ] **`association/skills/education-certification.md`**
+  - CE program design process
+  - Credit frameworks (CE, CPE, CEU, CME, CLE)
+  - Certification program development
+  - LMS evaluation criteria
+  - Micro-credentials and badges
+  - Mentorship program models
+
+- [ ] **`association/skills/revenue-diversification.md`**
+  - Sponsorship package design
+  - Grant writing for associations
+  - Affinity programs
+  - Content licensing
+  - Advertising rate cards
+  - Corporate partnership models
+
+- [ ] **`association/skills/chapter-management.md`**
+  - Chapter health metrics
+  - National-to-local communication
+  - Leader training programs
+  - Resource sharing models
+  - Financial reporting
+  - Virtual chapter models
+
+- [ ] **`association/skills/volunteer-engagement.md`**
+  - Recruitment and matching
+  - Role descriptions
+  - Recognition programs
+  - Pipeline development
+  - Burnout prevention
+  - Skills-based volunteering
+
+- [ ] **`association/skills/dei-inclusion.md`**
+  - Inclusive governance practices
+  - Accessible event planning
+  - Inclusive communications
+  - Scholarship programs
+  - Supplier diversity
+  - DEI metrics
+
+- [ ] **`association/skills/association-metrics.md`**
+  - Membership KPIs (retention, acquisition, LTV, engagement)
+  - Event KPIs (attendance, NPS, revenue per attendee)
+  - Financial KPIs (dues ratio, reserves, cost per member)
+  - Communication benchmarks
+  - ASAE benchmark references
+
+#### 2.3 Command Files (16 files)
+
+Each command file defines a slash command workflow. Use this structure:
+
+```markdown
+# /assoc:command-name
+
+Brief description of what this command does.
+
+## When to Use
+
+Describe the scenario when a user would invoke this command.
+
+## Inputs
+
+What information the command needs from the user (ask if not provided):
+- Input 1: description
+- Input 2: description
+
+## Workflow
+
+Step-by-step process Claude should follow:
+1. Step one
+2. Step two
+3. Step three
+
+## Output
+
+What the command produces:
+- Output item 1
+- Output item 2
+
+## Example
+
+Show an example interaction.
+```
+
+- [ ] **`association/commands/member-welcome.md`** — `/assoc:welcome`
+- [ ] **`association/commands/board-prep.md`** — `/assoc:board-prep`
+- [ ] **`association/commands/draft-newsletter.md`** — `/assoc:newsletter`
+- [ ] **`association/commands/event-plan.md`** — `/assoc:event-plan`
+- [ ] **`association/commands/advocacy-brief.md`** — `/assoc:advocacy`
+- [ ] **`association/commands/grant-proposal.md`** — `/assoc:grant`
+- [ ] **`association/commands/sponsor-pitch.md`** — `/assoc:sponsor`
+- [ ] **`association/commands/retention-campaign.md`** — `/assoc:retention`
+- [ ] **`association/commands/annual-report.md`** — `/assoc:annual-report`
+- [ ] **`association/commands/committee-charter.md`** — `/assoc:committee`
+- [ ] **`association/commands/bylaws-review.md`** — `/assoc:bylaws`
+- [ ] **`association/commands/strategic-plan.md`** — `/assoc:strategic-plan`
+- [ ] **`association/commands/ce-program.md`** — `/assoc:ce-program`
+- [ ] **`association/commands/member-survey.md`** — `/assoc:survey`
+- [ ] **`association/commands/rfp-response.md`** — `/assoc:rfp`
+- [ ] **`association/commands/crisis-comm.md`** — `/assoc:crisis`
+
+---
+
+### Phase 3: MJ Admin Plugin
+
+**Goal:** Plugin for MJ developers/admins to manage their instance through Cowork.
+**Dependency:** Requires MJ MCP Server running.
+
+#### 3.1 Manifest and Config Files
+
+- [ ] **`mj-admin/.claude-plugin/plugin.json`**
+  ```json
+  {
+    "name": "mj-admin",
+    "displayName": "MemberJunction Admin",
+    "description": "Developer and admin tools for MemberJunction. Query entities, scaffold migrations, manage metadata, and interact with the MJ platform through Cowork.",
+    "version": "1.0.0",
+    "author": "MemberJunction",
+    "homepage": "https://github.com/MemberJunction/co-work-plugins",
+    "keywords": ["memberjunction", "developer", "admin", "metadata", "entities"],
+    "commands": "commands/",
+    "skills": "skills/"
+  }
+  ```
+
+- [ ] **`mj-admin/.mcp.json`**
+  ```json
+  {
+    "mcpServers": {
+      "memberjunction": {
+        "url": "${MJ_MCP_SERVER_URL:-http://localhost:3100}",
+        "auth": {
+          "type": "api-key",
+          "key": "${MJ_API_KEY}"
+        }
+      }
+    }
+  }
+  ```
+
+- [ ] **`mj-admin/settings.local.json.example`**
+- [ ] **`mj-admin/README.md`**
+
+#### 3.2 Skills Files (8 files)
+
+Source content from MJ's `CLAUDE.md` and guides. Distill into Cowork-friendly format.
+
+- [ ] **`mj-admin/skills/entity-metadata-model.md`**
+  - How MJ's metadata system works
+  - Entities, fields, relationships, permissions
+  - Generated TypeScript classes
+  - BaseEntity patterns
+  - Entity naming conventions (including "MJ: " prefix rules)
+
+- [ ] **`mj-admin/skills/migration-patterns.md`**
+  - Migration file naming: `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql`
+  - Use `${flyway:defaultSchema}` placeholder
+  - Hardcoded UUIDs (not NEWID())
+  - Never include `__mj_CreatedAt`/`__mj_UpdatedAt` (CodeGen adds)
+  - Never create FK indexes (CodeGen adds)
+
+- [ ] **`mj-admin/skills/action-design.md`**
+  - Actions are metadata-driven boundaries
+  - When to use Actions (code → workflow) vs direct imports (code → code)
+  - BaseAction patterns
+  - Parameter extraction and validation
+
+- [ ] **`mj-admin/skills/codegen-workflow.md`**
+  - What CodeGen generates (entity classes, SQL objects, Angular forms)
+  - When CodeGen runs
+  - Generated file locations
+  - Never edit generated files
+
+- [ ] **`mj-admin/skills/naming-conventions.md`**
+  - PascalCase for public members
+  - camelCase for private/protected
+  - Entity naming patterns
+  - Package organization
+
+- [ ] **`mj-admin/skills/runview-patterns.md`**
+  - `entity_object` vs `simple` ResultType
+  - When `Fields` is ignored
+  - Batching with `RunViews`
+  - Always check `result.Success`
+
+- [ ] **`mj-admin/skills/mcp-server-config.md`**
+  - MCP server configuration in `mj.config.cjs`
+  - Entity tools, action tools, agent tools
+  - Authentication modes (API key, OAuth)
+
+- [ ] **`mj-admin/skills/monorepo-structure.md`**
+  - Package organization under `/packages`
+  - NPM workspace rules
+  - Build with Turbo
+  - Dependency management
+
+#### 3.3 Command Files (7 files)
+
+- [ ] **`mj-admin/commands/entity-lookup.md`** — `/mj:entity`
+  - Use MCP `Discover_Entities` tool
+  - Fetch entity field details
+  - Show relationships and value lists
+
+- [ ] **`mj-admin/commands/run-query.md`** — `/mj:query`
+  - Translate natural language to RunView
+  - Execute via MCP
+  - Format and present results
+
+- [ ] **`mj-admin/commands/scaffold-migration.md`** — `/mj:migration`
+  - Generate migration SQL following all conventions
+  - Include proper naming, UUIDs, schema placeholder
+
+- [ ] **`mj-admin/commands/scaffold-action.md`** — `/mj:action`
+  - Generate Action class scaffold
+  - Follow BaseAction patterns
+  - Include parameter definitions
+
+- [ ] **`mj-admin/commands/entity-relationships.md`** — `/mj:relationships`
+  - Show FK relationships for an entity
+  - Visual relationship graph (ASCII or mermaid)
+
+- [ ] **`mj-admin/commands/codegen-status.md`** — `/mj:codegen`
+  - Check what CodeGen would generate
+  - Diff against current generated files
+
+- [ ] **`mj-admin/commands/health-check.md`** — `/mj:health`
+  - Check MCP server connectivity
+  - Verify authentication
+  - List available tools
+
+---
+
+### Phase 4: MJ Agent Builder Plugin
+
+**Goal:** Enable non-developers to create, test, and iterate on MJ agents through Cowork.
+**Dependency:** Requires MJ MCP Server with agent tools enabled.
+
+#### 4.1 Manifest and Config Files
+
+- [ ] **`mj-agent-builder/.claude-plugin/plugin.json`**
+  ```json
+  {
+    "name": "mj-agent-builder",
+    "displayName": "MemberJunction Agent Builder",
+    "description": "Create, test, and iterate on MemberJunction AI agents. Execute agents, monitor runs, and tune prompts directly through Cowork.",
+    "version": "1.0.0",
+    "author": "MemberJunction",
+    "homepage": "https://github.com/MemberJunction/co-work-plugins",
+    "keywords": ["memberjunction", "ai", "agents", "prompts", "automation"],
+    "commands": "commands/",
+    "skills": "skills/"
+  }
+  ```
+
+- [ ] **`mj-agent-builder/.mcp.json`** (same as mj-admin)
+- [ ] **`mj-agent-builder/settings.local.json.example`**
+- [ ] **`mj-agent-builder/README.md`**
+
+#### 4.2 Skills Files (7 files)
+
+- [ ] **`mj-agent-builder/skills/agent-architecture.md`**
+  - MJ agent types and their purposes
+  - AgentRunner and execution flow
+  - Context system and memory management
+  - Agent entity relationships
+
+- [ ] **`mj-agent-builder/skills/prompt-engineering.md`**
+  - Best practices for MJ AI prompts
+  - System vs user prompts
+  - Prompt roles and positions
+  - Variable injection patterns
+
+- [ ] **`mj-agent-builder/skills/action-integration.md`**
+  - How agents discover available Actions
+  - Action parameter passing
+  - Action result handling
+
+- [ ] **`mj-agent-builder/skills/agent-entity-model.md`**
+  - AI Agents entity
+  - AI Agent Types entity
+  - MJ: AI Agent Runs entity
+  - MJ: AI Agent Run Steps entity
+  - MJ: AI Agent Prompts entity
+
+- [ ] **`mj-agent-builder/skills/conversation-model.md`**
+  - MJ conversation structure
+  - Artifacts and their types
+  - Multi-turn patterns
+  - Conversation persistence
+
+- [ ] **`mj-agent-builder/skills/model-selection.md`**
+  - AI Models entity
+  - Vendors and capabilities
+  - Cost considerations
+  - Model matching for tasks
+
+- [ ] **`mj-agent-builder/skills/debugging-patterns.md`**
+  - Common agent failure modes
+  - Token limit issues
+  - Timeout handling
+  - Reading agent run steps
+
+#### 4.3 Command Files (8 files)
+
+- [ ] **`mj-agent-builder/commands/create-agent.md`** — `/mj-agent:create`
+  - Walk through agent creation wizard
+  - Select type, configure prompts, choose actions
+  - Create via MCP entity CRUD
+
+- [ ] **`mj-agent-builder/commands/run-agent.md`** — `/mj-agent:run`
+  - Execute agent with user message
+  - Display results inline
+
+- [ ] **`mj-agent-builder/commands/chat-with-agent.md`** — `/mj-agent:chat`
+  - Multi-turn conversation with an agent
+  - Maintain conversation context
+
+- [ ] **`mj-agent-builder/commands/monitor.md`** — `/mj-agent:monitor`
+  - Check status of running agents
+  - Use `Agent_Run_Status` MCP tool
+
+- [ ] **`mj-agent-builder/commands/debug-run.md`** — `/mj-agent:debug`
+  - Analyze failed agent run
+  - Show steps, errors, token usage
+
+- [ ] **`mj-agent-builder/commands/tune-prompt.md`** — `/mj-agent:tune`
+  - Prompt iteration workflow
+  - Run, feedback, modify, compare
+
+- [ ] **`mj-agent-builder/commands/list-agents.md`** — `/mj-agent:list`
+  - Browse available agents
+  - Use `Discover_Agents` MCP tool
+
+- [ ] **`mj-agent-builder/commands/agent-analytics.md`** — `/mj-agent:analytics`
+  - Usage stats for an agent
+  - Success rates, costs, performance
+
+---
+
+### Phase 5: Testing and Validation
+
+#### 5.1 Association Plugin Testing
+
+- [ ] Install plugin in Cowork: `claude plugins add MemberJunction/co-work-plugins/association`
+- [ ] Test each command with realistic scenarios:
+  - [ ] `/assoc:newsletter` — Draft a newsletter for a fictional trade association
+  - [ ] `/assoc:board-prep` — Generate board meeting materials
+  - [ ] `/assoc:event-plan` — Plan an annual conference
+  - [ ] `/assoc:advocacy` — Create a position paper on a current issue
+  - [ ] `/assoc:retention` — Design a lapsed member campaign
+- [ ] Verify skills activate automatically in relevant conversations
+- [ ] Test with different organization types (trade, professional, chamber)
+
+#### 5.2 MJ Admin Plugin Testing
+
+- [ ] Start MJ MCP server locally
+- [ ] Install plugin and configure `.mcp.json` with server URL
+- [ ] Test each command:
+  - [ ] `/mj:entity Users` — Should return entity details
+  - [ ] `/mj:query` — "Show me all active users" → RunView
+  - [ ] `/mj:migration` — "Add a Notes field to the Users entity"
+  - [ ] `/mj:health` — Should show server status and available tools
+
+#### 5.3 MJ Agent Builder Plugin Testing
+
+- [ ] Ensure MJ MCP server has agent tools enabled
+- [ ] Test commands:
+  - [ ] `/mj-agent:list` — Should show available agents
+  - [ ] `/mj-agent:run` — Execute an existing agent
+  - [ ] `/mj-agent:create` — Walk through creating a simple agent
+  - [ ] `/mj-agent:debug` — Analyze a past agent run
+
+---
+
+### Phase 6: Documentation and Release
+
+- [ ] **Root README.md** — Complete with:
+  - Overview of all plugins
+  - Quick start for each
+  - Screenshots/examples
+  - Contributing guide
+  - Link to MemberJunction
+
+- [ ] **Each plugin README.md** — Complete with:
+  - Full command reference table
+  - Skills list with descriptions
+  - Configuration instructions
+  - Example workflows
+
+- [ ] **Submit to Anthropic marketplace** (if available)
+- [ ] **Announce on MJ channels**
+
+---
+
+### Phase 7: Future Enhancements
+
+#### 7.1 Association Plugin + MJ Integration
+
+- [ ] Add MJ-aware skills for association entities (Members, Events, Committees)
+- [ ] Add MJ-specific commands: `/assoc:member-lookup`, `/assoc:engagement-report`
+- [ ] Create association-focused MJ Agents in the MJ metadata
+- [ ] Test full integration workflow
+
+#### 7.2 MCP Server Enhancements (if needed)
+
+- [ ] `List_Agent_Types` tool
+- [ ] `Get_Agent_Prompts` tool
+- [ ] `Update_Agent_Prompt` tool
+- [ ] `Clone_Agent` tool
+- [ ] `Get_Agent_Run_History` tool
+
+#### 7.3 Enterprise Plugin Catalog
+
+- [ ] Tooling to generate org-specific plugin configs
+- [ ] Auto-populate settings from MJ instance
+- [ ] Custom skills from org's entity model
+
+---
+
+## Execution Instructions for New Session
+
+When starting a new Claude session to build these plugins:
+
+1. **Clone the repo**: `git clone https://github.com/MemberJunction/co-work-plugins.git`
+2. **Read this plan**: This document is the source of truth
+3. **Start with Phase 1** (repo setup) — create all directories first
+4. **Build Association plugin first** (Phase 2) — it's standalone and highest priority
+5. **Work through skills before commands** — skills inform how commands work
+6. **Commit frequently** — one plugin or one phase per commit
+7. **Test as you go** — install the plugin in Cowork and verify each command
+
+**Reference Materials:**
+- [Anthropic's knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) — Example plugin structure
+- [MJ's CLAUDE.md](/CLAUDE.md) — Source for MJ Admin skills
+- [MJ's MCP Server](/packages/AI/MCPServer/) — MCP tool reference
+- [MJ's guides](/guides/) — Additional MJ documentation
 
 ---
 
