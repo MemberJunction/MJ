@@ -1,6 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
 import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { CreateAgentService, CreateAgentResult } from '@memberjunction/ng-agents';
+import { NavigationService } from '@memberjunction/ng-shared';
 import * as d3 from 'd3';
 
 interface AgentHierarchyNode {
@@ -49,17 +51,17 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   public showPrompts = true;
   public showProperties = true;
   
-  // Sub-agent creation
-  public showCreateSubAgent = false;
-  public newSubAgentName = '';
-  public newSubAgentDescription = '';
-
   // D3 variables
   private svg: any;
   private g: any;
   private tree: any;
   private root: any;
   private zoom: any;
+
+  constructor(
+    private createAgentService: CreateAgentService,
+    private navigationService: NavigationService
+  ) {}
 
   ngOnInit(): void {
     if (this.agentId) {
@@ -442,68 +444,76 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     return mode === 'Sequential' ? 'fa-solid fa-list-ol' : 'fa-solid fa-layer-group';
   }
 
+  /**
+   * Opens the create sub-agent slide-in panel using the new CreateAgentService.
+   * After successful creation, saves the agent and navigates to it.
+   */
   public openCreateSubAgent(): void {
-    this.showCreateSubAgent = true;
-    this.newSubAgentName = '';
-    this.newSubAgentDescription = '';
+    if (!this.currentAgent) return;
+
     this.error = null;
+
+    this.createAgentService.OpenSubAgentSlideIn(
+      this.currentAgent.ID,
+      this.currentAgent.Name || 'Agent'
+    ).subscribe({
+      next: async (dialogResult) => {
+        if (!dialogResult.Cancelled && dialogResult.Result) {
+          await this.handleAgentCreated(dialogResult.Result);
+        }
+      },
+      error: (err) => {
+        console.error('Error in create sub-agent slide-in:', err);
+        this.error = 'Failed to open create sub-agent panel';
+      }
+    });
   }
 
-  public closeCreateSubAgent(): void {
-    this.showCreateSubAgent = false;
-    this.newSubAgentName = '';
-    this.newSubAgentDescription = '';
-  }
-
-  public async createSubAgent(): Promise<void> {
-    if (!this.currentAgent || !this.newSubAgentName.trim()) return;
-
+  /**
+   * Handles the result from the create agent slide-in.
+   * Saves the agent and navigates to the new record.
+   */
+  private async handleAgentCreated(result: CreateAgentResult): Promise<void> {
     try {
       this.isLoading = true;
       this.error = null;
 
-      const md = Metadata.Provider;
-      if (!md) {
-        throw new Error('Metadata provider not available');
-      }
-
-      // Create new AI Agent entity
-      const newAgent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', md.CurrentUser);
-      
-      // Set agent properties
-      newAgent.Name = this.newSubAgentName.trim();
-      newAgent.Description = this.newSubAgentDescription.trim() || '';
-      newAgent.ParentID = this.currentAgent.ID;
-      
-      // Set default values based on parent agent
-      newAgent.ExecutionMode = this.currentAgent.ExecutionMode || 'Sequential';
-      newAgent.ExecutionOrder = 1; // Default to 1, could be made configurable
-      newAgent.ExposeAsAction = false; // Default to false for sub-agents
-      newAgent.EnableContextCompression = this.currentAgent.EnableContextCompression || false;
-      newAgent.ContextCompressionMessageThreshold = this.currentAgent.ContextCompressionMessageThreshold || 10;
-      newAgent.ContextCompressionMessageRetentionCount = this.currentAgent.ContextCompressionMessageRetentionCount || 5;
+      const agent = result.Agent;
 
       // Save the new agent
-      const result = await newAgent.Save();
-      
-      if (result) {
+      const saveResult = await agent.Save();
+
+      if (saveResult) {
         LogStatus('Sub-agent created successfully');
-        
-        // Close the dialog
-        this.closeCreateSubAgent();
-        
+
+        // Save any linked prompts
+        if (result.AgentPrompts && result.AgentPrompts.length > 0) {
+          for (const agentPrompt of result.AgentPrompts) {
+            // Update the AgentID now that the agent has been saved
+            agentPrompt.AgentID = agent.ID;
+            await agentPrompt.Save();
+          }
+        }
+
+        // Save any linked actions
+        if (result.AgentActions && result.AgentActions.length > 0) {
+          for (const agentAction of result.AgentActions) {
+            // Update the AgentID now that the agent has been saved
+            agentAction.AgentID = agent.ID;
+            await agentAction.Save();
+          }
+        }
+
         // Reload agent data to show the new hierarchy
         await this.loadAgentData();
-        
-        // Navigate to the newly created agent
-        this.openAgent.emit(newAgent.ID);
+
+        // Navigate to the newly created agent record
+        this.navigationService.OpenEntityRecord('AI Agents', agent.PrimaryKey);
       } else {
-        // Handle save failure
-        const errorMessage = newAgent.LatestResult?.Message || 'Unknown error occurred while creating sub-agent';
+        const errorMessage = agent.LatestResult?.Message || 'Unknown error occurred while creating sub-agent';
         this.error = `Failed to create sub-agent: ${errorMessage}`;
         LogError('Sub-agent creation failed', undefined, errorMessage);
       }
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
       this.error = `Failed to create sub-agent: ${errorMessage}`;

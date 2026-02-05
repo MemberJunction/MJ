@@ -168,6 +168,8 @@ import { SharedPipesModule } from './shared/shared-pipes.module';
 import { MCPModule } from './MCP';
 // Actions Module (test harness, dialogs)
 import { ActionsModule } from '@memberjunction/ng-actions';
+// Agents Module (create agent dialogs and slide-ins)
+import { AgentsModule } from '@memberjunction/ng-agents';
 // Version History Dashboard Components
 import { VersionHistoryLabelsResourceComponent } from './VersionHistory/components/labels-resource.component';
 import { VersionHistoryDiffResourceComponent } from './VersionHistory/components/diff-resource.component';
@@ -346,6 +348,7 @@ import { VersionsModule } from '@memberjunction/ng-versions';
     CredentialsModule,
     SharedPipesModule,
     ActionsModule,
+    AgentsModule,
     MarkdownModule,
     VersionsModule
   ],

@@ -1,707 +1,674 @@
 <div class="mcp-dashboard">
-    <!-- Left Sidebar Navigation -->
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <i class="fa-solid fa-plug-circle-bolt"></i>
-            <span class="sidebar-title">MCP</span>
+    <!-- Header -->
+    <div class="dashboard-header">
+        <div class="header-info">
+            <h2 class="dashboard-title">
+                <i class="fa-solid fa-plug-circle-bolt"></i>
+                MCP Dashboard
+            </h2>
+            <button
+                type="button"
+                class="filter-toggle-btn"
+                (click)="toggleFilterPanel()"
+                title="Toggle Filters">
+                <i class="fa-solid fa-filter"></i>
+                @if (FilterPanelVisible) {
+                    Hide Filters
+                } @else {
+                    Show Filters
+                }
+            </button>
+            <span class="item-count">{{ CurrentFilteredCount }} of {{ CurrentTotalCount }} items</span>
         </div>
 
-        <nav class="sidebar-nav">
-            <button class="nav-item" [class.active]="ActiveTab === 'servers'" (click)="setActiveTab('servers')">
-                <i class="fa-solid fa-server"></i>
-                <span class="nav-label">Servers</span>
-                <span class="nav-badge">{{ servers.length }}</span>
-            </button>
-            <button class="nav-item" [class.active]="ActiveTab === 'connections'" (click)="setActiveTab('connections')">
-                <i class="fa-solid fa-link"></i>
-                <span class="nav-label">Connections</span>
-                <span class="nav-badge">{{ connections.length }}</span>
-            </button>
-            <button class="nav-item" [class.active]="ActiveTab === 'tools'" (click)="setActiveTab('tools')">
-                <i class="fa-solid fa-wrench"></i>
-                <span class="nav-label">Tools</span>
-                <span class="nav-badge">{{ tools.length }}</span>
-            </button>
-            <button class="nav-item" [class.active]="ActiveTab === 'logs'" (click)="setActiveTab('logs')">
-                <i class="fa-solid fa-list-check"></i>
-                <span class="nav-label">Logs</span>
-                <span class="nav-badge" [class.has-errors]="stats.failedExecutions > 0">{{ executionLogs.length }}</span>
-            </button>
-        </nav>
+        <div class="header-controls">
+            <!-- Tab Navigation -->
+            <div class="tab-nav">
+                <button
+                    type="button"
+                    class="tab-btn"
+                    [class.active]="ActiveTab === 'servers'"
+                    (click)="setActiveTab('servers')">
+                    <i class="fa-solid fa-server"></i>
+                    <span class="tab-label">Servers</span>
+                    <span class="tab-badge">{{ servers.length }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="tab-btn"
+                    [class.active]="ActiveTab === 'connections'"
+                    (click)="setActiveTab('connections')">
+                    <i class="fa-solid fa-link"></i>
+                    <span class="tab-label">Connections</span>
+                    <span class="tab-badge">{{ connections.length }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="tab-btn"
+                    [class.active]="ActiveTab === 'tools'"
+                    (click)="setActiveTab('tools')">
+                    <i class="fa-solid fa-wrench"></i>
+                    <span class="tab-label">Tools</span>
+                    <span class="tab-badge">{{ tools.length }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="tab-btn"
+                    [class.active]="ActiveTab === 'logs'"
+                    (click)="setActiveTab('logs')">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span class="tab-label">Logs</span>
+                    <span class="tab-badge" [class.has-errors]="stats.failedExecutions > 0">{{ executionLogs.length }}</span>
+                </button>
+            </div>
 
-        <!-- Sidebar Stats Summary -->
-        <div class="sidebar-stats">
-            <div class="stat-row">
-                <span class="stat-label">Active Servers</span>
-                <span class="stat-value">{{ stats.activeServers }}/{{ stats.totalServers }}</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">Active Connections</span>
-                <span class="stat-value">{{ stats.activeConnections }}/{{ stats.totalConnections }}</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">Active Tools</span>
-                <span class="stat-value">{{ stats.activeTools }}/{{ stats.totalTools }}</span>
-            </div>
-            @if (stats.failedExecutions > 0) {
-                <div class="stat-row error">
-                    <span class="stat-label">Failed (7d)</span>
-                    <span class="stat-value">{{ stats.failedExecutions }}</span>
-                </div>
+            <!-- Action Buttons based on tab -->
+            @switch (ActiveTab) {
+                @case ('servers') {
+                    <button kendoButton themeColor="primary" (click)="createServer()">
+                        <i class="fa-solid fa-plus"></i>
+                        Add Server
+                    </button>
+                }
+                @case ('connections') {
+                    <button kendoButton themeColor="primary" (click)="createConnection()">
+                        <i class="fa-solid fa-plus"></i>
+                        Add Connection
+                    </button>
+                }
+                @case ('tools') {
+                    <!-- View Mode Toggle -->
+                    <div class="view-toggle">
+                        <button
+                            type="button"
+                            class="view-btn"
+                            [class.active]="ToolsViewMode === 'card'"
+                            (click)="setToolsViewMode('card')"
+                            title="Card View">
+                            <i class="fa-solid fa-grip"></i>
+                        </button>
+                        <button
+                            type="button"
+                            class="view-btn"
+                            [class.active]="ToolsViewMode === 'list'"
+                            (click)="setToolsViewMode('list')"
+                            title="List View">
+                            <i class="fa-solid fa-list"></i>
+                        </button>
+                    </div>
+                    <button kendoButton themeColor="primary" (click)="openTestToolDialog()">
+                        <i class="fa-solid fa-play"></i>
+                        Test Tool
+                    </button>
+                }
+                @case ('logs') {
+                    <button kendoButton fillMode="flat" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
+                        <i class="fa-solid fa-sync" [class.fa-spin]="IsLoading"></i>
+                        Refresh
+                    </button>
+                }
             }
-        </div>
-
-        <div class="sidebar-footer">
-            <button kendoButton fillMode="flat" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
-                <i class="fa-solid fa-sync" [class.fa-spin]="IsLoading"></i>
-            </button>
         </div>
     </div>
 
-    <!-- Main Content Area -->
+    <!-- Main Content with Filter Panel -->
     <div class="main-content">
-        <!-- Error Message -->
-        @if (ErrorMessage) {
-            <div class="error-banner">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                {{ ErrorMessage }}
-                <button class="close-btn" (click)="ErrorMessage = null">
-                    <i class="fa-solid fa-times"></i>
-                </button>
-            </div>
-        }
-
-        <!-- Content Header with Search and Filters -->
-        <div class="content-header">
-            <h2 class="content-title">
-                @switch (ActiveTab) {
-                    @case ('servers') { MCP Servers }
-                    @case ('connections') { Server Connections }
-                    @case ('tools') { Available Tools }
-                    @case ('logs') { Execution Logs }
-                }
-            </h2>
-
-            <div class="header-actions">
-                <!-- Search -->
-                <div class="search-box">
-                    <i class="fa-solid fa-search"></i>
-                    <input type="text"
-                           placeholder="Search..."
-                           [ngModel]="(filters$ | async)?.searchTerm"
-                           (ngModelChange)="onSearchChange($event)">
-                </div>
-
-                <!-- Status Filter -->
-                @switch (ActiveTab) {
-                    @case ('servers') {
-                        <select class="status-filter"
-                                [ngModel]="(filters$ | async)?.serverStatus"
-                                (ngModelChange)="onStatusFilterChange('server', $event)">
-                            <option value="all">All Status</option>
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                        </select>
-                        <button kendoButton themeColor="primary" (click)="createServer()">
-                            <i class="fa-solid fa-plus"></i>
-                            Add Server
-                        </button>
-                    }
-                    @case ('connections') {
-                        <select class="status-filter"
-                                [ngModel]="(filters$ | async)?.connectionStatus"
-                                (ngModelChange)="onStatusFilterChange('connection', $event)">
-                            <option value="all">All Status</option>
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                            <option value="Error">Error</option>
-                        </select>
-                        <button kendoButton themeColor="primary" (click)="createConnection()">
-                            <i class="fa-solid fa-plus"></i>
-                            Add Connection
-                        </button>
-                    }
-                    @case ('tools') {
-                        <select class="status-filter"
-                                [ngModel]="(filters$ | async)?.toolStatus"
-                                (ngModelChange)="onStatusFilterChange('tool', $event)">
-                            <option value="all">All Status</option>
-                            <option value="Active">Active</option>
-                            <option value="Deprecated">Deprecated</option>
-                        </select>
-                        <!-- View Mode Toggle -->
-                        <div class="view-toggle">
-                            <button kendoButton
-                                    fillMode="flat"
-                                    [class.active]="ToolsViewMode === 'card'"
-                                    (click)="setToolsViewMode('card')"
-                                    title="Card View">
-                                <i class="fa-solid fa-grip"></i>
-                            </button>
-                            <button kendoButton
-                                    fillMode="flat"
-                                    [class.active]="ToolsViewMode === 'list'"
-                                    (click)="setToolsViewMode('list')"
-                                    title="List View">
-                                <i class="fa-solid fa-list"></i>
-                            </button>
-                        </div>
-                        <!-- Sort Dropdown -->
-                        <select class="status-filter"
-                                [(ngModel)]="ToolsSortBy"
-                                (ngModelChange)="setToolsSort($event)">
-                            <option value="server">Sort by Server</option>
-                            <option value="name">Sort by Name</option>
-                            <option value="discovered">Sort by Discovered</option>
-                            <option value="lastSeen">Sort by Last Seen</option>
-                        </select>
-                        <button kendoButton themeColor="primary" (click)="openTestToolDialog()">
-                            <i class="fa-solid fa-play"></i>
-                            Test Tool
-                        </button>
-                    }
-                    @case ('logs') {
-                        <select class="status-filter"
-                                [ngModel]="(filters$ | async)?.logStatus"
-                                (ngModelChange)="onStatusFilterChange('log', $event)">
-                            <option value="all">All Status</option>
-                            <option value="Success">Success</option>
-                            <option value="Error">Error</option>
-                            <option value="Running">Running</option>
-                        </select>
-                    }
-                }
-            </div>
+        <!-- Filter Panel (Left) -->
+        <div class="filter-panel-container" [class.hidden]="!FilterPanelVisible">
+            <mj-mcp-filter-panel
+                [filters]="CurrentFilters"
+                [activeTab]="ActiveTab"
+                [totalCount]="CurrentTotalCount"
+                [filteredCount]="CurrentFilteredCount"
+                (filtersChange)="onFiltersChange($event)"
+                (closePanel)="toggleFilterPanel()">
+            </mj-mcp-filter-panel>
+            <!-- Resize Handle -->
+            <div class="resize-handle"></div>
         </div>
 
-        <!-- Content Body -->
-        <div class="content-body">
-            @if (IsLoading) {
-                <mj-loading text="Loading MCP data..."></mj-loading>
-            } @else {
-                @switch (ActiveTab) {
-                    <!-- Servers Tab -->
-                    @case ('servers') {
-                        <div class="data-grid servers-grid">
-                            @if (filteredServers.length === 0) {
-                                <div class="empty-state">
-                                    <i class="fa-solid fa-server"></i>
-                                    <p>No MCP servers configured</p>
-                                    <button kendoButton themeColor="primary" (click)="createServer()">
-                                        Add Your First Server
-                                    </button>
-                                </div>
-                            } @else {
-                                @for (server of filteredServers; track server.ID) {
-                                    <div class="data-card" [class.expanded]="isServerExpanded(server)">
-                                        <div class="card-header clickable" (click)="toggleServerExpand(server)">
-                                            <div class="card-title">
-                                                <i class="fa-solid fa-chevron-right expand-arrow" [class.rotated]="isServerExpanded(server)"></i>
-                                                <i [class]="getTransportIcon(server.TransportType)"></i>
-                                                <span class="name" [innerHTML]="server.Name | highlightSearch:(filters$ | async)?.searchTerm"></span>
-                                                <span class="status-badge" [ngClass]="getStatusClass(server.Status)">
-                                                    {{ server.Status }}
-                                                </span>
-                                            </div>
-                                            <div class="card-actions" (click)="$event.stopPropagation()">
-                                                <button kendoButton fillMode="flat" (click)="editServer(server)" title="Edit">
-                                                    <i class="fa-solid fa-pen"></i>
-                                                </button>
-                                                <button kendoButton fillMode="flat" (click)="deleteServer(server)" title="Delete">
-                                                    <i class="fa-solid fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="card-body">
-                                            @if (server.Description) {
-                                                <p class="description" [innerHTML]="server.Description | highlightSearch:(filters$ | async)?.searchTerm"></p>
-                                            }
-                                            <div class="details-grid">
-                                                <div class="detail">
-                                                    <span class="label">Transport</span>
-                                                    <span class="value">{{ server.TransportType }}</span>
-                                                </div>
-                                                <div class="detail">
-                                                    <span class="label">Auth</span>
-                                                    <span class="value">{{ server.DefaultAuthType }}</span>
-                                                </div>
-                                                <div class="detail">
-                                                    <span class="label">Connections</span>
-                                                    <span class="value">{{ server.ConnectionCount }}</span>
-                                                </div>
-                                                <div class="detail">
-                                                    <span class="label">Tools</span>
-                                                    <span class="value">{{ server.ToolCount }}</span>
-                                                </div>
-                                                @if (server.ServerURL) {
-                                                    <div class="detail full-width">
-                                                        <span class="label">URL</span>
-                                                        <span class="value url">{{ server.ServerURL }}</span>
-                                                    </div>
-                                                }
-                                                @if (server.Command) {
-                                                    <div class="detail full-width">
-                                                        <span class="label">Command</span>
-                                                        <span class="value command">{{ server.Command }}</span>
-                                                    </div>
-                                                }
-                                                <div class="detail">
-                                                    <span class="label">Last Sync</span>
-                                                    <span class="value">{{ formatDate(server.LastSyncAt) }}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <!-- Expanded Tools Section -->
-                                        @if (isServerExpanded(server)) {
-                                            <div class="expanded-tools-section">
-                                                <div class="tools-section-header">
-                                                    <i class="fa-solid fa-wrench"></i>
-                                                    <span>Available Tools ({{ getToolsForServer(server.ID).length }})</span>
-                                                </div>
-                                                @if (getToolsForServer(server.ID).length === 0) {
-                                                    <div class="no-tools-message">
-                                                        <i class="fa-solid fa-info-circle"></i>
-                                                        No tools discovered yet. Sync a connection to discover tools.
-                                                    </div>
-                                                } @else {
-                                                    <div class="tools-mini-list">
-                                                        @for (tool of getToolsForServer(server.ID); track tool.ID) {
-                                                            <div class="tool-mini-card">
-                                                                <div class="tool-mini-info">
-                                                                    <span class="tool-mini-name">{{ tool.ToolTitle || tool.ToolName }}</span>
-                                                                    <span class="tool-mini-params">
-                                                                        <i class="fa-solid fa-sliders"></i>
-                                                                        {{ getParamCount(tool) }} params
-                                                                    </span>
-                                                                </div>
-                                                                <button kendoButton
-                                                                        fillMode="flat"
-                                                                        size="small"
-                                                                        (click)="runToolFromCard(tool); $event.stopPropagation()"
-                                                                        title="Test this tool">
-                                                                    <i class="fa-solid fa-play"></i>
-                                                                </button>
-                                                            </div>
-                                                        }
-                                                    </div>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            }
-                        </div>
-                    }
+        <!-- Content Area -->
+        <div class="content-area">
+            <!-- Error Message -->
+            @if (ErrorMessage) {
+                <div class="error-banner">
+                    <i class="fa-solid fa-exclamation-triangle"></i>
+                    {{ ErrorMessage }}
+                    <button class="close-btn" (click)="ErrorMessage = null">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+            }
 
-                    <!-- Connections Tab -->
-                    @case ('connections') {
-                        <div class="data-grid connections-grid">
-                            @if (filteredConnections.length === 0) {
-                                <div class="empty-state">
-                                    <i class="fa-solid fa-link"></i>
-                                    <p>No connections configured</p>
-                                    <button kendoButton themeColor="primary" (click)="createConnection()">
-                                        Add Your First Connection
-                                    </button>
-                                </div>
-                            } @else {
-                                @for (conn of filteredConnections; track conn.ID) {
-                                    <div class="data-card" [class.expanded]="isConnectionExpanded(conn)">
-                                        <div class="card-header clickable" (click)="toggleConnectionExpand(conn)">
-                                            <div class="card-title">
-                                                <i class="fa-solid fa-chevron-right expand-arrow" [class.rotated]="isConnectionExpanded(conn)"></i>
-                                                <i class="fa-solid fa-link"></i>
-                                                <span class="name" [innerHTML]="conn.Name | highlightSearch:(filters$ | async)?.searchTerm"></span>
-                                                <span class="status-badge" [ngClass]="getStatusClass(conn.Status)">
-                                                    {{ conn.Status }}
-                                                </span>
-                                            </div>
-                                            <div class="card-actions" (click)="$event.stopPropagation()">
-                                                <button kendoButton
-                                                        fillMode="flat"
-                                                        (click)="syncConnectionTools(conn)"
-                                                        [disabled]="isSyncing(conn.ID)"
-                                                        title="Sync Tools">
-                                                    @if (isSyncing(conn.ID)) {
-                                                        <i class="fa-solid fa-sync fa-spin"></i>
-                                                    } @else {
-                                                        <i class="fa-solid fa-sync"></i>
-                                                    }
-                                                </button>
-                                                <button kendoButton fillMode="flat" (click)="editConnection(conn)" title="Edit">
-                                                    <i class="fa-solid fa-pen"></i>
-                                                </button>
-                                                <button kendoButton fillMode="flat" (click)="deleteConnection(conn)" title="Delete">
-                                                    <i class="fa-solid fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <!-- Sync Progress Banner -->
-                                        @if (isSyncing(conn.ID)) {
-                                            <div class="sync-progress-banner">
-                                                <i class="fa-solid fa-circle-notch fa-spin"></i>
-                                                <span class="sync-message">{{ getSyncProgressMessage(conn.ID) || 'Syncing...' }}</span>
-                                            </div>
-                                        }
-                                        <!-- Sync Result Banner -->
-                                        @if (getSyncState(conn.ID)?.lastResult && !isSyncing(conn.ID)) {
-                                            <div class="sync-result-banner"
-                                                 [class.success]="getSyncState(conn.ID)?.lastResult?.Success"
-                                                 [class.error]="!getSyncState(conn.ID)?.lastResult?.Success">
-                                                @if (getSyncState(conn.ID)?.lastResult?.Success) {
-                                                    <i class="fa-solid fa-check-circle"></i>
-                                                    <span>Synced: {{ getSyncState(conn.ID)?.lastResult?.Added }} added,
-                                                          {{ getSyncState(conn.ID)?.lastResult?.Updated }} updated,
-                                                          {{ getSyncState(conn.ID)?.lastResult?.Deprecated }} deprecated
+            <!-- Content Body -->
+            <div class="content-body">
+                @if (IsLoading) {
+                    <mj-loading text="Loading MCP data..."></mj-loading>
+                } @else {
+                    @switch (ActiveTab) {
+                        <!-- Servers Tab -->
+                        @case ('servers') {
+                            <div class="data-grid servers-grid">
+                                @if (filteredServers.length === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-server"></i>
+                                        <p>No MCP servers configured</p>
+                                        <button kendoButton themeColor="primary" (click)="createServer()">
+                                            Add Your First Server
+                                        </button>
+                                    </div>
+                                } @else {
+                                    @for (server of filteredServers; track server.ID) {
+                                        <div class="data-card" [class.expanded]="isServerExpanded(server)">
+                                            <div class="card-header clickable" (click)="toggleServerExpand(server)">
+                                                <div class="card-title">
+                                                    <i class="fa-solid fa-chevron-right expand-arrow" [class.rotated]="isServerExpanded(server)"></i>
+                                                    <i [class]="getTransportIcon(server.TransportType)"></i>
+                                                    <span class="name" [innerHTML]="server.Name | highlightSearch:(filters$ | async)?.searchTerm"></span>
+                                                    <span class="status-badge" [ngClass]="getStatusClass(server.Status)">
+                                                        {{ server.Status }}
                                                     </span>
-                                                } @else {
-                                                    <i class="fa-solid fa-exclamation-circle"></i>
-                                                    <span>{{ getSyncState(conn.ID)?.lastResult?.ErrorMessage }}</span>
+                                                </div>
+                                                <div class="card-actions" (click)="$event.stopPropagation()">
+                                                    <button kendoButton fillMode="flat" (click)="editServer(server)" title="Edit">
+                                                        <i class="fa-solid fa-pen"></i>
+                                                    </button>
+                                                    <button kendoButton fillMode="flat" (click)="deleteServer(server)" title="Delete">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="card-body">
+                                                @if (server.Description) {
+                                                    <p class="description" [innerHTML]="server.Description | highlightSearch:(filters$ | async)?.searchTerm"></p>
                                                 }
-                                            </div>
-                                        }
-                                        <div class="card-body">
-                                            @if (conn.Description) {
-                                                <p class="description" [innerHTML]="conn.Description | highlightSearch:(filters$ | async)?.searchTerm"></p>
-                                            }
-                                            <div class="details-grid">
-                                                <div class="detail">
-                                                    <span class="label">Server</span>
-                                                    <span class="value">{{ conn.ServerName }}</span>
-                                                </div>
-                                                <div class="detail">
-                                                    <span class="label">Auto Sync</span>
-                                                    <span class="value">{{ conn.AutoSyncTools ? 'Yes' : 'No' }}</span>
-                                                </div>
-                                                <div class="detail">
-                                                    <span class="label">Logging</span>
-                                                    <span class="value">{{ conn.LogToolCalls ? 'Enabled' : 'Disabled' }}</span>
-                                                </div>
-                                                <div class="detail">
-                                                    <span class="label">Last Connected</span>
-                                                    <span class="value">{{ formatDate(conn.LastConnectedAt) }}</span>
-                                                </div>
-                                                @if (conn.LastErrorMessage) {
-                                                    <div class="detail full-width error">
-                                                        <span class="label">Last Error</span>
-                                                        <span class="value">{{ conn.LastErrorMessage }}</span>
+                                                <div class="details-grid">
+                                                    <div class="detail">
+                                                        <span class="label">Transport</span>
+                                                        <span class="value">{{ server.TransportType }}</span>
                                                     </div>
-                                                }
-                                            </div>
-                                        </div>
-                                        <!-- Expanded Tools Section -->
-                                        @if (isConnectionExpanded(conn)) {
-                                            <div class="expanded-tools-section">
-                                                <div class="tools-section-header">
-                                                    <i class="fa-solid fa-wrench"></i>
-                                                    <span>Available Tools ({{ getToolsForConnection(conn.ID).length }})</span>
+                                                    <div class="detail">
+                                                        <span class="label">Auth</span>
+                                                        <span class="value">{{ server.DefaultAuthType }}</span>
+                                                    </div>
+                                                    <div class="detail">
+                                                        <span class="label">Connections</span>
+                                                        <span class="value">{{ server.ConnectionCount }}</span>
+                                                    </div>
+                                                    <div class="detail">
+                                                        <span class="label">Tools</span>
+                                                        <span class="value">{{ server.ToolCount }}</span>
+                                                    </div>
+                                                    @if (server.ServerURL) {
+                                                        <div class="detail full-width">
+                                                            <span class="label">URL</span>
+                                                            <span class="value url">{{ server.ServerURL }}</span>
+                                                        </div>
+                                                    }
+                                                    @if (server.Command) {
+                                                        <div class="detail full-width">
+                                                            <span class="label">Command</span>
+                                                            <span class="value command">{{ server.Command }}</span>
+                                                        </div>
+                                                    }
+                                                    <div class="detail">
+                                                        <span class="label">Last Sync</span>
+                                                        <span class="value">{{ formatDate(server.LastSyncAt) }}</span>
+                                                    </div>
                                                 </div>
-                                                @if (getToolsForConnection(conn.ID).length === 0) {
-                                                    <div class="no-tools-message">
-                                                        <i class="fa-solid fa-info-circle"></i>
-                                                        No tools discovered yet. Click the sync button to discover tools.
+                                            </div>
+                                            <!-- Expanded Tools Section -->
+                                            @if (isServerExpanded(server)) {
+                                                <div class="expanded-tools-section">
+                                                    <div class="tools-section-header">
+                                                        <i class="fa-solid fa-wrench"></i>
+                                                        <span>Available Tools ({{ getToolsForServer(server.ID).length }})</span>
                                                     </div>
-                                                } @else {
-                                                    <div class="tools-mini-list">
-                                                        @for (tool of getToolsForConnection(conn.ID); track tool.ID) {
-                                                            <div class="tool-mini-card">
-                                                                <div class="tool-mini-info">
-                                                                    <span class="tool-mini-name">{{ tool.ToolTitle || tool.ToolName }}</span>
-                                                                    <span class="tool-mini-params">
-                                                                        <i class="fa-solid fa-sliders"></i>
-                                                                        {{ getParamCount(tool) }} params
-                                                                    </span>
-                                                                </div>
-                                                                <button kendoButton
-                                                                        fillMode="flat"
-                                                                        size="small"
-                                                                        (click)="runToolFromCard(tool, conn); $event.stopPropagation()"
-                                                                        title="Test this tool with this connection">
-                                                                    <i class="fa-solid fa-play"></i>
-                                                                </button>
-                                                            </div>
-                                                        }
-                                                    </div>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            }
-                        </div>
-                    }
-
-                    <!-- Tools Tab -->
-                    @case ('tools') {
-                        @if (ServerGroups.length === 0) {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-wrench"></i>
-                                <p>No tools discovered yet</p>
-                                <span class="hint">Tools are discovered when connections sync with MCP servers</span>
-                            </div>
-                        } @else {
-                            <div class="tools-container">
-                                <!-- Server Groups -->
-                                @for (group of ServerGroups; track group.server.ID) {
-                                    <div class="server-group" [class.collapsed]="!group.expanded">
-                                        <!-- Server Group Header -->
-                                        <div class="server-group-header" (click)="toggleServerGroup(group)">
-                                            <div class="server-info">
-                                                <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="group.expanded"></i>
-                                                <i [class]="getTransportIcon(group.server.TransportType)"></i>
-                                                <span class="server-name">{{ group.server.Name }}</span>
-                                                <span class="tool-count">{{ group.tools.length }} tools</span>
-                                                <span class="status-badge small" [ngClass]="getStatusClass(group.server.Status)">
-                                                    {{ group.server.Status }}
-                                                </span>
-                                            </div>
-                                            <div class="server-actions" (click)="$event.stopPropagation()">
-                                                <button kendoButton fillMode="flat" (click)="openTestToolDialog(undefined, undefined)" title="Test a tool">
-                                                    <i class="fa-solid fa-play"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <!-- Tools Content -->
-                                        @if (group.expanded) {
-                                            <!-- Card View -->
-                                            @if (ToolsViewMode === 'card') {
-                                                <div class="tools-grid">
-                                                    @for (tool of group.tools; track tool.ID) {
-                                                        <div class="tool-card" [class.expanded]="isToolExpanded(tool)">
-                                                            <div class="tool-card-header" (click)="toggleToolExpand(tool)">
-                                                                <div class="tool-title">
-                                                                    <i class="fa-solid fa-wrench"></i>
-                                                                    <span class="name" [innerHTML]="(tool.ToolTitle || tool.ToolName) | highlightSearch:(filters$ | async)?.searchTerm"></span>
-                                                                </div>
-                                                                <div class="tool-meta">
-                                                                    <span class="param-badge" title="Parameters">
-                                                                        <i class="fa-solid fa-sliders"></i>
-                                                                        {{ getParamCount(tool) }}
-                                                                    </span>
-                                                                    <span class="status-badge small" [ngClass]="getStatusClass(tool.Status)">
-                                                                        {{ tool.Status }}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            @if (tool.ToolDescription) {
-                                                                <p class="tool-description" [innerHTML]="tool.ToolDescription | highlightSearch:(filters$ | async)?.searchTerm"></p>
-                                                            }
-                                                            <div class="tool-card-actions">
-                                                                <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test this tool">
-                                                                    <i class="fa-solid fa-play"></i>
-                                                                    Test
-                                                                </button>
-                                                                <button kendoButton fillMode="flat" size="small" (click)="toggleToolExpand(tool)" title="View details">
-                                                                    <i class="fa-solid" [class.fa-chevron-down]="!isToolExpanded(tool)" [class.fa-chevron-up]="isToolExpanded(tool)"></i>
-                                                                    {{ isToolExpanded(tool) ? 'Less' : 'More' }}
-                                                                </button>
-                                                            </div>
-                                                            <!-- Expanded Details -->
-                                                            @if (isToolExpanded(tool)) {
-                                                                <div class="tool-details">
-                                                                    <div class="detail-row">
-                                                                        <span class="detail-label">Tool Name:</span>
-                                                                        <span class="detail-value mono">{{ tool.ToolName }}</span>
-                                                                    </div>
-                                                                    <div class="detail-row">
-                                                                        <span class="detail-label">Parameters:</span>
-                                                                        <span class="detail-value">
-                                                                            {{ getParamCount(tool) }} total, {{ getRequiredParamCount(tool) }} required
+                                                    @if (getToolsForServer(server.ID).length === 0) {
+                                                        <div class="no-tools-message">
+                                                            <i class="fa-solid fa-info-circle"></i>
+                                                            No tools discovered yet. Sync a connection to discover tools.
+                                                        </div>
+                                                    } @else {
+                                                        <div class="tools-mini-list">
+                                                            @for (tool of getToolsForServer(server.ID); track tool.ID) {
+                                                                <div class="tool-mini-card">
+                                                                    <div class="tool-mini-info">
+                                                                        <span class="tool-mini-name">{{ tool.ToolTitle || tool.ToolName }}</span>
+                                                                        <span class="tool-mini-params">
+                                                                            <i class="fa-solid fa-sliders"></i>
+                                                                            {{ getParamCount(tool) }} params
                                                                         </span>
                                                                     </div>
-                                                                    <div class="detail-row">
-                                                                        <span class="detail-label">Discovered:</span>
-                                                                        <span class="detail-value">{{ formatDate(tool.DiscoveredAt) }}</span>
-                                                                    </div>
-                                                                    <div class="detail-row">
-                                                                        <span class="detail-label">Last Seen:</span>
-                                                                        <span class="detail-value">{{ formatDate(tool.LastSeenAt) }}</span>
-                                                                    </div>
-                                                                    @if (tool.InputSchema) {
-                                                                        <div class="detail-row full">
-                                                                            <span class="detail-label">Input Schema:</span>
-                                                                            <pre class="schema-preview">{{ getFormattedInputSchema(tool) }}</pre>
-                                                                        </div>
-                                                                    }
+                                                                    <button kendoButton
+                                                                            fillMode="flat"
+                                                                            size="small"
+                                                                            (click)="runToolFromCard(tool); $event.stopPropagation()"
+                                                                            title="Test this tool">
+                                                                        <i class="fa-solid fa-play"></i>
+                                                                    </button>
                                                                 </div>
                                                             }
                                                         </div>
                                                     }
                                                 </div>
-                                            } @else {
-                                                <!-- List View -->
-                                                <div class="tools-list">
-                                                    <table>
-                                                        <thead>
-                                                            <tr>
-                                                                <th>Tool</th>
-                                                                <th>Description</th>
-                                                                <th>Params</th>
-                                                                <th>Status</th>
-                                                                <th>Last Seen</th>
-                                                                <th>Actions</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            @for (tool of group.tools; track tool.ID) {
-                                                                <tr [class.expanded]="isToolExpanded(tool)">
-                                                                    <td class="tool-name-cell">
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+
+                        <!-- Connections Tab -->
+                        @case ('connections') {
+                            <div class="data-grid connections-grid">
+                                @if (filteredConnections.length === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-link"></i>
+                                        <p>No connections configured</p>
+                                        <button kendoButton themeColor="primary" (click)="createConnection()">
+                                            Add Your First Connection
+                                        </button>
+                                    </div>
+                                } @else {
+                                    @for (conn of filteredConnections; track conn.ID) {
+                                        <div class="data-card" [class.expanded]="isConnectionExpanded(conn)">
+                                            <div class="card-header clickable" (click)="toggleConnectionExpand(conn)">
+                                                <div class="card-title">
+                                                    <i class="fa-solid fa-chevron-right expand-arrow" [class.rotated]="isConnectionExpanded(conn)"></i>
+                                                    <i class="fa-solid fa-link"></i>
+                                                    <span class="name" [innerHTML]="conn.Name | highlightSearch:(filters$ | async)?.searchTerm"></span>
+                                                    <span class="status-badge" [ngClass]="getStatusClass(conn.Status)">
+                                                        {{ conn.Status }}
+                                                    </span>
+                                                </div>
+                                                <div class="card-actions" (click)="$event.stopPropagation()">
+                                                    <button kendoButton
+                                                            fillMode="flat"
+                                                            (click)="syncConnectionTools(conn)"
+                                                            [disabled]="isSyncing(conn.ID)"
+                                                            title="Sync Tools">
+                                                        @if (isSyncing(conn.ID)) {
+                                                            <i class="fa-solid fa-sync fa-spin"></i>
+                                                        } @else {
+                                                            <i class="fa-solid fa-sync"></i>
+                                                        }
+                                                    </button>
+                                                    <button kendoButton fillMode="flat" (click)="editConnection(conn)" title="Edit">
+                                                        <i class="fa-solid fa-pen"></i>
+                                                    </button>
+                                                    <button kendoButton fillMode="flat" (click)="deleteConnection(conn)" title="Delete">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <!-- Sync Progress Banner -->
+                                            @if (isSyncing(conn.ID)) {
+                                                <div class="sync-progress-banner">
+                                                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                                                    <span class="sync-message">{{ getSyncProgressMessage(conn.ID) || 'Syncing...' }}</span>
+                                                </div>
+                                            }
+                                            <!-- Sync Result Banner -->
+                                            @if (getSyncState(conn.ID)?.lastResult && !isSyncing(conn.ID)) {
+                                                <div class="sync-result-banner"
+                                                     [class.success]="getSyncState(conn.ID)?.lastResult?.Success"
+                                                     [class.error]="!getSyncState(conn.ID)?.lastResult?.Success">
+                                                    @if (getSyncState(conn.ID)?.lastResult?.Success) {
+                                                        <i class="fa-solid fa-check-circle"></i>
+                                                        <span>Synced: {{ getSyncState(conn.ID)?.lastResult?.Added }} added,
+                                                              {{ getSyncState(conn.ID)?.lastResult?.Updated }} updated,
+                                                              {{ getSyncState(conn.ID)?.lastResult?.Deprecated }} deprecated
+                                                        </span>
+                                                    } @else {
+                                                        <i class="fa-solid fa-exclamation-circle"></i>
+                                                        <span>{{ getSyncState(conn.ID)?.lastResult?.ErrorMessage }}</span>
+                                                    }
+                                                </div>
+                                            }
+                                            <div class="card-body">
+                                                @if (conn.Description) {
+                                                    <p class="description" [innerHTML]="conn.Description | highlightSearch:(filters$ | async)?.searchTerm"></p>
+                                                }
+                                                <div class="details-grid">
+                                                    <div class="detail">
+                                                        <span class="label">Server</span>
+                                                        <span class="value">{{ conn.ServerName }}</span>
+                                                    </div>
+                                                    <div class="detail">
+                                                        <span class="label">Auto Sync</span>
+                                                        <span class="value">{{ conn.AutoSyncTools ? 'Yes' : 'No' }}</span>
+                                                    </div>
+                                                    <div class="detail">
+                                                        <span class="label">Logging</span>
+                                                        <span class="value">{{ conn.LogToolCalls ? 'Enabled' : 'Disabled' }}</span>
+                                                    </div>
+                                                    <div class="detail">
+                                                        <span class="label">Last Connected</span>
+                                                        <span class="value">{{ formatDate(conn.LastConnectedAt) }}</span>
+                                                    </div>
+                                                    @if (conn.LastErrorMessage) {
+                                                        <div class="detail full-width error">
+                                                            <span class="label">Last Error</span>
+                                                            <span class="value">{{ conn.LastErrorMessage }}</span>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <!-- Expanded Tools Section -->
+                                            @if (isConnectionExpanded(conn)) {
+                                                <div class="expanded-tools-section">
+                                                    <div class="tools-section-header">
+                                                        <i class="fa-solid fa-wrench"></i>
+                                                        <span>Available Tools ({{ getToolsForConnection(conn.ID).length }})</span>
+                                                    </div>
+                                                    @if (getToolsForConnection(conn.ID).length === 0) {
+                                                        <div class="no-tools-message">
+                                                            <i class="fa-solid fa-info-circle"></i>
+                                                            No tools discovered yet. Click the sync button to discover tools.
+                                                        </div>
+                                                    } @else {
+                                                        <div class="tools-mini-list">
+                                                            @for (tool of getToolsForConnection(conn.ID); track tool.ID) {
+                                                                <div class="tool-mini-card">
+                                                                    <div class="tool-mini-info">
+                                                                        <span class="tool-mini-name">{{ tool.ToolTitle || tool.ToolName }}</span>
+                                                                        <span class="tool-mini-params">
+                                                                            <i class="fa-solid fa-sliders"></i>
+                                                                            {{ getParamCount(tool) }} params
+                                                                        </span>
+                                                                    </div>
+                                                                    <button kendoButton
+                                                                            fillMode="flat"
+                                                                            size="small"
+                                                                            (click)="runToolFromCard(tool, conn); $event.stopPropagation()"
+                                                                            title="Test this tool with this connection">
+                                                                        <i class="fa-solid fa-play"></i>
+                                                                    </button>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+
+                        <!-- Tools Tab -->
+                        @case ('tools') {
+                            @if (ServerGroups.length === 0) {
+                                <div class="empty-state">
+                                    <i class="fa-solid fa-wrench"></i>
+                                    <p>No tools discovered yet</p>
+                                    <span class="hint">Tools are discovered when connections sync with MCP servers</span>
+                                </div>
+                            } @else {
+                                <div class="tools-container">
+                                    <!-- Server Groups -->
+                                    @for (group of ServerGroups; track group.server.ID) {
+                                        <div class="server-group" [class.collapsed]="!group.expanded">
+                                            <!-- Server Group Header -->
+                                            <div class="server-group-header" (click)="toggleServerGroup(group)">
+                                                <div class="server-info">
+                                                    <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="group.expanded"></i>
+                                                    <i [class]="getTransportIcon(group.server.TransportType)"></i>
+                                                    <span class="server-name">{{ group.server.Name }}</span>
+                                                    <span class="tool-count">{{ group.tools.length }} tools</span>
+                                                    <span class="status-badge small" [ngClass]="getStatusClass(group.server.Status)">
+                                                        {{ group.server.Status }}
+                                                    </span>
+                                                </div>
+                                                <div class="server-actions" (click)="$event.stopPropagation()">
+                                                    <button kendoButton fillMode="flat" (click)="openTestToolDialog(undefined, undefined)" title="Test a tool">
+                                                        <i class="fa-solid fa-play"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Tools Content -->
+                                            @if (group.expanded) {
+                                                <!-- Card View -->
+                                                @if (ToolsViewMode === 'card') {
+                                                    <div class="tools-grid">
+                                                        @for (tool of group.tools; track tool.ID) {
+                                                            <div class="tool-card" [class.expanded]="isToolExpanded(tool)">
+                                                                <div class="tool-card-header" (click)="toggleToolExpand(tool)">
+                                                                    <div class="tool-title">
                                                                         <i class="fa-solid fa-wrench"></i>
-                                                                        <div class="tool-name-info">
-                                                                            <span class="tool-title" [innerHTML]="(tool.ToolTitle || tool.ToolName) | highlightSearch:(filters$ | async)?.searchTerm"></span>
-                                                                            @if (tool.ToolTitle) {
-                                                                                <span class="tool-code">{{ tool.ToolName }}</span>
-                                                                            }
-                                                                        </div>
-                                                                    </td>
-                                                                    <td class="description-cell" [innerHTML]="(tool.ToolDescription || '-') | highlightSearch:(filters$ | async)?.searchTerm">
-                                                                    </td>
-                                                                    <td>
-                                                                        <span class="param-count">{{ getParamCount(tool) }}</span>
-                                                                    </td>
-                                                                    <td>
+                                                                        <span class="name" [innerHTML]="(tool.ToolTitle || tool.ToolName) | highlightSearch:(filters$ | async)?.searchTerm"></span>
+                                                                    </div>
+                                                                    <div class="tool-meta">
+                                                                        <span class="param-badge" title="Parameters">
+                                                                            <i class="fa-solid fa-sliders"></i>
+                                                                            {{ getParamCount(tool) }}
+                                                                        </span>
                                                                         <span class="status-badge small" [ngClass]="getStatusClass(tool.Status)">
                                                                             {{ tool.Status }}
                                                                         </span>
-                                                                    </td>
-                                                                    <td>{{ formatDate(tool.LastSeenAt) }}</td>
-                                                                    <td class="actions-cell">
-                                                                        <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test">
-                                                                            <i class="fa-solid fa-play"></i>
-                                                                        </button>
-                                                                        <button kendoButton fillMode="flat" size="small" (click)="toggleToolExpand(tool)" title="Details">
-                                                                            <i class="fa-solid" [class.fa-chevron-down]="!isToolExpanded(tool)" [class.fa-chevron-up]="isToolExpanded(tool)"></i>
-                                                                        </button>
-                                                                    </td>
-                                                                </tr>
+                                                                    </div>
+                                                                </div>
+                                                                @if (tool.ToolDescription) {
+                                                                    <p class="tool-description" [innerHTML]="tool.ToolDescription | highlightSearch:(filters$ | async)?.searchTerm"></p>
+                                                                }
+                                                                <div class="tool-card-actions">
+                                                                    <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test this tool">
+                                                                        <i class="fa-solid fa-play"></i>
+                                                                        Test
+                                                                    </button>
+                                                                    <button kendoButton fillMode="flat" size="small" (click)="toggleToolExpand(tool)" title="View details">
+                                                                        <i class="fa-solid" [class.fa-chevron-down]="!isToolExpanded(tool)" [class.fa-chevron-up]="isToolExpanded(tool)"></i>
+                                                                        {{ isToolExpanded(tool) ? 'Less' : 'More' }}
+                                                                    </button>
+                                                                </div>
+                                                                <!-- Expanded Details -->
                                                                 @if (isToolExpanded(tool)) {
-                                                                    <tr class="detail-row-expanded">
-                                                                        <td colspan="6">
-                                                                            <div class="inline-details">
-                                                                                <div class="detail-section">
-                                                                                    <span class="detail-label">Tool Name:</span>
-                                                                                    <span class="detail-value mono">{{ tool.ToolName }}</span>
-                                                                                </div>
-                                                                                <div class="detail-section">
-                                                                                    <span class="detail-label">Discovered:</span>
-                                                                                    <span class="detail-value">{{ formatDate(tool.DiscoveredAt) }}</span>
-                                                                                </div>
-                                                                                <div class="detail-section">
-                                                                                    <span class="detail-label">Required Params:</span>
-                                                                                    <span class="detail-value">{{ getRequiredParamCount(tool) }}</span>
-                                                                                </div>
-                                                                                @if (tool.InputSchema) {
-                                                                                    <div class="detail-section full">
-                                                                                        <span class="detail-label">Input Schema:</span>
-                                                                                        <pre class="schema-preview">{{ getFormattedInputSchema(tool) }}</pre>
-                                                                                    </div>
+                                                                    <div class="tool-details">
+                                                                        <div class="detail-row">
+                                                                            <span class="detail-label">Tool Name:</span>
+                                                                            <span class="detail-value mono">{{ tool.ToolName }}</span>
+                                                                        </div>
+                                                                        <div class="detail-row">
+                                                                            <span class="detail-label">Parameters:</span>
+                                                                            <span class="detail-value">
+                                                                                {{ getParamCount(tool) }} total, {{ getRequiredParamCount(tool) }} required
+                                                                            </span>
+                                                                        </div>
+                                                                        <div class="detail-row">
+                                                                            <span class="detail-label">Discovered:</span>
+                                                                            <span class="detail-value">{{ formatDate(tool.DiscoveredAt) }}</span>
+                                                                        </div>
+                                                                        <div class="detail-row">
+                                                                            <span class="detail-label">Last Seen:</span>
+                                                                            <span class="detail-value">{{ formatDate(tool.LastSeenAt) }}</span>
+                                                                        </div>
+                                                                        @if (tool.InputSchema) {
+                                                                            <div class="detail-row full">
+                                                                                <span class="detail-label">Input Schema:</span>
+                                                                                <pre class="schema-preview">{{ getFormattedInputSchema(tool) }}</pre>
+                                                                            </div>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                } @else {
+                                                    <!-- List View -->
+                                                    <div class="tools-list">
+                                                        <table>
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Tool</th>
+                                                                    <th>Description</th>
+                                                                    <th>Params</th>
+                                                                    <th>Status</th>
+                                                                    <th>Last Seen</th>
+                                                                    <th>Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @for (tool of group.tools; track tool.ID) {
+                                                                    <tr [class.expanded]="isToolExpanded(tool)">
+                                                                        <td class="tool-name-cell">
+                                                                            <i class="fa-solid fa-wrench"></i>
+                                                                            <div class="tool-name-info">
+                                                                                <span class="tool-title" [innerHTML]="(tool.ToolTitle || tool.ToolName) | highlightSearch:(filters$ | async)?.searchTerm"></span>
+                                                                                @if (tool.ToolTitle) {
+                                                                                    <span class="tool-code">{{ tool.ToolName }}</span>
                                                                                 }
                                                                             </div>
                                                                         </td>
+                                                                        <td class="description-cell" [innerHTML]="(tool.ToolDescription || '-') | highlightSearch:(filters$ | async)?.searchTerm">
+                                                                        </td>
+                                                                        <td>
+                                                                            <span class="param-count">{{ getParamCount(tool) }}</span>
+                                                                        </td>
+                                                                        <td>
+                                                                            <span class="status-badge small" [ngClass]="getStatusClass(tool.Status)">
+                                                                                {{ tool.Status }}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td>{{ formatDate(tool.LastSeenAt) }}</td>
+                                                                        <td class="actions-cell">
+                                                                            <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test">
+                                                                                <i class="fa-solid fa-play"></i>
+                                                                            </button>
+                                                                            <button kendoButton fillMode="flat" size="small" (click)="toggleToolExpand(tool)" title="Details">
+                                                                                <i class="fa-solid" [class.fa-chevron-down]="!isToolExpanded(tool)" [class.fa-chevron-up]="isToolExpanded(tool)"></i>
+                                                                            </button>
+                                                                        </td>
                                                                     </tr>
+                                                                    @if (isToolExpanded(tool)) {
+                                                                        <tr class="detail-row-expanded">
+                                                                            <td colspan="6">
+                                                                                <div class="inline-details">
+                                                                                    <div class="detail-section">
+                                                                                        <span class="detail-label">Tool Name:</span>
+                                                                                        <span class="detail-value mono">{{ tool.ToolName }}</span>
+                                                                                    </div>
+                                                                                    <div class="detail-section">
+                                                                                        <span class="detail-label">Discovered:</span>
+                                                                                        <span class="detail-value">{{ formatDate(tool.DiscoveredAt) }}</span>
+                                                                                    </div>
+                                                                                    <div class="detail-section">
+                                                                                        <span class="detail-label">Required Params:</span>
+                                                                                        <span class="detail-value">{{ getRequiredParamCount(tool) }}</span>
+                                                                                    </div>
+                                                                                    @if (tool.InputSchema) {
+                                                                                        <div class="detail-section full">
+                                                                                            <span class="detail-label">Input Schema:</span>
+                                                                                            <pre class="schema-preview">{{ getFormattedInputSchema(tool) }}</pre>
+                                                                                        </div>
+                                                                                    }
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    }
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+
+                        <!-- Logs Tab -->
+                        @case ('logs') {
+                            <div class="data-table">
+                                @if (filteredLogs.length === 0) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-list-check"></i>
+                                        <p>No recent execution logs</p>
+                                        <span class="hint">Logs appear when tools are executed via MCP connections</span>
+                                    </div>
+                                } @else {
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th class="sortable" [ngClass]="getLogSortClass('status')" (click)="onLogSortColumn('status')">
+                                                    Status
+                                                    <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'status' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'status' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'status'"></i>
+                                                </th>
+                                                <th class="sortable" [ngClass]="getLogSortClass('server')" (click)="onLogSortColumn('server')">
+                                                    Server
+                                                    <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'server' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'server' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'server'"></i>
+                                                </th>
+                                                <th class="sortable" [ngClass]="getLogSortClass('tool')" (click)="onLogSortColumn('tool')">
+                                                    Tool
+                                                    <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'tool' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'tool' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'tool'"></i>
+                                                </th>
+                                                <th class="sortable" [ngClass]="getLogSortClass('connection')" (click)="onLogSortColumn('connection')">
+                                                    Connection
+                                                    <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'connection' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'connection' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'connection'"></i>
+                                                </th>
+                                                <th class="sortable" [ngClass]="getLogSortClass('started')" (click)="onLogSortColumn('started')">
+                                                    Started
+                                                    <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'started' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'started' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'started'"></i>
+                                                </th>
+                                                <th class="sortable" [ngClass]="getLogSortClass('duration')" (click)="onLogSortColumn('duration')">
+                                                    Duration
+                                                    <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'duration' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'duration' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'duration'"></i>
+                                                </th>
+                                                <th class="sortable" [ngClass]="getLogSortClass('error')" (click)="onLogSortColumn('error')">
+                                                    Error
+                                                    <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'error' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'error' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'error'"></i>
+                                                </th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (log of filteredLogs; track log.ID) {
+                                                <tr [class.error-row]="log.Status === 'Error'"
+                                                    class="clickable-row"
+                                                    (click)="onLogClick(log)"
+                                                    title="Click for details">
+                                                    <td>
+                                                        <span class="status-badge" [ngClass]="getStatusClass(log.Status)">
+                                                            @switch (log.Status) {
+                                                                @case ('Success') {
+                                                                    <i class="fa-solid fa-check-circle"></i>
+                                                                }
+                                                                @case ('Error') {
+                                                                    <i class="fa-solid fa-times-circle"></i>
+                                                                }
+                                                                @case ('Running') {
+                                                                    <i class="fa-solid fa-spinner fa-spin"></i>
+                                                                }
+                                                                @default {
+                                                                    <i class="fa-solid fa-question-circle"></i>
                                                                 }
                                                             }
-                                                        </tbody>
-                                                    </table>
-                                                </div>
+                                                            {{ log.Status || 'Unknown' }}
+                                                        </span>
+                                                    </td>
+                                                    <td class="server-name">{{ log.ServerName }}</td>
+                                                    <td class="tool-name">{{ log.ToolName }}</td>
+                                                    <td>{{ log.ConnectionName }}</td>
+                                                    <td>{{ formatDate(log.StartedAt) }}</td>
+                                                    <td>{{ formatDuration(log.DurationMs) }}</td>
+                                                    <td class="error-message" [title]="log.ErrorMessage || ''">
+                                                        {{ log.ErrorMessage || '-' }}
+                                                    </td>
+                                                    <td class="action-cell">
+                                                        <i class="fa-solid fa-chevron-right"></i>
+                                                    </td>
+                                                </tr>
                                             }
-                                        }
-                                    </div>
+                                        </tbody>
+                                    </table>
                                 }
                             </div>
                         }
                     }
-
-                    <!-- Logs Tab -->
-                    @case ('logs') {
-                        <div class="data-table">
-                            @if (filteredLogs.length === 0) {
-                                <div class="empty-state">
-                                    <i class="fa-solid fa-list-check"></i>
-                                    <p>No recent execution logs</p>
-                                    <span class="hint">Logs appear when tools are executed via MCP connections</span>
-                                </div>
-                            } @else {
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th class="sortable" [ngClass]="getLogSortClass('status')" (click)="onLogSortColumn('status')">
-                                                Status
-                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'status' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'status' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'status'"></i>
-                                            </th>
-                                            <th class="sortable" [ngClass]="getLogSortClass('server')" (click)="onLogSortColumn('server')">
-                                                Server
-                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'server' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'server' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'server'"></i>
-                                            </th>
-                                            <th class="sortable" [ngClass]="getLogSortClass('tool')" (click)="onLogSortColumn('tool')">
-                                                Tool
-                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'tool' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'tool' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'tool'"></i>
-                                            </th>
-                                            <th class="sortable" [ngClass]="getLogSortClass('connection')" (click)="onLogSortColumn('connection')">
-                                                Connection
-                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'connection' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'connection' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'connection'"></i>
-                                            </th>
-                                            <th class="sortable" [ngClass]="getLogSortClass('started')" (click)="onLogSortColumn('started')">
-                                                Started
-                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'started' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'started' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'started'"></i>
-                                            </th>
-                                            <th class="sortable" [ngClass]="getLogSortClass('duration')" (click)="onLogSortColumn('duration')">
-                                                Duration
-                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'duration' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'duration' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'duration'"></i>
-                                            </th>
-                                            <th class="sortable" [ngClass]="getLogSortClass('error')" (click)="onLogSortColumn('error')">
-                                                Error
-                                                <i class="sort-icon fa-solid" [class.fa-sort-up]="LogsSortColumn === 'error' && LogsSortAscending" [class.fa-sort-down]="LogsSortColumn === 'error' && !LogsSortAscending" [class.fa-sort]="LogsSortColumn !== 'error'"></i>
-                                            </th>
-                                            <th></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @for (log of filteredLogs; track log.ID) {
-                                            <tr [class.error-row]="log.Status === 'Error'"
-                                                class="clickable-row"
-                                                (click)="onLogClick(log)"
-                                                title="Click for details">
-                                                <td>
-                                                    <span class="status-badge" [ngClass]="getStatusClass(log.Status)">
-                                                        @switch (log.Status) {
-                                                            @case ('Success') {
-                                                                <i class="fa-solid fa-check-circle"></i>
-                                                            }
-                                                            @case ('Error') {
-                                                                <i class="fa-solid fa-times-circle"></i>
-                                                            }
-                                                            @case ('Running') {
-                                                                <i class="fa-solid fa-spinner fa-spin"></i>
-                                                            }
-                                                            @default {
-                                                                <i class="fa-solid fa-question-circle"></i>
-                                                            }
-                                                        }
-                                                        {{ log.Status || 'Unknown' }}
-                                                    </span>
-                                                </td>
-                                                <td class="server-name">{{ log.ServerName }}</td>
-                                                <td class="tool-name">{{ log.ToolName }}</td>
-                                                <td>{{ log.ConnectionName }}</td>
-                                                <td>{{ formatDate(log.StartedAt) }}</td>
-                                                <td>{{ formatDuration(log.DurationMs) }}</td>
-                                                <td class="error-message" [title]="log.ErrorMessage || ''">
-                                                    {{ log.ErrorMessage || '-' }}
-                                                </td>
-                                                <td class="action-cell">
-                                                    <i class="fa-solid fa-chevron-right"></i>
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            }
-                        </div>
-                    }
                 }
-            }
+            </div>
         </div>
     </div>
 </div>
