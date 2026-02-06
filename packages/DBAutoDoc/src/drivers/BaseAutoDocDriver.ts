@@ -148,10 +148,10 @@ export abstract class BaseAutoDocDriver {
       maxSampleSize
     );
 
-    // Calculate total rows from null percentage if available
-    const totalRows = stats.nullCount > 0 && stats.nullPercentage > 0
-      ? Math.round(stats.nullCount / stats.nullPercentage)
-      : stats.nullCount + stats.distinctCount; // Estimate
+    // Use totalCount from stats (added by Object.assign in driver implementations)
+    // The totalCount property is added dynamically by getCardinalityStats() but not in the interface
+    const statsWithTotal = stats as AutoDocColumnStatistics & { totalCount?: number };
+    const totalRows = statsWithTotal.totalCount || stats.totalRows || 0;
 
     return {
       columnName,

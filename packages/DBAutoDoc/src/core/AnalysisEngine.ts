@@ -739,16 +739,58 @@ export class AnalysisEngine {
     for (const fk of foreignKeys) {
       const { columnName, referencesSchema, referencesTable, referencesColumn, confidence } = fk;
 
+      // Normalize table reference in case LLM returned "schema.table" format
+      let targetSchema = referencesSchema;
+      let targetTable = referencesTable;
+      if (referencesTable.includes('.')) {
+        const parts = referencesTable.split('.');
+        targetSchema = parts[0];
+        targetTable = parts[1];
+        console.log(`[AnalysisEngine] Normalized LLM table ref: "${referencesTable}" -> schema="${targetSchema}", table="${targetTable}"`);
+      }
+
+      // Post-LLM FK Validation**
+      // Reject FKs from hard PKs (SQL-defined) unless inheritance pattern
+      const sourceColumn = this.findColumnInState(state, schemaName, tableName, columnName);
+      if (sourceColumn?.isPrimaryKey && sourceColumn.pkSource === 'schema') {
+        // Hard PK from SQL schema - only allow if inheritance pattern
+        const table = state.schemas
+          .find(s => s.name === schemaName)
+          ?.tables.find(t => t.name === tableName);
+        if (!table || !this.detectInheritancePattern(table, sourceColumn)) {
+          console.warn(
+            `[AnalysisEngine] Rejecting FK from hard PK: ${schemaName}.${tableName}.${columnName} ` +
+            `→ ${targetSchema}.${targetTable}.${referencesColumn}`
+          );
+          continue; // Skip this FK
+        }
+      }
+
+      // Validate confidence vs value overlap for discovered FKs
+      const existingFKForValidation = discoveryPhase.discovered.foreignKeys.find(fk =>
+        fk.schemaName === schemaName &&
+        fk.sourceTable === tableName &&
+        fk.sourceColumn === columnName
+      );
+      if (existingFKForValidation && confidence > 0.9 && existingFKForValidation.evidence.valueOverlap < 0.1) {
+        console.warn(
+          `[AnalysisEngine] Suspicious FK: high LLM confidence (${confidence}) but low overlap ` +
+          `(${existingFKForValidation.evidence.valueOverlap}) for ${schemaName}.${tableName}.${columnName}`
+        );
+        // Downgrade confidence to max 0.6
+        fk.confidence = Math.min(confidence, 0.6);
+      }
+
       // Create feedback for this FK
       const feedback: import('../types/discovery.js').AnalysisToDiscoveryFeedback = {
         type: 'new_relationship',
-        evidence: `LLM-identified FK: ${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn} (confidence: ${confidence})`,
+        evidence: `LLM-identified FK: ${columnName} -> ${targetSchema}.${targetTable}.${referencesColumn} (confidence: ${confidence})`,
         tableName,
         columnName,
         affectedCandidates: [],
         recommendation: 'add_new',
         newRelationship: {
-          targetTable: `${referencesSchema}.${referencesTable}`,
+          targetTable: `${targetSchema}.${targetTable}`,
           targetColumn: referencesColumn
         }
       };
@@ -773,16 +815,20 @@ export class AnalysisEngine {
           feedback.affectedCandidates.push(`PK:${schemaName}.${tableName}.${columnName}`);
           const column = this.findColumnInState(state, schemaName, tableName, columnName);
           if (column) column.isPrimaryKey = false;
-          console.log(`[AnalysisEngine] FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}, rejecting as PK`);
+          console.log(`[AnalysisEngine] FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${targetSchema}.${targetTable}, rejecting as PK`);
         }
       }
 
       // Check if we already have this FK - boost confidence
-      const existingFK = discoveryPhase.discovered.foreignKeys.find(fk =>
-        fk.schemaName === schemaName &&
-        fk.sourceTable === tableName &&
-        fk.sourceColumn === columnName
-      );
+      // Normalize table references to prevent duplicates
+      const normalizedTarget = this.normalizeTableRef(targetSchema, targetTable);
+      const existingFK = discoveryPhase.discovered.foreignKeys.find(fk => {
+        const existingTarget = this.normalizeTableRef(fk.targetSchema, fk.targetTable);
+        return fk.schemaName === schemaName &&
+               fk.sourceTable === tableName &&
+               fk.sourceColumn === columnName &&
+               existingTarget === normalizedTarget; // Compare normalized refs
+      });
 
       if (existingFK && existingFK.status === 'candidate') {
         existingFK.validatedByLLM = true;
@@ -796,25 +842,28 @@ export class AnalysisEngine {
         if (column) {
           column.isForeignKey = true;
           column.foreignKeyReferences = {
-            schema: referencesSchema,
-            table: referencesTable,
+            schema: targetSchema,
+            table: targetTable,
             column: referencesColumn,
             referencedColumn: referencesColumn
           };
+          // Set fkSource tracking for LLM-confirmed FKs
+          column.fkSource = 'discovered';
+          column.fkDiscoveryConfidence = existingFK.confidence;
         }
 
         // Update table-level dependsOn and dependents arrays for ERD generation
-        this.updateTableDependencies(state, schemaName, tableName, referencesSchema, referencesTable, columnName, referencesColumn);
+        this.updateTableDependencies(state, schemaName, tableName, targetSchema, targetTable, columnName, referencesColumn);
 
-        console.log(`[AnalysisEngine] Confirmed FK: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}, confidence: ${existingFK.confidence}`);
+        console.log(`[AnalysisEngine] Confirmed FK: ${schemaName}.${tableName}.${columnName} -> ${targetSchema}.${targetTable}.${referencesColumn}, confidence: ${existingFK.confidence}`);
       } else {
         // Create new FK from LLM insight
         const newFK: import('../types/discovery.js').FKCandidate = {
           schemaName,
           sourceTable: tableName,
           sourceColumn: columnName,
-          targetSchema: referencesSchema,
-          targetTable: referencesTable,
+          targetSchema: targetSchema,
+          targetTable: targetTable,
           targetColumn: referencesColumn,
           confidence: Math.round(confidence * 100),
           evidence: {
@@ -840,17 +889,20 @@ export class AnalysisEngine {
         if (column) {
           column.isForeignKey = true;
           column.foreignKeyReferences = {
-            schema: referencesSchema,
-            table: referencesTable,
+            schema: targetSchema,
+            table: targetTable,
             column: referencesColumn,
             referencedColumn: referencesColumn
           };
+          // Set fkSource tracking for LLM-created FKs
+          column.fkSource = 'discovered';
+          column.fkDiscoveryConfidence = newFK.confidence;
         }
 
         // Update table-level dependsOn and dependents arrays for ERD generation
-        this.updateTableDependencies(state, schemaName, tableName, referencesSchema, referencesTable, columnName, referencesColumn);
+        this.updateTableDependencies(state, schemaName, tableName, targetSchema, targetTable, columnName, referencesColumn);
 
-        console.log(`[AnalysisEngine] Created FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}`);
+        console.log(`[AnalysisEngine] Created FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${targetSchema}.${targetTable}.${referencesColumn}`);
       }
 
       discoveryPhase.feedbackFromAnalysis.push(feedback);
@@ -860,6 +912,49 @@ export class AnalysisEngine {
   /**
    * Find a column in the state schemas
    */
+  /**
+   * Normalize table reference to schema.table format 
+   * Ensures consistent comparison regardless of whether schema is included
+   *
+   * Examples:
+   * - normalizeTableRef('common', 'Organization') -> 'common.Organization'
+   * - normalizeTableRef('dbo', 'User') -> 'dbo.User'
+   */
+  private normalizeTableRef(schema: string, table: string): string {
+    return `${schema}.${table}`;
+  }
+
+  /**
+   * Detect if a PK column is part of a 1:1 inheritance pattern (Bug #1 fix)
+   * Same logic as FKDetector.detectInheritancePattern()
+   */
+  private detectInheritancePattern(table: TableDefinition, pkColumn: ColumnDefinition): boolean {
+    // Must be single-column PK (composite PKs are never inheritance)
+    const pkColumns = table.columns.filter(c => c.isPrimaryKey);
+    if (pkColumns.length !== 1) {
+      return false;
+    }
+
+    const columnName = pkColumn.name.toLowerCase();
+    const tableName = table.name.toLowerCase();
+
+    // Heuristic: Column name contains a different table name + "id"
+    const idSuffixMatch = columnName.match(/^(.+?)_?id$/);
+    if (!idSuffixMatch) {
+      return false;
+    }
+
+    const potentialParentName = idSuffixMatch[1].replace(/_/g, '');
+
+    // If the potential parent name is the same as the table name, NOT inheritance
+    if (potentialParentName === tableName.replace(/_/g, '')) {
+      return false;
+    }
+
+    // If we get here: PK column name suggests a DIFFERENT table (likely inheritance)
+    return true;
+  }
+
   private findColumnInState(
     state: DatabaseDocumentation,
     schemaName: string,

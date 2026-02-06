@@ -44,6 +44,18 @@ export class FKDetector {
         continue;
       }
 
+      // Skip schema-defined PKs unless 1:1 inheritance pattern
+      // This catches hard PKs (from SQL schema) that aren't in discoveredPKs array
+      if (sourceColumn.isPrimaryKey) {
+        const isInheritance = this.detectInheritancePattern(sourceTable, sourceColumn);
+        if (!isInheritance) {
+          console.log(`[FKDetector]   Skip ${sourceColumn.name} - is a hard PK (not inheritance)`);
+          continue;
+        } else {
+          console.log(`[FKDetector]   Analyzing ${sourceColumn.name} - PK with inheritance pattern`);
+        }
+      }
+
       // Find potential target tables/columns
       const potentialTargets = this.findPotentialTargets(
         schemas,
@@ -86,6 +98,52 @@ export class FKDetector {
 
     // Sort by confidence descending
     return candidates.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /**
+   * Detect if a PK column is part of a 1:1 inheritance pattern
+   *
+   * Inheritance pattern characteristics:
+   * - PK column name suggests parent table (e.g., PersonID → Person)
+   * - Would create 1:1 relationship (child extends parent)
+   * - Rare case (~1% of tables), so we're conservative
+   *
+   * Returns true if inheritance pattern detected, false otherwise
+   */
+  private detectInheritancePattern(table: TableDefinition, pkColumn: ColumnDefinition): boolean {
+    // Must be single-column PK (composite PKs are never inheritance)
+    const pkColumns = table.columns.filter(c => c.isPrimaryKey);
+    if (pkColumns.length !== 1) {
+      return false;
+    }
+
+    const columnName = pkColumn.name.toLowerCase();
+    const tableName = table.name.toLowerCase();
+
+    // Heuristic: Column name contains a different table name + "id"
+    // Examples:
+    // - Employee table with PersonID column (PersonID → Person)
+    // - Student table with PersonID column (PersonID → Person)
+    // - Manager table with EmployeeID column (EmployeeID → Employee)
+
+    // Extract potential parent table name from column
+    // Match patterns: PersonID, Person_ID, person_id, etc.
+    const idSuffixMatch = columnName.match(/^(.+?)_?id$/);
+    if (!idSuffixMatch) {
+      return false; // Column doesn't end with "id"
+    }
+
+    const potentialParentName = idSuffixMatch[1].replace(/_/g, ''); // Remove underscores
+
+    // If the potential parent name is the same as the table name, NOT inheritance
+    // (e.g., Person table with PersonID is just a normal PK)
+    if (potentialParentName === tableName.replace(/_/g, '')) {
+      return false;
+    }
+
+    // If we get here: PK column name suggests a DIFFERENT table
+    // This is likely inheritance (e.g., Employee.PersonID → Person.PersonID)
+    return true;
   }
 
   /**

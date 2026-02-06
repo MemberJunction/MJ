@@ -126,6 +126,23 @@ export interface ColumnDefinition {
   statistics?: ColumnStatistics;
   description?: string;
   descriptionIterations: DescriptionIteration[];
+
+  /**
+   * Track origin of PK/FK flags
+   * - 'schema': Defined in SQL DDL (hard constraint, never reject)
+   * - 'discovered': Inferred by discovery phase (soft hypothesis, can reject/refine)
+   * Undefined for legacy state.json files (assume 'discovered' for safety)
+   */
+  pkSource?: 'schema' | 'discovered';
+  fkSource?: 'schema' | 'discovered';
+
+  /**
+   * Confidence scores for discovered keys (0-100)
+   * Only set when pkSource='discovered' or fkSource='discovered'
+   * Undefined for schema-defined keys
+   */
+  pkDiscoveryConfidence?: number;
+  fkDiscoveryConfidence?: number;
 }
 
 export interface ForeignKeyReference {

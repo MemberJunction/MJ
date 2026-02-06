@@ -962,6 +962,9 @@ export class DiscoveryEngine {
           const column = table.columns.find(c => c.name === columnName);
           if (column) {
             column.isPrimaryKey = true;
+            // Track discovered PKs
+            column.pkSource = 'discovered';
+            column.pkDiscoveryConfidence = pk.confidence;
           }
         }
       }
@@ -985,6 +988,9 @@ export class DiscoveryEngine {
             column: fk.targetColumn,
             referencedColumn: fk.targetColumn
           };
+          // Bug Fix #2 (Task 2.1): Track discovered FKs
+          column.fkSource = 'discovered';
+          column.fkDiscoveryConfidence = fk.confidence;
         }
       }
     }

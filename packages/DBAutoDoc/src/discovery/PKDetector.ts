@@ -27,6 +27,14 @@ export class PKDetector {
   ): Promise<PKCandidate[]> {
     const candidates: PKCandidate[] = [];
 
+    // Skip if table already has a PK defined
+    // SQL tables can only have ONE primary key (single or composite)
+    const hasExistingPK = table.columns.some(col => col.isPrimaryKey);
+    if (hasExistingPK) {
+      console.log(`[PKDetector] Skipping ${schemaName}.${table.name} - already has PK`);
+      return [];
+    }
+
     // Single-column PK detection
     for (const column of table.columns) {
       const candidate = await this.analyzeSingleColumnPK(
@@ -58,7 +66,19 @@ export class PKDetector {
     }
 
     // Sort by confidence descending
-    return candidates.sort((a, b) => b.confidence - a.confidence);
+    const sorted = candidates.sort((a, b) => b.confidence - a.confidence);
+
+    // SQL constraint - max ONE primary key per table
+    // Return only the best candidate (highest confidence)
+    if (sorted.length > 1) {
+      console.log(
+        `[PKDetector] Table ${table.name} has ${sorted.length} PK candidates - selecting best (confidence: ${sorted[0].confidence}%)`
+      );
+      const rejected = sorted.slice(1).map(c => `${c.columnNames.join(',')} (${c.confidence}%)`).join(', ');
+      console.log(`[PKDetector]   Rejected: ${rejected}`);
+    }
+
+    return sorted.length > 0 ? [sorted[0]] : [];
   }
 
   /**

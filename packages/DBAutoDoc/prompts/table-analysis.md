@@ -9,8 +9,8 @@ You are analyzing a database table to generate comprehensive documentation. Your
 ## Columns
 {% for col in columns %}
 - **{{ col.name }}** ({{ col.dataType }}){% if not col.isNullable %} NOT NULL{% endif %}
-  {% if col.isPrimaryKey %}- **PRIMARY KEY**{% endif %}
-  {% if col.isForeignKey %}- **FOREIGN KEY** → {{ col.foreignKeyReferences.schema }}.{{ col.foreignKeyReferences.table }}.{{ col.foreignKeyReferences.column }}{% endif %}
+  {% if col.isPrimaryKey %}{% if col.pkSource === 'schema' %}- **🔒 HARD PRIMARY KEY (SQL constraint)** - DO NOT suggest as foreign key{% else %}- **Soft Primary Key** (discovered{% if col.pkDiscoveryConfidence %}, confidence: {{ col.pkDiscoveryConfidence }}%{% endif %}){% endif %}{% endif %}
+  {% if col.isForeignKey %}{% if col.fkSource === 'schema' %}- **🔒 HARD FOREIGN KEY (SQL constraint)** → {{ col.foreignKeyReferences.schema }}.{{ col.foreignKeyReferences.table }}.{{ col.foreignKeyReferences.column }}{% else %}- **Soft Foreign Key** (discovered{% if col.fkDiscoveryConfidence %}, confidence: {{ col.fkDiscoveryConfidence }}%{% endif %}) → {{ col.foreignKeyReferences.schema }}.{{ col.foreignKeyReferences.table }}.{{ col.foreignKeyReferences.column }}{% endif %}{% endif %}
   {% if col.checkConstraint %}- Check Constraint: {{ col.checkConstraint }}{% endif %}
   {% if col.defaultValue %}- Default: {{ col.defaultValue }}{% endif %}
   {% if col.statistics %}- Distinct Values: {{ col.statistics.distinctCount }} ({{ (col.statistics.uniquenessRatio * 100) | round(1) }}% unique){% endif %}
@@ -109,6 +109,36 @@ Based on the evidence above, generate a JSON response with this exact structure:
   ]
 }
 ```
+
+**🚨 CRITICAL: Foreign Key Validation Rules**
+
+Before adding a foreign key to your response, you MUST validate it meets these requirements:
+
+1. **NEVER mark a PRIMARY KEY as a foreign key** (unless clear 1:1 inheritance pattern)
+   - Exception: Rare inheritance cases where child PK extends parent (e.g., Employee.PersonID → Person.PersonID)
+   - If column is marked as PRIMARY KEY above, do NOT add to foreignKeys array
+
+2. **FK confidence MUST correlate with value overlap**
+   - Low overlap (<30%) = Low confidence (<0.5)
+   - Medium overlap (30-70%) = Medium confidence (0.5-0.8)
+   - High overlap (>70%) = High confidence (>0.8)
+   - **NEVER use high confidence (>0.9) with low overlap (<10%)**
+
+3. **Check cardinality direction** (many-to-one expected for FKs)
+   - Valid: Many rows in THIS table → Few rows in target table
+   - Invalid: Few rows in THIS table → Many rows in target table (likely one-to-many, not FK)
+   - Use distinctCount and sample values to assess this
+
+4. **Generic "ID" columns do NOT automatically imply relationships**
+   - Column named "ID" alone is NOT evidence of FK
+   - Require at least TWO pieces of evidence:
+     - Naming match (e.g., CustomerID → Customer.ID) AND value overlap (>50%)
+     - OR explicit domain knowledge from context
+
+5. **Only reference tables from "All Database Tables" list**
+   - Do NOT invent table names
+   - Do NOT assume tables exist without seeing them in the provided list
+   - If unsure, leave foreignKeys array empty
 
 **Guidelines:**
 1. **Table Description**: Focus on WHAT the table stores and WHY it exists. Be specific about the real-world entities or business processes it represents.

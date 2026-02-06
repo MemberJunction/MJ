@@ -106,7 +106,11 @@ export class Introspector {
           isForeignKey: col.isForeignKey,
           checkConstraint: col.checkConstraint,
           defaultValue: col.defaultValue,
-          descriptionIterations: []
+          descriptionIterations: [],
+          // Track hard vs soft keys
+          // Schema introspection sets 'schema' source for SQL-defined keys
+          pkSource: col.isPrimaryKey ? 'schema' : undefined,
+          fkSource: col.isForeignKey ? 'schema' : undefined
         }));
 
         tables.push({
