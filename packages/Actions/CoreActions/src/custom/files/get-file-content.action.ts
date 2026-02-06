@@ -125,7 +125,7 @@ export class GetFileContentAction extends BaseFileStorageAction {
             } else if (this.isExcel(contentType)) {
                 // Excel: Parse to structured text
                 const workbook = new ExcelJS.Workbook();
-                await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+                await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
 
                 const sheets: Record<string, unknown[]> = {};
                 workbook.eachSheet((worksheet, sheetId) => {

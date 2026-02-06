@@ -210,10 +210,10 @@
   </div><!-- end input-container -->
 
   <!-- Validation Error -->
-  <div *ngIf="control?.invalid && control?.touched" class="validation-error">
-    <span *ngIf="control?.errors?.['required']">This field is required</span>
-    <span *ngIf="control?.errors?.['email']">Please enter a valid email address</span>
-    <span *ngIf="control?.errors?.['min']">Value must be at least {{ min }}</span>
-    <span *ngIf="control?.errors?.['max']">Value must be at most {{ max }}</span>
+  <div *ngIf="control.invalid && control.touched" class="validation-error">
+    <span *ngIf="control.errors?.['required']">This field is required</span>
+    <span *ngIf="control.errors?.['email']">Please enter a valid email address</span>
+    <span *ngIf="control.errors?.['min']">Value must be at least {{ min }}</span>
+    <span *ngIf="control.errors?.['max']">Value must be at most {{ max }}</span>
   </div>
 </div>

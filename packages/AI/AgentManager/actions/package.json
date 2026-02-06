@@ -30,9 +30,9 @@
     "@memberjunction/ai-engine-base": "3.4.0"
   },
   "devDependencies": {
-    "@types/node": "^18.11.0",
-    "rimraf": "^5.0.10",
-    "typescript": "^5.0.0"
+    "@types/node": "^24.10.11",
+    "rimraf": "^6.1.2",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

@@ -20,9 +20,9 @@
     "@memberjunction/global": "3.4.0"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
+    "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

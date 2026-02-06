@@ -600,11 +600,11 @@ export class EncryptionEngine extends EncryptionEngineBase {
             ? Buffer.from(plaintext, 'utf8')
             : plaintext;
 
-        // Encrypt - cast to Uint8Array[] for TS 5.9 Buffer compatibility
+        // Encrypt
         const ciphertext = Buffer.concat([
             cipher.update(Uint8Array.from(data)),
             cipher.final()
-        ] as Uint8Array[]);
+        ] as unknown as Uint8Array[]);
 
         // Build the serialized format
         const parts: string[] = [
@@ -678,7 +678,7 @@ export class EncryptionEngine extends EncryptionEngineBase {
             const plaintext = Buffer.concat([
                 decipher.update(Uint8Array.from(ciphertext)),
                 decipher.final()
-            ] as Uint8Array[]);
+            ] as unknown as Uint8Array[]);
 
             return plaintext.toString('utf8');
         } catch (err) {

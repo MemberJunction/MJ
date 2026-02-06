@@ -28,8 +28,8 @@
     "cron-parser": "^4.9.0"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
-    "typescript": "^5.4.5"
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

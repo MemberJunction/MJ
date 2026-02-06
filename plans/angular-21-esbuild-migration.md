@@ -397,10 +397,73 @@ Upgraded directly (not incrementally per major version). All packages updated:
 ---
 
 ### Phase 3: Upgrade Other Dependencies
+**Status**: In Progress
+**Estimated Complexity**: Medium
+
+#### Phase 3a: Non-MSAL Auth, Markdown & Utility Dependencies
+**Status**: Complete ✓
+**Completed**: 2026-02-05
+
+Upgraded: @auth0/auth0-angular 2.2→2.6, @okta/okta-auth-js 7.8→7.14, marked 12→14, marked-alert/gfm-heading-id/highlight/smartypants, mermaid 10→11, prismjs 1.29→1.30, tslib 2.6→2.8, rxjs 7.8.1→7.8.2
+
+#### Phase 3b: Full Dependency Upgrade to Latest
+**Status**: In Progress
+**Estimated Complexity**: High (198 outdated packages, 79 major version bumps)
+
+Mass upgrade all 198 outdated dependencies to their latest versions based on the comprehensive audit in `/plans/dependency-audit.csv`.
+
+**Notable major version bumps**:
+- zod: 3.x → 4.3.6 (19 locations)
+- dotenv: 16.x → 17.2.4 (30 locations)
+- uuid: 9/10 → 13.0.0 (10 locations)
+- openai: 4/5.x → 6.18.0 (6 locations)
+- jest/ts-jest/babel-jest: 29.x → 30.x (13 locations)
+- mssql: 10/11 → 12.2.0 (13 locations)
+- sass: 1.77 → 1.97.3 (9 locations)
+- rimraf: 5.x → 6.1.2 (17 locations)
+- ag-grid: 34 → 35 (3 locations)
+- MSAL: 3.x → 5.x (auth-services, MJExplorer)
+
+**Exception**: `@types/node` → `^24.10.11` (not 25.x, staying on Node 24 LTS)
+
+#### Phase 3c: Remove Axios
 **Status**: Not Started
 **Estimated Complexity**: Medium
 
-Upgrade auth, markdown, and other third-party dependencies. See target versions in the claude plan file.
+Remove `axios` dependency entirely (15 locations) and replace with Node.js built-in `fetch()` (available since Node 18, stable in Node 24 LTS).
+
+Also remove `@types/axios` (2 locations) and `axios-retry` (2 locations) if no longer needed.
+
+**Why**: Node 24 LTS includes a mature, stable `fetch()` implementation. Axios adds unnecessary bundle weight and an extra dependency surface. Node's built-in fetch covers all our use cases (GET, POST, JSON parsing, headers, timeouts).
+
+**Steps**:
+- [ ] Identify all 15 packages using axios
+- [ ] For each package, replace `axios` calls with `fetch()` equivalents
+- [ ] Handle axios-retry patterns (implement simple retry with fetch or use a lightweight alternative)
+- [ ] Remove `axios`, `@types/axios`, and `axios-retry` from all package.json files
+- [ ] Run `npm install` and `npm run build` to verify
+- [ ] Test API calls still work correctly
+
+**Migration patterns**:
+```typescript
+// Before (axios)
+const response = await axios.get(url, { headers });
+const data = response.data;
+
+// After (fetch)
+const response = await fetch(url, { headers });
+const data = await response.json();
+
+// Before (axios POST)
+const response = await axios.post(url, body, { headers });
+
+// After (fetch POST)
+const response = await fetch(url, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', ...headers },
+  body: JSON.stringify(body)
+});
+```
 
 ---
 

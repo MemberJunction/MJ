@@ -234,6 +234,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       this.appManager.ActiveApp.subscribe(async app => {
         this.activeApp = app;
+        this.cdr.detectChanges();
 
         // Create default tab when app is activated ONLY if:
         // 1. App has no tabs yet
@@ -390,6 +391,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.initialized = true;
     this.waitingForFirstResource = true;
+
+    // Force change detection to sync Angular's expected values after all async
+    // state changes (apps loaded, searchableEntities populated, etc.) to prevent
+    // NG0100 ExpressionChangedAfterItHasBeenCheckedError in dev mode
+    this.cdr.detectChanges();
   }
 
   /**
@@ -472,6 +478,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Check if this is a system tab (not associated with a registered app)
     if (tabAppId === SYSTEM_APP_ID) {
       this.isViewingSystemTab = true;
+      this.cdr.detectChanges();
+
       // Don't try to set active app - SYSTEM_APP_ID has no registered app
       // Update browser title with just the tab title (no app context)
       this.titleService.setContext(null, activeTab.title || 'Explorer');
@@ -480,6 +488,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Not a system tab - clear the flag
     this.isViewingSystemTab = false;
+    this.cdr.detectChanges();
 
     // Check if active app needs to be updated
     const currentActiveApp = this.appManager.GetActiveApp();

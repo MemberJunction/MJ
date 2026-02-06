@@ -32,17 +32,17 @@
     "@memberjunction/core-entities": "3.4.0",
     "@memberjunction/scheduled-actions": "3.4.0",
     "@memberjunction/sqlserver-dataprovider": "3.4.0",
-    "@types/axios": "^0.14.0",
-    "dotenv": "^16.4.1",
+    "@types/axios": "^0.14.4",
+    "dotenv": "^17.2.4",
     "env-var": "^7.3.0",
-    "express": "^5.1.0",
-    "mssql": "^11.0.1",
-    "typescript": "^5.4.5"
+    "express": "^5.2.1",
+    "mssql": "^12.2.0",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@types/express": "^5.0.3",
-    "@types/node": "^18.15.11",
-    "rimraf": "^5.0.10"
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.11",
+    "rimraf": "^6.1.2"
   },
   "repository": {
     "type": "git",

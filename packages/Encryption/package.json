@@ -17,11 +17,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
-    "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
-    "typescript": "^5.4.5"
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.10.11",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@memberjunction/global": "3.4.0",
@@ -37,9 +37,9 @@
     "@azure/identity": "^4.5.0"
   },
   "peerDependencies": {
-    "@aws-sdk/client-kms": "^3.0.0",
-    "@azure/keyvault-secrets": "^4.0.0",
-    "@azure/identity": "^4.0.0"
+    "@aws-sdk/client-kms": "^3.984.0",
+    "@azure/keyvault-secrets": "^4.10.0",
+    "@azure/identity": "^4.13.0"
   },
   "peerDependenciesMeta": {
     "@aws-sdk/client-kms": {

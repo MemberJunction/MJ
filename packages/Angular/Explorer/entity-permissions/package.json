@@ -37,7 +37,7 @@
     "@progress/kendo-angular-excel-export": "22.0.1",
     "@progress/kendo-angular-grid": "22.0.1",
     "@progress/kendo-angular-indicators": "22.0.1",
-    "tslib": "^2.3.0"
+    "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {

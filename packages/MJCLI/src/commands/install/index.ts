@@ -148,7 +148,7 @@ ASK_SKIP_ORGANIZATION_ID = 1
 
     // next, run CodeGen
     // We do not manually run the compilation for GeneratedEntities because CodeGen handles that, but notice above that we did npm install for GeneratedEntities otherwise when CodeGen attempts to compile it, it will fail.
-    dotenv.config();
+    dotenv.config({ quiet: true });
     this.config.runCommand('codegen');
 
     // Process MJExplorer

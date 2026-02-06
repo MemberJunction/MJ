@@ -10,7 +10,7 @@ import { CLIConfig } from '../types';
 
 // Load environment variables BEFORE loading config
 // This ensures process.env is populated when mj.config.cjs is evaluated
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true, quiet: true });
 
 export interface MJConfig {
     // Database settings

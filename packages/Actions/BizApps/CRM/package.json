@@ -31,9 +31,9 @@
     "@memberjunction/global": "3.4.0"
   },
   "devDependencies": {
-    "@types/node": "20.8.7",
-    "rimraf": "^5.0.5",
-    "typescript": "~5.3.3"
+    "@types/node": "24.10.11",
+    "rimraf": "^6.1.2",
+    "typescript": "~5.9.3"
   },
   "engines": {
     "node": ">=16"

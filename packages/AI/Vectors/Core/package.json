@@ -23,13 +23,13 @@
     "@memberjunction/ai": "3.4.0",
     "@memberjunction/ai-core-plus": "3.4.0",
     "@memberjunction/ai-vectordb": "3.4.0",
-    "dotenv": "^16.4.1",
-    "openai": "^4.28.4"
+    "dotenv": "^17.2.4",
+    "openai": "^6.18.0"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
+    "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

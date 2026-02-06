@@ -7,7 +7,7 @@ import { ContentSourceEntity, ContentItemEntity } from "@memberjunction/core-ent
 import { OpenAI } from "openai";
 import path from 'path';
 import dotenv from 'dotenv';
-dotenv.config()
+dotenv.config({ quiet: true })
 
 @RegisterClass(AutotagBase, 'AutotagLocalFileSystem')
 export class AutotagLocalFileSystem extends AutotagBase {

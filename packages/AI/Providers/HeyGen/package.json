@@ -13,13 +13,13 @@
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@memberjunction/ai": "3.4.0",
     "@memberjunction/global": "3.4.0",
-    "axios": "^1.7.2",
-    "@elevenlabs/elevenlabs-js": "^2.32.0"
+    "axios": "^1.13.4",
+    "@elevenlabs/elevenlabs-js": "^2.34.0"
   },
   "repository": {
     "type": "git",

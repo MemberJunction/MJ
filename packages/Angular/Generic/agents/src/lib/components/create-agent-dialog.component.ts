@@ -30,7 +30,7 @@ import { CreateAgentConfig, CreateAgentResult } from './create-agent-panel.compo
                     <i class="fa-solid fa-robot cad-title-icon"></i>
                     <div>
                         <h2 class="cad-title">{{ DialogTitle }}</h2>
-                        <p class="cad-subtitle" *ngIf="Config?.ParentAgentName">
+                        <p class="cad-subtitle" *ngIf="Config.ParentAgentName">
                             Sub-agent of {{ Config.ParentAgentName }}
                         </p>
                     </div>

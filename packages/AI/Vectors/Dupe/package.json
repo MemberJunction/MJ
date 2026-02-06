@@ -25,13 +25,13 @@
     "@memberjunction/core": "3.4.0",
     "@memberjunction/global": "3.4.0",
     "@memberjunction/core-entities": "3.4.0",
-    "dotenv": "^16.4.1"
+    "dotenv": "^17.2.4"
   },
   "devDependencies": {
-    "@types/mssql": "^9.1.5",
-    "@types/node": "20.14.2",
+    "@types/mssql": "^9.1.9",
+    "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

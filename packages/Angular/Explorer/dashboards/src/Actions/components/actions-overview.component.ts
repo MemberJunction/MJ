@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { ActionEntity, ActionCategoryEntity, ActionExecutionLogEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
@@ -50,7 +50,7 @@ interface ExecutionWithExpanded extends ActionExecutionLogEntity {
   styleUrls: ['./actions-overview.component.css']
 })
 export class ActionsOverviewComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-  public isLoading = true;
+  public isLoading: boolean = true;
   public metrics: ActionMetrics = {
     totalActions: 0,
     activeActions: 0,
@@ -75,7 +75,8 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
 
   private destroy$ = new Subject<void>();
 
-  constructor(private navigationService: NavigationService) {
+  constructor(private navigationService: NavigationService, 
+              private cdr: ChangeDetectorRef ) {
     super();
   }
 
@@ -104,7 +105,8 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   private async loadData(): Promise<void> {
     try {
       this.isLoading = true;
-      
+      this.cdr.detectChanges();
+
       // Load all data in a single batch using RunViews
       const rv = new RunView();
       
@@ -140,12 +142,12 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       this.recentActions = actions.slice(0, 10);
       this.recentExecutions = executions.slice(0, 10).map(e => ({ ...e, isExpanded: false } as ExecutionWithExpanded));
       this.topCategories = categories.slice(0, 5);
-
     } catch (error) {
       console.error('Error loading actions overview data:', error);
       LogError('Failed to load actions overview data', undefined, error);
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
       this.NotifyLoadComplete();
     }
   }

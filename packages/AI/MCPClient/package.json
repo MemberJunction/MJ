@@ -20,13 +20,13 @@
     "@memberjunction/core-entities": "3.4.0",
     "@memberjunction/credentials": "3.4.0",
     "@memberjunction/global": "3.4.0",
-    "@modelcontextprotocol/sdk": "^1.25.3",
-    "zod": "^3.25.0"
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "~3.24.4"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
-    "typescript": "^5.4.5",
-    "vitest": "^1.6.0"
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "repository": {
     "type": "git",

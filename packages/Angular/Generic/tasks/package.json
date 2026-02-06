@@ -17,8 +17,8 @@
     "@memberjunction/core-entities": "3.4.0",
     "@memberjunction/ai-core-plus": "3.4.0",
     "@memberjunction/ai-engine-base": "3.4.0",
-    "dhtmlx-gantt": "^8.0.10",
-    "rxjs": "^7.8.1"
+    "dhtmlx-gantt": "^9.1.1",
+    "rxjs": "^7.8.2"
   },
   "peerDependencies": {
     "@angular/common": "21.1.3",

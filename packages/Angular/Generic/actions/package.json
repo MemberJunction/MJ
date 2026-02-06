@@ -34,8 +34,8 @@
     "@memberjunction/core-entities": "3.4.0",
     "@memberjunction/global": "3.4.0",
     "@memberjunction/graphql-dataprovider": "3.4.0",
-    "rxjs": "^7.6.0",
-    "tslib": "^2.4.0"
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {
