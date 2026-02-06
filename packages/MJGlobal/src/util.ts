@@ -1,7 +1,7 @@
 import { MJGlobal } from ".";
 import { IMJComponent, MJEventType } from "./interface";
 import { v4 } from 'uuid';
-import * as _ from 'lodash';
+import _ from 'lodash';
 
 /**
  * Type definition for the global object store that allows arbitrary string indexing.

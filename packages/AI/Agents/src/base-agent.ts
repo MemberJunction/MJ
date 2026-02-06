@@ -52,7 +52,7 @@ import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
-import * as _ from 'lodash';
+import _ from 'lodash';
 
 /**
  * Base iteration context for tracking loop execution in BaseAgent.

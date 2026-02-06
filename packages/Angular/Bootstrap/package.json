@@ -10,6 +10,7 @@
     "types": "./types/memberjunction-ng-bootstrap.d.ts"
   },
   "scripts": {
+    "prebuild": "mj codegen manifest --output ./src/generated/mj-class-registrations.ts",
     "build": "ng-packagr -p ng-package.json && node scripts/fix-dist-package.js",
     "watch": "ng-packagr -p ng-package.json --watch",
     "clean": "rimraf dist"
@@ -29,9 +30,22 @@
     "rxjs": "^7.8.2"
   },
   "dependencies": {
+    "@memberjunction/actions-base": "3.4.0",
+    "@memberjunction/ai-core-plus": "3.4.0",
+    "@memberjunction/ai-engine-base": "3.4.0",
+    "@memberjunction/communication-types": "3.4.0",
     "@memberjunction/core": "3.4.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/entity-communications-base": "3.4.0",
     "@memberjunction/graphql-dataprovider": "3.4.0",
+    "@memberjunction/ng-artifacts": "3.4.0",
     "@memberjunction/ng-auth-services": "3.4.0",
+    "@memberjunction/ng-core-entity-forms": "3.4.0",
+    "@memberjunction/ng-dashboard-viewer": "3.4.0",
+    "@memberjunction/ng-dashboards": "3.4.0",
+    "@memberjunction/ng-explorer-core": "3.4.0",
+    "@memberjunction/ng-explorer-settings": "3.4.0",
+    "@memberjunction/ng-file-storage": "3.4.0",
     "@memberjunction/ng-shared": "3.4.0",
     "rxjs": "^7.8.2"
   },
