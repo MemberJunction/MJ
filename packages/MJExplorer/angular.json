@@ -58,7 +58,11 @@
               "optimization": false,
               "extractLicenses": false,
               "preserveSymlinks": true,
-              "sourceMap": true,
+              "sourceMap": {
+                "scripts": true,
+                "styles": true,
+                "vendor": true
+              },
               "namedChunks": true,
               "fileReplacements": [
                 {
@@ -71,7 +75,11 @@
               "optimization": false,
               "extractLicenses": false,
               "preserveSymlinks": true,
-              "sourceMap": true,
+              "sourceMap": {
+                "scripts": true,
+                "styles": true,
+                "vendor": true
+              },
               "namedChunks": true,
               "fileReplacements": [
                 {

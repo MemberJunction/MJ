@@ -55,22 +55,18 @@
       "preLaunchTask": "start MJExplorer",
       "name": "MJExplorer",
       "url": "http://localhost:4201",
-      "cwd": "${workspaceFolder}/packages/MJExplorer",
-      "sourceMaps": true,
       "webRoot": "${workspaceFolder}",
+      "sourceMaps": true,
       "sourceMapPathOverrides": {
-        "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*",
-        "webpack:///src/*": "${workspaceFolder}/packages/MJExplorer/src/*",
-        "webpack:///./packages/*": "${workspaceFolder}/packages/*",
-        "webpack:///packages/*": "${workspaceFolder}/packages/*",
-        "webpack:///./node_modules/@memberjunction/ng-explorer-core/*": "${workspaceFolder}/packages/Angular/Explorer/explorer-core/*",
-        "webpack:///node_modules/@memberjunction/ng-explorer-core/*": "${workspaceFolder}/packages/Angular/Explorer/explorer-core/*",
-        "webpack:///./node_modules/@memberjunction/*": "${workspaceFolder}/packages/*",
-        "webpack:///node_modules/@memberjunction/*": "${workspaceFolder}/packages/*",
-        "../src/*": "${workspaceFolder}/packages/GraphQLDataProvider/src/*",
-        "webpack:///*": "${workspaceFolder}/*"
+        "/@fs/*": "/*",
+        "./src/*": "${workspaceFolder}/packages/MJExplorer/src/*"
       },
-      "skipFiles": ["<node_internals>/**", "**/zone/**"]
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/node_modules/@memberjunction/**"
+      ],
+      "skipFiles": ["<node_internals>/**", "**/zone/**"],
+      "trace": true
     },
     {
       "type": "node",
