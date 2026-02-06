@@ -158,7 +158,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('duplicateRuns')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Runs','SourceListID')"
                 [NewRecordValues]="NewRecordValues('Duplicate Runs')"
@@ -168,6 +169,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Details Section -->
@@ -180,7 +182,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('details')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('List Details','ListID')"
                 [NewRecordValues]="NewRecordValues('List Details')"
@@ -190,6 +193,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: List Invitations Section -->
@@ -202,7 +206,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJListInvitations')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Invitations','ListID')"
                 [NewRecordValues]="NewRecordValues('MJ: List Invitations')"
@@ -212,6 +217,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: List Shares Section -->
@@ -224,7 +230,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJListShares')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Shares','ListID')"
                 [NewRecordValues]="NewRecordValues('MJ: List Shares')"
@@ -234,6 +241,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

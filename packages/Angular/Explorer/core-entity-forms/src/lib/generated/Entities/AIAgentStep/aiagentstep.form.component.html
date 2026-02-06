@@ -282,7 +282,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentStepPaths')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Step Paths','DestinationStepID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths')"
@@ -292,6 +293,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Step Paths Section -->
@@ -304,7 +306,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentStepPaths')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Step Paths','OriginStepID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths')"
@@ -314,6 +317,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

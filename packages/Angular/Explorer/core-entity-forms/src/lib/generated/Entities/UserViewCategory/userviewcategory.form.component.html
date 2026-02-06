@@ -150,7 +150,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userViewCategories')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User View Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('User View Categories')"
@@ -160,6 +161,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- User Views Section -->
@@ -172,7 +174,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userViews')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Views','CategoryID')"
                 [NewRecordValues]="NewRecordValues('User Views')"
@@ -182,6 +185,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

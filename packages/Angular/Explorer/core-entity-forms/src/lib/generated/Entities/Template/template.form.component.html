@@ -156,7 +156,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('templateContents')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Template Contents','TemplateID')"
                 [NewRecordValues]="NewRecordValues('Template Contents')"
@@ -166,6 +167,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Template Params Section -->
@@ -178,7 +180,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('templateParams')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Template Params','TemplateID')"
                 [NewRecordValues]="NewRecordValues('Template Params')"
@@ -188,6 +191,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: User Notification Types Section -->
@@ -200,7 +204,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJUserNotificationTypes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Types','SMSTemplateID')"
                 [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
@@ -210,6 +215,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- AI Prompts Section -->
@@ -222,7 +228,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIPrompts')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','TemplateID')"
                 [NewRecordValues]="NewRecordValues('AI Prompts')"
@@ -232,6 +239,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: User Notification Types Section -->
@@ -244,7 +252,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJUserNotificationTypes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Types','EmailTemplateID')"
                 [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
@@ -254,6 +263,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entity Documents Section -->
@@ -266,7 +276,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityDocuments')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','TemplateID')"
                 [NewRecordValues]="NewRecordValues('Entity Documents')"
@@ -276,6 +287,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

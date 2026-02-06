@@ -112,7 +112,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('taggedItems')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Tagged Items','TagID')"
                 [NewRecordValues]="NewRecordValues('Tagged Items')"
@@ -122,6 +123,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Tags Section -->
@@ -134,7 +136,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('tags')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Tags','ParentID')"
                 [NewRecordValues]="NewRecordValues('Tags')"
@@ -144,6 +147,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

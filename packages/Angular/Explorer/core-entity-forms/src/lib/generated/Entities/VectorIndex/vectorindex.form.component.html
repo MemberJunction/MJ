@@ -114,7 +114,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityRecordDocuments')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Record Documents','VectorIndexID')"
                 [NewRecordValues]="NewRecordValues('Entity Record Documents')"
@@ -124,6 +125,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

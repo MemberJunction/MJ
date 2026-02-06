@@ -162,7 +162,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgents')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','TypeID')"
                 [NewRecordValues]="NewRecordValues('AI Agents')"
@@ -172,6 +173,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

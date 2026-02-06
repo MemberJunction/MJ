@@ -104,7 +104,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('generatedCodeCategories')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Generated Code Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('Generated Code Categories')"
@@ -114,6 +115,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Generated Codes Section -->
@@ -126,7 +128,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('generatedCodes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Generated Codes','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Generated Codes')"
@@ -136,6 +139,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

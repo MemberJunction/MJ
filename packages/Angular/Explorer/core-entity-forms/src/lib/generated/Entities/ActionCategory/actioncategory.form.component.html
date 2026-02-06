@@ -112,7 +112,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('actionCategories')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Action Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('Action Categories')"
@@ -122,6 +123,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Actions Section -->
@@ -134,7 +136,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('actions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Actions','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Actions')"
@@ -144,6 +147,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: MCP Server Tools Section -->
@@ -156,7 +160,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJMCPServerTools')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Tools','GeneratedActionCategoryID')"
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools')"
@@ -166,6 +171,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

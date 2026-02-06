@@ -130,7 +130,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJConversationArtifactPermissions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Permissions','ConversationArtifactID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Permissions')"
@@ -140,6 +141,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Conversation Artifact Versions Section -->
@@ -152,7 +154,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJConversationArtifactVersions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Versions','ConversationArtifactID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Versions')"
@@ -162,6 +165,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Conversation Details Section -->
@@ -174,7 +178,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('conversationDetails')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','ArtifactID')"
                 [NewRecordValues]="NewRecordValues('Conversation Details')"
@@ -184,6 +189,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

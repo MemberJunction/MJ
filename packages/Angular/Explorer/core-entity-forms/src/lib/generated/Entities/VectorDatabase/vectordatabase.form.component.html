@@ -84,7 +84,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityDocuments')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','ID')"
                 [NewRecordValues]="NewRecordValues('Entity Documents')"
@@ -94,6 +95,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Vector Indexes Section -->
@@ -106,7 +108,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('vectorIndexes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes','VectorDatabaseID')"
                 [NewRecordValues]="NewRecordValues('Vector Indexes')"
@@ -116,6 +119,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

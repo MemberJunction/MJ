@@ -823,9 +823,11 @@ ${indentedFormHTML}
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('${sectionKey}')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
 ${componentCodeWithIndent}
         </div>
+        }
     </mj-collapsible-panel>`
 
             tabs.push({

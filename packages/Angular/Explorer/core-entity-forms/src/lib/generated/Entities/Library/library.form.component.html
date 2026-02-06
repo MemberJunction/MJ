@@ -102,7 +102,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('actions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Action Libraries','LibraryID')"
                 [NewRecordValues]="NewRecordValues('Action Libraries')"
@@ -112,6 +113,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Items Section -->
@@ -124,7 +126,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('items')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Library Items','LibraryID')"
                 [NewRecordValues]="NewRecordValues('Library Items')"
@@ -134,6 +137,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

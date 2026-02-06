@@ -158,7 +158,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('workspaceItems')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('Workspace Items')"
@@ -168,6 +169,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- User Notifications Section -->
@@ -180,7 +182,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userNotifications')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('User Notifications')"
@@ -190,6 +193,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Resource Links Section -->
@@ -202,7 +206,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('resourceLinks')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('Resource Links')"
@@ -212,6 +217,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Resource Permissions Section -->
@@ -224,7 +230,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('resourcePermissions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('Resource Permissions')"
@@ -234,6 +241,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

@@ -136,7 +136,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('reports')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Reports','OutputWorkflowID')"
                 [NewRecordValues]="NewRecordValues('Reports')"
@@ -146,6 +147,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Workflow Runs Section -->
@@ -158,7 +160,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('workflowRuns')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Workflow Runs','WorkflowName')"
                 [NewRecordValues]="NewRecordValues('Workflow Runs')"
@@ -168,6 +171,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

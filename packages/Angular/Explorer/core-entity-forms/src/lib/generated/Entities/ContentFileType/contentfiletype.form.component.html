@@ -58,7 +58,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('contentSources')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Content Sources','ContentFileTypeID')"
                 [NewRecordValues]="NewRecordValues('Content Sources')"
@@ -68,6 +69,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Content Items Section -->
@@ -80,7 +82,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('contentItems')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Content Items','ContentFileTypeID')"
                 [NewRecordValues]="NewRecordValues('Content Items')"
@@ -90,6 +93,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

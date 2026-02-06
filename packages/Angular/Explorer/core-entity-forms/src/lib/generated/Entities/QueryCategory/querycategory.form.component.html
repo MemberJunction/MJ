@@ -154,7 +154,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('queries')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Queries','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Queries')"
@@ -164,6 +165,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Query Categories Section -->
@@ -176,7 +178,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('queryCategories')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Query Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('Query Categories')"
@@ -186,6 +189,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         
