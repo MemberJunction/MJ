@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { ActionExecutionLogEntity, ActionEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
@@ -84,7 +84,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   private destroy$ = new Subject<void>();
 
-  constructor(private navigationService: NavigationService) {
+  constructor(private navigationService: NavigationService, private cdr: ChangeDetectorRef) {
     super();
   }
 
@@ -146,6 +146,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     } finally {
       this.isLoading = false;
       this.NotifyLoadComplete();
+      this.cdr.detectChanges();
     }
   }
 

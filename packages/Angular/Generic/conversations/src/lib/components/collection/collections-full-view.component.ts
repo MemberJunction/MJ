@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { CollectionEntity, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
@@ -1165,7 +1165,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     private artifactState: ArtifactStateService,
     private collectionState: CollectionStateService,
     private permissionService: CollectionPermissionService,
-    private artifactIconService: ArtifactIconService
+    private artifactIconService: ArtifactIconService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -1267,6 +1268,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       this.buildUnifiedItemList();
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
