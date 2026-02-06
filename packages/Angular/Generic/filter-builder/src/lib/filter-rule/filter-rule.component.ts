@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ViewEncapsulation, HostListener, ElementRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ViewEncapsulation, HostListener, ElementRef, ViewChild } from '@angular/core';
 import {
   FilterDescriptor,
   FilterFieldInfo,
@@ -76,6 +76,11 @@ export class FilterRuleComponent implements OnInit, OnChanges {
   public operatorHighlightIndex = -1;
   public valueHighlightIndex = -1;
 
+  // ViewChild references for dropdown buttons (Safari focus fix)
+  @ViewChild('fieldDropdownBtn') fieldDropdownBtn!: ElementRef<HTMLButtonElement>;
+  @ViewChild('operatorDropdownBtn') operatorDropdownBtn!: ElementRef<HTMLButtonElement>;
+  @ViewChild('valueDropdownBtn') valueDropdownBtn!: ElementRef<HTMLButtonElement>;
+
   constructor(private elementRef: ElementRef) {}
 
   /**
@@ -124,6 +129,10 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     const wasOpen = this.fieldDropdownOpen;
     this.closeAllDropdowns();
     this.fieldDropdownOpen = !wasOpen;
+    if (this.fieldDropdownOpen) {
+      // Ensure button retains focus for keyboard events (Safari fix)
+      setTimeout(() => this.fieldDropdownBtn?.nativeElement?.focus(), 0);
+    }
   }
 
   toggleOperatorDropdown(): void {
@@ -131,6 +140,10 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     const wasOpen = this.operatorDropdownOpen;
     this.closeAllDropdowns();
     this.operatorDropdownOpen = !wasOpen;
+    if (this.operatorDropdownOpen) {
+      // Ensure button retains focus for keyboard events (Safari fix)
+      setTimeout(() => this.operatorDropdownBtn?.nativeElement?.focus(), 0);
+    }
   }
 
   toggleValueDropdown(): void {
@@ -138,6 +151,10 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     const wasOpen = this.valueDropdownOpen;
     this.closeAllDropdowns();
     this.valueDropdownOpen = !wasOpen;
+    if (this.valueDropdownOpen) {
+      // Ensure button retains focus for keyboard events (Safari fix)
+      setTimeout(() => this.valueDropdownBtn?.nativeElement?.focus(), 0);
+    }
   }
 
   closeFieldDropdown(): void {
