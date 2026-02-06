@@ -16,7 +16,7 @@ This package implements a provider pattern that allows seamless switching betwee
 - **Reactive State Management**: Observable-based authentication state and user information
 - **Token Management**: Built-in token refresh and expiration handling
 - **TypeScript Support**: Full TypeScript definitions for type safety
-- **Angular 18+ Compatible**: Built for modern Angular applications
+- **Angular 21+ Compatible**: Built for modern Angular applications
 
 ## Installation
 

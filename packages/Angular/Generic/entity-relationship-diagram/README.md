@@ -759,7 +759,7 @@ Requires support for:
 
 ## Dependencies
 
-- Angular 18+
+- Angular 21+
 - D3.js 7+
 - RxJS 7+
 

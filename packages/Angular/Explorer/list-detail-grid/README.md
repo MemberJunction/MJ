@@ -46,7 +46,7 @@ npm install @memberjunction/ng-list-detail-grid
 
 ## Requirements
 
-- Angular 18+
+- Angular 21+
 - @memberjunction/core
 - @memberjunction/core-entities
 - @memberjunction/ng-compare-records
