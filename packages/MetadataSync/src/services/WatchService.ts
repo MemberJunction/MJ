@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import chokidar from 'chokidar';
+import chokidar, { type FSWatcher } from 'chokidar';
 import { BaseEntity, Metadata } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { loadEntityConfig, loadSyncConfig } from '../config';
@@ -28,7 +28,7 @@ export interface WatchCallbacks {
 }
 
 export interface WatchResult {
-  watchers: chokidar.FSWatcher[];
+  watchers: FSWatcher[];
   stop: () => Promise<void>;
 }
 
@@ -54,7 +54,7 @@ export class WatchService {
     await this.setupSqlLogging(callbacks);
     
     // Set up watchers
-    const watchers: chokidar.FSWatcher[] = [];
+    const watchers: FSWatcher[] = [];
     
     for (const entityDir of entityDirs) {
       const entityConfig = await loadEntityConfig(entityDir);
