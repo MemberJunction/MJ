@@ -69,6 +69,16 @@ export interface GenerateManifestOptions {
      * Glob patterns to exclude from scanning.
      */
     excludePatterns?: string[];
+
+    /**
+     * Package name prefixes to exclude from the dependency tree walk.
+     * Any package whose name starts with one of these prefixes will be skipped entirely.
+     * Useful for external consumers who import a pre-built manifest for framework packages
+     * and only need to scan their own custom packages.
+     *
+     * @example ['@memberjunction'] — skips all @memberjunction/* packages
+     */
+    excludePackages?: string[];
 }
 
 /**
@@ -151,9 +161,17 @@ function resolvePackageDir(depName: string, fromDir: string): string | null {
  * Walks the full transitive dependency tree starting from an app's package.json.
  * Returns all unique package directories found (deduplicated by resolved real path).
  */
+/**
+ * Checks whether a package name matches any of the given exclusion prefixes.
+ */
+function isPackageExcluded(packageName: string, excludePackages: string[]): boolean {
+    return excludePackages.some(prefix => packageName.startsWith(prefix));
+}
+
 function walkDependencyTree(
     appDir: string,
-    log: (msg: string) => void
+    log: (msg: string) => void,
+    excludePackages: string[] = []
 ): Map<string, string> {
     // Map of package name -> resolved directory
     const visited = new Map<string, string>();
@@ -164,6 +182,10 @@ function walkDependencyTree(
     if (!appPkg) {
         log(`No package.json found in ${appDir}`);
         return visited;
+    }
+
+    if (excludePackages.length > 0) {
+        log(`Excluding packages matching: ${excludePackages.join(', ')}`);
     }
 
     // Seed queue with all direct dependencies (both deps and devDeps for the root app)
@@ -177,6 +199,9 @@ function walkDependencyTree(
 
         // Skip if already visited
         if (visited.has(depName)) continue;
+
+        // Skip packages matching exclusion prefixes
+        if (isPackageExcluded(depName, excludePackages)) continue;
 
         // Resolve to actual directory on disk
         const depDir = resolvePackageDir(depName, fromDir);
@@ -715,7 +740,8 @@ export async function generateClassRegistrationsManifest(
         appDir = process.cwd(),
         verbose = true,
         filterBaseClasses,
-        excludePatterns = []
+        excludePatterns = [],
+        excludePackages = []
     } = options;
 
     const errors: string[] = [];
@@ -739,7 +765,7 @@ export async function generateClassRegistrationsManifest(
     log(`App directory: ${absoluteAppDir}`);
 
     // Walk the dependency tree
-    const depTree = walkDependencyTree(absoluteAppDir, log);
+    const depTree = walkDependencyTree(absoluteAppDir, log, excludePackages);
     log(`Dependency tree: ${depTree.size} packages`);
 
     // Scan each dependency for @RegisterClass decorators
