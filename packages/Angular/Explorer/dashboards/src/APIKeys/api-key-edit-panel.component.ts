@@ -40,6 +40,7 @@ interface UsageLogItem {
  * Panel for viewing and editing existing API keys
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-key-edit-panel',
     templateUrl: './api-key-edit-panel.component.html',
     styleUrls: ['./api-key-edit-panel.component.css']

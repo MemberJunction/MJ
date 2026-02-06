@@ -20,6 +20,7 @@ interface CategoryViewModel {
 
 @RegisterClass(BaseResourceComponent, 'ListsCategoriesResource')
 @Component({
+  standalone: false,
   selector: 'mj-lists-categories-resource',
   template: `
     <div class="lists-categories-container">
@@ -36,114 +37,127 @@ interface CategoryViewModel {
           </button>
         </div>
       </div>
-
+    
       <!-- Loading State -->
-      <div class="loading-container" *ngIf="isLoading">
-        <mj-loading text="Loading categories..." size="medium"></mj-loading>
-      </div>
-
+      @if (isLoading) {
+        <div class="loading-container">
+          <mj-loading text="Loading categories..." size="medium"></mj-loading>
+        </div>
+      }
+    
       <!-- Empty State -->
-      <div class="empty-state" *ngIf="!isLoading && categoryViewModels.length === 0">
-        <div class="empty-state-icon-wrapper">
-          <div class="icon-bg"></div>
-          <i class="fa-solid fa-folder-tree"></i>
-        </div>
-        <h3>No Categories Yet</h3>
-        <p>Categories help you organize lists into logical groups.</p>
-        <div class="empty-state-features">
-          <div class="feature-item">
-            <i class="fa-solid fa-check-circle"></i>
-            <span>Create hierarchical folder structures</span>
+      @if (!isLoading && categoryViewModels.length === 0) {
+        <div class="empty-state">
+          <div class="empty-state-icon-wrapper">
+            <div class="icon-bg"></div>
+            <i class="fa-solid fa-folder-tree"></i>
           </div>
-          <div class="feature-item">
-            <i class="fa-solid fa-check-circle"></i>
-            <span>Quickly find related lists</span>
+          <h3>No Categories Yet</h3>
+          <p>Categories help you organize lists into logical groups.</p>
+          <div class="empty-state-features">
+            <div class="feature-item">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>Create hierarchical folder structures</span>
+            </div>
+            <div class="feature-item">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>Quickly find related lists</span>
+            </div>
           </div>
+          <button class="btn-create-large" (click)="createCategory()">
+            <i class="fa-solid fa-plus"></i>
+            Create Your First Category
+          </button>
         </div>
-        <button class="btn-create-large" (click)="createCategory()">
-          <i class="fa-solid fa-plus"></i>
-          Create Your First Category
-        </button>
-      </div>
-
+      }
+    
       <!-- Categories Content -->
-      <div class="categories-content" *ngIf="!isLoading && categoryViewModels.length > 0">
-        <div class="categories-layout">
-          <!-- Category Tree -->
-          <div class="category-tree-panel">
-            <div class="panel-header">
-              <h3>Categories</h3>
-              <span class="count-badge">{{categories.length}}</span>
-            </div>
-            <div class="tree-content" role="tree" aria-label="Category tree">
-              <ng-container *ngFor="let vm of getTopLevelCategories()">
-                <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { vm: vm }"></ng-container>
-              </ng-container>
-            </div>
-          </div>
-
-          <!-- Category Details -->
-          <div class="category-detail-panel" *ngIf="selectedCategory">
-            <div class="panel-header">
-              <h3>Category Details</h3>
-              <div class="panel-actions">
-                <button class="icon-btn" (click)="editCategory()" title="Edit">
-                  <i class="fa-solid fa-pen"></i>
-                </button>
-                <button class="icon-btn danger" (click)="deleteCategory()" title="Delete">
-                  <i class="fa-solid fa-trash"></i>
-                </button>
+      @if (!isLoading && categoryViewModels.length > 0) {
+        <div class="categories-content">
+          <div class="categories-layout">
+            <!-- Category Tree -->
+            <div class="category-tree-panel">
+              <div class="panel-header">
+                <h3>Categories</h3>
+                <span class="count-badge">{{categories.length}}</span>
+              </div>
+              <div class="tree-content" role="tree" aria-label="Category tree">
+                @for (vm of getTopLevelCategories(); track vm) {
+                  <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { vm: vm }"></ng-container>
+                }
               </div>
             </div>
-            <div class="detail-content">
-              <div class="detail-field">
-                <label>Name</label>
-                <span class="field-value">{{selectedCategory.Name}}</span>
-              </div>
-              <div class="detail-field" *ngIf="selectedCategory.Description">
-                <label>Description</label>
-                <span class="field-value">{{selectedCategory.Description}}</span>
-              </div>
-              <div class="detail-field">
-                <label>Parent Category</label>
-                <span class="field-value">
-                  {{getParentCategoryName(selectedCategory) || '(Top Level)'}}
-                </span>
-              </div>
-              <div class="detail-stats">
-                <div class="stat-item">
-                  <span class="stat-value">{{getSelectedCategoryListCount()}}</span>
-                  <span class="stat-label">Lists</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-value">{{getSelectedCategoryChildCount()}}</span>
-                  <span class="stat-label">Subcategories</span>
-                </div>
-              </div>
-
-              <!-- Lists in this category -->
-              <div class="category-lists" *ngIf="selectedCategoryLists.length > 0">
-                <h4>Lists in this category</h4>
-                <div class="mini-list">
-                  <div class="mini-list-item" *ngFor="let list of selectedCategoryLists">
-                    <i class="fa-solid fa-list"></i>
-                    <span>{{list.Name}}</span>
+            <!-- Category Details -->
+            @if (selectedCategory) {
+              <div class="category-detail-panel">
+                <div class="panel-header">
+                  <h3>Category Details</h3>
+                  <div class="panel-actions">
+                    <button class="icon-btn" (click)="editCategory()" title="Edit">
+                      <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="icon-btn danger" (click)="deleteCategory()" title="Delete">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
                   </div>
                 </div>
+                <div class="detail-content">
+                  <div class="detail-field">
+                    <label>Name</label>
+                    <span class="field-value">{{selectedCategory.Name}}</span>
+                  </div>
+                  @if (selectedCategory.Description) {
+                    <div class="detail-field">
+                      <label>Description</label>
+                      <span class="field-value">{{selectedCategory.Description}}</span>
+                    </div>
+                  }
+                  <div class="detail-field">
+                    <label>Parent Category</label>
+                    <span class="field-value">
+                      {{getParentCategoryName(selectedCategory) || '(Top Level)'}}
+                    </span>
+                  </div>
+                  <div class="detail-stats">
+                    <div class="stat-item">
+                      <span class="stat-value">{{getSelectedCategoryListCount()}}</span>
+                      <span class="stat-label">Lists</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-value">{{getSelectedCategoryChildCount()}}</span>
+                      <span class="stat-label">Subcategories</span>
+                    </div>
+                  </div>
+                  <!-- Lists in this category -->
+                  @if (selectedCategoryLists.length > 0) {
+                    <div class="category-lists">
+                      <h4>Lists in this category</h4>
+                      <div class="mini-list">
+                        @for (list of selectedCategoryLists; track list) {
+                          <div class="mini-list-item">
+                            <i class="fa-solid fa-list"></i>
+                            <span>{{list.Name}}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
               </div>
-            </div>
-          </div>
-
-          <!-- No Selection State -->
-          <div class="category-detail-panel empty" *ngIf="!selectedCategory">
-            <div class="no-selection">
-              <i class="fa-solid fa-arrow-left"></i>
-              <p>Select a category to view details</p>
-            </div>
+            }
+            <!-- No Selection State -->
+            @if (!selectedCategory) {
+              <div class="category-detail-panel empty">
+                <div class="no-selection">
+                  <i class="fa-solid fa-arrow-left"></i>
+                  <p>Select a category to view details</p>
+                </div>
+              </div>
+            }
           </div>
         </div>
-      </div>
-
+      }
+    
       <!-- Category Node Template -->
       <ng-template #categoryNodeTemplate let-vm="vm">
         <div class="category-node" [style.padding-left.px]="vm.depth * 20">
@@ -160,99 +174,112 @@ interface CategoryViewModel {
             [attr.aria-expanded]="hasChildren(vm.category) ? vm.isExpanded : null"
             [attr.aria-selected]="selectedCategory?.ID === vm.category.ID"
             [attr.aria-label]="vm.category.Name + ' - ' + vm.listCount + ' lists'">
-            <button
-              class="expand-btn"
-              *ngIf="hasChildren(vm.category)"
-              (click)="toggleExpand($event, vm)"
-              tabindex="-1"
-              aria-hidden="true">
-              <i [class]="vm.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
-            </button>
-            <span class="expand-placeholder" *ngIf="!hasChildren(vm.category)"></span>
+            @if (hasChildren(vm.category)) {
+              <button
+                class="expand-btn"
+                (click)="toggleExpand($event, vm)"
+                tabindex="-1"
+                aria-hidden="true">
+                <i [class]="vm.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+              </button>
+            }
+            @if (!hasChildren(vm.category)) {
+              <span class="expand-placeholder"></span>
+            }
             <i class="fa-solid fa-folder" [class.fa-folder-open]="vm.isExpanded" aria-hidden="true"></i>
             <span class="node-name">{{vm.category.Name}}</span>
             <span class="node-count" aria-hidden="true">{{vm.listCount}}</span>
           </div>
-          <div class="node-children" *ngIf="vm.isExpanded && hasChildren(vm.category)" role="group">
-            <ng-container *ngFor="let childVm of getChildCategories(vm.category)">
-              <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { vm: childVm }"></ng-container>
-            </ng-container>
-          </div>
+          @if (vm.isExpanded && hasChildren(vm.category)) {
+            <div class="node-children" role="group">
+              @for (childVm of getChildCategories(vm.category); track childVm) {
+                <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { vm: childVm }"></ng-container>
+              }
+            </div>
+          }
         </div>
       </ng-template>
-
+    
       <!-- Create/Edit Dialog -->
-      <div class="modal-overlay" *ngIf="showDialog" (click)="closeDialog()">
-        <div class="modal-dialog" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <h3>{{editingCategory ? 'Edit Category' : 'Create Category'}}</h3>
-            <button class="modal-close" (click)="closeDialog()" [disabled]="isSaving">
-              <i class="fa-solid fa-times"></i>
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="category-form">
-              <div class="form-group">
-                <label>Name *</label>
-                <input
-                  type="text"
-                  [(ngModel)]="dialogName"
-                  placeholder="Enter category name"
-                  class="form-input" />
-              </div>
-              <div class="form-group">
-                <label>Description</label>
-                <textarea
-                  [(ngModel)]="dialogDescription"
-                  placeholder="Optional description"
-                  class="form-input"
+      @if (showDialog) {
+        <div class="modal-overlay" (click)="closeDialog()">
+          <div class="modal-dialog" (click)="$event.stopPropagation()">
+            <div class="modal-header">
+              <h3>{{editingCategory ? 'Edit Category' : 'Create Category'}}</h3>
+              <button class="modal-close" (click)="closeDialog()" [disabled]="isSaving">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+            <div class="modal-body">
+              <div class="category-form">
+                <div class="form-group">
+                  <label>Name *</label>
+                  <input
+                    type="text"
+                    [(ngModel)]="dialogName"
+                    placeholder="Enter category name"
+                    class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Description</label>
+                  <textarea
+                    [(ngModel)]="dialogDescription"
+                    placeholder="Optional description"
+                    class="form-input"
                   rows="3"></textarea>
-              </div>
-              <div class="form-group">
-                <label>Parent Category</label>
-                <select
-                  [(ngModel)]="dialogParentId"
-                  class="form-input">
-                  <option *ngFor="let parent of availableParents" [ngValue]="parent.ID">{{parent.displayName}}</option>
-                </select>
+                </div>
+                <div class="form-group">
+                  <label>Parent Category</label>
+                  <select
+                    [(ngModel)]="dialogParentId"
+                    class="form-input">
+                    @for (parent of availableParents; track parent) {
+                      <option [ngValue]="parent.ID">{{parent.displayName}}</option>
+                    }
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="modal-footer">
-            <button
-              class="btn-primary"
-              (click)="saveCategory()"
-              [disabled]="!dialogName || isSaving">
-              <i *ngIf="isSaving" class="fa-solid fa-spinner fa-spin"></i>
-              {{isSaving ? 'Saving...' : (editingCategory ? 'Save' : 'Create')}}
-            </button>
-            <button class="btn-secondary" (click)="closeDialog()" [disabled]="isSaving">Cancel</button>
+            <div class="modal-footer">
+              <button
+                class="btn-primary"
+                (click)="saveCategory()"
+                [disabled]="!dialogName || isSaving">
+                @if (isSaving) {
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                }
+                {{isSaving ? 'Saving...' : (editingCategory ? 'Save' : 'Create')}}
+              </button>
+              <button class="btn-secondary" (click)="closeDialog()" [disabled]="isSaving">Cancel</button>
+            </div>
           </div>
         </div>
-      </div>
-
+      }
+    
       <!-- Delete Confirmation Dialog -->
-      <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()">
-        <div class="modal-dialog modal-sm" (click)="$event.stopPropagation()">
-          <div class="modal-header danger">
-            <h3>Delete Category</h3>
-            <button class="modal-close" (click)="cancelDelete()">
-              <i class="fa-solid fa-times"></i>
-            </button>
-          </div>
-          <div class="modal-body">
-            <p>{{deleteConfirmMessage}}</p>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-danger" (click)="confirmDelete()">
-              Delete
-            </button>
-            <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+      @if (showDeleteConfirm) {
+        <div class="modal-overlay" (click)="cancelDelete()">
+          <div class="modal-dialog modal-sm" (click)="$event.stopPropagation()">
+            <div class="modal-header danger">
+              <h3>Delete Category</h3>
+              <button class="modal-close" (click)="cancelDelete()">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+            <div class="modal-body">
+              <p>{{deleteConfirmMessage}}</p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-danger" (click)="confirmDelete()">
+                Delete
+              </button>
+              <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+            </div>
           </div>
         </div>
-      </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     :host {
       display: flex;

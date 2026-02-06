@@ -172,1312 +172,1315 @@ export function LoadSystemDiagnosticsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'SystemDiagnosticsResource')
 @Component({
+  standalone: false,
     selector: 'app-system-diagnostics',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <div class="system-diagnostics">
-            <!-- Header -->
-            <div class="diagnostics-header">
-                <div class="header-title">
-                    <i class="fa-solid fa-stethoscope"></i>
-                    <h2>System Diagnostics</h2>
-                </div>
-                <div class="header-controls">
-                    <div class="auto-refresh-control">
-                        <label>
-                            <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
-                            Auto-refresh
-                        </label>
-                        @if (autoRefresh) {
-                            <span class="refresh-indicator">
-                                <i class="fa-solid fa-sync-alt spinning"></i>
-                                Every 5s
-                            </span>
-                        }
-                    </div>
-                    <button class="refresh-btn" (click)="refreshData()" [disabled]="isLoading">
-                        <i class="fa-solid fa-refresh" [class.spinning]="isLoading"></i>
-                        Refresh Now
-                    </button>
-                </div>
+          <!-- Header -->
+          <div class="diagnostics-header">
+            <div class="header-title">
+              <i class="fa-solid fa-stethoscope"></i>
+              <h2>System Diagnostics</h2>
             </div>
-
-            <!-- Overview Cards (Collapsible) -->
-            <div class="overview-cards-container" [class.collapsed]="kpiCardsCollapsed">
-                <button class="kpi-toggle-btn" (click)="toggleKpiCards()" [title]="kpiCardsCollapsed ? 'Expand KPI cards' : 'Collapse KPI cards'">
-                    <i class="fa-solid" [class.fa-chevron-up]="!kpiCardsCollapsed" [class.fa-chevron-down]="kpiCardsCollapsed"></i>
-                </button>
-
-                @if (!kpiCardsCollapsed) {
-                    <!-- Expanded View -->
-                    <div class="overview-cards">
-                        <div class="overview-card">
-                            <div class="card-icon card-icon--engines">
-                                <i class="fa-solid fa-cogs"></i>
-                            </div>
-                            <div class="card-content">
-                                <div class="card-value">{{ engineStats?.totalEngines || 0 }}</div>
-                                <div class="card-label">Registered Engines</div>
-                                <div class="card-subtitle">{{ engineStats?.loadedEngines || 0 }} loaded</div>
-                            </div>
-                        </div>
-
-                        <div class="overview-card">
-                            <div class="card-icon card-icon--memory">
-                                <i class="fa-solid fa-microchip"></i>
-                            </div>
-                            <div class="card-content">
-                                <div class="card-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</div>
-                                <div class="card-label">Engine Memory</div>
-                                <div class="card-subtitle">Estimated total</div>
-                            </div>
-                        </div>
-
-                        <div class="overview-card">
-                            <div class="card-icon" [class.card-icon--warning]="redundantLoads.length > 0" [class.card-icon--success]="redundantLoads.length === 0">
-                                <i class="fa-solid fa-copy"></i>
-                            </div>
-                            <div class="card-content">
-                                <div class="card-value">{{ redundantLoads.length }}</div>
-                                <div class="card-label">Redundant Loads</div>
-                                <div class="card-subtitle">
-                                    @if (redundantLoads.length === 0) {
-                                        No redundant loading detected
-                                    } @else {
-                                        {{ redundantLoads.length }} entities loaded by multiple engines
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                } @else {
-                    <!-- Collapsed View - Mini KPI bar -->
-                    <div class="overview-cards-mini">
-                        <div class="mini-kpi" title="Registered Engines">
-                            <i class="fa-solid fa-cogs"></i>
-                            <span class="mini-value">{{ engineStats?.totalEngines || 0 }}</span>
-                            <span class="mini-label">Engines</span>
-                        </div>
-                        <div class="mini-divider"></div>
-                        <div class="mini-kpi" title="Engine Memory">
-                            <i class="fa-solid fa-microchip"></i>
-                            <span class="mini-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</span>
-                            <span class="mini-label">Memory</span>
-                        </div>
-                        <div class="mini-divider"></div>
-                        <div class="mini-kpi" [class.warning]="redundantLoads.length > 0" title="Redundant Loads">
-                            <i class="fa-solid fa-copy"></i>
-                            <span class="mini-value">{{ redundantLoads.length }}</span>
-                            <span class="mini-label">Redundant</span>
-                        </div>
-                    </div>
+            <div class="header-controls">
+              <div class="auto-refresh-control">
+                <label>
+                  <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
+                  Auto-refresh
+                </label>
+                @if (autoRefresh) {
+                  <span class="refresh-indicator">
+                    <i class="fa-solid fa-sync-alt spinning"></i>
+                    Every 5s
+                  </span>
                 }
+              </div>
+              <button class="refresh-btn" (click)="refreshData()" [disabled]="isLoading">
+                <i class="fa-solid fa-refresh" [class.spinning]="isLoading"></i>
+                Refresh Now
+              </button>
             </div>
-
-            <!-- Main Content with Left Nav -->
-            <div class="main-content">
-                <!-- Left Navigation -->
-                <div class="left-nav">
-                    <div class="nav-section">
-                        <div class="nav-section-title">Diagnostics</div>
-                        <div
-                            class="nav-item"
-                            [class.active]="activeSection === 'engines'"
-                            (click)="setActiveSection('engines')"
-                        >
-                            <i class="fa-solid fa-cogs"></i>
-                            <span>Engine Registry</span>
-                            <span class="nav-badge">{{ engineStats?.totalEngines || 0 }}</span>
-                        </div>
-                        <div
-                            class="nav-item"
-                            [class.active]="activeSection === 'redundant'"
-                            (click)="setActiveSection('redundant')"
-                        >
-                            <i class="fa-solid fa-copy"></i>
-                            <span>Redundant Loading</span>
-                            @if (redundantLoads.length > 0) {
-                                <span class="nav-badge nav-badge--warning">{{ redundantLoads.length }}</span>
-                            } @else {
-                                <span class="nav-badge nav-badge--success">0</span>
-                            }
-                        </div>
-                        <div
-                            class="nav-item"
-                            [class.active]="activeSection === 'performance'"
-                            (click)="setActiveSection('performance')"
-                        >
-                            <i class="fa-solid fa-chart-line"></i>
-                            <span>Performance</span>
-                            <span class="nav-badge">{{ telemetrySummary?.totalEvents || 0 }}</span>
-                        </div>
-                        <div
-                            class="nav-item"
-                            [class.active]="activeSection === 'cache'"
-                            (click)="setActiveSection('cache')"
-                        >
-                            <i class="fa-solid fa-database"></i>
-                            <span>Local Cache</span>
-                            <span class="nav-badge">{{ cacheStats?.totalEntries || 0 }}</span>
-                        </div>
+          </div>
+        
+          <!-- Overview Cards (Collapsible) -->
+          <div class="overview-cards-container" [class.collapsed]="kpiCardsCollapsed">
+            <button class="kpi-toggle-btn" (click)="toggleKpiCards()" [title]="kpiCardsCollapsed ? 'Expand KPI cards' : 'Collapse KPI cards'">
+              <i class="fa-solid" [class.fa-chevron-up]="!kpiCardsCollapsed" [class.fa-chevron-down]="kpiCardsCollapsed"></i>
+            </button>
+        
+            @if (!kpiCardsCollapsed) {
+              <!-- Expanded View -->
+              <div class="overview-cards">
+                <div class="overview-card">
+                  <div class="card-icon card-icon--engines">
+                    <i class="fa-solid fa-cogs"></i>
+                  </div>
+                  <div class="card-content">
+                    <div class="card-value">{{ engineStats?.totalEngines || 0 }}</div>
+                    <div class="card-label">Registered Engines</div>
+                    <div class="card-subtitle">{{ engineStats?.loadedEngines || 0 }} loaded</div>
+                  </div>
+                </div>
+        
+                <div class="overview-card">
+                  <div class="card-icon card-icon--memory">
+                    <i class="fa-solid fa-microchip"></i>
+                  </div>
+                  <div class="card-content">
+                    <div class="card-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</div>
+                    <div class="card-label">Engine Memory</div>
+                    <div class="card-subtitle">Estimated total</div>
+                  </div>
+                </div>
+        
+                <div class="overview-card">
+                  <div class="card-icon" [class.card-icon--warning]="redundantLoads.length > 0" [class.card-icon--success]="redundantLoads.length === 0">
+                    <i class="fa-solid fa-copy"></i>
+                  </div>
+                  <div class="card-content">
+                    <div class="card-value">{{ redundantLoads.length }}</div>
+                    <div class="card-label">Redundant Loads</div>
+                    <div class="card-subtitle">
+                      @if (redundantLoads.length === 0) {
+                        No redundant loading detected
+                      } @else {
+                        {{ redundantLoads.length }} entities loaded by multiple engines
+                      }
                     </div>
+                  </div>
                 </div>
-
-                <!-- Content Area -->
-                <div class="content-area">
-                    <!-- Engine Registry Section -->
-                    @if (activeSection === 'engines') {
-                        <div class="section-panel">
-                            <div class="panel-header">
-                                <h3>
-                                    <i class="fa-solid fa-cogs"></i>
-                                    Registered Engines
-                                </h3>
-                                <div class="panel-actions">
-                                    <button class="action-btn" (click)="refreshAllEngines()" [disabled]="isRefreshingEngines">
-                                        <i class="fa-solid fa-sync" [class.spinning]="isRefreshingEngines"></i>
-                                        Refresh All Engines
-                                    </button>
-                                </div>
+              </div>
+            } @else {
+              <!-- Collapsed View - Mini KPI bar -->
+              <div class="overview-cards-mini">
+                <div class="mini-kpi" title="Registered Engines">
+                  <i class="fa-solid fa-cogs"></i>
+                  <span class="mini-value">{{ engineStats?.totalEngines || 0 }}</span>
+                  <span class="mini-label">Engines</span>
+                </div>
+                <div class="mini-divider"></div>
+                <div class="mini-kpi" title="Engine Memory">
+                  <i class="fa-solid fa-microchip"></i>
+                  <span class="mini-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</span>
+                  <span class="mini-label">Memory</span>
+                </div>
+                <div class="mini-divider"></div>
+                <div class="mini-kpi" [class.warning]="redundantLoads.length > 0" title="Redundant Loads">
+                  <i class="fa-solid fa-copy"></i>
+                  <span class="mini-value">{{ redundantLoads.length }}</span>
+                  <span class="mini-label">Redundant</span>
+                </div>
+              </div>
+            }
+          </div>
+        
+          <!-- Main Content with Left Nav -->
+          <div class="main-content">
+            <!-- Left Navigation -->
+            <div class="left-nav">
+              <div class="nav-section">
+                <div class="nav-section-title">Diagnostics</div>
+                <div
+                  class="nav-item"
+                  [class.active]="activeSection === 'engines'"
+                  (click)="setActiveSection('engines')"
+                  >
+                  <i class="fa-solid fa-cogs"></i>
+                  <span>Engine Registry</span>
+                  <span class="nav-badge">{{ engineStats?.totalEngines || 0 }}</span>
+                </div>
+                <div
+                  class="nav-item"
+                  [class.active]="activeSection === 'redundant'"
+                  (click)="setActiveSection('redundant')"
+                  >
+                  <i class="fa-solid fa-copy"></i>
+                  <span>Redundant Loading</span>
+                  @if (redundantLoads.length > 0) {
+                    <span class="nav-badge nav-badge--warning">{{ redundantLoads.length }}</span>
+                  } @else {
+                    <span class="nav-badge nav-badge--success">0</span>
+                  }
+                </div>
+                <div
+                  class="nav-item"
+                  [class.active]="activeSection === 'performance'"
+                  (click)="setActiveSection('performance')"
+                  >
+                  <i class="fa-solid fa-chart-line"></i>
+                  <span>Performance</span>
+                  <span class="nav-badge">{{ telemetrySummary?.totalEvents || 0 }}</span>
+                </div>
+                <div
+                  class="nav-item"
+                  [class.active]="activeSection === 'cache'"
+                  (click)="setActiveSection('cache')"
+                  >
+                  <i class="fa-solid fa-database"></i>
+                  <span>Local Cache</span>
+                  <span class="nav-badge">{{ cacheStats?.totalEntries || 0 }}</span>
+                </div>
+              </div>
+            </div>
+        
+            <!-- Content Area -->
+            <div class="content-area">
+              <!-- Engine Registry Section -->
+              @if (activeSection === 'engines') {
+                <div class="section-panel">
+                  <div class="panel-header">
+                    <h3>
+                      <i class="fa-solid fa-cogs"></i>
+                      Registered Engines
+                    </h3>
+                    <div class="panel-actions">
+                      <button class="action-btn" (click)="refreshAllEngines()" [disabled]="isRefreshingEngines">
+                        <i class="fa-solid fa-sync" [class.spinning]="isRefreshingEngines"></i>
+                        Refresh All Engines
+                      </button>
+                    </div>
+                  </div>
+        
+                  <div class="section-panel-content">
+                    @if (engines.length === 0) {
+                      <div class="empty-state">
+                        <i class="fa-solid fa-inbox"></i>
+                        <p>No engines registered yet</p>
+                        <span class="empty-hint">Engines register themselves when they are first configured</span>
+                      </div>
+                    } @else {
+                      <div class="engine-grid">
+                        @for (engine of engines; track engine.className) {
+                          <div class="engine-card" [class.loaded]="engine.isLoaded">
+                            <div class="engine-header">
+                              <div class="engine-name" [title]="engine.className">{{ engine.className }}</div>
+                              <div class="engine-status" [class.status-loaded]="engine.isLoaded" [class.status-pending]="!engine.isLoaded">
+                                {{ engine.isLoaded ? 'Loaded' : 'Not Loaded' }}
+                              </div>
                             </div>
-
-                            <div class="section-panel-content">
-                            @if (engines.length === 0) {
-                                <div class="empty-state">
-                                    <i class="fa-solid fa-inbox"></i>
-                                    <p>No engines registered yet</p>
-                                    <span class="empty-hint">Engines register themselves when they are first configured</span>
+                            <div class="engine-stats">
+                              <div class="stat-item">
+                                <i class="fa-solid fa-microchip"></i>
+                                <span class="stat-label">Memory:</span>
+                                <span class="stat-value">{{ engine.memoryDisplay }}</span>
+                              </div>
+                              <div class="stat-item">
+                                <i class="fa-solid fa-layer-group"></i>
+                                <span class="stat-label">Items:</span>
+                                <span class="stat-value">{{ engine.itemCount.toLocaleString() }}</span>
+                              </div>
+                              @if (engine.lastLoadedAt) {
+                                <div class="stat-item">
+                                  <i class="fa-solid fa-clock"></i>
+                                  <span class="stat-label">Loaded:</span>
+                                  <span class="stat-value">{{ formatTime(engine.lastLoadedAt) }}</span>
                                 </div>
+                              }
+                            </div>
+                            <div class="engine-actions">
+                              <button class="engine-action-btn" (click)="refreshSingleEngine(engine, $event)" [disabled]="!engine.isLoaded || isRefreshingSingleEngine === engine.className" title="Refresh this engine">
+                                <i class="fa-solid fa-sync" [class.spinning]="isRefreshingSingleEngine === engine.className"></i>
+                              </button>
+                              <button class="engine-action-btn" (click)="openEngineDetailPanel(engine)" [disabled]="!engine.isLoaded" title="View engine details">
+                                <i class="fa-solid fa-arrow-right"></i>
+                              </button>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+        
+              <!-- Redundant Loading Section -->
+              @if (activeSection === 'redundant') {
+                <div class="section-panel">
+                  <div class="panel-header">
+                    <h3>
+                      <i class="fa-solid fa-copy"></i>
+                      Redundant Entity Loading
+                    </h3>
+                  </div>
+        
+                  <div class="section-panel-content">
+                    <div class="info-banner">
+                      <i class="fa-solid fa-info-circle"></i>
+                      <div>
+                        <strong>What is this?</strong>
+                        This section shows entities that are loaded by multiple engines.
+                        Redundant loading indicates potential optimization opportunities where engines
+                        could share data or consolidate their loading logic.
+                      </div>
+                    </div>
+        
+                    @if (redundantLoads.length === 0) {
+                      <div class="empty-state success-state">
+                        <i class="fa-solid fa-check-circle"></i>
+                        <p>No redundant entity loading detected</p>
+                        <span class="empty-hint">Each entity is being loaded by only one engine</span>
+                      </div>
+                    } @else {
+                      <div class="redundant-loads-table-wrapper">
+                        <table class="redundant-loads-table">
+                          <thead>
+                            <tr>
+                              <th>Entity Name</th>
+                              <th>Loaded By Engines</th>
+                              <th class="text-right">Engine Count</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (load of redundantLoads; track load.entityName) {
+                              <tr>
+                                <td class="entity-name">{{ load.entityName }}</td>
+                                <td class="engines-cell">
+                                  <div class="engine-chips">
+                                    @for (engine of load.engines; track engine) {
+                                      <span class="engine-chip">{{ engine }}</span>
+                                    }
+                                  </div>
+                                </td>
+                                <td class="text-right count-cell">
+                                  <span class="count-badge">{{ load.engines.length }}</span>
+                                </td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+        
+                      <div class="recommendation-banner">
+                        <i class="fa-solid fa-lightbulb"></i>
+                        <div>
+                          <strong>Recommendation:</strong>
+                          Consider consolidating data loading by having dependent engines
+                          access data from a parent engine, or restructuring the engine
+                          hierarchy to avoid duplicate data fetches.
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+        
+              <!-- Performance Section -->
+              @if (activeSection === 'performance') {
+                <div class="section-panel perf-panel">
+                  <div class="panel-header">
+                    <h3>
+                      <i class="fa-solid fa-chart-line"></i>
+                      Performance Telemetry
+                    </h3>
+                    <div class="panel-actions">
+                      <!-- Source toggle -->
+                      <div class="source-toggle">
+                        <button class="source-btn" [class.active]="telemetrySource === 'client'" (click)="setTelemetrySource('client')">
+                          <i class="fa-solid fa-browser"></i>
+                          Client
+                        </button>
+                        <button class="source-btn" [class.active]="telemetrySource === 'server'" (click)="setTelemetrySource('server')">
+                          <i class="fa-solid fa-server"></i>
+                          Server
+                        </button>
+                      </div>
+                      <span class="action-divider"></span>
+                      @if (telemetrySource === 'client') {
+                        <button class="action-btn" [class.active]="telemetryEnabled" (click)="toggleTelemetry()">
+                          <i class="fa-solid" [class.fa-toggle-on]="telemetryEnabled" [class.fa-toggle-off]="!telemetryEnabled"></i>
+                          {{ telemetryEnabled ? 'Enabled' : 'Disabled' }}
+                        </button>
+                        <button class="action-btn" (click)="clearTelemetry()" [disabled]="!telemetryEnabled">
+                          <i class="fa-solid fa-trash"></i>
+                          Clear
+                        </button>
+                      } @else {
+                        <span class="status-indicator" [class.enabled]="serverTelemetryEnabled" [class.disabled]="!serverTelemetryEnabled">
+                          <i class="fa-solid" [class.fa-circle-check]="serverTelemetryEnabled" [class.fa-circle-xmark]="!serverTelemetryEnabled"></i>
+                          {{ serverTelemetryEnabled ? 'Enabled' : 'Disabled' }}
+                          <span class="config-note" title="Configure via mj.config.cjs telemetry section">(config)</span>
+                        </span>
+                      }
+                      @if (serverTelemetryLoading) {
+                        <span class="loading-indicator">
+                          <i class="fa-solid fa-spinner fa-spin"></i>
+                        </span>
+                      }
+                    </div>
+                  </div>
+                  @if (serverTelemetryError) {
+                    <div class="error-banner">
+                      <i class="fa-solid fa-exclamation-triangle"></i>
+                      {{ serverTelemetryError }}
+                      <button class="dismiss-btn" (click)="serverTelemetryError = null">
+                        <i class="fa-solid fa-times"></i>
+                      </button>
+                    </div>
+                  }
+        
+                  <!-- Performance Sub-Navigation Tabs -->
+                  <div class="perf-tabs">
+                    <button class="perf-tab" [class.active]="perfTab === 'monitor'" (click)="setPerfTab('monitor')">
+                      <i class="fa-solid fa-chart-area"></i>
+                      <span>Monitor</span>
+                    </button>
+                    <button class="perf-tab" [class.active]="perfTab === 'overview'" (click)="setPerfTab('overview')">
+                      <i class="fa-solid fa-gauge"></i>
+                      <span>Overview</span>
+                      @if (slowQueries.length > 0) {
+                        <span class="tab-badge warning">{{ slowQueries.length }}</span>
+                      }
+                    </button>
+                    <button class="perf-tab" [class.active]="perfTab === 'events'" (click)="setPerfTab('events')">
+                      <i class="fa-solid fa-timeline"></i>
+                      <span>Events</span>
+                      <span class="tab-badge">{{ telemetrySummary?.totalEvents || 0 }}</span>
+                    </button>
+                    <button class="perf-tab" [class.active]="perfTab === 'patterns'" (click)="setPerfTab('patterns')">
+                      <i class="fa-solid fa-fingerprint"></i>
+                      <span>Patterns</span>
+                      <span class="tab-badge">{{ telemetrySummary?.totalPatterns || 0 }}</span>
+                    </button>
+                    <button class="perf-tab" [class.active]="perfTab === 'insights'" (click)="setPerfTab('insights')">
+                      <i class="fa-solid fa-lightbulb"></i>
+                      <span>Insights</span>
+                      @if (telemetryInsights.length > 0) {
+                        <span class="tab-badge insight">{{ telemetryInsights.length }}</span>
+                      }
+                    </button>
+                  </div>
+        
+                  <div class="section-panel-content">
+                    @if (!telemetryEnabled) {
+                      <div class="info-banner warning-banner">
+                        <i class="fa-solid fa-exclamation-triangle"></i>
+                        <div>
+                          <strong>Telemetry is disabled.</strong>
+                          Enable telemetry to track RunView, RunQuery, and Engine loading performance.
+                        </div>
+                      </div>
+                    }
+        
+                    <!-- Monitor Tab (PerfMon Chart) -->
+                    @if (perfTab === 'monitor') {
+                      <div class="perfmon-section">
+                        <div class="perfmon-header">
+                          <div class="perfmon-legend">
+                            <span class="legend-item runview"><span class="legend-dot"></span> RunView</span>
+                            <span class="legend-item runquery"><span class="legend-dot"></span> RunQuery</span>
+                            <span class="legend-item engine"><span class="legend-dot"></span> Engine</span>
+                            <span class="legend-item ai"><span class="legend-dot"></span> AI</span>
+                          </div>
+                          <div class="perfmon-controls">
+                            <!-- Interaction Mode Toggle -->
+                            <div class="mode-toggle" title="Chart Interaction Mode">
+                              <button
+                                class="mode-btn"
+                                [class.active]="chartInteractionMode === 'pointer'"
+                                (click)="setChartInteractionMode('pointer')"
+                                title="Pointer mode - click events to view details">
+                                <i class="fa-solid fa-arrow-pointer"></i>
+                              </button>
+                              <button
+                                class="mode-btn"
+                                [class.active]="chartInteractionMode === 'select'"
+                                (click)="setChartInteractionMode('select')"
+                                title="Select mode - drag to zoom into a time range">
+                                <i class="fa-solid fa-vector-square"></i>
+                              </button>
+                              <button
+                                class="mode-btn"
+                                [class.active]="chartInteractionMode === 'pan'"
+                                (click)="setChartInteractionMode('pan')"
+                                title="Pan mode - drag to pan the chart">
+                                <i class="fa-solid fa-hand"></i>
+                              </button>
+                            </div>
+                            <span class="control-divider"></span>
+                            <button class="chart-control-btn" (click)="zoomPerfChart('in')" title="Zoom In">
+                              <i class="fa-solid fa-search-plus"></i>
+                            </button>
+                            <button class="chart-control-btn" (click)="zoomPerfChart('out')" title="Zoom Out">
+                              <i class="fa-solid fa-search-minus"></i>
+                            </button>
+                            <button class="chart-control-btn" (click)="resetPerfChartZoom()" title="Reset Zoom">
+                              <i class="fa-solid fa-expand"></i>
+                            </button>
+                            <span class="control-divider"></span>
+                            <label class="compress-toggle" title="Automatically compress gaps with no activity">
+                              <input type="checkbox" [(ngModel)]="chartGapCompression" (change)="onGapCompressionChange()">
+                              <span>Compress Gaps</span>
+                            </label>
+                          </div>
+                        </div>
+                        <div class="perfmon-chart-container">
+                          <div class="perfmon-y-axis">
+                            <span class="axis-label">Duration (ms)</span>
+                          </div>
+                          <div #perfChart class="perfmon-chart"></div>
+                        </div>
+                        <div class="perfmon-footer">
+                          <span class="footer-note">
+                            <i class="fa-solid fa-info-circle"></i>
+                            @if (chartTimeRangeStart !== null && chartTimeRangeEnd !== null) {
+                              Viewing {{ formatRelativeTime(chartTimeRangeStart) }} - {{ formatRelativeTime(chartTimeRangeEnd) }}. Click Reset to show all.
+                            } @else if (chartGapCompression) {
+                              Drag to select a time range. Gaps >5s compressed.
                             } @else {
-                                <div class="engine-grid">
-                                    @for (engine of engines; track engine.className) {
-                                        <div class="engine-card" [class.loaded]="engine.isLoaded">
-                                            <div class="engine-header">
-                                                <div class="engine-name" [title]="engine.className">{{ engine.className }}</div>
-                                                <div class="engine-status" [class.status-loaded]="engine.isLoaded" [class.status-pending]="!engine.isLoaded">
-                                                    {{ engine.isLoaded ? 'Loaded' : 'Not Loaded' }}
-                                                </div>
-                                            </div>
-                                            <div class="engine-stats">
-                                                <div class="stat-item">
-                                                    <i class="fa-solid fa-microchip"></i>
-                                                    <span class="stat-label">Memory:</span>
-                                                    <span class="stat-value">{{ engine.memoryDisplay }}</span>
-                                                </div>
-                                                <div class="stat-item">
-                                                    <i class="fa-solid fa-layer-group"></i>
-                                                    <span class="stat-label">Items:</span>
-                                                    <span class="stat-value">{{ engine.itemCount.toLocaleString() }}</span>
-                                                </div>
-                                                @if (engine.lastLoadedAt) {
-                                                    <div class="stat-item">
-                                                        <i class="fa-solid fa-clock"></i>
-                                                        <span class="stat-label">Loaded:</span>
-                                                        <span class="stat-value">{{ formatTime(engine.lastLoadedAt) }}</span>
-                                                    </div>
-                                                }
-                                            </div>
-                                            <div class="engine-actions">
-                                                <button class="engine-action-btn" (click)="refreshSingleEngine(engine, $event)" [disabled]="!engine.isLoaded || isRefreshingSingleEngine === engine.className" title="Refresh this engine">
-                                                    <i class="fa-solid fa-sync" [class.spinning]="isRefreshingSingleEngine === engine.className"></i>
-                                                </button>
-                                                <button class="engine-action-btn" (click)="openEngineDetailPanel(engine)" [disabled]="!engine.isLoaded" title="View engine details">
-                                                    <i class="fa-solid fa-arrow-right"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    }
-                                </div>
+                              Drag to select a time range. Hover over points for details.
                             }
-                            </div>
+                          </span>
+                          @if (telemetrySummary) {
+                            <span class="footer-stats">
+                              {{ telemetrySummary.totalEvents }} events
+                              @if (chartZoomLevel !== 1) {
+                                &bull; {{ (chartZoomLevel * 100) | number:'1.0-0' }}% zoom
+                              }
+                            </span>
+                          }
                         </div>
+                      </div>
                     }
-
-                    <!-- Redundant Loading Section -->
-                    @if (activeSection === 'redundant') {
-                        <div class="section-panel">
-                            <div class="panel-header">
-                                <h3>
-                                    <i class="fa-solid fa-copy"></i>
-                                    Redundant Entity Loading
-                                </h3>
-                            </div>
-
-                            <div class="section-panel-content">
-                                <div class="info-banner">
-                                    <i class="fa-solid fa-info-circle"></i>
-                                    <div>
-                                        <strong>What is this?</strong>
-                                        This section shows entities that are loaded by multiple engines.
-                                        Redundant loading indicates potential optimization opportunities where engines
-                                        could share data or consolidate their loading logic.
-                                    </div>
-                                </div>
-
-                                @if (redundantLoads.length === 0) {
-                                    <div class="empty-state success-state">
-                                        <i class="fa-solid fa-check-circle"></i>
-                                        <p>No redundant entity loading detected</p>
-                                        <span class="empty-hint">Each entity is being loaded by only one engine</span>
-                                    </div>
-                                } @else {
-                                    <div class="redundant-loads-table-wrapper">
-                                        <table class="redundant-loads-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>Entity Name</th>
-                                                    <th>Loaded By Engines</th>
-                                                    <th class="text-right">Engine Count</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @for (load of redundantLoads; track load.entityName) {
-                                                    <tr>
-                                                        <td class="entity-name">{{ load.entityName }}</td>
-                                                        <td class="engines-cell">
-                                                            <div class="engine-chips">
-                                                                @for (engine of load.engines; track engine) {
-                                                                    <span class="engine-chip">{{ engine }}</span>
-                                                                }
-                                                            </div>
-                                                        </td>
-                                                        <td class="text-right count-cell">
-                                                            <span class="count-badge">{{ load.engines.length }}</span>
-                                                        </td>
-                                                    </tr>
-                                                }
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    <div class="recommendation-banner">
-                                        <i class="fa-solid fa-lightbulb"></i>
-                                        <div>
-                                            <strong>Recommendation:</strong>
-                                            Consider consolidating data loading by having dependent engines
-                                            access data from a parent engine, or restructuring the engine
-                                            hierarchy to avoid duplicate data fetches.
-                                        </div>
-                                    </div>
-                                }
-                            </div>
+        
+                    <!-- Overview Tab -->
+                    @if (perfTab === 'overview') {
+                      <!-- Summary Stats -->
+                      <div class="telemetry-summary">
+                        <div class="summary-card">
+                          <div class="summary-value">{{ telemetrySummary?.totalEvents || 0 }}</div>
+                          <div class="summary-label">Total Events</div>
                         </div>
-                    }
-
-                    <!-- Performance Section -->
-                    @if (activeSection === 'performance') {
-                        <div class="section-panel perf-panel">
-                            <div class="panel-header">
-                                <h3>
-                                    <i class="fa-solid fa-chart-line"></i>
-                                    Performance Telemetry
-                                </h3>
-                                <div class="panel-actions">
-                                    <!-- Source toggle -->
-                                    <div class="source-toggle">
-                                        <button class="source-btn" [class.active]="telemetrySource === 'client'" (click)="setTelemetrySource('client')">
-                                            <i class="fa-solid fa-browser"></i>
-                                            Client
-                                        </button>
-                                        <button class="source-btn" [class.active]="telemetrySource === 'server'" (click)="setTelemetrySource('server')">
-                                            <i class="fa-solid fa-server"></i>
-                                            Server
-                                        </button>
-                                    </div>
-                                    <span class="action-divider"></span>
-                                    @if (telemetrySource === 'client') {
-                                        <button class="action-btn" [class.active]="telemetryEnabled" (click)="toggleTelemetry()">
-                                            <i class="fa-solid" [class.fa-toggle-on]="telemetryEnabled" [class.fa-toggle-off]="!telemetryEnabled"></i>
-                                            {{ telemetryEnabled ? 'Enabled' : 'Disabled' }}
-                                        </button>
-                                        <button class="action-btn" (click)="clearTelemetry()" [disabled]="!telemetryEnabled">
-                                            <i class="fa-solid fa-trash"></i>
-                                            Clear
-                                        </button>
-                                    } @else {
-                                        <span class="status-indicator" [class.enabled]="serverTelemetryEnabled" [class.disabled]="!serverTelemetryEnabled">
-                                            <i class="fa-solid" [class.fa-circle-check]="serverTelemetryEnabled" [class.fa-circle-xmark]="!serverTelemetryEnabled"></i>
-                                            {{ serverTelemetryEnabled ? 'Enabled' : 'Disabled' }}
-                                            <span class="config-note" title="Configure via mj.config.cjs telemetry section">(config)</span>
-                                        </span>
-                                    }
-                                    @if (serverTelemetryLoading) {
-                                        <span class="loading-indicator">
-                                            <i class="fa-solid fa-spinner fa-spin"></i>
-                                        </span>
-                                    }
-                                </div>
-                            </div>
-                            @if (serverTelemetryError) {
-                                <div class="error-banner">
-                                    <i class="fa-solid fa-exclamation-triangle"></i>
-                                    {{ serverTelemetryError }}
-                                    <button class="dismiss-btn" (click)="serverTelemetryError = null">
-                                        <i class="fa-solid fa-times"></i>
-                                    </button>
-                                </div>
+                        <div class="summary-card">
+                          <div class="summary-value">{{ telemetrySummary?.totalPatterns || 0 }}</div>
+                          <div class="summary-label">Unique Patterns</div>
+                        </div>
+                        <div class="summary-card">
+                          <div class="summary-value">{{ telemetrySummary?.totalInsights || 0 }}</div>
+                          <div class="summary-label">Insights</div>
+                        </div>
+                        <div class="summary-card">
+                          <div class="summary-value">{{ telemetrySummary?.activeEvents || 0 }}</div>
+                          <div class="summary-label">Active</div>
+                        </div>
+                      </div>
+        
+                      <!-- Category Breakdown -->
+                      @if (telemetrySummary && telemetrySummary.totalEvents > 0) {
+                        <div class="category-breakdown">
+                          <h4>By Category</h4>
+                          <div class="category-grid">
+                            @for (cat of categoriesWithData; track cat.name) {
+                              <div class="category-item" (click)="jumpToPatternsByCategory(cat.name)">
+                                <span class="category-name">{{ cat.name }}</span>
+                                <span class="category-events">{{ cat.events }}</span>
+                                <span class="category-avg">avg {{ cat.avgMs | number:'1.0-0' }}ms</span>
+                              </div>
                             }
-
-                            <!-- Performance Sub-Navigation Tabs -->
-                            <div class="perf-tabs">
-                                <button class="perf-tab" [class.active]="perfTab === 'monitor'" (click)="setPerfTab('monitor')">
-                                    <i class="fa-solid fa-chart-area"></i>
-                                    <span>Monitor</span>
-                                </button>
-                                <button class="perf-tab" [class.active]="perfTab === 'overview'" (click)="setPerfTab('overview')">
-                                    <i class="fa-solid fa-gauge"></i>
-                                    <span>Overview</span>
-                                    @if (slowQueries.length > 0) {
-                                        <span class="tab-badge warning">{{ slowQueries.length }}</span>
-                                    }
-                                </button>
-                                <button class="perf-tab" [class.active]="perfTab === 'events'" (click)="setPerfTab('events')">
-                                    <i class="fa-solid fa-timeline"></i>
-                                    <span>Events</span>
-                                    <span class="tab-badge">{{ telemetrySummary?.totalEvents || 0 }}</span>
-                                </button>
-                                <button class="perf-tab" [class.active]="perfTab === 'patterns'" (click)="setPerfTab('patterns')">
-                                    <i class="fa-solid fa-fingerprint"></i>
-                                    <span>Patterns</span>
-                                    <span class="tab-badge">{{ telemetrySummary?.totalPatterns || 0 }}</span>
-                                </button>
-                                <button class="perf-tab" [class.active]="perfTab === 'insights'" (click)="setPerfTab('insights')">
-                                    <i class="fa-solid fa-lightbulb"></i>
-                                    <span>Insights</span>
-                                    @if (telemetryInsights.length > 0) {
-                                        <span class="tab-badge insight">{{ telemetryInsights.length }}</span>
-                                    }
-                                </button>
-                            </div>
-
-                            <div class="section-panel-content">
-                                @if (!telemetryEnabled) {
-                                    <div class="info-banner warning-banner">
-                                        <i class="fa-solid fa-exclamation-triangle"></i>
-                                        <div>
-                                            <strong>Telemetry is disabled.</strong>
-                                            Enable telemetry to track RunView, RunQuery, and Engine loading performance.
-                                        </div>
-                                    </div>
-                                }
-
-                                <!-- Monitor Tab (PerfMon Chart) -->
-                                @if (perfTab === 'monitor') {
-                                    <div class="perfmon-section">
-                                        <div class="perfmon-header">
-                                            <div class="perfmon-legend">
-                                                <span class="legend-item runview"><span class="legend-dot"></span> RunView</span>
-                                                <span class="legend-item runquery"><span class="legend-dot"></span> RunQuery</span>
-                                                <span class="legend-item engine"><span class="legend-dot"></span> Engine</span>
-                                                <span class="legend-item ai"><span class="legend-dot"></span> AI</span>
-                                            </div>
-                                            <div class="perfmon-controls">
-                                                <!-- Interaction Mode Toggle -->
-                                                <div class="mode-toggle" title="Chart Interaction Mode">
-                                                    <button
-                                                        class="mode-btn"
-                                                        [class.active]="chartInteractionMode === 'pointer'"
-                                                        (click)="setChartInteractionMode('pointer')"
-                                                        title="Pointer mode - click events to view details">
-                                                        <i class="fa-solid fa-arrow-pointer"></i>
-                                                    </button>
-                                                    <button
-                                                        class="mode-btn"
-                                                        [class.active]="chartInteractionMode === 'select'"
-                                                        (click)="setChartInteractionMode('select')"
-                                                        title="Select mode - drag to zoom into a time range">
-                                                        <i class="fa-solid fa-vector-square"></i>
-                                                    </button>
-                                                    <button
-                                                        class="mode-btn"
-                                                        [class.active]="chartInteractionMode === 'pan'"
-                                                        (click)="setChartInteractionMode('pan')"
-                                                        title="Pan mode - drag to pan the chart">
-                                                        <i class="fa-solid fa-hand"></i>
-                                                    </button>
-                                                </div>
-                                                <span class="control-divider"></span>
-                                                <button class="chart-control-btn" (click)="zoomPerfChart('in')" title="Zoom In">
-                                                    <i class="fa-solid fa-search-plus"></i>
-                                                </button>
-                                                <button class="chart-control-btn" (click)="zoomPerfChart('out')" title="Zoom Out">
-                                                    <i class="fa-solid fa-search-minus"></i>
-                                                </button>
-                                                <button class="chart-control-btn" (click)="resetPerfChartZoom()" title="Reset Zoom">
-                                                    <i class="fa-solid fa-expand"></i>
-                                                </button>
-                                                <span class="control-divider"></span>
-                                                <label class="compress-toggle" title="Automatically compress gaps with no activity">
-                                                    <input type="checkbox" [(ngModel)]="chartGapCompression" (change)="onGapCompressionChange()">
-                                                    <span>Compress Gaps</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="perfmon-chart-container">
-                                            <div class="perfmon-y-axis">
-                                                <span class="axis-label">Duration (ms)</span>
-                                            </div>
-                                            <div #perfChart class="perfmon-chart"></div>
-                                        </div>
-                                        <div class="perfmon-footer">
-                                            <span class="footer-note">
-                                                <i class="fa-solid fa-info-circle"></i>
-                                                @if (chartTimeRangeStart !== null && chartTimeRangeEnd !== null) {
-                                                    Viewing {{ formatRelativeTime(chartTimeRangeStart) }} - {{ formatRelativeTime(chartTimeRangeEnd) }}. Click Reset to show all.
-                                                } @else if (chartGapCompression) {
-                                                    Drag to select a time range. Gaps >5s compressed.
-                                                } @else {
-                                                    Drag to select a time range. Hover over points for details.
-                                                }
-                                            </span>
-                                            <span class="footer-stats" *ngIf="telemetrySummary">
-                                                {{ telemetrySummary.totalEvents }} events
-                                                @if (chartZoomLevel !== 1) {
-                                                    &bull; {{ (chartZoomLevel * 100) | number:'1.0-0' }}% zoom
-                                                }
-                                            </span>
-                                        </div>
-                                    </div>
-                                }
-
-                                <!-- Overview Tab -->
-                                @if (perfTab === 'overview') {
-                                    <!-- Summary Stats -->
-                                    <div class="telemetry-summary">
-                                        <div class="summary-card">
-                                            <div class="summary-value">{{ telemetrySummary?.totalEvents || 0 }}</div>
-                                            <div class="summary-label">Total Events</div>
-                                        </div>
-                                        <div class="summary-card">
-                                            <div class="summary-value">{{ telemetrySummary?.totalPatterns || 0 }}</div>
-                                            <div class="summary-label">Unique Patterns</div>
-                                        </div>
-                                        <div class="summary-card">
-                                            <div class="summary-value">{{ telemetrySummary?.totalInsights || 0 }}</div>
-                                            <div class="summary-label">Insights</div>
-                                        </div>
-                                        <div class="summary-card">
-                                            <div class="summary-value">{{ telemetrySummary?.activeEvents || 0 }}</div>
-                                            <div class="summary-label">Active</div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Category Breakdown -->
-                                    @if (telemetrySummary && telemetrySummary.totalEvents > 0) {
-                                        <div class="category-breakdown">
-                                            <h4>By Category</h4>
-                                            <div class="category-grid">
-                                                @for (cat of categoriesWithData; track cat.name) {
-                                                    <div class="category-item" (click)="jumpToPatternsByCategory(cat.name)">
-                                                        <span class="category-name">{{ cat.name }}</span>
-                                                        <span class="category-events">{{ cat.events }}</span>
-                                                        <span class="category-avg">avg {{ cat.avgMs | number:'1.0-0' }}ms</span>
-                                                    </div>
-                                                }
-                                            </div>
-                                        </div>
-                                    }
-
-                                    <!-- Slow Queries Section -->
-                                    @if (slowQueries.length > 0) {
-                                        <div class="slow-queries-section">
-                                            <h4>
-                                                <i class="fa-solid fa-turtle"></i>
-                                                Slow Operations (>{{ slowQueryThresholdMs }}ms)
-                                            </h4>
-                                            <div class="slow-queries-list">
-                                                @for (query of slowQueries.slice(0, 10); track query.id) {
-                                                    <div class="slow-query-item clickable" [class.cache-hit]="isCacheHit(query)" (click)="openEventDetailPanel(query)">
-                                                        <div class="slow-query-main">
-                                                            <span class="category-chip small" [class]="'cat-' + query.category.toLowerCase()">
-                                                                {{ query.category }}
-                                                            </span>
-                                                            <span class="slow-query-entity">{{ query.entityName || query.operation }}</span>
-                                                            @if (isCacheHit(query)) {
-                                                                <span class="cache-hit-badge small" title="Data served from local cache">
-                                                                    <i class="fa-solid fa-bolt"></i>
-                                                                    CACHED
-                                                                </span>
-                                                            }
-                                                            <span class="slow-query-time">{{ query.elapsedMs | number:'1.0-0' }}ms</span>
-                                                        </div>
-                                                        <!-- Show entities for RunViews batch operation -->
-                                                        @if (isRunViewsOperation(query)) {
-                                                            <div class="slow-query-entities">
-                                                                @for (entity of getRunViewsEntities(query, 4); track entity) {
-                                                                    <span class="entity-pill small">{{ entity }}</span>
-                                                                }
-                                                                @if (hasMoreEntities(query, 4)) {
-                                                                    <span class="entity-pill small more">+{{ getRunViewsEntityCount(query) - 4 }} more</span>
-                                                                }
-                                                            </div>
-                                                        }
-                                                        <!-- RunView parameter pills -->
-                                                        @if (isRunViewOperation(query) && getRunViewPills(query).length > 0) {
-                                                            <div class="slow-query-pills">
-                                                                @for (pill of getRunViewPills(query); track pill.label) {
-                                                                    <span class="param-pill small" [class]="'pill-' + pill.type" [title]="pill.value">
-                                                                        <span class="pill-label">{{ pill.label }}:</span>
-                                                                        <span class="pill-value">{{ pill.value }}</span>
-                                                                    </span>
-                                                                }
-                                                            </div>
-                                                        }
-                                                        @if (query.filter) {
-                                                            <div class="slow-query-filter">{{ truncateString(query.filter, 60) }}</div>
-                                                        }
-                                                        <div class="slow-query-timestamp">{{ formatTimestamp(query.timestamp) }}</div>
-                                                    </div>
-                                                }
-                                            </div>
-                                        </div>
-                                    } @else if (telemetryEnabled && telemetrySummary && telemetrySummary.totalEvents > 0) {
-                                        <div class="success-banner">
-                                            <i class="fa-solid fa-check-circle"></i>
-                                            <span>No slow operations detected. All operations completed under {{ slowQueryThresholdMs }}ms.</span>
-                                        </div>
-                                    }
-                                }
-
-                                <!-- Events Tab (Timeline) -->
-                                @if (perfTab === 'events') {
-                                    <!-- Filter Bar for Events -->
-                                    <div class="filter-bar compact">
-                                        <div class="search-box">
-                                            <i class="fa-solid fa-search"></i>
-                                            <input type="text"
-                                                   placeholder="Search events..."
-                                                   [(ngModel)]="searchQuery"
-                                                   (ngModelChange)="onSearchChange()">
-                                            @if (searchQuery) {
-                                                <button class="clear-search" (click)="clearSearch()">
-                                                    <i class="fa-solid fa-times"></i>
-                                                </button>
-                                            }
-                                        </div>
-                                        <div class="filter-buttons">
-                                            <button class="filter-btn" [class.active]="categoryFilter === 'all'" (click)="setCategoryFilter('all')">
-                                                All
-                                            </button>
-                                            @for (cat of categoriesWithData; track cat.name) {
-                                                <button class="filter-btn" [class.active]="categoryFilter === cat.name" (click)="setCategoryFilterByName(cat.name)">
-                                                    {{ cat.name }}
-                                                </button>
-                                            }
-                                        </div>
-                                    </div>
-
-                                    <div class="timeline-section">
-                                        <div class="timeline-container">
-                                            @if (filteredEvents.length > 0) {
-                                                @for (event of filteredEvents.slice(0, 50); track event.id) {
-                                                    <div class="timeline-item clickable" [class]="'tl-' + event.category.toLowerCase()" [class.cache-hit]="isCacheHit(event)" (click)="openEventDetailPanel(event)">
-                                                        <div class="timeline-marker">
-                                                            @if (isCacheHit(event)) {
-                                                                <div class="marker-bolt">
-                                                                    <i class="fa-solid fa-bolt"></i>
-                                                                </div>
-                                                            } @else {
-                                                                <div class="marker-dot"></div>
-                                                            }
-                                                            <div class="marker-line"></div>
-                                                        </div>
-                                                        <div class="timeline-content">
-                                                            <div class="timeline-header">
-                                                                <span class="timeline-time">{{ formatTimestamp(event.timestamp) }}</span>
-                                                                <span class="category-chip small" [class]="'cat-' + event.category.toLowerCase()">
-                                                                    {{ event.category }}
-                                                                </span>
-                                                                @if (isCacheHit(event)) {
-                                                                    <span class="cache-hit-badge" title="Data served from local cache">
-                                                                        <i class="fa-solid fa-bolt"></i>
-                                                                        CACHED
-                                                                    </span>
-                                                                }
-                                                                @if (event.elapsedMs !== undefined) {
-                                                                    <span class="timeline-duration" [class.slow]="(event.elapsedMs || 0) >= slowQueryThresholdMs">
-                                                                        {{ event.elapsedMs | number:'1.0-0' }}ms
-                                                                    </span>
-                                                                }
-                                                            </div>
-                                                            <div class="timeline-body">
-                                                                <span class="timeline-operation">{{ event.operation }}</span>
-                                                                @if (event.entityName) {
-                                                                    <span class="timeline-entity">{{ event.entityName }}</span>
-                                                                }
-                                                                <!-- Show entities for RunViews batch operation -->
-                                                                @if (isRunViewsOperation(event)) {
-                                                                    <div class="timeline-entities">
-                                                                        @for (entity of getRunViewsEntities(event, 3); track entity) {
-                                                                            <span class="entity-pill">{{ entity }}</span>
-                                                                        }
-                                                                        @if (hasMoreEntities(event, 3)) {
-                                                                            <span class="entity-pill more">+{{ getRunViewsEntityCount(event) - 3 }} more</span>
-                                                                        }
-                                                                    </div>
-                                                                }
-                                                            </div>
-                                                            <!-- RunView parameter pills -->
-                                                            @if (isRunViewOperation(event) && getRunViewPills(event).length > 0) {
-                                                                <div class="timeline-pills">
-                                                                    @for (pill of getRunViewPills(event); track pill.label) {
-                                                                        <span class="param-pill" [class]="'pill-' + pill.type" [title]="pill.value">
-                                                                            <span class="pill-label">{{ pill.label }}:</span>
-                                                                            <span class="pill-value">{{ pill.value }}</span>
-                                                                        </span>
-                                                                    }
-                                                                </div>
-                                                            }
-                                                            @if (event.filter) {
-                                                                <div class="timeline-filter">{{ truncateString(event.filter, 80) }}</div>
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                }
-                                            } @else {
-                                                <div class="empty-state small">
-                                                    <i class="fa-solid fa-hourglass-start"></i>
-                                                    <p>No events recorded yet</p>
-                                                </div>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-
-                                <!-- Patterns Tab -->
-                                @if (perfTab === 'patterns') {
-                                    <!-- Filter Bar -->
-                                    <div class="filter-bar compact">
-                                        <div class="search-box">
-                                            <i class="fa-solid fa-search"></i>
-                                            <input type="text"
-                                                   placeholder="Search patterns..."
-                                                   [(ngModel)]="searchQuery"
-                                                   (ngModelChange)="onSearchChange()">
-                                            @if (searchQuery) {
-                                                <button class="clear-search" (click)="clearSearch()">
-                                                    <i class="fa-solid fa-times"></i>
-                                                </button>
-                                            }
-                                        </div>
-                                        <div class="filter-buttons">
-                                            <button class="filter-btn" [class.active]="categoryFilter === 'all'" (click)="setCategoryFilter('all')">
-                                                All
-                                            </button>
-                                            @for (cat of categoriesWithData; track cat.name) {
-                                                <button class="filter-btn" [class.active]="categoryFilter === cat.name" (click)="setCategoryFilterByName(cat.name)">
-                                                    {{ cat.name }}
-                                                </button>
-                                            }
-                                        </div>
-                                    </div>
-
-                                    @if (filteredPatterns.length > 0) {
-                                        <div class="patterns-section">
-                                            <div class="patterns-table-wrapper">
-                                                <table class="patterns-table sortable">
-                                                    <thead>
-                                                        <tr>
-                                                            <th class="sortable-header" (click)="sortPatternsBy('category')">
-                                                                Category
-                                                                <i class="fa-solid" [class]="getSortIcon('category')"></i>
-                                                            </th>
-                                                            <th class="sortable-header" (click)="sortPatternsBy('operation')">
-                                                                Operation
-                                                                <i class="fa-solid" [class]="getSortIcon('operation')"></i>
-                                                            </th>
-                                                            <th class="sortable-header" (click)="sortPatternsBy('entity')">
-                                                                Entity/Query
-                                                                <i class="fa-solid" [class]="getSortIcon('entity')"></i>
-                                                            </th>
-                                                            <th>Filter</th>
-                                                            <th class="sortable-header text-right" (click)="sortPatternsBy('count')">
-                                                                Count
-                                                                <i class="fa-solid" [class]="getSortIcon('count')"></i>
-                                                            </th>
-                                                            <th class="sortable-header text-right" (click)="sortPatternsBy('avgMs')">
-                                                                Avg (ms)
-                                                                <i class="fa-solid" [class]="getSortIcon('avgMs')"></i>
-                                                            </th>
-                                                            <th class="sortable-header text-right" (click)="sortPatternsBy('totalMs')">
-                                                                Total (ms)
-                                                                <i class="fa-solid" [class]="getSortIcon('totalMs')"></i>
-                                                            </th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @for (pattern of filteredPatterns; track pattern.fingerprint) {
-                                                            <tr [class.duplicate-row]="pattern.count >= 2" [class.slow-row]="pattern.avgElapsedMs >= slowQueryThresholdMs">
-                                                                <td>
-                                                                    <span class="category-chip" [class]="'cat-' + pattern.category.toLowerCase()">
-                                                                        {{ pattern.category }}
-                                                                    </span>
-                                                                </td>
-                                                                <td class="operation-cell">{{ pattern.operation }}</td>
-                                                                <td class="entity-cell">{{ pattern.entityName || '-' }}</td>
-                                                                <td class="filter-cell" [title]="pattern.filter || ''">
-                                                                    {{ truncateString(pattern.filter, 30) }}
-                                                                </td>
-                                                                <td class="text-right">
-                                                                    @if (pattern.count >= 2) {
-                                                                        <span class="count-warning">{{ pattern.count }}</span>
-                                                                    } @else {
-                                                                        {{ pattern.count }}
-                                                                    }
-                                                                </td>
-                                                                <td class="text-right" [class.slow-value]="pattern.avgElapsedMs >= slowQueryThresholdMs">
-                                                                    {{ pattern.avgElapsedMs | number:'1.1-1' }}
-                                                                </td>
-                                                                <td class="text-right">{{ pattern.totalElapsedMs | number:'1.0-0' }}</td>
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    } @else if (telemetryEnabled && telemetryPatterns.length === 0) {
-                                        <div class="empty-state">
-                                            <i class="fa-solid fa-hourglass-start"></i>
-                                            <p>No telemetry data yet</p>
-                                            <span class="empty-hint">Navigate around the app to generate performance data</span>
-                                        </div>
-                                    } @else if (searchQuery || categoryFilter !== 'all') {
-                                        <div class="empty-state small">
-                                            <i class="fa-solid fa-filter"></i>
-                                            <p>No patterns match your filter</p>
-                                        </div>
-                                    }
-                                }
-
-                                <!-- Insights Tab -->
-                                @if (perfTab === 'insights') {
-                                    @if (telemetryInsights.length > 0) {
-                                        <div class="insights-section">
-                                            <div class="insights-list">
-                                                @for (insight of telemetryInsights; track insight.id) {
-                                                    <div class="insight-card expandable" [class]="getSeverityClass(insight.severity)" [class.expanded]="insight.expanded">
-                                                        <div class="insight-header" (click)="toggleInsightExpanded(insight)">
-                                                            <i class="fa-solid" [class]="getSeverityIcon(insight.severity)"></i>
-                                                            <span class="insight-title">{{ insight.title }}</span>
-                                                            <span class="insight-category">{{ insight.category }}</span>
-                                                            <i class="fa-solid expand-icon" [class.fa-chevron-down]="!insight.expanded" [class.fa-chevron-up]="insight.expanded"></i>
-                                                        </div>
-
-                                                        <!-- Always show key info for actionability -->
-                                                        <div class="insight-key-info">
-                                                            @if (insight.entityName) {
-                                                                <div class="key-info-item">
-                                                                    <span class="key-label">Entity:</span>
-                                                                    <span class="key-value entity-name">{{ insight.entityName }}</span>
-                                                                </div>
-                                                            }
-                                                            @if (getInsightFilter(insight)) {
-                                                                <div class="key-info-item">
-                                                                    <span class="key-label">Filter:</span>
-                                                                    <code class="key-value filter-code">{{ getInsightFilter(insight) }}</code>
-                                                                </div>
-                                                            }
-                                                        </div>
-
-                                                        <div class="insight-message">{{ insight.message }}</div>
-                                                        <div class="insight-suggestion">
-                                                            <i class="fa-solid fa-arrow-right"></i>
-                                                            {{ insight.suggestion }}
-                                                        </div>
-
-                                                        <!-- Expanded Details -->
-                                                        @if (insight.expanded) {
-                                                            <div class="insight-details">
-                                                                <!-- Show all params from first related event -->
-                                                                @if (insight.relatedEvents.length > 0) {
-                                                                    <div class="detail-section">
-                                                                        <div class="detail-label">Full Parameters</div>
-                                                                        <div class="params-display">
-                                                                            @for (param of getEventParams(insight.relatedEvents[0]); track param.key) {
-                                                                                <div class="param-row">
-                                                                                    <span class="param-key">{{ param.key }}:</span>
-                                                                                    <span class="param-value">{{ param.value }}</span>
-                                                                                </div>
-                                                                            }
-                                                                        </div>
-                                                                    </div>
-                                                                    <div class="detail-section">
-                                                                        <div class="detail-label">Related Calls ({{ insight.relatedEvents.length }})</div>
-                                                                        <div class="related-events">
-                                                                            @for (event of insight.relatedEvents; track event.id) {
-                                                                                <div class="related-event">
-                                                                                    <span class="event-time">{{ formatTimestamp(event.timestamp) }}</span>
-                                                                                    <span class="event-duration">{{ event.elapsedMs | number:'1.0-0' }}ms</span>
-                                                                                    @if (event.entityName) {
-                                                                                        <span class="event-entity">{{ event.entityName }}</span>
-                                                                                    }
-                                                                                    @if (event.filter) {
-                                                                                        <span class="event-filter">{{ truncateString(event.filter, 40) }}</span>
-                                                                                    }
-                                                                                </div>
-                                                                            }
-                                                                        </div>
-                                                                    </div>
-                                                                }
-                                                            </div>
-                                                        }
-                                                    </div>
-                                                }
-                                            </div>
-                                        </div>
-                                    } @else {
-                                        <div class="empty-state">
-                                            <i class="fa-solid fa-check-circle" style="color: #4caf50;"></i>
-                                            <p>No optimization insights</p>
-                                            <span class="empty-hint">Insights will appear when potential optimizations are detected</span>
-                                        </div>
-                                    }
-                                }
-                            </div>
+                          </div>
                         </div>
-                    }
-
-                    <!-- Local Cache Section -->
-                    @if (activeSection === 'cache') {
-                        <div class="section-panel">
-                            <div class="panel-header">
-                                <h3>
-                                    <i class="fa-solid fa-database"></i>
-                                    Local Cache
-                                </h3>
-                                <div class="panel-actions">
-                                    <button class="action-btn" (click)="clearAllCache()" [disabled]="!cacheStats || cacheStats.totalEntries === 0">
-                                        <i class="fa-solid fa-trash"></i>
-                                        Clear All
-                                    </button>
+                      }
+        
+                      <!-- Slow Queries Section -->
+                      @if (slowQueries.length > 0) {
+                        <div class="slow-queries-section">
+                          <h4>
+                            <i class="fa-solid fa-turtle"></i>
+                            Slow Operations (>{{ slowQueryThresholdMs }}ms)
+                          </h4>
+                          <div class="slow-queries-list">
+                            @for (query of slowQueries.slice(0, 10); track query.id) {
+                              <div class="slow-query-item clickable" [class.cache-hit]="isCacheHit(query)" (click)="openEventDetailPanel(query)">
+                                <div class="slow-query-main">
+                                  <span class="category-chip small" [class]="'cat-' + query.category.toLowerCase()">
+                                    {{ query.category }}
+                                  </span>
+                                  <span class="slow-query-entity">{{ query.entityName || query.operation }}</span>
+                                  @if (isCacheHit(query)) {
+                                    <span class="cache-hit-badge small" title="Data served from local cache">
+                                      <i class="fa-solid fa-bolt"></i>
+                                      CACHED
+                                    </span>
+                                  }
+                                  <span class="slow-query-time">{{ query.elapsedMs | number:'1.0-0' }}ms</span>
                                 </div>
-                            </div>
-
-                            <div class="section-panel-content">
-                                @if (!cacheInitialized) {
-                                    <div class="info-banner warning-banner">
-                                        <i class="fa-solid fa-exclamation-triangle"></i>
-                                        <div>
-                                            <strong>Cache not initialized.</strong>
-                                            The LocalCacheManager requires initialization with a storage provider during app startup.
-                                        </div>
-                                    </div>
-                                } @else {
-                                    <!-- Cache Summary Stats -->
-                                    <div class="cache-summary">
-                                        <div class="summary-card">
-                                            <div class="summary-value">{{ cacheStats?.totalEntries || 0 }}</div>
-                                            <div class="summary-label">Total Entries</div>
-                                        </div>
-                                        <div class="summary-card">
-                                            <div class="summary-value">{{ formatBytes(cacheStats?.totalSizeBytes || 0) }}</div>
-                                            <div class="summary-label">Total Size</div>
-                                        </div>
-                                        <div class="summary-card">
-                                            <div class="summary-value">{{ cacheStats?.hits || 0 }}</div>
-                                            <div class="summary-label">Cache Hits</div>
-                                        </div>
-                                        <div class="summary-card">
-                                            <div class="summary-value">{{ cacheStats?.misses || 0 }}</div>
-                                            <div class="summary-label">Cache Misses</div>
-                                        </div>
-                                        <div class="summary-card">
-                                            <div class="summary-value">{{ cacheHitRate | number:'1.1-1' }}%</div>
-                                            <div class="summary-label">Hit Rate</div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Cache Type Breakdown -->
-                                    <div class="cache-type-breakdown">
-                                        <h4>By Type</h4>
-                                        <div class="type-grid">
-                                            <div class="type-item" (click)="setCacheTypeFilter('dataset')">
-                                                <span class="type-icon"><i class="fa-solid fa-layer-group"></i></span>
-                                                <span class="type-name">Datasets</span>
-                                                <span class="type-count">{{ cacheStats?.byType?.dataset?.count || 0 }}</span>
-                                                <span class="type-size">{{ formatBytes(cacheStats?.byType?.dataset?.sizeBytes || 0) }}</span>
-                                            </div>
-                                            <div class="type-item" (click)="setCacheTypeFilter('runview')">
-                                                <span class="type-icon"><i class="fa-solid fa-table"></i></span>
-                                                <span class="type-name">RunViews</span>
-                                                <span class="type-count">{{ cacheStats?.byType?.runview?.count || 0 }}</span>
-                                                <span class="type-size">{{ formatBytes(cacheStats?.byType?.runview?.sizeBytes || 0) }}</span>
-                                            </div>
-                                            <div class="type-item" (click)="setCacheTypeFilter('runquery')">
-                                                <span class="type-icon"><i class="fa-solid fa-code"></i></span>
-                                                <span class="type-name">RunQueries</span>
-                                                <span class="type-count">{{ cacheStats?.byType?.runquery?.count || 0 }}</span>
-                                                <span class="type-size">{{ formatBytes(cacheStats?.byType?.runquery?.sizeBytes || 0) }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Cache Entries Table -->
-                                    @if (filteredCacheEntries.length > 0) {
-                                        <div class="cache-entries-section">
-                                            <div class="section-header">
-                                                <h4>Cache Entries</h4>
-                                                <div class="filter-controls">
-                                                    <button class="filter-btn" [class.active]="cacheTypeFilter === 'all'" (click)="setCacheTypeFilter('all')">All</button>
-                                                    <button class="filter-btn" [class.active]="cacheTypeFilter === 'dataset'" (click)="setCacheTypeFilter('dataset')">Datasets</button>
-                                                    <button class="filter-btn" [class.active]="cacheTypeFilter === 'runview'" (click)="setCacheTypeFilter('runview')">RunViews</button>
-                                                    <button class="filter-btn" [class.active]="cacheTypeFilter === 'runquery'" (click)="setCacheTypeFilter('runquery')">RunQueries</button>
-                                                </div>
-                                            </div>
-                                            <div class="cache-entries-table-wrapper">
-                                                <table class="cache-entries-table">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Type</th>
-                                                            <th>Name</th>
-                                                            <th class="text-right">Size</th>
-                                                            <th class="text-right">Hits</th>
-                                                            <th>Cached At</th>
-                                                            <th>Last Accessed</th>
-                                                            <th></th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @for (entry of filteredCacheEntries.slice(0, 50); track entry.key) {
-                                                            <tr>
-                                                                <td>
-                                                                    <span class="cache-type-chip" [class]="'type-' + entry.type">
-                                                                        {{ entry.type }}
-                                                                    </span>
-                                                                </td>
-                                                                <td class="entry-name">
-                                                                    {{ entry.name }}
-                                                                    @if (entry.fingerprint) {
-                                                                        <code class="entry-fingerprint">{{ truncateString(entry.fingerprint, 20) }}</code>
-                                                                    }
-                                                                </td>
-                                                                <td class="text-right">{{ formatBytes(entry.sizeBytes) }}</td>
-                                                                <td class="text-right">{{ entry.accessCount }}</td>
-                                                                <td>{{ formatCacheTimestamp(entry.cachedAt) }}</td>
-                                                                <td>{{ formatCacheTimestamp(entry.lastAccessedAt) }}</td>
-                                                                <td>
-                                                                    <button class="icon-btn" (click)="invalidateCacheEntry(entry)" title="Invalidate">
-                                                                        <i class="fa-solid fa-times"></i>
-                                                                    </button>
-                                                                </td>
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                            @if (filteredCacheEntries.length > 50) {
-                                                <div class="table-footer">
-                                                    Showing 50 of {{ filteredCacheEntries.length }} entries
-                                                </div>
-                                            }
-                                        </div>
-                                    } @else if (cacheStats && cacheStats.totalEntries === 0) {
-                                        <div class="empty-state">
-                                            <i class="fa-solid fa-database"></i>
-                                            <p>No cached data</p>
-                                            <span class="empty-hint">Data will be cached as you use the application</span>
-                                        </div>
+                                <!-- Show entities for RunViews batch operation -->
+                                @if (isRunViewsOperation(query)) {
+                                  <div class="slow-query-entities">
+                                    @for (entity of getRunViewsEntities(query, 4); track entity) {
+                                      <span class="entity-pill small">{{ entity }}</span>
                                     }
+                                    @if (hasMoreEntities(query, 4)) {
+                                      <span class="entity-pill small more">+{{ getRunViewsEntityCount(query) - 4 }} more</span>
+                                    }
+                                  </div>
                                 }
-                            </div>
+                                <!-- RunView parameter pills -->
+                                @if (isRunViewOperation(query) && getRunViewPills(query).length > 0) {
+                                  <div class="slow-query-pills">
+                                    @for (pill of getRunViewPills(query); track pill.label) {
+                                      <span class="param-pill small" [class]="'pill-' + pill.type" [title]="pill.value">
+                                        <span class="pill-label">{{ pill.label }}:</span>
+                                        <span class="pill-value">{{ pill.value }}</span>
+                                      </span>
+                                    }
+                                  </div>
+                                }
+                                @if (query.filter) {
+                                  <div class="slow-query-filter">{{ truncateString(query.filter, 60) }}</div>
+                                }
+                                <div class="slow-query-timestamp">{{ formatTimestamp(query.timestamp) }}</div>
+                              </div>
+                            }
+                          </div>
                         </div>
+                      } @else if (telemetryEnabled && telemetrySummary && telemetrySummary.totalEvents > 0) {
+                        <div class="success-banner">
+                          <i class="fa-solid fa-check-circle"></i>
+                          <span>No slow operations detected. All operations completed under {{ slowQueryThresholdMs }}ms.</span>
+                        </div>
+                      }
                     }
+        
+                    <!-- Events Tab (Timeline) -->
+                    @if (perfTab === 'events') {
+                      <!-- Filter Bar for Events -->
+                      <div class="filter-bar compact">
+                        <div class="search-box">
+                          <i class="fa-solid fa-search"></i>
+                          <input type="text"
+                            placeholder="Search events..."
+                            [(ngModel)]="searchQuery"
+                            (ngModelChange)="onSearchChange()">
+                          @if (searchQuery) {
+                            <button class="clear-search" (click)="clearSearch()">
+                              <i class="fa-solid fa-times"></i>
+                            </button>
+                          }
+                        </div>
+                        <div class="filter-buttons">
+                          <button class="filter-btn" [class.active]="categoryFilter === 'all'" (click)="setCategoryFilter('all')">
+                            All
+                          </button>
+                          @for (cat of categoriesWithData; track cat.name) {
+                            <button class="filter-btn" [class.active]="categoryFilter === cat.name" (click)="setCategoryFilterByName(cat.name)">
+                              {{ cat.name }}
+                            </button>
+                          }
+                        </div>
+                      </div>
+        
+                      <div class="timeline-section">
+                        <div class="timeline-container">
+                          @if (filteredEvents.length > 0) {
+                            @for (event of filteredEvents.slice(0, 50); track event.id) {
+                              <div class="timeline-item clickable" [class]="'tl-' + event.category.toLowerCase()" [class.cache-hit]="isCacheHit(event)" (click)="openEventDetailPanel(event)">
+                                <div class="timeline-marker">
+                                  @if (isCacheHit(event)) {
+                                    <div class="marker-bolt">
+                                      <i class="fa-solid fa-bolt"></i>
+                                    </div>
+                                  } @else {
+                                    <div class="marker-dot"></div>
+                                  }
+                                  <div class="marker-line"></div>
+                                </div>
+                                <div class="timeline-content">
+                                  <div class="timeline-header">
+                                    <span class="timeline-time">{{ formatTimestamp(event.timestamp) }}</span>
+                                    <span class="category-chip small" [class]="'cat-' + event.category.toLowerCase()">
+                                      {{ event.category }}
+                                    </span>
+                                    @if (isCacheHit(event)) {
+                                      <span class="cache-hit-badge" title="Data served from local cache">
+                                        <i class="fa-solid fa-bolt"></i>
+                                        CACHED
+                                      </span>
+                                    }
+                                    @if (event.elapsedMs !== undefined) {
+                                      <span class="timeline-duration" [class.slow]="(event.elapsedMs || 0) >= slowQueryThresholdMs">
+                                        {{ event.elapsedMs | number:'1.0-0' }}ms
+                                      </span>
+                                    }
+                                  </div>
+                                  <div class="timeline-body">
+                                    <span class="timeline-operation">{{ event.operation }}</span>
+                                    @if (event.entityName) {
+                                      <span class="timeline-entity">{{ event.entityName }}</span>
+                                    }
+                                    <!-- Show entities for RunViews batch operation -->
+                                    @if (isRunViewsOperation(event)) {
+                                      <div class="timeline-entities">
+                                        @for (entity of getRunViewsEntities(event, 3); track entity) {
+                                          <span class="entity-pill">{{ entity }}</span>
+                                        }
+                                        @if (hasMoreEntities(event, 3)) {
+                                          <span class="entity-pill more">+{{ getRunViewsEntityCount(event) - 3 }} more</span>
+                                        }
+                                      </div>
+                                    }
+                                  </div>
+                                  <!-- RunView parameter pills -->
+                                  @if (isRunViewOperation(event) && getRunViewPills(event).length > 0) {
+                                    <div class="timeline-pills">
+                                      @for (pill of getRunViewPills(event); track pill.label) {
+                                        <span class="param-pill" [class]="'pill-' + pill.type" [title]="pill.value">
+                                          <span class="pill-label">{{ pill.label }}:</span>
+                                          <span class="pill-value">{{ pill.value }}</span>
+                                        </span>
+                                      }
+                                    </div>
+                                  }
+                                  @if (event.filter) {
+                                    <div class="timeline-filter">{{ truncateString(event.filter, 80) }}</div>
+                                  }
+                                </div>
+                              </div>
+                            }
+                          } @else {
+                            <div class="empty-state small">
+                              <i class="fa-solid fa-hourglass-start"></i>
+                              <p>No events recorded yet</p>
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+        
+                    <!-- Patterns Tab -->
+                    @if (perfTab === 'patterns') {
+                      <!-- Filter Bar -->
+                      <div class="filter-bar compact">
+                        <div class="search-box">
+                          <i class="fa-solid fa-search"></i>
+                          <input type="text"
+                            placeholder="Search patterns..."
+                            [(ngModel)]="searchQuery"
+                            (ngModelChange)="onSearchChange()">
+                          @if (searchQuery) {
+                            <button class="clear-search" (click)="clearSearch()">
+                              <i class="fa-solid fa-times"></i>
+                            </button>
+                          }
+                        </div>
+                        <div class="filter-buttons">
+                          <button class="filter-btn" [class.active]="categoryFilter === 'all'" (click)="setCategoryFilter('all')">
+                            All
+                          </button>
+                          @for (cat of categoriesWithData; track cat.name) {
+                            <button class="filter-btn" [class.active]="categoryFilter === cat.name" (click)="setCategoryFilterByName(cat.name)">
+                              {{ cat.name }}
+                            </button>
+                          }
+                        </div>
+                      </div>
+        
+                      @if (filteredPatterns.length > 0) {
+                        <div class="patterns-section">
+                          <div class="patterns-table-wrapper">
+                            <table class="patterns-table sortable">
+                              <thead>
+                                <tr>
+                                  <th class="sortable-header" (click)="sortPatternsBy('category')">
+                                    Category
+                                    <i class="fa-solid" [class]="getSortIcon('category')"></i>
+                                  </th>
+                                  <th class="sortable-header" (click)="sortPatternsBy('operation')">
+                                    Operation
+                                    <i class="fa-solid" [class]="getSortIcon('operation')"></i>
+                                  </th>
+                                  <th class="sortable-header" (click)="sortPatternsBy('entity')">
+                                    Entity/Query
+                                    <i class="fa-solid" [class]="getSortIcon('entity')"></i>
+                                  </th>
+                                  <th>Filter</th>
+                                  <th class="sortable-header text-right" (click)="sortPatternsBy('count')">
+                                    Count
+                                    <i class="fa-solid" [class]="getSortIcon('count')"></i>
+                                  </th>
+                                  <th class="sortable-header text-right" (click)="sortPatternsBy('avgMs')">
+                                    Avg (ms)
+                                    <i class="fa-solid" [class]="getSortIcon('avgMs')"></i>
+                                  </th>
+                                  <th class="sortable-header text-right" (click)="sortPatternsBy('totalMs')">
+                                    Total (ms)
+                                    <i class="fa-solid" [class]="getSortIcon('totalMs')"></i>
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                @for (pattern of filteredPatterns; track pattern.fingerprint) {
+                                  <tr [class.duplicate-row]="pattern.count >= 2" [class.slow-row]="pattern.avgElapsedMs >= slowQueryThresholdMs">
+                                    <td>
+                                      <span class="category-chip" [class]="'cat-' + pattern.category.toLowerCase()">
+                                        {{ pattern.category }}
+                                      </span>
+                                    </td>
+                                    <td class="operation-cell">{{ pattern.operation }}</td>
+                                    <td class="entity-cell">{{ pattern.entityName || '-' }}</td>
+                                    <td class="filter-cell" [title]="pattern.filter || ''">
+                                      {{ truncateString(pattern.filter, 30) }}
+                                    </td>
+                                    <td class="text-right">
+                                      @if (pattern.count >= 2) {
+                                        <span class="count-warning">{{ pattern.count }}</span>
+                                      } @else {
+                                        {{ pattern.count }}
+                                      }
+                                    </td>
+                                    <td class="text-right" [class.slow-value]="pattern.avgElapsedMs >= slowQueryThresholdMs">
+                                      {{ pattern.avgElapsedMs | number:'1.1-1' }}
+                                    </td>
+                                    <td class="text-right">{{ pattern.totalElapsedMs | number:'1.0-0' }}</td>
+                                  </tr>
+                                }
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      } @else if (telemetryEnabled && telemetryPatterns.length === 0) {
+                        <div class="empty-state">
+                          <i class="fa-solid fa-hourglass-start"></i>
+                          <p>No telemetry data yet</p>
+                          <span class="empty-hint">Navigate around the app to generate performance data</span>
+                        </div>
+                      } @else if (searchQuery || categoryFilter !== 'all') {
+                        <div class="empty-state small">
+                          <i class="fa-solid fa-filter"></i>
+                          <p>No patterns match your filter</p>
+                        </div>
+                      }
+                    }
+        
+                    <!-- Insights Tab -->
+                    @if (perfTab === 'insights') {
+                      @if (telemetryInsights.length > 0) {
+                        <div class="insights-section">
+                          <div class="insights-list">
+                            @for (insight of telemetryInsights; track insight.id) {
+                              <div class="insight-card expandable" [class]="getSeverityClass(insight.severity)" [class.expanded]="insight.expanded">
+                                <div class="insight-header" (click)="toggleInsightExpanded(insight)">
+                                  <i class="fa-solid" [class]="getSeverityIcon(insight.severity)"></i>
+                                  <span class="insight-title">{{ insight.title }}</span>
+                                  <span class="insight-category">{{ insight.category }}</span>
+                                  <i class="fa-solid expand-icon" [class.fa-chevron-down]="!insight.expanded" [class.fa-chevron-up]="insight.expanded"></i>
+                                </div>
+        
+                                <!-- Always show key info for actionability -->
+                                <div class="insight-key-info">
+                                  @if (insight.entityName) {
+                                    <div class="key-info-item">
+                                      <span class="key-label">Entity:</span>
+                                      <span class="key-value entity-name">{{ insight.entityName }}</span>
+                                    </div>
+                                  }
+                                  @if (getInsightFilter(insight)) {
+                                    <div class="key-info-item">
+                                      <span class="key-label">Filter:</span>
+                                      <code class="key-value filter-code">{{ getInsightFilter(insight) }}</code>
+                                    </div>
+                                  }
+                                </div>
+        
+                                <div class="insight-message">{{ insight.message }}</div>
+                                <div class="insight-suggestion">
+                                  <i class="fa-solid fa-arrow-right"></i>
+                                  {{ insight.suggestion }}
+                                </div>
+        
+                                <!-- Expanded Details -->
+                                @if (insight.expanded) {
+                                  <div class="insight-details">
+                                    <!-- Show all params from first related event -->
+                                    @if (insight.relatedEvents.length > 0) {
+                                      <div class="detail-section">
+                                        <div class="detail-label">Full Parameters</div>
+                                        <div class="params-display">
+                                          @for (param of getEventParams(insight.relatedEvents[0]); track param.key) {
+                                            <div class="param-row">
+                                              <span class="param-key">{{ param.key }}:</span>
+                                              <span class="param-value">{{ param.value }}</span>
+                                            </div>
+                                          }
+                                        </div>
+                                      </div>
+                                      <div class="detail-section">
+                                        <div class="detail-label">Related Calls ({{ insight.relatedEvents.length }})</div>
+                                        <div class="related-events">
+                                          @for (event of insight.relatedEvents; track event.id) {
+                                            <div class="related-event">
+                                              <span class="event-time">{{ formatTimestamp(event.timestamp) }}</span>
+                                              <span class="event-duration">{{ event.elapsedMs | number:'1.0-0' }}ms</span>
+                                              @if (event.entityName) {
+                                                <span class="event-entity">{{ event.entityName }}</span>
+                                              }
+                                              @if (event.filter) {
+                                                <span class="event-filter">{{ truncateString(event.filter, 40) }}</span>
+                                              }
+                                            </div>
+                                          }
+                                        </div>
+                                      </div>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      } @else {
+                        <div class="empty-state">
+                          <i class="fa-solid fa-check-circle" style="color: #4caf50;"></i>
+                          <p>No optimization insights</p>
+                          <span class="empty-hint">Insights will appear when potential optimizations are detected</span>
+                        </div>
+                      }
+                    }
+                  </div>
                 </div>
+              }
+        
+              <!-- Local Cache Section -->
+              @if (activeSection === 'cache') {
+                <div class="section-panel">
+                  <div class="panel-header">
+                    <h3>
+                      <i class="fa-solid fa-database"></i>
+                      Local Cache
+                    </h3>
+                    <div class="panel-actions">
+                      <button class="action-btn" (click)="clearAllCache()" [disabled]="!cacheStats || cacheStats.totalEntries === 0">
+                        <i class="fa-solid fa-trash"></i>
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
+        
+                  <div class="section-panel-content">
+                    @if (!cacheInitialized) {
+                      <div class="info-banner warning-banner">
+                        <i class="fa-solid fa-exclamation-triangle"></i>
+                        <div>
+                          <strong>Cache not initialized.</strong>
+                          The LocalCacheManager requires initialization with a storage provider during app startup.
+                        </div>
+                      </div>
+                    } @else {
+                      <!-- Cache Summary Stats -->
+                      <div class="cache-summary">
+                        <div class="summary-card">
+                          <div class="summary-value">{{ cacheStats?.totalEntries || 0 }}</div>
+                          <div class="summary-label">Total Entries</div>
+                        </div>
+                        <div class="summary-card">
+                          <div class="summary-value">{{ formatBytes(cacheStats?.totalSizeBytes || 0) }}</div>
+                          <div class="summary-label">Total Size</div>
+                        </div>
+                        <div class="summary-card">
+                          <div class="summary-value">{{ cacheStats?.hits || 0 }}</div>
+                          <div class="summary-label">Cache Hits</div>
+                        </div>
+                        <div class="summary-card">
+                          <div class="summary-value">{{ cacheStats?.misses || 0 }}</div>
+                          <div class="summary-label">Cache Misses</div>
+                        </div>
+                        <div class="summary-card">
+                          <div class="summary-value">{{ cacheHitRate | number:'1.1-1' }}%</div>
+                          <div class="summary-label">Hit Rate</div>
+                        </div>
+                      </div>
+        
+                      <!-- Cache Type Breakdown -->
+                      <div class="cache-type-breakdown">
+                        <h4>By Type</h4>
+                        <div class="type-grid">
+                          <div class="type-item" (click)="setCacheTypeFilter('dataset')">
+                            <span class="type-icon"><i class="fa-solid fa-layer-group"></i></span>
+                            <span class="type-name">Datasets</span>
+                            <span class="type-count">{{ cacheStats?.byType?.dataset?.count || 0 }}</span>
+                            <span class="type-size">{{ formatBytes(cacheStats?.byType?.dataset?.sizeBytes || 0) }}</span>
+                          </div>
+                          <div class="type-item" (click)="setCacheTypeFilter('runview')">
+                            <span class="type-icon"><i class="fa-solid fa-table"></i></span>
+                            <span class="type-name">RunViews</span>
+                            <span class="type-count">{{ cacheStats?.byType?.runview?.count || 0 }}</span>
+                            <span class="type-size">{{ formatBytes(cacheStats?.byType?.runview?.sizeBytes || 0) }}</span>
+                          </div>
+                          <div class="type-item" (click)="setCacheTypeFilter('runquery')">
+                            <span class="type-icon"><i class="fa-solid fa-code"></i></span>
+                            <span class="type-name">RunQueries</span>
+                            <span class="type-count">{{ cacheStats?.byType?.runquery?.count || 0 }}</span>
+                            <span class="type-size">{{ formatBytes(cacheStats?.byType?.runquery?.sizeBytes || 0) }}</span>
+                          </div>
+                        </div>
+                      </div>
+        
+                      <!-- Cache Entries Table -->
+                      @if (filteredCacheEntries.length > 0) {
+                        <div class="cache-entries-section">
+                          <div class="section-header">
+                            <h4>Cache Entries</h4>
+                            <div class="filter-controls">
+                              <button class="filter-btn" [class.active]="cacheTypeFilter === 'all'" (click)="setCacheTypeFilter('all')">All</button>
+                              <button class="filter-btn" [class.active]="cacheTypeFilter === 'dataset'" (click)="setCacheTypeFilter('dataset')">Datasets</button>
+                              <button class="filter-btn" [class.active]="cacheTypeFilter === 'runview'" (click)="setCacheTypeFilter('runview')">RunViews</button>
+                              <button class="filter-btn" [class.active]="cacheTypeFilter === 'runquery'" (click)="setCacheTypeFilter('runquery')">RunQueries</button>
+                            </div>
+                          </div>
+                          <div class="cache-entries-table-wrapper">
+                            <table class="cache-entries-table">
+                              <thead>
+                                <tr>
+                                  <th>Type</th>
+                                  <th>Name</th>
+                                  <th class="text-right">Size</th>
+                                  <th class="text-right">Hits</th>
+                                  <th>Cached At</th>
+                                  <th>Last Accessed</th>
+                                  <th></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                @for (entry of filteredCacheEntries.slice(0, 50); track entry.key) {
+                                  <tr>
+                                    <td>
+                                      <span class="cache-type-chip" [class]="'type-' + entry.type">
+                                        {{ entry.type }}
+                                      </span>
+                                    </td>
+                                    <td class="entry-name">
+                                      {{ entry.name }}
+                                      @if (entry.fingerprint) {
+                                        <code class="entry-fingerprint">{{ truncateString(entry.fingerprint, 20) }}</code>
+                                      }
+                                    </td>
+                                    <td class="text-right">{{ formatBytes(entry.sizeBytes) }}</td>
+                                    <td class="text-right">{{ entry.accessCount }}</td>
+                                    <td>{{ formatCacheTimestamp(entry.cachedAt) }}</td>
+                                    <td>{{ formatCacheTimestamp(entry.lastAccessedAt) }}</td>
+                                    <td>
+                                      <button class="icon-btn" (click)="invalidateCacheEntry(entry)" title="Invalidate">
+                                        <i class="fa-solid fa-times"></i>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                }
+                              </tbody>
+                            </table>
+                          </div>
+                          @if (filteredCacheEntries.length > 50) {
+                            <div class="table-footer">
+                              Showing 50 of {{ filteredCacheEntries.length }} entries
+                            </div>
+                          }
+                        </div>
+                      } @else if (cacheStats && cacheStats.totalEntries === 0) {
+                        <div class="empty-state">
+                          <i class="fa-solid fa-database"></i>
+                          <p>No cached data</p>
+                          <span class="empty-hint">Data will be cached as you use the application</span>
+                        </div>
+                      }
+                    }
+                  </div>
+                </div>
+              }
             </div>
-
-            <!-- Last Updated -->
-            <div class="footer">
-                <span class="last-updated">
-                    <i class="fa-solid fa-clock"></i>
-                    Last updated: {{ lastUpdated | date:'medium' }}
-                </span>
-                <button class="export-btn" (click)="exportTelemetryData()" [disabled]="!telemetryEnabled || telemetryEvents.length === 0">
-                    <i class="fa-solid fa-download"></i>
-                    Export JSON
-                </button>
-            </div>
+          </div>
+        
+          <!-- Last Updated -->
+          <div class="footer">
+            <span class="last-updated">
+              <i class="fa-solid fa-clock"></i>
+              Last updated: {{ lastUpdated | date:'medium' }}
+            </span>
+            <button class="export-btn" (click)="exportTelemetryData()" [disabled]="!telemetryEnabled || telemetryEvents.length === 0">
+              <i class="fa-solid fa-download"></i>
+              Export JSON
+            </button>
+          </div>
         </div>
-
+        
         <!-- Event Detail Slide-in Panel -->
         @if (eventDetailPanel.isOpen && eventDetailPanel.event) {
-            <div class="event-detail-overlay" (click)="closeEventDetailPanel()"></div>
-            <div class="event-detail-panel" [class.open]="eventDetailPanel.isOpen">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        <span class="category-chip" [class]="'cat-' + eventDetailPanel.event.category.toLowerCase()">
-                            {{ eventDetailPanel.event.category }}
-                        </span>
-                        <h3>Event Details</h3>
-                    </div>
-                    <button class="close-btn" (click)="closeEventDetailPanel()">
-                        <i class="fa-solid fa-times"></i>
-                    </button>
-                </div>
-
-                <div class="panel-body">
-                    <!-- Key Metrics -->
-                    <div class="detail-metrics">
-                        <div class="metric">
-                            <div class="metric-value" [class.slow]="(eventDetailPanel.event.elapsedMs || 0) >= slowQueryThresholdMs">
-                                {{ eventDetailPanel.event.elapsedMs !== undefined ? (eventDetailPanel.event.elapsedMs | number:'1.0-0') + 'ms' : 'In Progress' }}
-                            </div>
-                            <div class="metric-label">Duration</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value">{{ formatTimestamp(eventDetailPanel.event.timestamp) }}</div>
-                            <div class="metric-label">Time</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value">+{{ formatRelativeTime(eventDetailPanel.event.startTime - telemetryBootTime) }}</div>
-                            <div class="metric-label">Relative</div>
-                        </div>
-                    </div>
-
-                    <!-- Operation Info -->
-                    <div class="detail-section">
-                        <h4><i class="fa-solid fa-code"></i> Operation</h4>
-                        <div class="detail-content">
-                            <div class="detail-row">
-                                <span class="detail-key">Operation:</span>
-                                <span class="detail-val">{{ eventDetailPanel.event.operation }}</span>
-                            </div>
-                            @if (eventDetailPanel.event.entityName) {
-                                <div class="detail-row">
-                                    <span class="detail-key">Entity:</span>
-                                    <span class="detail-val entity-highlight">{{ eventDetailPanel.event.entityName }}</span>
-                                </div>
-                            }
-                            @if (eventDetailPanel.event.filter) {
-                                <div class="detail-row">
-                                    <span class="detail-key">Filter:</span>
-                                    <code class="detail-val filter-val">{{ eventDetailPanel.event.filter }}</code>
-                                </div>
-                            }
-                        </div>
-                    </div>
-
-                    <!-- All Parameters -->
-                    <div class="detail-section">
-                        <h4><i class="fa-solid fa-sliders"></i> Parameters</h4>
-                        <div class="params-grid">
-                            @for (param of getEventParams(eventDetailPanel.event); track param.key) {
-                                <div class="param-item">
-                                    <span class="param-name">{{ param.key }}</span>
-                                    <span class="param-val">{{ param.value }}</span>
-                                </div>
-                            }
-                        </div>
-                    </div>
-
-                    <!-- Related Pattern -->
-                    @if (eventDetailPanel.relatedPattern) {
-                        <div class="detail-section">
-                            <h4><i class="fa-solid fa-fingerprint"></i> Related Pattern</h4>
-                            <div class="pattern-summary">
-                                <div class="pattern-stat">
-                                    <span class="stat-val">{{ eventDetailPanel.relatedPattern.count }}</span>
-                                    <span class="stat-label">Total Calls</span>
-                                </div>
-                                <div class="pattern-stat">
-                                    <span class="stat-val">{{ eventDetailPanel.relatedPattern.avgElapsedMs | number:'1.1-1' }}ms</span>
-                                    <span class="stat-label">Avg Duration</span>
-                                </div>
-                                <div class="pattern-stat">
-                                    <span class="stat-val">{{ eventDetailPanel.relatedPattern.minElapsedMs | number:'1.0-0' }} - {{ eventDetailPanel.relatedPattern.maxElapsedMs | number:'1.0-0' }}ms</span>
-                                    <span class="stat-label">Range</span>
-                                </div>
-                            </div>
-                            @if (eventDetailPanel.relatedPattern.count >= 2) {
-                                <div class="pattern-warning">
-                                    <i class="fa-solid fa-exclamation-triangle"></i>
-                                    This pattern has been called {{ eventDetailPanel.relatedPattern.count }} times. Consider caching or batching.
-                                </div>
-                            }
-                        </div>
-                    }
-
-                    <!-- Actions -->
-                    <div class="detail-actions">
-                        <button class="action-button" (click)="copyEventToClipboard(eventDetailPanel.event)">
-                            <i class="fa-solid fa-copy"></i>
-                            Copy JSON
-                        </button>
-                        @if (eventDetailPanel.event.entityName) {
-                            <button class="action-button" (click)="filterByEntity(eventDetailPanel.event.entityName)">
-                                <i class="fa-solid fa-filter"></i>
-                                Filter by Entity
-                            </button>
-                        }
-                    </div>
-                </div>
+          <div class="event-detail-overlay" (click)="closeEventDetailPanel()"></div>
+          <div class="event-detail-panel" [class.open]="eventDetailPanel.isOpen">
+            <div class="panel-header">
+              <div class="panel-title">
+                <span class="category-chip" [class]="'cat-' + eventDetailPanel.event.category.toLowerCase()">
+                  {{ eventDetailPanel.event.category }}
+                </span>
+                <h3>Event Details</h3>
+              </div>
+              <button class="close-btn" (click)="closeEventDetailPanel()">
+                <i class="fa-solid fa-times"></i>
+              </button>
             </div>
+        
+            <div class="panel-body">
+              <!-- Key Metrics -->
+              <div class="detail-metrics">
+                <div class="metric">
+                  <div class="metric-value" [class.slow]="(eventDetailPanel.event.elapsedMs || 0) >= slowQueryThresholdMs">
+                    {{ eventDetailPanel.event.elapsedMs !== undefined ? (eventDetailPanel.event.elapsedMs | number:'1.0-0') + 'ms' : 'In Progress' }}
+                  </div>
+                  <div class="metric-label">Duration</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-value">{{ formatTimestamp(eventDetailPanel.event.timestamp) }}</div>
+                  <div class="metric-label">Time</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-value">+{{ formatRelativeTime(eventDetailPanel.event.startTime - telemetryBootTime) }}</div>
+                  <div class="metric-label">Relative</div>
+                </div>
+              </div>
+        
+              <!-- Operation Info -->
+              <div class="detail-section">
+                <h4><i class="fa-solid fa-code"></i> Operation</h4>
+                <div class="detail-content">
+                  <div class="detail-row">
+                    <span class="detail-key">Operation:</span>
+                    <span class="detail-val">{{ eventDetailPanel.event.operation }}</span>
+                  </div>
+                  @if (eventDetailPanel.event.entityName) {
+                    <div class="detail-row">
+                      <span class="detail-key">Entity:</span>
+                      <span class="detail-val entity-highlight">{{ eventDetailPanel.event.entityName }}</span>
+                    </div>
+                  }
+                  @if (eventDetailPanel.event.filter) {
+                    <div class="detail-row">
+                      <span class="detail-key">Filter:</span>
+                      <code class="detail-val filter-val">{{ eventDetailPanel.event.filter }}</code>
+                    </div>
+                  }
+                </div>
+              </div>
+        
+              <!-- All Parameters -->
+              <div class="detail-section">
+                <h4><i class="fa-solid fa-sliders"></i> Parameters</h4>
+                <div class="params-grid">
+                  @for (param of getEventParams(eventDetailPanel.event); track param.key) {
+                    <div class="param-item">
+                      <span class="param-name">{{ param.key }}</span>
+                      <span class="param-val">{{ param.value }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+        
+              <!-- Related Pattern -->
+              @if (eventDetailPanel.relatedPattern) {
+                <div class="detail-section">
+                  <h4><i class="fa-solid fa-fingerprint"></i> Related Pattern</h4>
+                  <div class="pattern-summary">
+                    <div class="pattern-stat">
+                      <span class="stat-val">{{ eventDetailPanel.relatedPattern.count }}</span>
+                      <span class="stat-label">Total Calls</span>
+                    </div>
+                    <div class="pattern-stat">
+                      <span class="stat-val">{{ eventDetailPanel.relatedPattern.avgElapsedMs | number:'1.1-1' }}ms</span>
+                      <span class="stat-label">Avg Duration</span>
+                    </div>
+                    <div class="pattern-stat">
+                      <span class="stat-val">{{ eventDetailPanel.relatedPattern.minElapsedMs | number:'1.0-0' }} - {{ eventDetailPanel.relatedPattern.maxElapsedMs | number:'1.0-0' }}ms</span>
+                      <span class="stat-label">Range</span>
+                    </div>
+                  </div>
+                  @if (eventDetailPanel.relatedPattern.count >= 2) {
+                    <div class="pattern-warning">
+                      <i class="fa-solid fa-exclamation-triangle"></i>
+                      This pattern has been called {{ eventDetailPanel.relatedPattern.count }} times. Consider caching or batching.
+                    </div>
+                  }
+                </div>
+              }
+        
+              <!-- Actions -->
+              <div class="detail-actions">
+                <button class="action-button" (click)="copyEventToClipboard(eventDetailPanel.event)">
+                  <i class="fa-solid fa-copy"></i>
+                  Copy JSON
+                </button>
+                @if (eventDetailPanel.event.entityName) {
+                  <button class="action-button" (click)="filterByEntity(eventDetailPanel.event.entityName)">
+                    <i class="fa-solid fa-filter"></i>
+                    Filter by Entity
+                  </button>
+                }
+              </div>
+            </div>
+          </div>
         }
-
+        
         <!-- Engine Detail Slide-in Panel -->
         @if (engineDetailPanel.isOpen && engineDetailPanel.engine) {
-            <div class="engine-detail-overlay" (click)="closeEngineDetailPanel()"></div>
-            <div class="engine-detail-panel" [class.open]="engineDetailPanel.isOpen">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        <i class="fa-solid fa-cogs"></i>
-                        <h3>{{ engineDetailPanel.engine.className }}</h3>
-                    </div>
-                    <div class="panel-header-actions">
-                        <button class="icon-btn" (click)="refreshEngineInDetailPanel()" [disabled]="engineDetailPanel.isRefreshing" title="Refresh engine">
-                            <i class="fa-solid fa-sync" [class.spinning]="engineDetailPanel.isRefreshing"></i>
-                        </button>
-                        <button class="close-btn" (click)="closeEngineDetailPanel()">
-                            <i class="fa-solid fa-times"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="panel-body">
-                    <!-- Engine Summary -->
-                    <div class="engine-summary-section">
-                        <div class="summary-stat">
-                            <span class="summary-label">Status</span>
-                            <span class="summary-value">
-                                <span class="status-dot" [class.status-loaded]="engineDetailPanel.engine.isLoaded"></span>
-                                {{ engineDetailPanel.engine.isLoaded ? 'Loaded' : 'Not Loaded' }}
-                            </span>
-                        </div>
-                        <div class="summary-stat">
-                            <span class="summary-label">Memory</span>
-                            <span class="summary-value">{{ engineDetailPanel.engine.memoryDisplay }}</span>
-                        </div>
-                        <div class="summary-stat">
-                            <span class="summary-label">Items</span>
-                            <span class="summary-value">{{ engineDetailPanel.engine.itemCount.toLocaleString() }}</span>
-                        </div>
-                        @if (engineDetailPanel.engine.lastLoadedAt) {
-                            <div class="summary-stat">
-                                <span class="summary-label">Last Loaded</span>
-                                <span class="summary-value">{{ formatTime(engineDetailPanel.engine.lastLoadedAt) }}</span>
-                            </div>
-                        }
-                    </div>
-
-                    <!-- Config Items -->
-                    <div class="config-items-section">
-                        <h4>
-                            <i class="fa-solid fa-database"></i>
-                            Data Configs ({{ engineDetailPanel.configItems.length }})
-                        </h4>
-
-                        @if (engineDetailPanel.configItems.length === 0) {
-                            <div class="empty-state small">
-                                <i class="fa-solid fa-inbox"></i>
-                                <p>No config items found</p>
-                            </div>
-                        } @else {
-                            <div class="config-items-list">
-                                @for (item of engineDetailPanel.configItems; track item.propertyName) {
-                                    <div class="config-item" [class.expanded]="item.expanded">
-                                        <div class="config-item-header" (click)="toggleConfigItemExpanded(item)">
-                                            <div class="config-item-info">
-                                                <span class="config-type-chip" [class]="'type-' + item.type">{{ item.type }}</span>
-                                                <span class="config-name">{{ item.entityName || item.datasetName || item.propertyName }}</span>
-                                            </div>
-                                            <div class="config-item-stats">
-                                                <span class="config-stat">{{ item.itemCount }} items</span>
-                                                <span class="config-stat">{{ item.memoryDisplay }}</span>
-                                                <i class="fa-solid expand-icon" [class.fa-chevron-down]="!item.expanded" [class.fa-chevron-up]="item.expanded"></i>
-                                            </div>
-                                        </div>
-
-                                        @if (item.expanded) {
-                                            <div class="config-item-details">
-                                                <div class="config-detail-row">
-                                                    <span class="detail-label">Property:</span>
-                                                    <code class="detail-value">{{ item.propertyName }}</code>
-                                                </div>
-                                                @if (item.filter) {
-                                                    <div class="config-detail-row">
-                                                        <span class="detail-label">Filter:</span>
-                                                        <code class="detail-value">{{ item.filter }}</code>
-                                                    </div>
-                                                }
-                                                @if (item.orderBy) {
-                                                    <div class="config-detail-row">
-                                                        <span class="detail-label">Order By:</span>
-                                                        <code class="detail-value">{{ item.orderBy }}</code>
-                                                    </div>
-                                                }
-
-                                                <!-- Data Table with Paging -->
-                                                @if (item.displayedData.length > 0) {
-                                                    <div class="sample-data-section">
-                                                        <div class="sample-header">
-                                                            <span class="sample-title">Data ({{ item.displayedData.length }} of {{ item.itemCount }})</span>
-                                                            <div class="sample-header-actions">
-                                                                @if (!item.allDataLoaded && item.itemCount > item.displayedData.length) {
-                                                                    <button class="load-more-btn" (click)="loadMoreData(item)" [disabled]="item.isLoadingMore" title="Load more records">
-                                                                        @if (item.isLoadingMore) {
-                                                                            <i class="fa-solid fa-spinner spinning"></i>
-                                                                        } @else {
-                                                                            <i class="fa-solid fa-plus"></i>
-                                                                        }
-                                                                        Load More
-                                                                    </button>
-                                                                    <button class="load-all-btn" (click)="loadAllData(item)" [disabled]="item.isLoadingMore" title="Load all records">
-                                                                        @if (item.isLoadingMore) {
-                                                                            <i class="fa-solid fa-spinner spinning"></i>
-                                                                        } @else {
-                                                                            <i class="fa-solid fa-download"></i>
-                                                                        }
-                                                                        Load All
-                                                                    </button>
-                                                                }
-                                                                @if (item.allDataLoaded) {
-                                                                    <span class="all-loaded-badge">
-                                                                        <i class="fa-solid fa-check"></i>
-                                                                        All Loaded
-                                                                    </span>
-                                                                }
-                                                            </div>
-                                                        </div>
-                                                        <div class="sample-data-table-wrapper">
-                                                            <table class="sample-data-table">
-                                                                <thead>
-                                                                    <tr>
-                                                                        <th class="action-col"></th>
-                                                                        @for (col of getSampleDataColumns(item); track col) {
-                                                                            <th>{{ col }}</th>
-                                                                        }
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    @for (row of item.displayedData; track $index) {
-                                                                        <tr>
-                                                                            <td class="action-col">
-                                                                                @if (item.entityName && getRecordId(row)) {
-                                                                                    <button class="open-record-btn" (click)="openEntityRecord(item.entityName, row)" title="Open record">
-                                                                                        <i class="fa-solid fa-external-link-alt"></i>
-                                                                                    </button>
-                                                                                }
-                                                                            </td>
-                                                                            @for (col of getSampleDataColumns(item); track col) {
-                                                                                <td [title]="getSampleDataValue(row, col)">{{ truncateString(getSampleDataValue(row, col), 30) }}</td>
-                                                                            }
-                                                                        </tr>
-                                                                    }
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
-                </div>
+          <div class="engine-detail-overlay" (click)="closeEngineDetailPanel()"></div>
+          <div class="engine-detail-panel" [class.open]="engineDetailPanel.isOpen">
+            <div class="panel-header">
+              <div class="panel-title">
+                <i class="fa-solid fa-cogs"></i>
+                <h3>{{ engineDetailPanel.engine.className }}</h3>
+              </div>
+              <div class="panel-header-actions">
+                <button class="icon-btn" (click)="refreshEngineInDetailPanel()" [disabled]="engineDetailPanel.isRefreshing" title="Refresh engine">
+                  <i class="fa-solid fa-sync" [class.spinning]="engineDetailPanel.isRefreshing"></i>
+                </button>
+                <button class="close-btn" (click)="closeEngineDetailPanel()">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
             </div>
+        
+            <div class="panel-body">
+              <!-- Engine Summary -->
+              <div class="engine-summary-section">
+                <div class="summary-stat">
+                  <span class="summary-label">Status</span>
+                  <span class="summary-value">
+                    <span class="status-dot" [class.status-loaded]="engineDetailPanel.engine.isLoaded"></span>
+                    {{ engineDetailPanel.engine.isLoaded ? 'Loaded' : 'Not Loaded' }}
+                  </span>
+                </div>
+                <div class="summary-stat">
+                  <span class="summary-label">Memory</span>
+                  <span class="summary-value">{{ engineDetailPanel.engine.memoryDisplay }}</span>
+                </div>
+                <div class="summary-stat">
+                  <span class="summary-label">Items</span>
+                  <span class="summary-value">{{ engineDetailPanel.engine.itemCount.toLocaleString() }}</span>
+                </div>
+                @if (engineDetailPanel.engine.lastLoadedAt) {
+                  <div class="summary-stat">
+                    <span class="summary-label">Last Loaded</span>
+                    <span class="summary-value">{{ formatTime(engineDetailPanel.engine.lastLoadedAt) }}</span>
+                  </div>
+                }
+              </div>
+        
+              <!-- Config Items -->
+              <div class="config-items-section">
+                <h4>
+                  <i class="fa-solid fa-database"></i>
+                  Data Configs ({{ engineDetailPanel.configItems.length }})
+                </h4>
+        
+                @if (engineDetailPanel.configItems.length === 0) {
+                  <div class="empty-state small">
+                    <i class="fa-solid fa-inbox"></i>
+                    <p>No config items found</p>
+                  </div>
+                } @else {
+                  <div class="config-items-list">
+                    @for (item of engineDetailPanel.configItems; track item.propertyName) {
+                      <div class="config-item" [class.expanded]="item.expanded">
+                        <div class="config-item-header" (click)="toggleConfigItemExpanded(item)">
+                          <div class="config-item-info">
+                            <span class="config-type-chip" [class]="'type-' + item.type">{{ item.type }}</span>
+                            <span class="config-name">{{ item.entityName || item.datasetName || item.propertyName }}</span>
+                          </div>
+                          <div class="config-item-stats">
+                            <span class="config-stat">{{ item.itemCount }} items</span>
+                            <span class="config-stat">{{ item.memoryDisplay }}</span>
+                            <i class="fa-solid expand-icon" [class.fa-chevron-down]="!item.expanded" [class.fa-chevron-up]="item.expanded"></i>
+                          </div>
+                        </div>
+        
+                        @if (item.expanded) {
+                          <div class="config-item-details">
+                            <div class="config-detail-row">
+                              <span class="detail-label">Property:</span>
+                              <code class="detail-value">{{ item.propertyName }}</code>
+                            </div>
+                            @if (item.filter) {
+                              <div class="config-detail-row">
+                                <span class="detail-label">Filter:</span>
+                                <code class="detail-value">{{ item.filter }}</code>
+                              </div>
+                            }
+                            @if (item.orderBy) {
+                              <div class="config-detail-row">
+                                <span class="detail-label">Order By:</span>
+                                <code class="detail-value">{{ item.orderBy }}</code>
+                              </div>
+                            }
+        
+                            <!-- Data Table with Paging -->
+                            @if (item.displayedData.length > 0) {
+                              <div class="sample-data-section">
+                                <div class="sample-header">
+                                  <span class="sample-title">Data ({{ item.displayedData.length }} of {{ item.itemCount }})</span>
+                                  <div class="sample-header-actions">
+                                    @if (!item.allDataLoaded && item.itemCount > item.displayedData.length) {
+                                      <button class="load-more-btn" (click)="loadMoreData(item)" [disabled]="item.isLoadingMore" title="Load more records">
+                                        @if (item.isLoadingMore) {
+                                          <i class="fa-solid fa-spinner spinning"></i>
+                                        } @else {
+                                          <i class="fa-solid fa-plus"></i>
+                                        }
+                                        Load More
+                                      </button>
+                                      <button class="load-all-btn" (click)="loadAllData(item)" [disabled]="item.isLoadingMore" title="Load all records">
+                                        @if (item.isLoadingMore) {
+                                          <i class="fa-solid fa-spinner spinning"></i>
+                                        } @else {
+                                          <i class="fa-solid fa-download"></i>
+                                        }
+                                        Load All
+                                      </button>
+                                    }
+                                    @if (item.allDataLoaded) {
+                                      <span class="all-loaded-badge">
+                                        <i class="fa-solid fa-check"></i>
+                                        All Loaded
+                                      </span>
+                                    }
+                                  </div>
+                                </div>
+                                <div class="sample-data-table-wrapper">
+                                  <table class="sample-data-table">
+                                    <thead>
+                                      <tr>
+                                        <th class="action-col"></th>
+                                        @for (col of getSampleDataColumns(item); track col) {
+                                          <th>{{ col }}</th>
+                                        }
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      @for (row of item.displayedData; track $index) {
+                                        <tr>
+                                          <td class="action-col">
+                                            @if (item.entityName && getRecordId(row)) {
+                                              <button class="open-record-btn" (click)="openEntityRecord(item.entityName, row)" title="Open record">
+                                                <i class="fa-solid fa-external-link-alt"></i>
+                                              </button>
+                                            }
+                                          </td>
+                                          @for (col of getSampleDataColumns(item); track col) {
+                                            <td [title]="getSampleDataValue(row, col)">{{ truncateString(getSampleDataValue(row, col), 30) }}</td>
+                                          }
+                                        </tr>
+                                      }
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
         }
-    `,
+        `,
     styles: [`
         .system-diagnostics {
             padding: 0;

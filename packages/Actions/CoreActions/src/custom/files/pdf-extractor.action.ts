@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
 import { BaseAction } from '@memberjunction/actions';
-const pdfParse = require('pdf-parse');
+import pdfParse from 'pdf-parse';
 
 /**
  * Action that extracts content from PDF files

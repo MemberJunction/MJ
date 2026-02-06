@@ -9,7 +9,7 @@
     "dist/**/*"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "clean": "rimraf dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -34,17 +34,17 @@
     "@memberjunction/global": "3.4.0",
     "@memberjunction/server": "3.4.0",
     "@memberjunction/sqlserver-dataprovider": "3.4.0",
-    "cosmiconfig": "^8.0.0",
-    "dotenv": "^16.0.3",
-    "express": "^5.1.0",
-    "mssql": "^11.0.1",
-    "zod": "^3.22.4"
+    "cosmiconfig": "^9.0.0",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "mssql": "^12.2.0",
+    "zod": "~3.24.4"
   },
   "devDependencies": {
-    "@types/express": "^5.0.3",
-    "@types/node": "^18.11.9",
-    "rimraf": "^5.0.10",
-    "typescript": "^5.0.2"
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.11",
+    "rimraf": "^6.1.2",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

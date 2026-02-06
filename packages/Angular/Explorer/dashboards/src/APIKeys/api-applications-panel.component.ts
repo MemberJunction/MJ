@@ -47,6 +47,7 @@ interface ScopeCategory {
  * Manages API Applications and their scope assignments
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-applications-panel',
     templateUrl: './api-applications-panel.component.html',
     styleUrls: ['./api-applications-panel.component.css']

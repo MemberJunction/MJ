@@ -43,6 +43,7 @@ export interface SaveViewRequestedEvent {
  * - "Open in Tab" button for saved views
  */
 @Component({
+  standalone: false,
   selector: 'mj-view-selector',
   templateUrl: './view-selector.component.html',
   styleUrls: ['./view-selector.component.css']

@@ -20,6 +20,7 @@ interface SchemaField {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credential-type-edit-panel',
     templateUrl: './credential-type-edit-panel.component.html',
     styleUrls: ['./credential-type-edit-panel.component.css'],

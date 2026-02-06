@@ -1,4 +1,4 @@
-import { Component, OnDestroy } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
@@ -20,6 +20,7 @@ interface FilterOptions {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-application-management',
   templateUrl: './application-management.component.html',
   styleUrls: ['./application-management.component.css']
@@ -59,7 +60,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
-  constructor() {
+  constructor(private cdr: ChangeDetectorRef) {
     super();
   }
 
@@ -172,6 +173,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
     }
     
     this.filteredApplications = filtered;
+    this.cdr.detectChanges();
   }
   
   private calculateStats(): void {

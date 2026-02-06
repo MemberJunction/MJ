@@ -14,6 +14,7 @@ interface TestingDashboardState {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-testing-dashboard',
   templateUrl: './testing-dashboard.component.html',
   styleUrls: ['./testing-dashboard.component.css'],

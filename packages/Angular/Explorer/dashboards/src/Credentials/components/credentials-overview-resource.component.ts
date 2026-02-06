@@ -46,6 +46,7 @@ interface UsageTrendPoint {
 
 @RegisterClass(BaseResourceComponent, 'CredentialsOverviewResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-overview-resource',
     templateUrl: './credentials-overview-resource.component.html',
     styleUrls: ['./credentials-overview-resource.component.css'],

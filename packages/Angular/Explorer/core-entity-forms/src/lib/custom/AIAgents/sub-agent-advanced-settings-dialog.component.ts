@@ -20,6 +20,7 @@ export interface SubAgentAdvancedSettingsFormData {
  * Manages execution order, execution mode, and other advanced sub-agent configurations.
  */
 @Component({
+  standalone: false,
   selector: 'mj-sub-agent-advanced-settings-dialog',
   templateUrl: './sub-agent-advanced-settings-dialog.component.html',
   styleUrls: ['./sub-agent-advanced-settings-dialog.component.css']

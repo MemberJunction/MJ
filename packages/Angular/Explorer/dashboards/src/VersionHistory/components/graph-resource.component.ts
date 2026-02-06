@@ -31,6 +31,7 @@ interface RelationshipEdge {
 
 @RegisterClass(BaseResourceComponent, 'VersionHistoryGraphResource')
 @Component({
+  standalone: false,
     selector: 'mj-version-history-graph-resource',
     templateUrl: './graph-resource.component.html',
     styleUrls: ['./graph-resource.component.css'],

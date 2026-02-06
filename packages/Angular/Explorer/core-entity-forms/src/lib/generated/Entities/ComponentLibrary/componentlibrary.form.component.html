@@ -168,7 +168,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJComponentLibraryLinks')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Library Links','LibraryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Component Library Links')"
@@ -178,6 +179,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

@@ -6,7 +6,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { ActionEntity, ActionLibraryEntity } from '@memberjunction/core-entities';
 import { ActionEntityServerEntity } from '@memberjunction/core-entities-server';
 import { logError, logMessage, logStatus } from './status_logging';
-import { mkdirSync } from 'fs-extra';
+import { mkdirSync } from 'fs';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionEntityExtended } from '@memberjunction/actions-base';
 

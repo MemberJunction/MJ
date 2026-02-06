@@ -20,15 +20,16 @@
     </mj-mention-editor>
 
     <!-- Attach Button - Positioned over editor -->
-    <button
-      *ngIf="enableAttachments"
-      class="attach-button-icon"
-      [disabled]="disabled"
-      (click)="openFilePicker(); $event.stopPropagation()"
-      title="Attach file"
-    >
-      <i class="fa-solid fa-paperclip"></i>
-    </button>
+    @if (enableAttachments) {
+      <button
+        class="attach-button-icon"
+        [disabled]="disabled"
+        (click)="openFilePicker(); $event.stopPropagation()"
+        title="Attach file"
+        >
+        <i class="fa-solid fa-paperclip"></i>
+      </button>
+    }
 
     <!-- Send Button (Icon Only) - Positioned over editor -->
     <button
@@ -36,7 +37,7 @@
       [disabled]="!canSend"
       (click)="onSendClick()"
       title="Send message (Enter)"
-    >
+      >
       <i class="fa-solid fa-paper-plane"></i>
     </button>
   </div>

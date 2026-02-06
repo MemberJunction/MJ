@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Generated Codes') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-generatedcode-form',
     templateUrl: './generatedcode.form.component.html'
 })

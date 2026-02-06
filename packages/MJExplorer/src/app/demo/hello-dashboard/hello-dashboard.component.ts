@@ -108,6 +108,7 @@ import { ResourceData } from '@memberjunction/core-entities';
  * LoadHelloDashboard(); // Prevents tree-shaking
  */
 @Component({
+  standalone: false,
   selector: 'mj-hello-dashboard',
   templateUrl: './hello-dashboard.component.html',
   styleUrls: ['./hello-dashboard.component.scss']
@@ -204,9 +205,9 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    * Controls when the featured entity changes to a new random entity.
    * 
    * @private
-   * @type {NodeJS.Timeout | null}
+   * @type {ReturnType<typeof setInterval> | null}
    */
-  private entityChangeInterval: NodeJS.Timeout | null = null;
+  private entityChangeInterval: ReturnType<typeof setInterval> | null = null;
 
   /**
    * Flag indicating whether the screensaver animation is currently running.

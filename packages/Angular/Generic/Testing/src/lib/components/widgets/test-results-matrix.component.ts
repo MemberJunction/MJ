@@ -57,99 +57,121 @@ export interface MatrixColumnClickEvent {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-test-results-matrix',
   template: `
     <div class="matrix-container" [class.loading]="loading">
       <!-- Loading state -->
-      <div class="matrix-loading" *ngIf="loading">
-        <div class="loading-spinner">
-          <i class="fas fa-spinner fa-spin"></i>
+      @if (loading) {
+        <div class="matrix-loading">
+          <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+          </div>
+          <span>Loading matrix data...</span>
         </div>
-        <span>Loading matrix data...</span>
-      </div>
-
+      }
+    
       <!-- Empty state -->
-      <div class="matrix-empty" *ngIf="!loading && (!data || data.columns.length === 0)">
-        <div class="empty-icon">
-          <i class="fas fa-th"></i>
+      @if (!loading && (!data || data.columns.length === 0)) {
+        <div class="matrix-empty">
+          <div class="empty-icon">
+            <i class="fas fa-th"></i>
+          </div>
+          <h4>{{ emptyTitle }}</h4>
+          <p>{{ emptyMessage }}</p>
         </div>
-        <h4>{{ emptyTitle }}</h4>
-        <p>{{ emptyMessage }}</p>
-      </div>
-
+      }
+    
       <!-- Matrix table -->
-      <div class="matrix-wrapper" *ngIf="!loading && data && data.columns.length > 0">
-        <table class="matrix-table">
-          <thead>
-            <tr class="header-row">
-              <th class="test-name-header sticky-col">
-                <div class="header-content">
-                  <i class="fas fa-flask"></i>
-                  <span>Test</span>
-                </div>
-              </th>
-              <th class="run-header"
-                  *ngFor="let col of data.columns; let i = index; trackBy: trackColumn"
-                  [class.highlighted]="highlightedColumn === col.suiteRunId"
-                  (click)="onColumnHeaderClick(col)"
-                  (mouseenter)="highlightedColumn = col.suiteRunId"
-                  (mouseleave)="highlightedColumn = null">
-                <div class="run-header-content">
-                  <div class="run-tags" *ngIf="showTags && col.tags.length > 0">
-                    <span class="tag-chip" *ngFor="let tag of col.tags.slice(0, 2)">{{ tag }}</span>
-                    <span class="tag-more" *ngIf="col.tags.length > 2">+{{ col.tags.length - 2 }}</span>
+      @if (!loading && data && data.columns.length > 0) {
+        <div class="matrix-wrapper">
+          <table class="matrix-table">
+            <thead>
+              <tr class="header-row">
+                <th class="test-name-header sticky-col">
+                  <div class="header-content">
+                    <i class="fas fa-flask"></i>
+                    <span>Test</span>
                   </div>
-                  <div class="run-date">{{ formatDate(col.date) }}</div>
-                  <div class="run-pass-rate" *ngIf="showPassRate">
-                    <span class="pass-rate-value" [class.high]="col.passRate >= 80" [class.medium]="col.passRate >= 50 && col.passRate < 80" [class.low]="col.passRate < 50">
-                      {{ col.passRate.toFixed(0) }}%
-                    </span>
-                  </div>
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="data-row"
-                *ngFor="let row of data.rows; trackBy: trackRow"
-                [class.highlighted]="highlightedRow === row.testId"
-                (mouseenter)="highlightedRow = row.testId"
-                (mouseleave)="highlightedRow = null">
-              <td class="test-name-cell sticky-col"
-                  (click)="onRowHeaderClick(row)">
-                <div class="test-name-content" [title]="row.testName">
-                  <span class="test-name-text">{{ row.testName }}</span>
-                </div>
-              </td>
-              <td class="result-cell"
-                  *ngFor="let col of data.columns; trackBy: trackColumn"
-                  [class.highlighted]="highlightedColumn === col.suiteRunId"
-                  (click)="onCellClicked(row, col)">
-                <div class="cell-content"
-                     [ngClass]="getCellClass(getCell(row.testId, col))"
-                     [title]="getCellTooltip(getCell(row.testId, col))">
-                  <i class="cell-icon" [ngClass]="getCellIcon(getCell(row.testId, col))"></i>
-                  <span class="cell-score" *ngIf="showScores && getCell(row.testId, col)?.score != null">
-                    {{ ((getCell(row.testId, col)?.score ?? 0) * 100).toFixed(0) }}%
-                  </span>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
+                </th>
+                @for (col of data.columns; track trackColumn(i, col); let i = $index) {
+                  <th class="run-header"
+                    [class.highlighted]="highlightedColumn === col.suiteRunId"
+                    (click)="onColumnHeaderClick(col)"
+                    (mouseenter)="highlightedColumn = col.suiteRunId"
+                    (mouseleave)="highlightedColumn = null">
+                    <div class="run-header-content">
+                      @if (showTags && col.tags.length > 0) {
+                        <div class="run-tags">
+                          @for (tag of col.tags.slice(0, 2); track tag) {
+                            <span class="tag-chip">{{ tag }}</span>
+                          }
+                          @if (col.tags.length > 2) {
+                            <span class="tag-more">+{{ col.tags.length - 2 }}</span>
+                          }
+                        </div>
+                      }
+                      <div class="run-date">{{ formatDate(col.date) }}</div>
+                      @if (showPassRate) {
+                        <div class="run-pass-rate">
+                          <span class="pass-rate-value" [class.high]="col.passRate >= 80" [class.medium]="col.passRate >= 50 && col.passRate < 80" [class.low]="col.passRate < 50">
+                            {{ col.passRate.toFixed(0) }}%
+                          </span>
+                        </div>
+                      }
+                    </div>
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of data.rows; track trackRow($index, row)) {
+                <tr class="data-row"
+                  [class.highlighted]="highlightedRow === row.testId"
+                  (mouseenter)="highlightedRow = row.testId"
+                  (mouseleave)="highlightedRow = null">
+                  <td class="test-name-cell sticky-col"
+                    (click)="onRowHeaderClick(row)">
+                    <div class="test-name-content" [title]="row.testName">
+                      <span class="test-name-text">{{ row.testName }}</span>
+                    </div>
+                  </td>
+                  @for (col of data.columns; track trackColumn($index, col)) {
+                    <td class="result-cell"
+                      [class.highlighted]="highlightedColumn === col.suiteRunId"
+                      (click)="onCellClicked(row, col)">
+                      <div class="cell-content"
+                        [ngClass]="getCellClass(getCell(row.testId, col))"
+                        [title]="getCellTooltip(getCell(row.testId, col))">
+                        <i class="cell-icon" [ngClass]="getCellIcon(getCell(row.testId, col))"></i>
+                        @if (showScores && getCell(row.testId, col)?.score != null) {
+                          <span class="cell-score">
+                            {{ ((getCell(row.testId, col)?.score ?? 0) * 100).toFixed(0) }}%
+                          </span>
+                        }
+                      </div>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    
       <!-- Legend -->
-      <div class="matrix-legend" *ngIf="!loading && data && data.columns.length > 0 && showLegend">
-        <span class="legend-item passed"><i class="fas fa-check-circle"></i> Passed</span>
-        <span class="legend-item failed"><i class="fas fa-times-circle"></i> Failed</span>
-        <span class="legend-item error"><i class="fas fa-exclamation-circle"></i> Error</span>
-        <span class="legend-item skipped"><i class="fas fa-forward"></i> Skipped</span>
-        <span class="legend-item pending"><i class="fas fa-clock"></i> Pending</span>
-        <span class="legend-item none"><i class="fas fa-minus"></i> Not Run</span>
-      </div>
+      @if (!loading && data && data.columns.length > 0 && showLegend) {
+        <div class="matrix-legend">
+          <span class="legend-item passed"><i class="fas fa-check-circle"></i> Passed</span>
+          <span class="legend-item failed"><i class="fas fa-times-circle"></i> Failed</span>
+          <span class="legend-item error"><i class="fas fa-exclamation-circle"></i> Error</span>
+          <span class="legend-item skipped"><i class="fas fa-forward"></i> Skipped</span>
+          <span class="legend-item pending"><i class="fas fa-clock"></i> Pending</span>
+          <span class="legend-item none"><i class="fas fa-minus"></i> Not Run</span>
+        </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     :host {
       display: block;

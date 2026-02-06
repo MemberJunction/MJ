@@ -18,6 +18,7 @@ export function LoadDataExplorerResource() {
  */
 @RegisterClass(BaseResourceComponent, 'DataExplorerResource')
 @Component({
+  standalone: false,
     selector: 'mj-data-explorer-resource',
     template: `
         <div class="data-explorer-resource-container">

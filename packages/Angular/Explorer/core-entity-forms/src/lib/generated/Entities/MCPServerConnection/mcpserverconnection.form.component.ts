@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: MCP Server Connections') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-mcpserverconnection-form',
     templateUrl: './mcpserverconnection.form.component.html'
 })

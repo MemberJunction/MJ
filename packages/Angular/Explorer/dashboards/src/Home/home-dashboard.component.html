@@ -10,171 +10,205 @@
     </div>
 
     <!-- Loading State -->
-    <div class="loading-container" *ngIf="isLoading">
-      <mj-loading text="Loading your applications..." size="large"></mj-loading>
-    </div>
+    @if (isLoading) {
+      <div class="loading-container">
+        <mj-loading text="Loading your applications..." size="large"></mj-loading>
+      </div>
+    }
 
     <!-- Apps Grid -->
-    <div class="apps-section" *ngIf="!isLoading">
-      <h2 class="section-title">
-        <i class="fa-solid fa-grid-2"></i>
-        Your Applications
-      </h2>
-
-      <div class="apps-grid">
-        <div *ngFor="let app of apps"
-             class="app-card"
-             [style.--app-color]="app.GetColor()"
-             (click)="onAppClick(app)">
-          <!-- App Icon -->
-          <div class="app-icon-wrapper">
-            <div class="app-icon">
-              <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
-            </div>
-          </div>
-
-          <!-- App Info -->
-          <div class="app-info">
-            <h3 class="app-name">{{ app.Name }}</h3>
-            <p class="app-description" *ngIf="app.Description">{{ app.Description }}</p>
-
-            <!-- Nav Items Preview -->
-            <div class="nav-preview" *ngIf="getNavItemsCount(app) > 0">
-              <div class="nav-item-chip" *ngFor="let item of getNavItemsPreview(app)">
-                <i [class]="item.Icon"></i>
-                <span>{{ item.Label }}</span>
+    @if (!isLoading) {
+      <div class="apps-section">
+        <h2 class="section-title">
+          <i class="fa-solid fa-grid-2"></i>
+          Your Applications
+        </h2>
+        <div class="apps-grid">
+          @for (app of apps; track app) {
+            <div
+              class="app-card"
+              [style.--app-color]="app.GetColor()"
+              (click)="onAppClick(app)">
+              <!-- App Icon -->
+              <div class="app-icon-wrapper">
+                <div class="app-icon">
+                  <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
+                </div>
               </div>
-              <span class="more-items" *ngIf="getNavItemsCount(app) > 3">
-                +{{ getNavItemsCount(app) - 3 }} more
-              </span>
+              <!-- App Info -->
+              <div class="app-info">
+                <h3 class="app-name">{{ app.Name }}</h3>
+                @if (app.Description) {
+                  <p class="app-description">{{ app.Description }}</p>
+                }
+                <!-- Nav Items Preview -->
+                @if (getNavItemsCount(app) > 0) {
+                  <div class="nav-preview">
+                    @for (item of getNavItemsPreview(app); track item) {
+                      <div class="nav-item-chip">
+                        <i [class]="item.Icon"></i>
+                        <span>{{ item.Label }}</span>
+                      </div>
+                    }
+                    @if (getNavItemsCount(app) > 3) {
+                      <span class="more-items">
+                        +{{ getNavItemsCount(app) - 3 }} more
+                      </span>
+                    }
+                  </div>
+                }
+              </div>
+              <!-- Hover Arrow -->
+              <div class="app-arrow">
+                <i class="fa-solid fa-arrow-right"></i>
+              </div>
             </div>
-          </div>
-
-          <!-- Hover Arrow -->
-          <div class="app-arrow">
-            <i class="fa-solid fa-arrow-right"></i>
-          </div>
+          }
         </div>
+        <!-- Empty State -->
+        @if (apps.length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fa-solid fa-folder-open"></i>
+            </div>
+            <h3>No Applications Available</h3>
+            <p>You don't have any applications configured yet.</p>
+            <button kendoButton
+              themeColor="primary"
+              (click)="openConfigDialog()">
+              <i class="fa-solid fa-gear"></i>
+              Configure Applications
+            </button>
+          </div>
+        }
       </div>
-
-      <!-- Empty State -->
-      <div class="empty-state" *ngIf="apps.length === 0">
-        <div class="empty-icon">
-          <i class="fa-solid fa-folder-open"></i>
-        </div>
-        <h3>No Applications Available</h3>
-        <p>You don't have any applications configured yet.</p>
-        <button kendoButton
-                themeColor="primary"
-                (click)="openConfigDialog()">
-          <i class="fa-solid fa-gear"></i>
-          Configure Applications
-        </button>
-      </div>
-    </div>
+    }
   </div>
 
   <!-- Collapsible Right Sidebar -->
-  <div class="quick-access-sidebar" *ngIf="hasSidebarContent">
-    <div class="sidebar-header">
-      <h3>
-        <i class="fa-solid fa-bolt"></i>
-        Quick Access
-      </h3>
-      <button class="sidebar-close-btn" (click)="toggleSidebar()" title="Close panel">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-    </div>
-
-    <div class="sidebar-content">
-      <!-- Unread Notifications Section -->
-      <div class="sidebar-section notifications-section" *ngIf="unreadNotifications.length > 0">
-        <h4 class="sidebar-section-title">
-          <i class="fa-solid fa-bell"></i>
-          Notifications
-          <span class="section-badge">{{ unreadNotifications.length }}</span>
-        </h4>
-        <div class="sidebar-items">
-          <div *ngFor="let notification of unreadNotifications"
-               class="sidebar-item notification-item"
-               (click)="onNotificationClick(notification)">
-            <div class="sidebar-item-icon">
+  @if (hasSidebarContent) {
+    <div class="quick-access-sidebar">
+      <div class="sidebar-header">
+        <h3>
+          <i class="fa-solid fa-bolt"></i>
+          Quick Access
+        </h3>
+        <button class="sidebar-close-btn" (click)="toggleSidebar()" title="Close panel">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="sidebar-content">
+        <!-- Unread Notifications Section -->
+        @if (unreadNotifications.length > 0) {
+          <div class="sidebar-section notifications-section">
+            <h4 class="sidebar-section-title">
               <i class="fa-solid fa-bell"></i>
-            </div>
-            <div class="sidebar-item-info">
-              <span class="sidebar-item-title">{{ notification.Title }}</span>
-              <span class="sidebar-item-subtitle">{{ notification.Message | slice:0:40 }}{{ (notification.Message?.length || 0) > 40 ? '...' : '' }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Favorites Section -->
-      <div class="sidebar-section favorites-section" *ngIf="favorites.length > 0 || favoritesLoading">
-        <h4 class="sidebar-section-title">
-          <i class="fa-solid fa-star"></i>
-          Favorites
-        </h4>
-        <div class="sidebar-items" *ngIf="!favoritesLoading">
-          <div *ngFor="let favorite of favorites"
-               class="sidebar-item favorite-item"
-               (click)="onFavoriteClick(favorite)">
-            <div class="sidebar-item-icon">
-              <i [class]="getFavoriteIcon(favorite)"></i>
-            </div>
-            <div class="sidebar-item-info">
-              <span class="sidebar-item-title">{{ favorite.RecordID }}</span>
-              <span class="sidebar-item-subtitle">{{ favorite.Entity }}</span>
+              Notifications
+              <span class="section-badge">{{ unreadNotifications.length }}</span>
+            </h4>
+            <div class="sidebar-items">
+              @for (notification of unreadNotifications; track notification) {
+                <div
+                  class="sidebar-item notification-item"
+                  (click)="onNotificationClick(notification)">
+                  <div class="sidebar-item-icon">
+                    <i class="fa-solid fa-bell"></i>
+                  </div>
+                  <div class="sidebar-item-info">
+                    <span class="sidebar-item-title">{{ notification.Title }}</span>
+                    <span class="sidebar-item-subtitle">{{ notification.Message | slice:0:40 }}{{ (notification.Message?.length || 0) > 40 ? '...' : '' }}</span>
+                  </div>
+                </div>
+              }
             </div>
           </div>
-        </div>
-        <div class="sidebar-loading" *ngIf="favoritesLoading">
-          <i class="fa-solid fa-spinner fa-spin"></i>
-          <span>Loading...</span>
-        </div>
-      </div>
-
-      <!-- Recents Section -->
-      <div class="sidebar-section recents-section" *ngIf="recentItems.length > 0 || recentsLoading">
-        <h4 class="sidebar-section-title">
-          <i class="fa-solid fa-clock-rotate-left"></i>
-          Recent
-        </h4>
-        <div class="sidebar-items" *ngIf="!recentsLoading">
-          <div *ngFor="let item of recentItems"
-               class="sidebar-item recent-item"
-               (click)="onRecentClick(item)">
-            <div class="sidebar-item-icon">
-              <i [class]="getResourceIcon(item.resourceType)"></i>
-            </div>
-            <div class="sidebar-item-info">
-              <span class="sidebar-item-title">{{ item.recordName || item.recordId }}</span>
-              <span class="sidebar-item-subtitle">{{ item.entityName }} · {{ formatDate(item.latestAt) }}</span>
-            </div>
+        }
+        <!-- Favorites Section -->
+        @if (favorites.length > 0 || favoritesLoading) {
+          <div class="sidebar-section favorites-section">
+            <h4 class="sidebar-section-title">
+              <i class="fa-solid fa-star"></i>
+              Favorites
+            </h4>
+            @if (!favoritesLoading) {
+              <div class="sidebar-items">
+                @for (favorite of favorites; track favorite) {
+                  <div
+                    class="sidebar-item favorite-item"
+                    (click)="onFavoriteClick(favorite)">
+                    <div class="sidebar-item-icon">
+                      <i [class]="getFavoriteIcon(favorite)"></i>
+                    </div>
+                    <div class="sidebar-item-info">
+                      <span class="sidebar-item-title">{{ favorite.RecordID }}</span>
+                      <span class="sidebar-item-subtitle">{{ favorite.Entity }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+            @if (favoritesLoading) {
+              <div class="sidebar-loading">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <span>Loading...</span>
+              </div>
+            }
           </div>
-        </div>
-        <div class="sidebar-loading" *ngIf="recentsLoading">
-          <i class="fa-solid fa-spinner fa-spin"></i>
-          <span>Loading...</span>
-        </div>
-      </div>
-
-      <!-- Empty sidebar state -->
-      <div class="sidebar-empty" *ngIf="!favoritesLoading && !recentsLoading && unreadNotifications.length === 0 && favorites.length === 0 && recentItems.length === 0">
-        <i class="fa-solid fa-inbox"></i>
-        <p>No quick access items</p>
+        }
+        <!-- Recents Section -->
+        @if (recentItems.length > 0 || recentsLoading) {
+          <div class="sidebar-section recents-section">
+            <h4 class="sidebar-section-title">
+              <i class="fa-solid fa-clock-rotate-left"></i>
+              Recent
+            </h4>
+            @if (!recentsLoading) {
+              <div class="sidebar-items">
+                @for (item of recentItems; track item) {
+                  <div
+                    class="sidebar-item recent-item"
+                    (click)="onRecentClick(item)">
+                    <div class="sidebar-item-icon">
+                      <i [class]="getResourceIcon(item.resourceType)"></i>
+                    </div>
+                    <div class="sidebar-item-info">
+                      <span class="sidebar-item-title">{{ item.recordName || item.recordId }}</span>
+                      <span class="sidebar-item-subtitle">{{ item.entityName }} · {{ formatDate(item.latestAt) }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+            @if (recentsLoading) {
+              <div class="sidebar-loading">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <span>Loading...</span>
+              </div>
+            }
+          </div>
+        }
+        <!-- Empty sidebar state -->
+        @if (!favoritesLoading && !recentsLoading && unreadNotifications.length === 0 && favorites.length === 0 && recentItems.length === 0) {
+          <div class="sidebar-empty">
+            <i class="fa-solid fa-inbox"></i>
+            <p>No quick access items</p>
+          </div>
+        }
       </div>
     </div>
-  </div>
+  }
 
   <!-- Quick Access FAB Toggle (Fixed Button) -->
-  <button class="sidebar-fab-toggle"
-          *ngIf="hasSidebarContent && !sidebarOpen"
-          (click)="toggleSidebar()"
-          title="Quick Access">
-    <i class="fa-solid fa-bolt"></i>
-    <span class="fab-badge" *ngIf="unreadNotifications.length > 0">{{ unreadNotifications.length }}</span>
-  </button>
+  @if (hasSidebarContent && !sidebarOpen) {
+    <button class="sidebar-fab-toggle"
+      (click)="toggleSidebar()"
+      title="Quick Access">
+      <i class="fa-solid fa-bolt"></i>
+      @if (unreadNotifications.length > 0) {
+        <span class="fab-badge">{{ unreadNotifications.length }}</span>
+      }
+    </button>
+  }
 
   <!-- App Configuration Dialog -->
   <mj-user-app-config

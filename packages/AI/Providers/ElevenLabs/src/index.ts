@@ -40,7 +40,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
                 reader.releaseLock();
             }
 
-            const audioBuffer = Buffer.concat(chunks);
+            const audioBuffer = Buffer.concat(chunks as Uint8Array[]);
             speechResult.data = audioBuffer;
             speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
             speechResult.success = true;

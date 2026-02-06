@@ -5,6 +5,7 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
  * Provides zoom, fit-to-screen, auto-layout, and grid/minimap toggles.
  */
 @Component({
+  standalone: false,
   selector: 'mj-flow-toolbar',
   template: `
     <div class="mj-flow-toolbar">
@@ -20,56 +21,60 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
           <i class="fa-solid fa-expand"></i>
         </button>
       </div>
-
+    
       <div class="mj-flow-toolbar-divider"></div>
-
+    
       <div class="mj-flow-toolbar-group">
         <button class="mj-flow-toolbar-btn"
-                [class.mj-flow-toolbar-btn--active]="!PanMode"
-                (click)="PanModeToggled.emit(false)"
-                title="Select Mode (pointer)">
+          [class.mj-flow-toolbar-btn--active]="!PanMode"
+          (click)="PanModeToggled.emit(false)"
+          title="Select Mode (pointer)">
           <i class="fa-solid fa-arrow-pointer"></i>
         </button>
         <button class="mj-flow-toolbar-btn"
-                [class.mj-flow-toolbar-btn--active]="PanMode"
-                (click)="PanModeToggled.emit(true)"
-                title="Pan Mode (drag to move canvas)">
+          [class.mj-flow-toolbar-btn--active]="PanMode"
+          (click)="PanModeToggled.emit(true)"
+          title="Pan Mode (drag to move canvas)">
           <i class="fa-solid fa-hand"></i>
         </button>
       </div>
-
-      <div class="mj-flow-toolbar-divider" *ngIf="!ReadOnly"></div>
-
-      <div class="mj-flow-toolbar-group" *ngIf="!ReadOnly">
-        <button class="mj-flow-toolbar-btn" (click)="AutoLayoutClicked.emit()" title="Auto Arrange">
-          <i class="fa-solid fa-diagram-project"></i>
-        </button>
-      </div>
-
+    
+      @if (!ReadOnly) {
+        <div class="mj-flow-toolbar-divider"></div>
+      }
+    
+      @if (!ReadOnly) {
+        <div class="mj-flow-toolbar-group">
+          <button class="mj-flow-toolbar-btn" (click)="AutoLayoutClicked.emit()" title="Auto Arrange">
+            <i class="fa-solid fa-diagram-project"></i>
+          </button>
+        </div>
+      }
+    
       <div class="mj-flow-toolbar-divider"></div>
-
+    
       <div class="mj-flow-toolbar-group">
         <button class="mj-flow-toolbar-btn"
-                [class.mj-flow-toolbar-btn--active]="ShowGrid"
-                (click)="GridToggled.emit(!ShowGrid)"
-                title="Toggle Grid">
+          [class.mj-flow-toolbar-btn--active]="ShowGrid"
+          (click)="GridToggled.emit(!ShowGrid)"
+          title="Toggle Grid">
           <i class="fa-solid fa-border-all"></i>
         </button>
         <button class="mj-flow-toolbar-btn"
-                [class.mj-flow-toolbar-btn--active]="ShowMinimap"
-                (click)="MinimapToggled.emit(!ShowMinimap)"
-                title="Toggle Minimap">
+          [class.mj-flow-toolbar-btn--active]="ShowMinimap"
+          (click)="MinimapToggled.emit(!ShowMinimap)"
+          title="Toggle Minimap">
           <i class="fa-solid fa-map"></i>
         </button>
         <button class="mj-flow-toolbar-btn"
-                [class.mj-flow-toolbar-btn--active]="ShowLegend"
-                (click)="LegendToggled.emit(!ShowLegend)"
-                title="Toggle Legend">
+          [class.mj-flow-toolbar-btn--active]="ShowLegend"
+          (click)="LegendToggled.emit(!ShowLegend)"
+          title="Toggle Legend">
           <i class="fa-solid fa-list-check"></i>
         </button>
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .mj-flow-toolbar {
       display: flex;

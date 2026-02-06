@@ -1,1114 +1,1054 @@
 <div class="record-form-container">
-    <!-- Dialog container for Kendo dialogs -->
-    <div kendoDialogContainer></div>
-    <form *ngIf="record" class="record-form" #form="ngForm" >
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
-
-        <!-- Main Content Area - Template Editor and Configuration -->
-        <div class="prompt-main-area" style="display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
-            
-            <!-- Header Section -->
-            <div class="prompt-header" style="flex-shrink: 0; padding: 20px; background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
-                    
-                    <!-- Left: Prompt Info -->
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                            <i class="fa-solid fa-robot" style="color: #6f42c1; font-size: 1.4em;"></i>
-                            @if (EditMode) {
-                                <kendo-textbox [(ngModel)]="record.Name" 
-                                              name="promptName"
-                                              placeholder="Enter prompt name..."
-                                              style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
-                                </kendo-textbox>
-                            } @else {
-                                <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Untitled AI Prompt' }}</h4>
-                                <span class="status-badge" [style.background-color]="getStatusBadgeColor()" 
-                                      style="color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
-                                    {{ record.Status }}
-                                </span>
-                            }
-                        </div>
-                        
-                        <!-- Status and Type Editors when in edit mode -->
-                        @if (EditMode) {
-                            <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
-                                <div>
-                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">Status</label>
-                                    <kendo-dropdownlist [(ngModel)]="record.Status"
-                                                       name="promptStatus"
-                                                       [data]="[{text: 'Active', value: 'Active'}, {text: 'Pending', value: 'Pending'}, {text: 'Disabled', value: 'Disabled'}]"
-                                                       textField="text"
-                                                       valueField="value"
-                                                       [valuePrimitive]="true"
-                                                       style="width: 150px;">
-                                    </kendo-dropdownlist>
-                                </div>
-                                <div>
-                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
-                                        Type <span style="color: #dc3545;">*</span>
-                                    </label>
-                                    @if (isLoadingPromptTypes) {
-                                        <div style="padding: 8px; color: #6c757d; font-style: italic; width: 200px;">
-                                            <i class="fa-solid fa-spinner fa-spin"></i> Loading types...
-                                        </div>
-                                    } @else {
-                                        <kendo-dropdownlist [(ngModel)]="record.TypeID"
-                                                           name="promptTypeID"
-                                                           [data]="availablePromptTypes"
-                                                           textField="Name"
-                                                           valueField="ID"
-                                                           [valuePrimitive]="true"
-                                                           [filterable]="true"
-                                                           placeholder="Select prompt type..."
-                                                           style="width: 200px;">
-                                        </kendo-dropdownlist>
-                                    }
-                                </div>
-                            </div>
-                        }
-                        
-                        @if (EditMode) {
-                            <kendo-textarea [(ngModel)]="record.Description" 
-                                           name="promptDescription"
-                                           [rows]="2"
-                                           placeholder="Enter prompt description..."
-                                           style="width: 100%; max-width: 600px; margin-bottom: 12px;">
-                            </kendo-textarea>
-                        } @else if (record.Description) {
-                            <p style="margin: 0 0 12px 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
-                        }
-                        
-                        <!-- Quick Config Row -->
-                        <div class="quick-config" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                            @if (record.TypeID) {
-                                <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
-                                    <i class="fa-solid fa-tag" style="color: #6c757d;"></i>
-                                    <span style="color: #6c757d;">Type:</span>
-                                    <span style="color: #495057; font-weight: 500;">{{ getPromptTypeDisplayName(record.TypeID) }}</span>
-                                </div>
-                            }
-                            
-                            <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
-                                <i class="fa-solid fa-layer-group" style="color: #6c757d;"></i>
-                                <span style="color: #6c757d;">Parallelization:</span>
-                                <span style="color: #495057; font-weight: 500;">{{ getParallelizationModeDisplay() }}</span>
-                            </div>
-                            
-                            <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
-                                <i class="fa-solid fa-code" style="color: #6c757d;"></i>
-                                <span style="color: #6c757d;">Output:</span>
-                                <span [style.color]="getValidationColor()" style="font-weight: 500;">{{ getOutputTypeDisplay() }}</span>
-                            </div>
-                            
-                            @if (record.EnableCaching) {
-                                <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
-                                    <i class="fa-solid fa-database" style="color: #28a745;"></i>
-                                    <span style="color: #28a745; font-weight: 500;">Caching Enabled</span>
-                                </div>
-                            }
-                            
-                            @if (record.EffortLevel) {
-                                <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
-                                    <i class="fa-solid fa-tachometer-alt" style="color: #6c757d;"></i>
-                                    <span style="color: #6c757d;">Effort Level:</span>
-                                    <span style="color: #495057; font-weight: 500;">{{ record.EffortLevel }}</span>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                    
-                    <!-- Right: Action Buttons -->
-                    <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
-                        <div style="display: flex; gap: 8px;">
-                            @if (record.ID) {
-                                <button kendoButton [themeColor]="'primary'" [size]="'large'"
-                                        (click)="openTestHarness()"
-                                        title="Run AI Prompt Test Harness">
-                                    <i class="fa-solid fa-play"></i> Run
-                                </button>
-                            }
-                        </div>
-                        
-                        @if (!canExecute && record.ID) {
-                            <div style="font-size: 0.75em; color: #dc3545; text-align: right; max-width: 200px;">
-                                @if (record.Status !== 'Active') {
-                                    • Prompt must be Active<br>
-                                }
-                                @if (!record.TemplateID) {
-                                    • Template is required<br>
-                                }
-                                @if (!template && record.TemplateID) {
-                                    • Template not found<br>
-                                }
-                            </div>
-                        }
-                    </div>
+  <!-- Dialog container for Kendo dialogs -->
+  <div kendoDialogContainer></div>
+  @if (record) {
+    <form class="record-form" #form="ngForm" >
+      <mj-form-toolbar [form]="this"></mj-form-toolbar>
+      <!-- Main Content Area - Template Editor and Configuration -->
+      <div class="prompt-main-area" style="display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
+        <!-- Header Section -->
+        <div class="prompt-header" style="flex-shrink: 0; padding: 20px; background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+            <!-- Left: Prompt Info -->
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <i class="fa-solid fa-robot" style="color: #6f42c1; font-size: 1.4em;"></i>
+                @if (EditMode) {
+                  <kendo-textbox [(ngModel)]="record.Name"
+                    name="promptName"
+                    placeholder="Enter prompt name..."
+                    style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
+                  </kendo-textbox>
+                } @else {
+                  <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Untitled AI Prompt' }}</h4>
+                  <span class="status-badge" [style.background-color]="getStatusBadgeColor()"
+                    style="color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                    {{ record.Status }}
+                  </span>
+                }
+              </div>
+              <!-- Status and Type Editors when in edit mode -->
+              @if (EditMode) {
+                <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
+                  <div>
+                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">Status</label>
+                    <kendo-dropdownlist [(ngModel)]="record.Status"
+                      name="promptStatus"
+                      [data]="[{text: 'Active', value: 'Active'}, {text: 'Pending', value: 'Pending'}, {text: 'Disabled', value: 'Disabled'}]"
+                      textField="text"
+                      valueField="value"
+                      [valuePrimitive]="true"
+                      style="width: 150px;">
+                    </kendo-dropdownlist>
+                  </div>
+                  <div>
+                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
+                      Type <span style="color: #dc3545;">*</span>
+                    </label>
+                    @if (isLoadingPromptTypes) {
+                      <div style="padding: 8px; color: #6c757d; font-style: italic; width: 200px;">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Loading types...
+                      </div>
+                    } @else {
+                      <kendo-dropdownlist [(ngModel)]="record.TypeID"
+                        name="promptTypeID"
+                        [data]="availablePromptTypes"
+                        textField="Name"
+                        valueField="ID"
+                        [valuePrimitive]="true"
+                        [filterable]="true"
+                        placeholder="Select prompt type..."
+                        style="width: 200px;">
+                      </kendo-dropdownlist>
+                    }
+                  </div>
                 </div>
+              }
+              @if (EditMode) {
+                <kendo-textarea [(ngModel)]="record.Description"
+                  name="promptDescription"
+                  [rows]="2"
+                  placeholder="Enter prompt description..."
+                  style="width: 100%; max-width: 600px; margin-bottom: 12px;">
+                </kendo-textarea>
+              } @else if (record.Description) {
+                <p style="margin: 0 0 12px 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
+              }
+              <!-- Quick Config Row -->
+              <div class="quick-config" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                @if (record.TypeID) {
+                  <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                    <i class="fa-solid fa-tag" style="color: #6c757d;"></i>
+                    <span style="color: #6c757d;">Type:</span>
+                    <span style="color: #495057; font-weight: 500;">{{ getPromptTypeDisplayName(record.TypeID) }}</span>
+                  </div>
+                }
+                <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                  <i class="fa-solid fa-layer-group" style="color: #6c757d;"></i>
+                  <span style="color: #6c757d;">Parallelization:</span>
+                  <span style="color: #495057; font-weight: 500;">{{ getParallelizationModeDisplay() }}</span>
+                </div>
+                <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                  <i class="fa-solid fa-code" style="color: #6c757d;"></i>
+                  <span style="color: #6c757d;">Output:</span>
+                  <span [style.color]="getValidationColor()" style="font-weight: 500;">{{ getOutputTypeDisplay() }}</span>
+                </div>
+                @if (record.EnableCaching) {
+                  <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                    <i class="fa-solid fa-database" style="color: #28a745;"></i>
+                    <span style="color: #28a745; font-weight: 500;">Caching Enabled</span>
+                  </div>
+                }
+                @if (record.EffortLevel) {
+                  <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                    <i class="fa-solid fa-tachometer-alt" style="color: #6c757d;"></i>
+                    <span style="color: #6c757d;">Effort Level:</span>
+                    <span style="color: #495057; font-weight: 500;">{{ record.EffortLevel }}</span>
+                  </div>
+                }
+              </div>
             </div>
-
-            <!-- Configuration Sections with Expansion Panels -->
-            <div class="configuration-sections" style="flex: 1; background: white; border-top: 2px solid #e9ecef; padding: 16px; min-height: 0;">
-                <!-- Template Editor Section -->
-                <kendo-expansionpanel 
-                    [expanded]="true"
-                    style="margin-bottom: 12px;">
-                    <ng-template kendoExpansionPanelTitleDirective>
-                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                            <i class="fa-solid fa-code" style="color: #6c757d;"></i>
-                            Template Editor
-                            @if (template) {
-                                <span style="color: #6c757d; font-size: 0.9em; font-weight: normal;">• {{ template.Name }}</span>
-                            }
-                        </span>
-                    </ng-template>
-                    
-                    <!-- Direct Content Projection -->
-                    <div class="template-section" style="display: flex; flex-direction: column; min-height: 400px; padding: 8px;">
-                        @if (isLoadingTemplate) {
-                            <div class="loading-state" style="flex: 1; display: flex; align-items: center; justify-content: center; color: #6c757d;">
-                                <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-right: 12px;"></i>
-                                Loading template...
-                            </div>
-                        } @else if (!record.TemplateID) {
-                            <div class="no-template-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: #6c757d;">
-                                <i class="fa-solid fa-code" style="font-size: 64px; margin-bottom: 20px; opacity: 0.3;"></i>
-                                <h5 style="margin-bottom: 12px; color: #495057;">No Template Associated</h5>
-                                <p style="margin-bottom: 24px; text-align: center; max-width: 400px;">
-                                    This AI prompt needs a template to define its structure and parameters. 
-                                    Create a new template or link to an existing one.
-                                </p>
-                                <div style="display: flex; gap: 12px;">
-                                    @if (UserCanCreateTemplates) {
-                                        <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
-                                            <i class="fa-solid fa-plus"></i> Create New Template
-                                        </button>
-                                    }
-                                    @if (UserCanReadTemplates) {
-                                        <button kendoButton [fillMode]="'outline'" (click)="linkExistingTemplate()">
-                                            <i class="fa-solid fa-link"></i> Link Existing Template
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-                        } @else if (templateNotFoundInDatabase) {
-                            <div class="invalid-template-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: #dc3545;">
-                                <i class="fa-solid fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px; opacity: 0.7;"></i>
-                                <h5 style="margin-bottom: 12px;">Template Not Found</h5>
-                                <p style="margin-bottom: 24px; text-align: center; max-width: 400px;">
-                                    The referenced template could not be loaded. It may have been deleted or moved.
-                                </p>
-                                <div style="display: flex; gap: 12px;">
-                                    <button kendoButton [fillMode]="'outline'" (click)="loadTemplate()">
-                                        <i class="fa-solid fa-refresh"></i> Retry Loading
-                                    </button>
-                                    @if (UserCanCreateTemplates) {
-                                        <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
-                                            <i class="fa-solid fa-plus"></i> Create New Template
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-                        } @else {
-                            <!-- Active Template Editor -->
-                            <div class="template-editor-container" style="flex: 1; display: flex; flex-direction: column; min-height: 350px;">
-                                <!-- Template Actions Bar -->
-                                @if (template && EditMode) {
-                                    <div class="template-actions" style="display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #e9ecef; background: #f8f9fa;">
-                                        @if (UserCanUpdateTemplates) {
-                                            <button kendoButton 
-                                                    [fillMode]="'outline'" 
-                                                    [size]="'small'"
-                                                    (click)="linkExistingTemplate()"
-                                                    title="Change to a different template">
-                                                <i class="fa-solid fa-exchange-alt"></i> Change Template
-                                            </button>
-                                        }
-                                        @if (UserCanReadTemplates) {
-                                            <button kendoButton 
-                                                    [fillMode]="'outline'" 
-                                                    [size]="'small'"
-                                                    (click)="openTemplateInNewWindow()"
-                                                    title="Open template in new window">
-                                                <i class="fa-solid fa-external-link-alt"></i> Open in New Window
-                                            </button>
-                                        }
-                                    </div>
-                                }
-                                
-                                <!-- Template Editor -->
-                                <div style="flex: 1; background: white; border-radius: 6px; border: 1px solid #e9ecef;">
-                                    <mj-template-editor 
-                                        #templateEditor
-                                        [template]="template"
-                                        [config]="templateEditorConfig"
-                                        (contentChange)="onTemplateContentChange($event)"
-                                        (runTemplate)="onTemplateRun($event)"
-                                        style="display: block; min-height: 300px;">
-                                    </mj-template-editor>
-                                </div>
-                            </div>
+            <!-- Right: Action Buttons -->
+            <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+              <div style="display: flex; gap: 8px;">
+                @if (record.ID) {
+                  <button kendoButton [themeColor]="'primary'" [size]="'large'"
+                    (click)="openTestHarness()"
+                    title="Run AI Prompt Test Harness">
+                    <i class="fa-solid fa-play"></i> Run
+                  </button>
+                }
+              </div>
+              @if (!canExecute && record.ID) {
+                <div style="font-size: 0.75em; color: #dc3545; text-align: right; max-width: 200px;">
+                  @if (record.Status !== 'Active') {
+                    • Prompt must be Active<br>
+                  }
+                  @if (!record.TemplateID) {
+                    • Template is required<br>
+                  }
+                  @if (!template && record.TemplateID) {
+                    • Template not found<br>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+        <!-- Configuration Sections with Expansion Panels -->
+        <div class="configuration-sections" style="flex: 1; background: white; border-top: 2px solid #e9ecef; padding: 16px; min-height: 0;">
+          <!-- Template Editor Section -->
+          <kendo-expansionpanel
+            [expanded]="true"
+            style="margin-bottom: 12px;">
+            <ng-template kendoExpansionPanelTitleDirective>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-code" style="color: #6c757d;"></i>
+                Template Editor
+                @if (template) {
+                  <span style="color: #6c757d; font-size: 0.9em; font-weight: normal;">• {{ template.Name }}</span>
+                }
+              </span>
+            </ng-template>
+            <!-- Direct Content Projection -->
+            <div class="template-section" style="display: flex; flex-direction: column; min-height: 400px; padding: 8px;">
+              @if (isLoadingTemplate) {
+                <div class="loading-state" style="flex: 1; display: flex; align-items: center; justify-content: center; color: #6c757d;">
+                  <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-right: 12px;"></i>
+                  Loading template...
+                </div>
+              } @else if (!record.TemplateID) {
+                <div class="no-template-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: #6c757d;">
+                  <i class="fa-solid fa-code" style="font-size: 64px; margin-bottom: 20px; opacity: 0.3;"></i>
+                  <h5 style="margin-bottom: 12px; color: #495057;">No Template Associated</h5>
+                  <p style="margin-bottom: 24px; text-align: center; max-width: 400px;">
+                    This AI prompt needs a template to define its structure and parameters.
+                    Create a new template or link to an existing one.
+                  </p>
+                  <div style="display: flex; gap: 12px;">
+                    @if (UserCanCreateTemplates) {
+                      <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
+                        <i class="fa-solid fa-plus"></i> Create New Template
+                      </button>
+                    }
+                    @if (UserCanReadTemplates) {
+                      <button kendoButton [fillMode]="'outline'" (click)="linkExistingTemplate()">
+                        <i class="fa-solid fa-link"></i> Link Existing Template
+                      </button>
+                    }
+                  </div>
+                </div>
+              } @else if (templateNotFoundInDatabase) {
+                <div class="invalid-template-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: #dc3545;">
+                  <i class="fa-solid fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px; opacity: 0.7;"></i>
+                  <h5 style="margin-bottom: 12px;">Template Not Found</h5>
+                  <p style="margin-bottom: 24px; text-align: center; max-width: 400px;">
+                    The referenced template could not be loaded. It may have been deleted or moved.
+                  </p>
+                  <div style="display: flex; gap: 12px;">
+                    <button kendoButton [fillMode]="'outline'" (click)="loadTemplate()">
+                      <i class="fa-solid fa-refresh"></i> Retry Loading
+                    </button>
+                    @if (UserCanCreateTemplates) {
+                      <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
+                        <i class="fa-solid fa-plus"></i> Create New Template
+                      </button>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <!-- Active Template Editor -->
+                <div class="template-editor-container" style="flex: 1; display: flex; flex-direction: column; min-height: 350px;">
+                  <!-- Template Actions Bar -->
+                  @if (template && EditMode) {
+                    <div class="template-actions" style="display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #e9ecef; background: #f8f9fa;">
+                      @if (UserCanUpdateTemplates) {
+                        <button kendoButton
+                          [fillMode]="'outline'"
+                          [size]="'small'"
+                          (click)="linkExistingTemplate()"
+                          title="Change to a different template">
+                          <i class="fa-solid fa-exchange-alt"></i> Change Template
+                        </button>
+                      }
+                      @if (UserCanReadTemplates) {
+                        <button kendoButton
+                          [fillMode]="'outline'"
+                          [size]="'small'"
+                          (click)="openTemplateInNewWindow()"
+                          title="Open template in new window">
+                          <i class="fa-solid fa-external-link-alt"></i> Open in New Window
+                        </button>
+                      }
+                    </div>
+                  }
+                  <!-- Template Editor -->
+                  <div style="flex: 1; background: white; border-radius: 6px; border: 1px solid #e9ecef;">
+                    <mj-template-editor
+                      #templateEditor
+                      [template]="template"
+                      [config]="templateEditorConfig"
+                      (contentChange)="onTemplateContentChange($event)"
+                      (runTemplate)="onTemplateRun($event)"
+                      style="display: block; min-height: 300px;">
+                    </mj-template-editor>
+                  </div>
+                </div>
+              }
+            </div>
+          </kendo-expansionpanel>
+          <!-- Model Configuration Expansion Panel -->
+          @if (record.IsSaved) {
+            <kendo-expansionpanel
+              [expanded]="true"
+              style="margin-bottom: 12px;">
+              <ng-template kendoExpansionPanelTitleDirective>
+                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                  <i class="fa-solid fa-microchip" style="color: #6c757d;"></i>
+                  Models
+                  @if (promptModels.length > 0) {
+                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                      {{ promptModels.length }}
+                    </span>
+                  }
+                  <span style="color: #6c757d; font-size: 0.8em; font-weight: normal; margin-left: 8px;">
+                    <i class="fa-solid fa-info-circle" title="Models are tried in order from top to bottom. The first available model will be used."></i>
+                    Priority order (first available model will be used)
+                  </span>
+                </span>
+              </ng-template>
+              <!-- Direct Content Projection -->
+              <div style="padding: 16px 0;">
+                <!-- Model Management Interface -->
+                <div class="model-management" style="border: 1px solid #dee2e6; border-radius: 6px; background: #f8f9fa;">
+                  @if (isLoadingModels) {
+                    <div class="loading-state" style="padding: 20px; text-align: center; color: #6c757d;">
+                      <i class="fa-solid fa-spinner fa-spin"></i> Loading models...
+                    </div>
+                  } @else {
+                    @if (promptModels.length === 0) {
+                      <div class="empty-state" style="padding: 20px; text-align: center; color: #6c757d;">
+                        <i class="fa-solid fa-info-circle"></i> No models configured
+                        @if (EditMode && UserCanCreatePromptModels) {
+                          <div style="margin-top: 10px;">
+                            <button kendoButton fillMode="outline" themeColor="primary" size="small"
+                              (click)="addNewModel()">
+                              <i class="fa-solid fa-plus"></i> Add Model
+                            </button>
+                          </div>
                         }
-                    </div>
-                </kendo-expansionpanel>                
-
-                <!-- Model Configuration Expansion Panel -->
-                @if (record.IsSaved) {
-                    <kendo-expansionpanel 
-                        [expanded]="true"
-                        style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-microchip" style="color: #6c757d;"></i>
-                                Models
-                                @if (promptModels.length > 0) {
-                                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                        {{ promptModels.length }}
-                                    </span>
-                                }
-                                <span style="color: #6c757d; font-size: 0.8em; font-weight: normal; margin-left: 8px;">
-                                    <i class="fa-solid fa-info-circle" title="Models are tried in order from top to bottom. The first available model will be used."></i>
-                                    Priority order (first available model will be used)
-                                </span>
-                            </span>
-                        </ng-template>
-                        
-                        <!-- Direct Content Projection -->
-                        <div style="padding: 16px 0;">
-                            <!-- Model Management Interface -->
-                            <div class="model-management" style="border: 1px solid #dee2e6; border-radius: 6px; background: #f8f9fa;">
-                                @if (isLoadingModels) {
-                                    <div class="loading-state" style="padding: 20px; text-align: center; color: #6c757d;">
-                                        <i class="fa-solid fa-spinner fa-spin"></i> Loading models...
-                                    </div>
-                                } @else {
-                                    @if (promptModels.length === 0) {
-                                        <div class="empty-state" style="padding: 20px; text-align: center; color: #6c757d;">
-                                            <i class="fa-solid fa-info-circle"></i> No models configured
-                                            @if (EditMode && UserCanCreatePromptModels) {
-                                                <div style="margin-top: 10px;">
-                                                    <button kendoButton fillMode="outline" themeColor="primary" size="small"
-                                                                (click)="addNewModel()">
-                                                        <i class="fa-solid fa-plus"></i> Add Model
-                                                    </button>
-                                                </div>
-                                            }
-                                        </div>
-                                    } @else {
-                                        <!-- Priority explanation for multiple models -->
-                                        @if (promptModels.length > 1) {
-                                            <div style="padding: 12px 16px; background: #e3f2fd; border-bottom: 1px solid #bbdefb; color: #1565c0; font-size: 0.85em;">
-                                                <i class="fa-solid fa-info-circle" style="margin-right: 6px;"></i>
-                                                Models are tried in priority order (highest priority first). The first available model that meets requirements will be used for execution.
-                                            </div>
-                                        }
-                                        <!-- Column Headers -->
-                                        <div class="model-header" style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; background: #e9ecef; font-weight: 600; font-size: 0.85em; color: #495057; border-bottom: 1px solid #dee2e6;">
-                                            <div title="Priority order - models are tried from top to bottom">
-                                                <i class="fa-solid fa-sort" style="color: #6c757d;"></i>
-                                            </div>
-                                            <div>AI Model <span style="color: #dc3545;">*</span></div>
-                                            <div>Vendor</div>
-                                            <div>Configuration</div>
-                                            <div>Created</div>
-                                            <div>Actions</div>
-                                        </div>
-                                        
-                                        @for (model of promptModels; track getModelTrackId(model) || $index; let i = $index) {
-                                            <div class="model-row" 
-                                                 [draggable]="EditMode"
-                                                 (dragstart)="onDragStart($event, i)"
-                                                 (dragover)="onDragOver($event)"
-                                                 (drop)="onDrop($event, i)"
-                                                 (dragend)="onDragEnd($event)"
-                                                 [style.background]="!model.ModelID ? '#fff3cd' : (draggedIndex === i ? '#e3f2fd' : 'white')"
-                                                 [style.border-left]="!model.ModelID ? '3px solid #ffc107' : 'none'"
-                                                 [style.opacity]="draggedIndex === i ? '0.5' : '1'"
-                                                 style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: start; transition: background 0.2s, opacity 0.2s;">
-                                                
-                                                <!-- Drag Handle / Priority -->
-                                                <div class="drag-handle" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6c757d;">
-                                                    @if (EditMode) {
-                                                        <i class="fa-solid fa-grip-vertical" title="Drag to reorder priority" style="cursor: move;"></i>
-                                                        <span style="font-size: 0.7em; margin-top: 2px;">#{{ i + 1 }}</span>
-                                                    } @else {
-                                                        <span style="font-size: 0.9em; font-weight: 600;" title="Priority {{ model.Priority }} - Higher priority numbers are tried first">#{{ i + 1 }}</span>
-                                                    }
-                                                </div>
-                                                
-                                                <!-- Model Selection -->
-                                                <div class="model-select">
-                                                    @if (EditMode) {
-                                                        <kendo-dropdownlist [(ngModel)]="model.ModelID"
-                                                                           [name]="'modelId_' + getModelTrackId(model)"
-                                                                           [data]="availableModels"
-                                                                           textField="Name"
-                                                                           valueField="ID"
-                                                                           [valuePrimitive]="true"
-                                                                           [filterable]="true"
-                                                                           placeholder="Select a model..."
-                                                                           (valueChange)="onModelChange($event, i)"
-                                                                           style="width: 100%;">
-                                                        </kendo-dropdownlist>
-                                                    } @else {
-                                                        <span style="font-weight: 500;">{{ getModelDisplayName(model.ModelID) }}</span>
-                                                    }
-                                                </div>
-                                                
-                                                <!-- Vendor -->
-                                                <div class="model-vendor">
-                                                    @if (EditMode) {
-                                                        @if (model.ModelID) {
-                                                            @if (shouldShowVendorDropdown(model.ModelID)) {
-                                                                <kendo-dropdownlist [(ngModel)]="model.VendorID"
-                                                                                   [name]="'vendorId_' + getModelTrackId(model)"
-                                                                                   [data]="getVendorsForModelSync(model.ModelID)"
-                                                                                   textField="Name"
-                                                                                   valueField="ID"
-                                                                                   [valuePrimitive]="true"
-                                                                                   [filterable]="true"
-                                                                                   placeholder="Select vendor..."
-                                                                                   style="width: 100%;">
-                                                                    <ng-template kendoDropDownListItemTemplate let-dataItem>
-                                                                        <span [style.color]="getVendorStatusColor(model.ModelID, dataItem.ID)">
-                                                                            {{ dataItem.Name }}
-                                                                            @if (getModelVendorStatus(model.ModelID, dataItem.ID) !== 'Active') {
-                                                                                <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, dataItem.ID) }})</span>
-                                                                            }
-                                                                        </span>
-                                                                    </ng-template>
-                                                                </kendo-dropdownlist>
-                                                            } @else {
-                                                                <!-- Single vendor - just show the name -->
-                                                                @if (getVendorsForModelSync(model.ModelID).length === 1) {
-                                                                    <span [style.color]="getVendorStatusColor(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID)" style="font-size: 0.9em; font-weight: 500;">
-                                                                        {{ getVendorsForModelSync(model.ModelID)[0].Name }}
-                                                                        @if (getModelVendorStatus(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID) !== 'Active') {
-                                                                            <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID) }})</span>
-                                                                        }
-                                                                    </span>
-                                                                } @else {
-                                                                    <span style="color: #6c757d; font-style: italic; font-size: 0.9em;">No vendors available</span>
-                                                                }
-                                                            }
-                                                        } @else {
-                                                            <span style="color: #6c757d; font-style: italic; font-size: 0.9em;">Select model first</span>
-                                                        }
-                                                    } @else {
-                                                        @if (model.VendorID && model.ModelID) {
-                                                            <span [style.color]="getVendorStatusColor(model.ModelID, model.VendorID)" style="font-size: 0.9em;">
-                                                                {{ getVendorDisplayName(model.VendorID) }}
-                                                                @if (getModelVendorStatus(model.ModelID, model.VendorID) !== 'Active') {
-                                                                    <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, model.VendorID) }})</span>
-                                                                }
-                                                            </span>
-                                                        } @else {
-                                                            <span style="color: #6c757d; font-size: 0.9em;">-</span>
-                                                        }
-                                                    }
-                                                </div>
-                                                
-                                                <!-- Configuration -->
-                                                <div class="model-configuration">
-                                                    @if (EditMode) {
-                                                        @if (isLoadingConfigurations) {
-                                                            <div style="padding: 4px; color: #6c757d; font-style: italic; font-size: 0.85em;">
-                                                                <i class="fa-solid fa-spinner fa-spin"></i> Loading...
-                                                            </div>
-                                                        } @else {
-                                                            <kendo-dropdownlist [(ngModel)]="model.ConfigurationID"
-                                                                               [name]="'configurationId_' + getModelTrackId(model)"
-                                                                               [data]="availableConfigurations"
-                                                                               textField="Name"
-                                                                               valueField="ID"
-                                                                               [valuePrimitive]="true"
-                                                                               [filterable]="true"
-                                                                               placeholder="Default"
-                                                                               (valueChange)="onConfigurationChange($event, i)"
-                                                                               style="width: 100%;">
-                                                                <ng-template kendoDropDownListNoDataTemplate>
-                                                                    <div style="padding: 8px; text-align: center; color: #6c757d;">
-                                                                        No configurations available
-                                                                    </div>
-                                                                </ng-template>
-                                                            </kendo-dropdownlist>
-                                                        }
-                                                    } @else {
-                                                        <span style="font-size: 0.9em;">{{ getConfigurationDisplayName(model.ConfigurationID) }}</span>
-                                                    }
-                                                </div>
-                                                
-                                                <!-- Created Date -->
-                                                <div class="model-created">
-                                                    @if (model.ID) {
-                                                        <span style="color: #6c757d; font-size: 0.8em;">{{ model.__mj_CreatedAt | date:'short' }}</span>
-                                                    } @else {
-                                                        <span style="color: #28a745; font-size: 0.8em; font-style: italic;">New</span>
-                                                    }
-                                                </div>
-                                                
-                                                <!-- Actions -->
-                                                <div class="model-actions" style="display: flex; gap: 2px; flex-direction: column;">
-                                                    @if (EditMode) {
-                                                        <div style="display: flex; gap: 2px; margin-bottom: 4px;">
-                                                            @if (UserCanUpdatePromptModels) {
-                                                                <button kendoButton fillMode="flat" size="small"
-                                                                            (click)="moveModelUp(i)"
-                                                                            [disabled]="i === 0"
-                                                                            title="Move up">
-                                                                    <i class="fa-solid fa-chevron-up"></i>
-                                                                </button>
-                                                                <button kendoButton fillMode="flat" size="small"
-                                                                            (click)="moveModelDown(i)"
-                                                                            [disabled]="i === promptModels.length - 1"
-                                                                            title="Move down">
-                                                                    <i class="fa-solid fa-chevron-down"></i>
-                                                                </button>
-                                                            }
-                                                        </div>
-                                                        @if (UserCanDeletePromptModels) {
-                                                            <button kendoButton fillMode="flat" themeColor="error" size="small"
-                                                                        (click)="removePromptModel(i)"
-                                                                        title="Remove model">
-                                                                <i class="fa-solid fa-times"></i>
-                                                            </button>
-                                                        }
-                                                    }
-                                                </div>
-                                            </div>
-                                            
-                                            <!-- Second row with additional details -->
-                                            <div style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #e9ecef; background: #f8f9fa; font-size: 0.85em; color: #6c757d;">
-                                                <div></div>
-                                                <div>
-                                                    <!-- Basic model details -->
-                                                    <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 8px;">
-                                                        @if (model.Status) {
-                                                            <span><strong>Status:</strong> {{ model.Status }}</span>
-                                                        }
-                                                    </div>
-                                                    
-                                                    <!-- Parallel execution fields when prompt is ModelSpecific -->
-                                                    @if (record.ParallelizationMode === 'ModelSpecific') {
-                                                        <div style="padding: 8px; background: #fff; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 8px;">
-                                                            <div style="margin-bottom: 6px; font-weight: 600; color: #495057; font-size: 0.9em;">
-                                                                <i class="fa-solid fa-layer-group"></i> Model-Specific Parallel Execution
-                                                            </div>
-                                                            
-                                                            @if (EditMode) {
-                                                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: center;">
-                                                                    <!-- Parallel Mode -->
-                                                                    <div>
-                                                                        <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Parallel Mode</label>
-                                                                        <kendo-dropdownlist [(ngModel)]="model.ParallelizationMode"
-                                                                                           [name]="'parallelMode_' + i"
-                                                                                           [data]="[{text: 'None', value: 'None'}, {text: 'Static Count', value: 'StaticCount'}, {text: 'Config Param', value: 'ConfigParam'}]"
-                                                                                           textField="text"
-                                                                                           valueField="value"
-                                                                                           [valuePrimitive]="true"
-                                                                                           placeholder="Select mode..."
-                                                                                           style="width: 100%; font-size: 0.85em;">
-                                                                        </kendo-dropdownlist>
-                                                                    </div>
-                                                                    
-                                                                    <!-- Parallel Count (when StaticCount) -->
-                                                                    @if (model.ParallelizationMode === 'StaticCount') {
-                                                                        <div>
-                                                                            <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Parallel Count</label>
-                                                                            <kendo-numerictextbox [(ngModel)]="model.ParallelCount"
-                                                                                                 [name]="'parallelCount_' + i"
-                                                                                                 [min]="1"
-                                                                                                 [step]="1"
-                                                                                                 [format]="'n0'"
-                                                                                                 placeholder="Count..."
-                                                                                                 style="width: 100%; font-size: 0.85em;">
-                                                                            </kendo-numerictextbox>
-                                                                        </div>
-                                                                    }
-                                                                    
-                                                                    <!-- Config Param (when ConfigParam) -->
-                                                                    @if (model.ParallelizationMode === 'ConfigParam') {
-                                                                        <div>
-                                                                            <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Config Parameter</label>
-                                                                            <kendo-textbox [(ngModel)]="model.ParallelConfigParam"
-                                                                                          [name]="'parallelConfigParam_' + i"
-                                                                                          placeholder="Parameter name..."
-                                                                                          style="width: 100%; font-size: 0.85em;">
-                                                                            </kendo-textbox>
-                                                                        </div>
-                                                                    }
-                                                                </div>
-                                                            } @else {
-                                                                <!-- Read-only display -->
-                                                                <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
-                                                                    @if (model.ParallelizationMode) {
-                                                                        <span><strong>Parallel Mode:</strong> {{ model.ParallelizationMode }}</span>
-                                                                    }
-                                                                    @if (model.ParallelCount) {
-                                                                        <span><strong>Parallel Count:</strong> {{ model.ParallelCount }}</span>
-                                                                    }
-                                                                    @if (model.ParallelConfigParam) {
-                                                                        <span><strong>Config Param:</strong> {{ model.ParallelConfigParam }}</span>
-                                                                    }
-                                                                </div>
-                                                            }
-                                                        </div>
-                                                    }
-                                                </div>
-                                            </div>
-                                        }
-                                        
-                                        @if (EditMode && UserCanCreatePromptModels) {
-                                            <div class="add-model-row" style="padding: 12px 16px; text-align: center; background: #f8f9fa; border-top: 1px solid #dee2e6;">
-                                                <button kendoButton fillMode="outline" themeColor="success" size="small"
-                                                            (click)="addNewModel()">
-                                                    <i class="fa-solid fa-plus"></i> Add Model
-                                                </button>
-                                            </div>
-                                        }
-                                    }
-                                }
-                            </div>
+                      </div>
+                    } @else {
+                      <!-- Priority explanation for multiple models -->
+                      @if (promptModels.length > 1) {
+                        <div style="padding: 12px 16px; background: #e3f2fd; border-bottom: 1px solid #bbdefb; color: #1565c0; font-size: 0.85em;">
+                          <i class="fa-solid fa-info-circle" style="margin-right: 6px;"></i>
+                          Models are tried in priority order (highest priority first). The first available model that meets requirements will be used for execution.
                         </div>
-                    </kendo-expansionpanel>
-                }
-
-                <!-- Advanced Configuration Expansion Panel -->
-                <kendo-expansionpanel 
-                    [expanded]="false"
-                    style="margin-bottom: 12px;">
-                    <ng-template kendoExpansionPanelTitleDirective>
-                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                            <i class="fa-solid fa-cogs" style="color: #6c757d;"></i>
-                            Advanced Configuration
-                        </span>
-                    </ng-template>
-                    
-                    <!-- Direct Content Projection -->
-                    <div style="padding: 16px 0;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                            
-                            <!-- Left Column -->
-                            <div>
-                                <mj-form-field 
-                                    [record]="record"
-                                    [ShowLabel]="true"
-                                    FieldName="ParallelizationMode"
-                                    Type="dropdownlist"
-                                    [EditMode]="EditMode">
-                                </mj-form-field>
-                                
-                                @if (showParallelCount) {
-                                    <mj-form-field 
-                                        [record]="record"
-                                        [ShowLabel]="true"
-                                        FieldName="ParallelCount"
-                                        Type="numerictextbox"
-                                        [EditMode]="EditMode">
-                                    </mj-form-field>
-                                }
-                                
-                                @if (showParallelConfigParam) {
-                                    <mj-form-field 
-                                        [record]="record"
-                                        [ShowLabel]="true"
-                                        FieldName="ParallelConfigParam"
-                                        Type="textbox"
-                                        [EditMode]="EditMode">
-                                    </mj-form-field>
-                                }
-                                
-                                <mj-form-field 
-                                    [record]="record"
-                                    [ShowLabel]="true"
-                                    FieldName="OutputType"
-                                    Type="dropdownlist"
-                                    [EditMode]="EditMode">
-                                </mj-form-field>
-                                
-                                <mj-form-field 
-                                    [record]="record"
-                                    [ShowLabel]="true"
-                                    FieldName="EffortLevel"
-                                    Type="numerictextbox"
-                                    Caption="Effort Level (1-100)"
-                                    Description="Higher values request more thorough reasoning"
-                                    [EditMode]="EditMode">
-                                </mj-form-field>
-                                
-                            </div>
-                            
-                            <!-- Right Column -->
-                            <div>
-                                <mj-form-field 
-                                    [record]="record"
-                                    [ShowLabel]="true"
-                                    FieldName="ValidationBehavior"
-                                    Type="dropdownlist"
-                                    [EditMode]="EditMode">
-                                </mj-form-field>
-                                
-                                <mj-form-field 
-                                    [record]="record"
-                                    [ShowLabel]="true"
-                                    FieldName="EnableCaching"
-                                    Type="checkbox"
-                                    [EditMode]="EditMode">
-                                </mj-form-field>
-                                
-                                <!-- Result Selector Prompt with Tree Selector -->
-                                <div style="margin-bottom: 16px;">
-                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
-                                        Result Selector Prompt
-                                    </label>
-                                    @if (EditMode) {
-                                        @if (isLoadingResultSelectorData) {
-                                            <div style="padding: 8px; color: #6c757d; font-style: italic;">
-                                                <i class="fa-solid fa-spinner fa-spin"></i> Loading prompts...
-                                            </div>
-                                        } @else {
-                                            <kendo-dropdowntree 
-                                                [(ngModel)]="record.ResultSelectorPromptID"
-                                                name="resultSelectorPromptID"
-                                                [data]="resultSelectorTreeData"
-                                                textField="text"
-                                                valueField="value"
-                                                [valuePrimitive]="true"
-                                                [filterable]="true"
-                                                placeholder="Select a result selector prompt..."
-                                                style="width: 100%;"
-                                                (valueChange)="onResultSelectorChange($event)">
-                                            </kendo-dropdowntree>
-                                        }
-                                    } @else {
-                                        <span style="color: #495057;">{{ getPromptDisplayName(record.ResultSelectorPromptID || '') || 'None selected' }}</span>
-                                    }
-                                </div>
-                            </div>
+                      }
+                      <!-- Column Headers -->
+                      <div class="model-header" style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; background: #e9ecef; font-weight: 600; font-size: 0.85em; color: #495057; border-bottom: 1px solid #dee2e6;">
+                        <div title="Priority order - models are tried from top to bottom">
+                          <i class="fa-solid fa-sort" style="color: #6c757d;"></i>
                         </div>
-                    </div>
-                </kendo-expansionpanel>
-
-                <!-- Template Parameters Expansion Panel -->
-                @if (template && templateParams.length > 0) {
-                    <kendo-expansionpanel 
-                        [expanded]="false"
-                        style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
-                                Template Parameters
-                                <span class="badge" style="background: #6f42c1; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                    {{ templateParams.length }}
-                                </span>
-                                <span style="color: #6c757d; font-size: 0.8em; font-weight: normal; margin-left: 8px;">
-                                    <i class="fa-solid fa-info-circle" title="These parameters are defined in the template and will be available when executing this prompt"></i>
-                                    Parameters defined in the template
-                                </span>
-                            </span>
-                        </ng-template>
-                        
-                        <!-- Template Parameters Display -->
-                        <div style="padding: 16px 0;">
-                            @if (isLoadingTemplateParams) {
-                                <div class="loading-state" style="padding: 20px; text-align: center; color: #6c757d;">
-                                    <i class="fa-solid fa-spinner fa-spin"></i> Loading template parameters...
-                                </div>
-                            } @else if (templateParams.length === 0) {
-                                <div class="empty-state" style="padding: 20px; text-align: center; color: #6c757d;">
-                                    <i class="fa-solid fa-info-circle"></i> This template has no parameters defined
-                                </div>
-                            } @else {
-                                <!-- Parameters Grid -->
-                                <div style="display: grid; gap: 12px;">
-                                    @for (param of templateParams; track param.ID) {
-                                        <div class="parameter-card" 
-                                             style="border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; background: #f8f9fa; transition: all 0.2s;"
-                                             [style.border-left]="'4px solid ' + getParamTypeColor(param.Type)">
-                                            
-                                            <!-- Parameter Header -->
-                                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                                                <div style="display: flex; align-items: center; gap: 8px;">
-                                                    <i [class]="'fa-solid ' + getParamTypeIcon(param.Type)" 
-                                                       [style.color]="getParamTypeColor(param.Type)"
-                                                       style="font-size: 1.2em;"></i>
-                                                    <h6 style="margin: 0; color: #495057; font-weight: 600;">
-                                                        {{ param.Name }}
-                                                        @if (param.IsRequired) {
-                                                            <span style="color: #dc3545; font-size: 0.9em; margin-left: 4px;">*</span>
-                                                        }
-                                                    </h6>
-                                                </div>
-                                                <div style="display: flex; align-items: center; gap: 8px;">
-                                                    <span class="type-badge" 
-                                                          [style.background-color]="getParamTypeColor(param.Type)"
-                                                          style="color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
-                                                        {{ param.Type }}
-                                                    </span>
-                                                    @if (param.IsRequired) {
-                                                        <span style="color: #dc3545; font-size: 0.85em; font-weight: 500;">Required</span>
-                                                    } @else {
-                                                        <span style="color: #6c757d; font-size: 0.85em;">Optional</span>
-                                                    }
-                                                </div>
-                                            </div>
-                                            
-                                            <!-- Parameter Description -->
-                                            @if (param.Description) {
-                                                <p style="margin: 0 0 8px 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">
-                                                    {{ param.Description }}
-                                                </p>
-                                            }
-                                            
-                                            <!-- Type-specific Information -->
-                                            <div style="font-size: 0.85em; color: #495057;">
-                                                <span style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
-                                                    <i class="fa-solid fa-info-circle" style="color: #6c757d;"></i>
-                                                    {{ getParamTypeDescription(param) }}
-                                                </span>
-                                            </div>
-                                            
-                                            <!-- Additional Parameter Details -->
-                                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px;">
-                                                @if (param.DefaultValue) {
-                                                    <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
-                                                        <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Default Value</label>
-                                                        <code style="font-size: 0.85em; color: #495057; word-break: break-all;">{{ param.DefaultValue }}</code>
-                                                    </div>
-                                                }
-                                                
-                                                @if (param.EntityID) {
-                                                    <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
-                                                        <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Entity</label>
-                                                        <span style="font-size: 0.85em; color: #495057;">{{ param.Entity || 'Entity ID: ' + param.EntityID }}</span>
-                                                    </div>
-                                                }
-                                                
-                                                @if (param.LinkedParameterName) {
-                                                    <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
-                                                        <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Linked To</label>
-                                                        <span style="font-size: 0.85em; color: #495057;">
-                                                            {{ param.LinkedParameterName }}
-                                                            @if (param.LinkedParameterField) {
-                                                                ({{ param.LinkedParameterField }})
-                                                            }
-                                                        </span>
-                                                    </div>
-                                                }
-                                                
-                                                @if (param.ExtraFilter) {
-                                                    <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
-                                                        <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Filter</label>
-                                                        <code style="font-size: 0.8em; color: #495057; word-break: break-all;">{{ param.ExtraFilter }}</code>
-                                                    </div>
-                                                }
-                                                
-                                                @if (param.RecordID) {
-                                                    <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
-                                                        <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Record ID</label>
-                                                        <code style="font-size: 0.85em; color: #495057;">{{ param.RecordID }}</code>
-                                                    </div>
-                                                }
-                                            </div>
-                                        </div>
-                                    }
-                                </div>
-                                
-                                <!-- Help Text -->
-                                <div style="margin-top: 16px; padding: 12px; background: #e3f2fd; border-radius: 6px; border: 1px solid #bbdefb;">
-                                    <div style="display: flex; align-items: flex-start; gap: 8px;">
-                                        <i class="fa-solid fa-lightbulb" style="color: #1976d2; margin-top: 2px;"></i>
-                                        <div style="flex: 1; font-size: 0.85em; color: #1565c0; line-height: 1.5;">
-                                            <strong>Using Template Parameters:</strong> When executing this prompt, you'll be prompted to provide values for all required parameters. 
-                                            Parameters can be simple values (text, numbers) or complex data structures (JSON objects, database records, or entire entity collections).
-                                            The template will use these parameters to generate dynamic content based on the values provided at execution time.
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    </kendo-expansionpanel>
-                }
-
-                <!-- Output Example Expansion Panel (when OutputType = object) -->
-                @if (showOutputExample) {
-                    <kendo-expansionpanel 
-                        [expanded]="true"
-                        style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-code" style="color: #6c757d;"></i>
-                                Output Example (JSON)
-                                <span style="color: #dc3545; font-size: 0.8em; font-weight: normal;">• Required for object output type</span>
-                            </span>
-                        </ng-template>
-                        
-                        <!-- Direct Content Projection -->
-                        <div style="padding: 16px;">
+                        <div>AI Model <span style="color: #dc3545;">*</span></div>
+                        <div>Vendor</div>
+                        <div>Configuration</div>
+                        <div>Created</div>
+                        <div>Actions</div>
+                      </div>
+                      @for (model of promptModels; track getModelTrackId(model) || $index; let i = $index) {
+                        <div class="model-row"
+                          [draggable]="EditMode"
+                          (dragstart)="onDragStart($event, i)"
+                          (dragover)="onDragOver($event)"
+                          (drop)="onDrop($event, i)"
+                          (dragend)="onDragEnd($event)"
+                          [style.background]="!model.ModelID ? '#fff3cd' : (draggedIndex === i ? '#e3f2fd' : 'white')"
+                          [style.border-left]="!model.ModelID ? '3px solid #ffc107' : 'none'"
+                          [style.opacity]="draggedIndex === i ? '0.5' : '1'"
+                          style="display: grid; grid-template-columns: 40px 2fr 1fr 1fr 1fr 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: start; transition: background 0.2s, opacity 0.2s;">
+                          <!-- Drag Handle / Priority -->
+                          <div class="drag-handle" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6c757d;">
                             @if (EditMode) {
-                                <mj-code-editor 
-                                    [(ngModel)]="record.OutputExample"
-                                    name="outputExample"
-                                    language="json"
-                                    placeholder="Enter JSON example structure..."
-                                    style="width: 100%; height: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
-                                </mj-code-editor>
-                                <div style="margin-top: 8px; color: #6c757d; font-size: 0.85em;">
-                                    <i class="fa-solid fa-info-circle"></i> Provide a JSON example that defines the expected structure for object output validation.
-                                </div>
-                            } @else if (record.OutputExample) {
-                                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; max-height: 250px;">{{ record.OutputExample }}</div>
+                              <i class="fa-solid fa-grip-vertical" title="Drag to reorder priority" style="cursor: move;"></i>
+                              <span style="font-size: 0.7em; margin-top: 2px;">#{{ i + 1 }}</span>
                             } @else {
-                                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 12px; color: #856404; text-align: center;">
-                                    <i class="fa-solid fa-exclamation-triangle"></i> Output example is required when output type is 'object'
-                                </div>
+                              <span style="font-size: 0.9em; font-weight: 600;" title="Priority {{ model.Priority }} - Higher priority numbers are tried first">#{{ i + 1 }}</span>
                             }
-                        </div>
-                    </kendo-expansionpanel>
-                }
-
-                <!-- Execution History Expansion Panel -->
-                @if (record.IsSaved) {
-                    <kendo-expansionpanel 
-                        [expanded]="false"
-                        style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-history" style="color: #6c757d;"></i>
-                                Execution History
-                                @if (executionHistory.length > 0) {
-                                    <span style="color: #6c757d; font-weight: normal;">({{ executionHistory.length }})</span>
-                                }
-                            </span>
-                        </ng-template>
-                        
-                        <!-- Custom Execution History Viewer -->
-                        <div style="padding: 16px;">
-                            @if (isLoadingHistory) {
-                                <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 2em; margin-bottom: 12px;"></i>
-                                    <p>Loading execution history...</p>
-                                </div>
-                            } @else if (executionHistory.length === 0) {
-                                <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                    <i class="fa-solid fa-history" style="font-size: 3em; margin-bottom: 12px; opacity: 0.3;"></i>
-                                    <p>No execution history yet</p>
-                                    <p style="font-size: 0.9em;">Run this prompt to see execution history here</p>
-                                </div>
+                          </div>
+                          <!-- Model Selection -->
+                          <div class="model-select">
+                            @if (EditMode) {
+                              <kendo-dropdownlist [(ngModel)]="model.ModelID"
+                                [name]="'modelId_' + getModelTrackId(model)"
+                                [data]="availableModels"
+                                textField="Name"
+                                valueField="ID"
+                                [valuePrimitive]="true"
+                                [filterable]="true"
+                                placeholder="Select a model..."
+                                (valueChange)="onModelChange($event, i)"
+                                style="width: 100%;">
+                              </kendo-dropdownlist>
                             } @else {
-                                <!-- Sort Controls -->
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                                    <div style="color: #6c757d; font-size: 0.9em;">
-                                        Showing {{ executionHistory.length }} executions
-                                    </div>
-                                    <div style="display: flex; gap: 8px; align-items: center;">
-                                        <span style="color: #6c757d; font-size: 0.85em;">Sort by:</span>
-                                        <kendo-buttongroup selection="single">
-                                            <button kendoButton 
-                                                    [selected]="historySortField === 'runAt'"
-                                                    (click)="changeHistorySort('runAt')"
-                                                    size="small">
-                                                Date
-                                                @if (historySortField === 'runAt') {
-                                                    <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')" 
-                                                       style="margin-left: 4px; font-size: 0.8em;"></i>
-                                                }
-                                            </button>
-                                            <button kendoButton 
-                                                    [selected]="historySortField === 'executionTime'"
-                                                    (click)="changeHistorySort('executionTime')"
-                                                    size="small">
-                                                Duration
-                                                @if (historySortField === 'executionTime') {
-                                                    <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')" 
-                                                       style="margin-left: 4px; font-size: 0.8em;"></i>
-                                                }
-                                            </button>
-                                            <button kendoButton 
-                                                    [selected]="historySortField === 'tokens'"
-                                                    (click)="changeHistorySort('tokens')"
-                                                    size="small">
-                                                Tokens
-                                                @if (historySortField === 'tokens') {
-                                                    <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')" 
-                                                       style="margin-left: 4px; font-size: 0.8em;"></i>
-                                                }
-                                            </button>
-                                            <button kendoButton 
-                                                    [selected]="historySortField === 'cost'"
-                                                    (click)="changeHistorySort('cost')"
-                                                    size="small">
-                                                Cost
-                                                @if (historySortField === 'cost') {
-                                                    <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')" 
-                                                       style="margin-left: 4px; font-size: 0.8em;"></i>
-                                                }
-                                            </button>
-                                        </kendo-buttongroup>
-                                    </div>
+                              <span style="font-weight: 500;">{{ getModelDisplayName(model.ModelID) }}</span>
+                            }
+                          </div>
+                          <!-- Vendor -->
+                          <div class="model-vendor">
+                            @if (EditMode) {
+                              @if (model.ModelID) {
+                                @if (shouldShowVendorDropdown(model.ModelID)) {
+                                  <kendo-dropdownlist [(ngModel)]="model.VendorID"
+                                    [name]="'vendorId_' + getModelTrackId(model)"
+                                    [data]="getVendorsForModelSync(model.ModelID)"
+                                    textField="Name"
+                                    valueField="ID"
+                                    [valuePrimitive]="true"
+                                    [filterable]="true"
+                                    placeholder="Select vendor..."
+                                    style="width: 100%;">
+                                    <ng-template kendoDropDownListItemTemplate let-dataItem>
+                                      <span [style.color]="getVendorStatusColor(model.ModelID, dataItem.ID)">
+                                        {{ dataItem.Name }}
+                                        @if (getModelVendorStatus(model.ModelID, dataItem.ID) !== 'Active') {
+                                          <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, dataItem.ID) }})</span>
+                                        }
+                                      </span>
+                                    </ng-template>
+                                  </kendo-dropdownlist>
+                                } @else {
+                                  <!-- Single vendor - just show the name -->
+                                  @if (getVendorsForModelSync(model.ModelID).length === 1) {
+                                    <span [style.color]="getVendorStatusColor(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID)" style="font-size: 0.9em; font-weight: 500;">
+                                      {{ getVendorsForModelSync(model.ModelID)[0].Name }}
+                                      @if (getModelVendorStatus(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID) !== 'Active') {
+                                        <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, getVendorsForModelSync(model.ModelID)[0].ID) }})</span>
+                                      }
+                                    </span>
+                                  } @else {
+                                    <span style="color: #6c757d; font-style: italic; font-size: 0.9em;">No vendors available</span>
+                                  }
+                                }
+                              } @else {
+                                <span style="color: #6c757d; font-style: italic; font-size: 0.9em;">Select model first</span>
+                              }
+                            } @else {
+                              @if (model.VendorID && model.ModelID) {
+                                <span [style.color]="getVendorStatusColor(model.ModelID, model.VendorID)" style="font-size: 0.9em;">
+                                  {{ getVendorDisplayName(model.VendorID) }}
+                                  @if (getModelVendorStatus(model.ModelID, model.VendorID) !== 'Active') {
+                                    <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, model.VendorID) }})</span>
+                                  }
+                                </span>
+                              } @else {
+                                <span style="color: #6c757d; font-size: 0.9em;">-</span>
+                              }
+                            }
+                          </div>
+                          <!-- Configuration -->
+                          <div class="model-configuration">
+                            @if (EditMode) {
+                              @if (isLoadingConfigurations) {
+                                <div style="padding: 4px; color: #6c757d; font-style: italic; font-size: 0.85em;">
+                                  <i class="fa-solid fa-spinner fa-spin"></i> Loading...
                                 </div>
-                                
-                                <!-- Execution History Table -->
-                                <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
-                                    <table style="width: 100%; border-collapse: collapse;">
-                                        <thead>
-                                            <tr style="background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
-                                                <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Status</th>
-                                                <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Date & Time</th>
-                                                <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Model</th>
-                                                <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Duration</th>
-                                                <th style="padding: 12px; text-align: right; font-weight: 600; color: #495057;">Tokens</th>
-                                                <th style="padding: 12px; text-align: right; font-weight: 600; color: #495057;">Cost</th>
-                                                <th style="padding: 12px; text-align: center; font-weight: 600; color: #495057;">Type</th>
-                                                <th style="padding: 12px; text-align: center; font-weight: 600; color: #495057;">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @for (run of executionHistory; track run.ID; let i = $index) {
-                                                <tr class="history-row"
-                                                    [class.even-row]="i % 2 === 0"
-                                                    style="border-bottom: 1px solid #f1f3f5;">
-                                                    <td style="padding: 12px;">
-                                                        <span style="display: flex; align-items: center; gap: 6px;">
-                                                            <i [class]="'fa-solid ' + getExecutionStatusIcon(run.Success)" 
-                                                               [style.color]="getExecutionStatusColor(run.Success)"></i>
-                                                            <span [style.color]="getExecutionStatusColor(run.Success)" style="font-weight: 500;">
-                                                                {{ run.Success === true ? 'Success' : run.Success === false ? 'Failed' : 'Running' }}
-                                                            </span>
-                                                        </span>
-                                                    </td>
-                                                    <td style="padding: 12px; color: #495057;">
-                                                        {{ run.RunAt | date:'short' }}
-                                                    </td>
-                                                    <td style="padding: 12px; color: #495057;">
-                                                        <span style="display: flex; align-items: center; gap: 6px;">
-                                                            <i class="fa-solid fa-microchip" style="color: #6c757d;"></i>
-                                                            {{ run.Model || 'Unknown' }}
-                                                        </span>
-                                                    </td>
-                                                    <td style="padding: 12px; color: #495057;">
-                                                        {{ formatDuration(run.ExecutionTimeMS) }}
-                                                    </td>
-                                                    <td style="padding: 12px; text-align: right; color: #495057;">
-                                                        {{ formatTokens(run.TokensUsed) }}
-                                                    </td>
-                                                    <td style="padding: 12px; text-align: right; color: #495057;">
-                                                        {{ formatCost(run.TotalCost || run.Cost) }}
-                                                    </td>
-                                                    <td style="padding: 12px; text-align: center;">
-                                                        @if (run.RunType) {
+                              } @else {
+                                <kendo-dropdownlist [(ngModel)]="model.ConfigurationID"
+                                  [name]="'configurationId_' + getModelTrackId(model)"
+                                  [data]="availableConfigurations"
+                                  textField="Name"
+                                  valueField="ID"
+                                  [valuePrimitive]="true"
+                                  [filterable]="true"
+                                  placeholder="Default"
+                                  (valueChange)="onConfigurationChange($event, i)"
+                                  style="width: 100%;">
+                                  <ng-template kendoDropDownListNoDataTemplate>
+                                    <div style="padding: 8px; text-align: center; color: #6c757d;">
+                                      No configurations available
+                                    </div>
+                                  </ng-template>
+                                </kendo-dropdownlist>
+                              }
+                            } @else {
+                              <span style="font-size: 0.9em;">{{ getConfigurationDisplayName(model.ConfigurationID) }}</span>
+                            }
+                          </div>
+                          <!-- Created Date -->
+                          <div class="model-created">
+                            @if (model.ID) {
+                              <span style="color: #6c757d; font-size: 0.8em;">{{ model.__mj_CreatedAt | date:'short' }}</span>
+                            } @else {
+                              <span style="color: #28a745; font-size: 0.8em; font-style: italic;">New</span>
+                            }
+                          </div>
+                          <!-- Actions -->
+                          <div class="model-actions" style="display: flex; gap: 2px; flex-direction: column;">
+                            @if (EditMode) {
+                              <div style="display: flex; gap: 2px; margin-bottom: 4px;">
+                                @if (UserCanUpdatePromptModels) {
+                                  <button kendoButton fillMode="flat" size="small"
+                                    (click)="moveModelUp(i)"
+                                    [disabled]="i === 0"
+                                    title="Move up">
+                                    <i class="fa-solid fa-chevron-up"></i>
+                                  </button>
+                                  <button kendoButton fillMode="flat" size="small"
+                                    (click)="moveModelDown(i)"
+                                    [disabled]="i === promptModels.length - 1"
+                                    title="Move down">
+                                    <i class="fa-solid fa-chevron-down"></i>
+                                  </button>
+                                }
+                              </div>
+                              @if (UserCanDeletePromptModels) {
+                                <button kendoButton fillMode="flat" themeColor="error" size="small"
+                                  (click)="removePromptModel(i)"
+                                  title="Remove model">
+                                  <i class="fa-solid fa-times"></i>
+                                </button>
+                              }
+                            }
+                          </div>
+                        </div>
+                        <!-- Second row with additional details -->
+                        <div style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #e9ecef; background: #f8f9fa; font-size: 0.85em; color: #6c757d;">
+                          <div></div>
+                          <div>
+                            <!-- Basic model details -->
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 8px;">
+                              @if (model.Status) {
+                                <span><strong>Status:</strong> {{ model.Status }}</span>
+                              }
+                            </div>
+                            <!-- Parallel execution fields when prompt is ModelSpecific -->
+                            @if (record.ParallelizationMode === 'ModelSpecific') {
+                              <div style="padding: 8px; background: #fff; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 8px;">
+                                <div style="margin-bottom: 6px; font-weight: 600; color: #495057; font-size: 0.9em;">
+                                  <i class="fa-solid fa-layer-group"></i> Model-Specific Parallel Execution
+                                </div>
+                                @if (EditMode) {
+                                  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: center;">
+                                    <!-- Parallel Mode -->
+                                    <div>
+                                      <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Parallel Mode</label>
+                                      <kendo-dropdownlist [(ngModel)]="model.ParallelizationMode"
+                                        [name]="'parallelMode_' + i"
+                                        [data]="[{text: 'None', value: 'None'}, {text: 'Static Count', value: 'StaticCount'}, {text: 'Config Param', value: 'ConfigParam'}]"
+                                        textField="text"
+                                        valueField="value"
+                                        [valuePrimitive]="true"
+                                        placeholder="Select mode..."
+                                        style="width: 100%; font-size: 0.85em;">
+                                      </kendo-dropdownlist>
+                                    </div>
+                                    <!-- Parallel Count (when StaticCount) -->
+                                    @if (model.ParallelizationMode === 'StaticCount') {
+                                      <div>
+                                        <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Parallel Count</label>
+                                        <kendo-numerictextbox [(ngModel)]="model.ParallelCount"
+                                          [name]="'parallelCount_' + i"
+                                          [min]="1"
+                                          [step]="1"
+                                          [format]="'n0'"
+                                          placeholder="Count..."
+                                          style="width: 100%; font-size: 0.85em;">
+                                        </kendo-numerictextbox>
+                                      </div>
+                                    }
+                                    <!-- Config Param (when ConfigParam) -->
+                                    @if (model.ParallelizationMode === 'ConfigParam') {
+                                      <div>
+                                        <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: #495057;">Config Parameter</label>
+                                        <kendo-textbox [(ngModel)]="model.ParallelConfigParam"
+                                          [name]="'parallelConfigParam_' + i"
+                                          placeholder="Parameter name..."
+                                          style="width: 100%; font-size: 0.85em;">
+                                        </kendo-textbox>
+                                      </div>
+                                    }
+                                  </div>
+                                } @else {
+                                  <!-- Read-only display -->
+                                  <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+                                    @if (model.ParallelizationMode) {
+                                      <span><strong>Parallel Mode:</strong> {{ model.ParallelizationMode }}</span>
+                                    }
+                                    @if (model.ParallelCount) {
+                                      <span><strong>Parallel Count:</strong> {{ model.ParallelCount }}</span>
+                                    }
+                                    @if (model.ParallelConfigParam) {
+                                      <span><strong>Config Param:</strong> {{ model.ParallelConfigParam }}</span>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+                      @if (EditMode && UserCanCreatePromptModels) {
+                        <div class="add-model-row" style="padding: 12px 16px; text-align: center; background: #f8f9fa; border-top: 1px solid #dee2e6;">
+                          <button kendoButton fillMode="outline" themeColor="success" size="small"
+                            (click)="addNewModel()">
+                            <i class="fa-solid fa-plus"></i> Add Model
+                          </button>
+                        </div>
+                      }
+                    }
+                  }
+                </div>
+              </div>
+            </kendo-expansionpanel>
+          }
+          <!-- Advanced Configuration Expansion Panel -->
+          <kendo-expansionpanel
+            [expanded]="false"
+            style="margin-bottom: 12px;">
+            <ng-template kendoExpansionPanelTitleDirective>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-cogs" style="color: #6c757d;"></i>
+                Advanced Configuration
+              </span>
+            </ng-template>
+            <!-- Direct Content Projection -->
+            <div style="padding: 16px 0;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <!-- Left Column -->
+                <div>
+                  <mj-form-field
+                    [record]="record"
+                    [ShowLabel]="true"
+                    FieldName="ParallelizationMode"
+                    Type="dropdownlist"
+                    [EditMode]="EditMode">
+                  </mj-form-field>
+                  @if (showParallelCount) {
+                    <mj-form-field
+                      [record]="record"
+                      [ShowLabel]="true"
+                      FieldName="ParallelCount"
+                      Type="numerictextbox"
+                      [EditMode]="EditMode">
+                    </mj-form-field>
+                  }
+                  @if (showParallelConfigParam) {
+                    <mj-form-field
+                      [record]="record"
+                      [ShowLabel]="true"
+                      FieldName="ParallelConfigParam"
+                      Type="textbox"
+                      [EditMode]="EditMode">
+                    </mj-form-field>
+                  }
+                  <mj-form-field
+                    [record]="record"
+                    [ShowLabel]="true"
+                    FieldName="OutputType"
+                    Type="dropdownlist"
+                    [EditMode]="EditMode">
+                  </mj-form-field>
+                  <mj-form-field
+                    [record]="record"
+                    [ShowLabel]="true"
+                    FieldName="EffortLevel"
+                    Type="numerictextbox"
+                    Caption="Effort Level (1-100)"
+                    Description="Higher values request more thorough reasoning"
+                    [EditMode]="EditMode">
+                  </mj-form-field>
+                </div>
+                <!-- Right Column -->
+                <div>
+                  <mj-form-field
+                    [record]="record"
+                    [ShowLabel]="true"
+                    FieldName="ValidationBehavior"
+                    Type="dropdownlist"
+                    [EditMode]="EditMode">
+                  </mj-form-field>
+                  <mj-form-field
+                    [record]="record"
+                    [ShowLabel]="true"
+                    FieldName="EnableCaching"
+                    Type="checkbox"
+                    [EditMode]="EditMode">
+                  </mj-form-field>
+                  <!-- Result Selector Prompt with Tree Selector -->
+                  <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
+                      Result Selector Prompt
+                    </label>
+                    @if (EditMode) {
+                      @if (isLoadingResultSelectorData) {
+                        <div style="padding: 8px; color: #6c757d; font-style: italic;">
+                          <i class="fa-solid fa-spinner fa-spin"></i> Loading prompts...
+                        </div>
+                      } @else {
+                        <kendo-dropdowntree
+                          [(ngModel)]="record.ResultSelectorPromptID"
+                          name="resultSelectorPromptID"
+                          [data]="resultSelectorTreeData"
+                          textField="text"
+                          valueField="value"
+                          [valuePrimitive]="true"
+                          [filterable]="true"
+                          placeholder="Select a result selector prompt..."
+                          style="width: 100%;"
+                          (valueChange)="onResultSelectorChange($event)">
+                        </kendo-dropdowntree>
+                      }
+                    } @else {
+                      <span style="color: #495057;">{{ getPromptDisplayName(record.ResultSelectorPromptID || '') || 'None selected' }}</span>
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
+          </kendo-expansionpanel>
+          <!-- Template Parameters Expansion Panel -->
+          @if (template && templateParams.length > 0) {
+            <kendo-expansionpanel
+              [expanded]="false"
+              style="margin-bottom: 12px;">
+              <ng-template kendoExpansionPanelTitleDirective>
+                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                  <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+                  Template Parameters
+                  <span class="badge" style="background: #6f42c1; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                    {{ templateParams.length }}
+                  </span>
+                  <span style="color: #6c757d; font-size: 0.8em; font-weight: normal; margin-left: 8px;">
+                    <i class="fa-solid fa-info-circle" title="These parameters are defined in the template and will be available when executing this prompt"></i>
+                    Parameters defined in the template
+                  </span>
+                </span>
+              </ng-template>
+              <!-- Template Parameters Display -->
+              <div style="padding: 16px 0;">
+                @if (isLoadingTemplateParams) {
+                  <div class="loading-state" style="padding: 20px; text-align: center; color: #6c757d;">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Loading template parameters...
+                  </div>
+                } @else if (templateParams.length === 0) {
+                  <div class="empty-state" style="padding: 20px; text-align: center; color: #6c757d;">
+                    <i class="fa-solid fa-info-circle"></i> This template has no parameters defined
+                  </div>
+                } @else {
+                  <!-- Parameters Grid -->
+                  <div style="display: grid; gap: 12px;">
+                    @for (param of templateParams; track param.ID) {
+                      <div class="parameter-card"
+                        style="border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; background: #f8f9fa; transition: all 0.2s;"
+                        [style.border-left]="'4px solid ' + getParamTypeColor(param.Type)">
+                        <!-- Parameter Header -->
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                          <div style="display: flex; align-items: center; gap: 8px;">
+                            <i [class]="'fa-solid ' + getParamTypeIcon(param.Type)"
+                              [style.color]="getParamTypeColor(param.Type)"
+                            style="font-size: 1.2em;"></i>
+                            <h6 style="margin: 0; color: #495057; font-weight: 600;">
+                              {{ param.Name }}
+                              @if (param.IsRequired) {
+                                <span style="color: #dc3545; font-size: 0.9em; margin-left: 4px;">*</span>
+                              }
+                            </h6>
+                          </div>
+                          <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="type-badge"
+                              [style.background-color]="getParamTypeColor(param.Type)"
+                              style="color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                              {{ param.Type }}
+                            </span>
+                            @if (param.IsRequired) {
+                              <span style="color: #dc3545; font-size: 0.85em; font-weight: 500;">Required</span>
+                            } @else {
+                              <span style="color: #6c757d; font-size: 0.85em;">Optional</span>
+                            }
+                          </div>
+                        </div>
+                        <!-- Parameter Description -->
+                        @if (param.Description) {
+                          <p style="margin: 0 0 8px 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">
+                            {{ param.Description }}
+                          </p>
+                        }
+                        <!-- Type-specific Information -->
+                        <div style="font-size: 0.85em; color: #495057;">
+                          <span style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+                            <i class="fa-solid fa-info-circle" style="color: #6c757d;"></i>
+                            {{ getParamTypeDescription(param) }}
+                          </span>
+                        </div>
+                        <!-- Additional Parameter Details -->
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px;">
+                          @if (param.DefaultValue) {
+                            <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                              <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Default Value</label>
+                              <code style="font-size: 0.85em; color: #495057; word-break: break-all;">{{ param.DefaultValue }}</code>
+                            </div>
+                          }
+                          @if (param.EntityID) {
+                            <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                              <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Entity</label>
+                              <span style="font-size: 0.85em; color: #495057;">{{ param.Entity || 'Entity ID: ' + param.EntityID }}</span>
+                            </div>
+                          }
+                          @if (param.LinkedParameterName) {
+                            <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                              <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Linked To</label>
+                              <span style="font-size: 0.85em; color: #495057;">
+                                {{ param.LinkedParameterName }}
+                                @if (param.LinkedParameterField) {
+                                  ({{ param.LinkedParameterField }})
+                                }
+                              </span>
+                            </div>
+                          }
+                          @if (param.ExtraFilter) {
+                            <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                              <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Filter</label>
+                              <code style="font-size: 0.8em; color: #495057; word-break: break-all;">{{ param.ExtraFilter }}</code>
+                            </div>
+                          }
+                          @if (param.RecordID) {
+                            <div style="background: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                              <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 2px;">Record ID</label>
+                              <code style="font-size: 0.85em; color: #495057;">{{ param.RecordID }}</code>
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                  <!-- Help Text -->
+                  <div style="margin-top: 16px; padding: 12px; background: #e3f2fd; border-radius: 6px; border: 1px solid #bbdefb;">
+                    <div style="display: flex; align-items: flex-start; gap: 8px;">
+                      <i class="fa-solid fa-lightbulb" style="color: #1976d2; margin-top: 2px;"></i>
+                      <div style="flex: 1; font-size: 0.85em; color: #1565c0; line-height: 1.5;">
+                        <strong>Using Template Parameters:</strong> When executing this prompt, you'll be prompted to provide values for all required parameters.
+                        Parameters can be simple values (text, numbers) or complex data structures (JSON objects, database records, or entire entity collections).
+                        The template will use these parameters to generate dynamic content based on the values provided at execution time.
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            </kendo-expansionpanel>
+          }
+          <!-- Output Example Expansion Panel (when OutputType = object) -->
+          @if (showOutputExample) {
+            <kendo-expansionpanel
+              [expanded]="true"
+              style="margin-bottom: 12px;">
+              <ng-template kendoExpansionPanelTitleDirective>
+                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                  <i class="fa-solid fa-code" style="color: #6c757d;"></i>
+                  Output Example (JSON)
+                  <span style="color: #dc3545; font-size: 0.8em; font-weight: normal;">• Required for object output type</span>
+                </span>
+              </ng-template>
+              <!-- Direct Content Projection -->
+              <div style="padding: 16px;">
+                @if (EditMode) {
+                  <mj-code-editor
+                    [(ngModel)]="record.OutputExample"
+                    name="outputExample"
+                    language="json"
+                    placeholder="Enter JSON example structure..."
+                    style="width: 100%; height: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
+                  </mj-code-editor>
+                  <div style="margin-top: 8px; color: #6c757d; font-size: 0.85em;">
+                    <i class="fa-solid fa-info-circle"></i> Provide a JSON example that defines the expected structure for object output validation.
+                  </div>
+                } @else if (record.OutputExample) {
+                  <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; max-height: 250px;">{{ record.OutputExample }}</div>
+                } @else {
+                  <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 12px; color: #856404; text-align: center;">
+                    <i class="fa-solid fa-exclamation-triangle"></i> Output example is required when output type is 'object'
+                  </div>
+                }
+              </div>
+            </kendo-expansionpanel>
+          }
+          <!-- Execution History Expansion Panel -->
+          @if (record.IsSaved) {
+            <kendo-expansionpanel
+              [expanded]="false"
+              style="margin-bottom: 12px;">
+              <ng-template kendoExpansionPanelTitleDirective>
+                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                  <i class="fa-solid fa-history" style="color: #6c757d;"></i>
+                  Execution History
+                  @if (executionHistory.length > 0) {
+                    <span style="color: #6c757d; font-weight: normal;">({{ executionHistory.length }})</span>
+                  }
+                </span>
+              </ng-template>
+              <!-- Custom Execution History Viewer -->
+              <div style="padding: 16px;">
+                @if (isLoadingHistory) {
+                  <div style="text-align: center; padding: 40px; color: #6c757d;">
+                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 2em; margin-bottom: 12px;"></i>
+                    <p>Loading execution history...</p>
+                  </div>
+                } @else if (executionHistory.length === 0) {
+                  <div style="text-align: center; padding: 40px; color: #6c757d;">
+                    <i class="fa-solid fa-history" style="font-size: 3em; margin-bottom: 12px; opacity: 0.3;"></i>
+                    <p>No execution history yet</p>
+                    <p style="font-size: 0.9em;">Run this prompt to see execution history here</p>
+                  </div>
+                } @else {
+                  <!-- Sort Controls -->
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div style="color: #6c757d; font-size: 0.9em;">
+                      Showing {{ executionHistory.length }} executions
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                      <span style="color: #6c757d; font-size: 0.85em;">Sort by:</span>
+                      <kendo-buttongroup selection="single">
+                        <button kendoButton
+                          [selected]="historySortField === 'runAt'"
+                          (click)="changeHistorySort('runAt')"
+                          size="small">
+                          Date
+                          @if (historySortField === 'runAt') {
+                            <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')"
+                            style="margin-left: 4px; font-size: 0.8em;"></i>
+                          }
+                        </button>
+                        <button kendoButton
+                          [selected]="historySortField === 'executionTime'"
+                          (click)="changeHistorySort('executionTime')"
+                          size="small">
+                          Duration
+                          @if (historySortField === 'executionTime') {
+                            <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')"
+                            style="margin-left: 4px; font-size: 0.8em;"></i>
+                          }
+                        </button>
+                        <button kendoButton
+                          [selected]="historySortField === 'tokens'"
+                          (click)="changeHistorySort('tokens')"
+                          size="small">
+                          Tokens
+                          @if (historySortField === 'tokens') {
+                            <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')"
+                            style="margin-left: 4px; font-size: 0.8em;"></i>
+                          }
+                        </button>
+                        <button kendoButton
+                          [selected]="historySortField === 'cost'"
+                          (click)="changeHistorySort('cost')"
+                          size="small">
+                          Cost
+                          @if (historySortField === 'cost') {
+                            <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')"
+                            style="margin-left: 4px; font-size: 0.8em;"></i>
+                          }
+                        </button>
+                      </kendo-buttongroup>
+                    </div>
+                  </div>
+                  <!-- Execution History Table -->
+                  <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                      <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+                          <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Status</th>
+                          <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Date & Time</th>
+                          <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Model</th>
+                          <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Duration</th>
+                          <th style="padding: 12px; text-align: right; font-weight: 600; color: #495057;">Tokens</th>
+                          <th style="padding: 12px; text-align: right; font-weight: 600; color: #495057;">Cost</th>
+                          <th style="padding: 12px; text-align: center; font-weight: 600; color: #495057;">Type</th>
+                          <th style="padding: 12px; text-align: center; font-weight: 600; color: #495057;">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (run of executionHistory; track run.ID; let i = $index) {
+                          <tr class="history-row"
+                            [class.even-row]="i % 2 === 0"
+                            style="border-bottom: 1px solid #f1f3f5;">
+                            <td style="padding: 12px;">
+                              <span style="display: flex; align-items: center; gap: 6px;">
+                                <i [class]="'fa-solid ' + getExecutionStatusIcon(run.Success)"
+                                [style.color]="getExecutionStatusColor(run.Success)"></i>
+                                <span [style.color]="getExecutionStatusColor(run.Success)" style="font-weight: 500;">
+                                  {{ run.Success === true ? 'Success' : run.Success === false ? 'Failed' : 'Running' }}
+                                </span>
+                              </span>
+                            </td>
+                            <td style="padding: 12px; color: #495057;">
+                              {{ run.RunAt | date:'short' }}
+                            </td>
+                            <td style="padding: 12px; color: #495057;">
+                              <span style="display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-microchip" style="color: #6c757d;"></i>
+                                {{ run.Model || 'Unknown' }}
+                              </span>
+                            </td>
+                            <td style="padding: 12px; color: #495057;">
+                              {{ formatDuration(run.ExecutionTimeMS) }}
+                            </td>
+                            <td style="padding: 12px; text-align: right; color: #495057;">
+                              {{ formatTokens(run.TokensUsed) }}
+                            </td>
+                            <td style="padding: 12px; text-align: right; color: #495057;">
+                              {{ formatCost(run.TotalCost || run.Cost) }}
+                            </td>
+                            <td style="padding: 12px; text-align: center;">
+                              @if (run.RunType) {
                                                             <span style="padding: 4px 8px; border-radius: 12px; background: #e9ecef; 
                                                                        color: #495057; font-size: 0.85em; font-weight: 500;">
-                                                                {{ run.RunType }}
-                                                            </span>
-                                                        }
-                                                    </td>
-                                                    <td style="padding: 12px; text-align: center;">
-                                                        <button kendoButton 
-                                                            fillMode="flat"
-                                                            size="small"
-                                                            (click)="navigateToPromptRun(run.ID)"
-                                                            title="View details">
-                                                            <i class="fa-solid fa-external-link"></i>
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            }
-                        </div>
-                    </kendo-expansionpanel>
+                                  {{ run.RunType }}
+                                </span>
+                              }
+                            </td>
+                            <td style="padding: 12px; text-align: center;">
+                              <button kendoButton
+                                fillMode="flat"
+                                size="small"
+                                (click)="navigateToPromptRun(run.ID)"
+                                title="View details">
+                                <i class="fa-solid fa-external-link"></i>
+                              </button>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
                 }
-
-                <!-- Cache Expansion Panel -->
-                @if (record.IsSaved && record.EnableCaching) {
-                    <kendo-expansionpanel 
-                        [expanded]="false"
-                        style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-database" style="color: #6c757d;"></i>
-                                Result Cache
-                            </span>
-                        </ng-template>
-                        
-                        <!-- Direct Content Projection -->
-                        <div style="padding: 16px 0;">
-                            <mj-explorer-entity-data-grid
-                                [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AIPromptID')"
-                                [NewRecordValues]="NewRecordValues('AI Result Cache')"
-                                [AllowLoad]="true"
-                                [ShowToolbar]="false">
-                            </mj-explorer-entity-data-grid>
-                        </div>
-                    </kendo-expansionpanel>
-                }
-
-                <!-- Related Items Expansion Panel -->
-                @if (record.IsSaved) {
-                    <kendo-expansionpanel 
-                        [expanded]="false"
-                        style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
-                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-link" style="color: #6c757d;"></i>
-                                Related Items
-                            </span>
-                        </ng-template>
-                        
-                        <!-- Direct Content Projection -->
-                        <div style="padding: 16px 0;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                                <!-- AI Agents -->
-                                <div>
-                                    <h6 style="margin: 0 0 12px 0; color: #495057;">AI Agents Using This Prompt</h6>
-                                    <mj-explorer-entity-data-grid
-                                        [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Prompts','PromptID')"
-                                        [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
-                                        [AllowLoad]="true"
-                                        [ShowToolbar]="false">
-                                    </mj-explorer-entity-data-grid>
-                                </div>
-                                
-                                <!-- Result Selector References -->
-                                <div>
-                                    <h6 style="margin: 0 0 12px 0; color: #495057;">Prompts Using This as Result Selector</h6>
-                                    <mj-explorer-entity-data-grid
-                                        [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','ResultSelectorPromptID')"
-                                        [NewRecordValues]="NewRecordValues('AI Prompts')"
-                                        [AllowLoad]="true"
-                                        [ShowToolbar]="false">
-                                    </mj-explorer-entity-data-grid>
-                                </div>
-                            </div>
-                        </div>
-                    </kendo-expansionpanel>
-                }
-            </div>
+              </div>
+            </kendo-expansionpanel>
+          }
+          <!-- Cache Expansion Panel -->
+          @if (record.IsSaved && record.EnableCaching) {
+            <kendo-expansionpanel
+              [expanded]="false"
+              style="margin-bottom: 12px;">
+              <ng-template kendoExpansionPanelTitleDirective>
+                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                  <i class="fa-solid fa-database" style="color: #6c757d;"></i>
+                  Result Cache
+                </span>
+              </ng-template>
+              <!-- Direct Content Projection -->
+              <div style="padding: 16px 0;">
+                <mj-explorer-entity-data-grid
+                  [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AIPromptID')"
+                  [NewRecordValues]="NewRecordValues('AI Result Cache')"
+                  [AllowLoad]="true"
+                  [ShowToolbar]="false">
+                </mj-explorer-entity-data-grid>
+              </div>
+            </kendo-expansionpanel>
+          }
+          <!-- Related Items Expansion Panel -->
+          @if (record.IsSaved) {
+            <kendo-expansionpanel
+              [expanded]="false"
+              style="margin-bottom: 12px;">
+              <ng-template kendoExpansionPanelTitleDirective>
+                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                  <i class="fa-solid fa-link" style="color: #6c757d;"></i>
+                  Related Items
+                </span>
+              </ng-template>
+              <!-- Direct Content Projection -->
+              <div style="padding: 16px 0;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                  <!-- AI Agents -->
+                  <div>
+                    <h6 style="margin: 0 0 12px 0; color: #495057;">AI Agents Using This Prompt</h6>
+                    <mj-explorer-entity-data-grid
+                      [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Prompts','PromptID')"
+                      [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
+                      [AllowLoad]="true"
+                      [ShowToolbar]="false">
+                    </mj-explorer-entity-data-grid>
+                  </div>
+                  <!-- Result Selector References -->
+                  <div>
+                    <h6 style="margin: 0 0 12px 0; color: #495057;">Prompts Using This as Result Selector</h6>
+                    <mj-explorer-entity-data-grid
+                      [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','ResultSelectorPromptID')"
+                      [NewRecordValues]="NewRecordValues('AI Prompts')"
+                      [AllowLoad]="true"
+                      [ShowToolbar]="false">
+                    </mj-explorer-entity-data-grid>
+                  </div>
+                </div>
+              </div>
+            </kendo-expansionpanel>
+          }
         </div>
+      </div>
     </form>
+  }
 
-    
-    <!-- AI Prompt Test Harness -->
-    @if (showTestHarness) {
-        <kendo-window 
-            [width]="1200" 
-            [height]="800" 
-            [minWidth]="800"
-            [minHeight]="600"
-            [draggable]="true"
-            [resizable]="true"
-            [state]="'default'"
-            (close)="onTestHarnessVisibilityChanged(false)"
-            title="Run AI Prompt - {{ record.Name || 'Untitled' }}">
-            <mj-ai-test-harness
-                [entity]="record"
-                [mode]="'prompt'"
-                [isVisible]="showTestHarness"
-                (visibilityChange)="onTestHarnessVisibilityChanged($event)">
-            </mj-ai-test-harness>
-        </kendo-window>
-    }
+
+  <!-- AI Prompt Test Harness -->
+  @if (showTestHarness) {
+    <kendo-window
+      [width]="1200"
+      [height]="800"
+      [minWidth]="800"
+      [minHeight]="600"
+      [draggable]="true"
+      [resizable]="true"
+      [state]="'default'"
+      (close)="onTestHarnessVisibilityChanged(false)"
+      title="Run AI Prompt - {{ record.Name || 'Untitled' }}">
+      <mj-ai-test-harness
+        [entity]="record"
+        [mode]="'prompt'"
+        [isVisible]="showTestHarness"
+        (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+      </mj-ai-test-harness>
+    </kendo-window>
+  }
 </div>

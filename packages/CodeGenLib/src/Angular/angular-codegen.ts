@@ -456,6 +456,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 ${generationImports.length > 0 ? generationImports + '\n' : ''}
 @RegisterClass(BaseFormComponent, '${entity.Name}') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-${entity.ClassName.toLowerCase()}-form',
     templateUrl: './${entity.ClassName.toLowerCase()}.form.component.html'
 })
@@ -822,9 +823,11 @@ ${indentedFormHTML}
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('${sectionKey}')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
 ${componentCodeWithIndent}
         </div>
+        }
     </mj-collapsible-panel>`
 
             tabs.push({

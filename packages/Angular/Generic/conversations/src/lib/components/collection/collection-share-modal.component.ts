@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { WindowModule } from '@progress/kendo-angular-dialog';
 import { ButtonModule } from '@progress/kendo-angular-buttons';
@@ -16,7 +16,7 @@ interface PermissionDisplay extends CollectionPermission {
 @Component({
     selector: 'mj-collection-share-modal',
     standalone: true,
-    imports: [CommonModule, FormsModule, WindowModule, ButtonModule, UserPickerComponent],
+    imports: [FormsModule, WindowModule, ButtonModule, UserPickerComponent],
     template: `
         @if (isOpen && collection) {
             <kendo-window

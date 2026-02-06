@@ -6,7 +6,7 @@ import { logError, logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
 import { mj_core_schema } from '../Config/config';
 import { SQLLogging } from './sql_logging';
-import * as sql from 'mssql';
+import sql from 'mssql';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic

@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/ai-agents",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: AI Agent Execution and Management",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "npm run test:all",
     "test:all": "npx ts-node src/__tests__/agent-type-prompt-params.test.ts && npx ts-node src/__tests__/action-changes.test.ts && npx ts-node src/__tests__/chat-handling-option.test.ts",
     "test:chat-handling": "npx ts-node src/__tests__/chat-handling-option.test.ts",
@@ -30,15 +31,15 @@
     "@memberjunction/core": "3.4.0",
     "@memberjunction/core-entities": "3.4.0",
     "@memberjunction/global": "3.4.0",
-    "dotenv": "^16.4.1",
-    "lodash": "^4.17.21",
-    "rxjs": "^7.8.1"
+    "dotenv": "^17.2.4",
+    "lodash": "^4.17.23",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@types/lodash": "^4.14.202",
-    "@types/node": "20.14.2",
+    "@types/lodash": "^4.17.23",
+    "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

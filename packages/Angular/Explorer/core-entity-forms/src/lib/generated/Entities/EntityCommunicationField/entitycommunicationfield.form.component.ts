@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Communication Fields') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-entitycommunicationfield-form',
     templateUrl: './entitycommunicationfield.form.component.html'
 })

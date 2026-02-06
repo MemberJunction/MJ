@@ -9,6 +9,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
 @Component({
+  standalone: false,
   selector: 'mj-conversation-list',
   template: `
     <div class="conversation-list" kendoDialogContainer>

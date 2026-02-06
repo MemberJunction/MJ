@@ -20,6 +20,7 @@ export interface ActionParamDialogResult {
  * </mj-action-param-dialog>
  */
 @Component({
+  standalone: false,
     selector: 'mj-action-param-dialog',
     templateUrl: './action-param-dialog.component.html',
     styleUrls: ['./action-param-dialog.component.css']

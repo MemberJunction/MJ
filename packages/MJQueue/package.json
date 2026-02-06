@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/queue",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: Queue Library for managing server side queues",
   "main": "dist/index.js",
@@ -9,14 +10,14 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@memberjunction/ai": "3.4.0",
@@ -25,8 +26,8 @@
     "@memberjunction/core": "3.4.0",
     "@memberjunction/global": "3.4.0",
     "@memberjunction/core-entities": "3.4.0",
-    "@types/uuid": "^9.0.1",
-    "uuid": "^9.0.0"
+    "@types/uuid": "^11.0.0",
+    "uuid": "^13.0.0"
   },
   "repository": {
     "type": "git",

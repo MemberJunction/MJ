@@ -17,6 +17,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
  * in nav items, allowing users to return to the Home dashboard after viewing orphan resources.
  */
 @Component({
+  standalone: false,
   selector: 'mj-home-dashboard',
   templateUrl: './home-dashboard.component.html',
   styleUrls: ['./home-dashboard.component.css']

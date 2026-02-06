@@ -16,6 +16,7 @@ import {
  */
 @RegisterClass(BaseConfigPanel, 'QueryPanelConfigDialog')
 @Component({
+  standalone: false,
     selector: 'mj-query-config-panel',
     templateUrl: './query-config-panel.component.html',
     styleUrls: ['./config-panel.component.css']

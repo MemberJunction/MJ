@@ -49,6 +49,7 @@ import {
  * which handles data loading, filtering, and view mode switching.
  */
 @Component({
+  standalone: false,
   selector: 'mj-data-explorer-dashboard',
   templateUrl: './data-explorer-dashboard.component.html',
   styleUrls: ['./data-explorer-dashboard.component.css'],

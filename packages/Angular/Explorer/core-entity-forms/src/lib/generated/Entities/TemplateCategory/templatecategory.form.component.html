@@ -132,7 +132,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('templateCategories')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Template Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('Template Categories')"
@@ -142,6 +143,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Templates Section -->
@@ -154,7 +156,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('templates')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Templates','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Templates')"
@@ -164,6 +167,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

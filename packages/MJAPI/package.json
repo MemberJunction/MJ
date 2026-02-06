@@ -12,16 +12,16 @@
     "zip": "zip -qr deploy.zip ./node_modules ./dist ./package.json ./config.json",
     "prestart": "mj codegen manifest --output ./src/generated/class-registrations-manifest.ts",
     "prebuild": "mj codegen manifest --output ./src/generated/class-registrations-manifest.ts",
-    "build": "tsc"
+    "build": "tsc && tsc-alias -f"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "dotenv": "16.4.5",
-    "nodemon": "^3.1.4",
+    "dotenv": "17.2.4",
+    "nodemon": "^3.1.11",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@memberjunction/ai": "3.4.0",
@@ -32,8 +32,8 @@
     "@memberjunction/server-bootstrap": "3.4.0",
     "@memberjunction/sqlserver-dataprovider": "3.4.0",
     "@memberjunction/templates": "3.4.0",
-    "axios": "^1.6.7",
-    "class-validator": "^0.14.0",
+    "axios": "^1.13.4",
+    "class-validator": "^0.14.3",
     "mj_generatedactions": "1.0.0",
     "mj_generatedentities": "1.0.0"
   },

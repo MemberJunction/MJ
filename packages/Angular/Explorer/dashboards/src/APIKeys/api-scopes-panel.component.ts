@@ -20,6 +20,7 @@ interface ScopeTreeNode {
  * Manages API Scopes in a hierarchical tree structure
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-scopes-panel',
     templateUrl: './api-scopes-panel.component.html',
     styleUrls: ['./api-scopes-panel.component.css']

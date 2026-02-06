@@ -1,237 +1,272 @@
 <div class="mj-flow-editor" [class.mj-flow-editor--readonly]="ReadOnly" tabindex="0">
 
   <!-- Canvas Toolbar -->
-  <div class="mj-flow-editor-toolbar-area" *ngIf="ShowToolbar">
-    <mj-flow-toolbar
-      [ZoomLevel]="zoomLevel"
-      [ShowGrid]="ShowGrid"
-      [ShowMinimap]="ShowMinimap"
-      [ShowLegend]="ShowLegend"
-      [ReadOnly]="ReadOnly"
-      [PanMode]="panMode"
-      (ZoomInClicked)="ZoomIn()"
-      (ZoomOutClicked)="ZoomOut()"
-      (FitToScreenClicked)="ZoomToFit()"
-      (AutoLayoutClicked)="AutoArrange()"
-      (GridToggled)="onGridToggled($event)"
-      (MinimapToggled)="onMinimapToggled($event)"
-      (LegendToggled)="onLegendToggled($event)"
-      (PanModeToggled)="onPanModeToggled($event)">
-    </mj-flow-toolbar>
-  </div>
+  @if (ShowToolbar) {
+    <div class="mj-flow-editor-toolbar-area">
+      <mj-flow-toolbar
+        [ZoomLevel]="zoomLevel"
+        [ShowGrid]="ShowGrid"
+        [ShowMinimap]="ShowMinimap"
+        [ShowLegend]="ShowLegend"
+        [ReadOnly]="ReadOnly"
+        [PanMode]="panMode"
+        (ZoomInClicked)="ZoomIn()"
+        (ZoomOutClicked)="ZoomOut()"
+        (FitToScreenClicked)="ZoomToFit()"
+        (AutoLayoutClicked)="AutoArrange()"
+        (GridToggled)="onGridToggled($event)"
+        (MinimapToggled)="onMinimapToggled($event)"
+        (LegendToggled)="onLegendToggled($event)"
+        (PanModeToggled)="onPanModeToggled($event)">
+      </mj-flow-toolbar>
+    </div>
+  }
 
   <!-- Main Canvas Area -->
   <div class="mj-flow-editor-canvas-area">
 
     <!-- Palette Sidebar -->
-    <mj-flow-palette
-      *ngIf="ShowPalette && !ReadOnly"
-      [NodeTypes]="NodeTypes">
-    </mj-flow-palette>
+    @if (ShowPalette && !ReadOnly) {
+      <mj-flow-palette
+        [NodeTypes]="NodeTypes">
+      </mj-flow-palette>
+    }
 
     <!-- Foblex Canvas -->
     <div class="mj-flow-editor-canvas"
-         [class.mj-flow-editor-canvas--pan-mode]="panMode">
+      [class.mj-flow-editor-canvas--pan-mode]="panMode">
       <f-flow fDraggable
-              [fDraggableDisabled]="false"
-              [fCanvasMoveTrigger]="canvasMoveTriggerFn"
-              [vCellSize]="GridSize"
-              [hCellSize]="GridSize"
-              [fCellSizeWhileDragging]="ShowGrid"
-              (fLoaded)="onFlowLoaded()"
-              (fCreateConnection)="onCreateConnection($event)"
-              (fReassignConnection)="onReassignConnection($event)"
-              (fCreateNode)="onCreateNode($event)"
-              (fSelectionChange)="onSelectionChange($event)"
-              (fMoveNodes)="onNodesMoved($event)">
+        [fDraggableDisabled]="false"
+        [fCanvasMoveTrigger]="canvasMoveTriggerFn"
+        [vCellSize]="GridSize"
+        [hCellSize]="GridSize"
+        [fCellSizeWhileDragging]="ShowGrid"
+        (fLoaded)="onFlowLoaded()"
+        (fCreateConnection)="onCreateConnection($event)"
+        (fReassignConnection)="onReassignConnection($event)"
+        (fCreateNode)="onCreateNode($event)"
+        (fSelectionChange)="onSelectionChange($event)"
+        (fMoveNodes)="onNodesMoved($event)">
 
         <!-- Background grid — MUST be direct child of f-flow (Foblex content projection requires it) -->
-        <f-background *ngIf="ShowGrid">
-          <f-circle-pattern [color]="'#94a3b8'" [radius]="24"></f-circle-pattern>
-        </f-background>
+        @if (ShowGrid) {
+          <f-background>
+            <f-circle-pattern [color]="'#94a3b8'" [radius]="24"></f-circle-pattern>
+          </f-background>
+        }
 
         <!-- Alignment snap lines — direct child of f-flow -->
-        <f-line-alignment *ngIf="!ReadOnly" [fAlignThreshold]="10"></f-line-alignment>
+        @if (!ReadOnly) {
+          <f-line-alignment [fAlignThreshold]="10"></f-line-alignment>
+        }
 
         <f-canvas fZoom #fZoomRef="fComponent"
-                  [fZoomMinimum]="0.15"
-                  [fZoomMaximum]="3"
-                  [fZoomStep]="0.1"
-                  [position]="canvasPosition"
-                  [scale]="canvasScale"
-                  (fCanvasChange)="onCanvasChange($event)">
+          [fZoomMinimum]="0.15"
+          [fZoomMaximum]="3"
+          [fZoomStep]="0.1"
+          [position]="canvasPosition"
+          [scale]="canvasScale"
+          (fCanvasChange)="onCanvasChange($event)">
 
           <!-- Interactive connection drawing -->
-          <f-connection-for-create *ngIf="!ReadOnly"
-                                   fType="bezier"
-                                   [fRadius]="8"
-                                   [fOffset]="12">
-            <svg viewBox="0 0 10 10" fMarker type="end"
-                 orient="auto" [refX]="9" [refY]="5" [height]="10" [width]="10">
-              <path d="M0 0L10 5L0 10Z" fill="#94a3b8"/>
-            </svg>
-          </f-connection-for-create>
+          @if (!ReadOnly) {
+            <f-connection-for-create
+              fType="bezier"
+              [fRadius]="8"
+              [fOffset]="12">
+              <svg viewBox="0 0 10 10" fMarker type="end"
+                orient="auto" [refX]="9" [refY]="5" [height]="10" [width]="10">
+                <path d="M0 0L10 5L0 10Z" fill="#94a3b8"/>
+              </svg>
+            </f-connection-for-create>
+          }
 
           <!-- Connections -->
-          <f-connection *ngFor="let conn of Connections; trackBy: trackConnectionById"
-                        [fConnectionId]="conn.ID"
-                        [fOutputId]="conn.SourcePortID"
-                        [fInputId]="conn.TargetPortID"
-                        fType="bezier"
-                        fBehavior="fixed"
-                        [fRadius]="8"
-                        [fOffset]="12"
-                        [fSelectionDisabled]="false"
-                        [fReassignDisabled]="ReadOnly"
-                        [style.--connection-color]="conn.Color || '#94a3b8'"
-                        [class.mj-flow-connection-colored]="!!conn.Color"
-                        [class.mj-flow-connection-dashed]="conn.Style === 'dashed'"
-                        [class.mj-flow-connection-dotted]="conn.Style === 'dotted'"
-                        (click)="onConnectionClicked($event, conn)"
-                        (contextmenu)="onConnectionContextMenu($event, conn)">
-            <!-- Arrow marker -->
-            <svg viewBox="0 0 10 10" fMarker type="end"
-                 orient="auto" [refX]="9" [refY]="5" [height]="10" [width]="10">
-              <path d="M0 0L10 5L0 10Z" [attr.fill]="conn.Color || '#94a3b8'"/>
-            </svg>
-            <!-- Connection label -->
-            <div *ngIf="conn.Label" fConnectionContent [position]="0.5"
-                 class="mj-flow-connection-label"
-                 [style.backgroundColor]="ConnectionLabelBackground"
-                 [style.borderColor]="ConnectionLabelBorderColor"
-                 [style.color]="ConnectionLabelTextColor"
-                 [title]="conn.LabelDetail || conn.Label || ''">
-              <i *ngIf="conn.LabelIcon"
-                 class="fa-solid mj-flow-connection-label-icon"
-                 [ngClass]="conn.LabelIcon"
-                 [style.color]="conn.LabelIconColor || 'inherit'"></i>
-              {{ conn.Label }}
-            </div>
-          </f-connection>
+          @for (conn of Connections; track trackConnectionById($index, conn)) {
+            <f-connection
+              [fConnectionId]="conn.ID"
+              [fOutputId]="conn.SourcePortID"
+              [fInputId]="conn.TargetPortID"
+              fType="bezier"
+              fBehavior="fixed"
+              [fRadius]="8"
+              [fOffset]="12"
+              [fSelectionDisabled]="false"
+              [fReassignDisabled]="ReadOnly"
+              [style.--connection-color]="conn.Color || '#94a3b8'"
+              [class.mj-flow-connection-colored]="!!conn.Color"
+              [class.mj-flow-connection-dashed]="conn.Style === 'dashed'"
+              [class.mj-flow-connection-dotted]="conn.Style === 'dotted'"
+              (click)="onConnectionClicked($event, conn)"
+              (contextmenu)="onConnectionContextMenu($event, conn)">
+              <!-- Arrow marker -->
+              <svg viewBox="0 0 10 10" fMarker type="end"
+                orient="auto" [refX]="9" [refY]="5" [height]="10" [width]="10">
+                <path d="M0 0L10 5L0 10Z" [attr.fill]="conn.Color || '#94a3b8'"/>
+              </svg>
+              <!-- Connection label -->
+              @if (conn.Label) {
+                <div fConnectionContent [position]="0.5"
+                  class="mj-flow-connection-label"
+                  [style.backgroundColor]="ConnectionLabelBackground"
+                  [style.borderColor]="ConnectionLabelBorderColor"
+                  [style.color]="ConnectionLabelTextColor"
+                  [title]="conn.LabelDetail || conn.Label || ''">
+                  @if (conn.LabelIcon) {
+                    <i
+                      class="fa-solid mj-flow-connection-label-icon"
+                      [ngClass]="conn.LabelIcon"
+                    [style.color]="conn.LabelIconColor || 'inherit'"></i>
+                  }
+                  {{ conn.Label }}
+                </div>
+              }
+            </f-connection>
+          }
 
           <!-- Nodes -->
-          <mj-flow-node *ngFor="let node of Nodes; trackBy: trackNodeById"
-                        fNode
-                        fDragHandle
-                        [fNodeId]="node.ID"
-                        [fNodePosition]="{ x: node.Position.X, y: node.Position.Y }"
-                        [fNodeDraggingDisabled]="ReadOnly || panMode || node.Locked === true"
-                        [fNodeSelectionDisabled]="panMode"
-                        [fConnectOnNode]="!ReadOnly && !panMode"
-                        [Node]="node"
-                        [TypeConfig]="GetTypeConfig(node.Type)"
-                        [ReadOnly]="ReadOnly"
-                        (contextmenu)="onNodeContextMenu($event, node)">
-          </mj-flow-node>
+          @for (node of Nodes; track trackNodeById($index, node)) {
+            <mj-flow-node
+              fNode
+              fDragHandle
+              [fNodeId]="node.ID"
+              [fNodePosition]="{ x: node.Position.X, y: node.Position.Y }"
+              [fNodeDraggingDisabled]="ReadOnly || panMode || node.Locked === true"
+              [fNodeSelectionDisabled]="panMode"
+              [fConnectOnNode]="!ReadOnly && !panMode"
+              [Node]="node"
+              [TypeConfig]="GetTypeConfig(node.Type)"
+              [ReadOnly]="ReadOnly"
+              (contextmenu)="onNodeContextMenu($event, node)">
+            </mj-flow-node>
+          }
 
         </f-canvas>
 
         <!-- Rubber-band selection — direct child of f-flow -->
-        <f-selection-area *ngIf="!ReadOnly"></f-selection-area>
+        @if (!ReadOnly) {
+          <f-selection-area></f-selection-area>
+        }
 
         <!-- Minimap -->
-        <div *ngIf="ShowMinimap" class="mj-flow-editor-minimap" fDragBlocker>
-          <f-minimap [fMinSize]="1500"></f-minimap>
-        </div>
+        @if (ShowMinimap) {
+          <div class="mj-flow-editor-minimap" fDragBlocker>
+            <f-minimap [fMinSize]="1500"></f-minimap>
+          </div>
+        }
       </f-flow>
 
       <!-- Legend -->
-      <div *ngIf="ShowLegend && Nodes.length > 0" class="mj-flow-editor-legend">
-        <div class="mj-flow-editor-legend-title">Legend</div>
-        <div class="mj-flow-editor-legend-section">
-          <div class="mj-flow-editor-legend-heading">Connections</div>
-          <div class="mj-flow-editor-legend-item">
-            <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#64748b" stroke-width="2"/></svg>
-            <span>Only exit path</span>
+      @if (ShowLegend && Nodes.length > 0) {
+        <div class="mj-flow-editor-legend">
+          <div class="mj-flow-editor-legend-title">Legend</div>
+          <div class="mj-flow-editor-legend-section">
+            <div class="mj-flow-editor-legend-heading">Connections</div>
+            <div class="mj-flow-editor-legend-item">
+              <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#64748b" stroke-width="2"/></svg>
+              <span>Only exit path</span>
+            </div>
+            <div class="mj-flow-editor-legend-item">
+              <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#16a34a" stroke-width="2"/></svg>
+              <i class="fa-solid fa-circle-check" style="color:#16a34a;font-size:10px;"></i>
+              <span>Default (fallback)</span>
+            </div>
+            <div class="mj-flow-editor-legend-item">
+              <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 3"/></svg>
+              <span>Conditional</span>
+            </div>
+            <div class="mj-flow-editor-legend-item">
+              <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#ef4444" stroke-width="2"/></svg>
+              <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;font-size:10px;"></i>
+              <span>Duplicate defaults</span>
+            </div>
           </div>
-          <div class="mj-flow-editor-legend-item">
-            <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#16a34a" stroke-width="2"/></svg>
-            <i class="fa-solid fa-circle-check" style="color:#16a34a;font-size:10px;"></i>
-            <span>Default (fallback)</span>
+          <div class="mj-flow-editor-legend-section">
+            <div class="mj-flow-editor-legend-heading">Step Types</div>
+            <div class="mj-flow-editor-legend-item">
+              <span class="mj-flow-editor-legend-swatch" style="background:#3B82F6"></span>
+              <span>Action</span>
+            </div>
+            <div class="mj-flow-editor-legend-item">
+              <span class="mj-flow-editor-legend-swatch" style="background:#8B5CF6"></span>
+              <span>Prompt</span>
+            </div>
+            <div class="mj-flow-editor-legend-item">
+              <span class="mj-flow-editor-legend-swatch" style="background:#10B981"></span>
+              <span>Sub-Agent</span>
+            </div>
+            <div class="mj-flow-editor-legend-item">
+              <span class="mj-flow-editor-legend-swatch" style="background:#F59E0B"></span>
+              <span>For Each</span>
+            </div>
+            <div class="mj-flow-editor-legend-item">
+              <span class="mj-flow-editor-legend-swatch" style="background:#F97316"></span>
+              <span>While</span>
+            </div>
           </div>
-          <div class="mj-flow-editor-legend-item">
-            <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 3"/></svg>
-            <span>Conditional</span>
-          </div>
-          <div class="mj-flow-editor-legend-item">
-            <svg class="mj-flow-editor-legend-line-svg" width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#ef4444" stroke-width="2"/></svg>
-            <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;font-size:10px;"></i>
-            <span>Duplicate defaults</span>
+          <div class="mj-flow-editor-legend-section">
+            <div class="mj-flow-editor-legend-heading">Borders</div>
+            <div class="mj-flow-editor-legend-item">
+              <span class="mj-flow-editor-legend-box" style="border-color:#16a34a;background:#f0fdf4;"></span>
+              <span>Start node</span>
+            </div>
+            <div class="mj-flow-editor-legend-item">
+              <span class="mj-flow-editor-legend-box" style="border-color:#ef4444;background:#fef2f2;"></span>
+              <i class="fa-solid fa-triangle-exclamation" style="color:#ea580c;font-size:10px;"></i>
+              <span>Missing config</span>
+            </div>
           </div>
         </div>
-        <div class="mj-flow-editor-legend-section">
-          <div class="mj-flow-editor-legend-heading">Step Types</div>
-          <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-swatch" style="background:#3B82F6"></span>
-            <span>Action</span>
-          </div>
-          <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-swatch" style="background:#8B5CF6"></span>
-            <span>Prompt</span>
-          </div>
-          <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-swatch" style="background:#10B981"></span>
-            <span>Sub-Agent</span>
-          </div>
-          <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-swatch" style="background:#F59E0B"></span>
-            <span>For Each</span>
-          </div>
-          <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-swatch" style="background:#F97316"></span>
-            <span>While</span>
-          </div>
-        </div>
-        <div class="mj-flow-editor-legend-section">
-          <div class="mj-flow-editor-legend-heading">Borders</div>
-          <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-box" style="border-color:#16a34a;background:#f0fdf4;"></span>
-            <span>Start node</span>
-          </div>
-          <div class="mj-flow-editor-legend-item">
-            <span class="mj-flow-editor-legend-box" style="border-color:#ef4444;background:#fef2f2;"></span>
-            <i class="fa-solid fa-triangle-exclamation" style="color:#ea580c;font-size:10px;"></i>
-            <span>Missing config</span>
-          </div>
-        </div>
-      </div>
+      }
 
       <!-- Empty state overlay -->
-      <div *ngIf="Nodes.length === 0" class="mj-flow-editor-empty">
-        <div class="mj-flow-editor-empty-content">
-          <i class="fa-solid fa-diagram-project mj-flow-editor-empty-icon"></i>
-          <p class="mj-flow-editor-empty-title" *ngIf="!ReadOnly">Drag steps from the palette to start building your flow</p>
-          <p class="mj-flow-editor-empty-title" *ngIf="ReadOnly">No steps defined for this flow</p>
-          <p class="mj-flow-editor-empty-subtitle" *ngIf="!ReadOnly">
-            Or use auto-layout after adding steps to arrange them automatically
-          </p>
+      @if (Nodes.length === 0) {
+        <div class="mj-flow-editor-empty">
+          <div class="mj-flow-editor-empty-content">
+            <i class="fa-solid fa-diagram-project mj-flow-editor-empty-icon"></i>
+            @if (!ReadOnly) {
+              <p class="mj-flow-editor-empty-title">Drag steps from the palette to start building your flow</p>
+            }
+            @if (ReadOnly) {
+              <p class="mj-flow-editor-empty-title">No steps defined for this flow</p>
+            }
+            @if (!ReadOnly) {
+              <p class="mj-flow-editor-empty-subtitle">
+                Or use auto-layout after adding steps to arrange them automatically
+              </p>
+            }
+          </div>
         </div>
-      </div>
+      }
     </div>
   </div>
 
   <!-- Context Menu -->
-  <div *ngIf="contextMenuVisible"
-       class="mj-flow-context-menu"
-       [style.left.px]="contextMenuX"
-       [style.top.px]="contextMenuY"
-       (click)="$event.stopPropagation()">
-    <button class="mj-flow-context-menu-item" (click)="onContextMenuAction('edit')">
-      <i class="fa-solid fa-pen-to-square"></i>
-      <span>Edit {{ contextMenuTargetType === 'node' ? 'Node' : 'Connection' }}</span>
-    </button>
-    <div class="mj-flow-context-menu-divider"></div>
-    <button class="mj-flow-context-menu-item mj-flow-context-menu-item--danger" (click)="onContextMenuAction('remove')">
-      <i class="fa-solid fa-trash-can"></i>
-      <span>Remove {{ contextMenuTargetType === 'node' ? 'Node' : 'Connection' }}</span>
-    </button>
-  </div>
+  @if (contextMenuVisible) {
+    <div
+      class="mj-flow-context-menu"
+      [style.left.px]="contextMenuX"
+      [style.top.px]="contextMenuY"
+      (click)="$event.stopPropagation()">
+      <button class="mj-flow-context-menu-item" (click)="onContextMenuAction('edit')">
+        <i class="fa-solid fa-pen-to-square"></i>
+        <span>Edit {{ contextMenuTargetType === 'node' ? 'Node' : 'Connection' }}</span>
+      </button>
+      <div class="mj-flow-context-menu-divider"></div>
+      <button class="mj-flow-context-menu-item mj-flow-context-menu-item--danger" (click)="onContextMenuAction('remove')">
+        <i class="fa-solid fa-trash-can"></i>
+        <span>Remove {{ contextMenuTargetType === 'node' ? 'Node' : 'Connection' }}</span>
+      </button>
+    </div>
+  }
 
   <!-- Status Bar -->
-  <mj-flow-status-bar *ngIf="ShowStatusBar"
-                       [NodeCount]="Nodes.length"
-                       [ConnectionCount]="Connections.length"
-                       [SelectedCount]="selectedCount"
-                       [ZoomLevel]="zoomLevel">
-  </mj-flow-status-bar>
+  @if (ShowStatusBar) {
+    <mj-flow-status-bar
+      [NodeCount]="Nodes.length"
+      [ConnectionCount]="Connections.length"
+      [SelectedCount]="selectedCount"
+      [ZoomLevel]="zoomLevel">
+    </mj-flow-status-bar>
+  }
 </div>

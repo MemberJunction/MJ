@@ -20,6 +20,7 @@ import { RegisterClass } from '@memberjunction/global';
  */
 @RegisterClass(BaseResourceComponent, 'MCPResource')
 @Component({
+  standalone: false,
     selector: 'mj-mcp-resource',
     template: `
         <mj-mcp-dashboard></mj-mcp-dashboard>

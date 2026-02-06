@@ -86,9 +86,9 @@ export class JSONTransformAction extends BaseAction {
 
             const expression = expressionParam.Value.toString();
             const transformType = (transformTypeParam?.Value?.toString() || 'JSONPath').toUpperCase();
-            const multiple = multipleParam?.Value?.toString()?.toLowerCase() === 'true' ?? true;
-            const flatten = flattenParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
-            const wrapScalar = wrapScalarParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
+            const multiple = multipleParam?.Value?.toString()?.toLowerCase() === 'true';
+            const flatten = flattenParam?.Value?.toString()?.toLowerCase() === 'true';
+            const wrapScalar = wrapScalarParam?.Value?.toString()?.toLowerCase() === 'true';
 
             let result: any;
 

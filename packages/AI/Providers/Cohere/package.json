@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/ai-cohere",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: Cohere AI Provider - Semantic reranking using Cohere's Rerank API",
   "main": "dist/index.js",
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
@@ -17,12 +18,12 @@
   "dependencies": {
     "@memberjunction/ai": "3.4.0",
     "@memberjunction/global": "3.4.0",
-    "cohere-ai": "^7.14.0"
+    "cohere-ai": "^7.20.0"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
+    "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

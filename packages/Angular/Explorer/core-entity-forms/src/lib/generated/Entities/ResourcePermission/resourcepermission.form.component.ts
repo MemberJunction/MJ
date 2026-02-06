@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Resource Permissions') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-resourcepermission-form',
     templateUrl: './resourcepermission.form.component.html'
 })

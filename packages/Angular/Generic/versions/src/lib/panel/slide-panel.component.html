@@ -1,51 +1,56 @@
 <!-- Backdrop overlay -->
 <div class="sp-backdrop"
-     [class.visible]="IsVisible"
-     [class.sp-dialog-backdrop]="Mode === 'dialog'"
-     (click)="OnBackdropClick()">
+  [class.visible]="IsVisible"
+  [class.sp-dialog-backdrop]="Mode === 'dialog'"
+  (click)="OnBackdropClick()">
 </div>
 
 <!-- Panel (slide-in from right) -->
-<div *ngIf="Mode === 'slide'"
-     class="sp-panel"
-     [class.visible]="IsVisible"
-     [style.width.px]="WidthPx">
-
+@if (Mode === 'slide') {
+  <div
+    class="sp-panel"
+    [class.visible]="IsVisible"
+    [style.width.px]="WidthPx">
     <!-- Resize handle -->
-    <div class="sp-resize-handle" *ngIf="Resizable" (mousedown)="OnResizeStart($event)">
+    @if (Resizable) {
+      <div class="sp-resize-handle" (mousedown)="OnResizeStart($event)">
         <div class="sp-resize-grip"></div>
-    </div>
-
+      </div>
+    }
     <!-- Header (if Title provided) -->
-    <div class="sp-header" *ngIf="Title">
+    @if (Title) {
+      <div class="sp-header">
         <h2 class="sp-title">{{Title}}</h2>
         <button class="sp-close-btn" (click)="OnClose()">
-            <i class="fa-solid fa-xmark"></i>
+          <i class="fa-solid fa-xmark"></i>
         </button>
-    </div>
-
+      </div>
+    }
     <!-- Content projection -->
     <div class="sp-body">
-        <ng-content></ng-content>
+      <ng-content></ng-content>
     </div>
-</div>
+  </div>
+}
 
 <!-- Dialog (centered modal) -->
-<div *ngIf="Mode === 'dialog'"
-     class="sp-dialog"
-     [class.visible]="IsVisible"
-     [style.width.px]="WidthPx">
-
+@if (Mode === 'dialog') {
+  <div
+    class="sp-dialog"
+    [class.visible]="IsVisible"
+    [style.width.px]="WidthPx">
     <!-- Header (if Title provided) -->
-    <div class="sp-header" *ngIf="Title">
+    @if (Title) {
+      <div class="sp-header">
         <h2 class="sp-title">{{Title}}</h2>
         <button class="sp-close-btn" (click)="OnClose()">
-            <i class="fa-solid fa-xmark"></i>
+          <i class="fa-solid fa-xmark"></i>
         </button>
-    </div>
-
+      </div>
+    }
     <!-- Content projection -->
     <div class="sp-body sp-dialog-body">
-        <ng-content select="[dialog-content]"></ng-content>
+      <ng-content select="[dialog-content]"></ng-content>
     </div>
-</div>
+  </div>
+}

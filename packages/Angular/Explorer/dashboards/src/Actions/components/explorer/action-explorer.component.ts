@@ -31,6 +31,7 @@ export function LoadActionExplorerResource() {
 
 @RegisterClass(BaseResourceComponent, 'ActionExplorerResource')
 @Component({
+  standalone: false,
   selector: 'mj-action-explorer',
   templateUrl: './action-explorer.component.html',
   styleUrls: ['./action-explorer.component.css'],

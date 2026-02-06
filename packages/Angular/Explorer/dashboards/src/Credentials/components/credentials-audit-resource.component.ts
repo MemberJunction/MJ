@@ -34,6 +34,7 @@ interface TimelineGroup {
 
 @RegisterClass(BaseResourceComponent, 'CredentialsAuditResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-audit-resource',
     templateUrl: './credentials-audit-resource.component.html',
     styleUrls: ['./credentials-audit-resource.component.css'],

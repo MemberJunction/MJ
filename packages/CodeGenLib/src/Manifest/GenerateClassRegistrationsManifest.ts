@@ -14,7 +14,7 @@
  *   await generateClassRegistrationsManifest({ outputPath: './src/generated/class-manifest.ts' });
  */
 
-import * as ts from 'typescript';
+import ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';

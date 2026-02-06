@@ -148,7 +148,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('fileEntityRecordLinks')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('File Entity Record Links','FileID')"
                 [NewRecordValues]="NewRecordValues('File Entity Record Links')"
@@ -158,6 +159,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: AI Prompt Run Medias Section -->
@@ -170,7 +172,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIPromptRunMedias')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Run Medias','FileID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
@@ -180,6 +183,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Conversation Detail Attachments Section -->
@@ -192,7 +196,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJConversationDetailAttachments')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Attachments','FileID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments')"
@@ -202,6 +207,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Run Medias Section -->
@@ -214,7 +220,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentRunMedias')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Medias','FileID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
@@ -224,6 +231,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

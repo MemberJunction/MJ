@@ -40,6 +40,7 @@ import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
 import { BaseManagedComponent } from '../base-managed-component';
 
 @Component({
+  standalone: false,
   selector: 'skip-chat',
   templateUrl: './skip-chat.component.html',
   styleUrls: ['./skip-chat.component.css'],

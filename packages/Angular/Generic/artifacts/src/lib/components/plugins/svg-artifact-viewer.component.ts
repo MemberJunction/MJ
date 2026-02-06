@@ -7,6 +7,7 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
  * Viewer component for SVG artifacts
  */
 @Component({
+  standalone: false,
   selector: 'mj-svg-artifact-viewer',
   template: `
     <div class="svg-artifact-viewer" [ngClass]="cssClass">

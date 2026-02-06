@@ -14,6 +14,7 @@ import { EncryptionEngineBase } from '@memberjunction/core-entities';
  * components for field rendering/editing when needed.
  */
 @Component({
+  standalone: false,
   selector: 'mj-form-field',
   styleUrl: './base-field-component.css',
   templateUrl: './base-field-component.html',

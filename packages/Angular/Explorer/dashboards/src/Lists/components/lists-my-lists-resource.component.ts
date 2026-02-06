@@ -27,6 +27,7 @@ interface CategoryNode {
 
 @RegisterClass(BaseResourceComponent, 'ListsMyListsResource')
 @Component({
+  standalone: false,
   selector: 'mj-lists-my-lists-resource',
   template: `
     <div class="lists-my-lists-container">
@@ -44,9 +45,11 @@ interface CategoryNode {
               placeholder="Search lists..."
               [(ngModel)]="searchTerm"
               (ngModelChange)="onSearchChange($event)" />
-            <button *ngIf="searchTerm" class="clear-search" (click)="clearSearch()">
-              <i class="fa-solid fa-times"></i>
-            </button>
+            @if (searchTerm) {
+              <button class="clear-search" (click)="clearSearch()">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
           </div>
           <button class="btn-create" (click)="createNewList()">
             <i class="fa-solid fa-plus"></i>
@@ -54,308 +57,350 @@ interface CategoryNode {
           </button>
         </div>
       </div>
-
+    
       <!-- Loading State -->
-      <div class="loading-container" *ngIf="isLoading">
-        <mj-loading text="Loading lists..." size="medium"></mj-loading>
-      </div>
-
+      @if (isLoading) {
+        <div class="loading-container">
+          <mj-loading text="Loading lists..." size="medium"></mj-loading>
+        </div>
+      }
+    
       <!-- Empty State -->
-      <div class="empty-state" *ngIf="!isLoading && filteredLists.length === 0 && !searchTerm">
-        <div class="empty-state-icon-wrapper">
-          <div class="icon-bg"></div>
-          <i class="fa-solid fa-list-check"></i>
+      @if (!isLoading && filteredLists.length === 0 && !searchTerm) {
+        <div class="empty-state">
+          <div class="empty-state-icon-wrapper">
+            <div class="icon-bg"></div>
+            <i class="fa-solid fa-list-check"></i>
+          </div>
+          <h3>No Lists Yet</h3>
+          <p>Lists help you organize and track groups of records across your data.</p>
+          <div class="empty-state-features">
+            <div class="feature-item">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>Group records from any entity</span>
+            </div>
+            <div class="feature-item">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>Organize with categories</span>
+            </div>
+            <div class="feature-item">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>Quick access from any view</span>
+            </div>
+          </div>
+          <button class="btn-create-large" (click)="createNewList()">
+            <i class="fa-solid fa-plus"></i>
+            Create Your First List
+          </button>
         </div>
-        <h3>No Lists Yet</h3>
-        <p>Lists help you organize and track groups of records across your data.</p>
-        <div class="empty-state-features">
-          <div class="feature-item">
-            <i class="fa-solid fa-check-circle"></i>
-            <span>Group records from any entity</span>
-          </div>
-          <div class="feature-item">
-            <i class="fa-solid fa-check-circle"></i>
-            <span>Organize with categories</span>
-          </div>
-          <div class="feature-item">
-            <i class="fa-solid fa-check-circle"></i>
-            <span>Quick access from any view</span>
-          </div>
-        </div>
-        <button class="btn-create-large" (click)="createNewList()">
-          <i class="fa-solid fa-plus"></i>
-          Create Your First List
-        </button>
-      </div>
-
+      }
+    
       <!-- No Results State -->
-      <div class="empty-state search-empty" *ngIf="!isLoading && filteredLists.length === 0 && searchTerm">
-        <div class="empty-state-icon-wrapper search">
-          <i class="fa-solid fa-search"></i>
-        </div>
-        <h3>No Results Found</h3>
-        <p>No lists match "<strong>{{searchTerm}}</strong>"</p>
-        <p class="empty-hint">Try a different search term or clear your search.</p>
-        <button class="btn-clear" (click)="clearSearch()">Clear Search</button>
-      </div>
-
-      <!-- Lists Grid -->
-      <div class="lists-content" *ngIf="!isLoading && filteredLists.length > 0">
-        <!-- View Toggle -->
-        <div class="view-controls">
-          <button
-            class="view-toggle"
-            [class.active]="viewMode === 'grid'"
-            (click)="viewMode = 'grid'"
-            title="Grid view">
-            <i class="fa-solid fa-grip"></i>
-          </button>
-          <button
-            class="view-toggle"
-            [class.active]="viewMode === 'list'"
-            (click)="viewMode = 'list'"
-            title="List view">
-            <i class="fa-solid fa-list"></i>
-          </button>
-          <span class="list-count">{{filteredLists.length}} list{{filteredLists.length !== 1 ? 's' : ''}}</span>
-        </div>
-
-        <!-- Category Tree View -->
-        <div class="category-tree" *ngIf="viewMode === 'list'">
-          <ng-container *ngFor="let node of categoryTree">
-            <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { node: node, depth: 0 }"></ng-container>
-          </ng-container>
-        </div>
-
-        <!-- Grid View -->
-        <div class="lists-grid" *ngIf="viewMode === 'grid'" role="list" aria-label="My Lists">
-          <div
-            class="list-card"
-            *ngFor="let item of filteredLists"
-            (click)="openList(item.list)"
-            (keydown.enter)="openList(item.list)"
-            (keydown.space)="openList(item.list); $event.preventDefault()"
-            tabindex="0"
-            role="listitem"
-            [attr.aria-label]="item.list.Name + ' - ' + item.entityName + ' - ' + item.itemCount + ' items'">
-            <div class="card-header">
-              <div class="card-icon" [style.background-color]="getEntityColor(item.list.Entity)" aria-hidden="true">
-                <i [class]="getEntityIcon(item.list.Entity)"></i>
-              </div>
-              <div class="card-menu">
-                <button class="menu-btn" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
-                  <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <h3 class="card-title">{{item.list.Name}}</h3>
-              <p class="card-description" *ngIf="item.list.Description">{{item.list.Description}}</p>
-              <div class="card-meta">
-                <span class="meta-item">
-                  <i class="fa-solid fa-database"></i>
-                  {{item.entityName}}
-                </span>
-                <span class="meta-item">
-                  <i class="fa-solid fa-hashtag"></i>
-                  {{item.itemCount}} item{{item.itemCount !== 1 ? 's' : ''}}
-                </span>
-              </div>
-            </div>
-            <div class="card-footer">
-              <span class="category-tag" *ngIf="item.list.CategoryID">
-                <i class="fa-solid fa-folder"></i>
-                {{getCategoryName(item.list.CategoryID)}}
-              </span>
-              <span class="date-info">Updated {{formatDate(item.list.__mj_UpdatedAt)}}</span>
-            </div>
+      @if (!isLoading && filteredLists.length === 0 && searchTerm) {
+        <div class="empty-state search-empty">
+          <div class="empty-state-icon-wrapper search">
+            <i class="fa-solid fa-search"></i>
           </div>
+          <h3>No Results Found</h3>
+          <p>No lists match "<strong>{{searchTerm}}</strong>"</p>
+          <p class="empty-hint">Try a different search term or clear your search.</p>
+          <button class="btn-clear" (click)="clearSearch()">Clear Search</button>
         </div>
-      </div>
-
+      }
+    
+      <!-- Lists Grid -->
+      @if (!isLoading && filteredLists.length > 0) {
+        <div class="lists-content">
+          <!-- View Toggle -->
+          <div class="view-controls">
+            <button
+              class="view-toggle"
+              [class.active]="viewMode === 'grid'"
+              (click)="viewMode = 'grid'"
+              title="Grid view">
+              <i class="fa-solid fa-grip"></i>
+            </button>
+            <button
+              class="view-toggle"
+              [class.active]="viewMode === 'list'"
+              (click)="viewMode = 'list'"
+              title="List view">
+              <i class="fa-solid fa-list"></i>
+            </button>
+            <span class="list-count">{{filteredLists.length}} list{{filteredLists.length !== 1 ? 's' : ''}}</span>
+          </div>
+          <!-- Category Tree View -->
+          @if (viewMode === 'list') {
+            <div class="category-tree">
+              @for (node of categoryTree; track node) {
+                <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { node: node, depth: 0 }"></ng-container>
+              }
+            </div>
+          }
+          <!-- Grid View -->
+          @if (viewMode === 'grid') {
+            <div class="lists-grid" role="list" aria-label="My Lists">
+              @for (item of filteredLists; track item) {
+                <div
+                  class="list-card"
+                  (click)="openList(item.list)"
+                  (keydown.enter)="openList(item.list)"
+                  (keydown.space)="openList(item.list); $event.preventDefault()"
+                  tabindex="0"
+                  role="listitem"
+                  [attr.aria-label]="item.list.Name + ' - ' + item.entityName + ' - ' + item.itemCount + ' items'">
+                  <div class="card-header">
+                    <div class="card-icon" [style.background-color]="getEntityColor(item.list.Entity)" aria-hidden="true">
+                      <i [class]="getEntityIcon(item.list.Entity)"></i>
+                    </div>
+                    <div class="card-menu">
+                      <button class="menu-btn" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
+                        <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    <h3 class="card-title">{{item.list.Name}}</h3>
+                    @if (item.list.Description) {
+                      <p class="card-description">{{item.list.Description}}</p>
+                    }
+                    <div class="card-meta">
+                      <span class="meta-item">
+                        <i class="fa-solid fa-database"></i>
+                        {{item.entityName}}
+                      </span>
+                      <span class="meta-item">
+                        <i class="fa-solid fa-hashtag"></i>
+                        {{item.itemCount}} item{{item.itemCount !== 1 ? 's' : ''}}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="card-footer">
+                    @if (item.list.CategoryID) {
+                      <span class="category-tag">
+                        <i class="fa-solid fa-folder"></i>
+                        {{getCategoryName(item.list.CategoryID)}}
+                      </span>
+                    }
+                    <span class="date-info">Updated {{formatDate(item.list.__mj_UpdatedAt)}}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    
       <!-- Category Node Template -->
       <ng-template #categoryNodeTemplate let-node="node" let-depth="depth">
         <div class="category-section" [style.margin-left.px]="depth * 20">
           <!-- Category Header -->
-          <div
-            class="category-header"
-            *ngIf="node.category"
-            (click)="toggleCategory(node)">
-            <i [class]="node.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
-            <i class="fa-solid fa-folder" [class.fa-folder-open]="node.isExpanded"></i>
-            <span class="category-name">{{node.category.Name}}</span>
-            <span class="category-count">{{getListCountInCategory(node)}}</span>
-          </div>
-
-          <!-- Uncategorized Header -->
-          <div
-            class="category-header uncategorized"
-            *ngIf="!node.category && node.lists.length > 0"
-            (click)="toggleCategory(node)">
-            <i [class]="node.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
-            <i class="fa-solid fa-inbox"></i>
-            <span class="category-name">Uncategorized</span>
-            <span class="category-count">{{node.lists.length}}</span>
-          </div>
-
-          <!-- Lists in this category -->
-          <div class="category-lists" *ngIf="node.isExpanded" role="list">
+          @if (node.category) {
             <div
-              class="list-row"
-              *ngFor="let item of node.lists"
-              (click)="openList(item.list)"
-              (keydown.enter)="openList(item.list)"
-              (keydown.space)="openList(item.list); $event.preventDefault()"
-              tabindex="0"
-              role="listitem"
-              [attr.aria-label]="item.list.Name + ' - ' + item.entityName + ' - ' + item.itemCount + ' items'">
-              <div class="list-icon" [style.background-color]="getEntityColor(item.list.Entity)" aria-hidden="true">
-                <i [class]="getEntityIcon(item.list.Entity)"></i>
-              </div>
-              <div class="list-info">
-                <span class="list-name">{{item.list.Name}}</span>
-                <span class="list-meta">{{item.entityName}} &middot; {{item.itemCount}} items</span>
-              </div>
-              <div class="list-actions">
-                <button class="action-btn" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
-                  <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                </button>
-              </div>
+              class="category-header"
+              (click)="toggleCategory(node)">
+              <i [class]="node.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+              <i class="fa-solid fa-folder" [class.fa-folder-open]="node.isExpanded"></i>
+              <span class="category-name">{{node.category.Name}}</span>
+              <span class="category-count">{{getListCountInCategory(node)}}</span>
             </div>
-          </div>
-
+          }
+    
+          <!-- Uncategorized Header -->
+          @if (!node.category && node.lists.length > 0) {
+            <div
+              class="category-header uncategorized"
+              (click)="toggleCategory(node)">
+              <i [class]="node.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+              <i class="fa-solid fa-inbox"></i>
+              <span class="category-name">Uncategorized</span>
+              <span class="category-count">{{node.lists.length}}</span>
+            </div>
+          }
+    
+          <!-- Lists in this category -->
+          @if (node.isExpanded) {
+            <div class="category-lists" role="list">
+              @for (item of node.lists; track item) {
+                <div
+                  class="list-row"
+                  (click)="openList(item.list)"
+                  (keydown.enter)="openList(item.list)"
+                  (keydown.space)="openList(item.list); $event.preventDefault()"
+                  tabindex="0"
+                  role="listitem"
+                  [attr.aria-label]="item.list.Name + ' - ' + item.entityName + ' - ' + item.itemCount + ' items'">
+                  <div class="list-icon" [style.background-color]="getEntityColor(item.list.Entity)" aria-hidden="true">
+                    <i [class]="getEntityIcon(item.list.Entity)"></i>
+                  </div>
+                  <div class="list-info">
+                    <span class="list-name">{{item.list.Name}}</span>
+                    <span class="list-meta">{{item.entityName}} &middot; {{item.itemCount}} items</span>
+                  </div>
+                  <div class="list-actions">
+                    <button class="action-btn" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
+                      <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+    
           <!-- Child categories -->
-          <ng-container *ngIf="node.isExpanded">
-            <ng-container *ngFor="let child of node.children">
+          @if (node.isExpanded) {
+            @for (child of node.children; track child) {
               <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { node: child, depth: depth + 1 }"></ng-container>
-            </ng-container>
-          </ng-container>
+            }
+          }
         </div>
       </ng-template>
-
+    
       <!-- Context Menu (native) -->
-      <div class="context-menu-overlay" *ngIf="showContextMenu" (click)="closeContextMenu()"></div>
-      <div class="context-menu" *ngIf="showContextMenu" [style.top.px]="contextMenuY" [style.left.px]="contextMenuX">
-        <button class="menu-item" (click)="editList()">
-          <i class="fa-solid fa-pen"></i>
-          Edit
-        </button>
-        <button class="menu-item" (click)="duplicateList()">
-          <i class="fa-solid fa-copy"></i>
-          Duplicate
-        </button>
-        <div class="menu-divider"></div>
-        <button class="menu-item danger" (click)="confirmDeleteList()">
-          <i class="fa-solid fa-trash"></i>
-          Delete
-        </button>
-      </div>
-
-      <!-- Create/Edit List Dialog (native modal) -->
-      <div class="modal-overlay" *ngIf="showCreateDialog" (click)="closeCreateDialog()"></div>
-      <div class="modal-dialog" *ngIf="showCreateDialog">
-        <div class="modal-header">
-          <h3>{{editingList ? 'Edit List' : 'Create New List'}}</h3>
-          <button class="modal-close" (click)="closeCreateDialog()">
-            <i class="fa-solid fa-times"></i>
+      @if (showContextMenu) {
+        <div class="context-menu-overlay" (click)="closeContextMenu()"></div>
+      }
+      @if (showContextMenu) {
+        <div class="context-menu" [style.top.px]="contextMenuY" [style.left.px]="contextMenuX">
+          <button class="menu-item" (click)="editList()">
+            <i class="fa-solid fa-pen"></i>
+            Edit
+          </button>
+          <button class="menu-item" (click)="duplicateList()">
+            <i class="fa-solid fa-copy"></i>
+            Duplicate
+          </button>
+          <div class="menu-divider"></div>
+          <button class="menu-item danger" (click)="confirmDeleteList()">
+            <i class="fa-solid fa-trash"></i>
+            Delete
           </button>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Name *</label>
-            <input
-              type="text"
-              [(ngModel)]="newListName"
-              placeholder="Enter list name"
-              class="form-input" />
+      }
+    
+      <!-- Create/Edit List Dialog (native modal) -->
+      @if (showCreateDialog) {
+        <div class="modal-overlay" (click)="closeCreateDialog()"></div>
+      }
+      @if (showCreateDialog) {
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h3>{{editingList ? 'Edit List' : 'Create New List'}}</h3>
+            <button class="modal-close" (click)="closeCreateDialog()">
+              <i class="fa-solid fa-times"></i>
+            </button>
           </div>
-          <div class="form-group">
-            <label>Description</label>
-            <textarea
-              [(ngModel)]="newListDescription"
-              placeholder="Optional description"
-              class="form-input"
-              rows="3"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Entity *</label>
-            <div class="custom-select-wrapper">
+          <div class="modal-body">
+            <div class="form-group">
+              <label>Name *</label>
               <input
-                #entityInput
                 type="text"
-                [(ngModel)]="entitySearchTerm"
-                (ngModelChange)="filterEntities($event)"
-                (focus)="openEntityDropdown(entityInput)"
-                placeholder="Search and select an entity"
+                [(ngModel)]="newListName"
+                placeholder="Enter list name"
+                class="form-input" />
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea
+                [(ngModel)]="newListDescription"
+                placeholder="Optional description"
                 class="form-input"
-                [disabled]="!!editingList" />
+              rows="3"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Entity *</label>
+              <div class="custom-select-wrapper">
+                <input
+                  #entityInput
+                  type="text"
+                  [(ngModel)]="entitySearchTerm"
+                  (ngModelChange)="filterEntities($event)"
+                  (focus)="openEntityDropdown(entityInput)"
+                  placeholder="Search and select an entity"
+                  class="form-input"
+                  [disabled]="!!editingList" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <select [(ngModel)]="selectedCategoryId" class="form-input">
+                <option [ngValue]="null">No category</option>
+                @for (cat of flatCategories; track cat) {
+                  <option [ngValue]="cat.ID">{{cat.displayName}}</option>
+                }
+              </select>
             </div>
           </div>
-          <div class="form-group">
-            <label>Category</label>
-            <select [(ngModel)]="selectedCategoryId" class="form-input">
-              <option [ngValue]="null">No category</option>
-              <option *ngFor="let cat of flatCategories" [ngValue]="cat.ID">{{cat.displayName}}</option>
-            </select>
+          <div class="modal-footer">
+            <button
+              class="btn-primary"
+              (click)="saveList()"
+              [disabled]="!newListName || !selectedEntityId || isSaving">
+              @if (isSaving) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              }
+              {{isSaving ? 'Saving...' : (editingList ? 'Save' : 'Create')}}
+            </button>
+            <button class="btn-secondary" (click)="closeCreateDialog()" [disabled]="isSaving">Cancel</button>
           </div>
         </div>
-        <div class="modal-footer">
-          <button
-            class="btn-primary"
-            (click)="saveList()"
-            [disabled]="!newListName || !selectedEntityId || isSaving">
-            <i *ngIf="isSaving" class="fa-solid fa-spinner fa-spin"></i>
-            {{isSaving ? 'Saving...' : (editingList ? 'Save' : 'Create')}}
-          </button>
-          <button class="btn-secondary" (click)="closeCreateDialog()" [disabled]="isSaving">Cancel</button>
-        </div>
-      </div>
-
+      }
+    
       <!-- Delete Confirmation Dialog -->
-      <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()"></div>
-      <div class="modal-dialog confirm-dialog" *ngIf="showDeleteConfirm">
-        <div class="modal-header">
-          <h3>Delete List</h3>
-          <button class="modal-close" (click)="cancelDelete()">
-            <i class="fa-solid fa-times"></i>
-          </button>
+      @if (showDeleteConfirm) {
+        <div class="modal-overlay" (click)="cancelDelete()"></div>
+      }
+      @if (showDeleteConfirm) {
+        <div class="modal-dialog confirm-dialog">
+          <div class="modal-header">
+            <h3>Delete List</h3>
+            <button class="modal-close" (click)="cancelDelete()">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p>Are you sure you want to delete "<strong>{{deleteListName}}</strong>"?</p>
+            <p class="warning-text">This will also remove all items in the list.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-danger" (click)="deleteList()">
+              @if (isDeleting) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              }
+              {{isDeleting ? 'Deleting...' : 'Delete'}}
+            </button>
+            <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          </div>
         </div>
-        <div class="modal-body">
-          <p>Are you sure you want to delete "<strong>{{deleteListName}}</strong>"?</p>
-          <p class="warning-text">This will also remove all items in the list.</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-danger" (click)="deleteList()">
-            <i *ngIf="isDeleting" class="fa-solid fa-spinner fa-spin"></i>
-            {{isDeleting ? 'Deleting...' : 'Delete'}}
-          </button>
-          <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
-        </div>
-      </div>
-
+      }
+    
       <!-- Entity Dropdown Portal (fixed positioning) -->
-      <div
-        class="entity-dropdown-portal"
-        *ngIf="showEntityDropdown && !editingList"
-        [style.top.px]="entityDropdownPosition.top"
-        [style.left.px]="entityDropdownPosition.left"
-        [style.width.px]="entityDropdownPosition.width"
-        [class.dropdown-above]="entityDropdownPosition.openAbove">
-        <div class="entity-dropdown-backdrop" (click)="closeEntityDropdown()"></div>
-        <div class="entity-dropdown-content" [class.open-above]="entityDropdownPosition.openAbove">
-          <div
-            class="dropdown-item"
-            *ngFor="let entity of filteredEntities"
-            (click)="selectEntity(entity)">
-            {{entity.Name}}
-          </div>
-          <div class="dropdown-empty" *ngIf="filteredEntities.length === 0">
-            No entities found
+      @if (showEntityDropdown && !editingList) {
+        <div
+          class="entity-dropdown-portal"
+          [style.top.px]="entityDropdownPosition.top"
+          [style.left.px]="entityDropdownPosition.left"
+          [style.width.px]="entityDropdownPosition.width"
+          [class.dropdown-above]="entityDropdownPosition.openAbove">
+          <div class="entity-dropdown-backdrop" (click)="closeEntityDropdown()"></div>
+          <div class="entity-dropdown-content" [class.open-above]="entityDropdownPosition.openAbove">
+            @for (entity of filteredEntities; track entity) {
+              <div
+                class="dropdown-item"
+                (click)="selectEntity(entity)">
+                {{entity.Name}}
+              </div>
+            }
+            @if (filteredEntities.length === 0) {
+              <div class="dropdown-empty">
+                No entities found
+              </div>
+            }
           </div>
         </div>
-      </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     :host {
       display: flex;

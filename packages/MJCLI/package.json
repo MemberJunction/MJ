@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/cli",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction command line tools",
   "keywords": [
@@ -26,7 +27,7 @@
     "/oclif.manifest.json"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "prepack": "npm run build && oclif manifest && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
     "version": "oclif readme && git add README.md"
@@ -50,7 +51,7 @@
     }
   },
   "dependencies": {
-    "@inquirer/prompts": "^5.0.1",
+    "@inquirer/prompts": "^8.2.0",
     "@memberjunction/ai-cli": "3.4.0",
     "@memberjunction/codegen-lib": "3.4.0",
     "@memberjunction/config": "3.4.0",
@@ -60,32 +61,32 @@
     "@memberjunction/query-gen": "3.4.0",
     "@memberjunction/sqlserver-dataprovider": "3.4.0",
     "@memberjunction/testing-cli": "3.4.0",
-    "@oclif/core": "^3",
-    "@oclif/plugin-help": "^6",
-    "@oclif/plugin-version": "^2.0.17",
-    "@oclif/plugin-warn-if-update-available": "^3.0.16",
+    "@oclif/core": "^3.27.0",
+    "@oclif/plugin-help": "^6.2.37",
+    "@oclif/plugin-version": "^2.2.36",
+    "@oclif/plugin-warn-if-update-available": "^3.1.55",
     "ajv": "^8.12.0",
-    "ajv-formats": "^2.1.1",
-    "chalk": "^4.1.2",
+    "ajv-formats": "^3.0.1",
+    "chalk": "^5.6.2",
     "cosmiconfig": "9.0.0",
-    "dotenv": "16.4.5",
-    "fast-glob": "^3.3.2",
-    "figlet": "^1.7.0",
-    "fs-extra": "^11.2.0",
+    "dotenv": "17.2.4",
+    "fast-glob": "^3.3.3",
+    "figlet": "^1.10.0",
+    "fs-extra": "^11.3.3",
     "node-flyway": "0.0.13",
     "ora-classic": "^5.4.2",
-    "recast": "^0.23.9",
-    "simple-git": "^3.27.0",
-    "zod": "^3.23.4"
+    "recast": "^0.23.11",
+    "simple-git": "^3.30.0",
+    "zod": "~3.24.4"
   },
   "devDependencies": {
     "@oclif/prettier-config": "^0.2.1",
-    "@types/figlet": "^1.5.8",
+    "@types/figlet": "^1.7.0",
     "@types/fs-extra": "^11.0.4",
-    "oclif": "^4",
-    "rimraf": "5.0.7",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "oclif": "^4.22.73",
+    "rimraf": "6.1.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=20.0.0"

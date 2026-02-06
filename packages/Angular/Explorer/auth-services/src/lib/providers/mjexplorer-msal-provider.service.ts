@@ -53,7 +53,6 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         },
         cache: {
           cacheLocation: 'localStorage',
-          storeAuthStateInCookie: false,
         },
       }),
     },

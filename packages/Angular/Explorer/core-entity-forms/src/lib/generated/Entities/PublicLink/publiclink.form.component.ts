@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Public Links') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-publiclink-form',
     templateUrl: './publiclink.form.component.html'
 })

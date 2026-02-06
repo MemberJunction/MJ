@@ -3,124 +3,133 @@ import { TestRunSummary } from '../../services/testing-instrumentation.service';
 import { OracleResult } from './oracle-breakdown-table.component';
 
 @Component({
+  standalone: false,
   selector: 'app-test-run-detail-panel',
   template: `
-    <div class="test-run-detail-panel" *ngIf="testRun">
-      <div class="detail-header">
-        <div class="header-left">
-          <h3>{{ testRun.testName }}</h3>
-          <div class="header-meta">
-            <span class="test-type">
-              <i class="fa-solid fa-tag"></i>
-              {{ testRun.testType }}
-            </span>
-            <span class="run-time">
-              <i class="fa-solid fa-clock"></i>
-              {{ testRun.runDateTime | date:'medium' }}
-            </span>
-          </div>
-        </div>
-        <div class="header-right">
-          <app-test-status-badge [status]="testRun.status"></app-test-status-badge>
-          <button class="close-btn" (click)="onClose()" *ngIf="closeable">
-            <i class="fa-solid fa-times"></i>
-          </button>
-        </div>
-      </div>
-
-      <div class="detail-content">
-        <!-- Main Metrics -->
-        <div class="metrics-section">
-          <div class="metric-card">
-            <div class="metric-label">Score</div>
-            <app-score-indicator [score]="testRun.score" [showBar]="true" [showIcon]="true"></app-score-indicator>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Cost</div>
-            <app-cost-display [cost]="testRun.cost" [showIcon]="true"></app-cost-display>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Duration</div>
-            <div class="metric-value">{{ formatDuration(testRun.duration) }}</div>
-          </div>
-          <div class="metric-card" *ngIf="testRun.targetType">
-            <div class="metric-label">Target</div>
-            <div class="metric-value target-link" (click)="onViewTarget()">
-              <i class="fa-solid fa-external-link-alt"></i>
-              {{ testRun.targetType }}
+    @if (testRun) {
+      <div class="test-run-detail-panel">
+        <div class="detail-header">
+          <div class="header-left">
+            <h3>{{ testRun.testName }}</h3>
+            <div class="header-meta">
+              <span class="test-type">
+                <i class="fa-solid fa-tag"></i>
+                {{ testRun.testType }}
+              </span>
+              <span class="run-time">
+                <i class="fa-solid fa-clock"></i>
+                {{ testRun.runDateTime | date:'medium' }}
+              </span>
             </div>
           </div>
-        </div>
-
-        <!-- Oracle Breakdown -->
-        <div class="oracle-section" *ngIf="oracleResults && oracleResults.length > 0">
-          <app-oracle-breakdown-table [results]="oracleResults"></app-oracle-breakdown-table>
-        </div>
-
-        <!-- Result Details -->
-        <div class="details-section" *ngIf="resultDetails">
-          <div class="section-header">
-            <h4>
-              <i class="fa-solid fa-file-alt"></i>
-              Result Details
-            </h4>
-            <button class="toggle-btn" (click)="toggleResultDetails()">
-              <i class="fa-solid" [class.fa-chevron-down]="!showResultDetails" [class.fa-chevron-up]="showResultDetails"></i>
-            </button>
-          </div>
-          <div class="details-content" *ngIf="showResultDetails">
-            <pre class="json-viewer">{{ formatJSON(resultDetails) }}</pre>
+          <div class="header-right">
+            <app-test-status-badge [status]="testRun.status"></app-test-status-badge>
+            @if (closeable) {
+              <button class="close-btn" (click)="onClose()">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
           </div>
         </div>
-
-        <!-- Feedback Section -->
-        <div class="feedback-section">
-          <div class="section-header">
-            <h4>
-              <i class="fa-solid fa-comment-dots"></i>
-              Human Feedback
-            </h4>
-          </div>
-          <div class="feedback-form">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Rating (1-10)</label>
-                <input
-                  type="number"
-                  [(ngModel)]="feedbackRating"
-                  min="1"
-                  max="10"
-                  class="rating-input"
-                />
-              </div>
-              <div class="form-group">
-                <label>Is Correct?</label>
-                <div class="checkbox-group">
-                  <label class="checkbox-label">
-                    <input type="checkbox" [(ngModel)]="feedbackIsCorrect" />
-                    <span>Yes, the automated result is correct</span>
-                  </label>
+        <div class="detail-content">
+          <!-- Main Metrics -->
+          <div class="metrics-section">
+            <div class="metric-card">
+              <div class="metric-label">Score</div>
+              <app-score-indicator [score]="testRun.score" [showBar]="true" [showIcon]="true"></app-score-indicator>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Cost</div>
+              <app-cost-display [cost]="testRun.cost" [showIcon]="true"></app-cost-display>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Duration</div>
+              <div class="metric-value">{{ formatDuration(testRun.duration) }}</div>
+            </div>
+            @if (testRun.targetType) {
+              <div class="metric-card">
+                <div class="metric-label">Target</div>
+                <div class="metric-value target-link" (click)="onViewTarget()">
+                  <i class="fa-solid fa-external-link-alt"></i>
+                  {{ testRun.targetType }}
                 </div>
               </div>
+            }
+          </div>
+          <!-- Oracle Breakdown -->
+          @if (oracleResults && oracleResults.length > 0) {
+            <div class="oracle-section">
+              <app-oracle-breakdown-table [results]="oracleResults"></app-oracle-breakdown-table>
             </div>
-            <div class="form-group">
-              <label>Comments</label>
-              <textarea
-                [(ngModel)]="feedbackComments"
-                rows="3"
-                class="comments-textarea"
-                placeholder="Enter your feedback comments..."
-              ></textarea>
+          }
+          <!-- Result Details -->
+          @if (resultDetails) {
+            <div class="details-section">
+              <div class="section-header">
+                <h4>
+                  <i class="fa-solid fa-file-alt"></i>
+                  Result Details
+                </h4>
+                <button class="toggle-btn" (click)="toggleResultDetails()">
+                  <i class="fa-solid" [class.fa-chevron-down]="!showResultDetails" [class.fa-chevron-up]="showResultDetails"></i>
+                </button>
+              </div>
+              @if (showResultDetails) {
+                <div class="details-content">
+                  <pre class="json-viewer">{{ formatJSON(resultDetails) }}</pre>
+                </div>
+              }
             </div>
-            <button class="submit-btn" (click)="onSubmitFeedback()" [disabled]="submittingFeedback">
-              <i class="fa-solid fa-paper-plane"></i>
-              {{ submittingFeedback ? 'Submitting...' : 'Submit Feedback' }}
-            </button>
+          }
+          <!-- Feedback Section -->
+          <div class="feedback-section">
+            <div class="section-header">
+              <h4>
+                <i class="fa-solid fa-comment-dots"></i>
+                Human Feedback
+              </h4>
+            </div>
+            <div class="feedback-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Rating (1-10)</label>
+                  <input
+                    type="number"
+                    [(ngModel)]="feedbackRating"
+                    min="1"
+                    max="10"
+                    class="rating-input"
+                    />
+                </div>
+                <div class="form-group">
+                  <label>Is Correct?</label>
+                  <div class="checkbox-group">
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="feedbackIsCorrect" />
+                      <span>Yes, the automated result is correct</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Comments</label>
+                <textarea
+                  [(ngModel)]="feedbackComments"
+                  rows="3"
+                  class="comments-textarea"
+                  placeholder="Enter your feedback comments..."
+                ></textarea>
+              </div>
+              <button class="submit-btn" (click)="onSubmitFeedback()" [disabled]="submittingFeedback">
+                <i class="fa-solid fa-paper-plane"></i>
+                {{ submittingFeedback ? 'Submitting...' : 'Submit Feedback' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     .test-run-detail-panel {
       background: white;

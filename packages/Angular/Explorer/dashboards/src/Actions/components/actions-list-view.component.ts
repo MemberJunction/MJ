@@ -11,6 +11,7 @@ interface CategoryTreeNode {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-actions-list-view',
   templateUrl: './actions-list-view.component.html',
   styleUrls: ['./actions-list-view.component.css']

@@ -27,6 +27,7 @@ const SHORTCUTS_SETTINGS_KEY = '__mj.Testing.ShowKeyboardShortcuts';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Suite Runs')
 @Component({
+  standalone: false,
   selector: 'mj-test-suite-run-form',
   templateUrl: './test-suite-run-form.component.html',
   styleUrls: ['./test-suite-run-form.component.css'],

@@ -68,7 +68,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('reports')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Reports','OutputTriggerTypeID')"
                 [NewRecordValues]="NewRecordValues('Reports')"
@@ -78,6 +79,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

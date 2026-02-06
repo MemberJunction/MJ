@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Integration URL Formats') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-integrationurlformat-form',
     templateUrl: './integrationurlformat.form.component.html'
 })

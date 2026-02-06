@@ -7,6 +7,7 @@ import { FlowNode, FlowNodeTypeConfig } from '../interfaces/flow-types';
  * Contains input/output ports via Foblex's fNodeInput/fNodeOutput directives.
  */
 @Component({
+  standalone: false,
   selector: 'mj-flow-node',
   templateUrl: './flow-node.component.html',
   styleUrls: ['./flow-node.component.css'],

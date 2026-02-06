@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/ai-lmstudio",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction Wrapper for LM Studio AI - Local Inference Engine",
   "main": "dist/index.js",
@@ -9,19 +10,19 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@memberjunction/ai": "3.4.0",
     "@memberjunction/global": "3.4.0",
-    "@lmstudio/sdk": "^1.4.0"
+    "@lmstudio/sdk": "^1.5.0"
   },
   "repository": {
     "type": "git",

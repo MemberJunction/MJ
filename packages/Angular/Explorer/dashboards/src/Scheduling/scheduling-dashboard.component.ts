@@ -15,6 +15,7 @@ interface SchedulingDashboardState {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-dashboard',
   templateUrl: './scheduling-dashboard.component.html',
   styleUrls: ['./scheduling-dashboard.component.css'],

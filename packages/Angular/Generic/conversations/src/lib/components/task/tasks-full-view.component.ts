@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { UserInfo, RunView } from '@memberjunction/core';
 import { TaskEntity, TaskDependencyEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
 import { TaskComponent } from '@memberjunction/ng-tasks';
@@ -13,7 +13,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 @Component({
   selector: 'mj-tasks-full-view',
   standalone: true,
-  imports: [CommonModule, TaskComponent],
+  imports: [TaskComponent],
   template: `
     <div class="tasks-full-view">
       @if (!selectedTask) {

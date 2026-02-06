@@ -8,6 +8,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
  */
 @RegisterClass(BaseResourceComponent, 'TestingExplorerResource')
 @Component({
+  standalone: false,
   selector: 'mj-testing-explorer-resource',
   template: `
     <div class="resource-container">

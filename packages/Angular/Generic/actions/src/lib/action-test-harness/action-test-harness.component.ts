@@ -20,6 +20,7 @@ export interface ActionResult {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-action-test-harness',
     templateUrl: './action-test-harness.component.html',
     styleUrls: ['./action-test-harness.component.css']

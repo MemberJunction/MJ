@@ -17,6 +17,7 @@ import { Component, Output, EventEmitter, Input, ChangeDetectorRef, ElementRef, 
  * </mj-generic-dialog>
  */
 @Component({
+  standalone: false,
   selector: 'mj-generic-dialog',
   templateUrl: './dialog.component.html',
   styleUrls: ['./dialog.component.css']

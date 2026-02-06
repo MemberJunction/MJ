@@ -61,6 +61,7 @@ export interface CreateAgentResult {
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-create-agent-panel',
     templateUrl: './create-agent-panel.component.html',
     styleUrls: ['./create-agent-panel.component.css'],

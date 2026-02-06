@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/communication-engine",
+  "type": "module",
   "version": "3.4.0",
   "description": "MemberJunction: Core Communication Framework Library",
   "main": "dist/index.js",
@@ -9,14 +10,14 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@memberjunction/global": "3.4.0",
@@ -24,7 +25,7 @@
     "@memberjunction/templates": "3.4.0",
     "@memberjunction/core-entities": "3.4.0",
     "@memberjunction/communication-types": "3.4.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.2"
   },
   "repository": {
     "type": "git",

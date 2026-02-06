@@ -1,204 +1,214 @@
 <!-- View Config Panel - Compact layout with tree dropdown and collapsible sections -->
 <div class="config-panel config-panel--compact">
-    <!-- View Selection (Primary) -->
-    <div class="form-group">
-        <label>
-            <i class="fa-solid fa-table"></i>
-            Select View
-            <span class="optional-tag">(or enter entity below)</span>
-        </label>
-        <mj-tree-dropdown
-            #viewDropdown
-            [BranchConfig]="ViewCategoryConfig"
-            [LeafConfig]="ViewLeafConfig"
-            [Value]="ViewIdAsKey"
-            [SelectableTypes]="'leaf'"
-            [SelectionMode]="'single'"
-            [Placeholder]="'Search or browse saved views...'"
-            [EnableSearch]="true"
-            (SelectionChange)="onViewSelection($event)"
-            [class.error]="viewError">
-        </mj-tree-dropdown>
-        <span class="form-error" *ngIf="viewError">{{ viewError }}</span>
-        <span class="form-hint" *ngIf="!viewError && !viewId && !entityName">
-            Select a saved view or enter an entity name below
-        </span>
-        <span class="form-hint form-hint--selected" *ngIf="!viewError && viewId">
-            <i class="fa-solid fa-check"></i>
-            Selected: {{ viewName }}
-        </span>
-    </div>
+  <!-- View Selection (Primary) -->
+  <div class="form-group">
+    <label>
+      <i class="fa-solid fa-table"></i>
+      Select View
+      <span class="optional-tag">(or enter entity below)</span>
+    </label>
+    <mj-tree-dropdown
+      #viewDropdown
+      [BranchConfig]="ViewCategoryConfig"
+      [LeafConfig]="ViewLeafConfig"
+      [Value]="ViewIdAsKey"
+      [SelectableTypes]="'leaf'"
+      [SelectionMode]="'single'"
+      [Placeholder]="'Search or browse saved views...'"
+      [EnableSearch]="true"
+      (SelectionChange)="onViewSelection($event)"
+      [class.error]="viewError">
+    </mj-tree-dropdown>
+    @if (viewError) {
+      <span class="form-error">{{ viewError }}</span>
+    }
+    @if (!viewError && !viewId && !entityName) {
+      <span class="form-hint">
+        Select a saved view or enter an entity name below
+      </span>
+    }
+    @if (!viewError && viewId) {
+      <span class="form-hint form-hint--selected">
+        <i class="fa-solid fa-check"></i>
+        Selected: {{ viewName }}
+      </span>
+    }
+  </div>
 
-    <!-- Entity Name (Alternative) -->
-    <div class="form-group">
-        <label for="entityName">
-            <i class="fa-solid fa-database"></i>
-            Entity Name
-            <span class="optional-tag">(alternative to view)</span>
-        </label>
-        <input
-            type="text"
-            id="entityName"
-            [(ngModel)]="entityName"
-            (input)="onEntityChange()"
-            placeholder="e.g., Accounts, Contacts, Users"
-            class="form-input">
-        <span class="form-hint">
-            Use this to display all records from an entity without a saved view
-        </span>
-    </div>
+  <!-- Entity Name (Alternative) -->
+  <div class="form-group">
+    <label for="entityName">
+      <i class="fa-solid fa-database"></i>
+      Entity Name
+      <span class="optional-tag">(alternative to view)</span>
+    </label>
+    <input
+      type="text"
+      id="entityName"
+      [(ngModel)]="entityName"
+      (input)="onEntityChange()"
+      placeholder="e.g., Accounts, Contacts, Users"
+      class="form-input">
+    <span class="form-hint">
+      Use this to display all records from an entity without a saved view
+    </span>
+  </div>
 
-    <!-- Title (Optional) -->
-    <div class="form-group">
-        <label for="partTitle">
-            <i class="fa-solid fa-heading"></i>
-            Part Title
-            <span class="optional-tag">(optional)</span>
-        </label>
-        <input
-            type="text"
-            id="partTitle"
-            [(ngModel)]="title"
-            (input)="onTitleChange()"
-            [placeholder]="viewName || entityName ? 'Default: ' + (viewName || entityName) : 'Enter a custom title'"
-            class="form-input">
-        <span class="form-hint">Leave empty to use view/entity name as title</span>
-    </div>
+  <!-- Title (Optional) -->
+  <div class="form-group">
+    <label for="partTitle">
+      <i class="fa-solid fa-heading"></i>
+      Part Title
+      <span class="optional-tag">(optional)</span>
+    </label>
+    <input
+      type="text"
+      id="partTitle"
+      [(ngModel)]="title"
+      (input)="onTitleChange()"
+      [placeholder]="viewName || entityName ? 'Default: ' + (viewName || entityName) : 'Enter a custom title'"
+      class="form-input">
+    <span class="form-hint">Leave empty to use view/entity name as title</span>
+  </div>
 
-    <!-- Display Options (Collapsible) -->
-    <div class="collapsible-section">
-        <button
-            type="button"
-            class="collapsible-header"
-            (click)="toggleDisplayOptions()"
-            [attr.aria-expanded]="showDisplayOptions">
-            <span class="collapsible-title">
-                <i class="fa-solid fa-grip"></i>
-                Display Options
-            </span>
-            <i class="collapsible-chevron fa-solid"
-               [class.fa-chevron-down]="!showDisplayOptions"
-               [class.fa-chevron-up]="showDisplayOptions"></i>
-        </button>
+  <!-- Display Options (Collapsible) -->
+  <div class="collapsible-section">
+    <button
+      type="button"
+      class="collapsible-header"
+      (click)="toggleDisplayOptions()"
+      [attr.aria-expanded]="showDisplayOptions">
+      <span class="collapsible-title">
+        <i class="fa-solid fa-grip"></i>
+        Display Options
+      </span>
+      <i class="collapsible-chevron fa-solid"
+        [class.fa-chevron-down]="!showDisplayOptions"
+      [class.fa-chevron-up]="showDisplayOptions"></i>
+    </button>
 
-        <div class="collapsible-content" *ngIf="showDisplayOptions">
-            <!-- Display Mode -->
-            <div class="form-group">
-                <label>Display Mode</label>
-                <div class="radio-group radio-group--horizontal">
-                    <label class="radio-option radio-option--compact" [class.selected]="displayMode === 'grid'">
-                        <input
-                            type="radio"
-                            name="displayMode"
-                            value="grid"
-                            [(ngModel)]="displayMode"
-                            (change)="onDisplayModeChange()">
-                        <span class="radio-mark"></span>
-                        <span class="radio-label">
-                            <i class="fa-solid fa-table-cells"></i>
-                            Grid
-                        </span>
-                    </label>
-                    <label class="radio-option radio-option--compact" [class.selected]="displayMode === 'cards'">
-                        <input
-                            type="radio"
-                            name="displayMode"
-                            value="cards"
-                            [(ngModel)]="displayMode"
-                            (change)="onDisplayModeChange()">
-                        <span class="radio-mark"></span>
-                        <span class="radio-label">
-                            <i class="fa-solid fa-id-card"></i>
-                            Cards
-                        </span>
-                    </label>
-                    <label class="radio-option radio-option--compact" [class.selected]="displayMode === 'timeline'">
-                        <input
-                            type="radio"
-                            name="displayMode"
-                            value="timeline"
-                            [(ngModel)]="displayMode"
-                            (change)="onDisplayModeChange()">
-                        <span class="radio-mark"></span>
-                        <span class="radio-label">
-                            <i class="fa-solid fa-timeline"></i>
-                            Timeline
-                        </span>
-                    </label>
-                </div>
-                <span class="form-hint">{{ getDisplayModeDescription() }}</span>
-            </div>
-
-            <!-- Selection Options -->
-            <div class="form-group">
-                <div class="checkbox-group checkbox-group--compact">
-                    <label class="checkbox-option checkbox-option--compact">
-                        <input
-                            type="checkbox"
-                            [(ngModel)]="allowModeSwitch"
-                            (change)="onOptionChange()">
-                        <span class="checkbox-mark"></span>
-                        <span class="checkbox-label">Allow Mode Switch</span>
-                    </label>
-                    <label class="checkbox-option checkbox-option--compact">
-                        <input
-                            type="checkbox"
-                            [(ngModel)]="enableSelection"
-                            (change)="onOptionChange()">
-                        <span class="checkbox-mark"></span>
-                        <span class="checkbox-label">Enable Selection</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Selection Mode -->
-            <div class="form-group" *ngIf="enableSelection">
-                <label for="selectionMode">Selection Mode</label>
-                <select
-                    id="selectionMode"
-                    class="form-select"
-                    [(ngModel)]="selectionMode"
-                    (change)="onSelectionModeChange()">
-                    <option value="single">Single Selection</option>
-                    <option value="multiple">Multiple Selection</option>
-                </select>
-            </div>
+    @if (showDisplayOptions) {
+      <div class="collapsible-content">
+        <!-- Display Mode -->
+        <div class="form-group">
+          <label>Display Mode</label>
+          <div class="radio-group radio-group--horizontal">
+            <label class="radio-option radio-option--compact" [class.selected]="displayMode === 'grid'">
+              <input
+                type="radio"
+                name="displayMode"
+                value="grid"
+                [(ngModel)]="displayMode"
+                (change)="onDisplayModeChange()">
+              <span class="radio-mark"></span>
+              <span class="radio-label">
+                <i class="fa-solid fa-table-cells"></i>
+                Grid
+              </span>
+            </label>
+            <label class="radio-option radio-option--compact" [class.selected]="displayMode === 'cards'">
+              <input
+                type="radio"
+                name="displayMode"
+                value="cards"
+                [(ngModel)]="displayMode"
+                (change)="onDisplayModeChange()">
+              <span class="radio-mark"></span>
+              <span class="radio-label">
+                <i class="fa-solid fa-id-card"></i>
+                Cards
+              </span>
+            </label>
+            <label class="radio-option radio-option--compact" [class.selected]="displayMode === 'timeline'">
+              <input
+                type="radio"
+                name="displayMode"
+                value="timeline"
+                [(ngModel)]="displayMode"
+                (change)="onDisplayModeChange()">
+              <span class="radio-mark"></span>
+              <span class="radio-label">
+                <i class="fa-solid fa-timeline"></i>
+                Timeline
+              </span>
+            </label>
+          </div>
+          <span class="form-hint">{{ getDisplayModeDescription() }}</span>
         </div>
-    </div>
-
-    <!-- Advanced Options (Collapsible) -->
-    <div class="collapsible-section">
-        <button
-            type="button"
-            class="collapsible-header"
-            (click)="toggleAdvancedOptions()"
-            [attr.aria-expanded]="showAdvancedOptions">
-            <span class="collapsible-title">
-                <i class="fa-solid fa-filter"></i>
-                Advanced Filtering
-            </span>
-            <i class="collapsible-chevron fa-solid"
-               [class.fa-chevron-down]="!showAdvancedOptions"
-               [class.fa-chevron-up]="showAdvancedOptions"></i>
-        </button>
-
-        <div class="collapsible-content" *ngIf="showAdvancedOptions">
-            <!-- Extra Filter -->
-            <div class="form-group">
-                <label for="extraFilter">
-                    Extra Filter
-                </label>
-                <input
-                    type="text"
-                    id="extraFilter"
-                    [(ngModel)]="extraFilter"
-                    (input)="onFilterChange()"
-                    placeholder="e.g., Status = 'Active'"
-                    class="form-input">
-                <span class="form-hint">
-                    SQL WHERE clause to filter records (applied in addition to view filters)
-                </span>
-            </div>
+        <!-- Selection Options -->
+        <div class="form-group">
+          <div class="checkbox-group checkbox-group--compact">
+            <label class="checkbox-option checkbox-option--compact">
+              <input
+                type="checkbox"
+                [(ngModel)]="allowModeSwitch"
+                (change)="onOptionChange()">
+              <span class="checkbox-mark"></span>
+              <span class="checkbox-label">Allow Mode Switch</span>
+            </label>
+            <label class="checkbox-option checkbox-option--compact">
+              <input
+                type="checkbox"
+                [(ngModel)]="enableSelection"
+                (change)="onOptionChange()">
+              <span class="checkbox-mark"></span>
+              <span class="checkbox-label">Enable Selection</span>
+            </label>
+          </div>
         </div>
-    </div>
+        <!-- Selection Mode -->
+        @if (enableSelection) {
+          <div class="form-group">
+            <label for="selectionMode">Selection Mode</label>
+            <select
+              id="selectionMode"
+              class="form-select"
+              [(ngModel)]="selectionMode"
+              (change)="onSelectionModeChange()">
+              <option value="single">Single Selection</option>
+              <option value="multiple">Multiple Selection</option>
+            </select>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Advanced Options (Collapsible) -->
+  <div class="collapsible-section">
+    <button
+      type="button"
+      class="collapsible-header"
+      (click)="toggleAdvancedOptions()"
+      [attr.aria-expanded]="showAdvancedOptions">
+      <span class="collapsible-title">
+        <i class="fa-solid fa-filter"></i>
+        Advanced Filtering
+      </span>
+      <i class="collapsible-chevron fa-solid"
+        [class.fa-chevron-down]="!showAdvancedOptions"
+      [class.fa-chevron-up]="showAdvancedOptions"></i>
+    </button>
+
+    @if (showAdvancedOptions) {
+      <div class="collapsible-content">
+        <!-- Extra Filter -->
+        <div class="form-group">
+          <label for="extraFilter">
+            Extra Filter
+          </label>
+          <input
+            type="text"
+            id="extraFilter"
+            [(ngModel)]="extraFilter"
+            (input)="onFilterChange()"
+            placeholder="e.g., Status = 'Active'"
+            class="form-input">
+          <span class="form-hint">
+            SQL WHERE clause to filter records (applied in addition to view filters)
+          </span>
+        </div>
+      </div>
+    }
+  </div>
 </div>

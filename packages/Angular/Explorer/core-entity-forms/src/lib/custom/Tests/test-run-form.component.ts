@@ -28,6 +28,7 @@ interface CheckResult {
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Runs')
 @Component({
+  standalone: false,
   selector: 'mj-test-run-form',
   templateUrl: './test-run-form.component.html',
   styleUrls: ['./test-run-form.component.css'],

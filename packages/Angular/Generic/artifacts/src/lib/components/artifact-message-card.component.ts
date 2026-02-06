@@ -10,6 +10,7 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
  * Shows artifact icon, name, type badge, and version. Click to open full artifact viewer.
  */
 @Component({
+  standalone: false,
   selector: 'mj-artifact-message-card',
   template: `
     <div class="artifact-message-card" [class.loading]="loading" [class.error]="error">

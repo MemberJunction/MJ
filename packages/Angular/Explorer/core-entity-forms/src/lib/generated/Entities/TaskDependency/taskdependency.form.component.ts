@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Task Dependencies') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-taskdependency-form',
     templateUrl: './taskdependency.form.component.html'
 })

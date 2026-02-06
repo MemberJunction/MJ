@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Recommendation Providers') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-recommendationprovider-form',
     templateUrl: './recommendationprovider.form.component.html'
 })

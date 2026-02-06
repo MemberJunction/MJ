@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Output Delivery Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-outputdeliverytype-form',
     templateUrl: './outputdeliverytype.form.component.html'
 })

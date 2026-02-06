@@ -15,17 +15,22 @@ import { MJInitializationService } from '../services/initialization.service';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '../bootstrap.types';
 
 @Component({
+  standalone: false,
   selector: 'mj-auth-shell',
   template: `
     <div class="mj-auth-shell">
-      <ng-content *ngIf="!HasError || showValidationOnly"></ng-content>
-
-      <div *ngIf="HasError && !showValidationOnly" class="error-container">
-        <h2>Error</h2>
-        <p>{{ ErrorMessage }}</p>
-      </div>
+      @if (!HasError || showValidationOnly) {
+        <ng-content></ng-content>
+      }
+    
+      @if (HasError && !showValidationOnly) {
+        <div class="error-container">
+          <h2>Error</h2>
+          <p>{{ ErrorMessage }}</p>
+        </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .mj-auth-shell {
       width: 100%;

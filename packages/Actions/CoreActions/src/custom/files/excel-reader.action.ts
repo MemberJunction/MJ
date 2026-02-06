@@ -96,7 +96,7 @@ export class ExcelReaderAction extends BaseFileHandlerAction {
 
             // Read Excel file
             const workbook = new ExcelJS.Workbook();
-            await workbook.xlsx.load(excelBuffer);
+            await workbook.xlsx.load(excelBuffer as unknown as ArrayBuffer);
 
             // Get the target worksheet
             let worksheet: ExcelJS.Worksheet;

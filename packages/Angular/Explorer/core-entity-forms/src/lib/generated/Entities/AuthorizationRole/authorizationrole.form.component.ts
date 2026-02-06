@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Authorization Roles') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-authorizationrole-form',
     templateUrl: './authorizationrole.form.component.html'
 })

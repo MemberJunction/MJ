@@ -9,7 +9,7 @@ import * as path from 'path';
 const hook: Hook<'init'> = async function () {
   // Load environment variables from .env file in repo root
   const envPath = path.resolve(process.cwd(), '.env');
-  dotenv.config({ path: envPath });
+  dotenv.config({ path: envPath, quiet: true });
 };
 
 export default hook;

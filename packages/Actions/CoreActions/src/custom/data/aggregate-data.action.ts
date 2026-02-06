@@ -147,7 +147,7 @@ export class AggregateDataAction extends BaseAction {
             }
 
             // Get other parameters
-            const includeEmptyGroups = includeEmptyGroupsParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
+            const includeEmptyGroups = includeEmptyGroupsParam?.Value?.toString()?.toLowerCase() === 'true';
             const sortBy = sortByParam?.Value?.toString();
             const sortOrder = (sortOrderParam?.Value?.toString() || 'asc').toLowerCase();
 

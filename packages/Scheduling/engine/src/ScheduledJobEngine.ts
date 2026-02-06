@@ -3,6 +3,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
+import os from 'os';
 import {
     UserInfo,
     Metadata,
@@ -603,7 +604,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
      */
     private getInstanceIdentifier(): string {
         // Use hostname + process ID for unique instance identification
-        const os = require('os');
         return `${os.hostname()}-${process.pid}`;
     }
 

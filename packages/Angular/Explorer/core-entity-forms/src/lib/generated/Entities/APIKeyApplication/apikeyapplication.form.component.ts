@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: API Key Applications') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-apikeyapplication-form',
     templateUrl: './apikeyapplication.form.component.html'
 })

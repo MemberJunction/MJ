@@ -192,7 +192,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entities')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Application Entities','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('Application Entities')"
@@ -202,6 +203,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Application Settings Section -->
@@ -214,7 +216,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('applicationSettings')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Application Settings','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('Application Settings')"
@@ -224,6 +227,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- User Applications Section -->
@@ -236,7 +240,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userApplications')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Applications','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('User Applications')"
@@ -246,6 +251,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Dashboards Section -->
@@ -258,7 +264,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('dashboards')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Dashboards','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('Dashboards')"
@@ -268,6 +275,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Dashboard User Preferences Section -->
@@ -280,7 +288,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJDashboardUserPreferences')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User Preferences','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard User Preferences')"
@@ -290,6 +299,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

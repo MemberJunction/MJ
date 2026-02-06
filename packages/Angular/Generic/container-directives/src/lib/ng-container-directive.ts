@@ -14,6 +14,7 @@ import { Directive, ViewContainerRef } from '@angular/core';
  * // Now you can use this.container.viewContainerRef for dynamic component creation
  */
 @Directive({
+  standalone: false,
   selector: '[mjContainer]',
 })
 export class Container {

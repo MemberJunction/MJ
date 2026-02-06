@@ -20,6 +20,7 @@ export interface AgentPromptAdvancedSettingsFormData {
  * Manages execution order, context behavior, and other advanced prompt configurations.
  */
 @Component({
+  standalone: false,
   selector: 'mj-agent-prompt-advanced-settings-dialog',
   templateUrl: './agent-prompt-advanced-settings-dialog.component.html',
   styleUrls: ['./agent-prompt-advanced-settings-dialog.component.css']

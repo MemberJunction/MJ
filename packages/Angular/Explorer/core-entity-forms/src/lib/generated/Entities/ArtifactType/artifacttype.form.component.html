@@ -144,7 +144,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentArtifactTypes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','ArtifactTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
@@ -154,6 +155,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Conversation Artifacts Section -->
@@ -166,7 +168,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJConversationArtifacts')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifacts','ArtifactTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Artifacts')"
@@ -176,6 +179,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Artifact Types Section -->
@@ -188,7 +192,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJArtifactTypes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Types','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Artifact Types')"
@@ -198,6 +203,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Artifacts Section -->
@@ -210,7 +216,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJArtifacts')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','TypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
@@ -220,6 +227,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- AI Agents Section -->
@@ -232,7 +240,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgents')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','DefaultArtifactTypeID')"
                 [NewRecordValues]="NewRecordValues('AI Agents')"
@@ -242,6 +251,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

@@ -3,6 +3,7 @@ import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from
 import { DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 
 @Component({
+  standalone: false,
   selector: 'mj-data-context',
   templateUrl: './ng-data-context.component.html',
   styleUrls: ['./ng-data-context.component.css']

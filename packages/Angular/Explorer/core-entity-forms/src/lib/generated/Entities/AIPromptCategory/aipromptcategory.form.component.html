@@ -104,7 +104,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIPrompts')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','CategoryID')"
                 [NewRecordValues]="NewRecordValues('AI Prompts')"
@@ -114,6 +115,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- AI Prompt Categories Section -->
@@ -126,7 +128,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIPromptCategories')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Prompt Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('AI Prompt Categories')"
@@ -136,6 +139,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

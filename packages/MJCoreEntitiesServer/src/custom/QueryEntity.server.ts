@@ -6,7 +6,8 @@ import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { BaseEmbeddings, EmbedTextParams, GetAIAPIKey } from "@memberjunction/ai";
 import { EmbedTextLocalHelper } from "./util";
-import { Parser } from 'node-sql-parser';
+import NodeSqlParser from 'node-sql-parser';
+const { Parser } = NodeSqlParser;
 import * as nunjucks from 'nunjucks';
 
 interface ExtractedParameter {

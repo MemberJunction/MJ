@@ -11,49 +11,57 @@ import { Subject } from 'rxjs';
  */
 @RegisterClass(BaseDashboardPart, 'ArtifactPanelRenderer')
 @Component({
+  standalone: false,
     selector: 'mj-artifact-part',
     template: `
         <div class="artifact-part" [class.loading]="IsLoading" [class.error]="ErrorMessage">
-            <!-- Loading state -->
-            <div class="loading-state" *ngIf="IsLoading">
-                <mj-loading text="Loading artifact..."></mj-loading>
+          <!-- Loading state -->
+          @if (IsLoading) {
+            <div class="loading-state">
+              <mj-loading text="Loading artifact..."></mj-loading>
             </div>
-
-            <!-- Error state -->
-            <div class="error-state" *ngIf="ErrorMessage && !IsLoading">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                <span>{{ ErrorMessage }}</span>
+          }
+        
+          <!-- Error state -->
+          @if (ErrorMessage && !IsLoading) {
+            <div class="error-state">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <span>{{ ErrorMessage }}</span>
             </div>
-
-            <!-- No artifact configured -->
-            <div class="empty-state" *ngIf="!IsLoading && !ErrorMessage && !hasArtifact">
-                <i class="fa-solid fa-palette"></i>
-                <h4>No Artifact Selected</h4>
-                <p>Click the configure button to select an artifact for this part.</p>
+          }
+        
+          <!-- No artifact configured -->
+          @if (!IsLoading && !ErrorMessage && !hasArtifact) {
+            <div class="empty-state">
+              <i class="fa-solid fa-palette"></i>
+              <h4>No Artifact Selected</h4>
+              <p>Click the configure button to select an artifact for this part.</p>
             </div>
-
-            <!-- Artifact Viewer Panel -->
+          }
+        
+          <!-- Artifact Viewer Panel -->
+          @if (!IsLoading && !ErrorMessage && hasArtifact && artifactId) {
             <mj-artifact-viewer-panel
-                *ngIf="!IsLoading && !ErrorMessage && hasArtifact && artifactId"
-                [artifactId]="artifactId"
-                [currentUser]="currentUser"
-                [environmentId]="environmentId"
-                [versionNumber]="versionNumber"
-                [showSaveToCollection]="false"
-                [showHeader]="showHeader"
-                [showTabs]="showTabs"
-                [showCloseButton]="showCloseButton"
-                [showMaximizeButton]="showMaximizeButton"
-                [viewContext]="null"
-                [canShare]="false"
-                [canEdit]="false"
-                [isMaximized]="false"
-                [refreshTrigger]="refreshTrigger"
-                (navigateToLink)="onNavigateToLink($event)"
-                (openEntityRecord)="onOpenEntityRecord($event)">
+              [artifactId]="artifactId"
+              [currentUser]="currentUser"
+              [environmentId]="environmentId"
+              [versionNumber]="versionNumber"
+              [showSaveToCollection]="false"
+              [showHeader]="showHeader"
+              [showTabs]="showTabs"
+              [showCloseButton]="showCloseButton"
+              [showMaximizeButton]="showMaximizeButton"
+              [viewContext]="null"
+              [canShare]="false"
+              [canEdit]="false"
+              [isMaximized]="false"
+              [refreshTrigger]="refreshTrigger"
+              (navigateToLink)="onNavigateToLink($event)"
+              (openEntityRecord)="onOpenEntityRecord($event)">
             </mj-artifact-viewer-panel>
+          }
         </div>
-    `,
+        `,
     styles: [`
         :host {
             display: block;

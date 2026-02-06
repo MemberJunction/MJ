@@ -15,6 +15,7 @@ export function LoadActionsScheduleResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ActionsScheduleResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduled-actions',
   template: `
     <div class="scheduled-actions-placeholder" >

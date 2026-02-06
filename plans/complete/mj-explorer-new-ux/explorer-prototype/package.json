@@ -20,7 +20,7 @@
     "@angular/router": "18.0.2",
     "@fortawesome/fontawesome-free": "^7.1.0",
     "golden-layout": "^2.6.0",
-    "rxjs": "~7.8.0",
+    "rxjs": "~7.8.2",
     "tslib": "^2.3.0",
     "zone.js": "~0.14.3"
   },
@@ -29,12 +29,12 @@
     "@angular/cli": "18.0.3",
     "@angular/compiler-cli": "18.0.2",
     "@types/jasmine": "~5.1.0",
-    "jasmine-core": "~5.1.0",
-    "karma": "~6.4.0",
+    "jasmine-core": "~6.0.1",
+    "karma": "~6.4.4",
     "karma-chrome-launcher": "~3.2.0",
-    "karma-coverage": "~2.2.0",
+    "karma-coverage": "~2.2.1",
     "karma-jasmine": "~5.1.0",
-    "karma-jasmine-html-reporter": "~2.1.0",
-    "typescript": "~5.4.2"
+    "karma-jasmine-html-reporter": "~2.2.0",
+    "typescript": "~5.9.3"
   }
 }

@@ -66,6 +66,7 @@ import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.co
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-viewer',
   templateUrl: './entity-viewer.component.html',
   styleUrls: ['./entity-viewer.component.css'],

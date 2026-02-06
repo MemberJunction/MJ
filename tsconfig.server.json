@@ -2,27 +2,17 @@
   "compilerOptions": {
     "module": "es2022",
     "target": "es2022",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "sourceMap": true,
     "experimentalDecorators": true,
     "resolveJsonModule": true,
-    "composite": true,
     "declaration": true,
     "declarationMap": true,
     "esModuleInterop": true,
-    "lib": ["es2022", "esnext.asynciterable"],
-    "removeComments": true,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
-    "strictFunctionTypes": true,
-    "noImplicitThis": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
+    "lib": ["es2022", "esnext.asynciterable", "dom"],
     "allowSyntheticDefaultImports": true,
     "emitDecoratorMetadata": true,
     "skipLibCheck": true,
-    "strict": true
+    "useDefineForClassFields": false
   }
 }

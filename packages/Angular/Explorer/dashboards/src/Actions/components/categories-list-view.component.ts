@@ -10,6 +10,7 @@ interface CategoryWithStats extends ActionCategoryEntity {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-categories-list-view',
   template: `
     <div class="categories-list-view" mjFillContainer>

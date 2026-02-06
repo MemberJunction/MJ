@@ -13,6 +13,7 @@ export function LoadFileBrowserResource() {
  */
 @RegisterClass(BaseResourceComponent, 'FileBrowserResource')
 @Component({
+  standalone: false,
   selector: 'mj-file-browser-resource',
   template: `
     <div class="file-browser-resource-container">

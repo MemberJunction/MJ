@@ -122,7 +122,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('auditLogTypes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Audit Log Types','ParentID')"
                 [NewRecordValues]="NewRecordValues('Audit Log Types')"
@@ -132,6 +133,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Audit Logs Section -->
@@ -144,7 +146,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('auditLogs')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs','AuditLogTypeName')"
                 [NewRecordValues]="NewRecordValues('Audit Logs')"
@@ -154,6 +157,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

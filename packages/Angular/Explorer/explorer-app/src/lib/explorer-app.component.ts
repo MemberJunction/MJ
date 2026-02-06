@@ -18,6 +18,7 @@ import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initia
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
 
 @Component({
+  standalone: false,
   selector: 'mj-explorer-app',
   templateUrl: './explorer-app.component.html',
   styleUrls: ['./explorer-app.component.css'],

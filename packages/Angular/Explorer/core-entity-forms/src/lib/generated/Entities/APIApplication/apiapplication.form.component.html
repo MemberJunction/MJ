@@ -86,7 +86,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAPIApplicationScopes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Application Scopes','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('MJ: API Application Scopes')"
@@ -96,6 +97,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: API Key Usage Logs Section -->
@@ -108,7 +110,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAPIKeyUsageLogs')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Usage Logs','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('MJ: API Key Usage Logs')"
@@ -118,6 +121,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: API Key Applications Section -->
@@ -130,7 +134,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAPIKeyApplications')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Applications','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('MJ: API Key Applications')"
@@ -140,6 +145,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

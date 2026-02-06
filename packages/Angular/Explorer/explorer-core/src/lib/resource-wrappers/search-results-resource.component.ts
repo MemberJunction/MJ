@@ -10,6 +10,7 @@ export function LoadSearchResultsResource() {
 
 @RegisterClass(BaseResourceComponent, 'SearchResultsResource')
 @Component({
+  standalone: false,
     selector: 'mj-search-results-resource',
     template: `<mj-single-search-result [entity]="Data.Configuration.Entity" [searchInput]="Data.Configuration.SearchInput" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></mj-single-search-result>`
 })

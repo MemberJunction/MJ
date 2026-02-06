@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: O Auth Auth Server Metadata Caches') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-oauthauthservermetadatacache-form',
     templateUrl: './oauthauthservermetadatacache.form.component.html'
 })

@@ -7,7 +7,7 @@
     "MemberJunction": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
+    "build": "tsc && tsc-alias -f && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
     "start": "node dist/index.js"
   },
   "files": [
@@ -33,22 +33,22 @@
     "@memberjunction/global": "3.4.0",
     "@memberjunction/server": "3.4.0",
     "@memberjunction/sqlserver-dataprovider": "3.4.0",
-    "@modelcontextprotocol/sdk": "^1.25.3",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "cosmiconfig": "9.0.0",
-    "dotenv": "^16.4.1",
-    "express": "^4.21.2",
-    "jsonwebtoken": "9.0.2",
-    "jwks-rsa": "^3.0.0",
-    "mssql": "^11.0.1",
-    "yargs": "^17.7.2",
-    "zod": "^3.25.0"
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "jsonwebtoken": "9.0.3",
+    "jwks-rsa": "^3.2.2",
+    "mssql": "^12.2.0",
+    "yargs": "^18.0.0",
+    "zod": "~3.24.4"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
-    "@types/yargs": "^17.0.32",
-    "@types/node": "20.14.2",
+    "@types/express": "^5.0.6",
+    "@types/yargs": "^17.0.35",
+    "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

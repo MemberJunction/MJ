@@ -17,6 +17,7 @@ interface RecordLabel {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-record-changes',
   templateUrl: './ng-record-changes.component.html',
   styleUrls: ['./ng-record-changes.component.css'],

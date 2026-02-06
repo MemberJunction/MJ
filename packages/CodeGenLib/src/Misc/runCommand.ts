@@ -2,7 +2,7 @@ import { CommandInfo } from '../Config/config';
 import { spawn, ChildProcess } from 'child_process';
 import { logError, logStatus } from './status_logging';
 import path from 'path';
-import treeKill = require('tree-kill');
+import treeKill from 'tree-kill';
 import { RegisterClass } from '@memberjunction/global';
 
 export type CommandExecutionResult = {

@@ -46,6 +46,7 @@ import { BaseDashboardPart } from '../parts/base-dashboard-part';
  * Navigation events are bubbled up for the parent component to handle.
  */
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-viewer',
     templateUrl: './dashboard-viewer.component.html',
     styleUrls: ['./dashboard-viewer.component.css'],

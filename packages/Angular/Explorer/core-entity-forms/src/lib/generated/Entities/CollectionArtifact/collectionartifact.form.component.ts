@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Collection Artifacts') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-collectionartifact-form',
     templateUrl: './collectionartifact.form.component.html'
 })

@@ -17,7 +17,7 @@ import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogError
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, SafeExpressionEvaluator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -7181,7 +7181,6 @@ The context is now within limits. Please retry your request with the recovered c
         const errors = [];
         let iterationCount = 0;
 
-        const { SafeExpressionEvaluator } = require('@memberjunction/global');
         const evaluator = new SafeExpressionEvaluator();
 
         // ACTUAL WHILE LOOP - simple and clear!

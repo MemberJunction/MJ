@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { AIVendorEntity, AIModelTypeEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
@@ -44,6 +44,7 @@ export function LoadAIModelsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIModelsResource')
 @Component({
+  standalone: false,
   selector: 'app-model-management',
   templateUrl: './model-management.component.html',
   styleUrls: ['./model-management.component.css']
@@ -115,7 +116,8 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   constructor(
     private sharedService: SharedService,
-    private navigationService: NavigationService
+    private navigationService: NavigationService,
+    private cdr: ChangeDetectorRef
   ) {
     super();
 
@@ -314,6 +316,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
         clearInterval(this.loadingMessageInterval);
       }
       this.NotifyLoadComplete();
+      this.cdr.detectChanges();
     }
   }
 

@@ -15,7 +15,7 @@ LoadCerebrasLLM(); // tree shaking prevention
 LoadBettyBotLLM(); // tree shaking prevention
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ quiet: true });
 
 export interface AICliConfig {
   // Database settings from mj.config.cjs

@@ -24,6 +24,7 @@ export interface ActionDisplayItem extends ActionEntity {
  * Features searchable action list, category filtering, and multi-select capability.
  */
 @Component({
+  standalone: false,
   selector: 'mj-add-action-dialog',
   templateUrl: './add-action-dialog.component.html',
   styleUrls: ['./add-action-dialog.component.css']

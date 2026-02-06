@@ -24,6 +24,7 @@ export function LoadViewResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ViewResource')
 @Component({
+  standalone: false,
     selector: 'mj-userview-resource',
     templateUrl: './view-resource.component.html',
     styles: [`

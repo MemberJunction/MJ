@@ -23,6 +23,7 @@ export interface ConnectionDialogResult {
  * MCP Connection Dialog Component
  */
 @Component({
+  standalone: false,
     selector: 'mj-mcp-connection-dialog',
     templateUrl: './mcp-connection-dialog.component.html',
     styleUrls: ['./mcp-connection-dialog.component.css']

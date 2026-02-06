@@ -198,7 +198,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJMCPServerConnectionTools')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Connection Tools','MCPServerToolID')"
                 [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Tools')"
@@ -208,6 +209,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: MCP Tool Execution Logs Section -->
@@ -220,7 +222,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJMCPToolExecutionLogs')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Tool Execution Logs','MCPServerToolID')"
                 [NewRecordValues]="NewRecordValues('MJ: MCP Tool Execution Logs')"
@@ -230,6 +233,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

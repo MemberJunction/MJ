@@ -11,6 +11,7 @@ import { ActionParamDialogComponent, ActionResultCodeDialogComponent } from '@me
 
 @RegisterClass(BaseFormComponent, 'Actions')
 @Component({
+  standalone: false,
     selector: 'mj-action-form',
     templateUrl: './action-form.component.html',
     styleUrls: ['./action-form.component.css']

@@ -1247,7 +1247,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             for await (const chunk of req) {
                 chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
             }
-            const bodyBuffer = Buffer.concat(chunks);
+            const bodyBuffer = Buffer.concat(chunks as unknown as Uint8Array[]);
 
             // Create a new readable stream from the buffered body for the transport
             const { Readable } = await import('stream');

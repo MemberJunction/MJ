@@ -8,6 +8,7 @@ export function LoadCredentialCategoryEditPanel() {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credential-category-edit-panel',
     templateUrl: './credential-category-edit-panel.component.html',
     styleUrls: ['./credential-category-edit-panel.component.css'],

@@ -6,6 +6,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
  
  
 @Component({
+  standalone: false,
   selector: 'mj-simple-record-list',
   templateUrl: './simple-record-list.component.html',
   styleUrls: ['./simple-record-list.component.css']

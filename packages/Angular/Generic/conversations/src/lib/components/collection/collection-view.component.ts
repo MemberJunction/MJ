@@ -7,6 +7,7 @@ type ViewMode = 'grid' | 'list';
 type SortBy = 'name' | 'date' | 'type';
 
 @Component({
+  standalone: false,
   selector: 'mj-collection-view',
   template: `
     <div class="collection-view">
@@ -29,7 +30,7 @@ type SortBy = 'name' | 'date' | 'type';
               <i class="fas fa-list"></i>
             </button>
           </div>
-
+    
           <kendo-dropdownlist
             [data]="sortOptions"
             [textField]="'label'"
@@ -39,22 +40,28 @@ type SortBy = 'name' | 'date' | 'type';
             [style.width.px]="150"
             placeholder="Sort by...">
           </kendo-dropdownlist>
-
-          <button class="btn-add" (click)="onAddArtifact()" title="Add Artifact" *ngIf="canEdit">
-            <i class="fas fa-plus"></i> Add
-          </button>
+    
+          @if (canEdit) {
+            <button class="btn-add" (click)="onAddArtifact()" title="Add Artifact">
+              <i class="fas fa-plus"></i> Add
+            </button>
+          }
         </div>
       </div>
-
+    
       <div class="view-content" [class.grid-mode]="viewMode === 'grid'" [class.list-mode]="viewMode === 'list'">
-        <div *ngIf="artifactVersions.length === 0" class="empty-state">
-          <i class="fas fa-folder-open"></i>
-          <p>This collection is empty</p>
-          <button class="btn-add-primary" (click)="onAddArtifact()" *ngIf="canEdit">
-            <i class="fas fa-plus"></i> Add Artifact
-          </button>
-        </div>
-
+        @if (artifactVersions.length === 0) {
+          <div class="empty-state">
+            <i class="fas fa-folder-open"></i>
+            <p>This collection is empty</p>
+            @if (canEdit) {
+              <button class="btn-add-primary" (click)="onAddArtifact()">
+                <i class="fas fa-plus"></i> Add Artifact
+              </button>
+            }
+          </div>
+        }
+    
         @for (item of artifactVersions; track item.version.ID) {
           <mj-collection-artifact-card
             [artifact]="item.artifact"
@@ -67,22 +74,24 @@ type SortBy = 'name' | 'date' | 'type';
         }
       </div>
     </div>
-
+    
     <!-- Artifact Viewer Panel -->
-    <div class="artifact-viewer-overlay" *ngIf="showArtifactViewer && selectedArtifactId" (click)="onCloseArtifactViewer()">
-      <div class="artifact-viewer-container" (click)="$event.stopPropagation()">
-        <mj-artifact-viewer-panel
-          [artifactId]="selectedArtifactId"
-          [versionNumber]="selectedVersionNumber"
-          [currentUser]="currentUser"
-          [environmentId]="environmentId"
-          [viewContext]="'collection'"
-          [contextCollectionId]="collection.ID"
-          (closed)="onCloseArtifactViewer()">
-        </mj-artifact-viewer-panel>
+    @if (showArtifactViewer && selectedArtifactId) {
+      <div class="artifact-viewer-overlay" (click)="onCloseArtifactViewer()">
+        <div class="artifact-viewer-container" (click)="$event.stopPropagation()">
+          <mj-artifact-viewer-panel
+            [artifactId]="selectedArtifactId"
+            [versionNumber]="selectedVersionNumber"
+            [currentUser]="currentUser"
+            [environmentId]="environmentId"
+            [viewContext]="'collection'"
+            [contextCollectionId]="collection.ID"
+            (closed)="onCloseArtifactViewer()">
+          </mj-artifact-viewer-panel>
+        </div>
       </div>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     .collection-view { display: flex; flex-direction: column; height: 100%; background: white; }
 

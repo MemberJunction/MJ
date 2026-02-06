@@ -36,6 +36,7 @@ type SortField = 'Name' | 'Scope' | 'Status' | 'Items' | 'Date';
 
 @RegisterClass(BaseResourceComponent, 'VersionHistoryLabelsResource')
 @Component({
+  standalone: false,
     selector: 'mj-version-history-labels-resource',
     templateUrl: './labels-resource.component.html',
     styleUrls: ['./labels-resource.component.css'],

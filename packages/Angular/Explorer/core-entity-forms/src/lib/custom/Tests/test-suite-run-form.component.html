@@ -10,13 +10,15 @@
             <span class="breadcrumb-text">Testing</span>
           </a>
         </li>
-        <li *ngIf="testSuite">
-          <i class="fas fa-chevron-right separator"></i>
-          <a href="javascript:void(0)" (click)="openTestSuite()">
-            <i class="fas fa-layer-group"></i>
-            <span class="breadcrumb-text">{{ testSuite.Name }}</span>
-          </a>
-        </li>
+        @if (testSuite) {
+          <li>
+            <i class="fas fa-chevron-right separator"></i>
+            <a href="javascript:void(0)" (click)="openTestSuite()">
+              <i class="fas fa-layer-group"></i>
+              <span class="breadcrumb-text">{{ testSuite.Name }}</span>
+            </a>
+          </li>
+        }
         <li class="current">
           <i class="fas fa-chevron-right separator"></i>
           <span>Run #{{ record.ID.substring(0, 8) }}</span>
@@ -37,23 +39,29 @@
               <i class="fas" [ngClass]="getStatusIcon()"></i>
               {{ record.Status }}
             </span>
-            <span class="meta-tag environment" *ngIf="record.Environment">
-              <i class="fas fa-server"></i>
-              {{ record.Environment }}
-            </span>
-            <span class="meta-tag trigger" *ngIf="record.TriggerType">
-              <i class="fas fa-bolt"></i>
-              {{ record.TriggerType }}
-            </span>
+            @if (record.Environment) {
+              <span class="meta-tag environment">
+                <i class="fas fa-server"></i>
+                {{ record.Environment }}
+              </span>
+            }
+            @if (record.TriggerType) {
+              <span class="meta-tag trigger">
+                <i class="fas fa-bolt"></i>
+                {{ record.TriggerType }}
+              </span>
+            }
           </div>
         </div>
       </div>
       <div class="header-actions">
         <!-- Evaluation Mode Toggle -->
         <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
-        <button kendoButton (click)="reRunSuite()" themeColor="primary" *ngIf="record.SuiteID">
-          <i class="fas fa-play"></i> Re-run Suite
-        </button>
+        @if (record.SuiteID) {
+          <button kendoButton (click)="reRunSuite()" themeColor="primary">
+            <i class="fas fa-play"></i> Re-run Suite
+          </button>
+        }
         <button kendoButton (click)="refresh()" [disabled]="isRefreshing">
           <i class="fas" [ngClass]="isRefreshing ? 'fa-sync fa-spin' : 'fa-sync'"></i>
           {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
@@ -151,94 +159,112 @@
     </div>
 
     <!-- Tags Section - Sleek inline design -->
-    <div class="tags-bar" *ngIf="!editingTags">
-      <div class="tags-bar-content">
-        <span class="tags-bar-label"><i class="fas fa-tags"></i></span>
-        <div class="tags-bar-chips" *ngIf="tags.length > 0">
-          <span class="tag-inline" *ngFor="let tag of tags">{{ tag }}</span>
-        </div>
-        <span class="tags-bar-empty" *ngIf="tags.length === 0">No tags</span>
-        <button class="tags-bar-edit" (click)="startEditingTags()" title="Edit tags">
-          <i class="fas fa-plus"></i> Add
-        </button>
-      </div>
-    </div>
-
-    <!-- Tags Editor - Expanded when editing -->
-    <div class="tags-editor-panel" *ngIf="editingTags">
-      <div class="tags-editor-header">
-        <span class="tags-editor-title"><i class="fas fa-tags"></i> Edit Tags</span>
-      </div>
-      <div class="tags-editor-body">
-        <div class="tags-editor-chips">
-          <span class="tag-editable" *ngFor="let tag of tags">
-            {{ tag }}
-            <button class="tag-remove-btn" (click)="removeTag(tag)" title="Remove tag">
-              <i class="fas fa-times"></i>
-            </button>
-          </span>
-          <span class="tags-empty-hint" *ngIf="tags.length === 0">No tags yet</span>
-        </div>
-        <div class="tags-editor-input">
-          <input type="text"
-                 [(ngModel)]="newTag"
-                 placeholder="Type a tag and press Enter..."
-                 (keyup.enter)="addTag()"
-                 class="tag-text-input" />
-          <button kendoButton (click)="addTag()" [disabled]="!newTag.trim()" fillMode="flat">
-            <i class="fas fa-plus"></i>
+    @if (!editingTags) {
+      <div class="tags-bar">
+        <div class="tags-bar-content">
+          <span class="tags-bar-label"><i class="fas fa-tags"></i></span>
+          @if (tags.length > 0) {
+            <div class="tags-bar-chips">
+              @for (tag of tags; track tag) {
+                <span class="tag-inline">{{ tag }}</span>
+              }
+            </div>
+          }
+          @if (tags.length === 0) {
+            <span class="tags-bar-empty">No tags</span>
+          }
+          <button class="tags-bar-edit" (click)="startEditingTags()" title="Edit tags">
+            <i class="fas fa-plus"></i> Add
           </button>
         </div>
       </div>
-      <div class="tags-editor-footer">
-        <button kendoButton (click)="saveTags()" themeColor="primary" [disabled]="savingTags">
-          <i class="fas fa-spinner fa-spin" *ngIf="savingTags"></i>
-          {{ savingTags ? 'Saving...' : 'Save' }}
-        </button>
-        <button kendoButton (click)="cancelEditingTags()" fillMode="flat">Cancel</button>
+    }
+
+    <!-- Tags Editor - Expanded when editing -->
+    @if (editingTags) {
+      <div class="tags-editor-panel">
+        <div class="tags-editor-header">
+          <span class="tags-editor-title"><i class="fas fa-tags"></i> Edit Tags</span>
+        </div>
+        <div class="tags-editor-body">
+          <div class="tags-editor-chips">
+            @for (tag of tags; track tag) {
+              <span class="tag-editable">
+                {{ tag }}
+                <button class="tag-remove-btn" (click)="removeTag(tag)" title="Remove tag">
+                  <i class="fas fa-times"></i>
+                </button>
+              </span>
+            }
+            @if (tags.length === 0) {
+              <span class="tags-empty-hint">No tags yet</span>
+            }
+          </div>
+          <div class="tags-editor-input">
+            <input type="text"
+              [(ngModel)]="newTag"
+              placeholder="Type a tag and press Enter..."
+              (keyup.enter)="addTag()"
+              class="tag-text-input" />
+            <button kendoButton (click)="addTag()" [disabled]="!newTag.trim()" fillMode="flat">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+        </div>
+        <div class="tags-editor-footer">
+          <button kendoButton (click)="saveTags()" themeColor="primary" [disabled]="savingTags">
+            @if (savingTags) {
+              <i class="fas fa-spinner fa-spin"></i>
+            }
+            {{ savingTags ? 'Saving...' : 'Save' }}
+          </button>
+          <button kendoButton (click)="cancelEditingTags()" fillMode="flat">Cancel</button>
+        </div>
       </div>
-    </div>
+    }
   </div>
 
   <!-- Tabs -->
   <div class="tabs-container">
     <div class="tabs" role="tablist">
       <button class="tab"
-              [class.active]="activeTab === 'overview'"
-              (click)="changeTab('overview')"
-              role="tab"
-              [attr.aria-selected]="activeTab === 'overview'">
+        [class.active]="activeTab === 'overview'"
+        (click)="changeTab('overview')"
+        role="tab"
+        [attr.aria-selected]="activeTab === 'overview'">
         <i class="fas fa-th-large"></i> Overview
       </button>
       <button class="tab"
-              [class.active]="activeTab === 'runs'"
-              (click)="changeTab('runs')"
-              role="tab"
-              [attr.aria-selected]="activeTab === 'runs'">
+        [class.active]="activeTab === 'runs'"
+        (click)="changeTab('runs')"
+        role="tab"
+        [attr.aria-selected]="activeTab === 'runs'">
         <i class="fas fa-list"></i> Test Runs
-        <span class="tab-badge" *ngIf="testRunsLoaded">{{ testRuns.length }}</span>
+        @if (testRunsLoaded) {
+          <span class="tab-badge">{{ testRuns.length }}</span>
+        }
       </button>
       <button class="tab"
-              [class.active]="activeTab === 'details'"
-              (click)="changeTab('details')"
-              role="tab"
-              [attr.aria-selected]="activeTab === 'details'">
+        [class.active]="activeTab === 'details'"
+        (click)="changeTab('details')"
+        role="tab"
+        [attr.aria-selected]="activeTab === 'details'">
         <i class="fas fa-info-circle"></i> Details
       </button>
       <button class="tab"
-              [class.active]="activeTab === 'analytics'"
-              (click)="changeTab('analytics')"
-              role="tab"
-              [attr.aria-selected]="activeTab === 'analytics'"
-              title="Press 4">
+        [class.active]="activeTab === 'analytics'"
+        (click)="changeTab('analytics')"
+        role="tab"
+        [attr.aria-selected]="activeTab === 'analytics'"
+        title="Press 4">
         <i class="fas fa-chart-bar"></i> Analytics
       </button>
       <button class="tab"
-              [class.active]="activeTab === 'execution'"
-              (click)="changeTab('execution')"
-              role="tab"
-              [attr.aria-selected]="activeTab === 'execution'"
-              title="Press 5">
+        [class.active]="activeTab === 'execution'"
+        (click)="changeTab('execution')"
+        role="tab"
+        [attr.aria-selected]="activeTab === 'execution'"
+        title="Press 5">
         <i class="fas fa-microchip"></i>
         <span>Execution</span>
       </button>
@@ -248,565 +274,679 @@
   <!-- Tab Content -->
   <div class="tab-content">
     <!-- Overview Tab -->
-    <div class="overview-tab" *ngIf="activeTab === 'overview'">
-      <!-- Result Hero -->
-      <div class="result-hero"
-           [class.passed]="record.Status === 'Completed' && getPassRate() >= 90"
-           [class.failed]="record.Status === 'Failed' || getPassRate() < 50"
-           [class.running]="record.Status === 'Running'"
-           [class.pending]="record.Status === 'Pending'">
-        <div class="result-hero-icon">
-          <i class="fas" [ngClass]="getStatusIcon()"></i>
-        </div>
-        <div class="result-hero-text">
-          <h2>SUITE {{ record.Status.toUpperCase() || 'UNKNOWN' }}</h2>
-          <div class="result-hero-stats">
-            <div class="stat-item">
-              <span class="stat-value">{{ getPassRate().toFixed(1) }}%</span>
-              <span class="stat-label">Pass Rate</span>
-            </div>
-            <div class="stat-divider"></div>
-            <div class="stat-item">
-              <span class="stat-value">{{ record.PassedTests || 0 }} / {{ record.TotalTests || 0 }}</span>
-              <span class="stat-label">Tests Passed</span>
-            </div>
+    @if (activeTab === 'overview') {
+      <div class="overview-tab">
+        <!-- Result Hero -->
+        <div class="result-hero"
+          [class.passed]="record.Status === 'Completed' && getPassRate() >= 90"
+          [class.failed]="record.Status === 'Failed' || getPassRate() < 50"
+          [class.running]="record.Status === 'Running'"
+          [class.pending]="record.Status === 'Pending'">
+          <div class="result-hero-icon">
+            <i class="fas" [ngClass]="getStatusIcon()"></i>
           </div>
-        </div>
-      </div>
-
-      <!-- Evaluation Metrics Summary -->
-      <div class="evaluation-summary" *ngIf="evaluationMetrics && feedbacksLoaded">
-        <div class="eval-summary-grid">
-          <!-- Human Feedback Card -->
-          <div class="eval-summary-card" *ngIf="evalPreferences.showHuman">
-            <div class="eval-card-header">
-              <i class="fa-solid fa-user"></i>
-              <span>Human Feedback</span>
-            </div>
-            <div class="eval-card-body">
-              <div class="eval-stat-row">
-                <span class="eval-stat-label">Reviewed</span>
-                <span class="eval-stat-value">{{ evaluationMetrics.humanReviewedCount }} / {{ evaluationMetrics.totalRuns }}</span>
+          <div class="result-hero-text">
+            <h2>SUITE {{ record.Status.toUpperCase() || 'UNKNOWN' }}</h2>
+            <div class="result-hero-stats">
+              <div class="stat-item">
+                <span class="stat-value">{{ getPassRate().toFixed(1) }}%</span>
+                <span class="stat-label">Pass Rate</span>
               </div>
-              <div class="eval-stat-row" *ngIf="evaluationMetrics.humanReviewedCount > 0">
-                <span class="eval-stat-label">Avg Rating</span>
-                <span class="eval-stat-value">{{ evaluationMetrics.humanAvgRating.toFixed(1) }}/10</span>
-              </div>
-              <div class="eval-stat-row" *ngIf="evaluationMetrics.humanReviewedCount > 0">
-                <span class="eval-stat-label">Correct</span>
-                <span class="eval-stat-value correct">{{ evaluationMetrics.humanCorrectCount }}</span>
-                <span class="eval-stat-value incorrect" *ngIf="evaluationMetrics.humanIncorrectCount > 0">{{ evaluationMetrics.humanIncorrectCount }} incorrect</span>
-              </div>
-            </div>
-            <div class="eval-card-footer" *ngIf="evaluationMetrics.humanPendingCount > 0">
-              <span class="pending-badge">
-                <i class="fa-solid fa-clock"></i>
-                {{ evaluationMetrics.humanPendingCount }} need review
-              </span>
-            </div>
-          </div>
-
-          <!-- Auto Score Card -->
-          <div class="eval-summary-card" *ngIf="evalPreferences.showAuto">
-            <div class="eval-card-header">
-              <i class="fa-solid fa-robot"></i>
-              <span>Auto Evaluation</span>
-            </div>
-            <div class="eval-card-body">
-              <div class="eval-stat-row">
-                <span class="eval-stat-label">Evaluated</span>
-                <span class="eval-stat-value">{{ evaluationMetrics.autoEvaluatedCount }} / {{ evaluationMetrics.totalRuns }}</span>
-              </div>
-              <div class="eval-stat-row" *ngIf="evaluationMetrics.autoEvaluatedCount > 0">
-                <span class="eval-stat-label">Avg Score</span>
-                <span class="eval-stat-value">{{ (evaluationMetrics.autoAvgScore * 100).toFixed(0) }}%</span>
-              </div>
-              <div class="eval-stat-row" *ngIf="evaluationMetrics.autoEvaluatedCount > 0">
-                <span class="eval-stat-label">Pass Rate</span>
-                <span class="eval-stat-value">{{ evaluationMetrics.autoPassRate.toFixed(0) }}%</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Execution Card -->
-          <div class="eval-summary-card" *ngIf="evalPreferences.showExecution">
-            <div class="eval-card-header">
-              <i class="fa-solid fa-circle-check"></i>
-              <span>Execution</span>
-            </div>
-            <div class="eval-card-body">
-              <div class="eval-stat-row">
-                <span class="eval-stat-label">Completed</span>
-                <span class="eval-stat-value">{{ evaluationMetrics.execCompletedCount }} / {{ evaluationMetrics.totalRuns }}</span>
-              </div>
-              <div class="eval-stat-row">
-                <span class="eval-stat-label">Success Rate</span>
-                <span class="eval-stat-value">{{ evaluationMetrics.execSuccessRate.toFixed(0) }}%</span>
-              </div>
-              <div class="eval-stat-row" *ngIf="evaluationMetrics.execErrorCount > 0 || evaluationMetrics.execTimeoutCount > 0">
-                <span class="eval-stat-label">Issues</span>
-                <span class="eval-stat-value error" *ngIf="evaluationMetrics.execErrorCount > 0">{{ evaluationMetrics.execErrorCount }} errors</span>
-                <span class="eval-stat-value timeout" *ngIf="evaluationMetrics.execTimeoutCount > 0">{{ evaluationMetrics.execTimeoutCount }} timeouts</span>
+              <div class="stat-divider"></div>
+              <div class="stat-item">
+                <span class="stat-value">{{ record.PassedTests || 0 }} / {{ record.TotalTests || 0 }}</span>
+                <span class="stat-label">Tests Passed</span>
               </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Needs Review Section -->
-      <div class="needs-review-section" *ngIf="evalPreferences.showHuman && needsReviewItems.length > 0 && feedbacksLoaded">
-        <div class="needs-review-header">
-          <h3><i class="fa-solid fa-user-clock"></i> Needs Review</h3>
-          <span class="review-count">{{ needsReviewItems.length }} items</span>
-        </div>
-        <div class="needs-review-list">
-          <div class="review-item" *ngFor="let item of needsReviewItems.slice(0, 5)"
-               [class.high-priority]="item.priority === 'high'"
-               [class.medium-priority]="item.priority === 'medium'"
-               (click)="toggleRunExpanded(item.run.id)">
-            <div class="review-item-icon">
-              <i class="fa-solid fa-exclamation-triangle" *ngIf="item.priority === 'high'"></i>
-              <i class="fa-solid fa-circle-dot" *ngIf="item.priority === 'medium'"></i>
-              <i class="fa-solid fa-clock" *ngIf="item.priority === 'low'"></i>
-            </div>
-            <div class="review-item-content">
-              <span class="review-item-name">{{ item.run.testName }}</span>
-              <span class="review-item-reason">{{ item.reason }}</span>
-            </div>
-            <div class="review-item-action">
-              <i class="fa-solid fa-chevron-right"></i>
-            </div>
-          </div>
-          <div class="review-more" *ngIf="needsReviewItems.length > 5">
-            <button kendoButton fillMode="flat" (click)="changeTab('runs')">
-              View all {{ needsReviewItems.length }} items
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Progress Ring (when running) -->
-      <div class="progress-section" *ngIf="record.Status === 'Running' || record.Status === 'Pending'">
-        <div class="progress-info">
-          <i class="fas fa-circle-notch fa-spin"></i>
-          <span>Suite execution in progress...</span>
-        </div>
-        <div class="auto-refresh-notice">
-          <i class="fas fa-sync"></i>
-          Auto-refreshing every 5 seconds
-        </div>
-      </div>
-    </div>
-
-    <!-- Test Runs Tab -->
-    <div class="runs-tab" *ngIf="activeTab === 'runs'">
-      <!-- Toolbar -->
-      <div class="runs-toolbar" *ngIf="testRunsLoaded && testRuns.length > 0">
-        <div class="run-filters">
-          <button class="filter-btn"
-                  [class.active]="runStatusFilter === null"
-                  (click)="setRunStatusFilter(null)">
-            All ({{ testRuns.length }})
-          </button>
-          <button class="filter-btn passed"
-                  [class.active]="runStatusFilter === 'Passed'"
-                  (click)="setRunStatusFilter('Passed')"
-                  *ngIf="getRunCountByStatus('Passed') > 0">
-            <i class="fas fa-check"></i> Passed ({{ getRunCountByStatus('Passed') }})
-          </button>
-          <button class="filter-btn failed"
-                  [class.active]="runStatusFilter === 'Failed'"
-                  (click)="setRunStatusFilter('Failed')"
-                  *ngIf="getRunCountByStatus('Failed') > 0">
-            <i class="fas fa-times"></i> Failed ({{ getRunCountByStatus('Failed') }})
-          </button>
-          <button class="filter-btn error"
-                  [class.active]="runStatusFilter === 'Error'"
-                  (click)="setRunStatusFilter('Error')"
-                  *ngIf="getRunCountByStatus('Error') > 0">
-            <i class="fas fa-exclamation"></i> Error ({{ getRunCountByStatus('Error') }})
-          </button>
-        </div>
-        <div class="runs-actions">
-          <button kendoButton (click)="exportToCSV()">
-            <i class="fas fa-download"></i> Export CSV
-          </button>
-        </div>
-      </div>
-
-      <!-- Loading State -->
-      <div class="loading-state" *ngIf="loadingTestRuns">
-        <div class="skeleton-list">
-          <div class="skeleton-card" *ngFor="let i of [1,2,3,4,5]">
-            <div class="skeleton-sequence"></div>
-            <div class="skeleton-icon"></div>
-            <div class="skeleton-content">
-              <div class="skeleton-line wide"></div>
-              <div class="skeleton-line narrow"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Test Runs List -->
-      <div class="test-runs-list" *ngIf="!loadingTestRuns && testRuns.length > 0">
-        <div class="test-run-card" *ngFor="let run of getFilteredTestRuns()">
-          <div class="test-run-item" (click)="toggleRunExpanded(run.ID)">
-            <div class="run-sequence">{{ run.Sequence || '-' }}</div>
-            <div class="run-icon" [style.background-color]="getRunStatusColor(run.Status)">
-              <i class="fas" [ngClass]="getRunStatusIcon(run.Status)"></i>
-            </div>
-            <div class="run-content">
-              <div class="run-header-row">
-                <div class="run-name">{{ run.Test }}</div>
-                <!-- Evaluation Badge -->
-                <app-evaluation-badge
-                  [executionStatus]="run.Status"
-                  [originalStatus]="run.Status"
-                  [autoScore]="run.Score"
-                  [humanRating]="getFeedbackRating(run.ID) || null"
-                  [humanIsCorrect]="getHumanIsCorrect(run.ID)"
-                  [hasHumanFeedback]="hasFeedback(run.ID)"
-                  [preferences]="evalPreferences"
-                  [mode]="'compact'">
-                </app-evaluation-badge>
-              </div>
-              <div class="run-meta">
-                <span class="run-duration" *ngIf="run.DurationSeconds">
-                  <i class="fas fa-clock"></i> {{ run.DurationSeconds.toFixed(1) }}s
-                </span>
-                <span class="run-cost" *ngIf="run.CostUSD">
-                  <i class="fas fa-dollar-sign"></i> {{ run.CostUSD.toFixed(6) }}
-                </span>
-                <mj-entity-link-pill
-                  *ngIf="run.TargetLogEntityID && run.TargetLogID"
-                  [entityName]="run.TargetLogEntity"
-                  [recordId]="run.TargetLogID">
-                </mj-entity-link-pill>
-              </div>
-              <div class="run-tags" *ngIf="getRunTags(run).length > 0">
-                <span class="tag-chip" *ngFor="let tag of getRunTags(run)">{{ tag }}</span>
-              </div>
-            </div>
-            <div class="run-expand">
-              <i class="fas" [class.fa-chevron-down]="expandedRunId !== run.ID" [class.fa-chevron-up]="expandedRunId === run.ID"></i>
+        <!-- Evaluation Metrics Summary -->
+        @if (evaluationMetrics && feedbacksLoaded) {
+          <div class="evaluation-summary">
+            <div class="eval-summary-grid">
+              <!-- Human Feedback Card -->
+              @if (evalPreferences.showHuman) {
+                <div class="eval-summary-card">
+                  <div class="eval-card-header">
+                    <i class="fa-solid fa-user"></i>
+                    <span>Human Feedback</span>
+                  </div>
+                  <div class="eval-card-body">
+                    <div class="eval-stat-row">
+                      <span class="eval-stat-label">Reviewed</span>
+                      <span class="eval-stat-value">{{ evaluationMetrics.humanReviewedCount }} / {{ evaluationMetrics.totalRuns }}</span>
+                    </div>
+                    @if (evaluationMetrics.humanReviewedCount > 0) {
+                      <div class="eval-stat-row">
+                        <span class="eval-stat-label">Avg Rating</span>
+                        <span class="eval-stat-value">{{ evaluationMetrics.humanAvgRating.toFixed(1) }}/10</span>
+                      </div>
+                    }
+                    @if (evaluationMetrics.humanReviewedCount > 0) {
+                      <div class="eval-stat-row">
+                        <span class="eval-stat-label">Correct</span>
+                        <span class="eval-stat-value correct">{{ evaluationMetrics.humanCorrectCount }}</span>
+                        @if (evaluationMetrics.humanIncorrectCount > 0) {
+                          <span class="eval-stat-value incorrect">{{ evaluationMetrics.humanIncorrectCount }} incorrect</span>
+                        }
+                      </div>
+                    }
+                  </div>
+                  @if (evaluationMetrics.humanPendingCount > 0) {
+                    <div class="eval-card-footer">
+                      <span class="pending-badge">
+                        <i class="fa-solid fa-clock"></i>
+                        {{ evaluationMetrics.humanPendingCount }} need review
+                      </span>
+                    </div>
+                  }
+                </div>
+              }
+              <!-- Auto Score Card -->
+              @if (evalPreferences.showAuto) {
+                <div class="eval-summary-card">
+                  <div class="eval-card-header">
+                    <i class="fa-solid fa-robot"></i>
+                    <span>Auto Evaluation</span>
+                  </div>
+                  <div class="eval-card-body">
+                    <div class="eval-stat-row">
+                      <span class="eval-stat-label">Evaluated</span>
+                      <span class="eval-stat-value">{{ evaluationMetrics.autoEvaluatedCount }} / {{ evaluationMetrics.totalRuns }}</span>
+                    </div>
+                    @if (evaluationMetrics.autoEvaluatedCount > 0) {
+                      <div class="eval-stat-row">
+                        <span class="eval-stat-label">Avg Score</span>
+                        <span class="eval-stat-value">{{ (evaluationMetrics.autoAvgScore * 100).toFixed(0) }}%</span>
+                      </div>
+                    }
+                    @if (evaluationMetrics.autoEvaluatedCount > 0) {
+                      <div class="eval-stat-row">
+                        <span class="eval-stat-label">Pass Rate</span>
+                        <span class="eval-stat-value">{{ evaluationMetrics.autoPassRate.toFixed(0) }}%</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+              <!-- Execution Card -->
+              @if (evalPreferences.showExecution) {
+                <div class="eval-summary-card">
+                  <div class="eval-card-header">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>Execution</span>
+                  </div>
+                  <div class="eval-card-body">
+                    <div class="eval-stat-row">
+                      <span class="eval-stat-label">Completed</span>
+                      <span class="eval-stat-value">{{ evaluationMetrics.execCompletedCount }} / {{ evaluationMetrics.totalRuns }}</span>
+                    </div>
+                    <div class="eval-stat-row">
+                      <span class="eval-stat-label">Success Rate</span>
+                      <span class="eval-stat-value">{{ evaluationMetrics.execSuccessRate.toFixed(0) }}%</span>
+                    </div>
+                    @if (evaluationMetrics.execErrorCount > 0 || evaluationMetrics.execTimeoutCount > 0) {
+                      <div class="eval-stat-row">
+                        <span class="eval-stat-label">Issues</span>
+                        @if (evaluationMetrics.execErrorCount > 0) {
+                          <span class="eval-stat-value error">{{ evaluationMetrics.execErrorCount }} errors</span>
+                        }
+                        @if (evaluationMetrics.execTimeoutCount > 0) {
+                          <span class="eval-stat-value timeout">{{ evaluationMetrics.execTimeoutCount }} timeouts</span>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
             </div>
           </div>
-
-          <!-- Expanded Inline Feedback -->
-          <div class="inline-feedback" *ngIf="expandedRunId === run.ID">
-            <div class="feedback-divider"></div>
-
-            <div class="feedback-section">
-              <div class="feedback-label">Quick Feedback</div>
-
-              <div class="inline-rating">
-                <div class="rating-numbers">
-                  <button *ngFor="let num of [1,2,3,4,5,6,7,8,9,10]"
-                          type="button"
-                          class="rating-btn"
-                          [class.selected]="num === inlineRating"
-                          [class.hover]="num === inlineHoverRating"
-                          [class.low]="num <= 3"
-                          [class.mid]="num >= 4 && num <= 6"
-                          [class.high]="num >= 7"
-                          (click)="setInlineRating(num); $event.stopPropagation()"
-                          (mouseenter)="inlineHoverRating = num"
-                          (mouseleave)="inlineHoverRating = 0">
-                    {{ num }}
+        }
+        <!-- Needs Review Section -->
+        @if (evalPreferences.showHuman && needsReviewItems.length > 0 && feedbacksLoaded) {
+          <div class="needs-review-section">
+            <div class="needs-review-header">
+              <h3><i class="fa-solid fa-user-clock"></i> Needs Review</h3>
+              <span class="review-count">{{ needsReviewItems.length }} items</span>
+            </div>
+            <div class="needs-review-list">
+              @for (item of needsReviewItems.slice(0, 5); track item) {
+                <div class="review-item"
+                  [class.high-priority]="item.priority === 'high'"
+                  [class.medium-priority]="item.priority === 'medium'"
+                  (click)="toggleRunExpanded(item.run.id)">
+                  <div class="review-item-icon">
+                    @if (item.priority === 'high') {
+                      <i class="fa-solid fa-exclamation-triangle"></i>
+                    }
+                    @if (item.priority === 'medium') {
+                      <i class="fa-solid fa-circle-dot"></i>
+                    }
+                    @if (item.priority === 'low') {
+                      <i class="fa-solid fa-clock"></i>
+                    }
+                  </div>
+                  <div class="review-item-content">
+                    <span class="review-item-name">{{ item.run.testName }}</span>
+                    <span class="review-item-reason">{{ item.reason }}</span>
+                  </div>
+                  <div class="review-item-action">
+                    <i class="fa-solid fa-chevron-right"></i>
+                  </div>
+                </div>
+              }
+              @if (needsReviewItems.length > 5) {
+                <div class="review-more">
+                  <button kendoButton fillMode="flat" (click)="changeTab('runs')">
+                    View all {{ needsReviewItems.length }} items
                   </button>
                 </div>
-                <div class="rating-info" *ngIf="inlineRating > 0">
-                  <span class="rating-value">{{ inlineRating }}/10</span>
-                  <span class="rating-label-text">{{ getInlineRatingLabel() }}</span>
-                </div>
-              </div>
-
-              <div class="correctness-row">
-                <span class="correctness-label">Was it correct?</span>
-                <div class="correctness-options">
-                  <label class="radio-opt" (click)="$event.stopPropagation()">
-                    <input type="radio" name="correct-{{run.ID}}" [value]="true" [(ngModel)]="inlineIsCorrect">
-                    <span>Yes</span>
-                  </label>
-                  <label class="radio-opt" (click)="$event.stopPropagation()">
-                    <input type="radio" name="correct-{{run.ID}}" [value]="false" [(ngModel)]="inlineIsCorrect">
-                    <span>No</span>
-                  </label>
-                  <label class="radio-opt" (click)="$event.stopPropagation()">
-                    <input type="radio" name="correct-{{run.ID}}" [value]="null" [(ngModel)]="inlineIsCorrect">
-                    <span>Not Sure</span>
-                  </label>
-                </div>
-              </div>
-
-              <div class="comments-row" (click)="$event.stopPropagation()">
-                <textarea
-                  class="feedback-textarea"
-                  [(ngModel)]="inlineComments"
-                  placeholder="Add comments or corrections..."
-                  rows="3"></textarea>
-              </div>
-
-              <div class="feedback-actions" (click)="$event.stopPropagation()">
-                <button kendoButton (click)="openTestRun(run.ID)">
-                  <i class="fas fa-external-link-alt"></i> View Full Details
-                </button>
-                <button kendoButton
-                        themeColor="primary"
-                        (click)="saveInlineFeedback()"
-                        [disabled]="!canSubmitInlineFeedback() || savingInlineFeedback">
-                  <i class="fas" [ngClass]="savingInlineFeedback ? 'fa-spinner fa-spin' : 'fa-save'"></i>
-                  {{ savingInlineFeedback ? 'Saving...' : (hasFeedback(run.ID) ? 'Update' : 'Save') }}
-                </button>
-              </div>
+              }
             </div>
           </div>
-        </div>
+        }
+        <!-- Progress Ring (when running) -->
+        @if (record.Status === 'Running' || record.Status === 'Pending') {
+          <div class="progress-section">
+            <div class="progress-info">
+              <i class="fas fa-circle-notch fa-spin"></i>
+              <span>Suite execution in progress...</span>
+            </div>
+            <div class="auto-refresh-notice">
+              <i class="fas fa-sync"></i>
+              Auto-refreshing every 5 seconds
+            </div>
+          </div>
+        }
       </div>
+    }
 
-      <!-- Empty State -->
-      <div class="empty-state" *ngIf="testRunsLoaded && !loadingTestRuns && testRuns.length === 0">
-        <div class="empty-icon">
-          <i class="fas fa-inbox"></i>
-        </div>
-        <h4>No Test Runs Found</h4>
-        <p>No test runs have been recorded for this suite execution.</p>
+    <!-- Test Runs Tab -->
+    @if (activeTab === 'runs') {
+      <div class="runs-tab">
+        <!-- Toolbar -->
+        @if (testRunsLoaded && testRuns.length > 0) {
+          <div class="runs-toolbar">
+            <div class="run-filters">
+              <button class="filter-btn"
+                [class.active]="runStatusFilter === null"
+                (click)="setRunStatusFilter(null)">
+                All ({{ testRuns.length }})
+              </button>
+              @if (getRunCountByStatus('Passed') > 0) {
+                <button class="filter-btn passed"
+                  [class.active]="runStatusFilter === 'Passed'"
+                  (click)="setRunStatusFilter('Passed')"
+                  >
+                  <i class="fas fa-check"></i> Passed ({{ getRunCountByStatus('Passed') }})
+                </button>
+              }
+              @if (getRunCountByStatus('Failed') > 0) {
+                <button class="filter-btn failed"
+                  [class.active]="runStatusFilter === 'Failed'"
+                  (click)="setRunStatusFilter('Failed')"
+                  >
+                  <i class="fas fa-times"></i> Failed ({{ getRunCountByStatus('Failed') }})
+                </button>
+              }
+              @if (getRunCountByStatus('Error') > 0) {
+                <button class="filter-btn error"
+                  [class.active]="runStatusFilter === 'Error'"
+                  (click)="setRunStatusFilter('Error')"
+                  >
+                  <i class="fas fa-exclamation"></i> Error ({{ getRunCountByStatus('Error') }})
+                </button>
+              }
+            </div>
+            <div class="runs-actions">
+              <button kendoButton (click)="exportToCSV()">
+                <i class="fas fa-download"></i> Export CSV
+              </button>
+            </div>
+          </div>
+        }
+        <!-- Loading State -->
+        @if (loadingTestRuns) {
+          <div class="loading-state">
+            <div class="skeleton-list">
+              @for (i of [1,2,3,4,5]; track i) {
+                <div class="skeleton-card">
+                  <div class="skeleton-sequence"></div>
+                  <div class="skeleton-icon"></div>
+                  <div class="skeleton-content">
+                    <div class="skeleton-line wide"></div>
+                    <div class="skeleton-line narrow"></div>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+        <!-- Test Runs List -->
+        @if (!loadingTestRuns && testRuns.length > 0) {
+          <div class="test-runs-list">
+            @for (run of getFilteredTestRuns(); track run) {
+              <div class="test-run-card">
+                <div class="test-run-item" (click)="toggleRunExpanded(run.ID)">
+                  <div class="run-sequence">{{ run.Sequence || '-' }}</div>
+                  <div class="run-icon" [style.background-color]="getRunStatusColor(run.Status)">
+                    <i class="fas" [ngClass]="getRunStatusIcon(run.Status)"></i>
+                  </div>
+                  <div class="run-content">
+                    <div class="run-header-row">
+                      <div class="run-name">{{ run.Test }}</div>
+                      <!-- Evaluation Badge -->
+                      <app-evaluation-badge
+                        [executionStatus]="run.Status"
+                        [originalStatus]="run.Status"
+                        [autoScore]="run.Score"
+                        [humanRating]="getFeedbackRating(run.ID) || null"
+                        [humanIsCorrect]="getHumanIsCorrect(run.ID)"
+                        [hasHumanFeedback]="hasFeedback(run.ID)"
+                        [preferences]="evalPreferences"
+                        [mode]="'compact'">
+                      </app-evaluation-badge>
+                    </div>
+                    <div class="run-meta">
+                      @if (run.DurationSeconds) {
+                        <span class="run-duration">
+                          <i class="fas fa-clock"></i> {{ run.DurationSeconds.toFixed(1) }}s
+                        </span>
+                      }
+                      @if (run.CostUSD) {
+                        <span class="run-cost">
+                          <i class="fas fa-dollar-sign"></i> {{ run.CostUSD.toFixed(6) }}
+                        </span>
+                      }
+                      @if (run.TargetLogEntityID && run.TargetLogID) {
+                        <mj-entity-link-pill
+                          [entityName]="run.TargetLogEntity"
+                          [recordId]="run.TargetLogID">
+                        </mj-entity-link-pill>
+                      }
+                    </div>
+                    @if (getRunTags(run).length > 0) {
+                      <div class="run-tags">
+                        @for (tag of getRunTags(run); track tag) {
+                          <span class="tag-chip">{{ tag }}</span>
+                        }
+                      </div>
+                    }
+                  </div>
+                  <div class="run-expand">
+                    <i class="fas" [class.fa-chevron-down]="expandedRunId !== run.ID" [class.fa-chevron-up]="expandedRunId === run.ID"></i>
+                  </div>
+                </div>
+                <!-- Expanded Inline Feedback -->
+                @if (expandedRunId === run.ID) {
+                  <div class="inline-feedback">
+                    <div class="feedback-divider"></div>
+                    <div class="feedback-section">
+                      <div class="feedback-label">Quick Feedback</div>
+                      <div class="inline-rating">
+                        <div class="rating-numbers">
+                          @for (num of [1,2,3,4,5,6,7,8,9,10]; track num) {
+                            <button
+                              type="button"
+                              class="rating-btn"
+                              [class.selected]="num === inlineRating"
+                              [class.hover]="num === inlineHoverRating"
+                              [class.low]="num <= 3"
+                              [class.mid]="num >= 4 && num <= 6"
+                              [class.high]="num >= 7"
+                              (click)="setInlineRating(num); $event.stopPropagation()"
+                              (mouseenter)="inlineHoverRating = num"
+                              (mouseleave)="inlineHoverRating = 0">
+                              {{ num }}
+                            </button>
+                          }
+                        </div>
+                        @if (inlineRating > 0) {
+                          <div class="rating-info">
+                            <span class="rating-value">{{ inlineRating }}/10</span>
+                            <span class="rating-label-text">{{ getInlineRatingLabel() }}</span>
+                          </div>
+                        }
+                      </div>
+                      <div class="correctness-row">
+                        <span class="correctness-label">Was it correct?</span>
+                        <div class="correctness-options">
+                          <label class="radio-opt" (click)="$event.stopPropagation()">
+                            <input type="radio" name="correct-{{run.ID}}" [value]="true" [(ngModel)]="inlineIsCorrect">
+                            <span>Yes</span>
+                          </label>
+                          <label class="radio-opt" (click)="$event.stopPropagation()">
+                            <input type="radio" name="correct-{{run.ID}}" [value]="false" [(ngModel)]="inlineIsCorrect">
+                            <span>No</span>
+                          </label>
+                          <label class="radio-opt" (click)="$event.stopPropagation()">
+                            <input type="radio" name="correct-{{run.ID}}" [value]="null" [(ngModel)]="inlineIsCorrect">
+                            <span>Not Sure</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div class="comments-row" (click)="$event.stopPropagation()">
+                        <textarea
+                          class="feedback-textarea"
+                          [(ngModel)]="inlineComments"
+                          placeholder="Add comments or corrections..."
+                        rows="3"></textarea>
+                      </div>
+                      <div class="feedback-actions" (click)="$event.stopPropagation()">
+                        <button kendoButton (click)="openTestRun(run.ID)">
+                          <i class="fas fa-external-link-alt"></i> View Full Details
+                        </button>
+                        <button kendoButton
+                          themeColor="primary"
+                          (click)="saveInlineFeedback()"
+                          [disabled]="!canSubmitInlineFeedback() || savingInlineFeedback">
+                          <i class="fas" [ngClass]="savingInlineFeedback ? 'fa-spinner fa-spin' : 'fa-save'"></i>
+                          {{ savingInlineFeedback ? 'Saving...' : (hasFeedback(run.ID) ? 'Update' : 'Save') }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+        <!-- Empty State -->
+        @if (testRunsLoaded && !loadingTestRuns && testRuns.length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-inbox"></i>
+            </div>
+            <h4>No Test Runs Found</h4>
+            <p>No test runs have been recorded for this suite execution.</p>
+          </div>
+        }
+        <!-- Filtered Empty -->
+        @if (testRunsLoaded && !loadingTestRuns && testRuns.length > 0 && getFilteredTestRuns().length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-filter"></i>
+            </div>
+            <h4>No Matching Runs</h4>
+            <p>No test runs match the current filter.</p>
+            <button kendoButton (click)="setRunStatusFilter(null)">Clear Filter</button>
+          </div>
+        }
       </div>
-
-      <!-- Filtered Empty -->
-      <div class="empty-state" *ngIf="testRunsLoaded && !loadingTestRuns && testRuns.length > 0 && getFilteredTestRuns().length === 0">
-        <div class="empty-icon">
-          <i class="fas fa-filter"></i>
-        </div>
-        <h4>No Matching Runs</h4>
-        <p>No test runs match the current filter.</p>
-        <button kendoButton (click)="setRunStatusFilter(null)">Clear Filter</button>
-      </div>
-    </div>
+    }
 
     <!-- Details Tab -->
-    <div class="details-tab" *ngIf="activeTab === 'details'">
-      <div class="details-card">
-        <h3><i class="fas fa-info-circle"></i> Run Information</h3>
-        <div class="details-grid">
-          <div class="detail-item">
-            <div class="detail-label">Run ID</div>
-            <div class="detail-value monospace">{{ record.ID }}</div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">Test Suite</div>
-            <div class="detail-value">
-              <a href="javascript:void(0)" (click)="openTestSuite()" *ngIf="testSuite">{{ testSuite.Name }}</a>
-              <span *ngIf="!testSuite">Loading...</span>
+    @if (activeTab === 'details') {
+      <div class="details-tab">
+        <div class="details-card">
+          <h3><i class="fas fa-info-circle"></i> Run Information</h3>
+          <div class="details-grid">
+            <div class="detail-item">
+              <div class="detail-label">Run ID</div>
+              <div class="detail-value monospace">{{ record.ID }}</div>
             </div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">Status</div>
-            <div class="detail-value">
-              <span class="status-inline" [ngClass]="getStatusClass()">{{ record.Status }}</span>
+            <div class="detail-item">
+              <div class="detail-label">Test Suite</div>
+              <div class="detail-value">
+                @if (testSuite) {
+                  <a href="javascript:void(0)" (click)="openTestSuite()">{{ testSuite.Name }}</a>
+                }
+                @if (!testSuite) {
+                  <span>Loading...</span>
+                }
+              </div>
             </div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">Run By</div>
-            <div class="detail-value">{{ record.RunByUser || 'N/A' }}</div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">Started At</div>
-            <div class="detail-value">{{ record.StartedAt | date:'medium' }}</div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">Completed At</div>
-            <div class="detail-value">{{ record.CompletedAt | date:'medium' }}</div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">Environment</div>
-            <div class="detail-value">{{ record.Environment || 'N/A' }}</div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">Trigger Type</div>
-            <div class="detail-value">{{ record.TriggerType || 'N/A' }}</div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">Git Commit</div>
-            <div class="detail-value monospace">{{ record.GitCommit || 'N/A' }}</div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">Agent Version</div>
-            <div class="detail-value">{{ record.AgentVersion || 'N/A' }}</div>
+            <div class="detail-item">
+              <div class="detail-label">Status</div>
+              <div class="detail-value">
+                <span class="status-inline" [ngClass]="getStatusClass()">{{ record.Status }}</span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Run By</div>
+              <div class="detail-value">{{ record.RunByUser || 'N/A' }}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Started At</div>
+              <div class="detail-value">{{ record.StartedAt | date:'medium' }}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Completed At</div>
+              <div class="detail-value">{{ record.CompletedAt | date:'medium' }}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Environment</div>
+              <div class="detail-value">{{ record.Environment || 'N/A' }}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Trigger Type</div>
+              <div class="detail-value">{{ record.TriggerType || 'N/A' }}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Git Commit</div>
+              <div class="detail-value monospace">{{ record.GitCommit || 'N/A' }}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Agent Version</div>
+              <div class="detail-value">{{ record.AgentVersion || 'N/A' }}</div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    }
 
     <!-- Analytics Tab -->
-    <div class="analytics-tab" *ngIf="activeTab === 'analytics'">
-      <!-- Loading State -->
-      <div class="analytics-loading" *ngIf="loadingTestRuns">
-        <i class="fas fa-spinner fa-spin"></i>
-        <span>Loading test results...</span>
+    @if (activeTab === 'analytics') {
+      <div class="analytics-tab">
+        <!-- Loading State -->
+        @if (loadingTestRuns) {
+          <div class="analytics-loading">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading test results...</span>
+          </div>
+        }
+        <!-- Summary Statistics - Moved to top for better overview -->
+        @if (!loadingTestRuns && testRuns.length > 0) {
+          <div class="analytics-section">
+            <h3><i class="fas fa-chart-pie"></i> Summary Statistics</h3>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-icon passed"><i class="fas fa-check-circle"></i></div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ getPassedCount() }}</div>
+                  <div class="stat-label">Passed</div>
+                  <div class="stat-percent">{{ getPassedPercent().toFixed(1) }}%</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon failed"><i class="fas fa-times-circle"></i></div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ getFailedCount() }}</div>
+                  <div class="stat-label">Failed</div>
+                  <div class="stat-percent">{{ getFailedPercent().toFixed(1) }}%</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon score"><i class="fas fa-star"></i></div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ (getAverageScore() * 100).toFixed(1) }}%</div>
+                  <div class="stat-label">Avg Score</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon duration"><i class="fas fa-clock"></i></div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ getAverageDuration().toFixed(1) }}s</div>
+                  <div class="stat-label">Avg Duration</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon cost"><i class="fas fa-dollar-sign"></i></div>
+                <div class="stat-content">
+                  <div class="stat-value">${{ getTotalCost().toFixed(4) }}</div>
+                  <div class="stat-label">Total Cost</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+        <!-- Test Results Table -->
+        @if (!loadingTestRuns && testRuns.length > 0) {
+          <div class="analytics-section">
+            <div class="analytics-header">
+              <h3><i class="fas fa-table"></i> Test Results</h3>
+              <div class="analytics-legend">
+                <span class="legend-item passed"><i class="fas fa-check-circle"></i> Passed</span>
+                <span class="legend-item failed"><i class="fas fa-times-circle"></i> Failed</span>
+                <span class="legend-item error"><i class="fas fa-exclamation-circle"></i> Error</span>
+                <span class="legend-item skipped"><i class="fas fa-forward"></i> Skipped</span>
+              </div>
+            </div>
+            <!-- Results Table -->
+            <div class="results-table-wrapper">
+              <table class="results-table">
+                <thead>
+                  <tr>
+                    <th class="seq-col">#</th>
+                    <th class="name-col">Test Name</th>
+                    @if (evalPreferences.showExecution) {
+                      <th class="status-col">Status</th>
+                    }
+                    @if (evalPreferences.showAuto) {
+                      <th class="score-col">Auto Score</th>
+                    }
+                    @if (evalPreferences.showHuman) {
+                      <th class="feedback-col">Human Score</th>
+                    }
+                    <th class="duration-col">Duration</th>
+                    <th class="cost-col">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (run of testRuns; track run; let i = $index) {
+                    <tr
+                      class="result-row"
+                      [class.row-passed]="run.Status === 'Passed'"
+                      [class.row-failed]="run.Status === 'Failed'"
+                      [class.row-error]="run.Status === 'Error'"
+                      [class.row-skipped]="run.Status === 'Skipped'"
+                      (click)="openTestRun(run.ID)">
+                      <td class="seq-col">{{ i + 1 }}</td>
+                      <td class="name-col">
+                        <div class="test-name-wrapper">
+                          <span class="test-name">{{ run.Test || 'Unknown Test' }}</span>
+                          @if (getRunTags(run).length > 0) {
+                            <div class="test-tags">
+                              @for (tag of getRunTags(run).slice(0, 2); track tag) {
+                                <span class="tag-mini">{{ tag }}</span>
+                              }
+                            </div>
+                          }
+                        </div>
+                      </td>
+                      @if (evalPreferences.showExecution) {
+                        <td class="status-col">
+                          <span class="status-badge" [ngClass]="'status-' + run.Status.toLowerCase()">
+                            <i class="fas"
+                              [class.fa-check-circle]="run.Status === 'Passed'"
+                              [class.fa-times-circle]="run.Status === 'Failed'"
+                              [class.fa-exclamation-circle]="run.Status === 'Error'"
+                              [class.fa-forward]="run.Status === 'Skipped'"
+                              [class.fa-clock]="run.Status === 'Pending'"
+                              [class.fa-spinner]="run.Status === 'Running'"
+                            [class.fa-spin]="run.Status === 'Running'"></i>
+                            {{ run.Status }}
+                          </span>
+                        </td>
+                      }
+                      @if (evalPreferences.showAuto) {
+                        <td class="score-col">
+                          @if (run.Score != null) {
+                            <div class="score-display">
+                              <div class="score-bar-mini">
+                                <div class="score-fill"
+                                  [style.width.%]="run.Score * 100"
+                                  [class.high]="run.Score >= 0.8"
+                                  [class.medium]="run.Score >= 0.5 && run.Score < 0.8"
+                                [class.low]="run.Score < 0.5"></div>
+                              </div>
+                              <span class="score-text">{{ (run.Score * 100).toFixed(0) }}%</span>
+                            </div>
+                          }
+                          @if (run.Score == null) {
+                            <span class="na-value">—</span>
+                          }
+                        </td>
+                      }
+                      @if (evalPreferences.showHuman) {
+                        <td class="feedback-col">
+                          @if (hasFeedback(run.ID)) {
+                            <div class="feedback-display">
+                              <span class="feedback-rating" [class.low]="getFeedbackRating(run.ID) <= 3" [class.mid]="getFeedbackRating(run.ID) >= 4 && getFeedbackRating(run.ID) <= 6" [class.high]="getFeedbackRating(run.ID) >= 7">
+                                {{ getFeedbackRating(run.ID) }}/10
+                              </span>
+                              @if (getHumanIsCorrect(run.ID) !== null) {
+                                <span class="feedback-correctness">
+                                  <i class="fas" [class.fa-check]="getHumanIsCorrect(run.ID) === true" [class.fa-times]="getHumanIsCorrect(run.ID) === false" [class.correct]="getHumanIsCorrect(run.ID) === true" [class.incorrect]="getHumanIsCorrect(run.ID) === false"></i>
+                                </span>
+                              }
+                            </div>
+                          }
+                          @if (!hasFeedback(run.ID)) {
+                            <span class="na-value needs-review">
+                              <i class="fas fa-user-clock"></i>
+                            </span>
+                          }
+                        </td>
+                      }
+                      <td class="duration-col">
+                        @if (run.DurationSeconds) {
+                          <span>{{ run.DurationSeconds.toFixed(1) }}s</span>
+                        }
+                        @if (!run.DurationSeconds) {
+                          <span class="na-value">—</span>
+                        }
+                      </td>
+                      <td class="cost-col">
+                        @if (run.CostUSD) {
+                          <span>${{ run.CostUSD.toFixed(4) }}</span>
+                        }
+                        @if (!run.CostUSD) {
+                          <span class="na-value">—</span>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+        <!-- Empty State -->
+        @if (!loadingTestRuns && testRunsLoaded && testRuns.length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-chart-bar"></i>
+            </div>
+            <h4>No Test Results Yet</h4>
+            <p>Test runs will appear here once the suite execution completes.</p>
+          </div>
+        }
       </div>
-
-      <!-- Summary Statistics - Moved to top for better overview -->
-      <div class="analytics-section" *ngIf="!loadingTestRuns && testRuns.length > 0">
-        <h3><i class="fas fa-chart-pie"></i> Summary Statistics</h3>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-icon passed"><i class="fas fa-check-circle"></i></div>
-            <div class="stat-content">
-              <div class="stat-value">{{ getPassedCount() }}</div>
-              <div class="stat-label">Passed</div>
-              <div class="stat-percent">{{ getPassedPercent().toFixed(1) }}%</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon failed"><i class="fas fa-times-circle"></i></div>
-            <div class="stat-content">
-              <div class="stat-value">{{ getFailedCount() }}</div>
-              <div class="stat-label">Failed</div>
-              <div class="stat-percent">{{ getFailedPercent().toFixed(1) }}%</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon score"><i class="fas fa-star"></i></div>
-            <div class="stat-content">
-              <div class="stat-value">{{ (getAverageScore() * 100).toFixed(1) }}%</div>
-              <div class="stat-label">Avg Score</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon duration"><i class="fas fa-clock"></i></div>
-            <div class="stat-content">
-              <div class="stat-value">{{ getAverageDuration().toFixed(1) }}s</div>
-              <div class="stat-label">Avg Duration</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon cost"><i class="fas fa-dollar-sign"></i></div>
-            <div class="stat-content">
-              <div class="stat-value">${{ getTotalCost().toFixed(4) }}</div>
-              <div class="stat-label">Total Cost</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Test Results Table -->
-      <div class="analytics-section" *ngIf="!loadingTestRuns && testRuns.length > 0">
-        <div class="analytics-header">
-          <h3><i class="fas fa-table"></i> Test Results</h3>
-          <div class="analytics-legend">
-            <span class="legend-item passed"><i class="fas fa-check-circle"></i> Passed</span>
-            <span class="legend-item failed"><i class="fas fa-times-circle"></i> Failed</span>
-            <span class="legend-item error"><i class="fas fa-exclamation-circle"></i> Error</span>
-            <span class="legend-item skipped"><i class="fas fa-forward"></i> Skipped</span>
-          </div>
-        </div>
-
-        <!-- Results Table -->
-        <div class="results-table-wrapper">
-          <table class="results-table">
-            <thead>
-              <tr>
-                <th class="seq-col">#</th>
-                <th class="name-col">Test Name</th>
-                <th class="status-col" *ngIf="evalPreferences.showExecution">Status</th>
-                <th class="score-col" *ngIf="evalPreferences.showAuto">Auto Score</th>
-                <th class="feedback-col" *ngIf="evalPreferences.showHuman">Human Score</th>
-                <th class="duration-col">Duration</th>
-                <th class="cost-col">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let run of testRuns; let i = index"
-                  class="result-row"
-                  [class.row-passed]="run.Status === 'Passed'"
-                  [class.row-failed]="run.Status === 'Failed'"
-                  [class.row-error]="run.Status === 'Error'"
-                  [class.row-skipped]="run.Status === 'Skipped'"
-                  (click)="openTestRun(run.ID)">
-                <td class="seq-col">{{ i + 1 }}</td>
-                <td class="name-col">
-                  <div class="test-name-wrapper">
-                    <span class="test-name">{{ run.Test || 'Unknown Test' }}</span>
-                    <div class="test-tags" *ngIf="getRunTags(run).length > 0">
-                      <span class="tag-mini" *ngFor="let tag of getRunTags(run).slice(0, 2)">{{ tag }}</span>
-                    </div>
-                  </div>
-                </td>
-                <td class="status-col" *ngIf="evalPreferences.showExecution">
-                  <span class="status-badge" [ngClass]="'status-' + run.Status.toLowerCase()">
-                    <i class="fas"
-                       [class.fa-check-circle]="run.Status === 'Passed'"
-                       [class.fa-times-circle]="run.Status === 'Failed'"
-                       [class.fa-exclamation-circle]="run.Status === 'Error'"
-                       [class.fa-forward]="run.Status === 'Skipped'"
-                       [class.fa-clock]="run.Status === 'Pending'"
-                       [class.fa-spinner]="run.Status === 'Running'"
-                       [class.fa-spin]="run.Status === 'Running'"></i>
-                    {{ run.Status }}
-                  </span>
-                </td>
-                <td class="score-col" *ngIf="evalPreferences.showAuto">
-                  <div class="score-display" *ngIf="run.Score != null">
-                    <div class="score-bar-mini">
-                      <div class="score-fill"
-                           [style.width.%]="run.Score * 100"
-                           [class.high]="run.Score >= 0.8"
-                           [class.medium]="run.Score >= 0.5 && run.Score < 0.8"
-                           [class.low]="run.Score < 0.5"></div>
-                    </div>
-                    <span class="score-text">{{ (run.Score * 100).toFixed(0) }}%</span>
-                  </div>
-                  <span class="na-value" *ngIf="run.Score == null">—</span>
-                </td>
-                <td class="feedback-col" *ngIf="evalPreferences.showHuman">
-                  <div class="feedback-display" *ngIf="hasFeedback(run.ID)">
-                    <span class="feedback-rating" [class.low]="getFeedbackRating(run.ID) <= 3" [class.mid]="getFeedbackRating(run.ID) >= 4 && getFeedbackRating(run.ID) <= 6" [class.high]="getFeedbackRating(run.ID) >= 7">
-                      {{ getFeedbackRating(run.ID) }}/10
-                    </span>
-                    <span class="feedback-correctness" *ngIf="getHumanIsCorrect(run.ID) !== null">
-                      <i class="fas" [class.fa-check]="getHumanIsCorrect(run.ID) === true" [class.fa-times]="getHumanIsCorrect(run.ID) === false" [class.correct]="getHumanIsCorrect(run.ID) === true" [class.incorrect]="getHumanIsCorrect(run.ID) === false"></i>
-                    </span>
-                  </div>
-                  <span class="na-value needs-review" *ngIf="!hasFeedback(run.ID)">
-                    <i class="fas fa-user-clock"></i>
-                  </span>
-                </td>
-                <td class="duration-col">
-                  <span *ngIf="run.DurationSeconds">{{ run.DurationSeconds.toFixed(1) }}s</span>
-                  <span class="na-value" *ngIf="!run.DurationSeconds">—</span>
-                </td>
-                <td class="cost-col">
-                  <span *ngIf="run.CostUSD">${{ run.CostUSD.toFixed(4) }}</span>
-                  <span class="na-value" *ngIf="!run.CostUSD">—</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Empty State -->
-      <div class="empty-state" *ngIf="!loadingTestRuns && testRunsLoaded && testRuns.length === 0">
-        <div class="empty-icon">
-          <i class="fas fa-chart-bar"></i>
-        </div>
-        <h4>No Test Results Yet</h4>
-        <p>Test runs will appear here once the suite execution completes.</p>
-      </div>
-    </div>
+    }
 
     <!-- Execution Tab -->
-    <div class="execution-tab" *ngIf="activeTab === 'execution'">
-      <mj-execution-context
-        [machineName]="record.MachineName"
-        [machineId]="record.MachineID"
-        [runByUserName]="record.RunByUserName"
-        [runByUserEmail]="record.RunByUserEmail"
-        [runContextDetailsJson]="record.RunContextDetails">
-      </mj-execution-context>
-    </div>
+    @if (activeTab === 'execution') {
+      <div class="execution-tab">
+        <mj-execution-context
+          [machineName]="record.MachineName"
+          [machineId]="record.MachineID"
+          [runByUserName]="record.RunByUserName"
+          [runByUserEmail]="record.RunByUserEmail"
+          [runContextDetailsJson]="record.RunContextDetails">
+        </mj-execution-context>
+      </div>
+    }
   </div>
 
   <!-- Keyboard Shortcuts Toggle Button -->
@@ -815,27 +955,29 @@
   </button>
 
   <!-- Keyboard Shortcuts Hint (Desktop Only) -->
-  <div class="keyboard-shortcuts" *ngIf="showShortcuts">
-    <div class="shortcuts-header">
-      <i class="fas fa-keyboard"></i>
-      Shortcuts
-      <button class="shortcuts-close" (click)="toggleShortcuts()" title="Hide shortcuts">
-        <i class="fas fa-times"></i>
-      </button>
+  @if (showShortcuts) {
+    <div class="keyboard-shortcuts">
+      <div class="shortcuts-header">
+        <i class="fas fa-keyboard"></i>
+        Shortcuts
+        <button class="shortcuts-close" (click)="toggleShortcuts()" title="Hide shortcuts">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="shortcut-list">
+        <div class="shortcut-item">
+          <span>Refresh</span>
+          <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>R</kbd></span>
+        </div>
+        <div class="shortcut-item">
+          <span>Re-run Suite</span>
+          <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>Shift</kbd><kbd>R</kbd></span>
+        </div>
+        <div class="shortcut-item">
+          <span>Switch Tabs</span>
+          <span class="shortcut-keys"><kbd>1</kbd>-<kbd>5</kbd></span>
+        </div>
+      </div>
     </div>
-    <div class="shortcut-list">
-      <div class="shortcut-item">
-        <span>Refresh</span>
-        <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>R</kbd></span>
-      </div>
-      <div class="shortcut-item">
-        <span>Re-run Suite</span>
-        <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>Shift</kbd><kbd>R</kbd></span>
-      </div>
-      <div class="shortcut-item">
-        <span>Switch Tabs</span>
-        <span class="shortcut-keys"><kbd>1</kbd>-<kbd>5</kbd></span>
-      </div>
-    </div>
-  </div>
+  }
 </div>

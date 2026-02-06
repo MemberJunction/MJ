@@ -87,6 +87,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-query-data-grid',
     templateUrl: './query-data-grid.component.html',
     styleUrls: ['./query-data-grid.component.css'],

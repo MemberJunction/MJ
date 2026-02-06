@@ -25,6 +25,7 @@ const STEP_TYPE_ICONS: Record<string, string> = {
  * Shows context-aware sections based on the selected step type.
  */
 @Component({
+  standalone: false,
   selector: 'mj-agent-properties-panel',
   templateUrl: './agent-properties-panel.component.html',
   styleUrls: ['./agent-properties-panel.component.css'],

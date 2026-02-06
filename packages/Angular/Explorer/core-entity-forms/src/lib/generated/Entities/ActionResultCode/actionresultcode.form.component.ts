@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Action Result Codes') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-actionresultcode-form',
     templateUrl: './actionresultcode.form.component.html'
 })

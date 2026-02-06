@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
@@ -46,6 +46,7 @@ export function LoadAIPromptsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIPromptsResource')
 @Component({
+  standalone: false,
   selector: 'app-prompt-management',
   templateUrl: './prompt-management.component.html',
   styleUrls: ['./prompt-management.component.css']
@@ -182,7 +183,8 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   constructor(
     private sharedService: SharedService,
     private testHarnessService: AITestHarnessDialogService,
-    private navigationService: NavigationService
+    private navigationService: NavigationService,
+    private cdr: ChangeDetectorRef
   ) {
     super();
 
@@ -449,6 +451,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
 
     // Apply sorting
     this.filteredPrompts = this.applySorting(this.filteredPrompts);
+    this.cdr.detectChanges();
   }
 
   /**

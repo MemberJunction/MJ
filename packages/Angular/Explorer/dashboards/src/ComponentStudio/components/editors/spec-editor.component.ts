@@ -18,6 +18,7 @@ const COMPONENT_TYPES = [
 ];
 
 @Component({
+  standalone: false,
   selector: 'mj-spec-editor',
   template: `
     <div class="spec-editor">

@@ -10,6 +10,7 @@ export function LoadQueryResource() {
 
 @RegisterClass(BaseResourceComponent, 'QueryResource')
 @Component({
+  standalone: false,
     selector: 'mj-query-resource',
     template: `<mj-single-query [queryId]="Data.ResourceRecordID" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></mj-single-query>`
 })

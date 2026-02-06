@@ -102,7 +102,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('queues')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Queues','QueueTypeID')"
                 [NewRecordValues]="NewRecordValues('Queues')"
@@ -112,6 +113,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

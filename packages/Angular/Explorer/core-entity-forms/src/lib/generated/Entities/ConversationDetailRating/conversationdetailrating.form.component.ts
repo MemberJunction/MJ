@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Conversation Detail Ratings') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-conversationdetailrating-form',
     templateUrl: './conversationdetailrating.form.component.html'
 })

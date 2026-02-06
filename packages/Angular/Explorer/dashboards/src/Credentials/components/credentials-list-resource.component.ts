@@ -16,6 +16,7 @@ type StatusFilter = '' | 'active' | 'inactive' | 'expired' | 'expiring';
 
 @RegisterClass(BaseResourceComponent, 'CredentialsListResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-list-resource',
     templateUrl: './credentials-list-resource.component.html',
     styleUrls: ['./credentials-list-resource.component.css'],

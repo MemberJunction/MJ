@@ -23,6 +23,7 @@ interface RolePermissions {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-permission-dialog',
   encapsulation: ViewEncapsulation.None,
   templateUrl: './permission-dialog.component.html',
@@ -79,7 +80,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscapeKey(event: KeyboardEvent): void {
+  onEscapeKey(event: Event): void {
     if (this.visible) {
       this.onCancel();
     }

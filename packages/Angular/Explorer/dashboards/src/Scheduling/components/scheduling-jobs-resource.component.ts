@@ -15,6 +15,7 @@ export function LoadSchedulingJobsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingJobsResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-jobs-resource',
   template: `
     <div class="resource-container">
