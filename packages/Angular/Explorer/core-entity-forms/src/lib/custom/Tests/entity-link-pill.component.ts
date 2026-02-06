@@ -20,12 +20,14 @@ import { SharedService } from '@memberjunction/ng-shared';
   standalone: false,
   selector: 'mj-entity-link-pill',
   template: `
-    <span class="entity-link-pill" *ngIf="entityInfo && recordId" (click)="openRecord()" [title]="tooltipText">
-      <i class="entity-icon" [ngClass]="iconClass"></i>
-      <span class="entity-label">{{ displayLabel }}</span>
-      <i class="fas fa-external-link-alt pill-action"></i>
-    </span>
-  `,
+    @if (entityInfo && recordId) {
+      <span class="entity-link-pill" (click)="openRecord()" [title]="tooltipText">
+        <i class="entity-icon" [ngClass]="iconClass"></i>
+        <span class="entity-label">{{ displayLabel }}</span>
+        <i class="fas fa-external-link-alt pill-action"></i>
+      </span>
+    }
+    `,
   styles: [`
     .entity-link-pill {
       display: inline-flex;

@@ -38,32 +38,38 @@ export interface VennRegionClickEvent {
   template: `
     <div class="venn-container" #vennContainer>
       <svg #vennSvg class="venn-svg"></svg>
-
+    
       <!-- Tooltip -->
       <div class="venn-tooltip" [class.visible]="tooltipVisible"
-           [style.left.px]="tooltipX" [style.top.px]="tooltipY">
+        [style.left.px]="tooltipX" [style.top.px]="tooltipY">
         <div class="tooltip-title">{{ tooltipTitle }}</div>
         <div class="tooltip-count">{{ tooltipCount }} records</div>
       </div>
-
+    
       <!-- Legend -->
-      <div class="venn-legend" *ngIf="data && data.sets.length > 0">
-        <div class="legend-item" *ngFor="let set of data.sets">
-          <div class="legend-color" [style.background-color]="set.color"></div>
-          <div class="legend-info">
-            <span class="legend-name">{{ set.listName }}</span>
-            <span class="legend-count">{{ set.size }} items</span>
-          </div>
+      @if (data && data.sets.length > 0) {
+        <div class="venn-legend">
+          @for (set of data.sets; track set) {
+            <div class="legend-item">
+              <div class="legend-color" [style.background-color]="set.color"></div>
+              <div class="legend-info">
+                <span class="legend-name">{{ set.listName }}</span>
+                <span class="legend-count">{{ set.size }} items</span>
+              </div>
+            </div>
+          }
         </div>
-      </div>
-
+      }
+    
       <!-- Empty state -->
-      <div class="empty-state" *ngIf="!data || data.sets.length === 0">
-        <i class="fa-solid fa-diagram-project"></i>
-        <p>Add lists to visualize their overlaps</p>
-      </div>
+      @if (!data || data.sets.length === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-diagram-project"></i>
+          <p>Add lists to visualize their overlaps</p>
+        </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     :host {
       display: block;

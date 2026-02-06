@@ -17,63 +17,71 @@ export function LoadCommunicationRunsResource() {
     selector: 'mj-communication-runs-resource',
     template: `
     <div class="runs-wrapper">
-        <div class="card">
-            <div class="card-header">
-                <h3><i class="fa-solid fa-play-circle"></i> Bulk Communication Runs</h3>
-                <div class="header-actions">
-                    <button class="tb-btn" (click)="loadData()">
-                        <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
-                    </button>
-                </div>
-            </div>
-            <div class="card-body no-padding">
-                <!-- SUMMARY STATS -->
-                <div class="runs-summary">
-                    <div class="run-stat-card info">
-                        <div class="run-stat-value">{{summary.active}}</div>
-                        <div class="run-stat-label">Active Runs</div>
-                    </div>
-                    <div class="run-stat-card success">
-                        <div class="run-stat-value">{{summary.completed}}</div>
-                        <div class="run-stat-label">Completed (24h)</div>
-                    </div>
-                    <div class="run-stat-card neutral">
-                        <div class="run-stat-value">{{summary.successRate}}%</div>
-                        <div class="run-stat-label">Success Rate</div>
-                    </div>
-                </div>
-
-                <!-- TIMELINE -->
-                <div class="run-timeline">
-                    <div *ngFor="let run of runs" class="run-entry">
-                        <div class="run-timeline-dot" [ngClass]="getRunDotClass(run.Status)"></div>
-                        <div class="run-entry-content">
-                            <div class="run-entry-header">
-                                <span class="run-entry-title">Run #{{run.ID.substring(0, 8)}}</span>
-                                <span class="run-status-badge" [ngClass]="getStatusClass(run.Status)">
-                                    {{run.Status}}
-                                </span>
-                            </div>
-                            <div class="run-entry-meta">
-                                <span><i class="fa-solid fa-user"></i> {{run.User || 'System'}}</span>
-                                <span><i class="fa-solid fa-clock"></i> {{run.StartedAt | date:'medium'}}</span>
-                                <span *ngIf="run.EndedAt"><i class="fa-solid fa-flag-checkered"></i> {{run.EndedAt | date:'shortTime'}}</span>
-                            </div>
-                            <div *ngIf="run.Comments" class="run-entry-comments">
-                                {{run.Comments}}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div *ngIf="runs.length === 0 && !isLoading" class="empty-state">
-                        <i class="fa-solid fa-play-circle"></i>
-                        <p>No communication runs found</p>
-                    </div>
-                </div>
-            </div>
+      <div class="card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-play-circle"></i> Bulk Communication Runs</h3>
+          <div class="header-actions">
+            <button class="tb-btn" (click)="loadData()">
+              <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
+            </button>
+          </div>
         </div>
+        <div class="card-body no-padding">
+          <!-- SUMMARY STATS -->
+          <div class="runs-summary">
+            <div class="run-stat-card info">
+              <div class="run-stat-value">{{summary.active}}</div>
+              <div class="run-stat-label">Active Runs</div>
+            </div>
+            <div class="run-stat-card success">
+              <div class="run-stat-value">{{summary.completed}}</div>
+              <div class="run-stat-label">Completed (24h)</div>
+            </div>
+            <div class="run-stat-card neutral">
+              <div class="run-stat-value">{{summary.successRate}}%</div>
+              <div class="run-stat-label">Success Rate</div>
+            </div>
+          </div>
+    
+          <!-- TIMELINE -->
+          <div class="run-timeline">
+            @for (run of runs; track run) {
+              <div class="run-entry">
+                <div class="run-timeline-dot" [ngClass]="getRunDotClass(run.Status)"></div>
+                <div class="run-entry-content">
+                  <div class="run-entry-header">
+                    <span class="run-entry-title">Run #{{run.ID.substring(0, 8)}}</span>
+                    <span class="run-status-badge" [ngClass]="getStatusClass(run.Status)">
+                      {{run.Status}}
+                    </span>
+                  </div>
+                  <div class="run-entry-meta">
+                    <span><i class="fa-solid fa-user"></i> {{run.User || 'System'}}</span>
+                    <span><i class="fa-solid fa-clock"></i> {{run.StartedAt | date:'medium'}}</span>
+                    @if (run.EndedAt) {
+                      <span><i class="fa-solid fa-flag-checkered"></i> {{run.EndedAt | date:'shortTime'}}</span>
+                    }
+                  </div>
+                  @if (run.Comments) {
+                    <div class="run-entry-comments">
+                      {{run.Comments}}
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+    
+            @if (runs.length === 0 && !isLoading) {
+              <div class="empty-state">
+                <i class="fa-solid fa-play-circle"></i>
+                <p>No communication runs found</p>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
     </div>
-  `,
+    `,
     styles: [`
     .runs-wrapper {
         height: 100%;

@@ -7,28 +7,32 @@ import { NavigationTab } from '../../models/conversation-state.model';
   selector: 'mj-conversation-sidebar',
   template: `
     <div class="conversation-sidebar">
-      <div *ngIf="activeTab === 'conversations'" class="sidebar-content">
-        <mj-conversation-list
-          [environmentId]="environmentId"
-          [currentUser]="currentUser"
-          [selectedConversationId]="selectedConversationId"
-          [renamedConversationId]="renamedConversationId"
-          [isSidebarPinned]="isSidebarPinned"
-          [isMobileView]="isMobileView"
-          (conversationSelected)="conversationSelected.emit($event)"
-          (newConversationRequested)="newConversationRequested.emit()"
-          (pinSidebarRequested)="onPinSidebarRequested()"
-          (unpinSidebarRequested)="onUnpinSidebarRequested()">
-        </mj-conversation-list>
-      </div>
-      <div *ngIf="activeTab === 'collections'" class="sidebar-content">
-        <mj-collection-tree
-          [environmentId]="environmentId"
-          [currentUser]="currentUser">
-        </mj-collection-tree>
-      </div>
+      @if (activeTab === 'conversations') {
+        <div class="sidebar-content">
+          <mj-conversation-list
+            [environmentId]="environmentId"
+            [currentUser]="currentUser"
+            [selectedConversationId]="selectedConversationId"
+            [renamedConversationId]="renamedConversationId"
+            [isSidebarPinned]="isSidebarPinned"
+            [isMobileView]="isMobileView"
+            (conversationSelected)="conversationSelected.emit($event)"
+            (newConversationRequested)="newConversationRequested.emit()"
+            (pinSidebarRequested)="onPinSidebarRequested()"
+            (unpinSidebarRequested)="onUnpinSidebarRequested()">
+          </mj-conversation-list>
+        </div>
+      }
+      @if (activeTab === 'collections') {
+        <div class="sidebar-content">
+          <mj-collection-tree
+            [environmentId]="environmentId"
+            [currentUser]="currentUser">
+          </mj-collection-tree>
+        </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .conversation-sidebar {
       height: 100%;

@@ -5,15 +5,19 @@ import { Component, Input } from '@angular/core';
   selector: 'app-score-indicator',
   template: `
     <div class="score-indicator" [class]="getColorClass()">
-      <div class="score-bar-container" *ngIf="showBar">
-        <div class="score-bar" [style.width.%]="score * 100"></div>
-      </div>
+      @if (showBar) {
+        <div class="score-bar-container">
+          <div class="score-bar" [style.width.%]="score * 100"></div>
+        </div>
+      }
       <div class="score-value">
-        <i [class]="getIcon()" *ngIf="showIcon"></i>
+        @if (showIcon) {
+          <i [class]="getIcon()"></i>
+        }
         <span class="score-text">{{ formatScore(score) }}</span>
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .score-indicator {
       display: inline-flex;

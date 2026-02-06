@@ -22,32 +22,34 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
     template: `
         <!-- Backdrop -->
         <div class="apd-backdrop" [class.apd-visible]="IsVisible" (click)="OnClose()"></div>
-
+        
         <!-- Dialog -->
         <div class="apd-dialog" [class.apd-visible]="IsVisible">
-            <!-- Header -->
-            <div class="apd-header">
-                <div class="apd-title-group">
-                    <i class="fa-solid fa-shield-halved apd-title-icon"></i>
-                    <div>
-                        <h2 class="apd-title">Manage Permissions</h2>
-                        <p class="apd-subtitle" *ngIf="Agent">{{ Agent.Name }}</p>
-                    </div>
-                </div>
-                <button class="apd-close-btn" (click)="OnClose()">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
+          <!-- Header -->
+          <div class="apd-header">
+            <div class="apd-title-group">
+              <i class="fa-solid fa-shield-halved apd-title-icon"></i>
+              <div>
+                <h2 class="apd-title">Manage Permissions</h2>
+                @if (Agent) {
+                  <p class="apd-subtitle">{{ Agent.Name }}</p>
+                }
+              </div>
             </div>
-
-            <!-- Content -->
-            <div class="apd-body">
-                <mj-agent-permissions-panel
-                    [Agent]="Agent"
-                    (PermissionsChanged)="PermissionsChanged.emit()">
-                </mj-agent-permissions-panel>
-            </div>
+            <button class="apd-close-btn" (click)="OnClose()">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        
+          <!-- Content -->
+          <div class="apd-body">
+            <mj-agent-permissions-panel
+              [Agent]="Agent"
+              (PermissionsChanged)="PermissionsChanged.emit()">
+            </mj-agent-permissions-panel>
+          </div>
         </div>
-    `,
+        `,
     styles: [`
         .apd-backdrop {
             position: fixed;

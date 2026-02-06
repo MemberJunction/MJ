@@ -20,12 +20,14 @@ export interface OracleResult {
           <i class="fa-solid fa-balance-scale"></i>
           Oracle Results
         </h4>
-        <div class="aggregate-score" *ngIf="results && results.length > 0">
-          <span class="label">Aggregate:</span>
-          <app-score-indicator [score]="getAggregateScore()" [showBar]="false"></app-score-indicator>
-        </div>
+        @if (results && results.length > 0) {
+          <div class="aggregate-score">
+            <span class="label">Aggregate:</span>
+            <app-score-indicator [score]="getAggregateScore()" [showBar]="false"></app-score-indicator>
+          </div>
+        }
       </div>
-
+    
       <div class="breakdown-content">
         @if (results && results.length > 0) {
           <div class="oracle-table">
@@ -36,15 +38,23 @@ export interface OracleResult {
               <div class="header-cell">Cost</div>
               <div class="header-cell">Duration</div>
             </div>
-
+    
             @for (oracle of results; track oracle.name) {
               <div class="table-row" [class.has-error]="oracle.errorMessage">
                 <div class="table-cell">
                   <div class="oracle-name">
-                    <i class="fa-solid fa-check-circle oracle-icon" *ngIf="oracle.status === 'Passed'"></i>
-                    <i class="fa-solid fa-times-circle oracle-icon" *ngIf="oracle.status === 'Failed'"></i>
-                    <i class="fa-solid fa-exclamation-triangle oracle-icon" *ngIf="oracle.status === 'Error'"></i>
-                    <i class="fa-solid fa-forward oracle-icon" *ngIf="oracle.status === 'Skipped'"></i>
+                    @if (oracle.status === 'Passed') {
+                      <i class="fa-solid fa-check-circle oracle-icon"></i>
+                    }
+                    @if (oracle.status === 'Failed') {
+                      <i class="fa-solid fa-times-circle oracle-icon"></i>
+                    }
+                    @if (oracle.status === 'Error') {
+                      <i class="fa-solid fa-exclamation-triangle oracle-icon"></i>
+                    }
+                    @if (oracle.status === 'Skipped') {
+                      <i class="fa-solid fa-forward oracle-icon"></i>
+                    }
                     <span>{{ oracle.name }}</span>
                   </div>
                 </div>
@@ -61,7 +71,7 @@ export interface OracleResult {
                   {{ formatDuration(oracle.duration) }}
                 </div>
               </div>
-
+    
               @if (oracle.errorMessage) {
                 <div class="error-row">
                   <div class="error-message">
@@ -72,7 +82,7 @@ export interface OracleResult {
               }
             }
           </div>
-
+    
           <div class="breakdown-summary">
             <div class="summary-item">
               <span class="summary-label">Total Cost:</span>
@@ -95,7 +105,7 @@ export interface OracleResult {
         }
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .oracle-breakdown {
       background: white;

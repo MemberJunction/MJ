@@ -16,82 +16,86 @@ interface ConversationMember {
   standalone: false,
   selector: 'mj-members-modal',
   template: `
-    <kendo-dialog
-      *ngIf="isVisible"
-      [title]="modalTitle"
-      [width]="600"
-      [height]="500"
-      (close)="onCancel()">
-
-      <div class="members-modal-content">
-        <div class="add-member-section">
-          <h4>Add Member</h4>
-          <div class="add-member-form">
-            <kendo-textbox
-              [(value)]="newMemberEmail"
-              placeholder="Enter email address"
-              [style.flex]="1">
-            </kendo-textbox>
-            <kendo-dropdownlist
-              [(ngModel)]="newMemberRole"
-              [data]="roleOptions"
-              [textField]="'label'"
-              [valueField]="'value'"
-              [style.width.px]="120">
-            </kendo-dropdownlist>
-            <button kendoButton [primary]="true" [disabled]="isLoading" (click)="onAddMember()">
-              Add
-            </button>
-          </div>
-        </div>
-
-        <div class="members-section">
-          <h4>Current Members ({{ members.length }})</h4>
-
-          <div class="members-list" *ngIf="!isLoading">
-            <div *ngIf="members.length === 0" class="empty-state">
-              <p>No additional members yet</p>
-            </div>
-
-            <div *ngFor="let member of members" class="member-item">
-              <div class="member-info">
-                <i class="fas fa-user-circle"></i>
-                <div class="member-details">
-                  <div class="member-name">{{ member.userName }}</div>
-                  <div class="member-email">{{ member.userEmail }}</div>
-                </div>
-              </div>
-
-              <div class="member-controls">
-                <span class="member-role" [class.owner]="member.role === 'owner'">
-                  {{ member.role === 'owner' ? 'Owner' : 'Member' }}
-                </span>
-                <button
-                  *ngIf="member.role !== 'owner'"
-                  class="btn-remove"
-                  (click)="onRemoveMember(member)"
-                  title="Remove member">
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
+    @if (isVisible) {
+      <kendo-dialog
+        [title]="modalTitle"
+        [width]="600"
+        [height]="500"
+        (close)="onCancel()">
+        <div class="members-modal-content">
+          <div class="add-member-section">
+            <h4>Add Member</h4>
+            <div class="add-member-form">
+              <kendo-textbox
+                [(value)]="newMemberEmail"
+                placeholder="Enter email address"
+                [style.flex]="1">
+              </kendo-textbox>
+              <kendo-dropdownlist
+                [(ngModel)]="newMemberRole"
+                [data]="roleOptions"
+                [textField]="'label'"
+                [valueField]="'value'"
+                [style.width.px]="120">
+              </kendo-dropdownlist>
+              <button kendoButton [primary]="true" [disabled]="isLoading" (click)="onAddMember()">
+                Add
+              </button>
             </div>
           </div>
-
-          <div class="loading-indicator" *ngIf="isLoading">
-            <mj-loading text="Loading members..." size="medium"></mj-loading>
+          <div class="members-section">
+            <h4>Current Members ({{ members.length }})</h4>
+            @if (!isLoading) {
+              <div class="members-list">
+                @if (members.length === 0) {
+                  <div class="empty-state">
+                    <p>No additional members yet</p>
+                  </div>
+                }
+                @for (member of members; track member) {
+                  <div class="member-item">
+                    <div class="member-info">
+                      <i class="fas fa-user-circle"></i>
+                      <div class="member-details">
+                        <div class="member-name">{{ member.userName }}</div>
+                        <div class="member-email">{{ member.userEmail }}</div>
+                      </div>
+                    </div>
+                    <div class="member-controls">
+                      <span class="member-role" [class.owner]="member.role === 'owner'">
+                        {{ member.role === 'owner' ? 'Owner' : 'Member' }}
+                      </span>
+                      @if (member.role !== 'owner') {
+                        <button
+                          class="btn-remove"
+                          (click)="onRemoveMember(member)"
+                          title="Remove member">
+                          <i class="fas fa-times"></i>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+            @if (isLoading) {
+              <div class="loading-indicator">
+                <mj-loading text="Loading members..." size="medium"></mj-loading>
+              </div>
+            }
           </div>
+          @if (errorMessage) {
+            <div class="error-message">
+              {{ errorMessage }}
+            </div>
+          }
         </div>
-
-        <div class="error-message" *ngIf="errorMessage">
-          {{ errorMessage }}
-        </div>
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onCancel()">Close</button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  `,
+        <kendo-dialog-actions>
+          <button kendoButton (click)="onCancel()">Close</button>
+        </kendo-dialog-actions>
+      </kendo-dialog>
+    }
+    `,
   styles: [`
     .members-modal-content {
       padding: 20px;

@@ -28,72 +28,75 @@ export function LoadChatConversationsResource() {
   standalone: false,
   selector: 'mj-chat-conversations-resource',
   template: `
-    <div class="chat-conversations-container" *ngIf="isReady; else loadingTemplate">
-      <!-- Left sidebar: Conversation list -->
-      <div class="conversation-sidebar"
-           *ngIf="isSidebarSettingsLoaded"
-           [class.collapsed]="isSidebarCollapsed"
-           [class.no-transition]="!sidebarTransitionsEnabled"
-           [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
-        <mj-conversation-list
-          #conversationList
-          *ngIf="currentUser"
-          [environmentId]="environmentId"
-          [currentUser]="currentUser"
-          [selectedConversationId]="selectedConversationId"
-          [renamedConversationId]="renamedConversationId"
-          [isSidebarPinned]="isSidebarPinned"
-          [isMobileView]="isMobileView"
-          (conversationSelected)="onConversationSelected($event)"
-          (newConversationRequested)="onNewConversationRequested()"
-          (pinSidebarRequested)="pinSidebar()"
-          (unpinSidebarRequested)="unpinSidebar()">
-        </mj-conversation-list>
+    @if (isReady) {
+      <div class="chat-conversations-container">
+        <!-- Left sidebar: Conversation list -->
+        @if (isSidebarSettingsLoaded) {
+          <div class="conversation-sidebar"
+            [class.collapsed]="isSidebarCollapsed"
+            [class.no-transition]="!sidebarTransitionsEnabled"
+            [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
+            @if (currentUser) {
+              <mj-conversation-list
+                #conversationList
+                [environmentId]="environmentId"
+                [currentUser]="currentUser"
+                [selectedConversationId]="selectedConversationId"
+                [renamedConversationId]="renamedConversationId"
+                [isSidebarPinned]="isSidebarPinned"
+                [isMobileView]="isMobileView"
+                (conversationSelected)="onConversationSelected($event)"
+                (newConversationRequested)="onNewConversationRequested()"
+                (pinSidebarRequested)="pinSidebar()"
+                (unpinSidebarRequested)="unpinSidebar()">
+              </mj-conversation-list>
+            }
+          </div>
+        }
+        <!-- Resize handle for sidebar (only when expanded and settings loaded) -->
+        @if (!isSidebarCollapsed && isSidebarSettingsLoaded) {
+          <div class="sidebar-resize-handle"
+          (mousedown)="onSidebarResizeStart($event)"></div>
+        }
+        <!-- Main area: Chat interface -->
+        <div class="conversation-main">
+          @if (currentUser) {
+            <mj-conversation-chat-area
+              #chatArea
+              [environmentId]="environmentId"
+              [currentUser]="currentUser"
+              [conversationId]="selectedConversationId"
+              [conversation]="selectedConversation"
+              [threadId]="selectedThreadId"
+              [isNewConversation]="isNewUnsavedConversation"
+              [pendingMessage]="pendingMessageToSend"
+              [pendingAttachments]="pendingAttachmentsToSend"
+              [pendingArtifactId]="pendingArtifactId"
+              [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
+              [showSidebarToggle]="isSidebarCollapsed && isSidebarSettingsLoaded"
+              (sidebarToggleClicked)="expandSidebar()"
+              (conversationRenamed)="onConversationRenamed($event)"
+              (conversationCreated)="onConversationCreated($event)"
+              (threadOpened)="onThreadOpened($event)"
+              (threadClosed)="onThreadClosed()"
+              (pendingArtifactConsumed)="onPendingArtifactConsumed()"
+              (pendingMessageConsumed)="onPendingMessageConsumed()"
+              (pendingMessageRequested)="onPendingMessageRequested($event)"
+              (artifactLinkClicked)="onArtifactLinkClicked($event)"
+              (openEntityRecord)="onOpenEntityRecord($event)">
+            </mj-conversation-chat-area>
+          }
+        </div>
       </div>
-
-      <!-- Resize handle for sidebar (only when expanded and settings loaded) -->
-      <div class="sidebar-resize-handle"
-           *ngIf="!isSidebarCollapsed && isSidebarSettingsLoaded"
-           (mousedown)="onSidebarResizeStart($event)"></div>
-
-      <!-- Main area: Chat interface -->
-      <div class="conversation-main">
-        <mj-conversation-chat-area
-          #chatArea
-          *ngIf="currentUser"
-          [environmentId]="environmentId"
-          [currentUser]="currentUser"
-          [conversationId]="selectedConversationId"
-          [conversation]="selectedConversation"
-          [threadId]="selectedThreadId"
-          [isNewConversation]="isNewUnsavedConversation"
-          [pendingMessage]="pendingMessageToSend"
-          [pendingAttachments]="pendingAttachmentsToSend"
-          [pendingArtifactId]="pendingArtifactId"
-          [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
-          [showSidebarToggle]="isSidebarCollapsed && isSidebarSettingsLoaded"
-          (sidebarToggleClicked)="expandSidebar()"
-          (conversationRenamed)="onConversationRenamed($event)"
-          (conversationCreated)="onConversationCreated($event)"
-          (threadOpened)="onThreadOpened($event)"
-          (threadClosed)="onThreadClosed()"
-          (pendingArtifactConsumed)="onPendingArtifactConsumed()"
-          (pendingMessageConsumed)="onPendingMessageConsumed()"
-          (pendingMessageRequested)="onPendingMessageRequested($event)"
-          (artifactLinkClicked)="onArtifactLinkClicked($event)"
-          (openEntityRecord)="onOpenEntityRecord($event)">
-        </mj-conversation-chat-area>
-      </div>
-    </div>
-    <ng-template #loadingTemplate>
+    } @else {
       <div class="initializing-container">
         <mj-loading text="Initializing..." size="large"></mj-loading>
       </div>
-    </ng-template>
-
+    }
+    
     <!-- Toast notifications container -->
     <mj-toast></mj-toast>
-  `,
+    `,
   styles: [`
     :host {
       display: flex;

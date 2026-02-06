@@ -46,12 +46,14 @@ import { EvaluationPreferences } from '../../models/evaluation.types';
           <span>Auto</span>
         </button>
       </div>
-      <span class="toggle-hint" *ngIf="showHint">
-        <i class="fa-solid fa-info-circle"></i>
-        At least one must be enabled
-      </span>
+      @if (showHint) {
+        <span class="toggle-hint">
+          <i class="fa-solid fa-info-circle"></i>
+          At least one must be enabled
+        </span>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .eval-toggle {
       display: flex;

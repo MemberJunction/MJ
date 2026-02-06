@@ -14,112 +14,128 @@ import { PanelConfig } from '../models/dashboard-types';
     selector: 'mj-weburl-part',
     template: `
         <div class="weburl-part" [class.loading]="IsLoading" [class.error]="ErrorMessage">
-            <!-- Loading state -->
-            <div class="loading-state" *ngIf="IsLoading">
-                <i class="fa-solid fa-spinner fa-spin"></i>
-                <span>Loading...</span>
+          <!-- Loading state -->
+          @if (IsLoading) {
+            <div class="loading-state">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              <span>Loading...</span>
             </div>
-
-            <!-- Error state -->
-            <div class="error-state" *ngIf="ErrorMessage">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                <span>{{ ErrorMessage }}</span>
-                <a *ngIf="rawUrl" [href]="rawUrl" target="_blank" class="open-link">
-                    <i class="fa-solid fa-external-link-alt"></i>
-                    Open in new window
+          }
+        
+          <!-- Error state -->
+          @if (ErrorMessage) {
+            <div class="error-state">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <span>{{ ErrorMessage }}</span>
+              @if (rawUrl) {
+                <a [href]="rawUrl" target="_blank" class="open-link">
+                  <i class="fa-solid fa-external-link-alt"></i>
+                  Open in new window
                 </a>
+              }
             </div>
-
-            <!-- No URL configured -->
-            <div class="empty-state" *ngIf="!IsLoading && !ErrorMessage && !SafeUrl">
-                <i class="fa-solid fa-globe"></i>
-                <h4>No URL Configured</h4>
-                <p>Click the configure button to set a URL for this part.</p>
+          }
+        
+          <!-- No URL configured -->
+          @if (!IsLoading && !ErrorMessage && !SafeUrl) {
+            <div class="empty-state">
+              <i class="fa-solid fa-globe"></i>
+              <h4>No URL Configured</h4>
+              <p>Click the configure button to set a URL for this part.</p>
             </div>
-
-            <!-- Iframe container - sandbox and allowfullscreen must be static, so we use ng-container to switch -->
-            <ng-container *ngIf="!IsLoading && !ErrorMessage && SafeUrl">
-                <!-- Standard sandbox + fullscreen enabled -->
-                <iframe
-                    *ngIf="sandboxMode === 'standard' && allowFullscreen"
-                    #iframe
-                    [src]="SafeUrl"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                    allowfullscreen
-                    [title]="Panel?.title || 'Embedded content'"
-                    (load)="onIframeLoad()"
-                    (error)="onIframeError($event)"
-                    class="content-iframe">
-                </iframe>
-                <!-- Standard sandbox + fullscreen disabled -->
-                <iframe
-                    *ngIf="sandboxMode === 'standard' && !allowFullscreen"
-                    #iframe
-                    [src]="SafeUrl"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                    [title]="Panel?.title || 'Embedded content'"
-                    (load)="onIframeLoad()"
-                    (error)="onIframeError($event)"
-                    class="content-iframe">
-                </iframe>
-                <!-- Strict sandbox + fullscreen enabled -->
-                <iframe
-                    *ngIf="sandboxMode === 'strict' && allowFullscreen"
-                    #iframe
-                    [src]="SafeUrl"
-                    sandbox="allow-scripts"
-                    allowfullscreen
-                    [title]="Panel?.title || 'Embedded content'"
-                    (load)="onIframeLoad()"
-                    (error)="onIframeError($event)"
-                    class="content-iframe">
-                </iframe>
-                <!-- Strict sandbox + fullscreen disabled -->
-                <iframe
-                    *ngIf="sandboxMode === 'strict' && !allowFullscreen"
-                    #iframe
-                    [src]="SafeUrl"
-                    sandbox="allow-scripts"
-                    [title]="Panel?.title || 'Embedded content'"
-                    (load)="onIframeLoad()"
-                    (error)="onIframeError($event)"
-                    class="content-iframe">
-                </iframe>
-                <!-- Permissive sandbox + fullscreen enabled -->
-                <iframe
-                    *ngIf="sandboxMode === 'permissive' && allowFullscreen"
-                    #iframe
-                    [src]="SafeUrl"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation"
-                    allowfullscreen
-                    [title]="Panel?.title || 'Embedded content'"
-                    (load)="onIframeLoad()"
-                    (error)="onIframeError($event)"
-                    class="content-iframe">
-                </iframe>
-                <!-- Permissive sandbox + fullscreen disabled -->
-                <iframe
-                    *ngIf="sandboxMode === 'permissive' && !allowFullscreen"
-                    #iframe
-                    [src]="SafeUrl"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation"
-                    [title]="Panel?.title || 'Embedded content'"
-                    (load)="onIframeLoad()"
-                    (error)="onIframeError($event)"
-                    class="content-iframe">
-                </iframe>
-            </ng-container>
-
-            <!-- Fallback link shown below iframe if content might be blocked -->
-            <div class="iframe-fallback" *ngIf="!IsLoading && !ErrorMessage && SafeUrl && showFallbackLink">
-                <span>If the content doesn't load:</span>
-                <a [href]="rawUrl" target="_blank">
-                    <i class="fa-solid fa-external-link-alt"></i>
-                    Open in new window
-                </a>
+          }
+        
+          <!-- Iframe container - sandbox and allowfullscreen must be static, so we use ng-container to switch -->
+          @if (!IsLoading && !ErrorMessage && SafeUrl) {
+            <!-- Standard sandbox + fullscreen enabled -->
+            @if (sandboxMode === 'standard' && allowFullscreen) {
+              <iframe
+                #iframe
+                [src]="SafeUrl"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                allowfullscreen
+                [title]="Panel?.title || 'Embedded content'"
+                (load)="onIframeLoad()"
+                (error)="onIframeError($event)"
+                class="content-iframe">
+              </iframe>
+            }
+            <!-- Standard sandbox + fullscreen disabled -->
+            @if (sandboxMode === 'standard' && !allowFullscreen) {
+              <iframe
+                #iframe
+                [src]="SafeUrl"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                [title]="Panel?.title || 'Embedded content'"
+                (load)="onIframeLoad()"
+                (error)="onIframeError($event)"
+                class="content-iframe">
+              </iframe>
+            }
+            <!-- Strict sandbox + fullscreen enabled -->
+            @if (sandboxMode === 'strict' && allowFullscreen) {
+              <iframe
+                #iframe
+                [src]="SafeUrl"
+                sandbox="allow-scripts"
+                allowfullscreen
+                [title]="Panel?.title || 'Embedded content'"
+                (load)="onIframeLoad()"
+                (error)="onIframeError($event)"
+                class="content-iframe">
+              </iframe>
+            }
+            <!-- Strict sandbox + fullscreen disabled -->
+            @if (sandboxMode === 'strict' && !allowFullscreen) {
+              <iframe
+                #iframe
+                [src]="SafeUrl"
+                sandbox="allow-scripts"
+                [title]="Panel?.title || 'Embedded content'"
+                (load)="onIframeLoad()"
+                (error)="onIframeError($event)"
+                class="content-iframe">
+              </iframe>
+            }
+            <!-- Permissive sandbox + fullscreen enabled -->
+            @if (sandboxMode === 'permissive' && allowFullscreen) {
+              <iframe
+                #iframe
+                [src]="SafeUrl"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation"
+                allowfullscreen
+                [title]="Panel?.title || 'Embedded content'"
+                (load)="onIframeLoad()"
+                (error)="onIframeError($event)"
+                class="content-iframe">
+              </iframe>
+            }
+            <!-- Permissive sandbox + fullscreen disabled -->
+            @if (sandboxMode === 'permissive' && !allowFullscreen) {
+              <iframe
+                #iframe
+                [src]="SafeUrl"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation"
+                [title]="Panel?.title || 'Embedded content'"
+                (load)="onIframeLoad()"
+                (error)="onIframeError($event)"
+                class="content-iframe">
+              </iframe>
+            }
+          }
+        
+          <!-- Fallback link shown below iframe if content might be blocked -->
+          @if (!IsLoading && !ErrorMessage && SafeUrl && showFallbackLink) {
+            <div class="iframe-fallback">
+              <span>If the content doesn't load:</span>
+              <a [href]="rawUrl" target="_blank">
+                <i class="fa-solid fa-external-link-alt"></i>
+                Open in new window
+              </a>
             </div>
+          }
         </div>
-    `,
+        `,
     styles: [`
         :host {
             display: block;

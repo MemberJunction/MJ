@@ -12,63 +12,64 @@ import { CollectionPermissionService } from '../../services/collection-permissio
   standalone: false,
   selector: 'mj-collection-form-modal',
   template: `
-    <kendo-dialog
-      *ngIf="isOpen"
-      [title]="collection?.ID ? 'Edit Collection' : 'New Collection'"
-      (close)="onCancel()"
-      [width]="500"
-      [minWidth]="300">
-      <div class="collection-form">
-        <div class="form-group">
-          <label class="form-label">
-            Name <span class="required">*</span>
-          </label>
-          <input
-            type="text"
-            class="k-textbox form-control"
-            [(ngModel)]="formData.name"
-            placeholder="Collection name"
-            #nameInput
-            (keydown.enter)="onSave()">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Description</label>
-          <textarea
-            class="k-textarea form-control"
-            [(ngModel)]="formData.description"
-            placeholder="Optional description"
-            rows="3">
-          </textarea>
-        </div>
-
-        <div class="form-group" *ngIf="parentCollection">
-          <label class="form-label">Parent Collection</label>
-          <div class="parent-info">
-            <i class="fas fa-folder"></i>
-            <span>{{ parentCollection.Name }}</span>
+    @if (isOpen) {
+      <kendo-dialog
+        [title]="collection?.ID ? 'Edit Collection' : 'New Collection'"
+        (close)="onCancel()"
+        [width]="500"
+        [minWidth]="300">
+        <div class="collection-form">
+          <div class="form-group">
+            <label class="form-label">
+              Name <span class="required">*</span>
+            </label>
+            <input
+              type="text"
+              class="k-textbox form-control"
+              [(ngModel)]="formData.name"
+              placeholder="Collection name"
+              #nameInput
+              (keydown.enter)="onSave()">
           </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea
+              class="k-textarea form-control"
+              [(ngModel)]="formData.description"
+              placeholder="Optional description"
+              rows="3">
+            </textarea>
+          </div>
+          @if (parentCollection) {
+            <div class="form-group">
+              <label class="form-label">Parent Collection</label>
+              <div class="parent-info">
+                <i class="fas fa-folder"></i>
+                <span>{{ parentCollection.Name }}</span>
+              </div>
+            </div>
+          }
+          @if (errorMessage) {
+            <div class="form-error">
+              <i class="fas fa-exclamation-circle"></i>
+              {{ errorMessage }}
+            </div>
+          }
         </div>
-
-        <div class="form-error" *ngIf="errorMessage">
-          <i class="fas fa-exclamation-circle"></i>
-          {{ errorMessage }}
-        </div>
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onCancel()" [disabled]="isSaving">
-          Cancel
-        </button>
-        <button kendoButton
-                [primary]="true"
-                (click)="onSave()"
-                [disabled]="!canSave || isSaving">
-          {{ isSaving ? 'Saving...' : 'Save' }}
-        </button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  `,
+        <kendo-dialog-actions>
+          <button kendoButton (click)="onCancel()" [disabled]="isSaving">
+            Cancel
+          </button>
+          <button kendoButton
+            [primary]="true"
+            (click)="onSave()"
+            [disabled]="!canSave || isSaving">
+            {{ isSaving ? 'Saving...' : 'Save' }}
+          </button>
+        </kendo-dialog-actions>
+      </kendo-dialog>
+    }
+    `,
   styles: [`
     .collection-form {
       padding: 20px 0;

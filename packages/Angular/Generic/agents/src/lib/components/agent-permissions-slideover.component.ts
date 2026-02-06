@@ -21,37 +21,39 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
     template: `
         <!-- Backdrop -->
         <div class="aps-backdrop" [class.aps-visible]="IsVisible" (click)="OnClose()"></div>
-
+        
         <!-- Slide panel -->
         <div class="aps-panel" [class.aps-visible]="IsVisible" [style.width.px]="WidthPx">
-            <!-- Resize handle -->
-            <div class="aps-resize-handle" (mousedown)="OnResizeStart($event)">
-                <div class="aps-resize-grip"></div>
+          <!-- Resize handle -->
+          <div class="aps-resize-handle" (mousedown)="OnResizeStart($event)">
+            <div class="aps-resize-grip"></div>
+          </div>
+        
+          <!-- Header -->
+          <div class="aps-header">
+            <div class="aps-title-group">
+              <i class="fa-solid fa-shield-halved aps-title-icon"></i>
+              <div>
+                <h2 class="aps-title">Permissions</h2>
+                @if (Agent) {
+                  <p class="aps-subtitle">{{ Agent.Name }}</p>
+                }
+              </div>
             </div>
-
-            <!-- Header -->
-            <div class="aps-header">
-                <div class="aps-title-group">
-                    <i class="fa-solid fa-shield-halved aps-title-icon"></i>
-                    <div>
-                        <h2 class="aps-title">Permissions</h2>
-                        <p class="aps-subtitle" *ngIf="Agent">{{ Agent.Name }}</p>
-                    </div>
-                </div>
-                <button class="aps-close-btn" (click)="OnClose()">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <!-- Content -->
-            <div class="aps-body">
-                <mj-agent-permissions-panel
-                    [Agent]="Agent"
-                    (PermissionsChanged)="PermissionsChanged.emit()">
-                </mj-agent-permissions-panel>
-            </div>
+            <button class="aps-close-btn" (click)="OnClose()">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        
+          <!-- Content -->
+          <div class="aps-body">
+            <mj-agent-permissions-panel
+              [Agent]="Agent"
+              (PermissionsChanged)="PermissionsChanged.emit()">
+            </mj-agent-permissions-panel>
+          </div>
         </div>
-    `,
+        `,
     styles: [`
         .aps-backdrop {
             position: fixed;

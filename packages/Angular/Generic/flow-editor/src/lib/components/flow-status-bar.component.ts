@@ -16,16 +16,18 @@ import { Component, Input, ViewEncapsulation, ChangeDetectionStrategy } from '@a
         <i class="fa-solid fa-link"></i>
         {{ ConnectionCount }} {{ ConnectionCount === 1 ? 'connection' : 'connections' }}
       </span>
-      <span class="mj-flow-status-item" *ngIf="SelectedCount > 0">
-        <i class="fa-solid fa-check-square"></i>
-        {{ SelectedCount }} selected
-      </span>
+      @if (SelectedCount > 0) {
+        <span class="mj-flow-status-item">
+          <i class="fa-solid fa-check-square"></i>
+          {{ SelectedCount }} selected
+        </span>
+      }
       <span class="mj-flow-status-item mj-flow-status-item--right">
         <i class="fa-solid fa-magnifying-glass"></i>
         {{ ZoomLevel }}%
       </span>
     </div>
-  `,
+    `,
   styles: [`
     .mj-flow-status-bar {
       display: flex;

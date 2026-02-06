@@ -21,40 +21,42 @@ import { CreateAgentConfig, CreateAgentResult } from './create-agent-panel.compo
     template: `
         <!-- Backdrop -->
         <div class="cas-backdrop" [class.cas-visible]="IsVisible" (click)="OnClose()"></div>
-
+        
         <!-- Slide panel -->
         <div class="cas-panel" [class.cas-visible]="IsVisible" [style.width.px]="WidthPx">
-            <!-- Resize handle -->
-            <div class="cas-resize-handle" (mousedown)="OnResizeStart($event)">
-                <div class="cas-resize-grip"></div>
+          <!-- Resize handle -->
+          <div class="cas-resize-handle" (mousedown)="OnResizeStart($event)">
+            <div class="cas-resize-grip"></div>
+          </div>
+        
+          <!-- Header -->
+          <div class="cas-header">
+            <div class="cas-title-group">
+              <i class="fa-solid fa-robot cas-title-icon"></i>
+              <div>
+                <h2 class="cas-title">{{ PanelTitle }}</h2>
+                @if (Config.ParentAgentName) {
+                  <p class="cas-subtitle">
+                    Sub-agent of {{ Config.ParentAgentName }}
+                  </p>
+                }
+              </div>
             </div>
-
-            <!-- Header -->
-            <div class="cas-header">
-                <div class="cas-title-group">
-                    <i class="fa-solid fa-robot cas-title-icon"></i>
-                    <div>
-                        <h2 class="cas-title">{{ PanelTitle }}</h2>
-                        <p class="cas-subtitle" *ngIf="Config.ParentAgentName">
-                            Sub-agent of {{ Config.ParentAgentName }}
-                        </p>
-                    </div>
-                </div>
-                <button class="cas-close-btn" (click)="OnClose()">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <!-- Content -->
-            <div class="cas-body">
-                <mj-create-agent-panel
-                    [Config]="Config"
-                    (Created)="OnCreated($event)"
-                    (Cancelled)="OnClose()">
-                </mj-create-agent-panel>
-            </div>
+            <button class="cas-close-btn" (click)="OnClose()">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        
+          <!-- Content -->
+          <div class="cas-body">
+            <mj-create-agent-panel
+              [Config]="Config"
+              (Created)="OnCreated($event)"
+              (Cancelled)="OnClose()">
+            </mj-create-agent-panel>
+          </div>
         </div>
-    `,
+        `,
     styles: [`
         .cas-backdrop {
             position: fixed;

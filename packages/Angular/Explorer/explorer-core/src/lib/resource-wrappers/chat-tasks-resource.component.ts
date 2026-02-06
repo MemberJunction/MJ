@@ -24,18 +24,19 @@ export function LoadChatTasksResource() {
   selector: 'mj-chat-tasks-resource',
   template: `
     <div class="chat-tasks-container">
-      <mj-tasks-full-view
-        #tasksView
-        *ngIf="currentUser"
-        [environmentId]="environmentId"
-        [currentUser]="currentUser"
-        [baseFilter]="'1=1'"
-        [activeTaskId]="activeTaskId"
-        (taskSelected)="onTaskSelected($any($event))"
-        style="height: 100%;">
-      </mj-tasks-full-view>
+      @if (currentUser) {
+        <mj-tasks-full-view
+          #tasksView
+          [environmentId]="environmentId"
+          [currentUser]="currentUser"
+          [baseFilter]="'1=1'"
+          [activeTaskId]="activeTaskId"
+          (taskSelected)="onTaskSelected($any($event))"
+          style="height: 100%;">
+        </mj-tasks-full-view>
+      }
     </div>
-  `,
+    `,
   styles: [`
     :host {
       display: flex;

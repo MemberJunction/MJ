@@ -26,82 +26,96 @@ export function LoadCommunicationProvidersResource() {
     selector: 'mj-communication-providers-resource',
     template: `
     <div class="providers-wrapper">
-        <div class="providers-header">
-            <div>
-                <h2>Communication Providers</h2>
-                <p>Manage your messaging service integrations</p>
-            </div>
-            <button class="tb-btn primary" (click)="addNewProvider()">
-                <i class="fa-solid fa-plus"></i> Add Provider
-            </button>
+      <div class="providers-header">
+        <div>
+          <h2>Communication Providers</h2>
+          <p>Manage your messaging service integrations</p>
         </div>
-
-        <div *ngIf="isLoading" class="loading-state">
-            <mj-loading text="Loading providers..."></mj-loading>
+        <button class="tb-btn primary" (click)="addNewProvider()">
+          <i class="fa-solid fa-plus"></i> Add Provider
+        </button>
+      </div>
+    
+      @if (isLoading) {
+        <div class="loading-state">
+          <mj-loading text="Loading providers..."></mj-loading>
         </div>
-
-        <div *ngIf="!isLoading" class="providers-grid">
-            <div *ngFor="let card of providerCards" class="provider-card" [class.disabled]="card.Entity.Status === 'Disabled'">
-                <div class="provider-card-header">
-                    <div class="provider-card-logo" [ngClass]="card.LogoClass">
-                        <i [class]="card.IconClass"></i>
-                    </div>
-                    <div class="provider-card-title">
-                        <div class="provider-card-name">{{card.Entity.Name}}</div>
-                        <div class="provider-card-desc">{{card.Entity.Description || 'No description'}}</div>
-                    </div>
-                    <span class="provider-card-status" [ngClass]="card.Entity.Status.toLowerCase()">
-                        {{card.Entity.Status}}
+      }
+    
+      @if (!isLoading) {
+        <div class="providers-grid">
+          @for (card of providerCards; track card) {
+            <div class="provider-card" [class.disabled]="card.Entity.Status === 'Disabled'">
+              <div class="provider-card-header">
+                <div class="provider-card-logo" [ngClass]="card.LogoClass">
+                  <i [class]="card.IconClass"></i>
+                </div>
+                <div class="provider-card-title">
+                  <div class="provider-card-name">{{card.Entity.Name}}</div>
+                  <div class="provider-card-desc">{{card.Entity.Description || 'No description'}}</div>
+                </div>
+                <span class="provider-card-status" [ngClass]="card.Entity.Status.toLowerCase()">
+                  {{card.Entity.Status}}
+                </span>
+              </div>
+              <div class="provider-card-body">
+                <div class="provider-capabilities">
+                  <span class="capability-chip" [class.supported]="card.Entity.SupportsSending" [class.unsupported]="!card.Entity.SupportsSending">
+                    <i [class]="card.Entity.SupportsSending ? 'fa-solid fa-check' : 'fa-solid fa-xmark'"></i> Sending
+                  </span>
+                  <span class="capability-chip" [class.supported]="card.Entity.SupportsReceiving" [class.unsupported]="!card.Entity.SupportsReceiving">
+                    <i [class]="card.Entity.SupportsReceiving ? 'fa-solid fa-check' : 'fa-solid fa-xmark'"></i> Receiving
+                  </span>
+                  @if (card.Entity.SupportsScheduledSending) {
+                    <span class="capability-chip supported">
+                      <i class="fa-solid fa-check"></i> Scheduled
                     </span>
+                  }
+                  @if (card.Entity.SupportsDrafts) {
+                    <span class="capability-chip supported">
+                      <i class="fa-solid fa-check"></i> Drafts
+                    </span>
+                  }
+                  @if (card.Entity.SupportsForwarding) {
+                    <span class="capability-chip supported">
+                      <i class="fa-solid fa-check"></i> Forward
+                    </span>
+                  }
+                  @if (card.Entity.SupportsReplying) {
+                    <span class="capability-chip supported">
+                      <i class="fa-solid fa-check"></i> Reply
+                    </span>
+                  }
                 </div>
-                <div class="provider-card-body">
-                    <div class="provider-capabilities">
-                        <span class="capability-chip" [class.supported]="card.Entity.SupportsSending" [class.unsupported]="!card.Entity.SupportsSending">
-                            <i [class]="card.Entity.SupportsSending ? 'fa-solid fa-check' : 'fa-solid fa-xmark'"></i> Sending
-                        </span>
-                        <span class="capability-chip" [class.supported]="card.Entity.SupportsReceiving" [class.unsupported]="!card.Entity.SupportsReceiving">
-                            <i [class]="card.Entity.SupportsReceiving ? 'fa-solid fa-check' : 'fa-solid fa-xmark'"></i> Receiving
-                        </span>
-                        <span *ngIf="card.Entity.SupportsScheduledSending" class="capability-chip supported">
-                            <i class="fa-solid fa-check"></i> Scheduled
-                        </span>
-                        <span *ngIf="card.Entity.SupportsDrafts" class="capability-chip supported">
-                            <i class="fa-solid fa-check"></i> Drafts
-                        </span>
-                        <span *ngIf="card.Entity.SupportsForwarding" class="capability-chip supported">
-                            <i class="fa-solid fa-check"></i> Forward
-                        </span>
-                        <span *ngIf="card.Entity.SupportsReplying" class="capability-chip supported">
-                            <i class="fa-solid fa-check"></i> Reply
-                        </span>
-                    </div>
-                    <div class="provider-card-stats">
-                        <div class="provider-stat">
-                            <div class="provider-stat-value">{{card.SentCount}}</div>
-                            <div class="provider-stat-label">Sent (24h)</div>
-                        </div>
-                        <div class="provider-stat">
-                            <div class="provider-stat-value">{{card.SuccessRate}}%</div>
-                            <div class="provider-stat-label">Success</div>
-                        </div>
-                        <div class="provider-stat">
-                            <div class="provider-stat-value">{{card.FailedCount}}</div>
-                            <div class="provider-stat-label">Failed</div>
-                        </div>
-                    </div>
+                <div class="provider-card-stats">
+                  <div class="provider-stat">
+                    <div class="provider-stat-value">{{card.SentCount}}</div>
+                    <div class="provider-stat-label">Sent (24h)</div>
+                  </div>
+                  <div class="provider-stat">
+                    <div class="provider-stat-value">{{card.SuccessRate}}%</div>
+                    <div class="provider-stat-label">Success</div>
+                  </div>
+                  <div class="provider-stat">
+                    <div class="provider-stat-value">{{card.FailedCount}}</div>
+                    <div class="provider-stat-label">Failed</div>
+                  </div>
                 </div>
-                <div class="provider-card-footer">
-                    <button (click)="configureProvider(card.Entity)">
-                        <i class="fa-solid fa-gear"></i> Configure
-                    </button>
-                    <button (click)="viewProviderLogs(card.Entity)">
-                        <i class="fa-solid fa-chart-line"></i> Analytics
-                    </button>
-                </div>
+              </div>
+              <div class="provider-card-footer">
+                <button (click)="configureProvider(card.Entity)">
+                  <i class="fa-solid fa-gear"></i> Configure
+                </button>
+                <button (click)="viewProviderLogs(card.Entity)">
+                  <i class="fa-solid fa-chart-line"></i> Analytics
+                </button>
+              </div>
             </div>
+          }
         </div>
+      }
     </div>
-  `,
+    `,
     styles: [`
     .providers-wrapper {
         height: 100%;

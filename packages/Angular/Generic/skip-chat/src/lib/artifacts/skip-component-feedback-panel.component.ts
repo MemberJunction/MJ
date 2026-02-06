@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from '@progress/kendo-angular-buttons';
 import { InputsModule } from '@progress/kendo-angular-inputs';
@@ -42,13 +42,12 @@ export interface ComponentFeedback {
   selector: 'skip-component-feedback-panel',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     ButtonModule,
     InputsModule,
     DropDownsModule,
     LayoutModule
-  ],
+],
   templateUrl: './skip-component-feedback-panel.component.html',
   styleUrls: ['./skip-component-feedback-panel.component.css']
 })

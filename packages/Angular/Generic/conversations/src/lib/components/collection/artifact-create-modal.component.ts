@@ -11,85 +11,83 @@ import { CollectionPermissionService } from '../../services/collection-permissio
   standalone: false,
   selector: 'mj-artifact-create-modal',
   template: `
-    <kendo-dialog
-      *ngIf="isOpen"
-      title="Create Artifact"
-      (close)="onCancel()"
-      [width]="600"
-      [minWidth]="400">
-      <div class="artifact-form">
-        <div class="form-group">
-          <label class="form-label">
-            Name <span class="required">*</span>
-          </label>
-          <input
-            type="text"
-            class="k-textbox form-control"
-            [(ngModel)]="formData.name"
-            placeholder="Artifact name"
-            #nameInput>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">
-            Type <span class="required">*</span>
-          </label>
-          <kendo-dropdownlist
-            [data]="artifactTypes"
-            [(ngModel)]="formData.selectedType"
-            textField="Name"
-            valueField="ID"
-            [valuePrimitive]="false"
-            class="form-control"
-            [loading]="isLoadingTypes">
-          </kendo-dropdownlist>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Description</label>
-          <textarea
-            class="k-textarea form-control"
-            [(ngModel)]="formData.description"
-            placeholder="Optional description"
-            rows="2">
-          </textarea>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">
-            Content <span class="required">*</span>
-          </label>
-          <textarea
-            class="k-textarea form-control content-area"
-            [(ngModel)]="formData.content"
-            placeholder="Paste your content here..."
-            rows="12">
-          </textarea>
-          <div class="content-hint">
-            <i class="fas fa-info-circle"></i>
-            Paste or type the artifact content. The content will be saved as version 1.
+    @if (isOpen) {
+      <kendo-dialog
+        title="Create Artifact"
+        (close)="onCancel()"
+        [width]="600"
+        [minWidth]="400">
+        <div class="artifact-form">
+          <div class="form-group">
+            <label class="form-label">
+              Name <span class="required">*</span>
+            </label>
+            <input
+              type="text"
+              class="k-textbox form-control"
+              [(ngModel)]="formData.name"
+              placeholder="Artifact name"
+              #nameInput>
           </div>
+          <div class="form-group">
+            <label class="form-label">
+              Type <span class="required">*</span>
+            </label>
+            <kendo-dropdownlist
+              [data]="artifactTypes"
+              [(ngModel)]="formData.selectedType"
+              textField="Name"
+              valueField="ID"
+              [valuePrimitive]="false"
+              class="form-control"
+              [loading]="isLoadingTypes">
+            </kendo-dropdownlist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea
+              class="k-textarea form-control"
+              [(ngModel)]="formData.description"
+              placeholder="Optional description"
+              rows="2">
+            </textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">
+              Content <span class="required">*</span>
+            </label>
+            <textarea
+              class="k-textarea form-control content-area"
+              [(ngModel)]="formData.content"
+              placeholder="Paste your content here..."
+              rows="12">
+            </textarea>
+            <div class="content-hint">
+              <i class="fas fa-info-circle"></i>
+              Paste or type the artifact content. The content will be saved as version 1.
+            </div>
+          </div>
+          @if (errorMessage) {
+            <div class="form-error">
+              <i class="fas fa-exclamation-circle"></i>
+              {{ errorMessage }}
+            </div>
+          }
         </div>
-
-        <div class="form-error" *ngIf="errorMessage">
-          <i class="fas fa-exclamation-circle"></i>
-          {{ errorMessage }}
-        </div>
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onCancel()" [disabled]="isSaving">
-          Cancel
-        </button>
-        <button kendoButton
-                [primary]="true"
-                (click)="onSave()"
-                [disabled]="!canSave || isSaving">
-          {{ isSaving ? 'Creating...' : 'Create Artifact' }}
-        </button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  `,
+        <kendo-dialog-actions>
+          <button kendoButton (click)="onCancel()" [disabled]="isSaving">
+            Cancel
+          </button>
+          <button kendoButton
+            [primary]="true"
+            (click)="onSave()"
+            [disabled]="!canSave || isSaving">
+            {{ isSaving ? 'Creating...' : 'Create Artifact' }}
+          </button>
+        </kendo-dialog-actions>
+      </kendo-dialog>
+    }
+    `,
   styles: [`
     .artifact-form {
       padding: 20px 0;

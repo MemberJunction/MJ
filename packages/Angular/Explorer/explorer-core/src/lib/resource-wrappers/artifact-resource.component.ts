@@ -19,17 +19,18 @@ export function LoadArtifactResource() {
   selector: 'mj-artifact-resource',
   template: `
     <div class="artifact-container">
-      <mj-artifact-viewer-panel
-        *ngIf="currentUser && artifactId"
-        [artifactId]="artifactId"
-        [currentUser]="currentUser"
-        [environmentId]="environmentId"
-        [showSaveToCollection]="true"
-        [canShare]="true"
-        [canEdit]="true">
-      </mj-artifact-viewer-panel>
+      @if (currentUser && artifactId) {
+        <mj-artifact-viewer-panel
+          [artifactId]="artifactId"
+          [currentUser]="currentUser"
+          [environmentId]="environmentId"
+          [showSaveToCollection]="true"
+          [canShare]="true"
+          [canEdit]="true">
+        </mj-artifact-viewer-panel>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .artifact-container {
       display: flex;

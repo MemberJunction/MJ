@@ -169,20 +169,23 @@ export class SuiteTreeComponent {
         class="node-content"
         [class.selected]="node.id === selectedId"
         (click)="onClick()"
-      >
-        <button
-          class="expand-btn"
-          *ngIf="node.children && node.children.length > 0"
-          (click)="onToggle($event)"
         >
-          <i class="fa-solid" [class.fa-chevron-right]="!node.expanded" [class.fa-chevron-down]="node.expanded"></i>
-        </button>
-        <span class="expand-placeholder" *ngIf="!node.children || node.children.length === 0"></span>
-
+        @if (node.children && node.children.length > 0) {
+          <button
+            class="expand-btn"
+            (click)="onToggle($event)"
+            >
+            <i class="fa-solid" [class.fa-chevron-right]="!node.expanded" [class.fa-chevron-down]="node.expanded"></i>
+          </button>
+        }
+        @if (!node.children || node.children.length === 0) {
+          <span class="expand-placeholder"></span>
+        }
+    
         <i class="fa-solid fa-folder suite-icon"></i>
-
+    
         <span class="suite-name">{{ node.name }}</span>
-
+    
         <div class="suite-metrics">
           <span class="test-count" title="Test Count">
             <i class="fa-solid fa-flask"></i>
@@ -193,7 +196,7 @@ export class SuiteTreeComponent {
           </span>
         </div>
       </div>
-
+    
       @if (node.expanded && node.children && node.children.length > 0) {
         @for (child of node.children; track child.id) {
           <div>
@@ -208,7 +211,7 @@ export class SuiteTreeComponent {
         }
       }
     </div>
-  `,
+    `,
   styles: [`
     .tree-node {
       margin-bottom: 2px;

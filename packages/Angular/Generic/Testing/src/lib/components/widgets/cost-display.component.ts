@@ -5,11 +5,15 @@ import { Component, Input } from '@angular/core';
   selector: 'app-cost-display',
   template: `
     <div class="cost-display" [class]="getMagnitudeClass()">
-      <i class="fa-solid fa-dollar-sign cost-icon" *ngIf="showIcon"></i>
+      @if (showIcon) {
+        <i class="fa-solid fa-dollar-sign cost-icon"></i>
+      }
       <span class="cost-value">{{ formatCost(cost) }}</span>
-      <span class="cost-label" *ngIf="label">{{ label }}</span>
+      @if (label) {
+        <span class="cost-label">{{ label }}</span>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .cost-display {
       display: inline-flex;

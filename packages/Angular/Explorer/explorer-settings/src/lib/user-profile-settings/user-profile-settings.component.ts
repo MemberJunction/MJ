@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
 import { UserEntity } from '@memberjunction/core-entities';

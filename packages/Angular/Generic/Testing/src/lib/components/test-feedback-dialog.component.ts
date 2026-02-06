@@ -19,96 +19,104 @@ export interface TestFeedbackDialogData {
       [minHeight]="500"
       [autoFocusedElement]="'none'"
       (close)="onCancel()">
-
-      <div class="feedback-dialog-content" *ngIf="!isLoading">
-        <div class="feedback-section">
-          <label class="feedback-label">Overall Rating</label>
-          <div class="rating-scale">
-            <div class="rating-numbers">
-              <button *ngFor="let num of [1,2,3,4,5,6,7,8,9,10]"
-                      type="button"
-                      class="rating-button"
-                      [class.selected]="num === rating"
-                      [class.hover]="num === hoverRating"
-                      [class.low]="num <= 3"
-                      [class.mid]="num >= 4 && num <= 6"
-                      [class.high]="num >= 7"
-                      (click)="setRating(num)"
-                      (mouseenter)="hoverRating = num"
-                      (mouseleave)="hoverRating = 0">
-                {{ num }}
-              </button>
-            </div>
-            <div class="rating-labels">
-              <span class="label-low">Poor</span>
-              <span class="label-mid">Average</span>
-              <span class="label-high">Excellent</span>
-            </div>
-            <div class="rating-description" *ngIf="rating > 0">
-              <span class="rating-value">{{ rating }}</span> / 10
-              <span class="rating-label">{{ getRatingLabel() }}</span>
+    
+      @if (!isLoading) {
+        <div class="feedback-dialog-content">
+          <div class="feedback-section">
+            <label class="feedback-label">Overall Rating</label>
+            <div class="rating-scale">
+              <div class="rating-numbers">
+                @for (num of [1,2,3,4,5,6,7,8,9,10]; track num) {
+                  <button
+                    type="button"
+                    class="rating-button"
+                    [class.selected]="num === rating"
+                    [class.hover]="num === hoverRating"
+                    [class.low]="num <= 3"
+                    [class.mid]="num >= 4 && num <= 6"
+                    [class.high]="num >= 7"
+                    (click)="setRating(num)"
+                    (mouseenter)="hoverRating = num"
+                    (mouseleave)="hoverRating = 0">
+                    {{ num }}
+                  </button>
+                }
+              </div>
+              <div class="rating-labels">
+                <span class="label-low">Poor</span>
+                <span class="label-mid">Average</span>
+                <span class="label-high">Excellent</span>
+              </div>
+              @if (rating > 0) {
+                <div class="rating-description">
+                  <span class="rating-value">{{ rating }}</span> / 10
+                  <span class="rating-label">{{ getRatingLabel() }}</span>
+                </div>
+              }
             </div>
           </div>
-        </div>
-
-        <div class="feedback-section">
-          <label class="feedback-label" for="correct">Was the result correct?</label>
-          <div class="correctness-options">
-            <label class="radio-option">
-              <input type="radio" name="correct" [value]="true" [(ngModel)]="isCorrect">
-              <span>Yes</span>
-            </label>
-            <label class="radio-option">
-              <input type="radio" name="correct" [value]="false" [(ngModel)]="isCorrect">
-              <span>No</span>
-            </label>
-            <label class="radio-option">
-              <input type="radio" name="correct" [value]="null" [(ngModel)]="isCorrect">
-              <span>Not Sure</span>
-            </label>
+          <div class="feedback-section">
+            <label class="feedback-label" for="correct">Was the result correct?</label>
+            <div class="correctness-options">
+              <label class="radio-option">
+                <input type="radio" name="correct" [value]="true" [(ngModel)]="isCorrect">
+                <span>Yes</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="correct" [value]="false" [(ngModel)]="isCorrect">
+                <span>No</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="correct" [value]="null" [(ngModel)]="isCorrect">
+                <span>Not Sure</span>
+              </label>
+            </div>
           </div>
-        </div>
-
-        <div class="feedback-section">
-          <label class="feedback-label" for="comments">Correction Summary / Comments <span class="optional-hint">(optional)</span></label>
-          <textarea
-            id="comments"
-            class="feedback-textarea"
-            [(ngModel)]="comments"
-            placeholder="Provide detailed feedback, corrections, or comments about this test execution..."
+          <div class="feedback-section">
+            <label class="feedback-label" for="comments">Correction Summary / Comments <span class="optional-hint">(optional)</span></label>
+            <textarea
+              id="comments"
+              class="feedback-textarea"
+              [(ngModel)]="comments"
+              placeholder="Provide detailed feedback, corrections, or comments about this test execution..."
             rows="6"></textarea>
+          </div>
+          @if (isSaving) {
+            <div class="feedback-info">
+              <i class="fas fa-spinner fa-spin"></i>
+              <span>Saving feedback...</span>
+            </div>
+          }
+          @if (errorMessage) {
+            <div class="feedback-error">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span>{{ errorMessage }}</span>
+            </div>
+          }
         </div>
-
-        <div class="feedback-info" *ngIf="isSaving">
-          <i class="fas fa-spinner fa-spin"></i>
-          <span>Saving feedback...</span>
+      }
+    
+      @if (isLoading) {
+        <div class="feedback-dialog-content">
+          <div class="feedback-info">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading existing feedback...</span>
+          </div>
         </div>
-
-        <div class="feedback-error" *ngIf="errorMessage">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ errorMessage }}</span>
-        </div>
-      </div>
-
-      <div class="feedback-dialog-content" *ngIf="isLoading">
-        <div class="feedback-info">
-          <i class="fas fa-spinner fa-spin"></i>
-          <span>Loading existing feedback...</span>
-        </div>
-      </div>
-
+      }
+    
       <kendo-dialog-actions layout="start">
         <button kendoButton
-                [primary]="true"
-                (click)="onSubmit()"
-                [disabled]="!canSubmit() || isSaving || isLoading">
+          [primary]="true"
+          (click)="onSubmit()"
+          [disabled]="!canSubmit() || isSaving || isLoading">
           <i class="fas" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-check'"></i>
           {{ isSaving ? 'Saving...' : (existingFeedback ? 'Update Feedback' : 'Submit Feedback') }}
         </button>
         <button kendoButton (click)="onCancel()" [disabled]="isSaving || isLoading">Cancel</button>
       </kendo-dialog-actions>
     </kendo-dialog>
-  `,
+    `,
   styles: [`
     :host {
       display: block;

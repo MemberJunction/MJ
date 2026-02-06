@@ -16,75 +16,89 @@ import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-e
           <h4><i class="fa-solid fa-circle-nodes"></i> Steps ({{ Steps.length }})</h4>
         </div>
         <div class="mj-step-list-table-wrap">
-          <table class="mj-step-list-table" *ngIf="Steps.length > 0">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Start</th>
-                <th>Configured</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let step of Steps"
-                  [class.mj-step-list-row--selected]="SelectedStepID === step.ID"
-                  (click)="StepClicked.emit(step)">
-                <td class="mj-step-list-name">{{ step.Name }}</td>
-                <td>
-                  <span class="mj-step-list-type-badge" [attr.data-type]="step.StepType">
-                    {{ step.StepType }}
-                  </span>
-                </td>
-                <td>
-                  <span class="mj-step-list-status" [attr.data-status]="step.Status">
-                    {{ step.Status }}
-                  </span>
-                </td>
-                <td>
-                  <i *ngIf="step.StartingStep" class="fa-solid fa-check mj-step-list-check"></i>
-                </td>
-                <td class="mj-step-list-configured">{{ getConfiguredItem(step) }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div *ngIf="Steps.length === 0" class="mj-step-list-empty">
-            No steps defined
-          </div>
+          @if (Steps.length > 0) {
+            <table class="mj-step-list-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Start</th>
+                  <th>Configured</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (step of Steps; track step) {
+                  <tr
+                    [class.mj-step-list-row--selected]="SelectedStepID === step.ID"
+                    (click)="StepClicked.emit(step)">
+                    <td class="mj-step-list-name">{{ step.Name }}</td>
+                    <td>
+                      <span class="mj-step-list-type-badge" [attr.data-type]="step.StepType">
+                        {{ step.StepType }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="mj-step-list-status" [attr.data-status]="step.Status">
+                        {{ step.Status }}
+                      </span>
+                    </td>
+                    <td>
+                      @if (step.StartingStep) {
+                        <i class="fa-solid fa-check mj-step-list-check"></i>
+                      }
+                    </td>
+                    <td class="mj-step-list-configured">{{ getConfiguredItem(step) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          @if (Steps.length === 0) {
+            <div class="mj-step-list-empty">
+              No steps defined
+            </div>
+          }
         </div>
       </div>
-
+    
       <!-- Paths Section -->
       <div class="mj-step-list-section">
         <div class="mj-step-list-section-header">
           <h4><i class="fa-solid fa-link"></i> Paths ({{ Paths.length }})</h4>
         </div>
         <div class="mj-step-list-table-wrap">
-          <table class="mj-step-list-table" *ngIf="Paths.length > 0">
-            <thead>
-              <tr>
-                <th>From</th>
-                <th>To</th>
-                <th>Condition</th>
-                <th>Priority</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let path of Paths">
-                <td>{{ path.OriginStep }}</td>
-                <td>{{ path.DestinationStep }}</td>
-                <td class="mj-step-list-condition">{{ path.Condition || '(always)' }}</td>
-                <td>{{ path.Priority }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div *ngIf="Paths.length === 0" class="mj-step-list-empty">
-            No paths defined
-          </div>
+          @if (Paths.length > 0) {
+            <table class="mj-step-list-table">
+              <thead>
+                <tr>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Condition</th>
+                  <th>Priority</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (path of Paths; track path) {
+                  <tr>
+                    <td>{{ path.OriginStep }}</td>
+                    <td>{{ path.DestinationStep }}</td>
+                    <td class="mj-step-list-condition">{{ path.Condition || '(always)' }}</td>
+                    <td>{{ path.Priority }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          @if (Paths.length === 0) {
+            <div class="mj-step-list-empty">
+              No paths defined
+            </div>
+          }
         </div>
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .mj-step-list {
       padding: 16px;

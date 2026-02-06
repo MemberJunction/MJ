@@ -27,21 +27,23 @@ export function LoadChatCollectionsResource() {
     <div class="chat-collections-container">
       <!-- Collections view -->
       <div class="collections-main" [class.with-artifact-panel]="isArtifactPanelOpen && activeArtifactId">
-        <mj-collections-full-view
-          *ngIf="currentUser"
-          [environmentId]="environmentId"
-          [currentUser]="currentUser">
-        </mj-collections-full-view>
+        @if (currentUser) {
+          <mj-collections-full-view
+            [environmentId]="environmentId"
+            [currentUser]="currentUser">
+          </mj-collections-full-view>
+        }
       </div>
-
+    
       <!-- Artifact Panel -->
-      <ng-container *ngIf="isArtifactPanelOpen && activeArtifactId">
-        <div class="artifact-panel-resize-handle"
-             *ngIf="!isArtifactPanelMaximized"
-             (mousedown)="onResizeStart($event)"></div>
+      @if (isArtifactPanelOpen && activeArtifactId) {
+        @if (!isArtifactPanelMaximized) {
+          <div class="artifact-panel-resize-handle"
+          (mousedown)="onResizeStart($event)"></div>
+        }
         <div class="artifact-panel"
-             [style.width.%]="artifactPanelWidth"
-             [class.maximized]="isArtifactPanelMaximized">
+          [style.width.%]="artifactPanelWidth"
+          [class.maximized]="isArtifactPanelMaximized">
           <mj-artifact-viewer-panel
             [artifactId]="activeArtifactId"
             [currentUser]="currentUser"
@@ -59,9 +61,9 @@ export function LoadChatCollectionsResource() {
             (openEntityRecord)="onOpenEntityRecord($event)">
           </mj-artifact-viewer-panel>
         </div>
-      </ng-container>
+      }
     </div>
-  `,
+    `,
   styles: [`
     :host {
       display: flex;

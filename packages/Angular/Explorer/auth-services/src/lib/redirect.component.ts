@@ -9,13 +9,15 @@ import { MJAuthBase } from './mjexplorer-auth-base.service';
   standalone: false,
   selector: 'app-redirect',
   template: `
-    <div *ngIf="isProcessing" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-      <div style="text-align: center;">
-        <h2>Processing authentication...</h2>
-        <p>Please wait while we complete your login.</p>
+    @if (isProcessing) {
+      <div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+        <div style="text-align: center;">
+          <h2>Processing authentication...</h2>
+          <p>Please wait while we complete your login.</p>
+        </div>
       </div>
-    </div>
-  `
+    }
+    `
 })
 export class RedirectComponent implements OnInit {
   isProcessing = false;
