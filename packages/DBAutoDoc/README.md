@@ -279,7 +279,91 @@ db-auto-doc export-sample-queries \
 
 This integrates DBAutoDoc-generated queries with MemberJunction's metadata system for use by AI agents like Skip.
 
-### 6. Check Status
+### 6. Export Soft PK/FK Configuration (Optional)
+
+Convert discovered relationships or existing database constraints to MemberJunction's soft PK/FK configuration format for CodeGen:
+
+```bash
+# Basic export (auto-detects best source)
+db-auto-doc export-soft-keys \
+  --input ./db-doc-state.json \
+  --output ./config/database-metadata-config.json
+
+# Export from relationship discovery phase (high confidence only)
+db-auto-doc export-soft-keys \
+  --input ./db-doc-state.json \
+  --output ./config/soft-keys.json \
+  --source discovery \
+  --min-confidence 85 \
+  --validated-only
+
+# Export from existing schema FK constraints
+db-auto-doc export-soft-keys \
+  --input ./db-doc-state.json \
+  --output ./config/soft-keys.json \
+  --source schema
+```
+
+**Key Flags:**
+- `--input, -i`: Path to state.json file from dbautodoc (required)
+- `--output, -o`: Output path for database-metadata-config.json (required)
+- `--source`: Data source - "discovery" (keyDetection phase), "schema" (existing FKs), or "auto" (default: auto)
+- `--min-confidence`: Minimum confidence threshold 0-100 (default: 70, applies to discovered relationships only)
+- `--validated-only`: Only export LLM-validated relationships (applies to discovered only, default: false)
+- `--status-filter`: Comma-separated status filter (default: "confirmed,candidate")
+- `--overwrite`: Overwrite existing output file (default: false)
+
+**What It Does:**
+When DBAutoDoc analyzes databases with missing primary key or foreign key constraints, it can discover relationships using statistical analysis, naming pattern detection, and LLM validation. This command converts those discovered relationships (or existing schema constraints) into MemberJunction's soft PK/FK configuration format, enabling CodeGen to:
+- Generate proper entity relationships
+- Create correct foreign key fields in generated code
+- Build accurate database views with joins
+
+**Two Data Sources:**
+1. **Discovery** (recommended for "messy" databases): Use relationships from dbautodoc's relationship discovery phase
+2. **Schema** (fallback): Use existing PK/FK metadata from database schema
+
+**Output Format:**
+
+The command generates a JSON file in the flat `tables` array format with camelCase properties that CodeGen expects:
+
+```json
+{
+  "$schema": "./database-metadata-config.schema.json",
+  "description": "Auto-generated from dbautodoc relationship discovery",
+  "version": "1.0",
+  "tables": [
+    {
+      "schemaName": "dbo",
+      "tableName": "Orders",
+      "primaryKeys": [
+        {
+          "fieldName": "OrderID",
+          "description": "Soft PK, confidence: 95%, uniqueness: 100.0%"
+        }
+      ],
+      "foreignKeys": [
+        {
+          "fieldName": "CustomerID",
+          "relatedSchema": "dbo",
+          "relatedTable": "Customers",
+          "relatedField": "ID",
+          "description": "Soft FK, confidence: 87%, value overlap: 94.5%"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**After Export:**
+1. Review the generated configuration file
+2. Update `mj.config.cjs` with: `additionalSchemaInfo: './config/database-metadata-config.json'`
+3. Run CodeGen: `mj codegen`
+
+This bridges the gap between relationship discovery and code generation for legacy databases.
+
+### 7. Check Status
 
 ```bash
 db-auto-doc status
@@ -292,7 +376,7 @@ Shows:
 - Token usage, cost, and duration
 - Guardrail status and warnings
 
-### 7. Resume Analysis
+### 8. Resume Analysis
 
 ```bash
 db-auto-doc analyze --resume ./db-doc-state.json

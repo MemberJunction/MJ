@@ -548,6 +548,7 @@ Available dbdoc commands:
 - `generate-queries` - Generate sample SQL queries from existing analysis state
 - `export` - Export documentation in multiple formats (SQL, Markdown, HTML, CSV, Mermaid)
 - `export-sample-queries` - Export sample queries to MemberJunction metadata format
+- `export-soft-keys` - Convert discovered relationships to soft PK/FK configuration for CodeGen
 - `status` - Show analysis status and progress
 - `reset` - Reset analysis state
 
@@ -601,6 +602,25 @@ mj dbdoc export --sql --apply
 # Export with filtering
 mj dbdoc export --approved-only --confidence-threshold 0.8
 
+# Convert discovered relationships to soft PK/FK configuration
+mj dbdoc export-soft-keys \
+  --input ./db-doc-state.json \
+  --output ./config/database-metadata-config.json
+
+# Export with high confidence filter and validation
+mj dbdoc export-soft-keys \
+  -i ./state.json \
+  -o ./soft-keys.json \
+  --min-confidence 80 \
+  --validated-only \
+  --source discovery
+
+# Export from schema FK constraints
+mj dbdoc export-soft-keys \
+  -i ./state.json \
+  -o ./soft-keys.json \
+  --source schema
+
 # Check status
 mj dbdoc status
 
@@ -639,6 +659,15 @@ mj dbdoc reset --force
 - `--validated-only`: Only export queries that were successfully validated
 - `--append`: Append to existing metadata file instead of overwriting
 - `--include-primary-key`: Include primaryKey and sync fields (for updating existing records)
+
+**Export Soft Keys Command:**
+- `-i, --input <path>`: Path to state.json file from dbautodoc (required)
+- `-o, --output <path>`: Output path for database-metadata-config.json (required)
+- `--min-confidence <number>`: Minimum confidence threshold 0-100 (default: 70, applies to discovered relationships only)
+- `--validated-only`: Only export LLM-validated relationships (applies to discovered only, default: false)
+- `--status-filter <list>`: Comma-separated status filter (default: "confirmed,candidate")
+- `--overwrite`: Overwrite existing output file (default: false)
+- `--source <type>`: Data source - "discovery" (keyDetection phase), "schema" (existing FKs), or "auto" (default: auto)
 
 **Export Command:**
 - `-s, --state-file <path>`: Path to state JSON file
@@ -733,7 +762,83 @@ mj dbdoc export-sample-queries \
 mj sync push ./metadata/queries/
 ```
 
+**Soft PK/FK Configuration Export:**
+
+When DBAutoDoc analyzes databases with missing primary key or foreign key constraints, it can discover relationships using:
+- Statistical analysis (uniqueness, cardinality, value overlap)
+- Naming pattern detection
+- LLM validation
+
+The `export-soft-keys` command converts these discovered relationships into MemberJunction's soft PK/FK configuration format, enabling CodeGen to:
+- Generate proper entity relationships
+- Create correct foreign key fields in generated code
+- Build accurate database views with joins
+
+**Two Data Sources:**
+1. **Discovery** (recommended): Use relationships from dbautodoc's relationship discovery phase
+2. **Schema**: Use existing PK/FK metadata from database schema
+
+**Workflow:**
+```bash
+# 1. Run dbautodoc with relationship discovery
+mj dbdoc analyze --config ./config-with-discovery.json
+
+# 2. Convert discovered relationships to soft keys
+mj dbdoc export-soft-keys \
+  --input ./db-doc-state.json \
+  --output ./config/database-metadata-config.json \
+  --min-confidence 80 \
+  --validated-only
+
+# 3. Configure MemberJunction to use soft keys
+# Add to mj.config.cjs:
+# additionalSchemaInfo: './config/database-metadata-config.json'
+
+# 4. Run CodeGen
+mj codegen
+```
+
+**Output Format:**
+
+The command generates a JSON file in the flat `tables` array format with camelCase properties that CodeGen expects:
+
+```json
+{
+  "$schema": "./database-metadata-config.schema.json",
+  "description": "Auto-generated from dbautodoc relationship discovery",
+  "version": "1.0",
+  "tables": [
+    {
+      "schemaName": "dbo",
+      "tableName": "Orders",
+      "primaryKeys": [
+        {
+          "fieldName": "OrderID",
+          "description": "Soft PK, confidence: 95%, uniqueness: 100.0%"
+        }
+      ],
+      "foreignKeys": [
+        {
+          "fieldName": "CustomerID",
+          "relatedSchema": "dbo",
+          "relatedTable": "Customers",
+          "relatedField": "ID",
+          "description": "Soft FK, confidence: 87%, value overlap: 94.5%"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Filtering Options:**
+- `--min-confidence 80`: Only export relationships with >= 80% confidence
+- `--validated-only`: Only include relationships verified by LLM
+- `--status-filter confirmed`: Only export confirmed relationships (skip candidates)
+
 **Use Cases:**
+- Documenting relationships in "messy" legacy databases
+- Generating soft PK/FK configuration for CodeGen
 - Training AI agents to generate consistent multi-query patterns
 - Creating reference examples for few-shot prompting
 - Documenting common query patterns for your database
