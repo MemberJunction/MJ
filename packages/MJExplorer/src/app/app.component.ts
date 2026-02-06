@@ -13,6 +13,6 @@ LoadGeneratedEntities(); // forces the generated entities library to load up, so
 @Component({
   standalone: false,
   selector: 'app-root',
-  template: '<mj-explorer-app></mj-explorer-app>'
+  template: '<mj-explorer-app />'
 })
 export class AppComponent {}
