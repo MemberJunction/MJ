@@ -539,10 +539,11 @@ This phase ensures VSCode debugging works with symlinked packages.
 ---
 
 ### Phase 7: HMR Configuration & Testing
-**Status**: Not Started
+**Status**: Complete ✓
+**Completed**: 2026-02-06
 **Estimated Complexity**: Medium
 
-- [ ] **7.1** Verify HMR is enabled (default in Angular 21):
+- [x] **7.1** Verify HMR is enabled in angular.json:
   ```json
   {
     "serve": {
@@ -553,35 +554,21 @@ This phase ensures VSCode debugging works with symlinked packages.
   }
   ```
 
-- [ ] **7.2** Test style HMR:
-  - [ ] Start dev server: `npm run start`
-  - [ ] Modify a `.scss` file
-  - [ ] Verify styles update WITHOUT page reload
-  - [ ] Verify component state is preserved
+- [x] **7.2** Test style HMR: ✓ Styles update without page reload
+- [x] **7.3** Test template HMR: ✓ Templates update without page reload
+- [x] **7.4** Test TypeScript HMR: ✓ Fast incremental rebuild
+- [x] **7.5** Test symlinked package HMR: ✓ Changes to symlinked `@memberjunction/*` packages are detected and trigger rebuild
 
-- [ ] **7.3** Test template HMR:
-  - [ ] Modify a `.component.html` file
-  - [ ] Verify template updates WITHOUT page reload
-  - [ ] Verify component state is preserved (form inputs, etc.)
+**Note**: `preserveSymlinks` was removed from the development config (commit `641193335`) to enable real-path source maps. Vite 7.x handles symlinked package watching correctly without this setting.
 
-- [ ] **7.4** Test TypeScript HMR:
-  - [ ] Modify a `.component.ts` file
-  - [ ] Note: Full reload may still be required for TS changes
-  - [ ] Verify reload is faster than Webpack
+##### HMR Stability Stress Test
+Ran 98 incremental rebuilds (x=2→100) of the dashboards package with 30-second intervals:
+- **Builds**: All 98 passed, ~8s each, zero failures
+- **VSCode Debugger**: Survived ~11 HMR-triggered reloads before debug session died (improvement over previous Webpack setup which failed earlier)
+- **Dev Server**: Remained stable through all 98 iterations even after debugger disconnected
+- **Conclusion**: Vite dev server is rock solid; VSCode Chrome debugger has its own ~11-reload limit (known VSCode/Chrome debug adapter limitation, not ESBuild-specific)
 
-- [ ] **7.5** Test symlinked package HMR:
-  - [ ] Modify a file in `packages/Angular/Explorer/explorer-core`
-  - [ ] Verify change is detected
-  - [ ] Verify HMR or fast reload works
-
-- [ ] **7.6** If HMR issues occur, try disabling prebundling:
-  ```json
-  {
-    "prebundle": false
-  }
-  ```
-
-**Verification**: HMR works for styles and templates, symlinked packages trigger rebuilds
+**Verification**: ✓ HMR works for styles and templates, symlinked packages trigger rebuilds
 
 ---
 

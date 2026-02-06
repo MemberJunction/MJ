@@ -27,17 +27,37 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 - **NEVER update title/description of merged PRs** without explicit approval each time
 - Always ask before modifying any historical git data
 
-### 4. NO STANDALONE COMPONENTS - EVER
-- **NEVER create standalone Angular components** - ALL components MUST be part of NgModules
-- **ALWAYS** use `@NgModule` with `declarations`, `imports`, and `exports`
-- **Why**: Standalone components cause style encapsulation issues, ::ng-deep doesn't work properly, and they bypass Angular's module system
-- When creating new components:
-  - Create or add to an NgModule
-  - Declare component in the module's `declarations` array
-  - Import `CommonModule` and other required modules in the module's `imports` array
-  - Export the component in the module's `exports` array if it needs to be used outside the module
-- **Remove** `standalone: true` and `imports: [...]` from ALL `@Component` decorators
-- This is **non-negotiable** - standalone components are strictly forbidden
+### 4. ANGULAR COMPONENT & MODULE STRATEGY
+MemberJunction supports both standalone and NgModule-declared components. Choose the right approach for each situation:
+
+#### When to Use Standalone Components (Preferred for New Components)
+- **New leaf components** (dialogs, panels, small widgets) that don't need to share a module
+- **Lazy-loaded route components** — standalone enables direct `loadComponent()` without wrapper modules
+- **Simple, self-contained components** with clear dependency lists
+- Benefits: better tree-shaking with ESBuild, less boilerplate, explicit dependency graph
+
+#### When to Use NgModules
+- **Feature modules** grouping many related components (e.g., dashboards, explorer modules)
+- **Shared modules** providing common functionality to multiple consumers
+- **Existing module-declared components** — don't migrate just for the sake of it
+- When a group of components share the same set of imports
+
+#### Rules for Both Approaches
+- **Standalone components**: declare all dependencies in the component's `imports` array
+- **NgModule components**: must use `standalone: false` explicitly (Angular 21 defaults to standalone)
+- **Never mix within a single component** — a component is either standalone or module-declared
+- When adding to an existing package, **follow the pattern already used in that package**
+
+#### Modern Template Syntax (Required for New Code)
+- **Use `@if`/`@for`/`@switch`** block syntax instead of `*ngIf`/`*ngFor`/`*ngSwitch`
+  - `@for` has 90% better runtime performance than `*ngFor`
+  - `*ngIf`/`*ngFor` are heading toward deprecation
+  - Works identically with both standalone and NgModule components
+  - After migrating templates, `CommonModule` import can be removed if no other directives are used
+- **Use `inject()` function** instead of constructor injection for new components
+  - Angular officially recommends `inject()` over constructor DI
+  - Better inheritance (no `super()` chains), better types, works with standard decorators
+  - Existing constructor injection doesn't need to be migrated unless refactoring
 
 ### 5. NO RE-EXPORTS BETWEEN PACKAGES
 - **NEVER re-export types, classes, or interfaces from other packages**
