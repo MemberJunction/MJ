@@ -3,7 +3,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { AIAgentEntityExtended, AIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { AIAgentEntityExtended, AIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, UserScope } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -174,6 +174,33 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Parse and validate JSON input
      */
+    /**
+     * Build userScope from the authenticated user context.
+     * Populates secondary dimensions from user identity (ID, roles, type, email).
+     * Primary scope (e.g., company/org) is not available on UserInfo —
+     * clients with tenant context should pass it via data.userScope.
+     */
+    private buildUserScopeFromContext(currentUser: UserInfo): UserScope {
+        const secondary: Record<string, string | string[]> = {};
+
+        if (currentUser.ID) {
+            secondary.ContactID = currentUser.ID;
+        }
+        if (currentUser.Email) {
+            secondary.Email = currentUser.Email;
+        }
+        if (currentUser.Type) {
+            secondary.UserType = currentUser.Type;
+        }
+
+        const roles = currentUser.UserRoles?.map(r => r.Role).filter(Boolean);
+        if (roles && roles.length > 0) {
+            secondary.UserRole = roles.length === 1 ? roles[0] : roles;
+        }
+
+        return { secondary };
+    }
+
     private parseJsonInput(jsonString: string | undefined, fieldName: string): any {
         if (!jsonString) return {};
 
@@ -399,6 +426,10 @@ export class RunAIAgentResolver extends ResolverBase {
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
+            // Build userScope from authenticated user context, with optional override via data.userScope
+            const dataUserScope = parsedData?.userScope as UserScope | undefined;
+            const parsedUserScope: UserScope | undefined = dataUserScope ?? this.buildUserScopeFromContext(currentUser);
+
             // Execute the agent in conversation context - handles conversation, artifacts, etc.
             const conversationResult = await agentRunner.RunAgentInConversation({
                 agent: agentEntity,
@@ -411,6 +442,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 autoPopulateLastRunPayload: autoPopulateLastRunPayload,
                 configurationId: configurationId,
                 data: parsedData,
+                userScope: parsedUserScope,
                 context: {
                     dataSource: dataSource
                 }

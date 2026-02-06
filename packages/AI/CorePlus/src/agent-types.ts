@@ -72,10 +72,129 @@ export interface UserScope {
     primaryRecordId?: string;
     /**
      * Additional scope dimensions as key-value pairs.
-     * Keys are field names (e.g., "ContactID", "TeamID"), values are record IDs.
+     * Keys are field names (e.g., "ContactID", "TeamID"), values are record IDs, arbitrary strings,
+     * or arrays of strings for multi-valued dimensions (e.g., multiple user roles).
      * Stored as JSON and used for fine-grained filtering after primary scope.
      */
-    secondary?: Record<string, string>;
+    secondary?: Record<string, string | string[]>;
+}
+
+/**
+ * Configuration for secondary scope dimensions on an AI Agent.
+ *
+ * Defines what secondary scope dimensions are valid for an agent and how they
+ * should behave for memory retrieval and storage. This configuration is stored
+ * in the `SecondaryScopeConfig` JSON field on the AIAgent entity.
+ *
+ * @since 2.131.0
+ *
+ * @example Customer Service App (entity-backed dimensions)
+ * ```json
+ * {
+ *     "dimensions": [
+ *         {"name": "ContactID", "entityId": "uuid-for-contacts", "inheritanceMode": "cascading"},
+ *         {"name": "TeamID", "entityId": "uuid-for-teams", "inheritanceMode": "strict"}
+ *     ],
+ *     "allowSecondaryOnly": false
+ * }
+ * ```
+ *
+ * @example Analytics App (arbitrary value dimensions)
+ * ```json
+ * {
+ *     "dimensions": [
+ *         {"name": "Region", "inheritanceMode": "cascading"},
+ *         {"name": "DealStage", "inheritanceMode": "strict"}
+ *     ],
+ *     "allowSecondaryOnly": true
+ * }
+ * ```
+ */
+export interface SecondaryScopeConfig {
+    /**
+     * Array of dimension definitions.
+     * Each dimension defines a scope key that can be provided at runtime via
+     * `ExecuteAgentParams.userScope.secondary`.
+     */
+    dimensions: SecondaryDimension[];
+
+    /**
+     * Default inheritance mode for dimensions that don't specify one.
+     * - 'cascading': Notes without a dimension match queries with that dimension (broader retrieval)
+     * - 'strict': Notes must exactly match the dimension value or be absent
+     * @default 'cascading'
+     */
+    defaultInheritanceMode?: 'cascading' | 'strict';
+
+    /**
+     * Whether to allow secondary-only scoping (no primary scope required).
+     * When true, the agent can function with only secondary dimensions provided
+     * in `ExecuteAgentParams.userScope.secondary` without requiring `primaryRecordId`.
+     * @default false
+     */
+    allowSecondaryOnly?: boolean;
+
+    /**
+     * Whether to validate runtime scope values against this config.
+     * When true, extra dimensions not defined in `dimensions` array will cause validation errors.
+     * When false, extra dimensions are accepted and stored but may not be used in filtering.
+     * @default false
+     */
+    strictValidation?: boolean;
+}
+
+/**
+ * Definition of a single secondary scope dimension.
+ *
+ * Secondary dimensions allow fine-grained scoping beyond the primary scope level.
+ * Each dimension can be configured for validation, inheritance behavior, and defaults.
+ *
+ * @since 2.131.0
+ */
+export interface SecondaryDimension {
+    /**
+     * Dimension name/key (e.g., "ContactID", "TeamName", "Region").
+     * This is the key used in `ExecuteAgentParams.userScope.secondary` and stored
+     * in the `SecondaryScopes` JSON field on notes/examples/runs.
+     */
+    name: string;
+
+    /**
+     * Optional MemberJunction Entity ID for validation.
+     * When provided, runtime values can be validated as existing records in that entity.
+     * When null/omitted, the dimension accepts any string value (useful for non-entity
+     * dimensions like "Region", "DealStage", "ProductLine", etc.).
+     */
+    entityId?: string | null;
+
+    /**
+     * Whether this dimension is required at runtime.
+     * When true, `ExecuteAgentParams.userScope.secondary` must include this dimension
+     * or have a `defaultValue` defined.
+     * @default false
+     */
+    required?: boolean;
+
+    /**
+     * Inheritance mode for this specific dimension, overrides `defaultInheritanceMode`.
+     * - 'cascading': Notes without this dimension match queries with it (broader retrieval).
+     *   For example, if querying with ContactID=123, notes without any ContactID will match.
+     * - 'strict': Notes must exactly match the provided dimension value.
+     *   Notes without the dimension do NOT match queries that include it.
+     */
+    inheritanceMode?: 'cascading' | 'strict';
+
+    /**
+     * Default value if not provided at runtime.
+     * Only used when `required=false`. If the dimension is not in the runtime scope
+     * and a defaultValue is set, this value will be used.
+     */
+    defaultValue?: string | null;
+
+    /**
+     * Human-readable description of this dimension for documentation.
+     */
+    description?: string;
 }
 
 // Import loop operation types from their dedicated modules
