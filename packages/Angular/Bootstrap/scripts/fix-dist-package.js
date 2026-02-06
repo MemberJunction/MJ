@@ -28,11 +28,18 @@ delete packageJson.publishConfig; // Not needed in dist/package.json
 delete packageJson.scripts;     // Already removed by ng-packagr
 delete packageJson.devDependencies; // Already removed by ng-packagr
 
+// Override sideEffects: ng-packagr sets false by default, but this package
+// contains a class registration manifest that relies on bare imports for side
+// effects (@RegisterClass decorators). Without sideEffects: true, bundlers
+// like ESBuild will ignore `import '@memberjunction/ng-bootstrap'`.
+packageJson.sideEffects = true;
+
 // Write back
 fs.writeFileSync(distPackageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
 
-console.log('✓ Removed problematic fields from dist/package.json');
+console.log('✓ Fixed dist/package.json for npm publish');
 console.log('  - Removed "main" (using "module" and "exports" instead)');
 console.log('  - Removed "types" (using "typings" and "exports.types" instead)');
 console.log('  - Removed "files" (publishing entire dist directory)');
 console.log('  - Removed "publishConfig" (not needed in dist)');
+console.log('  - Set "sideEffects": true (class registration manifest requires bare import)');

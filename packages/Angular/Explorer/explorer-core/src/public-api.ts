@@ -8,7 +8,7 @@ export * from './lib/generic/resource-container-component';
 export * from './lib/resource-wrappers/dashboard-resource.component'
 export * from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component'
 export * from './lib/resource-wrappers/record-resource.component'
-export * from './lib/resource-wrappers/resource-wrappers-loader'
+// export * from './lib/resource-wrappers/resource-wrappers-loader'
 export * from './lib/resource-wrappers/search-results-resource.component'
 export * from './lib/resource-wrappers/view-resource.component'
 export * from './lib/resource-wrappers/list-detail-resource.component'

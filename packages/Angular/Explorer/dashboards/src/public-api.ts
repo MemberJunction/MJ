@@ -81,7 +81,6 @@ export {
   AgentConfigurationComponent,
   LoadAIAgentsResource,
   ModelManagementComponent,
-  LoadAIModelsResource,
   SystemConfigurationComponent,
   LoadAIConfigResource,
   KPICardComponent,

@@ -5,7 +5,18 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mj-class-registrations": {
+      "types": "./dist/mj-class-registrations.d.ts",
+      "default": "./dist/mj-class-registrations.js"
+    }
+  },
   "scripts": {
+    "prebuild": "mj codegen manifest --output ./src/generated/mj-class-registrations.ts",
     "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
     "clean": "rimraf dist"
@@ -18,8 +29,40 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
+    "@memberjunction/actions": "3.4.0",
+    "@memberjunction/actions-apollo": "3.4.0",
+    "@memberjunction/actions-base": "3.4.0",
+    "@memberjunction/actions-bizapps-accounting": "3.4.0",
+    "@memberjunction/actions-bizapps-crm": "3.4.0",
+    "@memberjunction/actions-bizapps-formbuilders": "3.4.0",
+    "@memberjunction/actions-bizapps-lms": "3.4.0",
+    "@memberjunction/actions-bizapps-social": "3.4.0",
+    "@memberjunction/ai-agent-manager": "3.4.0",
+    "@memberjunction/ai-agents": "3.4.0",
+    "@memberjunction/ai-core-plus": "3.4.0",
+    "@memberjunction/ai-engine-base": "3.4.0",
+    "@memberjunction/ai-provider-bundle": "3.4.0",
+    "@memberjunction/ai-reranker": "3.4.0",
+    "@memberjunction/communication-ms-graph": "3.4.0",
+    "@memberjunction/communication-sendgrid": "3.4.0",
+    "@memberjunction/communication-types": "3.4.0",
+    "@memberjunction/content-autotagging": "3.4.0",
     "@memberjunction/core": "3.4.0",
+    "@memberjunction/core-actions": "3.4.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/core-entities-server": "3.4.0",
+    "@memberjunction/data-context-server": "3.4.0",
+    "@memberjunction/doc-utils": "3.4.0",
+    "@memberjunction/encryption": "3.4.0",
+    "@memberjunction/entity-communications-base": "3.4.0",
+    "@memberjunction/queue": "3.4.0",
+    "@memberjunction/scheduling-actions": "3.4.0",
+    "@memberjunction/scheduling-engine": "3.4.0",
+    "@memberjunction/scheduling-engine-base": "3.4.0",
     "@memberjunction/server": "3.4.0",
+    "@memberjunction/storage": "3.4.0",
+    "@memberjunction/templates": "3.4.0",
+    "@memberjunction/testing-engine": "3.4.0",
     "cosmiconfig": "^9.0.0"
   },
   "devDependencies": {

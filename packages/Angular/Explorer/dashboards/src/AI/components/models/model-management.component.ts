@@ -32,13 +32,6 @@ interface ModelManagementUserPreferences {
 }
 
 /**
- * Tree-shaking prevention function - ensures component is included in builds
- */
-export function LoadAIModelsResource() {
-  // Force inclusion in production builds
-}
-
-/**
  * AI Models Resource - displays AI model management
  * Extends BaseResourceComponent to work with the resource type system
  */
