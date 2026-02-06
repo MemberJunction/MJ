@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@asamuzakjp/css-color": "^4.1.2",
-    "@dagrejs/dagre": "^1.1.4",
+    "@dagrejs/dagre": "^1.1.8",
     "@memberjunction/actions": "3.4.0",
     "@memberjunction/actions-base": "3.4.0",
     "@memberjunction/ai": "3.4.0",

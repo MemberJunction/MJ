@@ -73,6 +73,7 @@
     "@progress/kendo-svg-icons": "^4.8.0",
     "@progress/kendo-licensing": "^1.10.0",
     "@progress/kendo-theme-default": "12.3.0",
+    "@dagrejs/dagre": "^1.1.8",
     "ag-grid-angular": "^35.0.1",
     "ag-grid-community": "^35.0.1",
     "dhtmlx-gantt": "^9.1.1",
