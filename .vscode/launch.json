@@ -55,11 +55,11 @@
       "preLaunchTask": "start MJExplorer",
       "name": "MJExplorer",
       "url": "http://localhost:4201",
-      "webRoot": "${workspaceFolder}",
+      "webRoot": "${workspaceFolder}/packages",
       "sourceMaps": true,
       "sourceMapPathOverrides": {
         "/@fs/*": "/*",
-        "./src/*": "${workspaceFolder}/packages/MJExplorer/src/*"
+        "src/*": "${workspaceFolder}/packages/MJExplorer/src/*"
       },
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",

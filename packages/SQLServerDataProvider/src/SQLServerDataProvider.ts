@@ -34,6 +34,7 @@ import {
   UserInfo,
   RecordChange,
   ILocalStorageProvider,
+  IFileSystemProvider,
   AuditLogTypeInfo,
   AuthorizationInfo,
   TransactionGroupBase,
@@ -80,6 +81,7 @@ import {
   InMemoryLocalStorageProvider,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from './queryParameterProcessor';
+import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import {
   AuditLogEntity,
@@ -261,6 +263,7 @@ export class SQLServerDataProvider
 
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
+  private _fileSystemProvider: IFileSystemProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
@@ -5589,6 +5592,12 @@ export class SQLServerDataProvider
     if (!this._localStorageProvider) this._localStorageProvider = new InMemoryLocalStorageProvider();
 
     return this._localStorageProvider;
+  }
+
+  override get FileSystemProvider(): IFileSystemProvider {
+    if (!this._fileSystemProvider) this._fileSystemProvider = new NodeFileSystemProvider();
+
+    return this._fileSystemProvider;
   }
 
   public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {

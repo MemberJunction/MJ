@@ -40,7 +40,7 @@
     "mermaid": "^11.12.2",
     "tslib": "^2.8.1"
   },
-  "sideEffects": false,
+  "sideEffects": ["./dist/public-api.js", "./dist/lib/services/markdown.service.js"],
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"

@@ -13,3 +13,4 @@ export {
 export { SqlLoggingSessionImpl } from "./SqlLogger";
 export { UserCache } from "./UserCache";
 export { QueryParameterProcessor } from "./queryParameterProcessor";
+export { NodeFileSystemProvider } from "./NodeFileSystemProvider";
