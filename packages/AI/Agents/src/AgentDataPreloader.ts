@@ -15,7 +15,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, RunView, RunQuery, UserInfo } from '@memberjunction/core';
 import { RunViewParams, RunQueryParams } from '@memberjunction/core';
 import { AIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
-import * as _ from 'lodash';
+import _ from 'lodash';
 
 /**
  * Result structure for preloaded data organized by destination

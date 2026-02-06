@@ -9,7 +9,7 @@
  * @since 3.1.0
  */
 
-import * as _ from 'lodash';
+import _ from 'lodash';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 
