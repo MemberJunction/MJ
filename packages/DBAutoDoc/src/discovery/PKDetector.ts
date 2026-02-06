@@ -5,7 +5,7 @@
  */
 
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
-import { TableDefinition, ColumnDefinition } from '../types/state.js';
+import { TableDefinition, ColumnDefinition, KeyValidationMetadata } from '../types/state.js';
 import { PKCandidate, PKEvidence, ColumnStatistics, CachedColumnStats } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig } from '../types/config.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
@@ -574,5 +574,72 @@ export class PKDetector {
     }
 
     return candidates;
+  }
+
+  /**
+   * Validate manual PKs from soft keys configuration
+   * Uses statistical analysis to confirm or contradict user-provided keys
+   */
+  public async validateManualPKs(
+    schemaName: string,
+    table: TableDefinition,
+    iteration: number
+  ): Promise<void> {
+    // Find columns with manual PK source
+    const manualPKs = table.columns.filter(col => col.isPrimaryKey && col.pkSource === 'manual');
+
+    if (manualPKs.length === 0) {
+      return; // No manual PKs to validate
+    }
+
+    console.log(`[PKDetector] Validating ${manualPKs.length} manual PK(s) in ${schemaName}.${table.name}`);
+
+    for (const column of manualPKs) {
+      // Skip if already validated
+      if (column.pkValidation && column.pkValidation.status !== 'not_validated') {
+        continue;
+      }
+
+      // Run the same analysis as for discovered PKs
+      const candidate = await this.analyzeSingleColumnPK(
+        schemaName,
+        table.name,
+        column,
+        iteration
+      );
+
+      const validation: KeyValidationMetadata = {
+        status: 'not_validated',
+        validatedBy: 'statistical_analysis',
+        validatedAt: new Date().toISOString()
+      };
+
+      if (candidate) {
+        const confidence = candidate.confidence;
+        column.pkDiscoveryConfidence = confidence;
+
+        // High confidence = confirmed
+        if (confidence >= this.config.confidence.primaryKeyMinimum * 100) {
+          validation.status = 'confirmed';
+          validation.confidence = confidence;
+          console.log(`[PKDetector]   ✓ Confirmed manual PK: ${column.name} (confidence: ${confidence})`);
+        }
+        // Low confidence = contradicted
+        else {
+          validation.status = 'contradicted';
+          validation.confidence = confidence;
+          validation.reason = `Statistical analysis suggests low confidence (${confidence}%) - ${candidate.evidence.warnings.join('; ')}`;
+          console.log(`[PKDetector]   ✗ Contradicted manual PK: ${column.name} (confidence: ${confidence})`);
+        }
+      } else {
+        // No candidate means very low confidence
+        validation.status = 'contradicted';
+        validation.confidence = 0;
+        validation.reason = 'Statistical analysis suggests this is not a primary key';
+        console.log(`[PKDetector]   ✗ Contradicted manual PK: ${column.name} (no evidence)`);
+      }
+
+      column.pkValidation = validation;
+    }
   }
 }

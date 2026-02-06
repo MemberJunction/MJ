@@ -10,6 +10,7 @@ export interface DBAutoDocConfig {
   output: OutputConfig;
   schemas: SchemaFilterConfig;
   tables: TableFilterConfig;
+  softKeys?: string | SoftKeyConfig; // File path or inline config
 }
 
 export interface DatabaseConfig {
@@ -181,4 +182,34 @@ export interface SchemaFilterConfig {
 
 export interface TableFilterConfig {
   exclude?: string[];
+}
+
+/**
+ * Soft keys configuration
+ * Allows manual definition of PK/FK relationships not in database schema
+ * Format matches MemberJunction CodeGen soft keys (camelCase)
+ */
+export interface SoftKeyConfig {
+  tables: SoftKeyTable[];
+}
+
+export interface SoftKeyTable {
+  schemaName: string;
+  tableName: string;
+  primaryKeys?: SoftKeyPrimaryKey[];
+  foreignKeys?: SoftKeyForeignKey[];
+  description?: string;
+}
+
+export interface SoftKeyPrimaryKey {
+  fieldName: string;
+  description?: string;
+}
+
+export interface SoftKeyForeignKey {
+  fieldName: string;
+  relatedSchema: string;
+  relatedTable: string;
+  relatedField: string;
+  description?: string;
 }

@@ -340,6 +340,13 @@ export class DiscoveryEngine {
       ).slice(0, 5)
     });
 
+    // Phase 2.25: Validate Manual Keys (FIRST TIME ONLY)
+    if (iteration === 1) {
+      iterationResult.phase = 'manual_key_validation';
+      await this.validateManualKeys(allPKs);
+      this.onProgress('Manual key validation complete');
+    }
+
     // Phase 2.5: LLM Sanity Check (FIRST TIME ONLY - reject obviously wrong candidates)
     if (this.sanityChecker && iteration === 1 && (newPKs.length > 0 || newFKs.length > 0)) {
       iterationResult.phase = 'sanity_check';
@@ -541,6 +548,28 @@ export class DiscoveryEngine {
     }
 
     return allFKs;
+  }
+
+  /**
+   * Validate manual keys from soft keys configuration
+   * Runs statistical analysis to confirm or contradict user-provided keys
+   */
+  private async validateManualKeys(discoveredPKs: PKCandidate[]): Promise<void> {
+    for (const schema of this.schemas) {
+      for (const table of schema.tables) {
+        // Validate manual PKs
+        await this.pkDetector.validateManualPKs(schema.name, table, 1);
+
+        // Validate manual FKs
+        await this.fkDetector.validateManualFKs(
+          this.schemas,
+          schema.name,
+          table,
+          discoveredPKs,
+          1
+        );
+      }
+    }
   }
 
   /**

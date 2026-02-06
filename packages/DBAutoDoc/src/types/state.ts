@@ -113,6 +113,25 @@ export interface TableDefinition {
   userApproved?: boolean;
 }
 
+/**
+ * Optional validation metadata for manual keys
+ * Tracks whether discovery phase confirmed or contradicted user-provided keys
+ */
+export interface KeyValidationMetadata {
+  status: 'confirmed' | 'contradicted' | 'not_validated';
+  confidence?: number;  // 0-100
+  valueOverlap?: number;  // For FKs: percentage of values that exist in target
+  validatedBy?: 'statistical_analysis' | 'llm' | 'both';
+  validatedAt?: string;  // ISO timestamp
+  reason?: string;  // Explanation if contradicted
+  suggestedTarget?: {  // If FK contradicted, what discovery suggests instead
+    schema: string;
+    table: string;
+    column: string;
+    referencedColumn: string;
+  };
+}
+
 export interface ColumnDefinition {
   name: string;
   dataType: string;
@@ -131,10 +150,11 @@ export interface ColumnDefinition {
    * Track origin of PK/FK flags
    * - 'schema': Defined in SQL DDL (hard constraint, never reject)
    * - 'discovered': Inferred by discovery phase (soft hypothesis, can reject/refine)
+   * - 'manual': User-provided via soft keys configuration (trusted input, validated but not overridden)
    * Undefined for legacy state.json files (assume 'discovered' for safety)
    */
-  pkSource?: 'schema' | 'discovered';
-  fkSource?: 'schema' | 'discovered';
+  pkSource?: 'schema' | 'discovered' | 'manual';
+  fkSource?: 'schema' | 'discovered' | 'manual';
 
   /**
    * Confidence scores for discovered keys (0-100)
@@ -143,6 +163,14 @@ export interface ColumnDefinition {
    */
   pkDiscoveryConfidence?: number;
   fkDiscoveryConfidence?: number;
+
+  /**
+   * Validation metadata for manual keys
+   * Only present when pkSource='manual' or fkSource='manual'
+   * Tracks whether discovery phase confirmed or contradicted user-provided keys
+   */
+  pkValidation?: KeyValidationMetadata;
+  fkValidation?: KeyValidationMetadata;
 }
 
 export interface ForeignKeyReference {

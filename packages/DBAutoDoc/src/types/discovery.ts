@@ -94,7 +94,7 @@ export interface SimpleColumnStats {
  */
 export interface RelationshipDiscoveryIteration {
   iteration: number;
-  phase: 'sampling' | 'pk_detection' | 'fk_detection' | 'sanity_check' | 'llm_validation' | 'backprop';
+  phase: 'sampling' | 'pk_detection' | 'fk_detection' | 'manual_key_validation' | 'sanity_check' | 'llm_validation' | 'backprop';
   startedAt: string;
   completedAt: string;
   tokensUsed: number;

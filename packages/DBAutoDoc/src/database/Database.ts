@@ -7,7 +7,8 @@ import { MJGlobal } from '@memberjunction/global';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { AutoDocConnectionConfig } from '../types/driver.js';
 import { SchemaDefinition, TableDefinition, ColumnDefinition, ForeignKeyReference } from '../types/state.js';
-import { SchemaFilterConfig, TableFilterConfig, AnalysisConfig } from '../types/config.js';
+import { SchemaFilterConfig, TableFilterConfig, AnalysisConfig, SoftKeyConfig } from '../types/config.js';
+import { SoftKeysLoader, mergeSoftKeys } from '../utils/index.js';
 import '../drivers/SQLServerDriver.js'; // Import to ensure registration
 import '../drivers/MySQLDriver.js'; // Import to ensure registration
 import '../drivers/PostgreSQLDriver.js'; // Import to ensure registration
@@ -79,7 +80,9 @@ export class Introspector {
 
   public async getSchemas(
     schemaFilter: SchemaFilterConfig,
-    tableFilter: TableFilterConfig
+    tableFilter: TableFilterConfig,
+    softKeysConfig?: string | SoftKeyConfig,
+    onProgress?: (message: string) => void
   ): Promise<SchemaDefinition[]> {
     const autoDocSchemas = await this.driver.getSchemas(schemaFilter, tableFilter);
 
@@ -150,6 +153,36 @@ export class Introspector {
           }
         }
       }
+    }
+
+    // Apply soft keys if provided
+    if (softKeysConfig) {
+      onProgress?.('Loading soft keys configuration...');
+      const softKeys = await SoftKeysLoader.load(softKeysConfig);
+
+      onProgress?.('Validating soft keys...');
+      const validation = SoftKeysLoader.validate(softKeys, schemas);
+
+      if (validation.errors.length > 0) {
+        throw new Error(`Soft keys validation failed:\n${validation.errors.join('\n')}`);
+      }
+
+      if (validation.warnings.length > 0) {
+        onProgress?.(`Soft keys warnings:\n${validation.warnings.join('\n')}`);
+      }
+
+      onProgress?.('Merging soft keys into schema...');
+      const mergeResult = mergeSoftKeys(schemas, softKeys, onProgress);
+
+      if (mergeResult.warnings.length > 0) {
+        onProgress?.(`Merge warnings:\n${mergeResult.warnings.join('\n')}`);
+      }
+
+      onProgress?.(
+        `Soft keys applied: ${mergeResult.stats.pkAdded} PKs, ${mergeResult.stats.fkAdded} FKs across ${mergeResult.stats.tablesAffected} tables`
+      );
+
+      return mergeResult.schemas;
     }
 
     return schemas;

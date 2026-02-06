@@ -5,7 +5,7 @@
  */
 
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
-import { SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
+import { SchemaDefinition, TableDefinition, ColumnDefinition, KeyValidationMetadata, ForeignKeyReference } from '../types/state.js';
 import { FKCandidate, FKEvidence, PKCandidate } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig } from '../types/config.js';
 
@@ -501,5 +501,113 @@ export class FKDetector {
     }
 
     return Math.round(Math.min(score, 100));
+  }
+
+  /**
+   * Validate manual FKs from soft keys configuration
+   * Uses value overlap analysis to confirm or contradict user-provided keys
+   */
+  public async validateManualFKs(
+    schemas: SchemaDefinition[],
+    sourceSchema: string,
+    sourceTable: TableDefinition,
+    discoveredPKs: PKCandidate[],
+    iteration: number
+  ): Promise<void> {
+    // Find columns with manual FK source
+    const manualFKs = sourceTable.columns.filter(col => col.isForeignKey && col.fkSource === 'manual');
+
+    if (manualFKs.length === 0) {
+      return; // No manual FKs to validate
+    }
+
+    console.log(`[FKDetector] Validating ${manualFKs.length} manual FK(s) in ${sourceSchema}.${sourceTable.name}`);
+
+    for (const column of manualFKs) {
+      // Skip if already validated
+      if (column.fkValidation && column.fkValidation.status !== 'not_validated') {
+        continue;
+      }
+
+      if (!column.foreignKeyReferences) {
+        console.log(`[FKDetector]   Warning: ${column.name} has fkSource='manual' but no foreignKeyReferences`);
+        continue;
+      }
+
+      const targetRef = column.foreignKeyReferences;
+
+      // Find target table
+      const targetSchema = schemas.find(s => s.name === targetRef.schema);
+      if (!targetSchema) {
+        console.log(`[FKDetector]   Warning: Target schema '${targetRef.schema}' not found for ${column.name}`);
+        continue;
+      }
+
+      const targetTable = targetSchema.tables.find(t => t.name === targetRef.table);
+      if (!targetTable) {
+        console.log(`[FKDetector]   Warning: Target table '${targetRef.table}' not found for ${column.name}`);
+        continue;
+      }
+
+      const targetColumn = targetTable.columns.find(c => c.name === targetRef.referencedColumn);
+      if (!targetColumn) {
+        console.log(`[FKDetector]   Warning: Target column '${targetRef.referencedColumn}' not found for ${column.name}`);
+        continue;
+      }
+
+      // Check if target column is a PK
+      const targetIsPK = targetColumn.isPrimaryKey || discoveredPKs.some(pk =>
+        pk.schemaName === targetRef.schema &&
+        pk.tableName === targetRef.table &&
+        pk.columnNames.includes(targetRef.referencedColumn)
+      );
+
+      // Run the same analysis as for discovered FKs
+      const candidate = await this.analyzeFKCandidate(
+        sourceSchema,
+        sourceTable.name,
+        column,
+        targetRef.schema,
+        targetRef.table,
+        targetRef.referencedColumn,
+        targetIsPK,
+        iteration
+      );
+
+      const validation: KeyValidationMetadata = {
+        status: 'not_validated',
+        validatedBy: 'statistical_analysis',
+        validatedAt: new Date().toISOString()
+      };
+
+      if (candidate) {
+        const confidence = candidate.confidence;
+        column.fkDiscoveryConfidence = confidence;
+
+        // High confidence = confirmed
+        if (confidence >= this.config.confidence.foreignKeyMinimum * 100) {
+          validation.status = 'confirmed';
+          validation.confidence = confidence;
+          validation.valueOverlap = candidate.evidence.valueOverlap;
+          console.log(`[FKDetector]   ✓ Confirmed manual FK: ${column.name} -> ${targetRef.table}.${targetRef.referencedColumn} (confidence: ${confidence}%, overlap: ${(candidate.evidence.valueOverlap * 100).toFixed(1)}%)`);
+        }
+        // Low confidence = contradicted
+        else {
+          validation.status = 'contradicted';
+          validation.confidence = confidence;
+          validation.valueOverlap = candidate.evidence.valueOverlap;
+          validation.reason = `Statistical analysis suggests low confidence (${confidence}%) - value overlap: ${(candidate.evidence.valueOverlap * 100).toFixed(1)}%, orphan count: ${candidate.evidence.orphanCount}`;
+          console.log(`[FKDetector]   ✗ Contradicted manual FK: ${column.name} -> ${targetRef.table}.${targetRef.referencedColumn} (confidence: ${confidence}%)`);
+        }
+      } else {
+        // No candidate means very low confidence
+        validation.status = 'contradicted';
+        validation.confidence = 0;
+        validation.reason = 'Statistical analysis suggests this is not a foreign key relationship';
+        console.log(`[FKDetector]   ✗ Contradicted manual FK: ${column.name} (no evidence)`);
+      }
+
+      column.fkValidation = validation;
+    }
   }
 }

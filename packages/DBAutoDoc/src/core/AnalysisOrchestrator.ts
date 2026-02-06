@@ -106,7 +106,12 @@ export class AnalysisOrchestrator {
         this.onProgress('Introspecting database schema');
         const driver = db.getDriver();
         const introspector = new Introspector(driver);
-        const schemas = await introspector.getSchemas(this.config.schemas, this.config.tables);
+        const schemas = await introspector.getSchemas(
+          this.config.schemas,
+          this.config.tables,
+          this.config.softKeys,
+          (msg) => this.onProgress(msg)
+        );
         state.schemas = schemas;
         this.onProgress('Schema introspection complete', {
           schemas: schemas.length,

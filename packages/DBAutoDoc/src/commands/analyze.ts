@@ -14,7 +14,9 @@ export default class Analyze extends Command {
   static examples = [
     '$ db-auto-doc analyze',
     '$ db-auto-doc analyze --resume ./output/run-6/state.json',
-    '$ db-auto-doc analyze --config ./my-config.json'
+    '$ db-auto-doc analyze --config ./my-config.json',
+    '$ db-auto-doc analyze --soft-keys ./soft-keys.json',
+    '$ db-auto-doc analyze --config ./my-config.json --soft-keys ./soft-keys.json'
   ];
 
   static flags = {
@@ -27,6 +29,11 @@ export default class Analyze extends Command {
       char: 'c',
       description: 'Path to config file',
       default: './config.json'
+    }),
+    'soft-keys': Flags.string({
+      char: 's',
+      description: 'Path to soft keys configuration file (JSON)',
+      required: false
     })
   };
 
@@ -40,6 +47,12 @@ export default class Analyze extends Command {
       // Load configuration
       spinner.start('Loading configuration');
       const config = await ConfigLoader.load(flags.config);
+
+      // Override with soft keys from CLI if provided
+      if (flags['soft-keys']) {
+        config.softKeys = flags['soft-keys'];
+      }
+
       spinner.succeed('Configuration loaded');
 
       // Create orchestrator

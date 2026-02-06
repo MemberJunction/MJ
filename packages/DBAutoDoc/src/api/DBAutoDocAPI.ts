@@ -38,7 +38,7 @@ import { AnalysisOrchestrator } from '../core/AnalysisOrchestrator.js';
 import { StateManager } from '../state/StateManager.js';
 import { SQLGenerator } from '../generators/SQLGenerator.js';
 import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
-import { DBAutoDocConfig, DatabaseConfig, AIConfig, AnalysisConfig } from '../types/config.js';
+import { DBAutoDocConfig, DatabaseConfig, AIConfig, AnalysisConfig, SoftKeyConfig } from '../types/config.js';
 import { DatabaseDocumentation, AnalysisSummary } from '../types/state.js';
 
 /**
@@ -85,6 +85,9 @@ export interface DBAutoDocAPIConfig {
   tables?: {
     exclude?: string[];
   };
+
+  /** Optional soft keys configuration (file path or inline config) */
+  softKeys?: string | SoftKeyConfig;
 }
 
 /**
@@ -575,7 +578,8 @@ export class DBAutoDocAPI {
         markdownFile: path.join(outputDir, 'summary.md')
       },
       schemas: config.schemas || {},
-      tables: config.tables || {}
+      tables: config.tables || {},
+      softKeys: config.softKeys
     };
   }
 

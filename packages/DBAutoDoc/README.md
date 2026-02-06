@@ -715,6 +715,150 @@ This rich context enables AI to make accurate inferences.
 }
 ```
 
+### Soft Keys Configuration
+
+Soft keys allow you to manually define primary and foreign key relationships that aren't defined in the database schema. This is useful for:
+- Databases without proper constraints
+- Natural keys not declared as primary keys
+- Logical relationships not enforced by foreign keys
+- Legacy systems with implicit relationships
+
+#### Usage
+
+Soft keys can be provided in two ways:
+
+1. **Via configuration file** - Add `softKeys` field pointing to a JSON file:
+   ```json
+   {
+     "version": "1.0.0",
+     "database": { ... },
+     "ai": { ... },
+     "softKeys": "./soft-keys.json"
+   }
+   ```
+
+2. **Via CLI flag** - Pass `--soft-keys` parameter:
+   ```bash
+   db-auto-doc analyze --soft-keys ./soft-keys.json
+   ```
+
+3. **Inline in config** - Embed soft keys directly:
+   ```json
+   {
+     "version": "1.0.0",
+     "database": { ... },
+     "softKeys": {
+       "tables": [
+         {
+           "schemaName": "dbo",
+           "tableName": "Orders",
+           "primaryKeys": [
+             { "fieldName": "OrderNumber" }
+           ],
+           "foreignKeys": [
+             {
+               "fieldName": "CustomerCode",
+               "relatedSchema": "dbo",
+               "relatedTable": "Customers",
+               "relatedField": "Code"
+             }
+           ]
+         }
+       ]
+     }
+   }
+   ```
+
+#### Soft Keys File Format
+
+```json
+{
+  "tables": [
+    {
+      "schemaName": "dbo",
+      "tableName": "Orders",
+      "primaryKeys": [
+        {
+          "fieldName": "OrderNumber",
+          "description": "Natural key for order identification"
+        }
+      ],
+      "foreignKeys": [
+        {
+          "fieldName": "CustomerCode",
+          "relatedSchema": "dbo",
+          "relatedTable": "Customers",
+          "relatedField": "Code",
+          "description": "Reference to customer master record"
+        }
+      ]
+    },
+    {
+      "schemaName": "dbo",
+      "tableName": "OrderItems",
+      "primaryKeys": [
+        {
+          "fieldName": "LineNumber",
+          "description": "Composite key component"
+        }
+      ],
+      "foreignKeys": [
+        {
+          "fieldName": "OrderNumber",
+          "relatedSchema": "dbo",
+          "relatedTable": "Orders",
+          "relatedField": "OrderNumber"
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### How Soft Keys Work
+
+1. **Additive Merge** - Soft keys are added to database-extracted relationships, never replacing them
+2. **Source Tracking** - Marked with `pkSource: 'manual'` or `fkSource: 'manual'` in state
+3. **Validation** - Discovery phase validates manual keys using statistical analysis
+4. **Conflict Resolution** - If a soft key conflicts with a database constraint, a warning is issued and the database constraint is preserved
+5. **Topological Sorting** - Manual foreign keys are used for table dependency ordering
+6. **Analysis Context** - LLM uses manual keys as relationship hypotheses during description generation
+
+#### Validation Metadata
+
+When relationship discovery is enabled, soft keys are validated:
+
+```typescript
+{
+  "pkValidation": {
+    "status": "confirmed",           // "confirmed" | "contradicted" | "not_validated"
+    "confidence": 95,                // 0-100 score
+    "validatedBy": "statistical_analysis",
+    "validatedAt": "2024-01-15T10:30:00Z"
+  },
+  "fkValidation": {
+    "status": "contradicted",
+    "confidence": 35,
+    "valueOverlap": 0.42,            // % of values existing in target
+    "reason": "Low value overlap suggests weak relationship",
+    "validatedBy": "statistical_analysis",
+    "validatedAt": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+- **Confirmed** - Statistical evidence supports the manual key (high confidence)
+- **Contradicted** - Evidence suggests the manual key is incorrect (low confidence)
+- **Not Validated** - No validation performed (discovery disabled)
+
+#### Best Practices
+
+- Use soft keys for natural keys that aren't declared as PKs
+- Define logical FKs that aren't enforced by constraints
+- Review validation results in state file to verify manual keys
+- Add descriptions to document why manual keys were defined
+- Use consistent naming (match actual database column names)
+
 ## Supported AI Providers
 
 DBAutoDoc integrates with MemberJunction's AI provider system. Supported providers:
