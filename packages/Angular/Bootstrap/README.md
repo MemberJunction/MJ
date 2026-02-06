@@ -90,16 +90,24 @@ The bootstrap component provides a clean template structure:
 ```html
 <mj-bootstrap>
   <!-- Authenticated: Shows the main shell -->
-  <mj-shell *ngIf="authenticated"></mj-shell>
+  @if (authenticated) {
+    <mj-shell></mj-shell>
+  }
 
   <!-- Not authenticated: Shows login screen -->
-  <mj-login *ngIf="!authenticated"></mj-login>
+  @if (!authenticated) {
+    <mj-login></mj-login>
+  }
 
   <!-- Error state: Shows error message -->
-  <mj-error *ngIf="hasError"></mj-error>
+  @if (hasError) {
+    <mj-error></mj-error>
+  }
 
   <!-- Validation issues: Shows validation banner -->
-  <mj-validation-banner *ngIf="showValidation"></mj-validation-banner>
+  @if (showValidation) {
+    <mj-validation-banner></mj-validation-banner>
+  }
 </mj-bootstrap>
 ```
 
@@ -199,7 +207,9 @@ import { MJBootstrapComponent } from '@memberjunction/ng-bootstrap';
   selector: 'app-custom-bootstrap',
   template: `
     <mj-bootstrap></mj-bootstrap>
-    <app-custom-error *ngIf="hasCustomError"></app-custom-error>
+    @if (hasCustomError) {
+      <app-custom-error></app-custom-error>
+    }
   `
 })
 export class CustomBootstrapComponent extends MJBootstrapComponent {

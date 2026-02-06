@@ -3,25 +3,103 @@
 
 # MemberJunction (MJ)
 
-MemberJunction (MJ) is an open-source, metadata-driven application development platform that unifies data management, business logic, and user interfaces through a comprehensive Common Data Platform (CDP). Built with TypeScript, Angular, and SQL Server, MemberJunction provides enterprise-grade capabilities while remaining accessible to organizations of all sizes.
+MemberJunction (MJ) is an open-source, AI-powered data platform that unifies data management, business logic, and intelligent interfaces through a metadata-driven architecture. Built with TypeScript, Angular 21, and SQL Server, MemberJunction combines enterprise-grade data capabilities with deep AI integration — supporting 15+ AI providers, vector operations, and an extensible agent framework — while remaining accessible to organizations of all sizes.
 
 ## Key Features
 
+- **🤖 AI-Native Platform** - Deep integration with 15+ AI providers (OpenAI, Anthropic, Google, and more), vector operations, embeddings, and an extensible agent framework
 - **🗄️ Unified Data Platform** - Integrate data from multiple sources into a singular, well-organized repository
 - **📊 Rich Metadata Layer** - Comprehensive metadata system that drives UI generation, validation, and business logic
 - **🔍 MemberJunction Explorer** - Powerful web application for browsing, searching, and managing your unified data
-- **🤖 AI Integration** - Built-in support for 15+ AI providers including OpenAI, Anthropic, Google, and more
 - **📨 Communication Framework** - Send emails, SMS, and messages through multiple providers with template support
 - **⚡ Actions System** - Flexible framework for implementing and scheduling custom business logic
 - **🔐 Enterprise Security** - Row-level security, field permissions, and integration with Auth0/MSAL
 - **🛠️ Developer Friendly** - Full TypeScript, comprehensive APIs, and extensive documentation
 - **📦 Modular Architecture** - 100+ npm packages that can be used independently or together
 
+## 🤖 AI Capabilities
+
+MemberJunction's AI framework is one of the most comprehensive open-source AI integration layers available. It provides a **provider-agnostic abstraction** that lets you swap AI providers without changing application code, plus a full agent framework for building autonomous workflows.
+
+> **[Full AI Framework Documentation](./packages/AI)**
+
+### AI Providers (15+)
+
+Connect to any major AI service through a consistent API — switch providers with zero code changes:
+
+| Provider | Capabilities | Package |
+|----------|-------------|---------|
+| **OpenAI** | GPT-4o, o1/o3 reasoning, DALL-E, Whisper, embeddings | [@memberjunction/ai-openai](./packages/AI/Providers/OpenAI) |
+| **Anthropic** | Claude 4 family, streaming, prompt caching, extended thinking | [@memberjunction/ai-anthropic](./packages/AI/Providers/Anthropic) |
+| **Google Gemini** | Gemini Pro/Flash, native multimodal, long context | [@memberjunction/ai-gemini](./packages/AI/Providers/Gemini) |
+| **Azure OpenAI** | Enterprise Azure-hosted models | [@memberjunction/ai-azure](./packages/AI/Providers/Azure) |
+| **Amazon Bedrock** | Multi-model access via AWS | [@memberjunction/ai-bedrock](./packages/AI/Providers/Bedrock) |
+| **Google Vertex** | Vertex AI platform integration | [@memberjunction/ai-vertex](./packages/AI/Providers/Vertex) |
+| **Mistral** | Open-source and commercial models, embeddings | [@memberjunction/ai-mistral](./packages/AI/Providers/Mistral) |
+| **Groq** | Ultra-fast inference for Llama, Mixtral | [@memberjunction/ai-groq](./packages/AI/Providers/Groq) |
+| **Cerebras** | High-performance inference | [@memberjunction/ai-cerebras](./packages/AI/Providers/Cerebras) |
+| **OpenRouter** | Multi-provider routing | [@memberjunction/ai-openrouter](./packages/AI/Providers/OpenRouter) |
+| **ElevenLabs** | Text-to-speech | [@memberjunction/ai-elevenlabs](./packages/AI/Providers/ElevenLabs) |
+| **HeyGen** | AI video generation | [@memberjunction/ai-heygen](./packages/AI/Providers/HeyGen) |
+
+> **[All AI Providers](./packages/AI/Providers)**
+
+### Agent Framework
+
+Build autonomous AI agents that orchestrate complex, multi-step workflows:
+
+- **[BaseAgent](./packages/AI/Agents)** - Core agent execution engine with hierarchical prompt composition, sub-agent delegation, action integration, and automatic context compression
+- **LoopAgentType** - Iterative agents that execute until task completion with ForEach/While operations (90% token reduction for batch tasks)
+- **FlowAgentType** - Deterministic workflow agents using directed graphs with conditional branching, parallel execution, and hybrid AI/deterministic paths
+- **AgentRunner** - Orchestrator that loads agent metadata, instantiates correct classes, and manages execution lifecycle
+
+> **[Agent Framework Documentation](./packages/AI/Agents)**
+
+### Prompt Management
+
+Database-driven prompt templates with advanced features:
+
+- **Hierarchical composition** - Parent/child template patterns for system + agent prompts
+- **Dynamic context injection** - Automatic variable substitution and placeholder resolution
+- **Effort level control** - Fine-grained reasoning intensity (1-100 scale) mapped per-provider
+- **Intelligent model selection** - Automatic failover across configured models
+- **Execution tracking** - Every prompt run logged to database for analysis
+
+> **[Prompt Engine Documentation](./packages/AI/Prompts)**
+
+### Vector Operations & Semantic Search
+
+Full vector pipeline from embedding to search:
+
+- **[Core vector operations](./packages/AI/Vectors/Core)** - Embeddings, similarity search, entity vectorization
+- **[Vector database layer](./packages/AI/Vectors/Database)** - Abstraction supporting Pinecone and extensible to other stores
+- **[Vector sync](./packages/AI/Vectors/Sync)** - Automatic entity vectorization with batch processing and incremental updates
+- **[Duplicate detection](./packages/AI/Vectors/Dupe)** - Find duplicates across entities using vector similarity
+- **[Memory vectors](./packages/AI/Vectors/Memory)** - In-memory vector operations
+
+> **[Vector Operations Documentation](./packages/AI/Vectors)**
+
+### Interoperability Protocols
+
+Connect MJ to the broader AI ecosystem:
+
+- **[MCP Server](./packages/AI/MCPServer)** - Model Context Protocol server exposing MJ entities and agents as tools for any MCP-compatible client (Claude Desktop, Cursor, etc.)
+- **[MCP Client](./packages/AI/MCPClient)** - Consume tools from external MCP servers with multi-transport support, authentication, and rate limiting
+- **[A2A Server](./packages/AI/A2AServer)** - Google Agent-to-Agent protocol for agent interoperability across platforms
+
+### AI Recommendations
+
+- **[Recommendation Engine](./packages/AI/Recommendations)** - Pluggable recommendation framework with entity-aware suggestions
+
+---
+
 ## Why MemberJunction?
 
-MemberJunction was designed to solve common challenges in data management and application development:
+MemberJunction was designed to solve common challenges in data management and AI-powered application development:
 
 - **Eliminate Data Silos** - Bring all your data together in one place
+- **Add AI Without Complexity** - Plug in any AI provider through a unified abstraction layer
+- **Build Intelligent Agents** - Create autonomous AI workflows with the agent framework
 - **Reduce Development Time** - Auto-generate forms, APIs, and documentation from metadata
 - **Ensure Consistency** - Single source of truth for data structure and business rules
 - **Scale Efficiently** - From small non-profits to large enterprises
@@ -37,10 +115,10 @@ Extensive documentation is available at [https://docs.memberjunction.org](https:
 
 ### Prerequisites
 
-- **Node.js** 18+ (20+ recommended)
+- **Node.js** 20+ (22+ recommended)
 - **npm** 9+
 - **SQL Server** 2019+ (or Azure SQL Database)
-- **Angular CLI** 18+
+- **Angular CLI** 21+
 - **Git** for cloning the repository
 
 ### Installation
@@ -122,13 +200,14 @@ MJ/
 
 ### 🤖 AI Framework
 
-Comprehensive AI integration supporting 15+ providers:
+See the dedicated [AI Capabilities](#-ai-capabilities) section above for full details. Key packages:
 
 - **[@memberjunction/ai](./packages/AI/Core)** - Provider-agnostic AI abstractions (works standalone!)
 - **[@memberjunction/aiengine](./packages/AI/Engine)** - High-level AI orchestration
-- **AI Providers** - OpenAI, Anthropic, Google, Azure, Mistral, and more
-- **Vector Operations** - Embeddings, similarity search, duplicate detection
-- **Recommendations** - Pluggable recommendation engine
+- **[@memberjunction/ai-agents](./packages/AI/Agents)** - Agent framework with sub-agent orchestration
+- **[@memberjunction/ai-prompts](./packages/AI/Prompts)** - Prompt management and execution engine
+- **[@memberjunction/ai-mcp-server](./packages/AI/MCPServer)** - MCP protocol server
+- **15+ [AI Providers](./packages/AI/Providers)** - OpenAI, Anthropic, Google, Groq, Mistral, and more
 
 ### 💬 Communication Framework
 
@@ -150,7 +229,7 @@ Extensible business logic execution:
 
 ### 🎨 UI Components
 
-100+ Angular components for rapid development:
+100+ Angular 21 components for rapid development (ESBuild/Vite powered):
 
 - **[@memberjunction/ng-explorer-core](./packages/Angular/Explorer/explorer-core)** - Explorer application shell
 - **Data Components** - Grids, forms, charts, timelines
@@ -172,8 +251,8 @@ Extensible business logic execution:
 # Build everything
 npm run build
 
-# Build specific package
-turbo build --filter="@memberjunction/core"
+# Build specific package (run from that package's directory)
+cd packages/MJCore && npm run build
 
 # Watch mode (auto-rebuild on changes)
 npm run watch
@@ -249,8 +328,8 @@ MemberJunction generates code from metadata:
 - **Interface-first** design for extensibility
 
 ### Naming Conventions
-- **PascalCase** for classes and interfaces
-- **camelCase** for variables and functions
+- **PascalCase** for classes, interfaces, and **public class members** (properties, methods)
+- **camelCase** for private/protected members, local variables, and function parameters
 - **UPPER_CASE** for constants
 - **Descriptive names** over abbreviations
 
@@ -303,11 +382,11 @@ MemberJunction includes enterprise-grade security features:
 
 MemberJunction is ideal for:
 
+- **AI-Powered Applications** - Build intelligent features with integrated AI providers, vector search, and agent orchestration
 - **Non-Profit Organizations** - Manage members, donors, and programs
 - **Associations** - Track memberships, events, and communications
 - **Enterprise Applications** - Build custom business applications
 - **Data Integration** - Unify data from multiple systems
-- **AI Applications** - Build AI-powered features with integrated vector search
 
 ## 🤝 Contributing
 

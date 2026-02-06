@@ -22,7 +22,7 @@ npm install @memberjunction/ng-link-directives
 
 ## Requirements
 
-- Angular 18.0.2 or higher
+- Angular 21 or higher
 - @memberjunction/core 2.43.0 or higher
 - TypeScript 4.0 or higher
 

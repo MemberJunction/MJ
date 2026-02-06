@@ -27,7 +27,7 @@ npm install @memberjunction/ng-code-editor
 
 ### Peer Dependencies
 
-This package requires Angular 18.0.2 or higher:
+This package requires Angular 21 or higher:
 - `@angular/common`: ^18.0.2
 - `@angular/core`: ^18.0.2
 

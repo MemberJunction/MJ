@@ -389,7 +389,7 @@ npm run build
 The package is configured with:
 - TypeScript compilation via `ngc`
 - No side effects for better tree-shaking
-- Proper peer dependencies for Angular 18.x
+- Proper peer dependencies for Angular 21+
 
 ## Integration with MemberJunction
 

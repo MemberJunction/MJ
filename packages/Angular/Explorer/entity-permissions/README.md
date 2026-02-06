@@ -32,7 +32,7 @@ npm install @memberjunction/ng-entity-permissions
 ## Requirements
 
 ### Peer Dependencies
-- Angular 18.0.2+
+- Angular 21+
 - @angular/common
 - @angular/core
 - @angular/forms

@@ -492,7 +492,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         const totalPreTime = performance.now() - preViewStart;
         if (totalPreTime > 50) {
-            console.log(`[PERF-PRE] PreRunView ${params.EntityName}: ${totalPreTime.toFixed(1)}ms (telemetry=${telemetryTime.toFixed(1)}ms, entityCheck=${entityCheckTime.toFixed(1)}ms, entityLookup=${entityLookupTime.toFixed(1)}ms, cache=${cacheCheckTime.toFixed(1)}ms)`);
+            LogStatus(`[PERF-PRE] PreRunView ${params.EntityName}: ${totalPreTime.toFixed(1)}ms (telemetry=${telemetryTime.toFixed(1)}ms, entityCheck=${entityCheckTime.toFixed(1)}ms, entityLookup=${entityLookupTime.toFixed(1)}ms, cache=${cacheCheckTime.toFixed(1)}ms)`);
         }
 
         return {

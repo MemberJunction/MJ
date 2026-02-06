@@ -4,7 +4,7 @@ MJExplorer is the primary user interface application for the MemberJunction fram
 
 ## Overview
 
-MJExplorer is built with Angular 18 and integrates seamlessly with the MemberJunction ecosystem to provide:
+MJExplorer is built with Angular 21 and integrates seamlessly with the MemberJunction ecosystem to provide:
 
 - **Entity Management**: Browse, view, create, update, and delete records across all entities
 - **Custom Forms**: Extensible form system with both generated and custom form components

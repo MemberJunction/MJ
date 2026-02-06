@@ -4,7 +4,7 @@ This directory contains Angular components, directives, and services that provid
 
 ## Overview
 
-The MemberJunction Angular packages provide a comprehensive set of UI components built with Angular 18+ and Kendo UI. These components handle everything from basic form fields to complex data grids, AI-powered chat interfaces, and complete application shells.
+The MemberJunction Angular packages provide a comprehensive set of UI components built with Angular 21+ and Kendo UI. These components handle everything from basic form fields to complex data grids, AI-powered chat interfaces, and complete application shells.
 
 ## Package Structure
 
@@ -31,7 +31,7 @@ Located in the [Generic](./Generic) subdirectory - reusable components for any A
 ## Key Features
 
 ### Modern Angular Patterns
-- Angular 18+ with standalone components
+- Angular 21+ with standalone components
 - Modern control flow syntax (`@if`, `@for`, `@switch`)
 - Reactive forms with strong typing
 - RxJS for state management

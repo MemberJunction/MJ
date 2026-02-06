@@ -287,7 +287,7 @@ onComponentEvent(event: ReactComponentEvent) {
 ## Dependencies
 
 This package requires:
-- Angular 18+
+- Angular 21+
 - React 18+
 - @memberjunction/react-runtime
 - @memberjunction/interactive-component-types

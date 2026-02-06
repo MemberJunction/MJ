@@ -164,6 +164,13 @@ If `my-feature` tracks `origin/next`:
 - Start API server: `npm run start:api`
 - Start Explorer UI: `npm run start:explorer`
 
+### Build Pipeline
+- MJExplorer uses the Angular `application` builder powered by ESBuild and Vite
+- Dev server (`npm run start:explorer`) uses Vite with HMR for fast iteration
+- ESBuild provides significantly faster builds compared to the legacy Webpack pipeline
+- Vite prebundling excludes `@memberjunction/*` packages (they're symlinked workspace packages)
+- Source maps are configured for full debugging support including symlinked packages
+
 ## Database Migrations
 - See `/migrations/CLAUDE.md` for comprehensive migration guidelines
 - Key points:
