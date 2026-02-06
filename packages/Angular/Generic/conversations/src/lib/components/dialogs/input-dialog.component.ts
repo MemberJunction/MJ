@@ -2,6 +2,7 @@ import { Component, Input } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 
 @Component({
+  standalone: false,
   selector: 'mj-input-dialog',
   template: `
     <div class="input-dialog-content">

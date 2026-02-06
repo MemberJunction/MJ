@@ -172,6 +172,7 @@ export function LoadSystemDiagnosticsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'SystemDiagnosticsResource')
 @Component({
+  standalone: false,
     selector: 'app-system-diagnostics',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `

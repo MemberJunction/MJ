@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Workflow Runs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-workflowrun-form',
     templateUrl: './workflowrun.form.component.html'
 })

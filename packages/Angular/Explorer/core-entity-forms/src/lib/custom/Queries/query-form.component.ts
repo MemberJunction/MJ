@@ -16,6 +16,7 @@ interface CategoryTreeNode {
 
 @RegisterClass(BaseFormComponent, 'Queries') 
 @Component({
+  standalone: false,
     selector: 'mj-query-form',
     templateUrl: './query-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']

@@ -1,6 +1,7 @@
 import { Component, Input } from '@angular/core';
 
 @Component({
+  standalone: false,
   selector: 'app-cost-display',
   template: `
     <div class="cost-display" [class]="getMagnitudeClass()">

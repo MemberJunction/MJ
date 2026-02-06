@@ -12,6 +12,7 @@ interface CredentialsDashboardState {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credentials-dashboard',
     templateUrl: './credentials-dashboard.component.html',
     styleUrls: ['./credentials-dashboard.component.css'],

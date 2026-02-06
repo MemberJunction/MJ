@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Content Type Attributes') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-contenttypeattribute-form',
     templateUrl: './contenttypeattribute.form.component.html'
 })

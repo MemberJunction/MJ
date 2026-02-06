@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Vector Indexes') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-vectorindex-form',
     templateUrl: './vectorindex.form.component.html'
 })

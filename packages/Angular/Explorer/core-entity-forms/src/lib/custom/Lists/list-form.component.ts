@@ -45,6 +45,7 @@ export interface AddableRecord {
  */
 @RegisterClass(BaseFormComponent, 'Lists')
 @Component({
+  standalone: false,
     selector: 'mj-list-form-extended',
     templateUrl: './list-form.component.html',
     styleUrls: ['./list-form.component.css', '../../../shared/form-styles.css'],

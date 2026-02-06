@@ -45,6 +45,7 @@ type BrowserMode = 'list' | 'view' | 'edit';
  */
 @RegisterClass(BaseResourceComponent, 'DashboardBrowserResource')
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-browser-resource',
     templateUrl: './dashboard-browser-resource.component.html',
     styleUrls: ['./dashboard-browser-resource.component.css'],

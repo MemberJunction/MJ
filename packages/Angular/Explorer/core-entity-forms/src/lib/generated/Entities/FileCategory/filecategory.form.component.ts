@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'File Categories') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-filecategory-form',
     templateUrl: './filecategory.form.component.html'
 })

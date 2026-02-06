@@ -15,6 +15,7 @@ import { TemplateEditorConfig } from '../../shared/components/template-editor.co
 
 @RegisterClass(BaseFormComponent, 'Templates') 
 @Component({
+  standalone: false,
     selector: 'mj-templates-form',
     templateUrl: './templates-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './templates-form.component.css']

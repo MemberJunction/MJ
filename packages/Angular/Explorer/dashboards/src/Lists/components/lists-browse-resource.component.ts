@@ -33,6 +33,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
 
 @RegisterClass(BaseResourceComponent, 'ListsBrowseResource')
 @Component({
+  standalone: false,
   selector: 'mj-lists-browse-resource',
   template: `
     <div class="lists-browse-container">

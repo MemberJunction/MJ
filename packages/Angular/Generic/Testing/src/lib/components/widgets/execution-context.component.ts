@@ -6,6 +6,7 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
  * Shows machine info, user info, and detailed runtime context in a clean, organized layout.
  */
 @Component({
+  standalone: false,
   selector: 'mj-execution-context',
   template: `
     <div class="execution-context">

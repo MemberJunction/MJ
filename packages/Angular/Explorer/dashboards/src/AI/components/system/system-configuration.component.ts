@@ -32,6 +32,7 @@ export function LoadAIConfigResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIConfigResource')
 @Component({
+  standalone: false,
   selector: 'app-system-configuration',
   templateUrl: './system-configuration.component.html',
   styleUrls: ['./system-configuration.component.css']

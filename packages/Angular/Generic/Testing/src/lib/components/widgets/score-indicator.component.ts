@@ -1,6 +1,7 @@
 import { Component, Input } from '@angular/core';
 
 @Component({
+  standalone: false,
   selector: 'app-score-indicator',
   template: `
     <div class="score-indicator" [class]="getColorClass()">

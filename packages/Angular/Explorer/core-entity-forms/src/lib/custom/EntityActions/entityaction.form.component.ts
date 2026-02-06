@@ -6,6 +6,7 @@ import { EntityActionFormComponent } from '../../generated/Entities/EntityAction
 
 @RegisterClass(BaseFormComponent, 'Entity Actions') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'mj-custom-entity-action-extended-form',
     templateUrl: './entityaction.form.component.html',
     styleUrls: ['../../../shared/form-styles.css']

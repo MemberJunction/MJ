@@ -3,6 +3,7 @@ import { TestRunSummary } from '../../services/testing-instrumentation.service';
 import { OracleResult } from './oracle-breakdown-table.component';
 
 @Component({
+  standalone: false,
   selector: 'app-test-run-detail-panel',
   template: `
     <div class="test-run-detail-panel" *ngIf="testRun">

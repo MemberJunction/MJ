@@ -6,6 +6,7 @@ import { FlowNodeTypeConfig } from '../interfaces/flow-types';
  * Uses Foblex's fExternalItem directive to enable drag-to-canvas creation.
  */
 @Component({
+  standalone: false,
   selector: 'mj-flow-palette',
   templateUrl: './flow-palette.component.html',
   styleUrls: ['./flow-palette.component.css'],

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Rubrics') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-testrubric-form',
     templateUrl: './testrubric.form.component.html'
 })

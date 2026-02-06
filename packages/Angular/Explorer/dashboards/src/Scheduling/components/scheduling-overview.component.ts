@@ -10,6 +10,7 @@ import {
 } from '../services/scheduling-instrumentation.service';
 
 @Component({
+  standalone: false,
   selector: 'app-scheduling-overview',
   templateUrl: './scheduling-overview.component.html',
   styleUrls: ['./scheduling-overview.component.css'],

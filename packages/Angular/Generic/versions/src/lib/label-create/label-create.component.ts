@@ -25,6 +25,7 @@ export interface RecordOption {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-label-create',
     templateUrl: './label-create.component.html',
     styleUrls: ['./label-create.component.css'],

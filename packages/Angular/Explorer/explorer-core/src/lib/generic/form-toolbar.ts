@@ -3,6 +3,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 
 @Component({
+  standalone: false,
     selector: 'mj-form-toolbar',
     styles: [`button { margin-right: 10px; }`],
     template: `

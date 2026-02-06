@@ -15,6 +15,7 @@ export function LoadSchedulingDashboardResource() {
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingDashboardResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-dashboard-resource',
   template: `
     <div class="resource-container">

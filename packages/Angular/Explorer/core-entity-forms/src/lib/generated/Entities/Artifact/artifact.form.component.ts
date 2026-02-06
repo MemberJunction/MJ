@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Artifacts') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-artifact-form',
     templateUrl: './artifact.form.component.html'
 })

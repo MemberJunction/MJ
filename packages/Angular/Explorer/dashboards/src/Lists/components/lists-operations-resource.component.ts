@@ -39,6 +39,7 @@ interface EntityOption {
 
 @RegisterClass(BaseResourceComponent, 'ListsOperationsResource')
 @Component({
+  standalone: false,
   selector: 'mj-lists-operations-resource',
   template: `
     <div class="operations-container">

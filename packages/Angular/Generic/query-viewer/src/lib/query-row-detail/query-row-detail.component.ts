@@ -59,6 +59,7 @@ const HIDE_EMPTY_FIELDS_KEY = 'QueryViewer_RowDetailPanel_HideEmptyFields';
  * Displays a single row's data in a formatted, grouped view with entity links.
  */
 @Component({
+  standalone: false,
     selector: 'mj-query-row-detail',
     templateUrl: './query-row-detail.component.html',
     styleUrls: ['./query-row-detail.component.css'],

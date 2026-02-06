@@ -36,6 +36,7 @@ interface CategoryNode {
  */
 @RegisterClass(BaseResourceComponent, 'QueryBrowserResource')
 @Component({
+  standalone: false,
     selector: 'mj-query-browser-resource',
     templateUrl: './query-browser-resource.component.html',
     styleUrls: ['./query-browser-resource.component.css'],

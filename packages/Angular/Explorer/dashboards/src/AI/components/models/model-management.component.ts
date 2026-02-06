@@ -44,6 +44,7 @@ export function LoadAIModelsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIModelsResource')
 @Component({
+  standalone: false,
   selector: 'app-model-management',
   templateUrl: './model-management.component.html',
   styleUrls: ['./model-management.component.css']

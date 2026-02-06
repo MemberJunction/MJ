@@ -456,6 +456,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 ${generationImports.length > 0 ? generationImports + '\n' : ''}
 @RegisterClass(BaseFormComponent, '${entity.Name}') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-${entity.ClassName.toLowerCase()}-form',
     templateUrl: './${entity.ClassName.toLowerCase()}.form.component.html'
 })

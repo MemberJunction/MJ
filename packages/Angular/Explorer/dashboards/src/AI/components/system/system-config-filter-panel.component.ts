@@ -8,6 +8,7 @@ interface SystemConfigFilter {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-system-config-filter-panel',
   templateUrl: './system-config-filter-panel.component.html',
   styleUrls: ['./system-config-filter-panel.component.css']

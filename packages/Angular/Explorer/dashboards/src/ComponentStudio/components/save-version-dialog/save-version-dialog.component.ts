@@ -6,6 +6,7 @@ export interface SaveVersionResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-save-version-dialog',
   template: `
     @if (Visible) {

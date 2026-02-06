@@ -46,6 +46,7 @@ export function LoadAIPromptsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIPromptsResource')
 @Component({
+  standalone: false,
   selector: 'app-prompt-management',
   templateUrl: './prompt-management.component.html',
   styleUrls: ['./prompt-management.component.css']

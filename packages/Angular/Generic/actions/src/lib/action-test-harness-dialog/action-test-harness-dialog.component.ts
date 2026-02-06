@@ -16,6 +16,7 @@ import { ActionResult } from '../action-test-harness/action-test-harness.compone
  * </mj-action-test-harness-dialog>
  */
 @Component({
+  standalone: false,
     selector: 'mj-action-test-harness-dialog',
     templateUrl: './action-test-harness-dialog.component.html',
     styleUrls: ['./action-test-harness-dialog.component.css']

@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Encryption Key Sources') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-encryptionkeysource-form',
     templateUrl: './encryptionkeysource.form.component.html'
 })

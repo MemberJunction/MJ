@@ -16,6 +16,7 @@ import { CreateAgentConfig, CreateAgentResult } from './create-agent-panel.compo
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-create-agent-dialog',
     template: `
         <!-- Backdrop -->

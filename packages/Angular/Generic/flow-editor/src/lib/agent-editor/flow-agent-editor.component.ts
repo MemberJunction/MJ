@@ -17,6 +17,7 @@ export type AgentEditorViewMode = 'diagram' | 'list';
  * MJ agent-specific CRUD, properties panel, and data transformation.
  */
 @Component({
+  standalone: false,
   selector: 'mj-flow-agent-editor',
   templateUrl: './flow-agent-editor.component.html',
   styleUrls: ['./flow-agent-editor.component.css'],

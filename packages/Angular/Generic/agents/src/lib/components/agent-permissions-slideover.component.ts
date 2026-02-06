@@ -16,6 +16,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-agent-permissions-slideover',
     template: `
         <!-- Backdrop -->

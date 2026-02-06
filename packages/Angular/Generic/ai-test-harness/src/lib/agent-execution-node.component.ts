@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from 
 import { AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 
 @Component({
+  standalone: false,
     selector: 'mj-execution-node',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `

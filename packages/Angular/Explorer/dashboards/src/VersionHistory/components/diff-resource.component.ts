@@ -55,6 +55,7 @@ interface EntityGroupView {
 
 @RegisterClass(BaseResourceComponent, 'VersionHistoryDiffResource')
 @Component({
+  standalone: false,
     selector: 'mj-version-history-diff-resource',
     templateUrl: './diff-resource.component.html',
     styleUrls: ['./diff-resource.component.css'],

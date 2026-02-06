@@ -50,6 +50,7 @@ export function LoadAPIKeysResource(): void {
  */
 @RegisterClass(BaseResourceComponent, 'APIKeysResource')
 @Component({
+  standalone: false,
     selector: 'mj-api-keys-resource',
     templateUrl: './api-keys-resource.component.html',
     styleUrls: ['./api-keys-resource.component.css']

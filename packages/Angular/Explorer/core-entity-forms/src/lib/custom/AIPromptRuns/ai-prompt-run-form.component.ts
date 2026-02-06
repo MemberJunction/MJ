@@ -13,6 +13,7 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
 @Component({
+  standalone: false,
     selector: 'mj-ai-prompt-run-form',
     templateUrl: './ai-prompt-run-form.component.html',
     styleUrls: ['./ai-prompt-run-form.component.css'],

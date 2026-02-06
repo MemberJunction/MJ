@@ -29,6 +29,7 @@ interface ExpandableSection {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-mcp-log-detail-panel',
     templateUrl: './mcp-log-detail-panel.component.html',
     styleUrls: ['./mcp-log-detail-panel.component.css'],

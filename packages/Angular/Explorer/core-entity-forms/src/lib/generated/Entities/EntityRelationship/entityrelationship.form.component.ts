@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Relationships') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-entityrelationship-form',
     templateUrl: './entityrelationship.form.component.html'
 })

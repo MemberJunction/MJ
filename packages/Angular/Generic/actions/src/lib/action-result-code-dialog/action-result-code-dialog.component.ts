@@ -20,6 +20,7 @@ export interface ActionResultCodeDialogResult {
  * </mj-action-result-code-dialog>
  */
 @Component({
+  standalone: false,
     selector: 'mj-action-result-code-dialog',
     templateUrl: './action-result-code-dialog.component.html',
     styleUrls: ['./action-result-code-dialog.component.css']

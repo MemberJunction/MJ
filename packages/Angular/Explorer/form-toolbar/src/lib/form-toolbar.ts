@@ -9,6 +9,7 @@ import { ListManagementDialogConfig, ListManagementResult } from '@memberjunctio
 
 
 @Component({
+  standalone: false,
     selector: 'mj-form-toolbar',
     styleUrl: './form-toolbar.css',
     templateUrl: './form-toolbar.html'

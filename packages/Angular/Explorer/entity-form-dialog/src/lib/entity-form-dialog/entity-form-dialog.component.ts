@@ -12,6 +12,7 @@ import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-
  * of the Save and Cancel buttons.
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-form-dialog',
   templateUrl: './entity-form-dialog.component.html',
   styleUrls: ['./entity-form-dialog.component.css']

@@ -13,6 +13,7 @@ interface ConversationMember {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-members-modal',
   template: `
     <kendo-dialog

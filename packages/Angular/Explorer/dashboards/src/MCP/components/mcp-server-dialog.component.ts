@@ -44,6 +44,7 @@ export interface ServerDialogResult {
  * MCP Server Dialog Component
  */
 @Component({
+  standalone: false,
     selector: 'mj-mcp-server-dialog',
     templateUrl: './mcp-server-dialog.component.html',
     styleUrls: ['./mcp-server-dialog.component.css']

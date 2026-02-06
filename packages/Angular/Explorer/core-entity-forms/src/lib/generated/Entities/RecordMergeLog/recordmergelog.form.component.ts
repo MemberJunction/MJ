@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Record Merge Logs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-recordmergelog-form',
     templateUrl: './recordmergelog.form.component.html'
 })

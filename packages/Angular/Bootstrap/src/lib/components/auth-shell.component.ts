@@ -15,6 +15,7 @@ import { MJInitializationService } from '../services/initialization.service';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '../bootstrap.types';
 
 @Component({
+  standalone: false,
   selector: 'mj-auth-shell',
   template: `
     <div class="mj-auth-shell">

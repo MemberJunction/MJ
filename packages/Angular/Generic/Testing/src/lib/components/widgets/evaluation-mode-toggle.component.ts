@@ -14,6 +14,7 @@ import { EvaluationPreferences } from '../../models/evaluation.types';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'app-evaluation-mode-toggle',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

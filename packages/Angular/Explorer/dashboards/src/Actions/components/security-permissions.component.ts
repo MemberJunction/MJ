@@ -15,6 +15,7 @@ export function LoadActionsSecurityResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ActionsSecurityResource')
 @Component({
+  standalone: false,
   selector: 'mj-security-permissions',
   template: `
     <div class="security-permissions-placeholder" >

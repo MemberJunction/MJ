@@ -5,6 +5,7 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
  * Provides zoom, fit-to-screen, auto-layout, and grid/minimap toggles.
  */
 @Component({
+  standalone: false,
   selector: 'mj-flow-toolbar',
   template: `
     <div class="mj-flow-toolbar">

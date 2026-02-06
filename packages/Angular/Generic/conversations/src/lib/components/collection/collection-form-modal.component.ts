@@ -9,6 +9,7 @@ import { CollectionPermissionService } from '../../services/collection-permissio
  * Modal for creating and editing collections
  */
 @Component({
+  standalone: false,
   selector: 'mj-collection-form-modal',
   template: `
     <kendo-dialog

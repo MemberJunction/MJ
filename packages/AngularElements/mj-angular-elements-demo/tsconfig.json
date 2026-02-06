@@ -12,13 +12,9 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "downlevelIteration": true,
-    "moduleResolution": "node",
     "importHelpers": true,
-    "target": "ES2020",
     "preserveConstEnums": true,
-    "module": "commonjs",
-    "useDefineForClassFields": false,
-    "lib": ["ES2020", "dom"]
+    "useDefineForClassFields": false
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

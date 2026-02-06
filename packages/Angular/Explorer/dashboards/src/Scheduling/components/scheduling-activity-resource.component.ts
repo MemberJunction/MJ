@@ -15,6 +15,7 @@ export function LoadSchedulingActivityResource() {
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingActivityResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-activity-resource',
   template: `
     <div class="resource-container">

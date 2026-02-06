@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Duplicate Run Detail Matches') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-duplicaterundetailmatch-form',
     templateUrl: './duplicaterundetailmatch.form.component.html'
 })

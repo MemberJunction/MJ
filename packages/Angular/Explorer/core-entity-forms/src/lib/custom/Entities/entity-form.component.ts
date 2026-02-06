@@ -91,6 +91,7 @@ export interface GroupedIncomingRelationship {
  */
 @RegisterClass(BaseFormComponent, 'Entities')
 @Component({
+  standalone: false,
     selector: 'mj-entity-form',
     templateUrl: './entity-form.component.html',
     styleUrls: ['./entity-form.component.css', '../../../shared/form-styles.css'],

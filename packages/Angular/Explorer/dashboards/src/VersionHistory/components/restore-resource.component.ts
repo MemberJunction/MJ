@@ -15,6 +15,7 @@ export function LoadVersionHistoryRestoreResource() {
 
 @RegisterClass(BaseResourceComponent, 'VersionHistoryRestoreResource')
 @Component({
+  standalone: false,
     selector: 'mj-version-history-restore-resource',
     templateUrl: './restore-resource.component.html',
     styleUrls: ['./restore-resource.component.css'],

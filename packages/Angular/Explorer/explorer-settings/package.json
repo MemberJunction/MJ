@@ -15,14 +15,14 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.2.14",
-    "@angular/compiler-cli": "18.2.14"
+    "@angular/compiler": "21.1.3",
+    "@angular/compiler-cli": "21.1.3"
   },
   "peerDependencies": {
-    "@angular/common": "18.2.14",
-    "@angular/core": "18.2.14",
-    "@angular/forms": "18.2.14",
-    "@angular/router": "18.2.14"
+    "@angular/common": "21.1.3",
+    "@angular/core": "21.1.3",
+    "@angular/forms": "21.1.3",
+    "@angular/router": "21.1.3"
   },
   "dependencies": {
     "@memberjunction/core": "3.4.0",
@@ -42,15 +42,15 @@
     "@memberjunction/ng-simple-record-list": "3.4.0",
     "@memberjunction/ng-tabstrip": "3.4.0",
     "@memberjunction/ng-user-avatar": "3.4.0",
-    "@progress/kendo-angular-buttons": "16.2.0",
-    "@progress/kendo-angular-dialog": "16.2.0",
-    "@progress/kendo-angular-dropdowns": "16.2.0",
-    "@progress/kendo-angular-excel-export": "16.2.0",
-    "@progress/kendo-angular-grid": "16.2.0",
-    "@progress/kendo-angular-indicators": "16.2.0",
-    "@progress/kendo-angular-layout": "16.2.0",
-    "@progress/kendo-angular-sortable": "16.2.0",
-    "@angular/cdk": "18.0.2",
+    "@progress/kendo-angular-buttons": "22.0.1",
+    "@progress/kendo-angular-dialog": "22.0.1",
+    "@progress/kendo-angular-dropdowns": "22.0.1",
+    "@progress/kendo-angular-excel-export": "22.0.1",
+    "@progress/kendo-angular-grid": "22.0.1",
+    "@progress/kendo-angular-indicators": "22.0.1",
+    "@progress/kendo-angular-layout": "22.0.1",
+    "@progress/kendo-angular-sortable": "22.0.1",
+    "@angular/cdk": "21.1.3",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

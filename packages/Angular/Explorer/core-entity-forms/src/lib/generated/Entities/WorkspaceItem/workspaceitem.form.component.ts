@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Workspace Items') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-workspaceitem-form',
     templateUrl: './workspaceitem.form.component.html'
 })

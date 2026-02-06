@@ -12,6 +12,7 @@ import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberj
  */
 @RegisterClass(BaseDashboardPart, 'ViewPanelRenderer')
 @Component({
+  standalone: false,
     selector: 'mj-view-part',
     template: `
         <div class="view-part" [class.loading]="IsLoading" [class.error]="ErrorMessage">

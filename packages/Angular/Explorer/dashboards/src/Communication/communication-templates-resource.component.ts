@@ -20,6 +20,7 @@ export function LoadCommunicationTemplatesResource() {
 
 @RegisterClass(BaseResourceComponent, 'CommunicationTemplatesResource')
 @Component({
+  standalone: false,
     selector: 'mj-communication-templates-resource',
     template: `
     <div class="templates-wrapper">

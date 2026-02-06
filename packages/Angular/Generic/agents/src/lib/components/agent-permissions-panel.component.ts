@@ -12,6 +12,7 @@ interface GranteeOption {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-agent-permissions-panel',
     templateUrl: './agent-permissions-panel.component.html',
     styleUrls: ['./agent-permissions-panel.component.css'],

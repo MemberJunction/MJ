@@ -15,6 +15,7 @@ export interface NavItemClickEvent {
  * Horizontal navigation items for the current app.
  */
 @Component({
+  standalone: false,
   selector: 'mj-app-nav',
   templateUrl: './app-nav.component.html',
   styleUrls: ['./app-nav.component.css']

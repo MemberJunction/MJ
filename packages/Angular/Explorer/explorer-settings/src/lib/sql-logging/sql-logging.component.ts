@@ -57,6 +57,7 @@ interface SqlLoggingConfig {
  * @requires SQL logging enabled in server configuration
  */
 @Component({
+  standalone: false,
   selector: 'mj-sql-logging',
   templateUrl: './sql-logging.component.html',
   styleUrls: ['./sql-logging.component.css'],

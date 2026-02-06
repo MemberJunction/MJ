@@ -35,6 +35,7 @@ export interface AppAccessDialogResult {
  * Features auto-dismiss with countdown timer for certain dialog types.
  */
 @Component({
+  standalone: false,
   selector: 'mj-app-access-dialog',
   templateUrl: './app-access-dialog.component.html',
   styleUrls: ['./app-access-dialog.component.css']

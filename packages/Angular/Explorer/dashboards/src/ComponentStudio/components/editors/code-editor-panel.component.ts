@@ -7,6 +7,7 @@ import { ComponentStudioStateService, CodeSection } from '../../services/compone
 type CodeViewMode = 'current' | 'original' | 'diff';
 
 @Component({
+  standalone: false,
   selector: 'mj-code-editor-panel',
   template: `
     <div class="code-editor-panel">

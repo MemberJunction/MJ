@@ -20,6 +20,7 @@ interface CategoryNode {
 
 @RegisterClass(BaseResourceComponent, 'CredentialsCategoriesResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-categories-resource',
     templateUrl: './credentials-categories-resource.component.html',
     styleUrls: ['./credentials-categories-resource.component.css'],

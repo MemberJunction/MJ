@@ -33,6 +33,7 @@ export interface VennRegionClickEvent {
  * - Responsive sizing
  */
 @Component({
+  standalone: false,
   selector: 'mj-venn-diagram',
   template: `
     <div class="venn-container" #vennContainer>

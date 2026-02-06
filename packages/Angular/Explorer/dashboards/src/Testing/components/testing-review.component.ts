@@ -28,6 +28,7 @@ interface ReviewFormState {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-testing-review',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

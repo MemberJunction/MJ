@@ -187,6 +187,7 @@ export type MCPDashboardTab = 'servers' | 'connections' | 'tools' | 'logs';
  */
 @RegisterClass(BaseDashboard, 'MCPDashboard')
 @Component({
+  standalone: false,
     selector: 'mj-mcp-dashboard',
     templateUrl: './mcp-dashboard.component.html',
     styleUrls: ['./mcp-dashboard.component.css']

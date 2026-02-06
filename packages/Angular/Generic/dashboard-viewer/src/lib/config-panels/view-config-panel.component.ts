@@ -16,6 +16,7 @@ import {
  */
 @RegisterClass(BaseConfigPanel, 'ViewPanelConfigDialog')
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-view-config-panel',
     templateUrl: './view-config-panel.component.html',
     styleUrls: ['./config-panel.component.css']

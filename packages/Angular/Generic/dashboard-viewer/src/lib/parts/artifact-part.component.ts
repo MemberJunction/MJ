@@ -11,6 +11,7 @@ import { Subject } from 'rxjs';
  */
 @RegisterClass(BaseDashboardPart, 'ArtifactPanelRenderer')
 @Component({
+  standalone: false,
     selector: 'mj-artifact-part',
     template: `
         <div class="artifact-part" [class.loading]="IsLoading" [class.error]="ErrorMessage">

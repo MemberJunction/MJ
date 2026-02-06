@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Data Context Items') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-datacontextitem-form',
     templateUrl: './datacontextitem.form.component.html'
 })

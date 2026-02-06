@@ -21,6 +21,7 @@ export function LoadChatCollectionsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ChatCollectionsResource')
 @Component({
+  standalone: false,
   selector: 'mj-chat-collections-resource',
   template: `
     <div class="chat-collections-container">

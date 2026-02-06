@@ -8,6 +8,7 @@ import { takeUntil } from 'rxjs/operators';
  * Appears in bottom-right corner, minimizable, shows only when tasks > 0
  */
 @Component({
+  standalone: false,
   selector: 'mj-global-tasks-panel',
   template: `
     <div class="global-tasks-panel" *ngIf="tasks.length > 0">

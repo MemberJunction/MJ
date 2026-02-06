@@ -15,6 +15,7 @@ export interface EntitySelectorConfig {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-entity-selector-dialog',
     template: `
         <div class="dialog-wrapper">

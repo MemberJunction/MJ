@@ -77,6 +77,7 @@ export interface OpenForeignKeyRecordEvent {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-record-detail-panel',
   templateUrl: './entity-record-detail-panel.component.html',
   styleUrls: ['./entity-record-detail-panel.component.css']

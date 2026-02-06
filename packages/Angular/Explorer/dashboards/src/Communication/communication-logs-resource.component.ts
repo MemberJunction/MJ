@@ -13,6 +13,7 @@ export function LoadCommunicationLogsResource() {
 
 @RegisterClass(BaseResourceComponent, 'CommunicationLogsResource')
 @Component({
+  standalone: false,
     selector: 'mj-communication-logs-resource',
     template: `
     <div class="logs-wrapper">

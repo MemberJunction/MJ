@@ -4,6 +4,7 @@ import { BaseFormSectionComponent } from './base-form-section-component';
 import { BaseEntity } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-form-section',
   template: `<div class="form-section"><ng-template #container></ng-template></div>`
 })

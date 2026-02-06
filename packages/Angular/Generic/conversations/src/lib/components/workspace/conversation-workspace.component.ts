@@ -58,6 +58,7 @@ import { PendingAttachment } from '../mention/mention-editor.component';
  * is the preferred approach for MJExplorer integration.
  */
 @Component({
+  standalone: false,
   selector: 'mj-conversation-workspace',
   templateUrl: './conversation-workspace.component.html',
   styleUrls: ['./conversation-workspace.component.css']

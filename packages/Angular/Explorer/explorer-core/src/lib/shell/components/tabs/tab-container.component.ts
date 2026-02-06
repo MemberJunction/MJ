@@ -42,6 +42,7 @@ import { ComponentCacheManager } from './component-cache-manager';
  * - Layout persistence
  */
 @Component({
+  standalone: false,
   selector: 'mj-tab-container',
   templateUrl: './tab-container.component.html',
   styleUrls: ['./tab-container.component.css'],

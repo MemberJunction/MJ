@@ -768,7 +768,7 @@ export class ExcelExporter extends BaseExporter {
         : img.data;
 
       const imageId = workbook.addImage({
-        buffer: imageData,
+        buffer: imageData as unknown as ArrayBuffer,
         extension: img.type
       });
 

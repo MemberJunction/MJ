@@ -22,6 +22,7 @@ import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.compon
  * Uses MJGlobal.Instance.ClassFactory.CreateInstance() to dynamically load viewer plugins.
  */
 @Component({
+  standalone: false,
   selector: 'mj-artifact-type-plugin-viewer',
   template: `
     <div class="artifact-type-plugin-viewer">

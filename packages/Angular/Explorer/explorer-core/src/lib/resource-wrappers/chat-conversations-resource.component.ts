@@ -25,6 +25,7 @@ export function LoadChatConversationsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ChatConversationsResource')
 @Component({
+  standalone: false,
   selector: 'mj-chat-conversations-resource',
   template: `
     <div class="chat-conversations-container" *ngIf="isReady; else loadingTemplate">

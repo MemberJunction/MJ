@@ -38,6 +38,7 @@ export function LoadAPIKeyCreateDialog(): void {
  * Shows the raw key only once - it cannot be recovered after closing
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-key-create-dialog',
     templateUrl: './api-key-create-dialog.component.html',
     styleUrls: ['./api-key-create-dialog.component.css']

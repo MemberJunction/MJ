@@ -12,6 +12,7 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
  */
 @RegisterClass(BaseDashboardPart, 'QueryPanelRenderer')
 @Component({
+  standalone: false,
     selector: 'mj-query-part',
     template: `
         <div class="query-part" [class.loading]="IsLoading" [class.error]="ErrorMessage">

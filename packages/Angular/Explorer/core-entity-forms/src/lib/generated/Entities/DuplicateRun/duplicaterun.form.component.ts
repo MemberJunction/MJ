@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Duplicate Runs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-duplicaterun-form',
     templateUrl: './duplicaterun.form.component.html'
 })

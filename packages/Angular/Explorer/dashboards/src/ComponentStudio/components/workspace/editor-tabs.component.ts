@@ -3,6 +3,7 @@ import { Subscription } from 'rxjs';
 import { ComponentStudioStateService } from '../../services/component-studio-state.service';
 
 @Component({
+  standalone: false,
   selector: 'mj-editor-tabs',
   template: `
     <div class="editor-tabs-container">

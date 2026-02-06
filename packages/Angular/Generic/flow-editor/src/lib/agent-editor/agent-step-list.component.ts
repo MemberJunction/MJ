@@ -6,6 +6,7 @@ import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-e
  * Alternative to the visual flow canvas — useful for quick overview and bulk editing.
  */
 @Component({
+  standalone: false,
   selector: 'mj-agent-step-list',
   template: `
     <div class="mj-step-list">

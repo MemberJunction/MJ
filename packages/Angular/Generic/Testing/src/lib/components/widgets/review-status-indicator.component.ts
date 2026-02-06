@@ -19,6 +19,7 @@ export type ReviewStatus = 'reviewed' | 'needs-review' | 'not-reviewed';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'app-review-status-indicator',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

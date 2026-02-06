@@ -57,6 +57,7 @@ export interface MatrixColumnClickEvent {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-test-results-matrix',
   template: `
     <div class="matrix-container" [class.loading]="loading">

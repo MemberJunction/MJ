@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Datasets') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-dataset-form',
     templateUrl: './dataset.form.component.html'
 })

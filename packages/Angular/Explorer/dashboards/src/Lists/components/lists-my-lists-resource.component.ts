@@ -27,6 +27,7 @@ interface CategoryNode {
 
 @RegisterClass(BaseResourceComponent, 'ListsMyListsResource')
 @Component({
+  standalone: false,
   selector: 'mj-lists-my-lists-resource',
   template: `
     <div class="lists-my-lists-container">

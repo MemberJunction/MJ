@@ -18,6 +18,7 @@ import {
  * This component is used by CodeGen for related entity grids in forms.
  */
 @Component({
+  standalone: false,
     selector: 'mj-explorer-entity-data-grid',
     template: `
         <mj-entity-data-grid

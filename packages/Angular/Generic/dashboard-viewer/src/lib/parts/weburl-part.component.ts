@@ -10,6 +10,7 @@ import { PanelConfig } from '../models/dashboard-types';
  */
 @RegisterClass(BaseDashboardPart, 'WebURLPanelRenderer')
 @Component({
+  standalone: false,
     selector: 'mj-weburl-part',
     template: `
         <div class="weburl-part" [class.loading]="IsLoading" [class.error]="ErrorMessage">

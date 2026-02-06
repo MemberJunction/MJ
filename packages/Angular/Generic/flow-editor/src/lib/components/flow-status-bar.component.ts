@@ -4,6 +4,7 @@ import { Component, Input, ViewEncapsulation, ChangeDetectionStrategy } from '@a
  * Status bar at the bottom of the flow editor showing counts and state.
  */
 @Component({
+  standalone: false,
   selector: 'mj-flow-status-bar',
   template: `
     <div class="mj-flow-status-bar">

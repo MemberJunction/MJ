@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Dataset Items') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-datasetitem-form',
     templateUrl: './datasetitem.form.component.html'
 })

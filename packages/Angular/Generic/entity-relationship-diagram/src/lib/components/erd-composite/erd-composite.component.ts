@@ -65,6 +65,7 @@ export interface ERDCompositeState {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-erd-composite',
   templateUrl: './erd-composite.component.html',
   styleUrls: ['./erd-composite.component.css']

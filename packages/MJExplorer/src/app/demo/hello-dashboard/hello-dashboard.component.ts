@@ -108,6 +108,7 @@ import { ResourceData } from '@memberjunction/core-entities';
  * LoadHelloDashboard(); // Prevents tree-shaking
  */
 @Component({
+  standalone: false,
   selector: 'mj-hello-dashboard',
   templateUrl: './hello-dashboard.component.html',
   styleUrls: ['./hello-dashboard.component.scss']

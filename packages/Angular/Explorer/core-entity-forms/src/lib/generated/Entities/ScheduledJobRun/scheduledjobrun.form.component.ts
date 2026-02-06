@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Scheduled Job Runs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-scheduledjobrun-form',
     templateUrl: './scheduledjobrun.form.component.html'
 })

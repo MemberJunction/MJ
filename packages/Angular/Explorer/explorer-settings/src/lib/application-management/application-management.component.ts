@@ -20,6 +20,7 @@ interface FilterOptions {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-application-management',
   templateUrl: './application-management.component.html',
   styleUrls: ['./application-management.component.css']

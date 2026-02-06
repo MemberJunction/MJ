@@ -6,6 +6,7 @@ import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 
 @Component({
+  standalone: false,
   selector: 'mj-export-modal',
   template: `
     <kendo-dialog

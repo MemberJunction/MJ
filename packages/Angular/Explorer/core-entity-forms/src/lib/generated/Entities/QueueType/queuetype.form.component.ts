@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Queue Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-queuetype-form',
     templateUrl: './queuetype.form.component.html'
 })

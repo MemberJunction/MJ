@@ -68,6 +68,7 @@ interface RecordChangeRow {
 // =========================================================================
 
 @Component({
+  standalone: false,
     selector: 'mj-label-detail-panel',
     templateUrl: './label-detail.component.html',
     styleUrls: ['./label-detail.component.css'],

@@ -6,6 +6,7 @@ import { ComponentDataRequirements, ComponentEntityDataRequirement, ComponentQue
  * Displays entities, queries, and fields in an organized, visually appealing layout.
  */
 @Component({
+  standalone: false,
   selector: 'mj-data-requirements-viewer',
   templateUrl: './data-requirements-viewer.component.html',
   styleUrls: ['./data-requirements-viewer.component.css']

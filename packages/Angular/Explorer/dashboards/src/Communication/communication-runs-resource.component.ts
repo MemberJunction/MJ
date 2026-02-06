@@ -13,6 +13,7 @@ export function LoadCommunicationRunsResource() {
 
 @RegisterClass(BaseResourceComponent, 'CommunicationRunsResource')
 @Component({
+  standalone: false,
     selector: 'mj-communication-runs-resource',
     template: `
     <div class="runs-wrapper">

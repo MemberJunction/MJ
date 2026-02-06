@@ -13,6 +13,7 @@ export interface ArtifactSelectionResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-artifact-selection-dialog',
   templateUrl: './artifact-selection-dialog.component.html',
   styleUrl: './artifact-selection-dialog.component.css'

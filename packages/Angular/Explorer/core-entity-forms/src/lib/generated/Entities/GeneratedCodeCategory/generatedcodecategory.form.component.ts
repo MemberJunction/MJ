@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Generated Code Categories') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-generatedcodecategory-form',
     templateUrl: './generatedcodecategory.form.component.html'
 })

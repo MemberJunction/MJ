@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aipromptrun-form',
     templateUrl: './aipromptrun.form.component.html'
 })

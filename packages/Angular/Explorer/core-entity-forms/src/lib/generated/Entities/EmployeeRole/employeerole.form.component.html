@@ -10,16 +10,6 @@
         icon="fa fa-key"
         [form]="this"
         [formContext]="formContext">
-
-    </mj-collapsible-panel>
-
-    <!-- Role Assignment Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="roleAssignment"
-        sectionName="Role Assignment"
-        icon="fa fa-id-badge"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -40,17 +30,37 @@
             LinkType="Record"
             LinkComponentType="Search"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Employee Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="employeeDetails"
+        sectionName="Employee Details"
+        icon="fa fa-user"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="Employee"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Role Assignment Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="roleAssignment"
+        sectionName="Role Assignment"
+        icon="fa fa-id-badge"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="Role"
             Type="textbox"
             [EditMode]="EditMode"

@@ -45,6 +45,7 @@ export interface CredentialDialogResult {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credential-dialog',
     template: `
         @if (Visible) {

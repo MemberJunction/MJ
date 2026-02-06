@@ -7,6 +7,7 @@ import { UserEntity } from '@memberjunction/core-entities';
  * Shows name, email, role, creation date, and last login.
  */
 @Component({
+  standalone: false,
   selector: 'mj-account-info',
   templateUrl: './account-info.component.html',
   styleUrls: ['./account-info.component.css']

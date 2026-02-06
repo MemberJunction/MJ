@@ -27,6 +27,7 @@ interface TypeWithStats extends CredentialTypeEntity {
 
 @RegisterClass(BaseResourceComponent, 'CredentialsTypesResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-types-resource',
     templateUrl: './credentials-types-resource.component.html',
     styleUrls: ['./credentials-types-resource.component.css'],

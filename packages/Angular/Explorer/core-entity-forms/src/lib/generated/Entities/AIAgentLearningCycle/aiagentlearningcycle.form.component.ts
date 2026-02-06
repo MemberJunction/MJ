@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'AI Agent Learning Cycles') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aiagentlearningcycle-form',
     templateUrl: './aiagentlearningcycle.form.component.html'
 })

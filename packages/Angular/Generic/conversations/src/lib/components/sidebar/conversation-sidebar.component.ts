@@ -3,6 +3,7 @@ import { UserInfo } from '@memberjunction/core';
 import { NavigationTab } from '../../models/conversation-state.model';
 
 @Component({
+  standalone: false,
   selector: 'mj-conversation-sidebar',
   template: `
     <div class="conversation-sidebar">

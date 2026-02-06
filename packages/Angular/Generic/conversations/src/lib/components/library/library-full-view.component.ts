@@ -7,6 +7,7 @@ import { CollectionEntity } from '@memberjunction/core-entities';
  * Replaces the main content area when Collections tab is selected
  */
 @Component({
+  standalone: false,
   selector: 'mj-library-full-view',
   template: `
     <div class="collections-view">

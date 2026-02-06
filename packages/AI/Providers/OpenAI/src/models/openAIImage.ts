@@ -119,9 +119,9 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
             const maskInput = params.mask ? await this.normalizeImageInput(params.mask) : undefined;
 
             // Create File objects for OpenAI API
-            const imageFile = new File([imageInput.buffer], 'image.png', { type: 'image/png' });
+            const imageFile = new File([new Uint8Array(imageInput.buffer)], 'image.png', { type: 'image/png' });
             const maskFile = maskInput
-                ? new File([maskInput.buffer], 'mask.png', { type: 'image/png' })
+                ? new File([maskInput.buffer as BlobPart], 'mask.png', { type: 'image/png' })
                 : undefined;
 
             const openAIParams = this.buildEditParams(params, imageFile, maskFile);
@@ -192,7 +192,7 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
             const imageInput = await this.normalizeImageInput(params.image);
 
             // Create File object for OpenAI API
-            const imageFile = new File([imageInput.buffer], 'image.png', { type: 'image/png' });
+            const imageFile = new File([new Uint8Array(imageInput.buffer)], 'image.png', { type: 'image/png' });
 
             const openAIParams = this.buildVariationParams(params, imageFile);
 
@@ -402,8 +402,9 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     ): ImageGenerationResult {
         const result = this.createSuccessResult(startTime, []);
 
-        for (let i = 0; i < response.data.length; i++) {
-            const imageData = response.data[i];
+        const data = response.data ?? [];
+        for (let i = 0; i < data.length; i++) {
+            const imageData = data[i];
             const generatedImage = new GeneratedImage();
 
             if (imageData.b64_json) {
@@ -444,12 +445,13 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     private processEditResponse(
         response: OpenAI.Images.ImagesResponse,
         startTime: Date,
-        params: ImageEditParams
+        _params: ImageEditParams
     ): ImageGenerationResult {
         const result = this.createSuccessResult(startTime, []);
 
-        for (let i = 0; i < response.data.length; i++) {
-            const imageData = response.data[i];
+        const data = response.data ?? [];
+        for (let i = 0; i < data.length; i++) {
+            const imageData = data[i];
             const generatedImage = new GeneratedImage();
 
             if (imageData.b64_json) {
@@ -476,12 +478,13 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     private processVariationResponse(
         response: OpenAI.Images.ImagesResponse,
         startTime: Date,
-        params: ImageVariationParams
+        _params: ImageVariationParams
     ): ImageGenerationResult {
         const result = this.createSuccessResult(startTime, []);
 
-        for (let i = 0; i < response.data.length; i++) {
-            const imageData = response.data[i];
+        const data = response.data ?? [];
+        for (let i = 0; i < data.length; i++) {
+            const imageData = data[i];
             const generatedImage = new GeneratedImage();
 
             if (imageData.b64_json) {

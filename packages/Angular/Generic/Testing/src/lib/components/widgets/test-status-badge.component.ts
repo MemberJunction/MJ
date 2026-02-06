@@ -3,6 +3,7 @@ import { Component, Input } from '@angular/core';
 export type TestStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Pending' | 'Timeout';
 
 @Component({
+  standalone: false,
   selector: 'app-test-status-badge',
   template: `
     <span

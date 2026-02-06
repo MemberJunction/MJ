@@ -9,6 +9,7 @@ import { Subscription } from 'rxjs';
  * Shows multiple agents with avatars, status colors, and click-to-expand functionality
  */
 @Component({
+  standalone: false,
   selector: 'mj-active-agent-indicator',
   template: `
     <div class="active-agents-container" *ngIf="activeAgents.length > 0">

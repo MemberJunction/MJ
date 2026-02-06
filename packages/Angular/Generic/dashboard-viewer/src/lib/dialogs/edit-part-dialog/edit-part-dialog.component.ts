@@ -37,6 +37,7 @@ export interface EditPartDialogResult {
  * just create a config panel, register it, and set the ConfigDialogClass.
  */
 @Component({
+  standalone: false,
     selector: 'mj-edit-part-dialog',
     templateUrl: './edit-part-dialog.component.html',
     styleUrls: ['./edit-part-dialog.component.css']

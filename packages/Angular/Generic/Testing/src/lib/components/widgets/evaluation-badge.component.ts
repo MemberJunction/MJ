@@ -25,6 +25,7 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'app-evaluation-badge',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

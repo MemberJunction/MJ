@@ -90,6 +90,7 @@ interface TestRunStatRow {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-testing-explorer',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

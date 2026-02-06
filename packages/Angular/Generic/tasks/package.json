@@ -9,10 +9,10 @@
     "watch": "ngc --watch"
   },
   "dependencies": {
-    "@angular/animations": "18.2.14",
-    "@angular/common": "18.2.14",
-    "@angular/core": "18.2.14",
-    "@angular/platform-browser": "18.2.14",
+    "@angular/animations": "21.1.3",
+    "@angular/common": "21.1.3",
+    "@angular/core": "21.1.3",
+    "@angular/platform-browser": "21.1.3",
     "@memberjunction/core": "3.4.0",
     "@memberjunction/core-entities": "3.4.0",
     "@memberjunction/ai-core-plus": "3.4.0",
@@ -21,8 +21,8 @@
     "rxjs": "^7.8.1"
   },
   "peerDependencies": {
-    "@angular/common": "18.2.14",
-    "@angular/core": "18.2.14"
+    "@angular/common": "21.1.3",
+    "@angular/core": "21.1.3"
   },
   "author": "MemberJunction",
   "license": "MIT",

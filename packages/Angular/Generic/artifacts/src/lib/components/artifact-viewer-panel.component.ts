@@ -12,6 +12,7 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
 @Component({
+  standalone: false,
   selector: 'mj-artifact-viewer-panel',
   templateUrl: './artifact-viewer-panel.component.html',
   styleUrls: ['./artifact-viewer-panel.component.css']

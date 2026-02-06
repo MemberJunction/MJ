@@ -59,6 +59,7 @@ interface UsageLogItem {
  * Comprehensive usage statistics and drill-down capabilities
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-usage-panel',
     templateUrl: './api-usage-panel.component.html',
     styleUrls: ['./api-usage-panel.component.css']

@@ -9,6 +9,7 @@ export function LoadListDetailResource() {
 
 @RegisterClass(BaseResourceComponent, 'ListDetailResource')
 @Component({
+  standalone: false,
     selector: 'mj-list-detail-resource',
     template: `<mj-list-detail [ListID]="Data.ResourceRecordID"/>`
 })

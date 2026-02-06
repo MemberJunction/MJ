@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Application Entities') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-applicationentity-form',
     templateUrl: './applicationentity.form.component.html'
 })

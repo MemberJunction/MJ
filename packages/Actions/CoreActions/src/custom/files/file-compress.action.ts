@@ -192,7 +192,7 @@ export class FileCompressAction extends BaseFileHandlerAction {
 
         // Finalize archive
         await archive.finalize();
-        const buffer = Buffer.concat(chunks);
+        const buffer = Buffer.concat(chunks as Uint8Array[]);
 
         // Save to storage if requested
         if (outputFileId) {

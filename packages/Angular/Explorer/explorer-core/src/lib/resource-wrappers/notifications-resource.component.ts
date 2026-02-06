@@ -9,6 +9,7 @@ export function LoadNotificationsResource() {
 
 @RegisterClass(BaseResourceComponent, 'NotificationsResource')
 @Component({
+  standalone: false,
     selector: 'mj-notifications-resource',
     template: `<app-user-notifications></app-user-notifications>`
 })

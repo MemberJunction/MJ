@@ -6,6 +6,7 @@ import { GridComponent, AddEvent, EditEvent, CancelEvent, SaveEvent, RemoveEvent
 import { FormGroup, FormControl, Validators } from '@angular/forms';
 
 @Component({
+  standalone: false,
     selector: 'mj-template-params-grid',
     templateUrl: './template-params-grid.component.html',
     styleUrls: ['./template-params-grid.component.css']

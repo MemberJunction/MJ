@@ -17,6 +17,7 @@ import { SharedService } from '@memberjunction/ng-shared';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-link-pill',
   template: `
     <span class="entity-link-pill" *ngIf="entityInfo && recordId" (click)="openRecord()" [title]="tooltipText">

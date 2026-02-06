@@ -20,6 +20,7 @@ interface CategoryViewModel {
 
 @RegisterClass(BaseResourceComponent, 'ListsCategoriesResource')
 @Component({
+  standalone: false,
   selector: 'mj-lists-categories-resource',
   template: `
     <div class="lists-categories-container">

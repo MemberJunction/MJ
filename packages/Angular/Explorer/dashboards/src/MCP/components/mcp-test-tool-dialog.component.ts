@@ -120,6 +120,7 @@ const ExecuteMCPToolMutation = gql`
 `;
 
 @Component({
+  standalone: false,
     selector: 'mj-mcp-test-tool-dialog',
     templateUrl: './mcp-test-tool-dialog.component.html',
     styleUrls: ['./mcp-test-tool-dialog.component.css'],

@@ -32,6 +32,7 @@ interface CredentialValues {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credential-edit-panel',
     templateUrl: './credential-edit-panel.component.html',
     styleUrls: ['./credential-edit-panel.component.css'],

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Content Source Type Params') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-contentsourcetypeparam-form',
     templateUrl: './contentsourcetypeparam.form.component.html'
 })

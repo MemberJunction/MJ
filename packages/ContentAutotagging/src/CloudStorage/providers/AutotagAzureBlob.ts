@@ -94,7 +94,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
                 chunks.push(data instanceof Buffer ? data : Buffer.from(data));
             });
             readableStream.on("end", () => {
-                resolve(Buffer.concat(chunks));
+                resolve(Buffer.concat(chunks as Uint8Array[]));
             });
             readableStream.on("error", reject);
         });

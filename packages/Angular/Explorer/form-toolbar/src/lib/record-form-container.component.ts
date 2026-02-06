@@ -11,6 +11,7 @@ import { BaseFormComponent, FormWidthMode } from '@memberjunction/ng-base-forms'
  * - [slot="after-panels"]: Related entity sections displayed after field panels
  */
 @Component({
+    standalone: false,
     selector: 'mj-record-form-container',
     encapsulation: ViewEncapsulation.None,
     template: `

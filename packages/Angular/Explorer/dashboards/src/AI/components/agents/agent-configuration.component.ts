@@ -44,6 +44,7 @@ export function LoadAIAgentsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIAgentsResource')
 @Component({
+  standalone: false,
   selector: 'app-agent-configuration',
   templateUrl: './agent-configuration.component.html',
   styleUrls: ['./agent-configuration.component.css']

@@ -69,6 +69,7 @@ export interface UnifiedSubAgent {
  */
 @RegisterClass(BaseFormComponent, 'AI Agents')
 @Component({
+  standalone: false,
     selector: 'mj-ai-agent-form',
     templateUrl: './ai-agent-form.component.html',
     styleUrls: ['./ai-agent-form.component.css']
