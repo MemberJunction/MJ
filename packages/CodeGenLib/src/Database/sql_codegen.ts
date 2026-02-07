@@ -2001,48 +2001,53 @@ GO${permissions}
         // Build the WHERE clause for matching foreign key(s)
         // TODO: Future enhancement to support composite foreign keys
         const whereClause = `[${fkField.CodeName}] = @${parentEntity.FirstPrimaryKey.CodeName}`;
-        
-        // Generate unique cursor name using entity code names
-        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_cursor`;
-        
+
+        // Generate unique cursor name using entity code name AND FK field name
+        // This ensures uniqueness when an entity has multiple FKs pointing to the same parent
+        // (e.g., AIPromptRun.ParentID and AIPromptRun.RerunFromPromptRunID both reference AIPromptRun)
+        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_${fkField.CodeName}_cursor`;
+
+        // Use a combined prefix that includes both entity name and FK field name to ensure unique variable names
+        const variablePrefix = `${relatedEntity.CodeName}_${fkField.CodeName}`;
+
         // Determine which SP to call
         const spType = operation === 'delete' ? SPType.Delete : SPType.Update;
         const spName = this.getSPName(relatedEntity, spType);
-        
+
         if (operation === 'update') {
             // For update, we need to include all updateable fields
-            // Use the related entity's code name as prefix to ensure uniqueness
-            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, relatedEntity.CodeName);
+            // Use the combined prefix to ensure uniqueness across multiple FKs to same entity
+            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, variablePrefix);
             const spCallParams = updateParams.allParams;
-            
+
             return `
     -- Cascade update on ${relatedEntity.BaseTable} using cursor to call ${spName}
     ${updateParams.declarations}
-    DECLARE ${cursorName} CURSOR FOR 
+    DECLARE ${cursorName} CURSOR FOR
         SELECT ${updateParams.selectFields}
         FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
         WHERE ${whereClause}
-    
+
     OPEN ${cursorName}
     FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
-    
+
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Set the FK field to NULL
-        SET @${relatedEntity.CodeName}_${fkField.CodeName} = NULL
-        
+        SET @${variablePrefix}_${fkField.CodeName} = NULL
+
         -- Call the update SP for the related entity
         EXEC [${relatedEntity.SchemaName}].[${spName}] ${spCallParams}
-        
+
         FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
     END
-    
+
     CLOSE ${cursorName}
     DEALLOCATE ${cursorName}`;
         }
-        
+
         // For delete operation, use a simpler prefix for primary keys only
-        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, relatedEntity.CodeName);
+        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, variablePrefix);
         
         return `
     -- Cascade delete from ${relatedEntity.BaseTable} using cursor to call ${spName}
