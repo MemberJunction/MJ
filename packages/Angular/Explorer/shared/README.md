@@ -1,18 +1,56 @@
 # @memberjunction/ng-shared
 
-Utility functions and reusable components used across MemberJunction Explorer Angular packages.
+Shared services, base classes, and utility components used across all MemberJunction Explorer Angular packages. This is the foundational shared layer that most other Explorer packages depend on.
 
-> **Note**: This package is intended for internal use within MJ Explorer and should not be used independently outside of the MemberJunction Explorer application.
+## Overview
+
+This package provides the core services and abstractions that enable MemberJunction Explorer's component ecosystem. The `SharedService` singleton manages application startup, metadata loading, resource types, and engine pre-warming. The `NavigationService` centralizes all tab and record navigation with shift-key detection for power users. Base classes like `BaseNavigationComponent` and `BaseResourceComponent` define the contracts for routable and resource-bound components.
+
+```mermaid
+graph TD
+    SS["SharedService\n(Singleton)"] --> MD["Metadata Loading"]
+    SS --> RT["ResourceType Management"]
+    SS --> EW["Engine Pre-warming"]
+    SS --> EVT["Event System"]
+
+    NS["NavigationService"] --> WSM["WorkspaceStateManager"]
+    NS --> AM["ApplicationManager"]
+    NS --> SK["Shift-Key Detection"]
+
+    BNC["BaseNavigationComponent"] --> BRC["BaseResourceComponent"]
+    BRC --> RD["ResourceData"]
+
+    TS["TitleService"] --> DT["Document Title"]
+    DMS["DeveloperModeService"] --> US["User Settings\n(Persistence)"]
+
+    style SS fill:#7c5295,stroke:#563a6b,color:#fff
+    style NS fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style BNC fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style BRC fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style TS fill:#b8762f,stroke:#8a5722,color:#fff
+    style DMS fill:#b8762f,stroke:#8a5722,color:#fff
+    style MD fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style RT fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style EW fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style EVT fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style WSM fill:#b8762f,stroke:#8a5722,color:#fff
+    style AM fill:#b8762f,stroke:#8a5722,color:#fff
+    style SK fill:#b8762f,stroke:#8a5722,color:#fff
+    style RD fill:#b8762f,stroke:#8a5722,color:#fff
+    style DT fill:#b8762f,stroke:#8a5722,color:#fff
+    style US fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Features
 
-- Shared services for consistent application behavior
-- Base components for navigation and resource management
-- Resource type management
-- Notification system integration
-- Event management
-- DOM utilities
-- Angular pipes for text and URL formatting
+- **SharedService**: Application startup, metadata refresh, resource type registry, event broadcast, notification helpers, engine pre-warming (AIEngineBase, DashboardEngine, ArtifactMetadataEngine)
+- **NavigationService**: Centralized navigation with auto shift-key detection for "open in new tab" behavior, Home app integration, entity/record/dashboard/query/view/search tab creation
+- **BaseNavigationComponent**: Base class for all routable Explorer components
+- **BaseResourceComponent**: Base class for resource-bound components (dashboards, views, custom resources) with lifecycle events (LoadStarted, LoadComplete, ResourceRecordSaved)
+- **EventCodes**: Standardized event code constants for component communication
+- **TitleService**: Manages the browser document title based on active tab
+- **DeveloperModeService**: Toggleable developer mode persisted to User Settings, with role-based access (Developer, Admin, System Administrator, Integration roles)
+- **SYSTEM_APP_ID**: System-level application identifier constant
 
 ## Installation
 
@@ -20,266 +58,120 @@ Utility functions and reusable components used across MemberJunction Explorer An
 npm install @memberjunction/ng-shared
 ```
 
-## Dependencies
+## Key Dependencies
 
-### Peer Dependencies
-- `@angular/common`: ^18.0.2
-- `@angular/core`: ^18.0.2
-- `rxjs`: ^7.8.1
+| Dependency | Purpose |
+|---|---|
+| `@memberjunction/core` | Metadata, StartupManager, CompositeKey |
+| `@memberjunction/core-entities` | ResourceTypeEntity, ResourceData, DashboardEngine, UserNotificationEntity |
+| `@memberjunction/global` | MJGlobal event system, InvokeManualResize |
+| `@memberjunction/graphql-dataprovider` | GraphQLDataProvider |
+| `@memberjunction/ai-engine-base` | AIEngineBase (pre-warming) |
+| `@memberjunction/ng-base-application` | WorkspaceStateManager, ApplicationManager, TabService |
+| `@memberjunction/ng-base-types` | BaseAngularComponent |
+| `@memberjunction/ng-notifications` | MJNotificationService |
+| `@progress/kendo-angular-notification` | Kendo NotificationService |
+| `rxjs` | Observables, BehaviorSubject |
 
-### Core Dependencies
-- `@memberjunction/core`: Provides core functionality and metadata management
-- `@memberjunction/core-entities`: Entity definitions and resource management
-- `@memberjunction/ng-notifications`: Notification system integration
-- `@memberjunction/ng-base-types`: Base Angular component types
-- `@memberjunction/graphql-dataprovider`: GraphQL data provider for API communication
-- `@progress/kendo-angular-notification`: UI notification components
-
-## Module Import
-
-```typescript
-import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
-
-@NgModule({
-  imports: [
-    MemberJunctionSharedModule
-    // ... other imports
-  ]
-})
-export class YourModule { }
-```
-
-## Key Components
+## Usage
 
 ### SharedService
-
-A singleton service that provides application-wide functionality:
 
 ```typescript
 import { SharedService } from '@memberjunction/ng-shared';
 
-// Get singleton instance
-const service = SharedService.Instance;
+@Component({ /* ... */ })
+export class MyComponent {
+  constructor(private shared: SharedService) {}
 
-// Access session ID
-const sessionId = service.SessionId;
+  async ngOnInit() {
+    // Refresh metadata
+    await SharedService.RefreshData(true);
 
-// Access resource types
-const viewResourceType = service.ViewResourceType;
-const recordResourceType = service.RecordResourceType;
-const dashboardResourceType = service.DashboardResourceType;
-const reportResourceType = service.ReportResourceType;
-const searchResultsResourceType = service.SearchResultsResourceType;
-const listResourceType = service.ListResourceType;
+    // Access resource types
+    const resourceTypes = SharedService.ResourceTypes;
 
-// Get resource type by ID or name
-const resourceTypeById = service.ResourceTypeByID('some-id');
-const resourceTypeByName = service.ResourceTypeByName('reports');
-
-// Format column values
-const formattedValue = service.FormatColumnValue(column, value, maxLength, '...');
-
-// Create notifications (Note: prefer MJNotificationService for new code)
-service.CreateSimpleNotification('Operation completed', 'success', 3000);
-
-// Convert between route segments and resource type names
-const routeSegment = service.mapResourceTypeNameToRouteSegment('user views'); // returns 'view'
-const resourceTypeName = service.mapResourceTypeRouteSegmentToName('view'); // returns 'user views'
-```
-
-### Base Components
-
-#### BaseNavigationComponent
-
-Base class for all MJ Explorer navigation components that can be displayed from a route:
-
-```typescript
-import { Component } from '@angular/core';
-import { BaseNavigationComponent } from '@memberjunction/ng-shared';
-
-@Component({
-  selector: 'app-your-navigation',
-  templateUrl: './your-navigation.component.html'
-})
-export class YourNavigationComponent extends BaseNavigationComponent {
-  // Inherits from BaseAngularComponent
-  // Provides foundation for routable components
+    // Show notification
+    this.shared.CreateSimpleNotification('Record saved!', 'success', 2000);
+  }
 }
 ```
 
-#### BaseResourceComponent
-
-Extended base class for components that work with MemberJunction resources:
+### NavigationService
 
 ```typescript
-import { Component } from '@angular/core';
+import { NavigationService } from '@memberjunction/ng-shared';
+
+@Component({ /* ... */ })
+export class MyComponent {
+  constructor(private nav: NavigationService) {}
+
+  openRecord(entityName: string, pkey: CompositeKey) {
+    // Automatically detects shift-key for new tab behavior
+    this.nav.NavigateToRecord(entityName, pkey);
+  }
+
+  openDashboard(dashboardId: string) {
+    this.nav.NavigateToDashboard(dashboardId);
+  }
+}
+```
+
+### BaseResourceComponent
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
 
-@Component({
-  selector: 'app-your-resource',
-  templateUrl: './your-resource.component.html'
-})
-export class YourResourceComponent extends BaseResourceComponent {
-  // Access resource data
-  ngOnInit() {
-    console.log(this.Data); // ResourceData object
-  }
-
-  // Required abstract methods
+@RegisterClass(BaseResourceComponent, 'MyResource')
+@Component({ selector: 'my-resource', template: '...' })
+export class MyResource extends BaseResourceComponent {
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    // Return display name based on resource data
-    return `Resource: ${data.ResourceRecordID}`;
+    return data.Name;
   }
-
   async GetResourceIconClass(data: ResourceData): Promise<string> {
-    // Return Font Awesome icon class
-    return 'fa-solid fa-file';
-  }
-
-  // Lifecycle notifications
-  protected onLoad() {
-    this.NotifyLoadStarted();
-    // ... load resource data
-    this.NotifyLoadComplete();
-  }
-
-  // Handle resource save
-  protected async saveResource() {
-    const entity = await this.getResourceEntity();
-    if (await entity.Save()) {
-      this.ResourceRecordSaved(entity);
-    }
+    return 'fa-solid fa-chart-bar';
   }
 }
 ```
 
-## Angular Pipes
-
-### URLPipe (formatUrl)
-
-Ensures URLs have proper protocol prefix:
+### DeveloperModeService
 
 ```typescript
-// In template
-<a [href]="website | formatUrl">Visit Site</a>
+import { DeveloperModeService } from '@memberjunction/ng-shared';
 
-// Transforms:
-// "example.com" → "https://example.com"
-// "http://example.com" → "http://example.com" (unchanged)
+@Component({ /* ... */ })
+export class MyComponent {
+  constructor(private devMode: DeveloperModeService) {}
+
+  ngOnInit() {
+    this.devMode.IsEnabled$.subscribe(enabled => {
+      this.showDevTools = enabled;
+    });
+  }
+}
 ```
 
-### SimpleTextFormatPipe (formatText)
+## Exported API
 
-Converts plain text formatting to HTML:
-
-```typescript
-// In template
-<div [innerHTML]="description | formatText"></div>
-
-// Transforms:
-// "Line 1\nLine 2" → "Line 1<br>Line 2"
-// "Text\tIndented" → "Text&nbsp;&nbsp;&nbsp;&nbsp;Indented"
-```
-
-## Utilities
-
-### Format Utilities
-
-```typescript
-// Convert Markdown list to HTML
-const htmlList = service.ConvertMarkdownStringToHtmlList('Unordered', '- Item 1\n- Item 2');
-// Result: <ul><li>Item 1</li><li>Item 2</li></ul>
-
-const orderedList = service.ConvertMarkdownStringToHtmlList('Ordered', '1. First\n2. Second');
-// Result: <ol><li>First</li><li>Second</li></ol>
-```
-
-### DOM Utilities
-
-```typescript
-// Check if one element is a descendant of another
-const isDescendant = SharedService.IsDescendant(parentRef, childRef);
-
-// Trigger manual window resize event (useful for responsive components)
-service.InvokeManualResize(50); // 50ms delay
-```
-
-### Push Status Updates
-
-```typescript
-// Subscribe to server push updates
-service.PushStatusUpdates().subscribe(status => {
-  console.log('Server status:', status);
-});
-```
-
-## Event Codes
-
-Predefined event codes for standardized application event handling:
-
-```typescript
-import { EventCodes } from '@memberjunction/ng-shared';
-
-// Available event codes:
-EventCodes.ViewClicked              // User clicked on a view
-EventCodes.EntityRecordClicked      // User clicked on an entity record
-EventCodes.AddDashboard            // Request to add a dashboard
-EventCodes.AddReport               // Request to add a report
-EventCodes.AddQuery                // Request to add a query
-EventCodes.ViewCreated             // View was created
-EventCodes.ViewUpdated             // View was updated
-EventCodes.RunSearch               // Execute a search
-EventCodes.ViewNotifications       // View notifications panel
-EventCodes.PushStatusUpdates       // Server push status updates
-EventCodes.UserNotificationsUpdated // User notifications changed
-EventCodes.CloseCurrentTab         // Close current tab
-EventCodes.ListCreated             // List was created
-EventCodes.ListClicked             // User clicked on a list
-```
-
-## Integration with Other MJ Packages
-
-This package seamlessly integrates with:
-
-- **@memberjunction/core**: Uses Metadata for entity access and logging
-- **@memberjunction/core-entities**: Works with ResourceTypeEntity, UserNotificationEntity, and ResourceData
-- **@memberjunction/ng-notifications**: Delegates notification functionality to the dedicated notification service
-- **@memberjunction/global**: Uses global event system and utilities
-
-## Migration Notes
-
-### Deprecated Methods
-
-Several notification-related methods in SharedService are deprecated in favor of MJNotificationService:
-
-```typescript
-// Deprecated
-SharedService.UserNotifications
-SharedService.UnreadUserNotifications
-SharedService.UnreadUserNotificationCount
-service.CreateNotification(...)
-SharedService.RefreshUserNotifications()
-service.CreateSimpleNotification(...)
-
-// Use instead
-import { MJNotificationService } from '@memberjunction/ng-notifications';
-
-MJNotificationService.UserNotifications
-MJNotificationService.UnreadUserNotifications
-MJNotificationService.UnreadUserNotificationCount
-mjNotificationService.CreateNotification(...)
-MJNotificationService.RefreshUserNotifications()
-mjNotificationService.CreateSimpleNotification(...)
-```
+| Export | Type | Description |
+|---|---|---|
+| `SharedService` | Service | Core singleton for app state, metadata, resource types |
+| `NavigationService` | Service | Centralized navigation with shift-key detection |
+| `TitleService` | Service | Browser document title management |
+| `DeveloperModeService` | Service | Developer mode toggle with persistence |
+| `BaseNavigationComponent` | Abstract Class | Base for routable components |
+| `BaseResourceComponent` | Abstract Class | Base for resource-bound components |
+| `EventCodes` | Constants | Standardized event codes |
+| `SYSTEM_APP_ID` | Constant | System-level application identifier |
+| `SharedModule` | NgModule | Module declaration |
 
 ## Build
 
-To build this package:
-
 ```bash
-cd packages/Angular/Explorer/shared
-npm run build
+cd packages/Angular/Explorer/shared && npm run build
 ```
 
-The build uses Angular's `ngc` compiler and outputs to the `dist` directory.
+## License
+
+ISC
