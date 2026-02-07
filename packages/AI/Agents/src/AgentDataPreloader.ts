@@ -445,10 +445,3 @@ export class AgentDataPreloader {
     }
 }
 
-/**
- * Export a load function to ensure the class isn't tree-shaken
- */
-export function LoadAgentDataPreloader() {
-    // This function ensures the class isn't tree-shaken
-    return AgentDataPreloader.Instance;
-}

@@ -170,7 +170,3 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
         return ["CreateSpeech", "GetVoices", "GetModels", "GetPronounciationDictionaries"];
     }
 }
-
-export function LoadElevenLabsAudioGenerator() {
-    // does nothing, avoid tree shaking that will get rid of this class since there is no static link to this class in the code base as it is loaded dynamically
-}

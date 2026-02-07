@@ -333,10 +333,3 @@ export class ExcelReaderAction extends BaseFileHandlerAction {
         return result;
     }
 }
-
-/**
- * Loader function to ensure the ExcelReaderAction class is included in the bundle
- */
-export function LoadExcelReaderAction() {
-    // Stub function to prevent tree shaking
-}

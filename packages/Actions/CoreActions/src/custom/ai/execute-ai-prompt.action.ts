@@ -277,10 +277,3 @@ export class ExecuteAIPromptAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the ExecuteAIPromptAction class is included in the bundle
- */
-export function LoadExecuteAIPromptAction() {
-    // Stub function to prevent tree shaking
-}

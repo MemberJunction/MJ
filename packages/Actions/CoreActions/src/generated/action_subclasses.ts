@@ -236,6 +236,3 @@ export class Get_AI_Model_Cost_Action extends BaseAction {
 }        
             
             
-export function LoadGeneratedActions() {
-    // this function is a stub that is used to force the bundler to include the generated action classes in the final bundle and not tree shake them out
-}

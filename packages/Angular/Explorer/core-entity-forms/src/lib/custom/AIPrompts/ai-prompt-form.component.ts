@@ -503,7 +503,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         }
     }
 
-
     /**
      * Loads template parameters for the current template
      */
@@ -1075,7 +1074,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         }
     }
 
-
     /**
      * Gets the display name for a model ID
      */
@@ -1292,7 +1290,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         }
     }
 
-
     /**
      * Loads the result selector tree data (categories and prompts)
      */
@@ -1404,7 +1401,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
 
         return tree;
     }
-
 
     /**
      * Handles result selector selection
@@ -1755,8 +1751,4 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
                 return 'Unknown type';
         }
     }
-}
-
-export function LoadAIPromptFormComponentExtended() {
-    // This function ensures the class isn't tree-shaken and registers it with MemberJunction
 }

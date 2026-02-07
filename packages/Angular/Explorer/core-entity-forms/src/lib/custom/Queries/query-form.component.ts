@@ -86,7 +86,6 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         this.cdr.detectChanges();
     }
 
-
     ngOnDestroy() {
         this.destroy$.next();
         this.destroy$.complete();
@@ -405,7 +404,6 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             option.text && option.text.trim().toLowerCase() === normalizedName
         );
     }
-
 
     /**
      * Updates the hasUnsavedChanges flag based on entity dirty states
@@ -802,8 +800,4 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         return this.EditMode ? "Queue" : "None";
     }
 
-}
-
-export function LoadQueryFormExtendedComponent() {
-    // prevents tree shaking
 }

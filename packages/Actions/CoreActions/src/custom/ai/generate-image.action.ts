@@ -401,10 +401,3 @@ export class GenerateImageAction extends BaseAction {
         return isNaN(num) ? defaultValue : num;
     }
 }
-
-/**
- * Loader function to ensure the GenerateImageAction class is included in the bundle
- */
-export function LoadGenerateImageAction() {
-    // Stub function to prevent tree shaking
-}

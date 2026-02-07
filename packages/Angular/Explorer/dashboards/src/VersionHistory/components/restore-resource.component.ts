@@ -8,11 +8,6 @@ import { ResourceData, UserInfoEngine, VersionLabelRestoreEntityType } from '@me
 interface VersionRestorePreferences {
     StatusFilter: string;
 }
-
-export function LoadVersionHistoryRestoreResource() {
-    // Prevents tree-shaking
-}
-
 @RegisterClass(BaseResourceComponent, 'VersionHistoryRestoreResource')
 @Component({
   standalone: false,

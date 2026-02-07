@@ -81,6 +81,3 @@ export class MoveObjectAction extends BaseFileStorageAction {
         }
     }
 }
-export function LoadMoveObjectAction() {
-    // Stub function to prevent tree shaking
-}

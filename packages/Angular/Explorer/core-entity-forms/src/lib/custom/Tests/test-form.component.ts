@@ -845,9 +845,3 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     }
   }
 }
-
-export function LoadTestFormComponentExtended() {
-  // Prevents tree-shaking
-}
-
-LoadTestFormComponentExtended();

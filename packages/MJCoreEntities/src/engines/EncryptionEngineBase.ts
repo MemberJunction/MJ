@@ -388,11 +388,3 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
         return key?.Marker || ENCRYPTION_MARKER;
     }
 }
-
-/**
- * Tree-shaking prevention function.
- * Call this to ensure the EncryptionEngineBase class is included in the build.
- */
-export function LoadEncryptionEngineBase(): void {
-    // This function exists to prevent tree-shaking from removing the class
-}

@@ -59,6 +59,7 @@
     "@memberjunction/db-auto-doc": "3.4.0",
     "@memberjunction/metadata-sync": "3.4.0",
     "@memberjunction/query-gen": "3.4.0",
+    "@memberjunction/server-bootstrap-lite": "3.4.0",
     "@memberjunction/sqlserver-dataprovider": "3.4.0",
     "@memberjunction/testing-cli": "3.4.0",
     "@oclif/core": "^3.27.0",

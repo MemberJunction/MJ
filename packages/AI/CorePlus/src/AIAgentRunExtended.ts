@@ -132,6 +132,4 @@ export class AIAgentRunEntityExtended extends AIAgentRunEntity {
         }
     }    
 }
- 
-// tree shaking load stub
-export function LoadAIAgentRunEntityExtended() {}
+

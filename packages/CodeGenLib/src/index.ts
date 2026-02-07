@@ -37,9 +37,6 @@
  * ```
  */
 
-import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
-LoadAIProviders(); // Ensure all AI providers are loaded
-
 // Configuration exports
 export { initializeConfig } from './Config/config'
 export * from './Config/config'

@@ -1,19 +1,6 @@
 import { cosmiconfig } from 'cosmiconfig';
 import dotenv from 'dotenv';
 
-import { LoadGroqLLM } from '@memberjunction/ai-groq';
-import { LoadOpenAILLM } from '@memberjunction/ai-openai';
-import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
-import { LoadMistralLLM } from '@memberjunction/ai-mistral';
-import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
-import { LoadBettyBotLLM } from '@memberjunction/ai-betty-bot';
-LoadGroqLLM(); // tree shaking prevention
-LoadOpenAILLM(); // tree shaking prevention
-LoadAnthropicLLM(); // tree shaking prevention
-LoadMistralLLM(); // tree shaking prevention
-LoadCerebrasLLM(); // tree shaking prevention
-LoadBettyBotLLM(); // tree shaking prevention
-
 // Load environment variables
 dotenv.config({ quiet: true });
 

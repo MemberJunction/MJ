@@ -32,14 +32,6 @@ interface PromptManagementUserPreferences {
   sortColumn: string;
   sortDirection: 'asc' | 'desc';
 }
-
-/**
- * Tree-shaking prevention function - ensures component is included in builds
- */
-export function LoadAIPromptsResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * AI Prompts Resource - displays AI prompt management
  * Extends BaseResourceComponent to work with the resource type system

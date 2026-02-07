@@ -3,11 +3,6 @@ import { Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-
-export function LoadArtifactResource() {
-  // Function for registration - actual instances created by Angular DI
-}
-
 /**
  * Artifact Resource - displays versioned content artifacts
  * Wraps the artifact-viewer-panel component for tab-based display

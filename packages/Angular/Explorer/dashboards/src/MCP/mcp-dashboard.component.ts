@@ -1884,10 +1884,3 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPDashboard(): void {
-    // Ensures the component is not tree-shaken
-}

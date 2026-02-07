@@ -351,10 +351,3 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         this.setError('This site cannot be embedded. It may block iframe embedding for security reasons.');
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadWebURLPart() {
-    // Prevents tree-shaking of the component
-}

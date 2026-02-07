@@ -18,12 +18,12 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Panel components
-import { CredentialEditPanelComponent, LoadCredentialEditPanel } from './panels/credential-edit-panel/credential-edit-panel.component';
-import { CredentialTypeEditPanelComponent, LoadCredentialTypeEditPanel } from './panels/credential-type-edit-panel/credential-type-edit-panel.component';
-import { CredentialCategoryEditPanelComponent, LoadCredentialCategoryEditPanel } from './panels/credential-category-edit-panel/credential-category-edit-panel.component';
+import { CredentialEditPanelComponent } from './panels/credential-edit-panel/credential-edit-panel.component';
+import { CredentialTypeEditPanelComponent } from './panels/credential-type-edit-panel/credential-type-edit-panel.component';
+import { CredentialCategoryEditPanelComponent } from './panels/credential-category-edit-panel/credential-category-edit-panel.component';
 
 // Dialog components
-import { CredentialDialogComponent, LoadCredentialDialog } from './dialogs/credential-dialog.component';
+import { CredentialDialogComponent } from './dialogs/credential-dialog.component';
 
 @NgModule({
     declarations: [
@@ -51,14 +51,3 @@ import { CredentialDialogComponent, LoadCredentialDialog } from './dialogs/crede
     ]
 })
 export class CredentialsModule { }
-
-/**
- * Loads all credential components to prevent tree-shaking.
- * Call this from your application's module initialization.
- */
-export function LoadCredentialsModule(): void {
-    LoadCredentialEditPanel();
-    LoadCredentialTypeEditPanel();
-    LoadCredentialCategoryEditPanel();
-    LoadCredentialDialog();
-}

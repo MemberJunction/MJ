@@ -831,7 +831,3 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
         this.cdr.markForCheck();
     }
 }
-
-export function LoadListFormComponentExtended() {
-    // Prevents tree-shaking
-}

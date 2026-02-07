@@ -3,10 +3,6 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 
-export function LoadFileBrowserResource() {
-  // Tree-shaking prevention function
-}
-
 /**
  * File Browser Resource Wrapper - displays the file browser in a tab
  * Extends BaseResourceComponent to work with the MJ resource type system

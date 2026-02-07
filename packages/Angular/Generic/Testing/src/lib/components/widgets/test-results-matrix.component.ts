@@ -703,9 +703,3 @@ export class TestResultsMatrixComponent {
     return row.testId;
   }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadTestResultsMatrixComponent() {}
-LoadTestResultsMatrixComponent();

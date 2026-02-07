@@ -329,10 +329,3 @@ export class FileCompressAction extends BaseFileHandlerAction {
         }
     }
 }
-
-/**
- * Loader function to ensure the FileCompressAction class is included in the bundle
- */
-export function LoadFileCompressAction() {
-    // Stub function to prevent tree shaking
-}

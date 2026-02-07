@@ -3,10 +3,6 @@ import { CredentialEntity, CredentialTypeEntity, CredentialCategoryEntity } from
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
-export function LoadCredentialEditPanel() {
-    // Prevents tree-shaking
-}
-
 interface FieldSchemaProperty {
     name: string;
     type: string;

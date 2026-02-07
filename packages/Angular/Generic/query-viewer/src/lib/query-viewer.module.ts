@@ -16,14 +16,6 @@ import { QueryViewerComponent } from './query-viewer/query-viewer.component';
 import { QueryRowDetailComponent } from './query-row-detail/query-row-detail.component';
 import { QueryInfoPanelComponent } from './query-info-panel/query-info-panel.component';
 
-/**
- * Prevents tree-shaking of the QueryViewer module.
- * Import this in your application's module to ensure components are available.
- */
-export function LoadQueryViewerModule() {
-    // This function exists to prevent tree-shaking
-}
-
 @NgModule({
     declarations: [
         QueryDataGridComponent,

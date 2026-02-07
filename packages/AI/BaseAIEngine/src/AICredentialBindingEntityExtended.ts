@@ -200,10 +200,3 @@ export class AICredentialBindingEntityExtended extends AICredentialBindingEntity
     }
 }
 
-/**
- * Tree-shaking prevention function - must be called from index.ts
- */
-export function LoadAICredentialBindingEntityExtended() {
-    // This function ensures the extended class is included in the bundle
-    // The @RegisterClass decorator handles the actual registration
-}

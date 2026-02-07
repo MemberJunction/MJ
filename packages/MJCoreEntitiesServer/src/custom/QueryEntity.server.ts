@@ -1244,5 +1244,3 @@ export class QueryEntityExtended extends QueryEntity {
     }
 
 }
-
-export function LoadQueryEntityServerSubClass() {}

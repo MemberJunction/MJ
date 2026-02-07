@@ -182,10 +182,3 @@ export class GetScheduledJobStatisticsAction extends BaseJobAction {
         }
     }
 }
-
-/**
- * Loader function to prevent tree shaking
- */
-export function LoadGetScheduledJobStatisticsAction() {
-    // Stub function - ensures class is included in bundle
-}

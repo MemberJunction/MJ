@@ -90,7 +90,3 @@ export class PerHundredThousandTokensPriceUnitType extends BasePriceUnitType {
         return this.InternalCalculateNormalizedCost(divisor, activeCost, inputTokens, outputTokens);
     }
 }
-
-export function LoadPriceUnitTypes() {
-    // tree shaking avoidance
-}

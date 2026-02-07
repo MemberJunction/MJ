@@ -142,9 +142,3 @@ export class EntityLinkPillComponent implements OnChanges {
     }
   }
 }
-
-export function LoadEntityLinkPillComponent() {
-  // Prevents tree-shaking
-}
-
-LoadEntityLinkPillComponent();

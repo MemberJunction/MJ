@@ -1348,14 +1348,6 @@ export class MCPResolver extends ResolverBase {
         return url;
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPResolver(): void {
-    // Ensures the resolver is not tree-shaken
-}
-
 /**
  * Publishes an OAuth event to the subscription topic.
  * Can be called from other resolvers or handlers to notify clients of OAuth events.

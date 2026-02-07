@@ -521,9 +521,3 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     }
 }
 
-/**
- * Prevents tree-shaking from removing this class
- */
-export function LoadOpenAIImageGenerator() {
-    // This function intentionally does nothing
-}

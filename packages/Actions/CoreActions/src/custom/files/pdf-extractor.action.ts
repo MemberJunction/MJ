@@ -243,10 +243,3 @@ export class PDFExtractorAction extends BaseFileHandlerAction {
         };
     }
 }
-
-/**
- * Loader function to ensure the PDFExtractorAction class is included in the bundle
- */
-export function LoadPDFExtractorAction() {
-    // Stub function to prevent tree shaking
-}

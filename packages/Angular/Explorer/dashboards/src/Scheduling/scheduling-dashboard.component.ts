@@ -153,7 +153,3 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     this.NotifyLoadComplete();
   }
 }
-
-export function LoadSchedulingDashboard() {
-  // Prevents tree-shaking
-}

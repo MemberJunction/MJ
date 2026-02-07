@@ -14,7 +14,3 @@ export * from './lib/models/tree-types';
 
 // Events
 export * from './lib/events/tree-events';
-
-// Tree-shaking prevention
-import { LoadNgTreesModule } from './lib/ng-trees.module';
-LoadNgTreesModule();

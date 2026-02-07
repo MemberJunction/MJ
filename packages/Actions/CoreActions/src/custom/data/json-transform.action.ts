@@ -169,10 +169,3 @@ export class JSONTransformAction extends BaseAction {
         }
     }
 }
-
-/**
- * Loader function to ensure the JSONTransformAction class is included in the bundle
- */
-export function LoadJSONTransformAction() {
-    // Stub function to prevent tree shaking
-}

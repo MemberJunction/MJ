@@ -7,11 +7,6 @@ import { ResourceData } from '@memberjunction/core-entities';
 import { EnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { TasksFullViewComponent } from '@memberjunction/ng-conversations';
 import { Subject, takeUntil, filter } from 'rxjs';
-
-export function LoadChatTasksResource() {
-  const test = new ChatTasksResource(null!, null!); // Force inclusion in production builds (tree shaking workaround)
-}
-
 /**
  * Chat Tasks Resource - displays the tasks full view for tab-based display
  * Extends BaseResourceComponent to work with the resource type system

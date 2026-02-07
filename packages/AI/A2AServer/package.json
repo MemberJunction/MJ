@@ -9,6 +9,8 @@
     "dist/**/*"
   ],
   "scripts": {
+    "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
+    "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
     "build": "tsc && tsc-alias -f",
     "clean": "rimraf dist",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -33,6 +35,7 @@
     "@memberjunction/encryption": "3.4.0",
     "@memberjunction/global": "3.4.0",
     "@memberjunction/server": "3.4.0",
+    "@memberjunction/server-bootstrap-lite": "3.4.0",
     "@memberjunction/sqlserver-dataprovider": "3.4.0",
     "cosmiconfig": "^9.0.0",
     "dotenv": "^17.2.4",

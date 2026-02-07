@@ -6,32 +6,28 @@
  */
 
 // Module
-export { ActionsModule, LoadActionsModule } from './lib/actions.module';
+export { ActionsModule } from './lib/actions.module';
 
 // Action Test Harness
 export {
     ActionTestHarnessComponent,
     ActionParamValue,
-    ActionResult,
-    LoadActionTestHarnessComponent
+    ActionResult
 } from './lib/action-test-harness/action-test-harness.component';
 
 // Action Test Harness Dialog
 export {
-    ActionTestHarnessDialogComponent,
-    LoadActionTestHarnessDialogComponent
+    ActionTestHarnessDialogComponent
 } from './lib/action-test-harness-dialog/action-test-harness-dialog.component';
 
 // Action Param Dialog
 export {
     ActionParamDialogComponent,
-    ActionParamDialogResult,
-    LoadActionParamDialogComponent
+    ActionParamDialogResult
 } from './lib/action-param-dialog/action-param-dialog.component';
 
 // Action Result Code Dialog
 export {
     ActionResultCodeDialogComponent,
-    ActionResultCodeDialogResult,
-    LoadActionResultCodeDialogComponent
+    ActionResultCodeDialogResult
 } from './lib/action-result-code-dialog/action-result-code-dialog.component';

@@ -114,10 +114,3 @@ export class QueryScheduledJobsAction extends BaseJobAction {
         }
     }
 }
-
-/**
- * Loader function to prevent tree shaking
- */
-export function LoadQueryScheduledJobsAction() {
-    // Stub function - ensures class is included in bundle
-}

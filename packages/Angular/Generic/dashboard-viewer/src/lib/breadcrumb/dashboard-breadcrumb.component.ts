@@ -222,10 +222,3 @@ export class DashboardBreadcrumbComponent {
         this.cdr.markForCheck();
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadDashboardBreadcrumb() {
-    // Prevents tree-shaking of the component
-}

@@ -478,8 +478,3 @@ export class ActionTestHarnessComponent implements OnInit {
         return String(data);
     }
 }
-
-// Tree-shaking prevention function
-export function LoadActionTestHarnessComponent(): void {
-    // This function ensures the component is included in the bundle
-}

@@ -29,44 +29,8 @@ import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 
-import { LoadAllCoreActions } from '@memberjunction/core-actions';
-LoadAllCoreActions(); // prevent tree shaking for this dynamic module
-import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo'
-LoadApolloAccountsEnrichmentAction();
-LoadApolloContactsEnrichmentAction();
-
-import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
-LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic module
-
-import { LoadAgentManagementActions } from '@memberjunction/ai-agent-manager-actions';
-LoadAgentManagementActions();
-
-// Load agent manager core classes (registers custom agent classes like AgentBuilderAgent, AgentArchitectAgent)
-import { LoadAgentManagerCore } from '@memberjunction/ai-agent-manager';
-LoadAgentManagerCore();
-
-import { LoadSchedulingEngine } from '@memberjunction/scheduling-engine';
-LoadSchedulingEngine(); // This also loads drivers
-
-import { LoadAllSchedulingActions } from '@memberjunction/scheduling-actions';
-LoadAllSchedulingActions(); // prevent tree shaking for scheduling actions
-
-import { GetTypeformResponsesAction } from '@memberjunction/actions-bizapps-formbuilders';
-const x = GetTypeformResponsesAction; // prevent tree shaking for this dynamic module
-
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
-import { LoadAIEngine } from '@memberjunction/aiengine';
-import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
-// Load AI Engine and all providers to prevent tree shaking
-LoadAIEngine();
-LoadAIProviders();
-
-// Load Communication Providers
-import { LoadMSGraphProvider } from '@memberjunction/communication-ms-graph';
-import { LoadProvider as LoadSendGridProvider } from '@memberjunction/communication-sendgrid';
-LoadMSGraphProvider();
-LoadSendGridProvider();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';

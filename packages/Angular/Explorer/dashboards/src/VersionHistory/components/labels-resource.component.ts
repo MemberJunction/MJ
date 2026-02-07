@@ -5,11 +5,6 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { RunView, Metadata } from '@memberjunction/core';
 import { ResourceData, VersionLabelEntityType, VersionLabelItemEntityType, UserInfoEngine } from '@memberjunction/core-entities';
 import { EntityLinkClickEvent } from '@memberjunction/ng-versions';
-
-export function LoadVersionHistoryLabelsResource() {
-    // Prevents tree-shaking
-}
-
 interface ScopeStat {
     Scope: string;
     Count: number;

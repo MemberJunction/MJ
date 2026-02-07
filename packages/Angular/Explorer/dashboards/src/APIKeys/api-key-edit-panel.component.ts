@@ -3,12 +3,6 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { APIKeyEntity, APIScopeEntity, APIKeyScopeEntity, APIKeyUsageLogEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLEncryptionClient } from '@memberjunction/graphql-dataprovider';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
-
-/** Tree shaking prevention function */
-export function LoadAPIKeyEditPanel(): void {
-    // This function prevents tree shaking
-}
-
 /** Scope with selection state */
 interface ScopeItem {
     scope: APIScopeEntity;

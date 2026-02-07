@@ -7,6 +7,8 @@
     "MemberJunction": "./dist/index.js"
   },
   "scripts": {
+    "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
+    "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
     "build": "tsc && tsc-alias -f && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
     "start": "node dist/index.js"
   },
@@ -32,6 +34,7 @@
     "@memberjunction/encryption": "3.4.0",
     "@memberjunction/global": "3.4.0",
     "@memberjunction/server": "3.4.0",
+    "@memberjunction/server-bootstrap-lite": "3.4.0",
     "@memberjunction/sqlserver-dataprovider": "3.4.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "cosmiconfig": "9.0.0",

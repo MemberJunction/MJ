@@ -166,7 +166,3 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
         return this.tabLabels[this.activeTab] || 'Credential Management';
     }
 }
-
-export function LoadCredentialsDashboard() {
-    // Prevents tree-shaking
-}

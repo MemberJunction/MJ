@@ -118,8 +118,3 @@ export class ActionResultCodeDialogComponent implements OnInit {
         return !!this.Code && this.Code.trim().length > 0;
     }
 }
-
-// Tree-shaking prevention function
-export function LoadActionResultCodeDialogComponent(): void {
-    // This function ensures the component is included in the bundle
-}

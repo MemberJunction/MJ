@@ -7,8 +7,3 @@ export * from './action-card.component';
 export * from './action-list-item.component';
 export * from './new-category-panel.component';
 export * from './new-action-panel.component';
-
-// Tree-shaking prevention
-export function LoadActionExplorerComponents() {
-  // Force inclusion of all explorer components
-}

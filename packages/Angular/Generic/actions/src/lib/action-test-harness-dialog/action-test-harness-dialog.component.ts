@@ -79,8 +79,3 @@ export class ActionTestHarnessDialogComponent implements OnInit {
         this.ExecutionComplete.emit(result);
     }
 }
-
-// Tree-shaking prevention function
-export function LoadActionTestHarnessDialogComponent(): void {
-    // This function ensures the component is included in the bundle
-}

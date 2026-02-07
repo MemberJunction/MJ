@@ -35,8 +35,6 @@ export interface UnifiedSubAgent {
     relationship?: AIAgentRelationshipEntity;  // Only for related sub-agents
 }
 
-
-
 /**
  * Enhanced AI Agent form component that extends the auto-generated base form
  * with comprehensive agent management capabilities including test harness integration,
@@ -585,9 +583,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
     }
 
-
-
-
     /**
      * Loads counts and preview data for all related entities including sub-agents,
      * prompts, actions, learning cycles, notes, and execution history. 
@@ -1078,7 +1073,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             this.isPerformingCancel = false;
         }
     }
-
 
     /**
      * Opens the integrated test harness for the current agent.
@@ -1898,7 +1892,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public debugPendingRecords() {
         // Debug method for troubleshooting - console output removed for production
     }
-
 
     /**
      * Adds a new note to the agent
@@ -2942,8 +2935,4 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         this.agentType = null;
     }
     
-}
-
-export function LoadAIAgentFormComponentExtended() {
-    // This function is called to ensure the component is loaded and registered
 }

@@ -7,11 +7,6 @@ import { Subject } from 'rxjs';
 import { ListSetOperationsService, VennData, VennIntersection, SetOperation, SetOperationResult } from '../services/list-set-operations.service';
 import { VennRegionClickEvent } from './venn-diagram/venn-diagram.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-
-export function LoadListsOperationsResource() {
-  // tree shaker
-}
-
 interface ListSelection {
   list: ListEntity;
   entityName: string;

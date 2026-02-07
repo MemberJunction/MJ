@@ -292,10 +292,3 @@ export class MCPToolsService implements OnDestroy {
         }
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPToolsService(): void {
-    // Ensures the service is not tree-shaken
-}

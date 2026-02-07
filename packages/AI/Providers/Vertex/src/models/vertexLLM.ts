@@ -219,13 +219,3 @@ export class VertexLLM extends GeminiLLM {
     return { ...this._credentials };
   }
 }
-
-/**
- * Load function to prevent tree-shaking
- *
- * Call this function from your module's public-api.ts to ensure
- * the class is not removed during tree-shaking optimization.
- */
-export function LoadVertexLLM(): void {
-  // Intentionally empty - just prevents tree-shaking
-}

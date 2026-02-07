@@ -60,14 +60,6 @@ export interface ExecutionMonitoringState {
   activeTabId: string;
   splitterSizes?: number[];
 }
-
-/**
- * Tree-shaking prevention function - ensures component is included in builds
- */
-export function LoadAIMonitorResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * AI Monitor Resource - displays AI execution monitoring and analytics
  * Extends BaseResourceComponent to work with the resource type system
@@ -2034,7 +2026,6 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       }
     ];
   }
-
 
   onTimeRangeChange(): void {
     // Simply change time range - loading state is managed by the service

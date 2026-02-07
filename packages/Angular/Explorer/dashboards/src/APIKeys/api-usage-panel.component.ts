@@ -1,12 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { APIKeyEntity, APIKeyUsageLogEntity } from '@memberjunction/core-entities';
-
-/** Tree shaking prevention function */
-export function LoadAPIUsagePanel(): void {
-    // This function prevents tree shaking
-}
-
 /** Time bucket for aggregation */
 interface TimeBucket {
     label: string;

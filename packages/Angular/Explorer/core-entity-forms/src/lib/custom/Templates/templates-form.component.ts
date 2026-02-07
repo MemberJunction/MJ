@@ -314,7 +314,6 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         }
     }
 
-
     get currentTemplateContent(): TemplateContentEntity | null {
         if (this.isAddingNewContent) {
             return this.newTemplateContent;
@@ -488,7 +487,6 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         return false;
     }
 
-
     getContentTypeDisplayText(typeId: string): string {
         if (!typeId) return '-';
         const option = this.contentTypeOptions.find(opt => opt.value === typeId);
@@ -590,7 +588,3 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     }
 
 } 
-
-export function LoadTemplatesFormExtendedComponent() {
-    // prevents tree shaking
-}

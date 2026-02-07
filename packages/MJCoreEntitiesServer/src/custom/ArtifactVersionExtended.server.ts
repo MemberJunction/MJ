@@ -282,10 +282,3 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
         return hierarchy;
     }
 }
-
-/**
- * Stub function to ensure this class is not tree shaken out
- */
-export function LoadArtifactVersionExtendedServerSubClass() {
-    // This function is intentionally empty - it just needs to exist to prevent tree shaking
-}

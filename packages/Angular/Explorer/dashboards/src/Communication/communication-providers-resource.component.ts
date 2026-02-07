@@ -12,14 +12,6 @@ interface ProviderCardData {
     IconClass: string;
     LogoClass: string;
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadCommunicationProvidersResource() {
-    // Force inclusion in production builds
-}
-
 @RegisterClass(BaseResourceComponent, 'CommunicationProvidersResource')
 @Component({
   standalone: false,

@@ -283,10 +283,3 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
         return control?.hasError(errorType) && control?.touched || false;
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPConnectionDialog(): void {
-    // Ensures the component is not tree-shaken
-}

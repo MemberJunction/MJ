@@ -4,11 +4,6 @@ import { ResourceData, CredentialEntity, CredentialTypeEntity, CredentialCategor
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
-
-export function LoadCredentialsOverviewResource() {
-    // Prevents tree-shaking
-}
-
 interface CategoryStat {
     category: string;
     categoryId: string;

@@ -205,10 +205,3 @@ export class TextAnalyzerAction extends BaseAction {
         return "General text";
     }
 }
-
-/**
- * Loader function to ensure the TextAnalyzerAction class is included in the bundle.
- */
-export function LoadTextAnalyzerAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

@@ -4910,6 +4910,3 @@ export class AIPromptRunner {
   }
 }
 
-export function LoadAIPromptRunner() {
-  // This function ensures the class isn't tree-shaken
-}
