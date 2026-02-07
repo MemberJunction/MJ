@@ -1,0 +1,45 @@
+# @memberjunction/server-bootstrap-lite
+
+## 4.0.0
+
+### Major Changes
+
+- 5f6306c: 4.0
+
+### Patch Changes
+
+- Updated dependencies [2f86270]
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [58ec618]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/core-entities-server@4.0.0
+  - @memberjunction/ai-agent-manager@4.0.0
+  - @memberjunction/ai-agents@4.0.0
+  - @memberjunction/ai-engine-base@4.0.0
+  - @memberjunction/ai-core-plus@4.0.0
+  - @memberjunction/ai-provider-bundle@4.0.0
+  - @memberjunction/ai-reranker@4.0.0
+  - @memberjunction/actions-apollo@4.0.0
+  - @memberjunction/actions-base@4.0.0
+  - @memberjunction/actions-bizapps-accounting@4.0.0
+  - @memberjunction/actions-bizapps-crm@4.0.0
+  - @memberjunction/actions-bizapps-formbuilders@4.0.0
+  - @memberjunction/actions-bizapps-lms@4.0.0
+  - @memberjunction/actions-bizapps-social@4.0.0
+  - @memberjunction/core-actions@4.0.0
+  - @memberjunction/actions@4.0.0
+  - @memberjunction/doc-utils@4.0.0
+  - @memberjunction/encryption@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+  - @memberjunction/data-context-server@4.0.0
+  - @memberjunction/scheduling-actions@4.0.0
+  - @memberjunction/scheduling-engine-base@4.0.0
+  - @memberjunction/scheduling-engine@4.0.0
+  - @memberjunction/templates@4.0.0
+  - @memberjunction/testing-engine@4.0.0
