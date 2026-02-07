@@ -1,5 +1,5 @@
 /*
-   MemberJunction Migration: v3.5.x
+   MemberJunction Migration: v4.0.x
 
    Description: Updates vwSQLTablesAndEntities view to include table and view descriptions
                 from sys.extended_properties. This enables Entity records to automatically
