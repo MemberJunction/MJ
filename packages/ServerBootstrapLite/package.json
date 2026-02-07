@@ -16,9 +16,9 @@
     }
   },
   "scripts": {
-    "prebuild": "if [ -d dist ]; then mj codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts; else touch .needs-manifest-rebuild; fi",
+    "prebuild": "if [ -d dist ]; then mj codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'; else touch .needs-manifest-rebuild; fi",
     "build": "tsc && tsc-alias -f",
-    "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && mj codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts && tsc && tsc-alias -f; fi",
+    "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && (mj codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts && tsc && tsc-alias -f || echo 'Warning: mj codegen manifest not available, manifest will be generated on next build'); fi",
     "watch": "tsc --watch",
     "clean": "rimraf dist"
   },

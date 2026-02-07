@@ -9,7 +9,7 @@
     "dev": "ts-node-dev --transpile-only --respawn --project tsconfig.json src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
-    "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
+    "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
     "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf output",
