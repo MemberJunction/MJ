@@ -208,13 +208,19 @@ flowchart LR
     end
     RE --> API[GraphQL API / RunView]
     VE --> API
-    style Virtual fill:#e8d5f5,stroke:#7b2d8e
-    style Regular fill:#d5e8f5,stroke:#2d5f8e
+    style Virtual fill:#7c5295,stroke:#563a6b,color:#fff
+    style Regular fill:#2d6a9f,stroke:#1a4971,color:#fff
 \`\`\`
 ```
 
 **Rules for mermaid diagrams:**
 - Use colors/styling to distinguish different conceptual groups
+- **Dark/light mode compatibility**: Use medium-brightness fills with explicit `color:#fff` — avoid light pastels (wash out in dark mode) and very dark fills (disappear in light mode). Standard palette:
+  - Blue: `fill:#2d6a9f,stroke:#1a4971,color:#fff`
+  - Green: `fill:#2d8659,stroke:#1a5c3a,color:#fff`
+  - Orange: `fill:#b8762f,stroke:#8a5722,color:#fff`
+  - Purple: `fill:#7c5295,stroke:#563a6b,color:#fff`
+  - Gray: `fill:#64748b,stroke:#475569,color:#fff`
 - Keep diagrams focused — one concept per diagram
 - Add labels that explain what's happening, not just box names
 - For complex systems, use multiple smaller diagrams rather than one giant one

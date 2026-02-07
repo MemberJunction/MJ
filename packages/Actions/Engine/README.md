@@ -48,10 +48,10 @@ flowchart TD
     Dispatch --> OAuth
     EAES --> AES
 
-    style Consumers fill:#d5e8f5,stroke:#2d5f8e
-    style Engine fill:#e8d5f5,stroke:#7b2d8e
-    style Pipeline fill:#d5f5e8,stroke:#2d8e5f
-    style Actions fill:#f5e8d5,stroke:#8e5f2d
+    style Consumers fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Engine fill:#7c5295,stroke:#563a6b,color:#fff
+    style Pipeline fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style Actions fill:#b8762f,stroke:#8a5722,color:#fff
 ```
 
 ## Key Features

@@ -129,9 +129,9 @@ flowchart TD
     P2 --> C
     P3 --> C
     Consumer[Your Application] --> E
-    style Core fill:#d5e8f5,stroke:#2d5f8e
-    style Engine fill:#d5f5e8,stroke:#2d8e5f
-    style Providers fill:#f5e8d5,stroke:#8e5f2d
+    style Core fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Engine fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style Providers fill:#b8762f,stroke:#8a5722,color:#fff
 \`\`\`
 
 ## Packages
@@ -260,10 +260,12 @@ Recommended diagram types for folder READMEs:
 | Class hierarchy (providers) | `classDiagram` |
 
 **Style the diagram** with colors to group related packages:
-- Core/base packages: blue tones (`fill:#d5e8f5,stroke:#2d5f8e`)
-- Engine/orchestration: green tones (`fill:#d5f5e8,stroke:#2d8e5f`)
-- Provider/plugin layer: orange tones (`fill:#f5e8d5,stroke:#8e5f2d`)
-- Consumer/application: neutral (`fill:#f5f5f5,stroke:#666`)
+Use medium-brightness fills with explicit white text so diagrams are readable in both dark and light mode. Avoid light pastels (wash out in dark mode) and very dark fills (disappear in light mode).
+
+- Core/base packages: blue (`fill:#2d6a9f,stroke:#1a4971,color:#fff`)
+- Engine/orchestration: green (`fill:#2d8659,stroke:#1a5c3a,color:#fff`)
+- Provider/plugin layer: orange (`fill:#b8762f,stroke:#8a5722,color:#fff`)
+- Consumer/application: gray (`fill:#64748b,stroke:#475569,color:#fff`)
 
 ### Phase 6: Cross-Linking
 
