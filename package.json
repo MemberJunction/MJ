@@ -30,6 +30,7 @@
   "scripts": {
     "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
     "build": "npm run build:stream",
+    "postbuild": "npm run mj:manifest && turbo --log-order=stream build --filter=@memberjunction/server-bootstrap-lite --filter=@memberjunction/server-bootstrap --filter=@memberjunction/ng-bootstrap",
     "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",
     "build:generated": "turbo --log-order=stream build --filter=\"mj_generatedentities\" --filter=\"mj_generatedactions\"",
     "build:api": "turbo --log-order=stream build --filter=\"mj_api\"",

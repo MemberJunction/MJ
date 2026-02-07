@@ -10,7 +10,7 @@
     "types": "./types/memberjunction-ng-bootstrap.d.ts"
   },
   "scripts": {
-    "prebuild": "mj codegen manifest --output ./src/generated/mj-class-registrations.ts",
+    "prebuild": "mj codegen manifest --output ./src/generated/mj-class-registrations.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
     "build": "ng-packagr -p ng-package.json && node scripts/fix-dist-package.js",
     "watch": "ng-packagr -p ng-package.json --watch",
     "clean": "rimraf dist"
