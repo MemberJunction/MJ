@@ -8,6 +8,7 @@ import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig } from '../types/config.js';
 import { PromptExecutionResult } from '../types/prompts.js';
 import { createLLMInstance } from '../utils/llm-factory.js';
+import { CleanAndParseJSON } from '@memberjunction/global';
 
 export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };
 
@@ -60,25 +61,6 @@ export class PromptEngine {
   private createLLM(): BaseLLM {
     // Use shared factory (DRY principle)
     return createLLMInstance(this.config.provider, this.config.apiKey);
-  }
-
-  /**
-   * Strip markdown code fences from JSON responses
-   * Some LLMs wrap JSON responses in ```json ... ``` markdown blocks
-   */
-  private stripMarkdownCodeFences(content: string): string {
-    let cleaned = content.trim();
-
-    // Check if content starts with markdown code fence
-    if (cleaned.startsWith('```')) {
-      // Remove opening fence (```json or just ```)
-      cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '');
-      // Remove closing fence
-      cleaned = cleaned.replace(/\n?```\s*$/, '');
-      cleaned = cleaned.trim();
-    }
-
-    return cleaned;
   }
 
   /**
@@ -214,19 +196,18 @@ export class PromptEngine {
 
       let parsedResult: T;
       if (options?.responseFormat === 'JSON') {
-        try {
-          // Strip markdown code fences before parsing (some LLMs wrap JSON in ```json ... ```)
-          const cleanedContent = this.stripMarkdownCodeFences(content);
-          parsedResult = JSON.parse(cleanedContent) as T;
-        } catch (parseError) {
+        // Use shared MJGlobal utility for JSON cleaning (handles markdown fences, double-escaping, etc.)
+        const parsed = CleanAndParseJSON<T>(content, true);
+        if (parsed === null) {
           return {
             success: false,
-            errorMessage: `Failed to parse JSON response: ${(parseError as Error).message}\n\nRaw content:\n${content}`,
+            errorMessage: `Failed to parse JSON response\n\nRaw content:\n${content}`,
             tokensUsed: usage?.totalTokens || 0,
             promptInput: renderedPrompt,
             promptOutput: content
           };
         }
+        parsedResult = parsed;
       } else {
         parsedResult = content as unknown as T;
       }
@@ -306,23 +287,21 @@ export class PromptEngine {
         const content = chatResult.data.choices[0].message.content;
         const usage = chatResult.data.usage;
 
-        try {
-          // Strip markdown code fences before parsing (some LLMs wrap JSON in ```json ... ```)
-          const cleanedContent = this.stripMarkdownCodeFences(content);
-          const parsed = JSON.parse(cleanedContent) as T;
-          return {
-            success: true,
-            result: parsed,
-            tokensUsed: usage?.totalTokens || 0,
-            cost: usage?.cost
-          };
-        } catch (error) {
+        // Use shared MJGlobal utility for JSON cleaning (handles markdown fences, double-escaping, etc.)
+        const parsed = CleanAndParseJSON<T>(content, true);
+        if (parsed === null) {
           return {
             success: false,
-            errorMessage: `JSON parse error: ${(error as Error).message}`,
+            errorMessage: `JSON parse error`,
             tokensUsed: usage?.totalTokens || 0
           };
         }
+        return {
+          success: true,
+          result: parsed,
+          tokensUsed: usage?.totalTokens || 0,
+          cost: usage?.cost
+        };
       });
     } catch (error) {
       // If rendering or execution fails completely, return array of errors
