@@ -9,7 +9,8 @@
     "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
-    "test": "jest"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "memberjunction",
@@ -26,7 +27,8 @@
   "devDependencies": {
     "@types/lodash.mergewith": "^4.6.9",
     "@types/node": "^24.10.11",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "files": [
     "dist"

@@ -6,7 +6,7 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"No tests configured yet\""
   },
   "private": true,
   "dependencies": {

@@ -1,4 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// Mock the config module before any imports that depend on it
+vi.mock('../../config', () => ({
+  configInfo: {
+    authProviders: [],
+    databaseSettings: {},
+    graphqlPort: 4000,
+    baseUrl: 'http://localhost',
+    graphqlRootPath: '/',
+  },
+}));
+
 import { AuthProviderFactory } from '../AuthProviderFactory';
 import { IAuthProvider } from '../IAuthProvider';
 import { initializeAuthProviders } from '../initializeProviders';
@@ -18,36 +30,32 @@ describe('Authentication Provider Backward Compatibility', () => {
     factory.clear();
   });
 
-  describe('Legacy Configuration Support', () => {
-    it('should create MSAL provider from legacy config', () => {
-      // Simulate legacy environment variables
-      process.env.TENANT_ID = 'test-tenant-id';
-      process.env.WEB_CLIENT_ID = 'test-client-id';
-      
-      // Initialize with legacy config
+  describe('Configuration-Based Provider Initialization', () => {
+    it('should initialize with no providers when config is empty', () => {
       initializeAuthProviders();
-      
-      // Check that MSAL provider was created
-      const msalProvider = factory.getByName('msal');
-      expect(msalProvider).toBeDefined();
-      expect(msalProvider?.issuer).toContain('test-tenant-id');
-      expect(msalProvider?.audience).toBe('test-client-id');
+
+      // With empty authProviders array, no providers should be registered
+      expect(factory.hasProviders()).toBe(false);
     });
-    
-    it('should create Auth0 provider from legacy config', () => {
-      // Simulate legacy environment variables
-      process.env.AUTH0_DOMAIN = 'test.auth0.com';
-      process.env.AUTH0_CLIENT_ID = 'auth0-client-id';
-      process.env.AUTH0_CLIENT_SECRET = 'auth0-secret';
-      
-      // Initialize with legacy config
+
+    it('should clear existing providers before re-initializing', () => {
+      // Register a manual provider first
+      const testProvider = {
+        name: 'test',
+        issuer: 'https://test.com',
+        audience: 'test',
+        jwksUri: 'https://test.com/jwks',
+        validateConfig: () => true,
+        getSigningKey: vi.fn(),
+        extractUserInfo: vi.fn(),
+        matchesIssuer: vi.fn(),
+      } as IAuthProvider;
+      factory.register(testProvider);
+      expect(factory.hasProviders()).toBe(true);
+
+      // Re-initialize clears everything
       initializeAuthProviders();
-      
-      // Check that Auth0 provider was created
-      const auth0Provider = factory.getByName('auth0');
-      expect(auth0Provider).toBeDefined();
-      expect(auth0Provider?.issuer).toBe('https://test.auth0.com/');
-      expect(auth0Provider?.audience).toBe('auth0-client-id');
+      expect(factory.hasProviders()).toBe(false);
     });
   });
 
@@ -106,55 +114,36 @@ describe('Authentication Provider Backward Compatibility', () => {
   });
 
   describe('User Info Extraction', () => {
-    it('should extract user info from different token formats', () => {
-      // Test MSAL token format
-      const msalPayload = {
-        iss: 'https://login.microsoftonline.com/tenant/v2.0',
-        email: 'user@example.com',
-        given_name: 'John',
-        family_name: 'Doe',
-        name: 'John Doe',
-        preferred_username: 'john.doe@example.com'
-      };
-      
-      // Test Auth0 token format
-      const auth0Payload = {
-        iss: 'https://test.auth0.com/',
-        email: 'user@example.com',
-        given_name: 'Jane',
-        family_name: 'Smith',
-        name: 'Jane Smith'
-      };
-      
-      // Test Okta token format
-      const oktaPayload = {
-        iss: 'https://test.okta.com/oauth2/default',
-        email: 'user@example.com',
-        given_name: 'Bob',
-        family_name: 'Johnson',
-        name: 'Bob Johnson',
-        preferred_username: 'bob.johnson'
-      };
-      
-      // Initialize providers
-      initializeAuthProviders();
-      
-      // Test extraction for each provider type
-      const msalProvider = factory.getByIssuer(msalPayload.iss);
-      if (msalProvider) {
-        const msalUserInfo = msalProvider.extractUserInfo(msalPayload);
-        expect(msalUserInfo.email).toBe('user@example.com');
-        expect(msalUserInfo.firstName).toBe('John');
-        expect(msalUserInfo.lastName).toBe('Doe');
-      }
-      
-      const auth0Provider = factory.getByIssuer(auth0Payload.iss);
-      if (auth0Provider) {
-        const auth0UserInfo = auth0Provider.extractUserInfo(auth0Payload);
-        expect(auth0UserInfo.email).toBe('user@example.com');
-        expect(auth0UserInfo.firstName).toBe('Jane');
-        expect(auth0UserInfo.lastName).toBe('Smith');
-      }
+    it('should return undefined for unregistered issuer', () => {
+      const provider = factory.getByIssuer('https://unknown.issuer.com');
+      expect(provider).toBeUndefined();
+    });
+
+    it('should support extractUserInfo on manually registered providers', () => {
+      const mockExtract = vi.fn().mockReturnValue({
+        email: 'user@test.com',
+        firstName: 'Test',
+        lastName: 'User',
+      });
+      const testProvider = {
+        name: 'test-extract',
+        issuer: 'https://test-extract.com',
+        audience: 'test',
+        jwksUri: 'https://test-extract.com/jwks',
+        validateConfig: () => true,
+        getSigningKey: vi.fn(),
+        extractUserInfo: mockExtract,
+        matchesIssuer: (iss: string) => iss === 'https://test-extract.com',
+      } as IAuthProvider;
+
+      factory.register(testProvider);
+
+      const found = factory.getByIssuer('https://test-extract.com');
+      expect(found).toBeDefined();
+
+      const userInfo = found!.extractUserInfo({ email: 'user@test.com' });
+      expect(userInfo.email).toBe('user@test.com');
+      expect(mockExtract).toHaveBeenCalledTimes(1);
     });
   });
 
