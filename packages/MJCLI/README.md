@@ -147,12 +147,34 @@ The generated manifest imports all packages in the app's dependency tree that co
 Applies database migrations to update your MemberJunction schema to the latest version.
 
 ```bash
-mj migrate [--verbose] [--tag <version>]
+mj migrate [--verbose] [--tag <version>] [--schema <name>] [--dir <path>]
 ```
 
 Options:
-- `--verbose`: Enable detailed logging
-- `--tag <version>`: Specify a version tag for migrations (e.g., 'v2.10.0')
+- `-v, --verbose`: Enable detailed logging
+- `-t, --tag <version>`: Specify a version tag for migrations (e.g., 'v2.10.0')
+- `-s, --schema <name>`: Target schema (overrides `coreSchema` from config)
+- `--dir <path>`: Migration source directory (overrides `migrationsLocation` from config)
+
+**Schema Handling:**
+- When using `--schema`, the specified schema will be automatically created if it doesn't exist
+- This enables migrating to new schemas without manual DDL setup
+- The schema creation uses Flyway's `createSchemas` feature
+
+Examples:
+```bash
+# Basic migration
+mj migrate
+
+# Migrate to a specific version tag
+mj migrate --tag v2.10.0
+
+# Migrate a custom schema with custom migrations directory
+mj migrate --schema __BCSaaS --dir ./migrations/v1
+
+# Verbose output for debugging
+mj migrate --verbose
+```
 
 #### `mj bump`
 
