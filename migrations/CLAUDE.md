@@ -34,7 +34,7 @@ The baseline is configured in Flyway settings:
 ```javascript
 {
   migrationsLocation: 'filesystem:./migrations',  // Flyway recursively scans v2/ and v3/ subdirectories
-  baselineVersion: '202601122300',                // Baseline version (v2.133.0 equivalent)
+  baselineVersion: '202602061600',                // Baseline version (v4.x based one v3.4.x + 2 migration scripts that would have been in v3.5.0)
   baselineOnMigrate: true                         // Auto-baseline blank databases
 }
 ```
