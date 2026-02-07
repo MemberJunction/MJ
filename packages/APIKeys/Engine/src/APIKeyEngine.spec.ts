@@ -3,11 +3,12 @@
  * Tests the main orchestrator for API key operations and authorization
  */
 
+import { vi } from 'vitest';
 import { APIKeyEngine, GetAPIKeyEngine, ResetAPIKeyEngine } from './APIKeyEngine';
 import { UserInfo, setMockRunViewResult, clearMockRunViewResults, setMockEntity, clearMockEntities } from './__mocks__/core';
 import { APIKeyEntity, APIApplicationEntity, UserEntity } from './__mocks__/core-entities';
 
-// Note: Mocking is handled by moduleNameMapper in jest.config.js
+// Note: Mocking is handled by resolve.alias in vitest.config.ts
 // @memberjunction/core -> ./__mocks__/core.ts
 // @memberjunction/core-entities -> ./__mocks__/core-entities.ts
 
@@ -509,7 +510,7 @@ describe('APIKeyEngine', () => {
             // Mock usage log entity
             const mockLogEntity = {
                 ID: 'log-id',
-                Save: jest.fn().mockResolvedValue(true)
+                Save: vi.fn().mockResolvedValue(true)
             };
             setMockEntity('MJ: API Key Usage Logs', mockLogEntity);
 

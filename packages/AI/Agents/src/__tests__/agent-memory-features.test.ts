@@ -6,11 +6,10 @@
  * - AgentContextInjector formatting with precedence instructions
  * - Multi-tenant scope determination
  *
- * To run these tests:
- *   npx ts-node src/__tests__/agent-memory-features.test.ts
- *
  * @since 2.130.0
  */
+
+import { describe, it, expect } from 'vitest';
 
 // ============================================================================
 // Mock Data and Types
@@ -120,7 +119,7 @@ function formatNotesForInjection(notes: MockNote[], includeMemoryPolicy: boolean
         lines.push('');
     }
 
-    lines.push(`📝 AGENT NOTES (${notes.length})`);
+    lines.push(`\u{1F4DD} AGENT NOTES (${notes.length})`);
     lines.push('');
 
     for (const note of notes) {
@@ -154,20 +153,23 @@ function generateQuestions(warnings: MockPayloadWarning[]): MockFeedbackQuestion
         let question = '';
 
         switch (warning.type) {
-            case 'content_truncation':
+            case 'content_truncation': {
                 const truncDetails = warning.details as { originalLength: number; newLength: number; reductionPercentage: number };
                 question = `Did you intend to reduce the content at "${warning.path}" from ${truncDetails.originalLength} to ${truncDetails.newLength} characters (${truncDetails.reductionPercentage.toFixed(1)}% reduction)?`;
                 break;
+            }
 
-            case 'key_removal':
+            case 'key_removal': {
                 const removalDetails = warning.details as { removedKeys: string[] };
                 question = `Did you intend to remove the non-empty key(s) at "${warning.path}": ${removalDetails.removedKeys.join(', ')}?`;
                 break;
+            }
 
-            case 'type_change':
+            case 'type_change': {
                 const typeDetails = warning.details as { originalType: string; newType: string };
                 question = `Did you intend to change the type at "${warning.path}" from ${typeDetails.originalType} to ${typeDetails.newType}?`;
                 break;
+            }
 
             case 'pattern_anomaly':
                 question = `Did you intend the following change at "${warning.path}": ${warning.message}?`;
@@ -294,455 +296,317 @@ const mockWarnings: MockPayloadWarning[] = [
 ];
 
 // ============================================================================
-// Tests
-// ============================================================================
-
-let testsPassed = 0;
-let testsFailed = 0;
-
-function runTest(name: string, fn: () => void) {
-    try {
-        fn();
-        console.log(`✅ ${name}`);
-        testsPassed++;
-    } catch (error) {
-        console.error(`❌ ${name}`);
-        console.error(`   Error: ${error instanceof Error ? error.message : error}`);
-        testsFailed++;
-    }
-}
-
-function assertEqual<T>(actual: T, expected: T, message?: string) {
-    if (actual !== expected) {
-        throw new Error(`${message || 'Assertion failed'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
-    }
-}
-
-function assertTrue(condition: boolean, message?: string) {
-    if (!condition) {
-        throw new Error(message || 'Expected condition to be true');
-    }
-}
-
-function assertContains(str: string, substring: string, message?: string) {
-    if (!str.includes(substring)) {
-        throw new Error(`${message || 'String does not contain expected substring'}: "${substring}"`);
-    }
-}
-
-console.log('\n=== Agent Memory Features Tests ===\n');
-
-// ============================================================================
 // Scope Determination Tests
 // ============================================================================
 
-console.log('--- Scope Determination Tests ---\n');
+describe('Scope Determination', () => {
+    it('determineNoteScope: Agent + User specific', () => {
+        expect(determineNoteScope(mockNotes[0])).toBe('Agent + User specific');
+    });
 
-runTest('determineNoteScope: Agent + User specific', () => {
-    const note = mockNotes[0]; // has AgentID and UserID
-    const scope = determineNoteScope(note);
-    assertEqual(scope, 'Agent + User specific');
-});
+    it('determineNoteScope: Company-wide', () => {
+        expect(determineNoteScope(mockNotes[1])).toBe('Company-wide');
+    });
 
-runTest('determineNoteScope: Company-wide', () => {
-    const note = mockNotes[1]; // has only CompanyID
-    const scope = determineNoteScope(note);
-    assertEqual(scope, 'Company-wide');
-});
+    it('determineNoteScope: Global (all null)', () => {
+        expect(determineNoteScope(mockNotes[2])).toBe('Global');
+    });
 
-runTest('determineNoteScope: Global (all null)', () => {
-    const note = mockNotes[2]; // all nulls
-    const scope = determineNoteScope(note);
-    assertEqual(scope, 'Global');
-});
+    it('determineSaaSScope: Organization-level (primary scope only)', () => {
+        expect(determineSaaSScope(mockNotes[1])).toBe('Organization-level');
+    });
 
-runTest('determineSaaSScope: Organization-level (primary scope only)', () => {
-    const note = mockNotes[1]; // has PrimaryScopeRecordID but no SecondaryScopes
-    const scope = determineSaaSScope(note);
-    assertEqual(scope, 'Organization-level');
-});
+    it('determineSaaSScope: Contact-specific (has secondary scopes)', () => {
+        expect(determineSaaSScope(mockNotes[3])).toBe('Contact-specific (most specific)');
+    });
 
-runTest('determineSaaSScope: Contact-specific (has secondary scopes)', () => {
-    const note = mockNotes[3]; // has both primary and secondary scopes
-    const scope = determineSaaSScope(note);
-    assertEqual(scope, 'Contact-specific (most specific)');
-});
-
-runTest('determineSaaSScope: null when no SaaS scope', () => {
-    const note = mockNotes[0]; // no PrimaryScopeRecordID
-    const scope = determineSaaSScope(note);
-    assertEqual(scope, null);
+    it('determineSaaSScope: null when no SaaS scope', () => {
+        expect(determineSaaSScope(mockNotes[0])).toBeNull();
+    });
 });
 
 // ============================================================================
-// Format Notes with Precedence Tests
+// Format Notes Tests
 // ============================================================================
 
-console.log('\n--- Format Notes Tests ---\n');
+describe('Format Notes', () => {
+    it('includes memory policy by default', () => {
+        const result = formatNotesForInjection(mockNotes);
+        expect(result).toContain('<memory_policy>');
+        expect(result).toContain('Precedence (highest to lowest)');
+        expect(result).toContain('Contact-specific notes override organization-level');
+        expect(result).toContain('</memory_policy>');
+    });
 
-runTest('formatNotesForInjection: includes memory policy by default', () => {
-    const result = formatNotesForInjection(mockNotes);
-    assertContains(result, '<memory_policy>');
-    assertContains(result, 'Precedence (highest to lowest)');
-    assertContains(result, 'Contact-specific notes override organization-level');
-    assertContains(result, '</memory_policy>');
-});
+    it('excludes memory policy when disabled', () => {
+        const result = formatNotesForInjection(mockNotes, false);
+        expect(result).not.toContain('<memory_policy>');
+    });
 
-runTest('formatNotesForInjection: excludes memory policy when disabled', () => {
-    const result = formatNotesForInjection(mockNotes, false);
-    assertTrue(!result.includes('<memory_policy>'), 'Should not contain memory_policy');
-});
+    it('includes note count', () => {
+        const result = formatNotesForInjection(mockNotes);
+        expect(result).toContain(`AGENT NOTES (${mockNotes.length})`);
+    });
 
-runTest('formatNotesForInjection: includes note count', () => {
-    const result = formatNotesForInjection(mockNotes);
-    assertContains(result, `📝 AGENT NOTES (${mockNotes.length})`);
-});
+    it('includes note types and content', () => {
+        const result = formatNotesForInjection(mockNotes);
+        expect(result).toContain('[Preference] User prefers bullet points');
+        expect(result).toContain('[Context] Company uses metric units');
+        expect(result).toContain('[Constraint] Never share PII');
+    });
 
-runTest('formatNotesForInjection: includes note types and content', () => {
-    const result = formatNotesForInjection(mockNotes);
-    assertContains(result, '[Preference] User prefers bullet points');
-    assertContains(result, '[Context] Company uses metric units');
-    assertContains(result, '[Constraint] Never share PII');
-});
+    it('shows SaaS scope when available', () => {
+        const result = formatNotesForInjection(mockNotes);
+        expect(result).toContain('Organization-level');
+        expect(result).toContain('Contact-specific (most specific)');
+    });
 
-runTest('formatNotesForInjection: shows SaaS scope when available', () => {
-    const result = formatNotesForInjection(mockNotes);
-    assertContains(result, 'Organization-level');
-    assertContains(result, 'Contact-specific (most specific)');
-});
-
-runTest('formatNotesForInjection: returns empty string for empty notes', () => {
-    const result = formatNotesForInjection([]);
-    assertEqual(result, '');
+    it('returns empty string for empty notes', () => {
+        expect(formatNotesForInjection([])).toBe('');
+    });
 });
 
 // ============================================================================
-// Feedback Question Generation Tests
+// Feedback Question Tests
 // ============================================================================
 
-console.log('\n--- Feedback Question Tests ---\n');
+describe('Feedback Questions', () => {
+    it('filters out non-feedback warnings', () => {
+        const questions = generateQuestions(mockWarnings);
+        expect(questions.length).toBe(2);
+    });
 
-runTest('generateQuestions: filters out non-feedback warnings', () => {
-    const questions = generateQuestions(mockWarnings);
-    assertEqual(questions.length, 2, 'Should only include warnings with requiresFeedback=true');
-});
+    it('formats content_truncation correctly', () => {
+        const questions = generateQuestions(mockWarnings);
+        const truncQuestion = questions[0];
+        expect(truncQuestion.question).toContain('reduce the content');
+        expect(truncQuestion.question).toContain('1000 to 100');
+        expect(truncQuestion.question).toContain('90.0%');
+    });
 
-runTest('generateQuestions: formats content_truncation correctly', () => {
-    const questions = generateQuestions(mockWarnings);
-    const truncQuestion = questions[0];
-    assertContains(truncQuestion.question, 'reduce the content');
-    assertContains(truncQuestion.question, '1000 to 100');
-    assertContains(truncQuestion.question, '90.0%');
-});
+    it('formats key_removal correctly', () => {
+        const questions = generateQuestions(mockWarnings);
+        const removalQuestion = questions[1];
+        expect(removalQuestion.question).toContain('remove the non-empty key(s)');
+        expect(removalQuestion.question).toContain('timestamp');
+        expect(removalQuestion.question).toContain('version');
+    });
 
-runTest('generateQuestions: formats key_removal correctly', () => {
-    const questions = generateQuestions(mockWarnings);
-    const removalQuestion = questions[1];
-    assertContains(removalQuestion.question, 'remove the non-empty key(s)');
-    assertContains(removalQuestion.question, 'timestamp');
-    assertContains(removalQuestion.question, 'version');
-});
-
-runTest('generateQuestions: includes context with path and type', () => {
-    const questions = generateQuestions(mockWarnings);
-    const question = questions[0];
-    assertTrue(question.context !== undefined, 'Should have context');
-    assertEqual(question.context?.path, 'response.body');
-    assertEqual(question.context?.changeType, 'content_truncation');
+    it('includes context with path and type', () => {
+        const questions = generateQuestions(mockWarnings);
+        const question = questions[0];
+        expect(question.context).toBeDefined();
+        expect(question.context?.path).toBe('response.body');
+        expect(question.context?.changeType).toBe('content_truncation');
+    });
 });
 
 // ============================================================================
 // LLM Response Mapping Tests
 // ============================================================================
 
-console.log('\n--- LLM Response Mapping Tests ---\n');
+describe('LLM Response Mapping', () => {
+    it('maps responses correctly', () => {
+        const questions = generateQuestions(mockWarnings);
+        const llmResponses = [
+            { questionNumber: 1, intended: false, explanation: 'This was a mistake' },
+            { questionNumber: 2, intended: true, explanation: 'Intended cleanup' }
+        ];
 
-runTest('mapLLMResponsesToFeedback: maps responses correctly', () => {
-    const questions = generateQuestions(mockWarnings);
-    const llmResponses = [
-        { questionNumber: 1, intended: false, explanation: 'This was a mistake' },
-        { questionNumber: 2, intended: true, explanation: 'Intended cleanup' }
-    ];
+        const result = mapLLMResponsesToFeedback(questions, llmResponses);
 
-    const result = mapLLMResponsesToFeedback(questions, llmResponses);
+        expect(result.length).toBe(2);
+        expect(result[0].intended).toBe(false);
+        expect(result[0].explanation).toBe('This was a mistake');
+        expect(result[1].intended).toBe(true);
+    });
 
-    assertEqual(result.length, 2);
-    assertEqual(result[0].intended, false);
-    assertEqual(result[0].explanation, 'This was a mistake');
-    assertEqual(result[1].intended, true);
-});
+    it('defaults to intended when no response', () => {
+        const questions = generateQuestions(mockWarnings);
+        const llmResponses: Array<{ questionNumber: number; intended: boolean; explanation?: string }> = [];
 
-runTest('mapLLMResponsesToFeedback: defaults to intended when no response', () => {
-    const questions = generateQuestions(mockWarnings);
-    const llmResponses: Array<{ questionNumber: number; intended: boolean; explanation?: string }> = [];
+        const result = mapLLMResponsesToFeedback(questions, llmResponses);
 
-    const result = mapLLMResponsesToFeedback(questions, llmResponses);
-
-    assertTrue(result.every(r => r.intended === true), 'All should default to intended');
-    assertContains(result[0].explanation || '', 'No explicit response');
+        expect(result.every(r => r.intended === true)).toBe(true);
+        expect(result[0].explanation).toContain('No explicit response');
+    });
 });
 
 // ============================================================================
 // Memory Cleanup Agent Tests
 // ============================================================================
 
-console.log('\n--- Memory Cleanup Agent Tests ---\n');
-
-/**
- * Calculate cutoff date for retention (mirrors MemoryCleanupAgent)
- */
-function getCutoffDate(retentionDays: number): string {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - retentionDays);
-    return cutoff.toISOString();
-}
-
-/**
- * Get note retention days with default (mirrors MemoryCleanupAgent)
- */
-function getNoteRetentionDays(agent: { NoteRetentionDays?: number | null }): number {
-    const DEFAULT_NOTE_RETENTION_DAYS = 90;
-    if (typeof agent.NoteRetentionDays === 'number' && agent.NoteRetentionDays > 0) {
-        return agent.NoteRetentionDays;
-    }
-    return DEFAULT_NOTE_RETENTION_DAYS;
-}
-
-/**
- * Get example retention days with default (mirrors MemoryCleanupAgent)
- */
-function getExampleRetentionDays(agent: { ExampleRetentionDays?: number | null }): number {
-    const DEFAULT_EXAMPLE_RETENTION_DAYS = 180;
-    if (typeof agent.ExampleRetentionDays === 'number' && agent.ExampleRetentionDays > 0) {
-        return agent.ExampleRetentionDays;
-    }
-    return DEFAULT_EXAMPLE_RETENTION_DAYS;
-}
-
-/**
- * Check if auto-archive is enabled (mirrors MemoryCleanupAgent)
- */
-function getAutoArchiveEnabled(agent: { AutoArchiveEnabled?: boolean }): boolean {
-    return agent.AutoArchiveEnabled !== false;
-}
-
-/**
- * Build cleanup summary message (mirrors MemoryCleanupAgent)
- */
-function buildCleanupSummary(result: {
-    notesArchived: number;
-    examplesArchived: number;
-    notesExpired: number;
-    examplesExpired: number;
-    errors: string[];
-}): string {
-    const parts: string[] = [];
-
-    if (result.notesArchived > 0) {
-        parts.push(`${result.notesArchived} stale notes archived`);
-    }
-    if (result.examplesArchived > 0) {
-        parts.push(`${result.examplesArchived} stale examples archived`);
-    }
-    if (result.notesExpired > 0) {
-        parts.push(`${result.notesExpired} expired notes archived`);
-    }
-    if (result.examplesExpired > 0) {
-        parts.push(`${result.examplesExpired} expired examples archived`);
+describe('Memory Cleanup Agent', () => {
+    function getCutoffDate(retentionDays: number): string {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - retentionDays);
+        return cutoff.toISOString();
     }
 
-    if (parts.length === 0) {
-        parts.push('No items needed archiving');
+    function getNoteRetentionDays(agent: { NoteRetentionDays?: number | null }): number {
+        const DEFAULT_NOTE_RETENTION_DAYS = 90;
+        if (typeof agent.NoteRetentionDays === 'number' && agent.NoteRetentionDays > 0) {
+            return agent.NoteRetentionDays;
+        }
+        return DEFAULT_NOTE_RETENTION_DAYS;
     }
 
-    if (result.errors.length > 0) {
-        parts.push(`${result.errors.length} errors encountered`);
+    function getExampleRetentionDays(agent: { ExampleRetentionDays?: number | null }): number {
+        const DEFAULT_EXAMPLE_RETENTION_DAYS = 180;
+        if (typeof agent.ExampleRetentionDays === 'number' && agent.ExampleRetentionDays > 0) {
+            return agent.ExampleRetentionDays;
+        }
+        return DEFAULT_EXAMPLE_RETENTION_DAYS;
     }
 
-    return parts.join(', ');
-}
+    function getAutoArchiveEnabled(agent: { AutoArchiveEnabled?: boolean }): boolean {
+        return agent.AutoArchiveEnabled !== false;
+    }
 
-runTest('getCutoffDate: calculates correct date for 90 days', () => {
-    const now = new Date();
-    const cutoffStr = getCutoffDate(90);
-    const cutoffDate = new Date(cutoffStr);
+    function buildCleanupSummary(result: {
+        notesArchived: number;
+        examplesArchived: number;
+        notesExpired: number;
+        examplesExpired: number;
+        errors: string[];
+    }): string {
+        const parts: string[] = [];
+        if (result.notesArchived > 0) parts.push(`${result.notesArchived} stale notes archived`);
+        if (result.examplesArchived > 0) parts.push(`${result.examplesArchived} stale examples archived`);
+        if (result.notesExpired > 0) parts.push(`${result.notesExpired} expired notes archived`);
+        if (result.examplesExpired > 0) parts.push(`${result.examplesExpired} expired examples archived`);
+        if (parts.length === 0) parts.push('No items needed archiving');
+        if (result.errors.length > 0) parts.push(`${result.errors.length} errors encountered`);
+        return parts.join(', ');
+    }
 
-    // Should be approximately 90 days ago (allow 1 second tolerance)
-    const expectedDate = new Date(now);
-    expectedDate.setDate(expectedDate.getDate() - 90);
+    it('getCutoffDate calculates correct date for 90 days', () => {
+        const now = new Date();
+        const cutoffStr = getCutoffDate(90);
+        const cutoffDate = new Date(cutoffStr);
+        const expectedDate = new Date(now);
+        expectedDate.setDate(expectedDate.getDate() - 90);
+        const diff = Math.abs(cutoffDate.getTime() - expectedDate.getTime());
+        expect(diff).toBeLessThan(1000);
+    });
 
-    const diff = Math.abs(cutoffDate.getTime() - expectedDate.getTime());
-    assertTrue(diff < 1000, 'Cutoff date should be approximately 90 days ago');
-});
+    it('getNoteRetentionDays returns agent value when set', () => {
+        expect(getNoteRetentionDays({ NoteRetentionDays: 60 })).toBe(60);
+    });
 
-runTest('getNoteRetentionDays: returns agent value when set', () => {
-    const agent = { NoteRetentionDays: 60 };
-    assertEqual(getNoteRetentionDays(agent), 60);
-});
+    it('getNoteRetentionDays returns default when null', () => {
+        expect(getNoteRetentionDays({ NoteRetentionDays: null })).toBe(90);
+    });
 
-runTest('getNoteRetentionDays: returns default when null', () => {
-    const agent = { NoteRetentionDays: null };
-    assertEqual(getNoteRetentionDays(agent), 90);
-});
+    it('getNoteRetentionDays returns default when not set', () => {
+        expect(getNoteRetentionDays({})).toBe(90);
+    });
 
-runTest('getNoteRetentionDays: returns default when not set', () => {
-    const agent = {};
-    assertEqual(getNoteRetentionDays(agent), 90);
-});
+    it('getExampleRetentionDays returns agent value when set', () => {
+        expect(getExampleRetentionDays({ ExampleRetentionDays: 120 })).toBe(120);
+    });
 
-runTest('getExampleRetentionDays: returns agent value when set', () => {
-    const agent = { ExampleRetentionDays: 120 };
-    assertEqual(getExampleRetentionDays(agent), 120);
-});
+    it('getExampleRetentionDays returns default when not set', () => {
+        expect(getExampleRetentionDays({})).toBe(180);
+    });
 
-runTest('getExampleRetentionDays: returns default when not set', () => {
-    const agent = {};
-    assertEqual(getExampleRetentionDays(agent), 180);
-});
+    it('getAutoArchiveEnabled returns true by default', () => {
+        expect(getAutoArchiveEnabled({})).toBe(true);
+    });
 
-runTest('getAutoArchiveEnabled: returns true by default', () => {
-    const agent = {};
-    assertEqual(getAutoArchiveEnabled(agent), true);
-});
+    it('getAutoArchiveEnabled returns false when explicitly disabled', () => {
+        expect(getAutoArchiveEnabled({ AutoArchiveEnabled: false })).toBe(false);
+    });
 
-runTest('getAutoArchiveEnabled: returns false when explicitly disabled', () => {
-    const agent = { AutoArchiveEnabled: false };
-    assertEqual(getAutoArchiveEnabled(agent), false);
-});
+    it('getAutoArchiveEnabled returns true when explicitly enabled', () => {
+        expect(getAutoArchiveEnabled({ AutoArchiveEnabled: true })).toBe(true);
+    });
 
-runTest('getAutoArchiveEnabled: returns true when explicitly enabled', () => {
-    const agent = { AutoArchiveEnabled: true };
-    assertEqual(getAutoArchiveEnabled(agent), true);
-});
+    it('buildCleanupSummary reports stale notes', () => {
+        const summary = buildCleanupSummary({ notesArchived: 5, examplesArchived: 0, notesExpired: 0, examplesExpired: 0, errors: [] });
+        expect(summary).toContain('5 stale notes archived');
+    });
 
-runTest('buildCleanupSummary: reports stale notes', () => {
-    const result = { notesArchived: 5, examplesArchived: 0, notesExpired: 0, examplesExpired: 0, errors: [] };
-    const summary = buildCleanupSummary(result);
-    assertContains(summary, '5 stale notes archived');
-});
+    it('buildCleanupSummary reports expired items', () => {
+        const summary = buildCleanupSummary({ notesArchived: 0, examplesArchived: 0, notesExpired: 2, examplesExpired: 3, errors: [] });
+        expect(summary).toContain('2 expired notes archived');
+        expect(summary).toContain('3 expired examples archived');
+    });
 
-runTest('buildCleanupSummary: reports expired items', () => {
-    const result = { notesArchived: 0, examplesArchived: 0, notesExpired: 2, examplesExpired: 3, errors: [] };
-    const summary = buildCleanupSummary(result);
-    assertContains(summary, '2 expired notes archived');
-    assertContains(summary, '3 expired examples archived');
-});
+    it('buildCleanupSummary reports errors', () => {
+        const summary = buildCleanupSummary({ notesArchived: 1, examplesArchived: 0, notesExpired: 0, examplesExpired: 0, errors: ['error1', 'error2'] });
+        expect(summary).toContain('2 errors encountered');
+    });
 
-runTest('buildCleanupSummary: reports errors', () => {
-    const result = { notesArchived: 1, examplesArchived: 0, notesExpired: 0, examplesExpired: 0, errors: ['error1', 'error2'] };
-    const summary = buildCleanupSummary(result);
-    assertContains(summary, '2 errors encountered');
-});
-
-runTest('buildCleanupSummary: reports nothing needed when all zero', () => {
-    const result = { notesArchived: 0, examplesArchived: 0, notesExpired: 0, examplesExpired: 0, errors: [] };
-    const summary = buildCleanupSummary(result);
-    assertEqual(summary, 'No items needed archiving');
+    it('buildCleanupSummary reports nothing needed when all zero', () => {
+        const summary = buildCleanupSummary({ notesArchived: 0, examplesArchived: 0, notesExpired: 0, examplesExpired: 0, errors: [] });
+        expect(summary).toBe('No items needed archiving');
+    });
 });
 
 // ============================================================================
 // Extraction Guardrails Tests
 // ============================================================================
 
-console.log('\n--- Extraction Guardrails Tests ---\n');
+describe('Extraction Guardrails', () => {
+    function containsEphemeralPhrase(content: string): boolean {
+        const ephemeralPatterns = [
+            /this time/i, /just for now/i, /today only/i, /for this call/i,
+            /temporarily/i, /one-time/i, /exception/i, /just once/i
+        ];
+        return ephemeralPatterns.some(pattern => pattern.test(content));
+    }
 
-/**
- * Check if content contains ephemeral phrases (should not be stored)
- */
-function containsEphemeralPhrase(content: string): boolean {
-    const ephemeralPatterns = [
-        /this time/i,
-        /just for now/i,
-        /today only/i,
-        /for this call/i,
-        /temporarily/i,
-        /one-time/i,
-        /exception/i,
-        /just once/i
-    ];
-    return ephemeralPatterns.some(pattern => pattern.test(content));
-}
+    function containsDurablePhrase(content: string): boolean {
+        const durablePatterns = [
+            /always/i, /never/i, /company policy/i, /all customers/i,
+            /standard practice/i, /we typically/i, /our preference/i,
+            /every time/i, /by default/i, /as a rule/i
+        ];
+        return durablePatterns.some(pattern => pattern.test(content));
+    }
 
-/**
- * Check if content contains durable phrases (should be stored at org/global scope)
- */
-function containsDurablePhrase(content: string): boolean {
-    const durablePatterns = [
-        /always/i,
-        /never/i,
-        /company policy/i,
-        /all customers/i,
-        /standard practice/i,
-        /we typically/i,
-        /our preference/i,
-        /every time/i,
-        /by default/i,
-        /as a rule/i
-    ];
-    return durablePatterns.some(pattern => pattern.test(content));
-}
+    function containsPII(content: string): boolean {
+        const piiPatterns = [
+            /\b\d{3}-\d{2}-\d{4}\b/, /\b\d{16}\b/, /password[:\s]+\S+/i,
+            /\bssn\b/i, /passport\s*#?\s*\d+/i
+        ];
+        return piiPatterns.some(pattern => pattern.test(content));
+    }
 
-/**
- * Check if content contains PII that should not be extracted
- */
-function containsPII(content: string): boolean {
-    const piiPatterns = [
-        /\b\d{3}-\d{2}-\d{4}\b/,  // SSN pattern
-        /\b\d{16}\b/,             // Credit card
-        /password[:\s]+\S+/i,     // Password mention
-        /\bssn\b/i,               // SSN mention
-        /passport\s*#?\s*\d+/i    // Passport
-    ];
-    return piiPatterns.some(pattern => pattern.test(content));
-}
+    it('containsEphemeralPhrase detects "just for now"', () => {
+        expect(containsEphemeralPhrase('Just for now, use bullet points')).toBe(true);
+    });
 
-runTest('containsEphemeralPhrase: detects "just for now"', () => {
-    assertTrue(containsEphemeralPhrase('Just for now, use bullet points'));
+    it('containsEphemeralPhrase detects "this time"', () => {
+        expect(containsEphemeralPhrase('This time I want a shorter response')).toBe(true);
+    });
+
+    it('containsEphemeralPhrase returns false for durable content', () => {
+        expect(containsEphemeralPhrase('We always use metric units')).toBe(false);
+    });
+
+    it('containsDurablePhrase detects "always"', () => {
+        expect(containsDurablePhrase('We always use formal tone')).toBe(true);
+    });
+
+    it('containsDurablePhrase detects "company policy"', () => {
+        expect(containsDurablePhrase('Company policy requires approval')).toBe(true);
+    });
+
+    it('containsDurablePhrase returns false for ephemeral content', () => {
+        expect(containsDurablePhrase('Just this once, skip the greeting')).toBe(false);
+    });
+
+    it('containsPII detects SSN pattern', () => {
+        expect(containsPII('My SSN is 123-45-6789')).toBe(true);
+    });
+
+    it('containsPII detects password mention', () => {
+        expect(containsPII('The password is: secret123')).toBe(true);
+    });
+
+    it('containsPII returns false for safe content', () => {
+        expect(containsPII('User prefers bullet points')).toBe(false);
+    });
 });
-
-runTest('containsEphemeralPhrase: detects "this time"', () => {
-    assertTrue(containsEphemeralPhrase('This time I want a shorter response'));
-});
-
-runTest('containsEphemeralPhrase: returns false for durable content', () => {
-    assertTrue(!containsEphemeralPhrase('We always use metric units'));
-});
-
-runTest('containsDurablePhrase: detects "always"', () => {
-    assertTrue(containsDurablePhrase('We always use formal tone'));
-});
-
-runTest('containsDurablePhrase: detects "company policy"', () => {
-    assertTrue(containsDurablePhrase('Company policy requires approval'));
-});
-
-runTest('containsDurablePhrase: returns false for ephemeral content', () => {
-    assertTrue(!containsDurablePhrase('Just this once, skip the greeting'));
-});
-
-runTest('containsPII: detects SSN pattern', () => {
-    assertTrue(containsPII('My SSN is 123-45-6789'));
-});
-
-runTest('containsPII: detects password mention', () => {
-    assertTrue(containsPII('The password is: secret123'));
-});
-
-runTest('containsPII: returns false for safe content', () => {
-    assertTrue(!containsPII('User prefers bullet points'));
-});
-
-// ============================================================================
-// Summary
-// ============================================================================
-
-console.log('\n=== Test Summary ===\n');
-console.log(`Total: ${testsPassed + testsFailed}`);
-console.log(`Passed: ${testsPassed}`);
-console.log(`Failed: ${testsFailed}`);
-
-if (testsFailed > 0) {
-    process.exit(1);
-}
-
-console.log('\n✅ All tests passed!\n');

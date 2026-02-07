@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { AuthProviderFactory } from '../AuthProviderFactory';
 import { IAuthProvider } from '../IAuthProvider';
 import { initializeAuthProviders } from '../initializeProviders';
@@ -61,8 +61,8 @@ describe('Authentication Provider Backward Compatibility', () => {
         audience: 'test-audience',
         jwksUri: 'https://test.provider.com/.well-known/jwks.json',
         validateConfig: () => true,
-        getSigningKey: jest.fn(),
-        extractUserInfo: jest.fn(),
+        getSigningKey: vi.fn(),
+        extractUserInfo: vi.fn(),
         matchesIssuer: (issuer: string) => {
           const normalized = issuer.toLowerCase().replace(/\/$/, '');
           return normalized === 'https://test.provider.com/oauth2';
@@ -88,9 +88,9 @@ describe('Authentication Provider Backward Compatibility', () => {
         audience: 'test',
         jwksUri: 'https://test.provider.com/jwks',
         validateConfig: () => true,
-        getSigningKey: jest.fn(),
-        extractUserInfo: jest.fn(),
-        matchesIssuer: jest.fn((issuer: string): boolean => issuer === 'https://test.provider.com')
+        getSigningKey: vi.fn(),
+        extractUserInfo: vi.fn(),
+        matchesIssuer: vi.fn((issuer: string): boolean => issuer === 'https://test.provider.com')
       } as IAuthProvider;
       
       factory.register(testProvider);
@@ -172,9 +172,9 @@ describe('Authentication Provider Backward Compatibility', () => {
         audience: 'test',
         jwksUri: 'https://test.com/jwks',
         validateConfig: () => false,
-        getSigningKey: jest.fn(),
-        extractUserInfo: jest.fn(),
-        matchesIssuer: jest.fn()
+        getSigningKey: vi.fn(),
+        extractUserInfo: vi.fn(),
+        matchesIssuer: vi.fn()
       } as IAuthProvider;
       
       expect(() => factory.register(invalidProvider)).toThrow();

@@ -10,19 +10,17 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
-    "@types/jest": "^30.0.0",
     "@types/node": "^24.10.11",
-    "jest": "^30.2.0",
     "tsc-alias": "^1.8.16",
-    "ts-jest": "^29.4.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@memberjunction/api-keys-base": "3.4.0",

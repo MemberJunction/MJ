@@ -18,9 +18,9 @@
     "build": "tsc && tsc-alias -f",
     "bundle": "tsc -noEmit && pkgroll --sourcemap --minify",
     "watch": "tsc -w",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@apollo/server": "^4.9.1",
@@ -106,11 +106,8 @@
     "zod": "~3.24.4"
   },
   "devDependencies": {
-    "@jest/globals": "^30.2.0",
-    "@types/jest": "^30.0.0",
-    "jest": "^30.2.0",
     "pkgroll": "2.23.0",
-    "ts-jest": "^29.4.6",
+    "vitest": "^3.1.1",
     "typescript": "^5.9.3"
   },
   "repository": {
