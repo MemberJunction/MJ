@@ -1,5 +1,5 @@
 ---
-folderPath: Path to the folder containing packages (e.g., packages/AI or packages/Actions)
+folderPath: Path to the folder containing packages -- examples: packages/AI or packages/Actions
 ---
 
 # Update Folder-Level README

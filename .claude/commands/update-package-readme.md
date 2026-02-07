@@ -1,5 +1,5 @@
 ---
-packagePath: Path to the package (e.g., packages/AI/Core or packages/MJCore)
+packagePath: Path to the package -- examples: packages/AI/Core or packages/MJCore
 ---
 
 # Update Package README

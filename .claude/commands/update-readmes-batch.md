@@ -1,5 +1,5 @@
 ---
-arguments: Directory to process and optional max parallel count (e.g., "packages/AI" or "packages/AI 5")
+arguments: Directory to process and optional max parallel count -- examples: "packages/AI" or "packages/AI 5"
 ---
 
 # Batch Update Package READMEs
