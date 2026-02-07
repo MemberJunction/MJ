@@ -12,7 +12,7 @@ When creating or editing metadata JSON files, **NEVER** include the following fi
 - **CreatedAt**: System timestamp
 - **UpdatedAt**: System timestamp
 
-These fields will be automatically added/updated when you run `mj-sync push`.
+These fields will be automatically added/updated when you run `mj sync push`.
 
 ### 2. File Naming Conventions
 - **Metadata files**: Must match the filePattern in `.mj-sync.json` (typically `.*.json` for dot-prefixed files)
@@ -147,7 +147,7 @@ metadata/
 1. Create prompt templates in `prompts/templates/`
 2. Create prompt records in `prompts/.prompts.json`
 3. Create agent records in `agents/.agents.json` with related entities
-4. Use `mj-sync push` to sync to database
+4. Use `mj sync push` to sync to database
 5. Test the agent through the MJ system
 
 ### 10. Common Pitfalls to Avoid
@@ -157,13 +157,42 @@ metadata/
 - Don't create agent types - use existing "Loop" type
 - Don't include primaryKey or sync objects in any records
 
-### 11. Testing and Validation
-- Always run `mj-sync push --dry-run` first to preview changes
+### 11. Pushing Metadata with `mj sync push`
+
+#### Command Syntax
+Run from the **repository root** (not from inside `metadata/`):
+```bash
+# Push all metadata
+npx mj sync push --dir=metadata
+
+# Push only specific entity directories (use --include)
+npx mj sync push --dir=metadata --include="prompts"
+
+# Exclude problematic directories (use --exclude)
+npx mj sync push --dir=metadata --exclude="api-application-scopes"
+
+# Multiple patterns (comma-separated)
+npx mj sync push --dir=metadata --include="prompts,agents"
+```
+
+**Important:**
+- The CLI command is `mj sync` (space-separated). NOT `mj-sync` or `mjsync`.
+- `--include` and `--exclude` cannot be used together — pick one.
+- Patterns match on directory basename only (e.g., `"prompts"` matches `metadata/prompts/`).
+- Validation errors in **any** entity directory cause a full rollback. Use `--include` to push only the directories you changed when other directories have pre-existing errors.
+
+#### How `@file:` References Work
+- `@file:` references are **resolved at push time** — the full file content is stored in the database, not the reference string.
+- This means editing a template `.md` file requires a `mj sync push` to update the database. A server restart alone will NOT pick up template file changes.
+- Template files referenced via `@file:` are convenience for version control — the database always holds the resolved content.
+
+### 12. Testing and Validation
+- Always run `mj sync push --dry-run` first to preview changes
 - Check for lookup resolution errors
 - Verify all @file references point to existing files
 - Ensure all required fields are present
 
-### 12. Agent Hierarchy Best Practices
+### 13. Agent Hierarchy Best Practices
 - Top-level agents orchestrate workflows
 - Sub-agents handle specialized tasks
 - Actions are tools for specific operations

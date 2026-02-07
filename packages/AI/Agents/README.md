@@ -2450,6 +2450,8 @@ Flow agents can incorporate AI decision points:
 
 For detailed architecture information, see [agent-architecture.md](./agent-architecture.md).
 
+For multi-tenant memory scoping (notes/examples), see [AGENT_MEMORY_SCOPING.md](./AGENT_MEMORY_SCOPING.md).
+
 ## Contributing
 
 Contributions are welcome! Please see the main MemberJunction [contributing guide](../../../CONTRIBUTING.md).
