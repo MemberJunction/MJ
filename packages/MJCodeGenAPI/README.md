@@ -1,203 +1,136 @@
 # MemberJunction CodeGen API
 
-A specialized API server for handling MemberJunction code generation operations, specifically focused on generating SQL code for entity permissions.
-
-## Overview
-
-The `mj_codegen_api` package provides a lightweight Express-based API server that exposes endpoints for generating SQL code based on MemberJunction entity metadata. It serves as a crucial component in the MemberJunction ecosystem by automating the generation of SQL stored procedures and permission structures for entities.
-
-## Key Features
-
-- **Entity Permission SQL Generation**: Automatically generate SQL stored procedures for entity CRUD operations with proper permissions
-- **Metadata Refresh**: Force metadata refresh before generating SQL to ensure up-to-date entity information
-- **Selective Entity Processing**: Generate SQL for specific entities based on their IDs
-- **Integration with MJ Core**: Deep integration with MemberJunction core components and SQL code generation library
-
-## Installation
-
-### Prerequisites
-
-- Node.js 16+ (18+ recommended)
-- SQL Server database with MemberJunction schema installed
-- Access to MemberJunction core packages
-
-### Setup
-
-1. Clone the repository and navigate to the package directory:
-
-```bash
-cd packages/MJCodeGenAPI
-```
-
-2. Configure environment variables (create a `.env` file in the package directory):
-
-```
-# Server Configuration
-PORT=3999
-
-# Database Configuration (inherited from MemberJunction configuration)
-# These should match your MemberJunction database setup
-MJ_CORE_DATASOURCE_HOST=your_db_host
-MJ_CORE_DATASOURCE_PORT=1433
-MJ_CORE_DATASOURCE_USERNAME=your_db_user
-MJ_CORE_DATASOURCE_PASSWORD=your_db_password
-MJ_CORE_DATASOURCE_DATABASE=your_db_name
-```
-
-3. Install dependencies (from the repository root):
-
-```bash
-npm install
-```
-
-4. Build the project:
-
-```bash
-npm run build
-```
-
-5. Start the API server:
-
-```bash
-npm start
-```
-
-## Configuration
-
-The API server uses the following environment variables:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | API server port | 3999 |
-
-The database configuration is inherited from the MemberJunction codegen library configuration. The server will use the standard MemberJunction database connection settings.
-
-## API Endpoints
-
-### Entity Permissions SQL Generation
-
-#### `POST /api/entity-permissions`
-
-Generate SQL stored procedures for entity permissions. This endpoint refreshes metadata and generates SQL code for the specified entities.
-
-**Request Body:**
-```json
-{
-  "entityIDArray": [1, 2, 3]
-}
-```
-
-**Parameters:**
-- `entityIDArray` (required): Array of entity IDs to generate SQL permissions for
-
-**Response (Success):**
-```json
-{
-  "status": "ok"
-}
-```
-
-**Response (Error):**
-```json
-{
-  "status": "error",
-  "errorMessage": "Error message details"
-}
-```
-
-**Example Usage:**
-```typescript
-import axios from 'axios';
-
-const response = await axios.post('http://localhost:3999/api/entity-permissions', {
-  entityIDArray: [1, 2, 3] // Entity IDs for User, Role, UserRole
-});
-
-if (response.data.status === 'ok') {
-  console.log('Entity permissions updated successfully');
-}
-```
-
-**What it does:**
-1. Validates the request contains a valid `entityIDArray`
-2. Forces a metadata refresh to ensure entity information is up-to-date
-3. Filters entities based on the provided IDs
-4. Generates SQL stored procedures for CRUD operations with proper permissions
-5. Executes the generated SQL directly in the database (does not write files to disk)
-
-**Note**: The current implementation has `writeFiles: false` and `skipExecution: false`, which means:
-- SQL is generated and executed directly in the database
-- No SQL files are written to the filesystem
-- Only permission-related SQL is generated (`onlyPermissions: true`)
-
-## Development
-
-### Running in Development Mode
-
-```bash
-npm run dev
-```
-
-For debugging:
-
-```bash
-npm run dev:debug
-```
-
-### Building
-
-```bash
-npm run build
-```
-
-### Running Tests
-
-```bash
-npm test
-```
-
-## Integration with MemberJunction
-
-This API server is designed to work closely with other MemberJunction packages:
-
-- `@memberjunction/core`: Core MemberJunction functionality
-- `@memberjunction/global`: Shared utilities and types
-- `@memberjunction/core-entities`: Base entity definitions
-- `@memberjunction/codegen-lib`: Code generation library
-- `@memberjunction/sqlserver-dataprovider`: SQL Server data access
+A lightweight Express API server that triggers MemberJunction code generation operations. Provides an HTTP endpoint to initiate the full CodeGen pipeline, generating TypeScript classes, SQL objects, and Angular UI components from database schema metadata.
 
 ## Architecture
 
-The API server is built on top of several key MemberJunction components:
+```mermaid
+graph TD
+    subgraph "MJCodeGenAPI (This Package)"
+        A[Express Server] --> B["/api/run" Endpoint]
+        B --> C[RunCodeGenBase]
+        A --> D[Server Init]
+        D --> E[Config Init]
+        D --> F[DataSource Setup]
+        A --> G[Class Registration Manifests]
+    end
 
-- **Express Server**: Simple HTTP server handling POST requests
-- **MJGlobal ClassFactory**: Dynamic instantiation of code generation classes
-- **SQLCodeGenBase**: Core SQL code generation functionality
-- **Metadata Management**: Automatic refresh before code generation
-- **TypeORM Integration**: Database connectivity through MemberJunction's data layer
+    subgraph "CodeGen Pipeline"
+        C --> H[Schema Analysis]
+        H --> I[Entity Classes<br/>TypeScript]
+        H --> J[SQL Objects<br/>Stored Procs/Views]
+        H --> K[Angular Forms<br/>Components]
+    end
 
-## Use Cases
+    subgraph "Data Layer"
+        L[SQL Server<br/>MJ Schema]
+    end
 
-1. **Database Schema Updates**: Regenerate SQL procedures when entity schemas change
-2. **Permission Management**: Update entity-level CRUD permissions through SQL generation
-3. **CI/CD Integration**: Automate SQL code generation in deployment pipelines
-4. **Development Workflow**: Quick regeneration of SQL procedures during development
+    F --> L
+    C --> L
 
-## Error Handling
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style C fill:#7c5295,stroke:#563a6b,color:#fff
+    style H fill:#b8762f,stroke:#8a5722,color:#fff
+    style I fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style J fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style K fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
 
-The API implements comprehensive error handling:
-- **400 Bad Request**: Invalid request body or missing `entityIDArray`
-- **500 Internal Server Error**: Failed to create code generation instance or SQL generation errors
-- All errors include descriptive messages in the response body
+## Overview
 
-## Notes
+MJCodeGenAPI wraps the `@memberjunction/codegen-lib` package in a simple Express HTTP server, enabling code generation to be triggered remotely. This is useful for automated workflows and CI/CD pipelines.
 
-- This API generates and executes SQL permission procedures directly in the database
-- It specifically generates permission-related SQL only (`onlyPermissions: true`)
-- No SQL files are written to disk in the current implementation
-- Metadata is always refreshed before generation to ensure accuracy
-- The API runs on port 3999 by default (configurable via PORT environment variable)
-- To modify the behavior (e.g., write files, generate full SQL), adjust the parameters in the `generateAndExecuteEntitySQLToSeparateFiles` call
+The server:
+
+1. Initializes the MemberJunction configuration and database connection on startup
+2. Loads class registration manifests (pre-built + supplemental)
+3. Exposes a single `POST /api/run` endpoint that triggers the full CodeGen pipeline
+4. Prevents concurrent execution with a promise-based lock
+
+## Prerequisites
+
+- Node.js 18+
+- SQL Server with MemberJunction schema
+- `mj.config.cjs` configuration file in the repository root
+- Environment variables via `.env` (optional, loaded with dotenv)
+
+## Getting Started
+
+### 1. Configure
+
+Ensure `mj.config.cjs` exists in the repository root with database connection settings.
+
+### 2. Build
+
+```bash
+cd packages/MJCodeGenAPI && npm run build
+```
+
+### 3. Start
+
+```bash
+# Production
+npm start
+
+# Development with hot reload
+npm run dev
+
+# Development with debug port
+npm run dev:debug
+```
+
+The server starts on the port configured by `___codeGenAPIPort` (default: 3999).
+
+## API
+
+### POST /api/run
+
+Triggers a full code generation run. Returns immediately if a run is already in progress (only one run at a time).
+
+**Request:**
+```http
+POST /api/run HTTP/1.1
+Content-Type: application/json
+```
+
+**Response:**
+The endpoint runs code generation asynchronously. The server logs progress to stdout.
+
+## Project Structure
+
+```
+packages/MJCodeGenAPI/
+  src/
+    index.ts              # Express server and /api/run handler
+    config.ts             # Port configuration
+    util.ts               # Server initialization and CodeGen setup
+    generated/            # Class registration manifest
+  package.json
+  tsconfig.json
+```
+
+## Class Registration Manifests
+
+Like MJAPI, MJCodeGenAPI uses dual manifests:
+
+1. **Pre-built manifest** (`@memberjunction/server-bootstrap-lite/mj-class-registrations`): Covers all `@memberjunction/*` packages
+2. **Supplemental manifest** (`src/generated/class-registrations-manifest.ts`): Generated at build time with `--exclude-packages @memberjunction`
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/codegen-lib` | Code generation engine |
+| `@memberjunction/core` | Core MJ functionality |
+| `@memberjunction/core-entities` | Entity types |
+| `@memberjunction/server-bootstrap-lite` | Lightweight server init with class manifests |
+| `@memberjunction/sqlserver-dataprovider` | Database connectivity |
+| `@memberjunction/global` | Class factory |
+| `express` | HTTP server framework |
+| `dotenv` | Environment variable loading |
+| `rxjs` | Observable patterns for init |
 
 ## License
 
