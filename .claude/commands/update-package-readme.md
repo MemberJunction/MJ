@@ -50,22 +50,35 @@ The documentation model for MemberJunction follows a **hub-and-spoke** pattern:
    ```
    Incorporate relevant development guidelines if present.
 
-5. **Check for Existing docs/ Folder**:
+5. **Check Parent Directory for Existing Docs**:
+   ```
+   Read {{packagePath}}/../CLAUDE.md
+   Read {{packagePath}}/../README.md
+   ```
+   This is important for avoiding content duplication. If the parent directory already has extensive documentation (philosophy guides, architecture docs, pattern documentation), the package README should:
+   - **Reference the parent docs** rather than duplicating that content
+   - **Focus on package-specific details** (API reference, usage examples, class hierarchy)
+   - **Link to the parent** for conceptual/philosophical content
+
+   Example: `packages/Actions/CLAUDE.md` already covers the Actions philosophy in depth, so `packages/Actions/Engine/README.md` should link to it rather than re-explaining when to use Actions.
+
+6. **Check for Existing docs/ Folder**:
    ```
    Glob: {{packagePath}}/docs/**/*.md
    ```
    If guides already exist, review and update them alongside the README.
 
-6. **Determine Documentation Strategy**:
+7. **Determine Documentation Strategy**:
    Choose one of these based on the package's **conceptual richness** (not just file count):
 
-   - **Single README** — Package has a straightforward, single-purpose API (e.g., a single provider, a thin wrapper). Even with many files, if the concepts are simple, a README alone suffices.
+   - **Single README** — Package has a straightforward, single-purpose API (a single provider, a thin wrapper). Even with many files, if the concepts are simple, a README alone suffices. Also prefer single README when the parent directory already has extensive docs covering the conceptual depth — the package README should complement, not duplicate.
 
-   - **Hub-and-Spoke (README + docs/)** — Package has **multiple distinct concepts** that each deserve deep treatment. Triggers:
-     - Package has 2+ major subsystems or patterns (e.g., virtual entities AND IS-A relationships in MJCore)
-     - Package has complex lifecycle or orchestration (e.g., CodeGen pipeline stages)
-     - Package serves as a framework that others extend (e.g., provider base classes)
+   - **Hub-and-Spoke (README + docs/)** — Package has **multiple distinct concepts** that each deserve deep treatment AND the parent directory does NOT already cover them. Triggers:
+     - Package has 2+ major subsystems or patterns (virtual entities AND IS-A relationships in MJCore)
+     - Package has complex lifecycle or orchestration (CodeGen pipeline stages)
+     - Package serves as a framework that others extend (provider base classes)
      - Package has concepts that would make the README >300 lines if fully explained inline
+     - Parent directory docs do NOT already cover these concepts
 
 ### Phase 2: Generate README Structure
 
