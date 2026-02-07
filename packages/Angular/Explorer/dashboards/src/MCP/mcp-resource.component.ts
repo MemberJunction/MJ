@@ -7,7 +7,7 @@
  * @module MCP Resource
  */
 
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
@@ -20,6 +20,7 @@ import { RegisterClass } from '@memberjunction/global';
  */
 @RegisterClass(BaseResourceComponent, 'MCPResource')
 @Component({
+  standalone: false,
     selector: 'mj-mcp-resource',
     template: `
         <mj-mcp-dashboard></mj-mcp-dashboard>
@@ -31,7 +32,13 @@ import { RegisterClass } from '@memberjunction/global';
         }
     `]
 })
-export class MCPResourceComponent extends BaseResourceComponent {
+export class MCPResourceComponent extends BaseResourceComponent implements OnInit {
+
+    ngOnInit(): void {
+        // Signal that the resource has finished loading
+        // This is required for the shell's loading screen to dismiss
+        this.NotifyLoadComplete();
+    }
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         return 'MCP';
@@ -40,11 +47,4 @@ export class MCPResourceComponent extends BaseResourceComponent {
     async GetResourceIconClass(data: ResourceData): Promise<string> {
         return 'fa-solid fa-plug-circle-bolt';
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPResource(): void {
-    // Ensures the component is not tree-shaken
 }

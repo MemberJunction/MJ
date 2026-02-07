@@ -133,6 +133,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-data-grid',
   templateUrl: './entity-data-grid.component.html',
   styleUrls: ['./entity-data-grid.component.css'],

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'User Notifications') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-usernotification-form',
     templateUrl: './usernotification.form.component.html'
 })

@@ -9,6 +9,7 @@ export interface DashboardPreferencesResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-dashboard-preferences-dialog',
   templateUrl: './dashboard-preferences-dialog.component.html',
   styleUrls: ['./dashboard-preferences-dialog.component.css']

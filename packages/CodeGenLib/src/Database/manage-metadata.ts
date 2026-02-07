@@ -1,4 +1,4 @@
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { configInfo, currentWorkingDirectory, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { ApplicationEntity } from "@memberjunction/core-entities";

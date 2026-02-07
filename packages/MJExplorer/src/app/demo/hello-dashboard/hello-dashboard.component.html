@@ -1,84 +1,85 @@
 <div class="hello-dashboard-container">
-  
+
   <!-- State Update Notification -->
-  <div class="state-notification" 
-       [class.visible]="showStateUpdateNotification"
-       [style.background]="getLightColor(themeColor, 0.15)"
-       [style.border-color]="getLightColor(themeColor, 0.4)">
+  <div class="state-notification"
+    [class.visible]="showStateUpdateNotification"
+    [style.background]="getLightColor(themeColor, 0.15)"
+    [style.border-color]="getLightColor(themeColor, 0.4)">
     <i class="fa-solid fa-check-circle" [style.color]="themeColor"></i>
     <span>User state saved to container!</span>
   </div>
-  
-  
-  <!-- Loading Indicator -->
-  <div class="loading-container" *ngIf="isLoading">
-    <div class="loading-spinner">
-      <i class="fa-solid fa-spinner fa-spin"></i>
-    </div>
-    <div class="loading-text">Loading dashboard...</div>
-  </div>
 
-  <div class="greeting-box" 
-       *ngIf="!isLoading"
-       [style.transform]="'translate(' + boxPosition.x + 'px, ' + boxPosition.y + 'px)'"
-       [style.border-color]="getLightColor(themeColor, 0.3)">
-    <h1 [style.color]="textColor">Hello Dashboard</h1>
-    <div class="featured-entity" 
-         [style.background]="getLightColor(themeColor, 0.08)"
-         [style.border-color]="getLightColor(themeColor, 0.25)">
-      <div class="entity-info">
-        <i class="fa-solid fa-database" [style.color]="themeColor"></i>
-        <span>Featured Entity: <strong [style.color]="themeColor">{{ featuredEntity }}</strong></span>
+
+  <!-- Loading Indicator -->
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-spinner">
+        <i class="fa-solid fa-spinner fa-spin"></i>
       </div>
-      <button class="open-button" 
-              (click)="openFeaturedEntity()" 
-              [disabled]="!featuredEntityObject"
-              [style.background]="themeColor"
-              title="Open Entity Record">
-        <i class="fa-solid fa-external-link-alt"></i>
-      </button>
+      <div class="loading-text">Loading dashboard...</div>
     </div>
-    <div class="controls">
-      <button class="color-button" 
-              (click)="changeColor()"
-              [style.background]="'linear-gradient(45deg, ' + themeColor + ', ' + themeColor + 'dd)'">
-        <i class="fa-solid fa-palette"></i> Change Color
-      </button>
-      
-      
-      <div class="speed-section">
-        <div class="speed-label">
-          <i class="fa-solid fa-gauge-high" [style.color]="themeColor"></i>
-          Animation Speed
-          <span class="keyboard-hint">(Use +/- keys)</span>
+  }
+
+  @if (!isLoading) {
+    <div class="greeting-box"
+      [style.transform]="'translate(' + boxPosition.x + 'px, ' + boxPosition.y + 'px)'"
+      [style.border-color]="getLightColor(themeColor, 0.3)">
+      <h1 [style.color]="textColor">Hello Dashboard</h1>
+      <div class="featured-entity"
+        [style.background]="getLightColor(themeColor, 0.08)"
+        [style.border-color]="getLightColor(themeColor, 0.25)">
+        <div class="entity-info">
+          <i class="fa-solid fa-database" [style.color]="themeColor"></i>
+          <span>Featured Entity: <strong [style.color]="themeColor">{{ featuredEntity }}</strong></span>
         </div>
-        <div class="speed-controls">
-          <button class="speed-button" 
-                  (click)="slowDown()" 
-                  [disabled]="speed <= 0.25"
-                  [style.border-color]="speed > 0.25 ? getLightColor(themeColor, 0.6) : null"
-                  [style.color]="speed > 0.25 ? themeColor : null"
-                  [style.background]="speed > 0.25 ? getLightColor(themeColor, 0.1) : null"
-                  title="Slow Down ({{ (speed - 0.25).toFixed(2) }}x)">
-            <i class="fa-solid fa-minus"></i>
-          </button>
-          <div class="speed-display" 
-               [style.border-color]="getLightColor(themeColor, 0.3)"
-               [style.background]="getLightColor(themeColor, 0.05)">
-            <span class="speed-value" [style.color]="themeColor">{{ speed.toFixed(2) }}x</span>
-            <span class="speed-description">{{ getSpeedDescription() }}</span>
+        <button class="open-button"
+          (click)="openFeaturedEntity()"
+          [disabled]="!featuredEntityObject"
+          [style.background]="themeColor"
+          title="Open Entity Record">
+          <i class="fa-solid fa-external-link-alt"></i>
+        </button>
+      </div>
+      <div class="controls">
+        <button class="color-button"
+          (click)="changeColor()"
+          [style.background]="'linear-gradient(45deg, ' + themeColor + ', ' + themeColor + 'dd)'">
+          <i class="fa-solid fa-palette"></i> Change Color
+        </button>
+        <div class="speed-section">
+          <div class="speed-label">
+            <i class="fa-solid fa-gauge-high" [style.color]="themeColor"></i>
+            Animation Speed
+            <span class="keyboard-hint">(Use +/- keys)</span>
           </div>
-          <button class="speed-button" 
-                  (click)="speedUp()" 
-                  [disabled]="speed >= 4"
-                  [style.border-color]="speed < 4 ? getLightColor(themeColor, 0.6) : null"
-                  [style.color]="speed < 4 ? themeColor : null"
-                  [style.background]="speed < 4 ? getLightColor(themeColor, 0.1) : null"
-                  title="Speed Up ({{ (speed + 0.25).toFixed(2) }}x)">
-            <i class="fa-solid fa-plus"></i>
-          </button>
+          <div class="speed-controls">
+            <button class="speed-button"
+              (click)="slowDown()"
+              [disabled]="speed <= 0.25"
+              [style.border-color]="speed > 0.25 ? getLightColor(themeColor, 0.6) : null"
+              [style.color]="speed > 0.25 ? themeColor : null"
+              [style.background]="speed > 0.25 ? getLightColor(themeColor, 0.1) : null"
+              title="Slow Down ({{ (speed - 0.25).toFixed(2) }}x)">
+              <i class="fa-solid fa-minus"></i>
+            </button>
+            <div class="speed-display"
+              [style.border-color]="getLightColor(themeColor, 0.3)"
+              [style.background]="getLightColor(themeColor, 0.05)">
+              <span class="speed-value" [style.color]="themeColor">{{ speed.toFixed(2) }}x</span>
+              <span class="speed-description">{{ getSpeedDescription() }}</span>
+            </div>
+            <button class="speed-button"
+              (click)="speedUp()"
+              [disabled]="speed >= 4"
+              [style.border-color]="speed < 4 ? getLightColor(themeColor, 0.6) : null"
+              [style.color]="speed < 4 ? themeColor : null"
+              [style.background]="speed < 4 ? getLightColor(themeColor, 0.1) : null"
+              title="Speed Up ({{ (speed + 0.25).toFixed(2) }}x)">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  }
 </div>

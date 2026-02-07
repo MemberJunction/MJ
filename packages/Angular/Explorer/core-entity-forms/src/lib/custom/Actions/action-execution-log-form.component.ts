@@ -15,6 +15,7 @@ interface ActionParameter {
 
 @RegisterClass(BaseFormComponent, 'Action Execution Logs')
 @Component({
+  standalone: false,
     selector: 'mj-action-execution-log-form',
     templateUrl: './action-execution-log-form.component.html',
     styleUrls: ['./action-execution-log-form.component.css']
@@ -111,7 +112,6 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
             this.isLoadingUser = false;
         }
     }
-
 
     private formatJSONFields() {
         const parseOptions: ParseJSONOptions = {
@@ -278,10 +278,3 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         }
     }
 }
-
-
-// Loader function for ActionExecutionLogFormComponentExtended
-export function LoadActionExecutionLogFormComponentExtended() {
-    // This function is called to ensure the form is loaded
-}
-

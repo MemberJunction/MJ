@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/ai-prompts",
-  "version": "3.3.0",
+  "type": "module",
+  "version": "3.4.0",
   "description": "MemberJunction: AI Prompt Execution and Management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,33 +10,38 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc && tsc-alias -f",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "3.3.0",
-    "@memberjunction/ai-core-plus": "3.3.0",
-    "@memberjunction/ai-engine-base": "3.3.0",
-    "@memberjunction/aiengine": "3.3.0",
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/core-entities": "3.3.0",
-    "@memberjunction/credentials": "3.3.0",
-    "@memberjunction/global": "3.3.0",
-    "@memberjunction/templates": "3.3.0",
-    "@memberjunction/templates-base-types": "3.3.0",
+    "@memberjunction/ai": "3.4.0",
+    "@memberjunction/ai-core-plus": "3.4.0",
+    "@memberjunction/ai-engine-base": "3.4.0",
+    "@memberjunction/aiengine": "3.4.0",
+    "@memberjunction/core": "3.4.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/credentials": "3.4.0",
+    "@memberjunction/global": "3.4.0",
+    "@memberjunction/templates": "3.4.0",
+    "@memberjunction/templates-base-types": "3.4.0",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
-    "dotenv": "^16.4.1",
+    "dotenv": "^17.2.4",
     "json5": "^2.2.3",
-    "rxjs": "^7.8.1",
-    "uuid": "^10.0.0"
+    "rxjs": "^7.8.2",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
+    "@types/jest": "^30.0.0",
+    "@types/node": "24.10.11",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

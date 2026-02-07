@@ -106,7 +106,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityActionFilters')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters','EntityActionID')"
                 [NewRecordValues]="NewRecordValues('Entity Action Filters')"
@@ -116,6 +117,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entity Action Invocations Section -->
@@ -128,7 +130,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityActionInvocations')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Invocations','EntityActionID')"
                 [NewRecordValues]="NewRecordValues('Entity Action Invocations')"
@@ -138,6 +141,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entity Action Params Section -->
@@ -150,7 +154,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityActionParams')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Params','EntityActionID')"
                 [NewRecordValues]="NewRecordValues('Entity Action Params')"
@@ -160,6 +165,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

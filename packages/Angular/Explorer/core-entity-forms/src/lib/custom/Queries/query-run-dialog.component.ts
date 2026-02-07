@@ -26,6 +26,7 @@ interface ParameterPair {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-query-run-dialog',
     templateUrl: './query-run-dialog.component.html',
     styleUrls: ['./query-run-dialog.component.css']

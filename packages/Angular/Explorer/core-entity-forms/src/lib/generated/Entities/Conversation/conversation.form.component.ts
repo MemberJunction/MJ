@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Conversations') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-conversation-form',
     templateUrl: './conversation.form.component.html'
 })
@@ -18,7 +19,7 @@ export class ConversationFormComponent extends BaseFormComponent {
             { sectionKey: 'conversationCore', sectionName: 'Conversation Core', isExpanded: true },
             { sectionKey: 'participantsReferences', sectionName: 'Participants & References', isExpanded: true },
             { sectionKey: 'contextualScope', sectionName: 'Contextual Scope', isExpanded: false },
-            { sectionKey: 'testing', sectionName: 'Testing', isExpanded: false },
+            { sectionKey: 'testRunDetails', sectionName: 'Test Run Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'conversationDetails', sectionName: 'Conversation Details', isExpanded: false },
             { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },

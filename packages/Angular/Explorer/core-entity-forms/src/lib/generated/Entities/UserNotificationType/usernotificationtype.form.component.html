@@ -188,7 +188,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userNotifications')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','NotificationTypeID')"
                 [NewRecordValues]="NewRecordValues('User Notifications')"
@@ -198,6 +199,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: User Notification Preferences Section -->
@@ -210,7 +212,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJUserNotificationPreferences')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Preferences','NotificationTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: User Notification Preferences')"
@@ -220,6 +223,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

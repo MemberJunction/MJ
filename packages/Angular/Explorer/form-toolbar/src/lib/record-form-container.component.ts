@@ -11,44 +11,46 @@ import { BaseFormComponent, FormWidthMode } from '@memberjunction/ng-base-forms'
  * - [slot="after-panels"]: Related entity sections displayed after field panels
  */
 @Component({
+    standalone: false,
     selector: 'mj-record-form-container',
     encapsulation: ViewEncapsulation.None,
     template: `
         <div class="record-form-container">
-            <form *ngIf="record" class="record-form" #formElement="ngForm">
-                <mj-form-toolbar [form]="formComponent">
-                    <mj-form-section-controls
-                        toolbar-additional-controls
-                        [visibleCount]="visibleCount"
-                        [totalCount]="totalCount"
-                        [expandedCount]="expandedCount"
-                        [searchFilter]="formComponent.searchFilter"
-                        [showEmptyFields]="formComponent.showEmptyFields"
-                        [widthMode]="widthMode"
-                        [hasCustomOrder]="hasCustomOrder"
-                        (expandAll)="onExpandAll()"
-                        (collapseAll)="onCollapseAll()"
-                        (filterChange)="onFilterChange($event)"
-                        (showEmptyFieldsChange)="formComponent.showEmptyFields = $event"
-                        (widthModeChange)="onWidthModeChange($event)"
-                        (resetOrder)="onResetOrder()">
-                    </mj-form-section-controls>
-                </mj-form-toolbar>
-
-                <div class="forms-panel-container-outer">
-                    <div class="form-panels-container" [class.full-width]="widthMode === 'full-width'">
-                        <div class="related-entity-grid">
-                            <ng-content select="[slot='before-panels']"></ng-content>
-                        </div>
-                        <ng-content select="[slot='field-panels']"></ng-content>
-                        <div class="related-entity-grid">
-                            <ng-content select="[slot='after-panels']"></ng-content>
-                        </div>
-                    </div>
+          @if (record) {
+            <form class="record-form" #formElement="ngForm">
+              <mj-form-toolbar [form]="formComponent">
+                <mj-form-section-controls
+                  toolbar-additional-controls
+                  [visibleCount]="visibleCount"
+                  [totalCount]="totalCount"
+                  [expandedCount]="expandedCount"
+                  [searchFilter]="formComponent.searchFilter"
+                  [showEmptyFields]="formComponent.showEmptyFields"
+                  [widthMode]="widthMode"
+                  [hasCustomOrder]="hasCustomOrder"
+                  (expandAll)="onExpandAll()"
+                  (collapseAll)="onCollapseAll()"
+                  (filterChange)="onFilterChange($event)"
+                  (showEmptyFieldsChange)="formComponent.showEmptyFields = $event"
+                  (widthModeChange)="onWidthModeChange($event)"
+                  (resetOrder)="onResetOrder()">
+                </mj-form-section-controls>
+              </mj-form-toolbar>
+              <div class="forms-panel-container-outer">
+                <div class="form-panels-container" [class.full-width]="widthMode === 'full-width'">
+                  <div class="related-entity-grid">
+                    <ng-content select="[slot='before-panels']"></ng-content>
+                  </div>
+                  <ng-content select="[slot='field-panels']"></ng-content>
+                  <div class="related-entity-grid">
+                    <ng-content select="[slot='after-panels']"></ng-content>
+                  </div>
                 </div>
+              </div>
             </form>
+          }
         </div>
-    `,
+        `,
     styleUrls: ['./record-form-container.component.css']
 })
 export class RecordFormContainerComponent implements AfterViewChecked {

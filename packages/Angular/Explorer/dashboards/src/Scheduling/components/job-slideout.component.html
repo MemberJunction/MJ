@@ -1,168 +1,190 @@
 <div class="slideout-container">
-    <!-- Header -->
-    <div class="slideout-header">
-        <div class="slideout-title">
-            <i [class]="Mode === 'create' ? 'fa-solid fa-plus-circle' : 'fa-solid fa-pen-to-square'"></i>
-            <span>{{Title}}</span>
+  <!-- Header -->
+  <div class="slideout-header">
+    <div class="slideout-title">
+      <i [class]="Mode === 'create' ? 'fa-solid fa-plus-circle' : 'fa-solid fa-pen-to-square'"></i>
+      <span>{{Title}}</span>
+    </div>
+    <button class="close-btn" (click)="OnClose()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+
+  <!-- Body -->
+  <div class="slideout-body">
+    <!-- Error -->
+    @if (ErrorMessage) {
+      <div class="error-banner">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span>{{ErrorMessage}}</span>
+      </div>
+    }
+
+    <!-- Form -->
+    <div class="form-section">
+      <div class="section-title">General</div>
+
+      <div class="form-group">
+        <label class="form-label">Name <span class="required">*</span></label>
+        <input class="form-input" type="text" [(ngModel)]="Name" placeholder="e.g., Daily Data Sync" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-textarea" [(ngModel)]="Description" rows="3"
+        placeholder="What does this job do?"></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Job Type <span class="required">*</span></label>
+          <select class="form-input" [(ngModel)]="JobTypeID">
+            @for (t of JobTypes; track t) {
+              <option [value]="t.id">{{t.name}}</option>
+            }
+          </select>
         </div>
-        <button class="close-btn" (click)="OnClose()">
-            <i class="fa-solid fa-xmark"></i>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-input" [(ngModel)]="Status">
+            @for (s of StatusOptions; track s) {
+              <option [value]="s">{{s}}</option>
+            }
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-title">Schedule</div>
+
+      <div class="form-group">
+        <label class="form-label">Cron Expression <span class="required">*</span></label>
+        <input class="form-input mono" type="text" [(ngModel)]="CronExpression"
+          placeholder="0 */15 * * * *" />
+        <div class="form-hint">e.g., 0 */15 * * * * (every 15 minutes)</div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Timezone</label>
+          <select class="form-input" [(ngModel)]="Timezone">
+            @for (tz of TimezoneOptions; track tz) {
+              <option [value]="tz">{{tz}}</option>
+            }
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Concurrency</label>
+          <select class="form-input" [(ngModel)]="ConcurrencyMode">
+            @for (c of ConcurrencyOptions; track c) {
+              <option [value]="c">{{c}}</option>
+            }
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-title">Configuration</div>
+      <div class="form-group">
+        <label class="form-label">Configuration JSON</label>
+        <div class="code-editor-wrapper">
+          <mj-code-editor
+            [value]="Configuration"
+            [language]="'json'"
+            [lineWrapping]="true"
+            [placeholder]="'{ }'"
+            (change)="OnConfigurationChange($event)">
+          </mj-code-editor>
+        </div>
+        <div class="form-hint">Optional JSON configuration for the job type plugin</div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-title">Notifications</div>
+      <div class="form-row checkboxes">
+        <label class="checkbox-label">
+          <input type="checkbox" [(ngModel)]="NotifyOnSuccess" />
+          <span>Notify on success</span>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" [(ngModel)]="NotifyOnFailure" />
+          <span>Notify on failure</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Job Stats (Edit Mode) -->
+    @if (Mode === 'edit' && Job) {
+      <div class="form-section">
+        <div class="section-title">Statistics</div>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-label">Total Runs</span>
+            <span class="stat-value">{{Job.totalRuns}}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Success</span>
+            <span class="stat-value success">{{Job.successCount}}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Failures</span>
+            <span class="stat-value failure">{{Job.failureCount}}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Created</span>
+            <span class="stat-value">{{Job.createdAt | date:'short'}}</span>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Footer -->
+  <div class="slideout-footer">
+    <div class="footer-left">
+      @if (Mode === 'edit') {
+        <button class="delete-btn" (click)="ShowDeleteConfirm = true"
+          [disabled]="IsDeleting">
+          <i class="fa-solid fa-trash-can"></i> Delete
         </button>
+      }
     </div>
-
-    <!-- Body -->
-    <div class="slideout-body">
-        <!-- Error -->
-        <div class="error-banner" *ngIf="ErrorMessage">
-            <i class="fa-solid fa-circle-exclamation"></i>
-            <span>{{ErrorMessage}}</span>
-        </div>
-
-        <!-- Form -->
-        <div class="form-section">
-            <div class="section-title">General</div>
-
-            <div class="form-group">
-                <label class="form-label">Name <span class="required">*</span></label>
-                <input class="form-input" type="text" [(ngModel)]="Name" placeholder="e.g., Daily Data Sync" />
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Description</label>
-                <textarea class="form-textarea" [(ngModel)]="Description" rows="3"
-                          placeholder="What does this job do?"></textarea>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Job Type <span class="required">*</span></label>
-                    <select class="form-input" [(ngModel)]="JobTypeID">
-                        <option *ngFor="let t of JobTypes" [value]="t.id">{{t.name}}</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Status</label>
-                    <select class="form-input" [(ngModel)]="Status">
-                        <option *ngFor="let s of StatusOptions" [value]="s">{{s}}</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <div class="section-title">Schedule</div>
-
-            <div class="form-group">
-                <label class="form-label">Cron Expression <span class="required">*</span></label>
-                <input class="form-input mono" type="text" [(ngModel)]="CronExpression"
-                       placeholder="0 */15 * * * *" />
-                <div class="form-hint">e.g., 0 */15 * * * * (every 15 minutes)</div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Timezone</label>
-                    <select class="form-input" [(ngModel)]="Timezone">
-                        <option *ngFor="let tz of TimezoneOptions" [value]="tz">{{tz}}</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Concurrency</label>
-                    <select class="form-input" [(ngModel)]="ConcurrencyMode">
-                        <option *ngFor="let c of ConcurrencyOptions" [value]="c">{{c}}</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <div class="section-title">Configuration</div>
-            <div class="form-group">
-                <label class="form-label">Configuration JSON</label>
-                <div class="code-editor-wrapper">
-                    <mj-code-editor
-                        [value]="Configuration"
-                        [language]="'json'"
-                        [lineWrapping]="true"
-                        [placeholder]="'{ }'"
-                        (change)="OnConfigurationChange($event)">
-                    </mj-code-editor>
-                </div>
-                <div class="form-hint">Optional JSON configuration for the job type plugin</div>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <div class="section-title">Notifications</div>
-            <div class="form-row checkboxes">
-                <label class="checkbox-label">
-                    <input type="checkbox" [(ngModel)]="NotifyOnSuccess" />
-                    <span>Notify on success</span>
-                </label>
-                <label class="checkbox-label">
-                    <input type="checkbox" [(ngModel)]="NotifyOnFailure" />
-                    <span>Notify on failure</span>
-                </label>
-            </div>
-        </div>
-
-        <!-- Job Stats (Edit Mode) -->
-        <div class="form-section" *ngIf="Mode === 'edit' && Job">
-            <div class="section-title">Statistics</div>
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <span class="stat-label">Total Runs</span>
-                    <span class="stat-value">{{Job.totalRuns}}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Success</span>
-                    <span class="stat-value success">{{Job.successCount}}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Failures</span>
-                    <span class="stat-value failure">{{Job.failureCount}}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Created</span>
-                    <span class="stat-value">{{Job.createdAt | date:'short'}}</span>
-                </div>
-            </div>
-        </div>
+    <div class="footer-right">
+      <button class="cancel-btn" (click)="OnClose()">Cancel</button>
+      <button class="save-btn" (click)="Save()" [disabled]="!IsValid || IsSaving">
+        @if (IsSaving) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        }
+        @if (!IsSaving) {
+          <i class="fa-solid fa-check"></i>
+        }
+        {{Mode === 'create' ? 'Create Job' : 'Save Changes'}}
+      </button>
     </div>
+  </div>
 
-    <!-- Footer -->
-    <div class="slideout-footer">
-        <div class="footer-left">
-            <button *ngIf="Mode === 'edit'" class="delete-btn" (click)="ShowDeleteConfirm = true"
-                    [disabled]="IsDeleting">
-                <i class="fa-solid fa-trash-can"></i> Delete
-            </button>
+  <!-- Delete Confirmation -->
+  @if (ShowDeleteConfirm) {
+    <div class="confirm-overlay">
+      <div class="confirm-dialog">
+        <div class="confirm-icon">
+          <i class="fa-solid fa-triangle-exclamation"></i>
         </div>
-        <div class="footer-right">
-            <button class="cancel-btn" (click)="OnClose()">Cancel</button>
-            <button class="save-btn" (click)="Save()" [disabled]="!IsValid || IsSaving">
-                <i *ngIf="IsSaving" class="fa-solid fa-spinner fa-spin"></i>
-                <i *ngIf="!IsSaving" class="fa-solid fa-check"></i>
-                {{Mode === 'create' ? 'Create Job' : 'Save Changes'}}
-            </button>
+        <h3>Delete Job</h3>
+        <p>Are you sure you want to delete "{{Name}}"? This action cannot be undone.</p>
+        <div class="confirm-actions">
+          <button class="delete-confirm-btn" (click)="Delete()" [disabled]="IsDeleting">
+            @if (IsDeleting) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+            }
+            Delete
+          </button>
+          <button class="cancel-btn" (click)="ShowDeleteConfirm = false">Cancel</button>
         </div>
+      </div>
     </div>
-
-    <!-- Delete Confirmation -->
-    <div class="confirm-overlay" *ngIf="ShowDeleteConfirm">
-        <div class="confirm-dialog">
-            <div class="confirm-icon">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-            </div>
-            <h3>Delete Job</h3>
-            <p>Are you sure you want to delete "{{Name}}"? This action cannot be undone.</p>
-            <div class="confirm-actions">
-                <button class="delete-confirm-btn" (click)="Delete()" [disabled]="IsDeleting">
-                    <i *ngIf="IsDeleting" class="fa-solid fa-spinner fa-spin"></i>
-                    Delete
-                </button>
-                <button class="cancel-btn" (click)="ShowDeleteConfirm = false">Cancel</button>
-            </div>
-        </div>
-    </div>
+  }
 </div>

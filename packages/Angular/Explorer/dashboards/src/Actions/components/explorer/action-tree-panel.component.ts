@@ -24,6 +24,7 @@ export interface CategoryTreeNode {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-action-tree-panel',
   templateUrl: './action-tree-panel.component.html',
   styleUrls: ['./action-tree-panel.component.css'],

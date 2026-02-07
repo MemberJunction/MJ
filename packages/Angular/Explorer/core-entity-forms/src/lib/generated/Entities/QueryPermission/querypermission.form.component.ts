@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Query Permissions') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-querypermission-form',
     templateUrl: './querypermission.form.component.html'
 })

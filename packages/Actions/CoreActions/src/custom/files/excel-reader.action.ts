@@ -96,7 +96,7 @@ export class ExcelReaderAction extends BaseFileHandlerAction {
 
             // Read Excel file
             const workbook = new ExcelJS.Workbook();
-            await workbook.xlsx.load(excelBuffer);
+            await workbook.xlsx.load(excelBuffer as unknown as ArrayBuffer);
 
             // Get the target worksheet
             let worksheet: ExcelJS.Worksheet;
@@ -332,11 +332,4 @@ export class ExcelReaderAction extends BaseFileHandlerAction {
         }
         return result;
     }
-}
-
-/**
- * Loader function to ensure the ExcelReaderAction class is included in the bundle
- */
-export function LoadExcelReaderAction() {
-    // Stub function to prevent tree shaking
 }

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Action Params') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-entityactionparam-form',
     templateUrl: './entityactionparam.form.component.html'
 })
@@ -16,6 +17,7 @@ export class EntityActionParamFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identifierRelationships', sectionName: 'Identifier & Relationships', isExpanded: true },
             { sectionKey: 'parameterDefinition', sectionName: 'Parameter Definition', isExpanded: true },
+            { sectionKey: 'actionDetails', sectionName: 'Action Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

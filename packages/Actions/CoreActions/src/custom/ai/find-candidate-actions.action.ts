@@ -213,10 +213,3 @@ export class FindBestActionAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the FindBestActionAction class is included in the bundle
- */
-export function LoadFindBestActionAction() {
-    // Stub function to prevent tree shaking
-}

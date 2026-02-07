@@ -10,6 +10,7 @@ import { TemplateEngineBase } from '@memberjunction/templates-base-types';
  * Component for previewing in the UI what a communication will look like when sent using a specific entity and parameters for running a view that drive a dataset against a given template
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-communications-preview',
   templateUrl: './preview.component.html',
   styleUrls: ['./preview.component.css']

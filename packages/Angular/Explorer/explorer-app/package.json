@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-app",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "MemberJunction Explorer Application Shell - Complete branded entry point for Explorer-style applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,24 +20,24 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/ng-auth-services": "3.3.0",
-    "@memberjunction/ng-bootstrap": "3.3.0",
-    "@memberjunction/ng-explorer-core": "3.3.0",
-    "@memberjunction/ng-workspace-initializer": "3.3.0"
+    "@memberjunction/core": "3.4.0",
+    "@memberjunction/ng-auth-services": "3.4.0",
+    "@memberjunction/ng-bootstrap": "3.4.0",
+    "@memberjunction/ng-explorer-core": "3.4.0",
+    "@memberjunction/ng-workspace-initializer": "3.4.0"
   },
   "peerDependencies": {
-    "@angular/common": "^18.0.0",
-    "@angular/core": "^18.0.0",
-    "@angular/router": "^18.0.0",
-    "rxjs": "^7.8.1"
+    "@angular/common": "^21.0.0",
+    "@angular/core": "^21.0.0",
+    "@angular/router": "^21.0.0",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@angular/common": "^18.2.13",
-    "@angular/core": "^18.2.13",
-    "@angular/compiler": "^18.2.13",
-    "@angular/compiler-cli": "^18.2.13",
-    "typescript": "~5.5.4"
+    "@angular/common": "^21.1.3",
+    "@angular/core": "^21.1.3",
+    "@angular/compiler": "^21.1.3",
+    "@angular/compiler-cli": "^21.1.3",
+    "typescript": "~5.9.3"
   },
   "files": [
     "dist/**/*"

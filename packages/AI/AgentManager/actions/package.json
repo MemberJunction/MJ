@@ -1,11 +1,12 @@
 {
   "name": "@memberjunction/ai-agent-manager-actions",
-  "version": "3.3.0",
+  "type": "module",
+  "version": "3.4.0",
   "description": "Agent Management actions for creating and managing AI agents in MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf dist",
     "prepublishOnly": "npm run build"
@@ -19,19 +20,19 @@
   "author": "MemberJunction",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "3.3.0",
-    "@memberjunction/actions-base": "3.3.0",
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/core-entities": "3.3.0",
-    "@memberjunction/global": "3.3.0",
-    "@memberjunction/ai-agent-manager": "3.3.0",
-    "@memberjunction/ai-core-plus": "3.3.0",
-    "@memberjunction/ai-engine-base": "3.3.0"
+    "@memberjunction/actions": "3.4.0",
+    "@memberjunction/actions-base": "3.4.0",
+    "@memberjunction/core": "3.4.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/global": "3.4.0",
+    "@memberjunction/ai-agent-manager": "3.4.0",
+    "@memberjunction/ai-core-plus": "3.4.0",
+    "@memberjunction/ai-engine-base": "3.4.0"
   },
   "devDependencies": {
-    "@types/node": "^18.11.0",
-    "rimraf": "^5.0.10",
-    "typescript": "^5.0.0"
+    "@types/node": "^24.10.11",
+    "rimraf": "^6.1.2",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

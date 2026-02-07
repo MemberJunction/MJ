@@ -132,7 +132,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('contentItems')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Content Items','ContentSourceID')"
                 [NewRecordValues]="NewRecordValues('Content Items')"
@@ -142,6 +143,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Content Process Runs Section -->
@@ -154,7 +156,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('contentProcessRuns')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Content Process Runs','SourceID')"
                 [NewRecordValues]="NewRecordValues('Content Process Runs')"
@@ -164,6 +167,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Content Source Params Section -->
@@ -176,7 +180,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('contentSourceParams')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Content Source Params','ContentSourceID')"
                 [NewRecordValues]="NewRecordValues('Content Source Params')"
@@ -186,6 +191,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

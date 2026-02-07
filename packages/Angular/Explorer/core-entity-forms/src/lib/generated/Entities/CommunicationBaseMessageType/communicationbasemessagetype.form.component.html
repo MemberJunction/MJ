@@ -102,7 +102,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('communicationProviderMessageTypes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Communication Provider Message Types','CommunicationBaseMessageTypeID')"
                 [NewRecordValues]="NewRecordValues('Communication Provider Message Types')"
@@ -112,6 +113,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entity Communication Message Types Section -->
@@ -124,7 +126,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityCommunicationMessageTypes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Message Types','BaseMessageTypeID')"
                 [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
@@ -134,6 +137,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

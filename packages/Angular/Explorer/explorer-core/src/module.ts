@@ -24,7 +24,6 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
-import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryGridModule } from '@memberjunction/ng-query-grid';
@@ -72,10 +71,12 @@ import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collection
 import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
+import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 
 @NgModule({
   declarations: [
     FormToolbarComponent,
+    OAuthCallbackComponent,
     ResourceContainerComponent,
     DashboardResource,
     EntityRecordResource,
@@ -109,7 +110,6 @@ import { NotificationsResource } from './lib/resource-wrappers/notifications-res
     GridModule,
     DialogsModule,
     ExcelExportModule,
-    CompareRecordsModule, // [3.0] TO DO To-Do Need to implement this again
     IndicatorsModule,
     ButtonsModule,
     TabStripModule,

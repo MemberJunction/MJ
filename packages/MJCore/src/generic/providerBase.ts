@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult } from "./interfaces";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
@@ -492,7 +492,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         const totalPreTime = performance.now() - preViewStart;
         if (totalPreTime > 50) {
-            console.log(`[PERF-PRE] PreRunView ${params.EntityName}: ${totalPreTime.toFixed(1)}ms (telemetry=${telemetryTime.toFixed(1)}ms, entityCheck=${entityCheckTime.toFixed(1)}ms, entityLookup=${entityLookupTime.toFixed(1)}ms, cache=${cacheCheckTime.toFixed(1)}ms)`);
+            LogStatus(`[PERF-PRE] PreRunView ${params.EntityName}: ${totalPreTime.toFixed(1)}ms (telemetry=${telemetryTime.toFixed(1)}ms, entityCheck=${entityCheckTime.toFixed(1)}ms, entityLookup=${entityLookupTime.toFixed(1)}ms, cache=${cacheCheckTime.toFixed(1)}ms)`);
         }
 
         return {
@@ -2216,6 +2216,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Local storage provider instance
      */
     abstract get LocalStorageProvider(): ILocalStorageProvider;
+
+    /**
+     * Returns the filesystem provider for the current environment.
+     * Default implementation returns null (no filesystem access).
+     * Server-side providers should override this to return a NodeFileSystemProvider.
+     */
+    get FileSystemProvider(): IFileSystemProvider | null {
+        return null;
+    }
 
     /**
      * Loads metadata from local storage if available.

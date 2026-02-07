@@ -5,6 +5,7 @@ import { IMetadataProvider } from '@memberjunction/core';
  * Enhanced dialog wrapper component for the data context viewer
  */
 @Component({
+  standalone: false,
   selector: 'mj-data-context-dialog',
   templateUrl: './ng-data-context-dialog.component.html',
   styleUrls: ['./ng-data-context-dialog.component.css']

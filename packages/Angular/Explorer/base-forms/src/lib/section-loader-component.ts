@@ -1,9 +1,10 @@
-import { Component, Input, OnDestroy, ViewChild, ViewContainerRef, AfterViewInit, OnChanges, SimpleChanges, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, OnDestroy, ViewChild, ViewContainerRef, AfterViewInit, OnChanges, SimpleChanges, Output, EventEmitter, ChangeDetectorRef, Type } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseFormSectionComponent } from './base-form-section-component';
 import { BaseEntity } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-form-section',
   template: `<div class="form-section"><ng-template #container></ng-template></div>`
 })
@@ -35,9 +36,9 @@ export class SectionLoaderComponent implements AfterViewInit, OnDestroy, OnChang
 
     private loadComponent() { 
       //console.log("loading component?", `${this.Entity}.${this.Section}`);
-      const sectionInfo = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent,`${this.Entity}.${this.Section}`); 
+      const sectionInfo = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent,`${this.Entity}.${this.Section}`);
       if (sectionInfo) {
-        const componentRef = this.container.createComponent(sectionInfo.SubClass); 
+        const componentRef = this.container.createComponent(sectionInfo.SubClass as Type<BaseFormSectionComponent>); 
         // pass in record and edit mode
         this._sectionObj = <BaseFormSectionComponent>componentRef.instance;
         this._sectionObj.record = this.record;

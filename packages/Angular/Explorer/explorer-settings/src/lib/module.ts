@@ -5,7 +5,6 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
 
 import { WindowModule } from '@progress/kendo-angular-dialog';
 
-import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
@@ -75,7 +74,6 @@ import { ApplicationDialogComponent } from './application-management/application
     FormsModule,
     ReactiveFormsModule,
     DragDropModule,
-    CompareRecordsModule,
     ContainerDirectivesModule,
     EntityPermissionsModule,
     MJTabStripModule,

@@ -10,17 +10,21 @@
     </button>
 
     <!-- Nav Bar Apps: Left of App Switcher -->
-    <div class="nav-bar-apps left-of-switcher" *ngIf="leftOfSwitcherApps.length > 0">
-      <button *ngFor="let app of leftOfSwitcherApps"
-              class="nav-bar-app-btn"
-              [class.active]="app.ID === activeApp?.ID"
-              [title]="app.Name"
-              [style.--app-color]="app.GetColor()"
-              (click)="onNavBarAppClick(app, $event)"
-              (dblclick)="onNavBarAppDblClick(app, $event)">
-        <i [class]="app.Icon"></i>
-      </button>
-    </div>
+    @if (leftOfSwitcherApps.length > 0) {
+      <div class="nav-bar-apps left-of-switcher">
+        @for (app of leftOfSwitcherApps; track app) {
+          <button
+            class="nav-bar-app-btn"
+            [class.active]="app.ID === activeApp?.ID"
+            [title]="app.Name"
+            [style.--app-color]="app.GetColor()"
+            (click)="onNavBarAppClick(app, $event)"
+            (dblclick)="onNavBarAppDblClick(app, $event)">
+            <i [class]="app.Icon"></i>
+          </button>
+        }
+      </div>
+    }
 
     <!-- App Switcher -->
     <mj-app-switcher
@@ -31,12 +35,13 @@
     </mj-app-switcher>
 
     <!-- App Navigation (desktop only) -->
-    <mj-app-nav
-      *ngIf="activeApp"
-      class="desktop-nav"
-      [app]="activeApp"
-      (navItemClick)="onNavItemClick($event)">
-    </mj-app-nav>
+    @if (activeApp) {
+      <mj-app-nav
+        class="desktop-nav"
+        [app]="activeApp"
+        (navItemClick)="onNavItemClick($event)">
+      </mj-app-nav>
+    }
 
     <!-- Spacer -->
     <div class="spacer"></div>
@@ -48,82 +53,93 @@
       </button>
       <button class="icon-btn desktop-only notification-btn" title="Notifications" (click)="showNotifications()">
         <i class="fa-solid fa-bell"></i>
-        <span class="notification-badge" *ngIf="unreadNotificationCount > 0">
-          {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
-        </span>
+        @if (unreadNotificationCount > 0) {
+          <span class="notification-badge">
+            {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+          </span>
+        }
       </button>
 
       <!-- Nav Bar Apps: Left of User Menu -->
-      <div class="nav-bar-apps left-of-user-menu" *ngIf="leftOfUserMenuApps.length > 0">
-        <button *ngFor="let app of leftOfUserMenuApps"
-                class="nav-bar-app-btn"
-                [class.active]="app.ID === activeApp?.ID"
-                [title]="app.Name"
-                [style.--app-color]="app.GetColor()"
-                (click)="onNavBarAppClick(app, $event)"
-                (dblclick)="onNavBarAppDblClick(app, $event)">
-          <i [class]="app.Icon"></i>
-        </button>
-      </div>
+      @if (leftOfUserMenuApps.length > 0) {
+        <div class="nav-bar-apps left-of-user-menu">
+          @for (app of leftOfUserMenuApps; track app) {
+            <button
+              class="nav-bar-app-btn"
+              [class.active]="app.ID === activeApp?.ID"
+              [title]="app.Name"
+              [style.--app-color]="app.GetColor()"
+              (click)="onNavBarAppClick(app, $event)"
+              (dblclick)="onNavBarAppDblClick(app, $event)">
+              <i [class]="app.Icon"></i>
+            </button>
+          }
+        </div>
+      }
 
       <div class="user-menu">
         <button class="avatar-btn" (click)="toggleUserMenu($event)">
-          <ng-container *ngIf="userImageURL; else iconAvatar">
+          @if (userImageURL) {
             <img [src]="userImageURL" alt="User avatar" class="avatar-img" />
-          </ng-container>
-          <ng-template #iconAvatar>
+          } @else {
             <div class="icon-fallback">
               <i [class]="userIconClass || 'fa-solid fa-user'"></i>
             </div>
-          </ng-template>
+          }
         </button>
         <!-- User Context Menu (Dynamic) -->
-        <div class="user-context-menu" *ngIf="userMenuVisible"
-             [class.menu-fade]="getUserMenuOptions()?.animationStyle === 'fade'"
-             [class.menu-slide]="getUserMenuOptions()?.animationStyle === 'slide'">
-
-          <!-- User Header -->
-          <ng-container *ngIf="getUserMenuOptions()?.showUserName">
-            <div class="user-menu-header">
-              <div class="user-info">
-                <span class="user-name">{{ getUserDisplayInfo()?.name || userName }}</span>
-                <span class="user-email" *ngIf="getUserMenuOptions()?.showUserEmail && getUserDisplayInfo()?.email">
-                  {{ getUserDisplayInfo()?.email }}
-                </span>
-              </div>
-            </div>
-            <div class="user-menu-divider"></div>
-          </ng-container>
-
-          <!-- Dynamic Menu Items -->
-          <ng-container *ngFor="let element of userMenuElements">
-
-            <!-- Divider -->
-            <div class="user-menu-divider" *ngIf="isMenuDivider(element)"></div>
-
-            <!-- Menu Item -->
-            <ng-container *ngIf="!isMenuDivider(element)">
-              <ng-container *ngIf="asMenuItem(element) as item">
-                <div class="user-menu-item"
-                     [class.disabled]="!item.enabled"
-                     [class.danger]="item.cssClass === 'danger'"
-                     [style.color]="item.color || null"
-                     [title]="item.tooltip || ''"
-                     (click)="item.enabled && onUserMenuItemClick(item.id)">
-                  <i [class]="item.icon"></i>
-                  <span class="menu-label">{{ item.label }}</span>
-                  <span class="menu-shortcut" *ngIf="item.shortcut">{{ item.shortcut }}</span>
+        @if (userMenuVisible) {
+          <div class="user-context-menu"
+            [class.menu-fade]="getUserMenuOptions()?.animationStyle === 'fade'"
+            [class.menu-slide]="getUserMenuOptions()?.animationStyle === 'slide'">
+            <!-- User Header -->
+            @if (getUserMenuOptions()?.showUserName) {
+              <div class="user-menu-header">
+                <div class="user-info">
+                  <span class="user-name">{{ getUserDisplayInfo()?.name || userName }}</span>
+                  @if (getUserMenuOptions()?.showUserEmail && getUserDisplayInfo()?.email) {
+                    <span class="user-email">
+                      {{ getUserDisplayInfo()?.email }}
+                    </span>
+                  }
                 </div>
-              </ng-container>
-            </ng-container>
-          </ng-container>
-        </div>
+              </div>
+              <div class="user-menu-divider"></div>
+            }
+            <!-- Dynamic Menu Items -->
+            @for (element of userMenuElements; track element) {
+              <!-- Divider -->
+              @if (isMenuDivider(element)) {
+                <div class="user-menu-divider"></div>
+              }
+              <!-- Menu Item -->
+              @if (!isMenuDivider(element)) {
+                @if (asMenuItem(element); as item) {
+                  <div class="user-menu-item"
+                    [class.disabled]="!item.enabled"
+                    [class.danger]="item.cssClass === 'danger'"
+                    [style.color]="item.color || null"
+                    [title]="item.tooltip || ''"
+                    (click)="item.enabled && onUserMenuItemClick(item.id)">
+                    <i [class]="item.icon"></i>
+                    <span class="menu-label">{{ item.label }}</span>
+                    @if (item.shortcut) {
+                      <span class="menu-shortcut">{{ item.shortcut }}</span>
+                    }
+                  </div>
+                }
+              }
+            }
+          </div>
+        }
       </div>
     </div>
   </header>
 
   <!-- Search Popup -->
-  <div class="search-popup-overlay" *ngIf="isSearchOpen" (click)="closeSearch()"></div>
+  @if (isSearchOpen) {
+    <div class="search-popup-overlay" (click)="closeSearch()"></div>
+  }
   <div class="search-popup" [class.open]="isSearchOpen">
     <div class="search-popup-content" (click)="$event.stopPropagation()">
       <kendo-dropdownlist
@@ -140,7 +156,7 @@
         kendoTextBox
         class="search-input"
         (keydown.enter)="onSearch($event)"
-      />
+        />
       <button class="search-submit-btn" (click)="onSearch($event)" title="Search">
         <i class="fa-solid fa-search"></i>
       </button>
@@ -148,7 +164,9 @@
   </div>
 
   <!-- Mobile Navigation Drawer -->
-  <div class="mobile-nav-overlay" *ngIf="mobileNavOpen" (click)="closeMobileNav()"></div>
+  @if (mobileNavOpen) {
+    <div class="mobile-nav-overlay" (click)="closeMobileNav()"></div>
+  }
   <div class="mobile-nav-drawer" [class.open]="mobileNavOpen">
     <div class="mobile-nav-header">
       <span>Navigation</span>
@@ -156,13 +174,15 @@
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
-    <div class="mobile-nav-content" *ngIf="activeApp">
-      <div class="mobile-nav-section-title">{{ activeApp.Name }}</div>
-      <mj-app-nav
-        [app]="activeApp"
-        (navItemClick)="onNavItemClick($event)">
-      </mj-app-nav>
-    </div>
+    @if (activeApp) {
+      <div class="mobile-nav-content">
+        <div class="mobile-nav-section-title">{{ activeApp.Name }}</div>
+        <mj-app-nav
+          [app]="activeApp"
+          (navItemClick)="onNavItemClick($event)">
+        </mj-app-nav>
+      </div>
+    }
     <div class="mobile-nav-footer">
       <button class="mobile-nav-action" title="Search" (click)="toggleSearch(); closeMobileNav()">
         <i class="fa-solid fa-search"></i>
@@ -171,9 +191,11 @@
       <button class="mobile-nav-action" title="Notifications" (click)="showNotifications(); closeMobileNav()">
         <i class="fa-solid fa-bell"></i>
         <span>Notifications</span>
-        <span class="notification-badge-mobile" *ngIf="unreadNotificationCount > 0">
-          {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
-        </span>
+        @if (unreadNotificationCount > 0) {
+          <span class="notification-badge-mobile">
+            {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+          </span>
+        }
       </button>
     </div>
   </div>
@@ -187,19 +209,24 @@
 </div>
 
 <!-- Loading State -->
-<div class="shell-loading" *ngIf="loading">
-  <mj-loading
-    [text]="currentLoadingText"
-    [textColor]="currentLoadingTextColor"
-    [logoColor]="currentLoadingColor"
-    [logoGradient]="currentLoadingGradient"
-    [animation]="currentLoadingAnimation"
-    size="large">
-  </mj-loading>
-</div>
+@if (loading) {
+  <div class="shell-loading">
+    <mj-loading
+      [text]="currentLoadingText"
+      [textColor]="currentLoadingTextColor"
+      [logoColor]="currentLoadingColor"
+      [logoGradient]="currentLoadingGradient"
+      [animation]="currentLoadingAnimation"
+      size="large">
+    </mj-loading>
+  </div>
+}
 
 <!-- App Access Error Dialog -->
 <mj-app-access-dialog
   #appAccessDialog
   (result)="onAppAccessDialogResult($event)">
 </mj-app-access-dialog>
+
+<!-- Command Palette -->
+<mj-command-palette (AppSelected)="onAppSwitch($event)"></mj-command-palette>

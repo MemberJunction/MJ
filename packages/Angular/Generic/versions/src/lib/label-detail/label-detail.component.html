@@ -1,0 +1,644 @@
+<!-- Backdrop overlay -->
+<div class="panel-backdrop" [class.visible]="IsVisible" (click)="OnBackdropClick()"></div>
+
+<!-- Slide-in panel -->
+<div class="detail-panel" [class.visible]="IsVisible" [style.width.px]="PanelWidthPx">
+  <!-- Resize handle -->
+  <div class="resize-handle" (mousedown)="OnResizeStart($event)">
+    <div class="resize-handle-grip"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- HEADER -->
+  <!-- ============================================================ -->
+  <div class="panel-header">
+    <div class="header-info">
+      <div class="header-title-row">
+        <i [class]="GetScopeIcon(Label.Scope)" class="header-scope-icon"></i>
+        <h2 class="header-title">{{Label.Name}}</h2>
+        <span class="header-status" [ngClass]="GetStatusClass(Label.Status)">
+          {{Label.Status}}
+        </span>
+        <span class="header-scope-badge">{{Label.Scope}}</span>
+      </div>
+      @if (Label.Description) {
+        <p class="header-description">{{Label.Description}}</p>
+      }
+    </div>
+    <div class="header-actions">
+      <button class="header-action-btn" (click)="OnArchive()"
+        [disabled]="IsArchiving || Label.Status === 'Archived'"
+        title="Archive this label">
+        <i class="fa-solid fa-box-archive"></i>
+      </button>
+      <button class="header-action-btn" (click)="OnTabChange('changes')" title="View changes">
+        <i class="fa-solid fa-code-compare"></i>
+      </button>
+      <button class="close-btn" (click)="OnClose()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SUMMARY KPIs -->
+  <!-- ============================================================ -->
+  <div class="summary-kpis">
+    <div class="summary-kpi">
+      <div class="kpi-mini-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+        <i class="fa-solid fa-camera"></i>
+      </div>
+      <div class="kpi-mini-content">
+        <span class="kpi-mini-value">{{LabelItems.length || Label.ItemCount || GetItemCount(Label.ID)}}</span>
+        <span class="kpi-mini-label">Items</span>
+      </div>
+    </div>
+    <div class="summary-kpi">
+      <div class="kpi-mini-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+        <i class="fa-solid fa-table"></i>
+      </div>
+      <div class="kpi-mini-content">
+        <span class="kpi-mini-value">{{UniqueEntityCount}}</span>
+        <span class="kpi-mini-label">Entities</span>
+      </div>
+    </div>
+    @if (Label.CreationDurationMS) {
+      <div class="summary-kpi">
+        <div class="kpi-mini-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+          <i class="fa-solid fa-stopwatch"></i>
+        </div>
+        <div class="kpi-mini-content">
+          <span class="kpi-mini-value">{{FormatDuration(Label.CreationDurationMS)}}</span>
+          <span class="kpi-mini-label">Duration</span>
+        </div>
+      </div>
+    }
+    @if (ChildLabels.length > 0) {
+      <div class="summary-kpi">
+        <div class="kpi-mini-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+          <i class="fa-solid fa-layer-group"></i>
+        </div>
+        <div class="kpi-mini-content">
+          <span class="kpi-mini-value">{{ChildLabels.length}}</span>
+          <span class="kpi-mini-label">Children</span>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TAB BAR (hidden when micro-view is active) -->
+  <!-- ============================================================ -->
+  @if (!ShowMicroView) {
+    <div class="tab-bar">
+      <button class="tab" [class.active]="ActiveTab === 'overview'" (click)="OnTabChange('overview')">
+        <i class="fa-solid fa-info-circle tab-icon"></i> Overview
+      </button>
+      <button class="tab" [class.active]="ActiveTab === 'snapshots'" (click)="OnTabChange('snapshots')">
+        <i class="fa-solid fa-camera tab-icon"></i> Snapshots
+        @if (LabelItems.length > 0) {
+          <span class="tab-count">{{LabelItems.length}}</span>
+        }
+      </button>
+      <button class="tab" [class.active]="ActiveTab === 'dependencies'" (click)="OnTabChange('dependencies')">
+        <i class="fa-solid fa-diagram-project tab-icon"></i> Dependencies
+      </button>
+      <button class="tab" [class.active]="ActiveTab === 'changes'" (click)="OnTabChange('changes')">
+        <i class="fa-solid fa-code-compare tab-icon"></i> Changes
+      </button>
+      <button class="tab" [class.active]="ActiveTab === 'history'" (click)="OnTabChange('history')">
+        <i class="fa-solid fa-clock-rotate-left tab-icon"></i> History
+      </button>
+    </div>
+  }
+
+  <!-- ============================================================ -->
+  <!-- BREADCRUMB (shown when micro-view is active) -->
+  <!-- ============================================================ -->
+  @if (ShowMicroView) {
+    <div class="breadcrumb-bar">
+      <button class="breadcrumb-back" (click)="OnBackFromMicroView()">
+        <i class="fa-solid fa-arrow-left"></i>
+      </button>
+      <div class="breadcrumb-trail">
+        <span class="breadcrumb-item clickable" (click)="OnBackFromMicroView()">
+          <i class="fa-solid fa-camera breadcrumb-icon"></i> Snapshots
+        </span>
+        <i class="fa-solid fa-chevron-right breadcrumb-separator"></i>
+        <span class="breadcrumb-item current">
+          <i class="fa-solid fa-file-lines breadcrumb-icon"></i> {{BreadcrumbLabel}}
+        </span>
+      </div>
+    </div>
+  }
+
+  <!-- ============================================================ -->
+  <!-- TAB CONTENT (scrollable) - or inline micro-view -->
+  <!-- ============================================================ -->
+  @if (!ShowMicroView) {
+    <div class="tab-content">
+      <!-- Loading state for items -->
+      @if (IsLoadingItems && ActiveTab !== 'dependencies') {
+        <mj-loading text="Loading label data..."></mj-loading>
+      }
+      <!-- ======================================================== -->
+      <!-- OVERVIEW TAB -->
+      <!-- ======================================================== -->
+      @if (ActiveTab === 'overview' && !IsLoadingItems) {
+        <div class="tab-pane">
+          <!-- Metadata section -->
+          <div class="detail-section">
+            <h3 class="section-title">
+              <i class="fa-solid fa-info-circle section-icon"></i> Label Details
+            </h3>
+            <div class="detail-grid">
+              <div class="detail-field">
+                <span class="field-label">Name</span>
+                <span class="field-value">{{Label.Name}}</span>
+              </div>
+              <div class="detail-field">
+                <span class="field-label">Status</span>
+                <span class="field-value">
+                  <span class="inline-badge" [ngClass]="GetStatusClass(Label.Status)">{{Label.Status}}</span>
+                </span>
+              </div>
+              <div class="detail-field">
+                <span class="field-label">Scope</span>
+                <span class="field-value">
+                  <i [class]="GetScopeIcon(Label.Scope)" style="margin-right: 6px;"></i>{{Label.Scope}}
+                </span>
+              </div>
+              @if (Label.EntityID) {
+                <div class="detail-field">
+                  <span class="field-label">Entity</span>
+                  <span class="field-value">
+                    <i [class]="OverviewEntityIcon" style="margin-right: 6px; color: #3b82f6;"></i>{{Label.Entity ?? resolveEntityName(Label.EntityID)}}
+                  </span>
+                </div>
+              }
+              @if (Label.RecordID && Label.Scope !== 'Record') {
+                <div class="detail-field">
+                  <span class="field-label">Record ID</span>
+                  <span class="field-value field-mono">{{FormatRecordID(Label.RecordID)}}</span>
+                </div>
+              }
+              @if (Label.ExternalSystemID) {
+                <div class="detail-field">
+                  <span class="field-label">External Ref</span>
+                  <span class="field-value field-mono">{{Label.ExternalSystemID}}</span>
+                </div>
+              }
+            </div>
+          </div>
+          <!-- Record card (Record-scoped labels) -->
+          @if (Label.Scope === 'Record' && Label.RecordID) {
+            <div class="record-card">
+              <div class="record-card-main">
+                <i [class]="OverviewEntityIcon" class="record-card-icon"></i>
+                <div class="record-card-info">
+                  @if (OverviewRecordName) {
+                    <span class="record-card-name">{{OverviewRecordName}}</span>
+                  }
+                  @if (!OverviewRecordName) {
+                    <span class="record-card-name record-card-name-loading">Loading...</span>
+                  }
+                  <span class="record-card-entity">{{Label.Entity ?? resolveEntityName(Label.EntityID)}}</span>
+                  <span class="record-card-id">{{FormatRecordID(Label.RecordID)}}</span>
+                </div>
+              </div>
+              <button class="record-card-open-btn" (click)="OnOpenOverviewRecord()" title="Open record">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Open
+              </button>
+            </div>
+          }
+          <!-- Description -->
+          @if (Label.Description) {
+            <div class="detail-section">
+              <h3 class="section-title">
+                <i class="fa-solid fa-align-left section-icon"></i> Description
+              </h3>
+              <p class="description-text">{{Label.Description}}</p>
+            </div>
+          }
+          <!-- Creation info -->
+          <div class="detail-section">
+            <h3 class="section-title">
+              <i class="fa-solid fa-clock section-icon"></i> Creation
+            </h3>
+            <div class="detail-grid">
+              <div class="detail-field">
+                <span class="field-label">Created</span>
+                <span class="field-value">{{FormatDate(Label.__mj_CreatedAt)}}</span>
+              </div>
+              @if (Label.CreatedByUser) {
+                <div class="detail-field">
+                  <span class="field-label">Created By</span>
+                  <span class="field-value">
+                    <i class="fa-solid fa-user" style="margin-right: 6px; opacity: 0.5;"></i>{{Label.CreatedByUser}}
+                  </span>
+                </div>
+              }
+              @if (Label.CreationDurationMS) {
+                <div class="detail-field">
+                  <span class="field-label">Capture Duration</span>
+                  <span class="field-value">{{FormatDuration(Label.CreationDurationMS)}}</span>
+                </div>
+              }
+              <div class="detail-field">
+                <span class="field-label">Items Captured</span>
+                <span class="field-value">{{LabelItems.length}}</span>
+              </div>
+            </div>
+          </div>
+          <!-- Parent / Children -->
+          @if (Label.ParentID || ChildLabels.length > 0) {
+            <div class="detail-section">
+              <h3 class="section-title">
+                <i class="fa-solid fa-sitemap section-icon"></i> Hierarchy
+              </h3>
+              <!-- Parent reference -->
+              @if (Label.ParentID) {
+                <div class="hierarchy-item parent">
+                  <i class="fa-solid fa-arrow-up hierarchy-icon"></i>
+                  <span class="hierarchy-label">Parent:</span>
+                  <span class="hierarchy-name">
+                    @for (pl of AllLabels; track pl) {
+                      @if (pl.ID === Label.ParentID) {
+                        <span>{{pl.Name}}</span>
+                      }
+                    }
+                  </span>
+                </div>
+              }
+              <!-- Children -->
+              @if (ChildLabels.length > 0) {
+                <div class="hierarchy-children">
+                  @for (child of ChildLabels; track child) {
+                    <div class="hierarchy-item child">
+                      <i class="fa-solid fa-arrow-turn-down-right hierarchy-icon"></i>
+                      <span class="hierarchy-name">{{child.Name}}</span>
+                      @if (child.RecordID) {
+                        <span class="hierarchy-meta">{{child.RecordID | slice:0:12}}...</span>
+                      }
+                      @if (child.ItemCount) {
+                        <span class="hierarchy-meta">{{child.ItemCount}} items</span>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+      <!-- ======================================================== -->
+      <!-- SNAPSHOTS TAB -->
+      <!-- ======================================================== -->
+      @if (ActiveTab === 'snapshots' && !IsLoadingItems) {
+        <div class="tab-pane">
+          <!-- Snapshot toolbar -->
+          <div class="snapshot-toolbar">
+            <div class="snapshot-search">
+              <i class="fa-solid fa-search snapshot-search-icon"></i>
+              <input type="text" class="snapshot-search-input"
+                placeholder="Search by entity or record..."
+                [ngModel]="SnapshotSearch"
+                (ngModelChange)="OnSnapshotSearchChange($event)" />
+            </div>
+            <div class="snapshot-sort-toggle">
+              <button class="toggle-btn-sm" [class.active]="SnapshotSortBy === 'name'"
+                (click)="OnSnapshotSortChange('name')" title="Sort by name">
+                @if (SnapshotSortBy === 'name' && SnapshotSortDir === 'asc') {
+                  <i class="fa-solid fa-arrow-down-a-z"></i>
+                }
+                @if (SnapshotSortBy === 'name' && SnapshotSortDir === 'desc') {
+                  <i class="fa-solid fa-arrow-up-z-a"></i>
+                }
+                @if (SnapshotSortBy !== 'name') {
+                  <i class="fa-solid fa-arrow-down-a-z"></i>
+                }
+              </button>
+              <button class="toggle-btn-sm" [class.active]="SnapshotSortBy === 'count'"
+                (click)="OnSnapshotSortChange('count')" title="Sort by record count">
+                @if (SnapshotSortBy === 'count' && SnapshotSortDir === 'desc') {
+                  <i class="fa-solid fa-arrow-down-9-1"></i>
+                }
+                @if (SnapshotSortBy === 'count' && SnapshotSortDir === 'asc') {
+                  <i class="fa-solid fa-arrow-up-1-9"></i>
+                }
+                @if (SnapshotSortBy !== 'count') {
+                  <i class="fa-solid fa-arrow-down-9-1"></i>
+                }
+              </button>
+            </div>
+            <div class="snapshot-view-toggle">
+              <button class="toggle-btn-sm" [class.active]="SnapshotViewMode === 'list'" (click)="SnapshotViewMode = 'list'">
+                <i class="fa-solid fa-list"></i>
+              </button>
+              <button class="toggle-btn-sm" [class.active]="SnapshotViewMode === 'card'" (click)="SnapshotViewMode = 'card'">
+                <i class="fa-solid fa-grip"></i>
+              </button>
+            </div>
+          </div>
+          <!-- Entity groups -->
+          <div class="snapshot-groups">
+            @for (group of FilteredSnapshotGroups; track group) {
+              <div class="snapshot-group">
+                <div class="group-header" (click)="ToggleSnapshotGroup(group)">
+                  <i class="fa-solid fa-chevron-right group-chevron" [class.expanded]="group.IsExpanded"></i>
+                  <i [class]="group.EntityIcon" class="group-entity-icon"></i>
+                  <span class="group-name">{{group.EntityName}} <span class="group-count-inline">{{group.Items.length}}</span></span>
+                </div>
+                @if (group.IsExpanded) {
+                  <div class="group-content">
+                    <!-- Loading names indicator -->
+                    @if (group.IsLoadingNames) {
+                      <div class="group-names-loading">
+                        <mj-loading text="Loading record names..." size="small"></mj-loading>
+                      </div>
+                    }
+                    <!-- List mode -->
+                    @if (SnapshotViewMode === 'list') {
+                      @for (item of group.Items; track item) {
+                        <div class="snapshot-list-item"
+                          (click)="OpenMicroView(group.EntityName, item.RecordID, item.RecordChangeID, item.DisplayName)">
+                          <i class="fa-solid fa-file-lines snapshot-item-icon"></i>
+                          <span class="snapshot-item-name">{{item.DisplayName}}</span>
+                          <i class="fa-solid fa-chevron-right snapshot-item-arrow"></i>
+                        </div>
+                      }
+                    }
+                    <!-- Card mode -->
+                    @if (SnapshotViewMode === 'card') {
+                      <div class="snapshot-cards">
+                        @for (item of group.Items; track item) {
+                          <div class="snapshot-card"
+                            (click)="OpenMicroView(group.EntityName, item.RecordID, item.RecordChangeID, item.DisplayName)">
+                            <div class="snapshot-card-header">
+                              <i class="fa-solid fa-file-lines"></i>
+                              <span class="snapshot-card-name">{{item.DisplayName}}</span>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+          <!-- Empty state -->
+          @if (FilteredSnapshotGroups.length === 0) {
+            <div class="tab-empty">
+              <i class="fa-solid fa-camera tab-empty-icon"></i>
+              <p>No snapshot items found.</p>
+            </div>
+          }
+        </div>
+      }
+      <!-- ======================================================== -->
+      <!-- DEPENDENCIES TAB -->
+      <!-- ======================================================== -->
+      @if (ActiveTab === 'dependencies') {
+        <div class="tab-pane">
+          @if (IsLoadingDependencies) {
+            <mj-loading text="Loading dependencies..."></mj-loading>
+          }
+          @if (!IsLoadingDependencies && Label.EntityID) {
+            <div class="dep-root">
+              <div class="dep-root-entity">
+                <i [class]="GetScopeIcon(Label.Scope)" class="dep-root-icon"></i>
+                <span class="dep-root-name">{{Label.Entity ?? resolveEntityName(Label.EntityID)}}</span>
+                <span class="dep-root-badge">Root</span>
+              </div>
+              @if (DependencyTree.length > 0) {
+                @for (node of DependencyTree; track node) {
+                  <ng-container *ngTemplateOutlet="depNode; context: { $implicit: node }"></ng-container>
+                }
+              }
+              @if (DependencyTree.length === 0) {
+                <div class="dep-empty">
+                  <p>No dependent entities found.</p>
+                </div>
+              }
+            </div>
+          }
+          @if (!IsLoadingDependencies && !Label.EntityID) {
+            <div class="tab-empty">
+              <i class="fa-solid fa-diagram-project tab-empty-icon"></i>
+              <p>No entity associated with this label.</p>
+            </div>
+          }
+        </div>
+      }
+      <!-- Dependency tree node template -->
+      <ng-template #depNode let-node>
+        <div class="dep-node" [style.padding-left.px]="node.Depth * 24">
+          <div class="dep-node-header" (click)="ToggleDependencyNode(node)">
+            @if (node.Children.length > 0) {
+              <i class="fa-solid fa-chevron-right dep-chevron"
+                [class.expanded]="node.IsExpanded"
+              ></i>
+            }
+            @if (node.Children.length === 0) {
+              <span class="dep-node-spacer"></span>
+            }
+            <i [class]="resolveEntityIconByName(node.EntityName)" class="dep-node-icon"></i>
+            <span class="dep-node-name">{{node.EntityName}}</span>
+            <span class="dep-node-field">via {{node.RelationshipField}}</span>
+            @if (node.Children.length > 0) {
+              <span class="dep-node-count">
+                {{node.Children.length}} dep{{node.Children.length !== 1 ? 's' : ''}}
+              </span>
+            }
+          </div>
+          @if (node.IsExpanded && node.Children.length > 0) {
+            @for (child of node.Children; track child) {
+              <ng-container *ngTemplateOutlet="depNode; context: { $implicit: child }"></ng-container>
+            }
+          }
+        </div>
+      </ng-template>
+      <!-- ======================================================== -->
+      <!-- CHANGES TAB -->
+      <!-- ======================================================== -->
+      @if (ActiveTab === 'changes') {
+        <div class="tab-pane">
+          @if (IsLoadingDiff) {
+            <mj-loading text="Computing differences..."></mj-loading>
+          }
+          @if (!IsLoadingDiff && DiffResult) {
+            <!-- Diff summary -->
+            <div class="diff-summary">
+              <div class="diff-stat">
+                <span class="diff-stat-value change-modified">{{DiffResult.Summary.Changed}}</span>
+                <span class="diff-stat-label">Changed</span>
+              </div>
+              <div class="diff-stat">
+                <span class="diff-stat-value">{{DiffResult.Summary.Unchanged}}</span>
+                <span class="diff-stat-label">Unchanged</span>
+              </div>
+              <div class="diff-stat">
+                <span class="diff-stat-value">{{DiffResult.Summary.EntitiesAffected}}</span>
+                <span class="diff-stat-label">Entities</span>
+              </div>
+            </div>
+            <!-- Expand/collapse all -->
+            @if (DiffResult.EntityGroups.length > 0) {
+              <div class="diff-toolbar">
+                <button class="toolbar-action-btn" (click)="ExpandAllDiffGroups()" title="Expand all">
+                  <i class="fa-solid fa-angles-down"></i>
+                  <span>Expand All</span>
+                </button>
+                <button class="toolbar-action-btn" (click)="CollapseAllDiffGroups()" title="Collapse all">
+                  <i class="fa-solid fa-angles-up"></i>
+                  <span>Collapse All</span>
+                </button>
+              </div>
+            }
+            <!-- Entity diff groups -->
+            @if (DiffResult.EntityGroups.length > 0) {
+              <div class="diff-groups">
+                @for (group of DiffResult.EntityGroups; track group) {
+                  <div class="diff-group">
+                    <div class="diff-group-header" (click)="ToggleDiffGroup(group)">
+                      <i class="fa-solid fa-chevron-right diff-chevron" [class.expanded]="group.IsExpanded"></i>
+                      <i [class]="resolveEntityIconByName(group.EntityName)" class="diff-group-icon"></i>
+                      <span class="diff-group-name">{{group.EntityName}}</span>
+                      <span class="diff-group-count change-modified">
+                        {{group.Records.length}} modified
+                      </span>
+                    </div>
+                    @if (group.IsExpanded) {
+                      <div class="diff-group-content">
+                        @for (record of group.Records; track record) {
+                          <div class="diff-record">
+                            <div class="diff-record-header">
+                              <i [class]="GetChangeTypeIcon(record.ChangeType)" [ngClass]="GetChangeTypeClass(record.ChangeType)"></i>
+                              <span class="diff-record-id">{{record.RecordID | slice:0:20}}...</span>
+                            </div>
+                            @if (record.FieldChanges.length > 0) {
+                              <div class="diff-fields">
+                                @for (field of record.FieldChanges; track field) {
+                                  <div class="diff-field"
+                                    [ngClass]="GetChangeTypeClass(field.ChangeType)">
+                                    <span class="diff-field-name">{{field.FieldName}}</span>
+                                    @if (field.OldValue) {
+                                      <span class="diff-field-old">{{field.OldValue | slice:0:40}}</span>
+                                    }
+                                    @if (field.OldValue && field.NewValue) {
+                                      <i class="fa-solid fa-arrow-right diff-field-arrow"></i>
+                                    }
+                                    @if (field.NewValue) {
+                                      <span class="diff-field-new">{{field.NewValue | slice:0:40}}</span>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+            <!-- No changes -->
+            @if (DiffResult.EntityGroups.length === 0 && DiffResult.Summary.Changed === 0) {
+              <div class="tab-empty">
+                <i class="fa-solid fa-circle-check tab-empty-icon" style="color: #10b981;"></i>
+                <p>No changes detected since this label was created.</p>
+              </div>
+            }
+          }
+        </div>
+      }
+      <!-- ======================================================== -->
+      <!-- HISTORY TAB -->
+      <!-- ======================================================== -->
+      @if (ActiveTab === 'history') {
+        <div class="tab-pane">
+          @if (IsLoadingHistory) {
+            <mj-loading text="Loading history..."></mj-loading>
+          }
+          @if (!IsLoadingHistory) {
+            <!-- Restores -->
+            @if (Restores.length > 0) {
+              <div class="detail-section">
+                <h3 class="section-title">
+                  <i class="fa-solid fa-clock-rotate-left section-icon"></i> Restore Operations
+                </h3>
+                <div class="history-list">
+                  @for (restore of Restores; track restore) {
+                    <div class="history-item">
+                      <div class="history-item-icon" [ngClass]="'status-' + (restore.Status ?? '').toLowerCase().replace(' ', '-')">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                      </div>
+                      <div class="history-item-content">
+                        <span class="history-item-title">Restore {{restore.Status}}</span>
+                        <span class="history-item-meta">
+                          {{restore.CompletedItems ?? 0}}/{{restore.TotalItems ?? 0}} items
+                          @if (restore.FailedItems) {
+                            <span> &middot; {{restore.FailedItems}} failed</span>
+                          }
+                        </span>
+                      </div>
+                      <span class="history-item-date">{{FormatRelativeDate(restore.__mj_CreatedAt)}}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+            <!-- Related labels -->
+            @if (RelatedLabels.length > 0) {
+              <div class="detail-section">
+                <h3 class="section-title">
+                  <i class="fa-solid fa-tags section-icon"></i> Related Labels
+                </h3>
+                <div class="history-list">
+                  @for (related of RelatedLabels; track related) {
+                    <div class="history-item">
+                      <div class="history-item-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+                        <i class="fa-solid fa-tag"></i>
+                      </div>
+                      <div class="history-item-content">
+                        <span class="history-item-title">{{related.Name}}</span>
+                        <span class="history-item-meta">
+                          <span class="inline-badge small" [ngClass]="GetStatusClass(related.Status)">{{related.Status}}</span>
+                        </span>
+                      </div>
+                      <span class="history-item-date">{{FormatRelativeDate(related.__mj_CreatedAt)}}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+            <!-- Empty -->
+            @if (Restores.length === 0 && RelatedLabels.length === 0) {
+              <div class="tab-empty">
+                <i class="fa-solid fa-clock-rotate-left tab-empty-icon"></i>
+                <p>No restore history or related labels found.</p>
+              </div>
+            }
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ============================================================ -->
+  <!-- INLINE MICRO VIEW (replaces tab content when active) -->
+  <!-- ============================================================ -->
+  @if (ShowMicroView && MicroViewRecord) {
+    <div class="tab-content">
+      <mj-record-micro-view
+        [Data]="MicroViewRecord"
+        [Inline]="true"
+        (Close)="OnBackFromMicroView()"
+        (EntityLinkClick)="OnEntityLinkClick($event)"
+        (OpenRecord)="OnOpenRecordClick($event)">
+      </mj-record-micro-view>
+    </div>
+  }
+</div>

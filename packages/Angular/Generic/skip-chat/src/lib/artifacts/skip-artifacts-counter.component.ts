@@ -7,6 +7,7 @@ import { LogError } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
+  standalone: false,
   selector: 'skip-artifacts-counter',
   templateUrl: './skip-artifacts-counter.component.html',
   styleUrls: ['./skip-artifacts-counter.component.css']

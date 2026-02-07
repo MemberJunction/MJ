@@ -37,6 +37,7 @@ interface FieldDifference {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-prompt-version-control',
   templateUrl: './prompt-version-control.component.html',
   styleUrls: ['./prompt-version-control.component.css']

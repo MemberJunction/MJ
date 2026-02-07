@@ -29,7 +29,7 @@ npm install @memberjunction/ng-explorer-core
 
 ## Requirements
 
-- Angular 18.0.2 or higher
+- Angular 21 or higher
 - MemberJunction core libraries:
   - `@memberjunction/core` v2.43.0+
   - `@memberjunction/core-entities` v2.43.0+

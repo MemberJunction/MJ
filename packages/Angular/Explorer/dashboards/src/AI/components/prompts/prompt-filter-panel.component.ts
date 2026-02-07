@@ -17,6 +17,7 @@ interface PromptWithTemplate {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-prompt-filter-panel',
   templateUrl: './prompt-filter-panel.component.html',
   styleUrls: ['./prompt-filter-panel.component.css']

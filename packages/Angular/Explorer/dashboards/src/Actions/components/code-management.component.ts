@@ -2,19 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionsCodeResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * Code Management Resource - displays AI code generation workflow
  */
 @RegisterClass(BaseResourceComponent, 'ActionsCodeResource')
 @Component({
+  standalone: false,
   selector: 'mj-code-management',
   template: `
     <div class="code-management-placeholder" >

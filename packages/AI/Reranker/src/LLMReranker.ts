@@ -234,11 +234,3 @@ export function createLLMReranker(promptID: string, contextUser: UserInfo): LLMR
     return new LLMReranker('', '', promptID, contextUser);
 }
 
-/**
- * Ensure the LLMReranker class is loaded for tree-shaking prevention.
- * Import this function in your module's entry point.
- */
-export function LoadLLMReranker(): void {
-    // This function exists to ensure the class registration occurs
-    // when the module is imported, preventing tree-shaking from removing it
-}

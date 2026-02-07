@@ -20,16 +20,11 @@ interface KeyScopeInfo {
     preview: string[];
     categories: CategoryScopeCount[];
 }
-
-/** Tree shaking prevention function */
-export function LoadAPIKeyList(): void {
-    // This function prevents tree shaking
-}
-
 /**
  * List view component for displaying and filtering API keys
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-key-list',
     templateUrl: './api-key-list.component.html',
     styleUrls: ['./api-key-list.component.css']

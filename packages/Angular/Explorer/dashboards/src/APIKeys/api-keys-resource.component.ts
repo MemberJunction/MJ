@@ -34,12 +34,6 @@ type ViewType = 'overview' | 'list';
 
 /** Main tab type */
 type MainTab = 'keys' | 'applications' | 'scopes' | 'usage';
-
-/** Tree shaking prevention function */
-export function LoadAPIKeysResource(): void {
-    // This function prevents tree shaking
-}
-
 /**
  * API Keys Resource Component
  * Provides management interface for MJ API Keys including:
@@ -50,6 +44,7 @@ export function LoadAPIKeysResource(): void {
  */
 @RegisterClass(BaseResourceComponent, 'APIKeysResource')
 @Component({
+  standalone: false,
     selector: 'mj-api-keys-resource',
     templateUrl: './api-keys-resource.component.html',
     styleUrls: ['./api-keys-resource.component.css']

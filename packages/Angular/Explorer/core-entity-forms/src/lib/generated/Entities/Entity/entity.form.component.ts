@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Entities') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-entity-form',
     templateUrl: './entity.form.component.html'
 })
@@ -61,6 +62,8 @@ export class EntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAccessControlRules', sectionName: 'MJ: Access Control Rules', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJRecordLinks', sectionName: 'MJ: Record Links', isExpanded: false },
+            { sectionKey: 'mJVersionLabelItems', sectionName: 'MJ: Version Label Items', isExpanded: false },
+            { sectionKey: 'mJVersionLabels', sectionName: 'MJ: Version Labels', isExpanded: false },
             { sectionKey: 'queryEntities', sectionName: 'Query Entities', isExpanded: false },
             { sectionKey: 'generatedCodes', sectionName: 'Generated Codes', isExpanded: false },
             { sectionKey: 'mJRecordLinks1', sectionName: 'MJ: Record Links', isExpanded: false },

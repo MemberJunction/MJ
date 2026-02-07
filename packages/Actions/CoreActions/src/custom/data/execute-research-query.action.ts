@@ -603,10 +603,3 @@ export class ExecuteResearchQueryAction extends BaseAction {
     }
 
 }
-
-/**
- * Load function to ensure the class is registered and not tree-shaken
- */
-export function LoadExecuteResearchQueryAction() {
-    MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, "Execute Research Query");
-}

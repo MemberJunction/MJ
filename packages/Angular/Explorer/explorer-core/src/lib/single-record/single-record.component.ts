@@ -9,6 +9,7 @@ import { RecentAccessService } from '@memberjunction/ng-shared';
 
 
 @Component({
+  standalone: false,
   selector: 'mj-single-record',
   templateUrl: './single-record.component.html',
   styleUrls: ['./single-record.component.css']

@@ -11,6 +11,7 @@ import { ActionParamDialogComponent, ActionResultCodeDialogComponent } from '@me
 
 @RegisterClass(BaseFormComponent, 'Actions')
 @Component({
+  standalone: false,
     selector: 'mj-action-form',
     templateUrl: './action-form.component.html',
     styleUrls: ['./action-form.component.css']
@@ -942,9 +943,4 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         this.updateParamArrays();
         this.cdr.detectChanges();
     }
-}
-
-// Loader function required for the component to be properly registered
-export function LoadActionFormComponentExtended() {
-    // This function is called to ensure the form is loaded and registered
 }

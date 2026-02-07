@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Dashboards') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-dashboard-form',
     templateUrl: './dashboard.form.component.html'
 })

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Scheduled Action Params') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-scheduledactionparam-form',
     templateUrl: './scheduledactionparam.form.component.html'
 })

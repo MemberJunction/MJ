@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Template Params') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-templateparam-form',
     templateUrl: './templateparam.form.component.html'
 })
@@ -17,7 +18,6 @@ export class TemplateParamFormComponent extends BaseFormComponent {
             { sectionKey: 'templateAssociation', sectionName: 'Template Association', isExpanded: true },
             { sectionKey: 'parameterSpecification', sectionName: 'Parameter Specification', isExpanded: true },
             { sectionKey: 'dynamicLinkingFilters', sectionName: 'Dynamic Linking & Filters', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

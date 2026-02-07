@@ -1,363 +1,342 @@
-<div class="template-editor" *ngIf="template" style="height: 100%; display: flex; flex-direction: column;">
-
+@if (template) {
+  <div class="template-editor" style="height: 100%; display: flex; flex-direction: column;">
     <!-- Content Versions List/Tabs -->
     @if (templateContents.length > 0) {
-        <div class="content-versions-tabs" style="margin-bottom: 16px; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">
-            <div class="content-tabs" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                
-                @for (content of templateContents; track content.ID || $index; let i = $index) {
-                    <div class="content-version-tab" 
-                         [class.active]="selectedContentIndex === i && !isAddingNewContent"
-                         (click)="selectTemplateContent(i, false)"
-                         style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; background: #fff; display: flex; align-items: center; gap: 6px; transition: all 0.2s; position: relative;"
-                         [style.border-color]="selectedContentIndex === i && !isAddingNewContent ? '#007bff' : '#ccc'"
-                         [style.background]="selectedContentIndex === i && !isAddingNewContent ? '#e3f2fd' : '#fff'">
-                        
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600; font-size: 0.85em; color: #495057;">
-                                {{ content.Type || 'Version ' + (i + 1) }}
-                            </div>
-                            <div style="font-size: 0.7em; color: #6c757d;">
-                                P:{{ content.Priority }}
-                                @if (!content.IsActive) {
-                                    • <span style="color: #dc3545;">Inactive</span>
-                                }
-                            </div>
-                        </div>
-                        
-                        @if (templateContents.length > 1 && config.allowEdit) {
-                            <button type="button" 
-                                    (click)="deleteTemplateContent(i); $event.stopPropagation()"
-                                    class="btn-sm delete-btn"
-                                    style="background: none; border: none; color: #dc3545; padding: 4px; border-radius: 3px; transition: all 0.2s; cursor: pointer;"
-                                    onmouseover="this.style.backgroundColor='#dc3545'; this.style.color='white';"
-                                    onmouseout="this.style.backgroundColor='transparent'; this.style.color='#dc3545';"
-                                    title="Delete this content version">
-                                <i class="fa-solid fa-trash fa-xs"></i>
-                            </button>
-                        }
-                    </div>
-                }
-                
-                @if (isAddingNewContent) {
-                    <div class="content-version-tab active" 
-                         style="padding: 8px 12px; border: 1px solid #28a745; border-radius: 6px; background: #d4edda; display: flex; align-items: center; gap: 6px;">
-                        <i class="fa-solid fa-plus text-success"></i>
-                        <span style="font-weight: 600; color: #155724; font-size: 0.85em;">New</span>
-                    </div>
-                }
-                
-                <!-- Add New Content (Edit Mode Only) -->
-                @if (config.allowEdit && !isAddingNewContent) {
-                    <div class="content-version-tab add-new" 
-                         (click)="addNewTemplateContent()"
-                         style="padding: 8px 12px; border: 1px dashed #28a745; border-radius: 6px; background: #f8f9fa; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: all 0.2s;"
-                         onmouseover="this.style.backgroundColor='#e8f5e9'; this.style.borderStyle='solid';"
-                         onmouseout="this.style.backgroundColor='#f8f9fa'; this.style.borderStyle='dashed';"
-                         title="Add new template content">
-                        <i class="fa-solid fa-plus" style="color: #28a745; font-size: 0.75em;"></i>
-                        <span style="font-weight: 500; color: #28a745; font-size: 0.85em;">New</span>
-                    </div>
-                }
+      <div class="content-versions-tabs" style="margin-bottom: 16px; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">
+        <div class="content-tabs" style="display: flex; gap: 6px; flex-wrap: wrap;">
+          @for (content of templateContents; track content.ID || $index; let i = $index) {
+            <div class="content-version-tab"
+              [class.active]="selectedContentIndex === i && !isAddingNewContent"
+              (click)="selectTemplateContent(i, false)"
+              style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; background: #fff; display: flex; align-items: center; gap: 6px; transition: all 0.2s; position: relative;"
+              [style.border-color]="selectedContentIndex === i && !isAddingNewContent ? '#007bff' : '#ccc'"
+              [style.background]="selectedContentIndex === i && !isAddingNewContent ? '#e3f2fd' : '#fff'">
+              <div style="flex: 1;">
+                <div style="font-weight: 600; font-size: 0.85em; color: #495057;">
+                  {{ content.Type || 'Version ' + (i + 1) }}
+                </div>
+                <div style="font-size: 0.7em; color: #6c757d;">
+                  P:{{ content.Priority }}
+                  @if (!content.IsActive) {
+                    • <span style="color: #dc3545;">Inactive</span>
+                  }
+                </div>
+              </div>
+              @if (templateContents.length > 1 && config.allowEdit) {
+                <button type="button"
+                  (click)="deleteTemplateContent(i); $event.stopPropagation()"
+                  class="btn-sm delete-btn"
+                  style="background: none; border: none; color: #dc3545; padding: 4px; border-radius: 3px; transition: all 0.2s; cursor: pointer;"
+                  onmouseover="this.style.backgroundColor='#dc3545'; this.style.color='white';"
+                  onmouseout="this.style.backgroundColor='transparent'; this.style.color='#dc3545';"
+                  title="Delete this content version">
+                  <i class="fa-solid fa-trash fa-xs"></i>
+                </button>
+              }
             </div>
+          }
+          @if (isAddingNewContent) {
+            <div class="content-version-tab active"
+              style="padding: 8px 12px; border: 1px solid #28a745; border-radius: 6px; background: #d4edda; display: flex; align-items: center; gap: 6px;">
+              <i class="fa-solid fa-plus text-success"></i>
+              <span style="font-weight: 600; color: #155724; font-size: 0.85em;">New</span>
+            </div>
+          }
+          <!-- Add New Content (Edit Mode Only) -->
+          @if (config.allowEdit && !isAddingNewContent) {
+            <div class="content-version-tab add-new"
+              (click)="addNewTemplateContent()"
+              style="padding: 8px 12px; border: 1px dashed #28a745; border-radius: 6px; background: #f8f9fa; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.backgroundColor='#e8f5e9'; this.style.borderStyle='solid';"
+              onmouseout="this.style.backgroundColor='#f8f9fa'; this.style.borderStyle='dashed';"
+              title="Add new template content">
+              <i class="fa-solid fa-plus" style="color: #28a745; font-size: 0.75em;"></i>
+              <span style="font-weight: 500; color: #28a745; font-size: 0.85em;">New</span>
+            </div>
+          }
         </div>
+      </div>
     }
-
     <!-- Content Editor -->
     @if (currentTemplateContent) {
-        <div class="content-editor-container" style="flex: 1; display: flex; flex-direction: column; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
-            
-            <!-- Content Metadata Bar -->
-            <div class="content-metadata-bar" style="background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 16px 20px;">
-                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 20px; align-items: end;">
-                    
-                    <div class="form-group" style="margin: 0;">
-                        <label for="contentType" class="form-label" style="margin-bottom: 4px; font-size: 0.9em; font-weight: 600;">
-                            <i class="fa-solid fa-tag"></i> Content Type
-                        </label>
-                        @if (config.allowEdit) {
-                            <kendo-dropdownlist [(ngModel)]="currentTemplateContent.TypeID"
-                                               name="contentType"
-                                               [data]="getContentTypeOptionsForContent()"
-                                               textField="text"
-                                               valueField="value"
-                                               [valuePrimitive]="true"
-                                               (valueChange)="onContentTypeChange()">
-                            </kendo-dropdownlist>
-                        } @else {
-                            <div class="form-control-plaintext" style="font-size: 0.9em; padding: 4px 0;">
-                                {{ getContentTypeDisplayText(currentTemplateContent.TypeID) }}
-                            </div>
-                        }
-                    </div>
-                    
-                    <div class="form-group" style="margin: 0;">
-                        <label for="priority" class="form-label" style="margin-bottom: 4px; font-size: 0.9em; font-weight: 600;">
-                            <i class="fa-solid fa-sort-numeric-up"></i> Priority
-                        </label>
-                        @if (config.allowEdit) {
-                            <kendo-numerictextbox [(ngModel)]="currentTemplateContent.Priority"
-                                                 name="priority"
-                                                 [min]="1"
-                                                 [step]="1"
-                                                 [format]="'n0'">
-                            </kendo-numerictextbox>
-                        } @else {
-                            <div class="form-control-plaintext" style="font-size: 0.9em; padding: 4px 0;">
-                                {{ currentTemplateContent.Priority || '-' }}
-                            </div>
-                        }
-                    </div>
-                    
-                    <div class="form-group" style="margin: 0;">
-                        <label class="form-label" style="margin-bottom: 4px; font-size: 0.9em; font-weight: 600;">
-                            <i class="fa-solid fa-toggle-on"></i> Status
-                        </label>
-                        @if (config.allowEdit) {
-                            <div class="form-check" style="margin-top: 8px;">
-                                <input type="checkbox" 
-                                       id="isActive"
-                                       class="form-check-input" 
-                                       [(ngModel)]="currentTemplateContent.IsActive"
-                                       name="isActive">
-                                <label class="form-check-label" for="isActive" style="font-size: 0.9em;">
-                                    Active
-                                </label>
-                            </div>
-                        } @else {
-                            <div class="form-control-plaintext" style="font-size: 0.9em; padding: 4px 0;">
-                                @if (currentTemplateContent.IsActive) {
-                                    <span class="badge badge-success" style="background: #28a745; color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.75em;">
-                                        <i class="fa-solid fa-check-circle"></i> Active
-                                    </span>
-                                } @else {
-                                    <span class="badge badge-secondary" style="background: #6c757d; color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.75em;">
-                                        <i class="fa-solid fa-pause-circle"></i> Inactive
-                                    </span>
-                                }
-                            </div>
-                        }
-                    </div>
-
+      <div class="content-editor-container" style="flex: 1; display: flex; flex-direction: column; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
+        <!-- Content Metadata Bar -->
+        <div class="content-metadata-bar" style="background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 16px 20px;">
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 20px; align-items: end;">
+            <div class="form-group" style="margin: 0;">
+              <label for="contentType" class="form-label" style="margin-bottom: 4px; font-size: 0.9em; font-weight: 600;">
+                <i class="fa-solid fa-tag"></i> Content Type
+              </label>
+              @if (config.allowEdit) {
+                <kendo-dropdownlist [(ngModel)]="currentTemplateContent.TypeID"
+                  name="contentType"
+                  [data]="getContentTypeOptionsForContent()"
+                  textField="text"
+                  valueField="value"
+                  [valuePrimitive]="true"
+                  (valueChange)="onContentTypeChange()">
+                </kendo-dropdownlist>
+              } @else {
+                <div class="form-control-plaintext" style="font-size: 0.9em; padding: 4px 0;">
+                  {{ getContentTypeDisplayText(currentTemplateContent.TypeID) }}
                 </div>
+              }
             </div>
-            
-            <!-- Content Text Editor -->
-            <div class="content-text-editor" style="flex: 1; padding: 20px; display: flex; flex-direction: column;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <label for="templateContent" class="form-label" style="margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                        <i class="fa-solid fa-code"></i> Template Content
-                        <span class="badge" style="padding: 4px 8px; border-radius: 4px; font-size: 0.75em;"
-                              [style.background]="!currentTemplateContent.ID ? '#28a745' : '#6c757d'"
-                              [style.color]="'white'">
-                            @if (!currentTemplateContent.ID) {
-                                New
-                            } @else {
-                                {{ getContentTypeDisplayText(currentTemplateContent.TypeID) }}
-                            }
-                        </span>
-                    </label>
-                    
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        @if (!isAddingNewContent && hasUnsavedChanges) {
-                            <span class="unsaved-indicator" style="color: #fd7e14; font-size: 0.85em; display: flex; align-items: center; gap: 4px;">
-                                <i class="fa-solid fa-circle" style="font-size: 0.5em;"></i>
-                                Unsaved changes
-                            </span>
-                        }
-                        
-                        @if (template.IsSaved && currentTemplateContent && config.showRunButton) {
-                            <button type="button" 
-                                    class="btn btn-sm"
-                                    [disabled]="isRunningTemplate"
-                                    (click)="onRunTemplate()"
-                                    style="background: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.85em; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
-                                    onmouseover="this.style.background='#138496'"
-                                    onmouseout="this.style.background='#17a2b8'"
-                                    title="Test run this template">
-                                @if (isRunningTemplate) {
-                                    <i class="fa-solid fa-spinner fa-spin"></i>
-                                    Running...
-                                } @else {
-                                    <i class="fa-solid fa-play"></i>
-                                    Run
-                                }
-                            </button>
-                        }
-                    </div>
+            <div class="form-group" style="margin: 0;">
+              <label for="priority" class="form-label" style="margin-bottom: 4px; font-size: 0.9em; font-weight: 600;">
+                <i class="fa-solid fa-sort-numeric-up"></i> Priority
+              </label>
+              @if (config.allowEdit) {
+                <kendo-numerictextbox [(ngModel)]="currentTemplateContent.Priority"
+                  name="priority"
+                  [min]="1"
+                  [step]="1"
+                  [format]="'n0'">
+                </kendo-numerictextbox>
+              } @else {
+                <div class="form-control-plaintext" style="font-size: 0.9em; padding: 4px 0;">
+                  {{ currentTemplateContent.Priority || '-' }}
                 </div>
-                
-                <mj-code-editor 
-                    #codeEditor
-                    (change)="onTemplateTextChange($event)"
-                    [readonly]="!config.allowEdit"
-                    [language]="getEditorLanguage()"
-                    [languages]="supportedLanguages"
-                    style="flex: 1; height: 350px; border: 1px solid #ced4da; border-radius: 4px;">
-                </mj-code-editor>
-                
-                <!-- Template Help Section with Tabs -->
-                @if (!config.compactMode) {
-                    <div class="template-help-section" style="margin-top: 16px;">
-                        <!-- Tab Navigation -->
-                        <div class="help-tabs" style="display: flex; border-bottom: 2px solid #dee2e6; margin-bottom: 0;">
-                            <button type="button" 
-                                    class="help-tab" 
-                                    [class.active]="activeHelpTab === 'syntax'"
-                                    (click)="activeHelpTab = 'syntax'"
-                                    style="padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 0.9em; font-weight: 600; color: #6c757d; border-bottom: 3px solid transparent; transition: all 0.2s;"
-                                    [style.color]="activeHelpTab === 'syntax' ? '#28a745' : '#6c757d'"
-                                    [style.border-bottom-color]="activeHelpTab === 'syntax' ? '#28a745' : 'transparent'">
-                                <i class="fa-solid fa-code"></i> Template Syntax
-                            </button>
-                            <button type="button" 
-                                    class="help-tab" 
-                                    [class.active]="activeHelpTab === 'placeholders'"
-                                    (click)="activeHelpTab = 'placeholders'"
-                                    style="padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 0.9em; font-weight: 600; color: #6c757d; border-bottom: 3px solid transparent; transition: all 0.2s;"
-                                    [style.color]="activeHelpTab === 'placeholders' ? '#28a745' : '#6c757d'"
-                                    [style.border-bottom-color]="activeHelpTab === 'placeholders' ? '#28a745' : 'transparent'">
-                                <i class="fa-solid fa-at"></i> System Placeholders
-                            </button>
-                        </div>
-                        
-                        <!-- Tab Content -->
-                        <div class="help-content" style="padding: 16px; background: #f8f9fa; border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 4px 4px;">
-                            <!-- Template Syntax Tab -->
-                            @if (activeHelpTab === 'syntax') {
-                                <div class="syntax-help" style="font-size: 0.85em;">
-                                    <div style="font-weight: 600; margin-bottom: 12px; color: #155724;">
-                                        <i class="fa-solid fa-lightbulb"></i> Template Syntax Quick Reference
-                                    </div>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                                        <div>
-                                            <div style="margin-bottom: 8px;">
-                                                <strong>Parameters:</strong><br>
-                                                <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{{'}} paramName {{'}}'}}</code>
-                                            </div>
-                                            <div>
-                                                <strong>Template Includes:</strong><br>
-                                                <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{% template "TemplateName" %}'}}</code>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div style="margin-bottom: 8px;">
-                                                <strong>Conditionals:</strong><br>
-                                                <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{% if condition %}'}} ... {{'{% endif %}'}}</code>
-                                            </div>
-                                            <div>
-                                                <strong>Loops:</strong><br>
-                                                <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{% for item in items %}'}} ... {{'{% endfor %}'}}</code>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                            
-                            <!-- System Placeholders Tab -->
-                            @if (activeHelpTab === 'placeholders') {
-                                <div class="placeholders-help" style="font-size: 0.85em;">
-                                    <div style="font-weight: 600; margin-bottom: 12px; color: #155724;">
-                                        <i class="fa-solid fa-at"></i> System Placeholders Reference
-                                    </div>
-                                    <p style="margin-bottom: 16px; color: #495057; line-height: 1.5;">
-                                        System placeholders are automatically available in all AI prompt templates. Simply use them in your template text and they will be replaced with their current values at execution time.
-                                    </p>
-                                    
-                                    <!-- Category Sub-tabs -->
-                                    <div class="category-tabs" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
-                                        @for (categoryGroup of placeholderCategories; track categoryGroup.category.name) {
-                                            <button type="button"
-                                                    class="category-tab"
-                                                    [class.active]="activePlaceholderCategory === categoryGroup.category.name"
-                                                    (click)="activePlaceholderCategory = categoryGroup.category.name"
-                                                    style="padding: 6px 14px; border: 1px solid #dee2e6; background: white; border-radius: 20px; cursor: pointer; font-size: 0.85em; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: all 0.2s; position: relative;"
-                                                    [style.border-color]="activePlaceholderCategory === categoryGroup.category.name ? categoryGroup.category.color : '#dee2e6'"
-                                                    [style.background]="activePlaceholderCategory === categoryGroup.category.name ? categoryGroup.category.color + '10' : 'white'"
-                                                    [style.color]="activePlaceholderCategory === categoryGroup.category.name ? categoryGroup.category.color : '#6c757d'">
-                                                <i [class]="'fa-solid ' + categoryGroup.category.icon" style="font-size: 0.9em;"></i>
-                                                {{ categoryGroup.category.name }}
-                                                <span class="badge" 
-                                                      style="background: rgba(0,0,0,0.1); color: inherit; padding: 2px 6px; border-radius: 10px; font-size: 0.75em; margin-left: 4px;">
-                                                    {{ categoryGroup.placeholders.length }}
-                                                </span>
-                                            </button>
-                                        }
-                                    </div>
-                                    
-                                    <!-- Active Category Content -->
-                                    <div class="placeholder-content" style="background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px;">
-                                        @for (categoryGroup of placeholderCategories; track categoryGroup.category.name) {
-                                            @if (activePlaceholderCategory === categoryGroup.category.name) {
-                                                <div class="category-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-                                                    <i [class]="'fa-solid ' + categoryGroup.category.icon" 
-                                                       [style.color]="categoryGroup.category.color" 
-                                                       style="font-size: 1.2em;"></i>
-                                                    <h5 style="margin: 0; color: #343a40; font-weight: 600;">{{ categoryGroup.category.name }}</h5>
-                                                </div>
-                                                
-                                                <div style="display: grid; gap: 10px;">
-                                                    @for (placeholder of categoryGroup.placeholders; track placeholder.name) {
-                                                        <div class="placeholder-item" 
-                                                             style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; position: relative; transition: all 0.2s; max-width: 800px;"
-                                                             onmouseover="this.style.borderColor='#007bff'; this.style.background='#f0f8ff'; this.querySelector('.copy-btn').style.opacity='1';"
-                                                             onmouseout="this.style.borderColor='#e9ecef'; this.style.background='#f8f9fa'; this.querySelector('.copy-btn').style.opacity='0';">
-                                                            <div style="display: flex; align-items: flex-start; gap: 8px;">
-                                                                <div>
-                                                                    <div style="display: inline-flex; align-items: center; gap: 8px;">
-                                                                        <code style="color: #e83e8c; font-weight: 600; font-size: 0.95em;">{{'{{'}} {{ placeholder.name }} {{'}}'}}</code>
-                                                                        <button type="button"
-                                                                                class="copy-btn"
-                                                                                (click)="copyPlaceholder(placeholder.name)"
-                                                                                style="opacity: 0; transition: opacity 0.2s; background: none; border: none; padding: 4px 8px; cursor: pointer; color: #007bff; border-radius: 4px; display: inline-flex; align-items: center;"
-                                                                                onmouseover="this.style.background='#e7f3ff';"
-                                                                                onmouseout="this.style.background='none';"
-                                                                                title="Copy placeholder to clipboard">
-                                                                            <i class="fa-solid fa-copy" style="font-size: 0.85em;"></i>
-                                                                        </button>
-                                                                    </div>
-                                                                    @if (placeholder.description) {
-                                                                        <div style="color: #6c757d; margin-top: 4px; line-height: 1.4;">{{ placeholder.description }}</div>
-                                                                    }
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    }
-                                                </div>
-                                            }
-                                        }
-                                    </div>
-                                    
-                                    <!-- Usage Example -->
-                                    <div style="margin-top: 20px; padding: 12px; background: #e3f2fd; border-radius: 6px; border: 1px solid #bbdefb;">
-                                        <div style="display: flex; align-items: flex-start; gap: 8px;">
-                                            <i class="fa-solid fa-info-circle" style="color: #1976d2; margin-top: 2px;"></i>
-                                            <div style="flex: 1; font-size: 0.85em; color: #1565c0; line-height: 1.5;">
-                                                <strong>Usage Example:</strong> To use a system placeholder in your template, simply include it in double curly braces. 
-                                                For example: <code style="background: white; padding: 2px 4px; border-radius: 3px;">"Today is {{'{{'}} _CURRENT_DATE {{'}}'}} and the current user is {{'{{'}} _USER_NAME {{'}}'}}"</code>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    </div>
+              }
+            </div>
+            <div class="form-group" style="margin: 0;">
+              <label class="form-label" style="margin-bottom: 4px; font-size: 0.9em; font-weight: 600;">
+                <i class="fa-solid fa-toggle-on"></i> Status
+              </label>
+              @if (config.allowEdit) {
+                <div class="form-check" style="margin-top: 8px;">
+                  <input type="checkbox"
+                    id="isActive"
+                    class="form-check-input"
+                    [(ngModel)]="currentTemplateContent.IsActive"
+                    name="isActive">
+                  <label class="form-check-label" for="isActive" style="font-size: 0.9em;">
+                    Active
+                  </label>
+                </div>
+              } @else {
+                <div class="form-control-plaintext" style="font-size: 0.9em; padding: 4px 0;">
+                  @if (currentTemplateContent.IsActive) {
+                    <span class="badge badge-success" style="background: #28a745; color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.75em;">
+                      <i class="fa-solid fa-check-circle"></i> Active
+                    </span>
+                  } @else {
+                    <span class="badge badge-secondary" style="background: #6c757d; color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.75em;">
+                      <i class="fa-solid fa-pause-circle"></i> Inactive
+                    </span>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+        <!-- Content Text Editor -->
+        <div class="content-text-editor" style="flex: 1; padding: 20px; display: flex; flex-direction: column;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <label for="templateContent" class="form-label" style="margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+              <i class="fa-solid fa-code"></i> Template Content
+              <span class="badge" style="padding: 4px 8px; border-radius: 4px; font-size: 0.75em;"
+                [style.background]="!currentTemplateContent.ID ? '#28a745' : '#6c757d'"
+                [style.color]="'white'">
+                @if (!currentTemplateContent.ID) {
+                  New
+                } @else {
+                  {{ getContentTypeDisplayText(currentTemplateContent.TypeID) }}
                 }
-            </div>
-        </div>
-    } @else {
-        <!-- No Content State -->
-        <div class="no-content-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 8px; padding: 40px; text-align: center;">
-            <i class="fa-solid fa-file-plus" style="font-size: 48px; margin-bottom: 16px; color: #6c757d; opacity: 0.6;"></i>
-            <h5 style="color: #495057; margin-bottom: 8px;">No Template Content</h5>
-            <p style="color: #6c757d; margin-bottom: 20px;">Create your first template content version to get started.</p>
-            @if (config.allowEdit) {
-                <button type="button" 
-                        (click)="addNewTemplateContent()"
-                        class="btn btn-primary">
-                    <i class="fa-solid fa-plus"></i> Create First Content Version
+              </span>
+            </label>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              @if (!isAddingNewContent && hasUnsavedChanges) {
+                <span class="unsaved-indicator" style="color: #fd7e14; font-size: 0.85em; display: flex; align-items: center; gap: 4px;">
+                  <i class="fa-solid fa-circle" style="font-size: 0.5em;"></i>
+                  Unsaved changes
+                </span>
+              }
+              @if (template.IsSaved && currentTemplateContent && config.showRunButton) {
+                <button type="button"
+                  class="btn btn-sm"
+                  [disabled]="isRunningTemplate"
+                  (click)="onRunTemplate()"
+                  style="background: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.85em; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+                  onmouseover="this.style.background='#138496'"
+                  onmouseout="this.style.background='#17a2b8'"
+                  title="Test run this template">
+                  @if (isRunningTemplate) {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    Running...
+                  } @else {
+                    <i class="fa-solid fa-play"></i>
+                    Run
+                  }
                 </button>
-            }
+              }
+            </div>
+          </div>
+          <mj-code-editor
+            #codeEditor
+            (change)="onTemplateTextChange($event)"
+            [readonly]="!config.allowEdit"
+            [language]="getEditorLanguage()"
+            [languages]="supportedLanguages"
+            style="flex: 1; height: 350px; border: 1px solid #ced4da; border-radius: 4px;">
+          </mj-code-editor>
+          <!-- Template Help Section with Tabs -->
+          @if (!config.compactMode) {
+            <div class="template-help-section" style="margin-top: 16px;">
+              <!-- Tab Navigation -->
+              <div class="help-tabs" style="display: flex; border-bottom: 2px solid #dee2e6; margin-bottom: 0;">
+                <button type="button"
+                  class="help-tab"
+                  [class.active]="activeHelpTab === 'syntax'"
+                  (click)="activeHelpTab = 'syntax'"
+                  style="padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 0.9em; font-weight: 600; color: #6c757d; border-bottom: 3px solid transparent; transition: all 0.2s;"
+                  [style.color]="activeHelpTab === 'syntax' ? '#28a745' : '#6c757d'"
+                  [style.border-bottom-color]="activeHelpTab === 'syntax' ? '#28a745' : 'transparent'">
+                  <i class="fa-solid fa-code"></i> Template Syntax
+                </button>
+                <button type="button"
+                  class="help-tab"
+                  [class.active]="activeHelpTab === 'placeholders'"
+                  (click)="activeHelpTab = 'placeholders'"
+                  style="padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 0.9em; font-weight: 600; color: #6c757d; border-bottom: 3px solid transparent; transition: all 0.2s;"
+                  [style.color]="activeHelpTab === 'placeholders' ? '#28a745' : '#6c757d'"
+                  [style.border-bottom-color]="activeHelpTab === 'placeholders' ? '#28a745' : 'transparent'">
+                  <i class="fa-solid fa-at"></i> System Placeholders
+                </button>
+              </div>
+              <!-- Tab Content -->
+              <div class="help-content" style="padding: 16px; background: #f8f9fa; border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 4px 4px;">
+                <!-- Template Syntax Tab -->
+                @if (activeHelpTab === 'syntax') {
+                  <div class="syntax-help" style="font-size: 0.85em;">
+                    <div style="font-weight: 600; margin-bottom: 12px; color: #155724;">
+                      <i class="fa-solid fa-lightbulb"></i> Template Syntax Quick Reference
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                      <div>
+                        <div style="margin-bottom: 8px;">
+                          <strong>Parameters:</strong><br>
+                          <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{{'}} paramName {{'}}'}}</code>
+                        </div>
+                        <div>
+                          <strong>Template Includes:</strong><br>
+                          <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{% template "TemplateName" %}'}}</code>
+                        </div>
+                      </div>
+                      <div>
+                        <div style="margin-bottom: 8px;">
+                          <strong>Conditionals:</strong><br>
+                          <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{% if condition %}'}} ... {{'{% endif %}'}}</code>
+                        </div>
+                        <div>
+                          <strong>Loops:</strong><br>
+                          <code style="background: #fff; padding: 4px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">{{'{% for item in items %}'}} ... {{'{% endfor %}'}}</code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                }
+                <!-- System Placeholders Tab -->
+                @if (activeHelpTab === 'placeholders') {
+                  <div class="placeholders-help" style="font-size: 0.85em;">
+                    <div style="font-weight: 600; margin-bottom: 12px; color: #155724;">
+                      <i class="fa-solid fa-at"></i> System Placeholders Reference
+                    </div>
+                    <p style="margin-bottom: 16px; color: #495057; line-height: 1.5;">
+                      System placeholders are automatically available in all AI prompt templates. Simply use them in your template text and they will be replaced with their current values at execution time.
+                    </p>
+                    <!-- Category Sub-tabs -->
+                    <div class="category-tabs" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+                      @for (categoryGroup of placeholderCategories; track categoryGroup.category.name) {
+                        <button type="button"
+                          class="category-tab"
+                          [class.active]="activePlaceholderCategory === categoryGroup.category.name"
+                          (click)="activePlaceholderCategory = categoryGroup.category.name"
+                          style="padding: 6px 14px; border: 1px solid #dee2e6; background: white; border-radius: 20px; cursor: pointer; font-size: 0.85em; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: all 0.2s; position: relative;"
+                          [style.border-color]="activePlaceholderCategory === categoryGroup.category.name ? categoryGroup.category.color : '#dee2e6'"
+                          [style.background]="activePlaceholderCategory === categoryGroup.category.name ? categoryGroup.category.color + '10' : 'white'"
+                          [style.color]="activePlaceholderCategory === categoryGroup.category.name ? categoryGroup.category.color : '#6c757d'">
+                          <i [class]="'fa-solid ' + categoryGroup.category.icon" style="font-size: 0.9em;"></i>
+                          {{ categoryGroup.category.name }}
+                          <span class="badge"
+                            style="background: rgba(0,0,0,0.1); color: inherit; padding: 2px 6px; border-radius: 10px; font-size: 0.75em; margin-left: 4px;">
+                            {{ categoryGroup.placeholders.length }}
+                          </span>
+                        </button>
+                      }
+                    </div>
+                    <!-- Active Category Content -->
+                    <div class="placeholder-content" style="background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px;">
+                      @for (categoryGroup of placeholderCategories; track categoryGroup.category.name) {
+                        @if (activePlaceholderCategory === categoryGroup.category.name) {
+                          <div class="category-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                            <i [class]="'fa-solid ' + categoryGroup.category.icon"
+                              [style.color]="categoryGroup.category.color"
+                            style="font-size: 1.2em;"></i>
+                            <h5 style="margin: 0; color: #343a40; font-weight: 600;">{{ categoryGroup.category.name }}</h5>
+                          </div>
+                          <div style="display: grid; gap: 10px;">
+                            @for (placeholder of categoryGroup.placeholders; track placeholder.name) {
+                              <div class="placeholder-item"
+                                style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; position: relative; transition: all 0.2s; max-width: 800px;"
+                                onmouseover="this.style.borderColor='#007bff'; this.style.background='#f0f8ff'; this.querySelector('.copy-btn').style.opacity='1';"
+                                onmouseout="this.style.borderColor='#e9ecef'; this.style.background='#f8f9fa'; this.querySelector('.copy-btn').style.opacity='0';">
+                                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                                  <div>
+                                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                                      <code style="color: #e83e8c; font-weight: 600; font-size: 0.95em;">{{'{{'}} {{ placeholder.name }} {{'}}'}}</code>
+                                      <button type="button"
+                                        class="copy-btn"
+                                        (click)="copyPlaceholder(placeholder.name)"
+                                        style="opacity: 0; transition: opacity 0.2s; background: none; border: none; padding: 4px 8px; cursor: pointer; color: #007bff; border-radius: 4px; display: inline-flex; align-items: center;"
+                                        onmouseover="this.style.background='#e7f3ff';"
+                                        onmouseout="this.style.background='none';"
+                                        title="Copy placeholder to clipboard">
+                                        <i class="fa-solid fa-copy" style="font-size: 0.85em;"></i>
+                                      </button>
+                                    </div>
+                                    @if (placeholder.description) {
+                                      <div style="color: #6c757d; margin-top: 4px; line-height: 1.4;">{{ placeholder.description }}</div>
+                                    }
+                                  </div>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        }
+                      }
+                    </div>
+                    <!-- Usage Example -->
+                    <div style="margin-top: 20px; padding: 12px; background: #e3f2fd; border-radius: 6px; border: 1px solid #bbdefb;">
+                      <div style="display: flex; align-items: flex-start; gap: 8px;">
+                        <i class="fa-solid fa-info-circle" style="color: #1976d2; margin-top: 2px;"></i>
+                        <div style="flex: 1; font-size: 0.85em; color: #1565c0; line-height: 1.5;">
+                          <strong>Usage Example:</strong> To use a system placeholder in your template, simply include it in double curly braces.
+                          For example: <code style="background: white; padding: 2px 4px; border-radius: 3px;">"Today is {{'{{'}} _CURRENT_DATE {{'}}'}} and the current user is {{'{{'}} _USER_NAME {{'}}'}}"</code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
         </div>
+      </div>
+    } @else {
+      <!-- No Content State -->
+      <div class="no-content-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 8px; padding: 40px; text-align: center;">
+        <i class="fa-solid fa-file-plus" style="font-size: 48px; margin-bottom: 16px; color: #6c757d; opacity: 0.6;"></i>
+        <h5 style="color: #495057; margin-bottom: 8px;">No Template Content</h5>
+        <p style="color: #6c757d; margin-bottom: 20px;">Create your first template content version to get started.</p>
+        @if (config.allowEdit) {
+          <button type="button"
+            (click)="addNewTemplateContent()"
+            class="btn btn-primary">
+            <i class="fa-solid fa-plus"></i> Create First Content Version
+          </button>
+        }
+      </div>
     }
-</div>
+  </div>
+}

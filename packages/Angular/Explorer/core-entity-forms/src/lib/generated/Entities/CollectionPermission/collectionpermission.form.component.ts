@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Collection Permissions') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-collectionpermission-form',
     templateUrl: './collectionpermission.form.component.html'
 })

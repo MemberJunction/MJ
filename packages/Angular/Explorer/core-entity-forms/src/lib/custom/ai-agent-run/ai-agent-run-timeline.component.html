@@ -1,64 +1,74 @@
-<div class="timeline-container" *ngIf="!loading && (timelineItems$ | async) as items">
-  <div class="timeline" *ngIf="items.length > 0">
-    <ng-container *ngFor="let item of items; trackBy: trackByItemId">
-      <!-- Main Timeline Item -->
-      <mj-ai-agent-run-step-node
-        [item]="item"
-        [isSelected]="selectedItem?.id === item.id"
-        (itemClick)="selectItem(item)"
-        (expandToggle)="toggleItemExpansion(item, $event)"
-        (navigateToEntity)="navigateToEntity.emit($event)">
-      </mj-ai-agent-run-step-node>
-      
-      <!-- Children Container (for both Sub-Agent and ParentID relationships) -->
-      <ng-container *ngIf="item.isExpanded">
-        <!-- Show loading indicator while loading Sub-Agent children -->
-        <div class="loading-children" *ngIf="item.type === 'step' && item.data?.StepType === 'Sub-Agent' && !item.childrenLoaded">
-          <i class="fas fa-spinner fa-spin"></i> Loading sub-agent steps...
-        </div>
-
-        <!-- Show no children message for Sub-Agents -->
-        <div class="no-children" *ngIf="item.type === 'step' && item.data?.StepType === 'Sub-Agent' && item.childrenLoaded && item.hasNoChildren">
-          <i class="fas fa-info-circle"></i> No sub-agent steps found
-        </div>
-
-        <!-- Render children recursively (works for both Sub-Agent and ParentID children) -->
-        <ng-container *ngIf="item.children && item.children.length > 0">
-          <ng-container *ngTemplateOutlet="recursiveSteps; context: { $implicit: item.children }"></ng-container>
-        </ng-container>
-
-        <!-- For actual sub-run items (from the initial load) - legacy support -->
-        <mj-ai-agent-run-timeline
-          *ngIf="item.type === 'subrun' && item.data?.ID"
-          [aiAgentRunId]="item.data.ID"
-          [dataHelper]="createSubRunDataHelper()"
-          [autoRefresh]="false"
-          (itemSelected)="selectItem($event)"
-          (navigateToEntity)="navigateToEntity.emit($event)">
-        </mj-ai-agent-run-timeline>
-      </ng-container>
-    </ng-container>
+@if (!loading && (timelineItems$ | async); as items) {
+  <div class="timeline-container">
+    @if (items.length > 0) {
+      <div class="timeline">
+        @for (item of items; track trackByItemId($index, item)) {
+          <!-- Main Timeline Item -->
+          <mj-ai-agent-run-step-node
+            [item]="item"
+            [isSelected]="selectedItem?.id === item.id"
+            (itemClick)="selectItem(item)"
+            (expandToggle)="toggleItemExpansion(item, $event)"
+            (navigateToEntity)="navigateToEntity.emit($event)">
+          </mj-ai-agent-run-step-node>
+          <!-- Children Container (for both Sub-Agent and ParentID relationships) -->
+          @if (item.isExpanded) {
+            <!-- Show loading indicator while loading Sub-Agent children -->
+            @if (item.type === 'step' && item.data?.StepType === 'Sub-Agent' && !item.childrenLoaded) {
+              <div class="loading-children">
+                <i class="fas fa-spinner fa-spin"></i> Loading sub-agent steps...
+              </div>
+            }
+            <!-- Show no children message for Sub-Agents -->
+            @if (item.type === 'step' && item.data?.StepType === 'Sub-Agent' && item.childrenLoaded && item.hasNoChildren) {
+              <div class="no-children">
+                <i class="fas fa-info-circle"></i> No sub-agent steps found
+              </div>
+            }
+            <!-- Render children recursively (works for both Sub-Agent and ParentID children) -->
+            @if (item.children && item.children.length > 0) {
+              <ng-container *ngTemplateOutlet="recursiveSteps; context: { $implicit: item.children }"></ng-container>
+            }
+            <!-- For actual sub-run items (from the initial load) - legacy support -->
+            @if (item.type === 'subrun' && item.data?.ID) {
+              <mj-ai-agent-run-timeline
+                [aiAgentRunId]="item.data.ID"
+                [dataHelper]="createSubRunDataHelper()"
+                [autoRefresh]="false"
+                (itemSelected)="selectItem($event)"
+                (navigateToEntity)="navigateToEntity.emit($event)">
+              </mj-ai-agent-run-timeline>
+            }
+          }
+        }
+      </div>
+    }
+    @if (items.length === 0) {
+      <div class="empty-state">
+        <i class="fas fa-stream fa-3x"></i>
+        <p>No execution steps found</p>
+      </div>
+    }
   </div>
-  
-  <div class="empty-state" *ngIf="items.length === 0">
-    <i class="fas fa-stream fa-3x"></i>
-    <p>No execution steps found</p>
+}
+
+@if (loading) {
+  <div class="loading-state">
+    <i class="fas fa-spinner fa-spin fa-2x"></i>
+    <p>Loading timeline...</p>
   </div>
-</div>
+}
 
-<div class="loading-state" *ngIf="loading">
-  <i class="fas fa-spinner fa-spin fa-2x"></i>
-  <p>Loading timeline...</p>
-</div>
-
-<div class="error-state" *ngIf="error">
-  <i class="fas fa-exclamation-triangle fa-2x"></i>
-  <p>{{ error }}</p>
-</div>
+@if (error) {
+  <div class="error-state">
+    <i class="fas fa-exclamation-triangle fa-2x"></i>
+    <p>{{ error }}</p>
+  </div>
+}
 
 <!-- Recursive template for rendering nested children (ParentID relationships) -->
 <ng-template #recursiveSteps let-steps>
-  <ng-container *ngFor="let step of steps; trackBy: trackByItemId">
+  @for (step of steps; track trackByItemId($index, step)) {
     <mj-ai-agent-run-step-node
       [item]="step"
       [isSelected]="selectedItem?.id === step.id"
@@ -66,10 +76,9 @@
       (expandToggle)="toggleItemExpansion(step, $event)"
       (navigateToEntity)="navigateToEntity.emit($event)">
     </mj-ai-agent-run-step-node>
-
     <!-- Recursively render this step's children if expanded -->
-    <ng-container *ngIf="step.isExpanded && step.children && step.children.length > 0">
+    @if (step.isExpanded && step.children && step.children.length > 0) {
       <ng-container *ngTemplateOutlet="recursiveSteps; context: { $implicit: step.children }"></ng-container>
-    </ng-container>
-  </ng-container>
+    }
+  }
 </ng-template>

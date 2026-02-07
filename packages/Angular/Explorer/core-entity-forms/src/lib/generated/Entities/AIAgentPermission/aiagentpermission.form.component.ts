@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Permissions') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aiagentpermission-form',
     templateUrl: './aiagentpermission.form.component.html'
 })

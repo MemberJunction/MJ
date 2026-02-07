@@ -9,6 +9,7 @@ import { ActionCategoryEntity } from '@memberjunction/core-entities';
 import { ActionEntityExtended } from '@memberjunction/actions-base';
 
 @Component({
+  standalone: false,
   selector: 'mj-action-list-item',
   templateUrl: './action-list-item.component.html',
   styleUrls: ['./action-list-item.component.css'],

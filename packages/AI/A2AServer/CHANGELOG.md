@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/a2aserver
 
+## 3.4.0
+
+### Minor Changes
+
+- ef7acd8: migration
+
+### Patch Changes
+
+- Updated dependencies [ef7acd8]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [e552e5f]
+- Updated dependencies [a3961d5]
+  - @memberjunction/server@3.4.0
+  - @memberjunction/sqlserver-dataprovider@3.4.0
+  - @memberjunction/config@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ai-agents@3.4.0
+  - @memberjunction/aiengine@3.4.0
+  - @memberjunction/ai-core-plus@3.4.0
+  - @memberjunction/api-keys@3.4.0
+  - @memberjunction/encryption@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Minor Changes

@@ -36,7 +36,7 @@ export class RunCommand {
             }
 
             const config = loadCLIConfig();
-            const format = flags.format || config.defaultFormat;
+            const format = flags.format || config.defaultFormat || 'console';
             const environment = flags.environment || config.defaultEnvironment;
 
             // Get engine instance

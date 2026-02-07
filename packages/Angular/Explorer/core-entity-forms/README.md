@@ -20,7 +20,7 @@ npm install @memberjunction/ng-core-entity-forms
 
 ## Requirements
 
-- Angular 18+
+- Angular 21+
 - @memberjunction/core
 - @memberjunction/core-entities
 - @memberjunction/ng-base-forms
@@ -371,7 +371,7 @@ AIAgentFormComponent (generated)
 
 ### Future Enhancements
 
-1. **Visual Flow Editor**: Integrate a proper flow visualization library (when Angular 18 compatible)
+1. **Visual Flow Editor**: Integrate a proper flow visualization library (when Angular 21 compatible)
 2. **Drag & Drop**: Allow visual workflow editing with drag and drop
 3. **Conditional UI**: Show/hide sections based on agent configuration
 4. **Template Library**: Pre-built custom sections for common agent types

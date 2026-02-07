@@ -25,11 +25,3 @@ export class DataContextItemServer extends DataContextItem {
         }
     }
 }
-
-/**
- * Call this function after you import this package to ensure that the DataContextItemServer class is not tree shaken out of the final build
- */
-export function LoadDataContextItemsServer() {
-    // nothing to do here - this is called from packages that import this package in order to prevent tree shaking from removing the DataContextItemServer class
-    // that can happen since there is no static code path to instantiate the class
-}

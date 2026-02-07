@@ -1,27 +1,9 @@
 {
+  "extends": "../../tsconfig.server.json",
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "es2022",
-    "declaration": true,
-    "declarationMap": true,
-    "outDir": "./dist",
-    "rootDir": ".",
-    "sourceMap": true,
-    "experimentalDecorators": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "lib": ["es2022", "esnext.asynciterable"],
-    "moduleResolution": "node",
-    "removeComments": true,
-    "noImplicitThis": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "allowSyntheticDefaultImports": true,
-    "emitDecoratorMetadata": true,
-    "skipLibCheck": true, 
-    "composite": true,
-    "baseUrl": "."
+    "outDir": "dist",
+    "rootDir": "src"
   },
-  "exclude": ["node_modules", "./dist"],
-  "include": ["./*/**/*.ts"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
 }

@@ -17,6 +17,7 @@ import { ApplicationManager } from '@memberjunction/ng-base-application';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
+  standalone: false,
   selector: 'mj-ai-agent-run-form',
   templateUrl: './ai-agent-run.component.html',
   styleUrls: ['./ai-agent-run.component.css']
@@ -636,10 +637,4 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
       return null;
     }
   }
-}
-
-
-// Loader function for AIAgentRunFormComponent
-export function LoadAIAgentRunFormComponent() {
-    // This function is called to ensure the form is loaded
 }

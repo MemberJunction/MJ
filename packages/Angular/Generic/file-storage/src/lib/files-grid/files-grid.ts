@@ -54,6 +54,7 @@ const FileDownloadQuerySchema = z.object({
 });
 
 @Component({
+  standalone: false,
   selector: 'mj-files-grid',
   templateUrl: './files-grid.html',
   styleUrls: ['./files-grid.css'],

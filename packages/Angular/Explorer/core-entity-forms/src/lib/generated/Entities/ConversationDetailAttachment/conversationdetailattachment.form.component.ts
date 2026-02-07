@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Conversation Detail Attachments') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-conversationdetailattachment-form',
     templateUrl: './conversationdetailattachment.form.component.html'
 })

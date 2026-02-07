@@ -8,6 +8,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
  * The matching portions will be wrapped in a <mark class="search-highlight"> tag.
  */
 @Pipe({
+  standalone: false,
   name: 'highlightSearch'
 })
 export class HighlightSearchPipe implements PipeTransform {

@@ -18,6 +18,7 @@ interface AddableRecord {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-list-detail',
   templateUrl: './single-list-detail.component.html',
   styleUrls: ['./single-list-detail.component.css', '../../shared/first-tab-styles.css']

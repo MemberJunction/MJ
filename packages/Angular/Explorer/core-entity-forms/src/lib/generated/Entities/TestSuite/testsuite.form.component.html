@@ -154,7 +154,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJTestSuites')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suites','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Test Suites')"
@@ -164,6 +165,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Test Suite Runs Section -->
@@ -176,7 +178,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJTestSuiteRuns')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suite Runs','SuiteID')"
                 [NewRecordValues]="NewRecordValues('MJ: Test Suite Runs')"
@@ -186,6 +189,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Test Suite Tests Section -->
@@ -198,7 +202,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJTestSuiteTests')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suite Tests','SuiteID')"
                 [NewRecordValues]="NewRecordValues('MJ: Test Suite Tests')"
@@ -208,6 +213,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

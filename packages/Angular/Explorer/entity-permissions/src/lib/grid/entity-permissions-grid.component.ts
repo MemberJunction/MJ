@@ -13,6 +13,7 @@ export type EntityPermissionChangedEvent = {
 }
  
 @Component({
+  standalone: false,
   selector: 'mj-entity-permissions-grid',
   templateUrl: './entity-permissions-grid.component.html',
   styleUrls: ['./entity-permissions-grid.component.css']

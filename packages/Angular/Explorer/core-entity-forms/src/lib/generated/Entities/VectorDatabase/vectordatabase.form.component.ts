@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Vector Databases') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-vectordatabase-form',
     templateUrl: './vectordatabase.form.component.html'
 })

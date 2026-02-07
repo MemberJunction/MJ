@@ -582,6 +582,17 @@ mj codegen manifest --output ./src/generated/class-registrations-manifest.ts
 
 See the [MJCLI README](../MJCLI/README.md) for full CLI documentation.
 
+**Pre-built manifests for npm distribution:**
+
+When MJ packages are installed via npm, consumers only receive `dist/` (no `src/`), so the manifest generator can't scan them. To solve this, MJ ships **pre-built manifests** inside the bootstrap packages:
+
+- `@memberjunction/server-bootstrap` — 623 server-side classes from 54 packages
+- `@memberjunction/ng-bootstrap` — 383 Angular classes from 14 packages
+
+External consumers import the pre-built manifest for MJ classes, then generate a supplemental manifest for their own classes using `--exclude-packages @memberjunction`.
+
+For complete setup instructions, CLI reference, and troubleshooting, see the **[Class Manifest Guide](CLASS_MANIFEST_GUIDE.md)**.
+
 **Example output:**
 - [MJAPI manifest (server-side)](EXAMPLE_MANIFEST_MJAPI.md) — 54 packages, 715 classes (AI providers, actions, encryption, scheduling, storage, etc.)
 - [MJExplorer manifest (client-side)](EXAMPLE_MANIFEST_MJEXPLORER.md) — 17 packages, 721 classes (Angular components, dashboards, forms, etc.)

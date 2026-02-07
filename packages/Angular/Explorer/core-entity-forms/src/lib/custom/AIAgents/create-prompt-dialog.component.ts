@@ -34,6 +34,7 @@ export interface CreatePromptResult {
  * This ensures atomicity with the parent form's save operation.
  */
 @Component({
+  standalone: false,
   selector: 'mj-create-prompt-dialog',
   templateUrl: './create-prompt-dialog.component.html',
   styleUrls: ['./create-prompt-dialog.component.css']

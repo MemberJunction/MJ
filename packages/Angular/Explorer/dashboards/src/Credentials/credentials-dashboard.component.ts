@@ -12,6 +12,7 @@ interface CredentialsDashboardState {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-credentials-dashboard',
     templateUrl: './credentials-dashboard.component.html',
     styleUrls: ['./credentials-dashboard.component.css'],
@@ -164,8 +165,4 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
     public getCurrentTabLabel(): string {
         return this.tabLabels[this.activeTab] || 'Credential Management';
     }
-}
-
-export function LoadCredentialsDashboard() {
-    // Prevents tree-shaking
 }

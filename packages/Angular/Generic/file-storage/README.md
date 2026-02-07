@@ -21,7 +21,7 @@ Angular components for managing file storage in MemberJunction applications. Thi
 npm install @memberjunction/ng-file-storage
 ```
 
-**Note**: This package requires Angular 18.0.2 or later and the following MemberJunction packages:
+**Note**: This package requires Angular 21 or later and the following MemberJunction packages:
 - `@memberjunction/core` (^2.43.0)
 - `@memberjunction/core-entities` (^2.43.0)
 - `@memberjunction/global` (^2.43.0)

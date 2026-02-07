@@ -124,15 +124,17 @@
             "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:Users\"}",
             "ActionOutputMapping": "{\"CanCreate\": \"permissions.users.canCreate\", \"CanUpdate\": \"permissions.users.canUpdate\"}",
             "Status": "Active",
-            "PositionX": 100,
-            "PositionY": 100
+            "PositionX": 280,
+            "PositionY": -60,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "AF1A0DE4-E0DB-4290-A316-FB1CB35FEF11"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.901Z",
-            "checksum": "9648e6955f5618ed998ec2fb1400a97fc59eaf9620079f857a3a5ddc9237b2b7"
+            "lastModified": "2026-02-06T04:33:29.586Z",
+            "checksum": "54d23f9abd6b1de0fc05506863d14ef7a5e9544594b7e212f18adb8355b66a79"
           }
         },
         {
@@ -145,15 +147,17 @@
             "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:User Roles\"}",
             "ActionOutputMapping": "{\"CanCreate\": \"permissions.userRoles.canCreate\"}",
             "Status": "Active",
-            "PositionX": 200,
-            "PositionY": 100
+            "PositionX": 170,
+            "PositionY": 220,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "AE444D5A-0CDC-41B2-A369-3BA12A7E1AAA"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.903Z",
-            "checksum": "b9a9348635be10d572933211a73ca814e298b78ec8c14803ac5b2e2d1928a6a5"
+            "lastModified": "2026-02-06T04:33:29.586Z",
+            "checksum": "c10e7d1bb64a6cfc6e01418c00a0be6b25a8a8103e5bff11bd974d099daeb2a7"
           }
         },
         {
@@ -166,15 +170,17 @@
             "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:Employees\"}",
             "ActionOutputMapping": "{\"CanCreate\": \"permissions.employees.canCreate\"}",
             "Status": "Active",
-            "PositionX": 300,
-            "PositionY": 100
+            "PositionX": -380,
+            "PositionY": 400,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "B6431F43-41DA-4405-9EF5-C98F21409FA6"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.905Z",
-            "checksum": "ac0ce48ce6b0ad9bb57a4a5fe47dc5dda9365725a09c68c8bf20c8c478284137"
+            "lastModified": "2026-02-06T04:33:29.587Z",
+            "checksum": "17a9b3fc689bc82345996dfcb7b26234ac7b07419130b890487da0e089d8e8b6"
           }
         },
         {
@@ -185,15 +191,17 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Permission Denied - Users",
             "Status": "Active",
-            "PositionX": 100,
-            "PositionY": 250
+            "PositionX": 720,
+            "PositionY": 320,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "620AD7B8-8BA8-4615-AF66-6BB38F1B5DDB"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.063Z",
-            "checksum": "ba6f96b79cb993cb6a984e51c3453f82fc1fb320586001899d2a3002a72d19ac"
+            "lastModified": "2026-02-06T04:33:29.780Z",
+            "checksum": "27a30344b42d04db844e89c0c60edb555d4b81357ec381101e57d31bd48818e0"
           }
         },
         {
@@ -204,15 +212,17 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Permission Denied - User Roles",
             "Status": "Active",
-            "PositionX": 200,
-            "PositionY": 250
+            "PositionX": 520,
+            "PositionY": 500,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "8DE19F37-02DF-4717-A8FA-98085F62FE2D"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.065Z",
-            "checksum": "e9c844cd00a64309d087667034a4eb03c386ca744f2ad44c4a6c02a5b803f2af"
+            "lastModified": "2026-02-06T04:33:29.786Z",
+            "checksum": "8110afc67b30d71cbd6798a5807406f7deb62469db050a9c252f71171e231756"
           }
         },
         {
@@ -223,15 +233,17 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Permission Denied - Employees",
             "Status": "Active",
-            "PositionX": 300,
-            "PositionY": 250
+            "PositionX": 630,
+            "PositionY": 40,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "CB7B4615-1CCB-403F-B406-25F51130D703"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.066Z",
-            "checksum": "69d878312e11681d9ab3113d5e2820ce64f16333c6e47c5f61490e1362bbe4fb"
+            "lastModified": "2026-02-06T04:33:29.790Z",
+            "checksum": "9f1b8f8d1a02bcaaa7eea279829791dae7a48edf27ba73cc92379ecc3b0c1231"
           }
         },
         {
@@ -242,15 +254,17 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Collect User Information - Prompt Step",
             "Status": "Active",
-            "PositionX": 400,
-            "PositionY": 100
+            "PositionX": 40,
+            "PositionY": 580,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "3DB38E5E-FB94-401C-94AB-0B2D7E18302C"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.068Z",
-            "checksum": "982df890f7fe9fc6e17be81062609c3baa8419445a432b6e662467816878db7a"
+            "lastModified": "2026-02-06T04:33:29.795Z",
+            "checksum": "b5265cd748d7f0769a3aefe3df6ffb52a8f0c48a9007674ae3efb92113bfab55"
           }
         },
         {
@@ -263,15 +277,17 @@
             "ActionInputMapping": "{\"Email\": \"payload.userData.email\"}",
             "ActionOutputMapping": "{\"IsUnique\": \"emailIsUnique\", \"ExistingUserID\": \"existingUserID\"}",
             "Status": "Active",
-            "PositionX": 600,
-            "PositionY": 100
+            "PositionX": 40,
+            "PositionY": 760,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "286C4DE2-133C-42CD-9BA9-96F46156AF95"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.070Z",
-            "checksum": "d876f17da88fd80ca38e2338f7370b9a90f365a9286d2a3b5c553f1a7f505081"
+            "lastModified": "2026-02-06T04:33:29.795Z",
+            "checksum": "2c831f6bbeb4f7215f21d35820223a839d4af1ee1263743755f7266ebb6bbeba"
           }
         },
         {
@@ -284,15 +300,17 @@
             "ActionInputMapping": "{\"FirstName\": \"payload.userData.firstName\", \"LastName\": \"payload.userData.lastName\", \"Email\": \"payload.userData.email\", \"Title\": \"payload.userData.title\", \"Phone\": \"payload.userData.employeeData.phone\", \"CompanyID\": \"payload.userData.employeeData.companyID\", \"SupervisorID\": \"payload.userData.employeeData.supervisorID\"}",
             "ActionOutputMapping": "{\"EmployeeID\": \"createdEmployeeID\"}",
             "Status": "Active",
-            "PositionX": 800,
-            "PositionY": 50
+            "PositionX": 500,
+            "PositionY": 960,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "5A421648-5261-4A49-862D-465C71F5A87E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.071Z",
-            "checksum": "b5b9439124e17f3df78d0a1736bd965adb0c7e2efd46fc7741577e500504ccc8"
+            "lastModified": "2026-02-06T04:33:29.797Z",
+            "checksum": "69fe8867fb54169a86d84d37e78a30faf6de786a7ee9d69fda1138413ada5949"
           }
         },
         {
@@ -305,15 +323,17 @@
             "ActionInputMapping": "{\"FirstName\": \"payload.userData.firstName\", \"LastName\": \"payload.userData.lastName\", \"Email\": \"payload.userData.email\", \"Title\": \"payload.userData.title\", \"Type\": \"payload.userData.type\", \"IsActive\": \"true\", \"EmployeeID\": \"payload.createdEmployeeID\"}",
             "ActionOutputMapping": "{\"UserID\": \"createdUserID\", \"Name\": \"createdUserName\"}",
             "Status": "Active",
-            "PositionX": 800,
-            "PositionY": 150
+            "PositionX": -20,
+            "PositionY": 1100,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "8297F22F-76CC-4C2F-B3E7-3650CC25AFDE"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.072Z",
-            "checksum": "cde17a658f86be1810da8c16d5e43d0482d49deaf6e87a86cf28d668d6b2890e"
+            "lastModified": "2026-02-06T04:33:29.798Z",
+            "checksum": "df54754f36eab86a1cd16674c3b54cfb50213509ee2761c825d21ba3f4e2696b"
           }
         },
         {
@@ -326,15 +346,17 @@
             "ActionInputMapping": "{\"UserID\": \"payload.createdUserID\", \"RoleNames\": \"payload.userData.roles\"}",
             "ActionOutputMapping": "{\"AssignedUserRoleIDs\": \"assignedUserRoleIDs\", \"AssignedCount\": \"assignedRoleCount\"}",
             "Status": "Active",
-            "PositionX": 1000,
-            "PositionY": 100
+            "PositionX": 80,
+            "PositionY": 1300,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "5A977380-2AA5-4119-A329-4450FC603025"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.073Z",
-            "checksum": "d83b3774eb7d74ac10f1590f2883561f50c8c6e46a4db38820225e876aace773"
+            "lastModified": "2026-02-06T04:33:29.799Z",
+            "checksum": "707cf86ab44c89393c6d86bfb1c60384963b9d644668522fe32a5cb5e2f9f7f7"
           }
         },
         {
@@ -345,15 +367,17 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Prepare Welcome Email - User Onboarding",
             "Status": "Active",
-            "PositionX": 1200,
-            "PositionY": 100
+            "PositionX": 20,
+            "PositionY": 1500,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "D4F0E61E-9E0C-420D-9F92-6CECF0884C81"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.075Z",
-            "checksum": "3bfafea756874b9b58995dc3f70b330272511438e15f907bc82e2c8dd3bf8c89"
+            "lastModified": "2026-02-06T04:33:29.805Z",
+            "checksum": "2e9c97f8ee933aa02b4be4fb190c0cb77a732dc16add11a57d861bf7b0d55868"
           }
         },
         {
@@ -366,15 +390,17 @@
             "ActionInputMapping": "{\"Subject\": \"payload.emailSubject\", \"Body\": \"payload.emailBody\", \"To\": \"payload.userData.email\", \"From\": \"static:noreply@memberjunction.com\", \"Provider\": \"static:SendGrid\", \"MessageType\": \"static:Email\"}",
             "ActionOutputMapping": "{}",
             "Status": "Active",
-            "PositionX": 1400,
-            "PositionY": 100
+            "PositionX": 240,
+            "PositionY": 1700,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "EA96D877-DEDB-4C7F-9ADC-CB74E6C2A291"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.076Z",
-            "checksum": "bc3749e03d355acdd4c97d7af0b8de495758002221faea3fd3280b2483ca764a"
+            "lastModified": "2026-02-06T04:33:29.805Z",
+            "checksum": "bfba4ea8af8267993008eef77b9fa126be1c0d2156fb40048330d50732849817"
           }
         },
         {
@@ -385,15 +411,17 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Generic Error Message",
             "Status": "Active",
-            "PositionX": 600,
-            "PositionY": 250
+            "PositionX": -320,
+            "PositionY": 1000,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "23157416-28D0-422A-AF69-6E4D46E0E212"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.091Z",
-            "checksum": "bd7022a89409a379774479c5ad433dbadc6243dbc836bfa5c65d2a8c1d0244f9"
+            "lastModified": "2026-02-06T04:33:29.837Z",
+            "checksum": "af645721049d27777c20c59dae2a121ffea618bed3436a8b6027998fd3b0acbf"
           }
         }
       ],

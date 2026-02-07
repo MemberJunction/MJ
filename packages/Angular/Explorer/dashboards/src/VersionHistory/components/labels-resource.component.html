@@ -1,0 +1,296 @@
+<div class="labels-container">
+  @if (IsLoading) {
+    <mj-loading text="Loading version labels..."></mj-loading>
+  }
+
+  @if (!IsLoading) {
+    <!-- Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">Version Labels</h2>
+        <p class="page-subtitle">Manage versioning snapshots across your system</p>
+      </div>
+      <div class="header-actions">
+        <div class="view-toggle">
+          <button class="toggle-btn" [class.active]="ViewMode === 'card'" (click)="SetViewMode('card')" title="Card view">
+            <i class="fa-solid fa-grip"></i>
+          </button>
+          <button class="toggle-btn" [class.active]="ViewMode === 'list'" (click)="SetViewMode('list')" title="List view">
+            <i class="fa-solid fa-list"></i>
+          </button>
+        </div>
+        <button class="btn-primary" (click)="OpenCreateDialog()">
+          <i class="fa-solid fa-plus"></i>
+          <span>Create Label</span>
+        </button>
+        <button class="btn-icon" (click)="Refresh()" title="Refresh">
+          <i class="fa-solid fa-refresh"></i>
+        </button>
+      </div>
+    </div>
+    <!-- KPI Cards -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+          <i class="fa-solid fa-tags"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{FormatNumber(TotalLabels)}}</div>
+          <div class="kpi-label">Total Labels</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{FormatNumber(ActiveLabels)}}</div>
+          <div class="kpi-label">Active</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background: rgba(107, 114, 128, 0.1); color: #6b7280;">
+          <i class="fa-solid fa-box-archive"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{FormatNumber(ArchivedLabels)}}</div>
+          <div class="kpi-label">Archived</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{FormatNumber(RestoredLabels)}}</div>
+          <div class="kpi-label">Restored</div>
+        </div>
+      </div>
+    </div>
+    <!-- Scope breakdown -->
+    <div class="scope-chips">
+      @for (stat of ScopeStats; track stat) {
+        <button class="scope-chip"
+          [class.active]="ScopeFilter === stat.Scope"
+          (click)="OnScopeFilterChange(stat.Scope)">
+          <i [class]="stat.Icon"></i>
+          <span>{{stat.Scope}}</span>
+          <span class="chip-count">{{stat.Count}}</span>
+        </button>
+      }
+      @for (stat of StatusStats; track stat) {
+        <button class="scope-chip"
+          [class.active]="StatusFilter === stat.Status"
+          [ngClass]="GetStatusClass(stat.Status)"
+          (click)="OnStatusFilterChange(stat.Status)">
+          <span>{{stat.Status}}</span>
+          <span class="chip-count">{{stat.Count}}</span>
+        </button>
+      }
+    </div>
+    <!-- Search -->
+    <div class="search-bar">
+      <i class="fa-solid fa-search search-icon"></i>
+      <input type="text"
+        class="search-input"
+        placeholder="Search labels by name, description, or entity..."
+        [ngModel]="SearchText"
+        (ngModelChange)="OnSearchChange($event)" />
+      @if (SearchText) {
+        <button class="btn-clear" (click)="OnSearchChange('')">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      }
+    </div>
+    <!-- Labels Card View -->
+    @if (FilteredLabels.length > 0 && ViewMode === 'card') {
+      <div class="labels-list">
+        @for (label of FilteredLabels; track label) {
+          <div class="label-card clickable"
+            [class.group-parent]="IsGroupParent(label)"
+            (click)="OnLabelClick(label)">
+            <div class="label-header">
+              <div class="label-title-row">
+                <i [class]="GetScopeIcon(label.Scope)" class="label-scope-icon"></i>
+                <h3 class="label-name">{{label.Name}}</h3>
+                @if (IsGroupParent(label)) {
+                  <span class="group-badge">
+                    <i class="fa-solid fa-layer-group"></i>
+                    {{GetChildLabels(label.ID).length}} records
+                  </span>
+                }
+                <span class="label-status" [ngClass]="GetStatusClass(label.Status)">
+                  {{label.Status}}
+                </span>
+              </div>
+              <div class="label-meta">
+                <span class="meta-item" title="Scope">
+                  <i class="fa-solid fa-layer-group"></i> {{label.Scope}}
+                </span>
+                @if (label.Entity || label.EntityID) {
+                  <span class="meta-item" title="Entity">
+                    <i class="fa-solid fa-table"></i> {{label.Entity ?? ResolveEntityName(label.EntityID)}}
+                  </span>
+                }
+                @if (label.RecordID) {
+                  <span class="meta-item" title="Record ID">
+                    <i class="fa-solid fa-fingerprint"></i> {{label.RecordID | slice:0:12}}...
+                  </span>
+                }
+                @if (label.ItemCount) {
+                  <span class="meta-item" title="Items captured">
+                    <i class="fa-solid fa-camera"></i> {{label.ItemCount}} items
+                  </span>
+                }
+                @if (!label.ItemCount) {
+                  <span class="meta-item" title="Items captured">
+                    <i class="fa-solid fa-camera"></i> {{GetItemCount(label.ID)}} items
+                  </span>
+                }
+                @if (label.CreationDurationMS) {
+                  <span class="meta-item" title="Creation time">
+                    <i class="fa-solid fa-stopwatch"></i> {{FormatDuration(label.CreationDurationMS)}}
+                  </span>
+                }
+                @if (label.CreatedByUser) {
+                  <span class="meta-item" title="Created by">
+                    <i class="fa-solid fa-user"></i> {{label.CreatedByUser}}
+                  </span>
+                }
+                <span class="meta-item" title="Created">
+                  <i class="fa-regular fa-clock"></i> {{FormatDate(label.__mj_CreatedAt)}}
+                </span>
+              </div>
+            </div>
+            @if (label.Description) {
+              <p class="label-description">{{label.Description}}</p>
+            }
+            <!-- Child labels for group parents -->
+            @if (IsGroupParent(label) && GetChildLabels(label.ID).length > 0) {
+              <div class="child-labels">
+                @for (child of GetChildLabels(label.ID); track child) {
+                  <div class="child-label">
+                    <i class="fa-solid fa-tag child-icon"></i>
+                    <span class="child-name">{{child.Name}}</span>
+                    @if (child.RecordID) {
+                      <span class="child-record">{{child.RecordID | slice:0:12}}...</span>
+                    }
+                    @if (child.ItemCount) {
+                      <span class="child-items">{{child.ItemCount}} items</span>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+    <!-- Labels List View -->
+    @if (FilteredLabels.length > 0 && ViewMode === 'list') {
+      <div class="labels-table">
+        <div class="list-header-row">
+          <span class="list-col-icon"></span>
+          <span class="list-col-name sortable-header" (click)="OnSortChange('Name')">
+            Name <i [class]="GetSortIcon('Name')" class="sort-icon"></i>
+          </span>
+          <span class="list-col-entity">Entity</span>
+          <span class="list-col-status sortable-header" (click)="OnSortChange('Status')">
+            Status <i [class]="GetSortIcon('Status')" class="sort-icon"></i>
+          </span>
+          <span class="list-col-items sortable-header" (click)="OnSortChange('Items')">
+            Items <i [class]="GetSortIcon('Items')" class="sort-icon"></i>
+          </span>
+          <span class="list-col-date sortable-header" (click)="OnSortChange('Date')">
+            Created <i [class]="GetSortIcon('Date')" class="sort-icon"></i>
+          </span>
+          <span class="list-col-arrow"></span>
+        </div>
+        @for (label of FilteredLabels; track label) {
+          <div class="list-row clickable"
+            (click)="OnLabelClick(label)">
+            <span class="list-col-icon">
+              <i [class]="GetScopeIcon(label.Scope)" class="list-scope-icon"></i>
+            </span>
+            <span class="list-col-name">
+              <span class="list-label-name">{{label.Name}}</span>
+              @if (IsGroupParent(label)) {
+                <span class="list-group-badge">
+                  <i class="fa-solid fa-layer-group"></i> {{GetChildLabels(label.ID).length}}
+                </span>
+              }
+            </span>
+            <span class="list-col-entity">{{label.Entity ?? ResolveEntityName(label.EntityID)}}</span>
+            <span class="list-col-status">
+              <span class="label-status small" [ngClass]="GetStatusClass(label.Status)">{{label.Status}}</span>
+            </span>
+            <span class="list-col-items">{{label.ItemCount || GetItemCount(label.ID)}}</span>
+            <span class="list-col-date">{{FormatDate(label.__mj_CreatedAt)}}</span>
+            <span class="list-col-arrow">
+              <i class="fa-solid fa-chevron-right list-arrow"></i>
+            </span>
+          </div>
+        }
+      </div>
+    }
+    <!-- Empty state -->
+    @if (FilteredLabels.length === 0 && !IsLoading) {
+      <div class="empty-state">
+        <i class="fa-solid fa-tags empty-icon"></i>
+        <h3>No labels found</h3>
+        @if (SearchText || ScopeFilter || StatusFilter) {
+          <p>
+            Try adjusting your filters or search criteria.
+          </p>
+        }
+        @if (!SearchText && !ScopeFilter && !StatusFilter) {
+          <p>
+            No version labels have been created yet.
+          </p>
+        }
+        @if (!SearchText && !ScopeFilter && !StatusFilter) {
+          <button class="btn-primary empty-cta"
+            (click)="OpenCreateDialog()">
+            <i class="fa-solid fa-plus"></i>
+            <span>Create Your First Label</span>
+          </button>
+        }
+      </div>
+    }
+  }
+
+  <!-- Create Label Wizard -->
+  @if (ShowCreateWizard) {
+    <div class="create-wizard-overlay" (click)="OnCreateWizardCancel()">
+      <div class="create-wizard-container" (click)="$event.stopPropagation()">
+        <div class="create-wizard-header">
+          <h3 class="create-wizard-title">
+            <i class="fa-solid fa-tag"></i>
+            Create Version Label
+          </h3>
+          <button class="create-wizard-close" (click)="OnCreateWizardCancel()" title="Close">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="create-wizard-body">
+          <mj-label-create
+            (Created)="OnLabelCreated($event)"
+            (Cancel)="OnCreateWizardCancel()">
+          </mj-label-create>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Detail panel -->
+  @if (ShowDetailPanel && SelectedLabel) {
+    <mj-label-detail-panel
+      [Label]="SelectedLabel"
+      [AllLabels]="Labels"
+      [ItemCountMap]="ItemCountMap"
+      (Close)="OnDetailPanelClose()"
+      (LabelUpdated)="OnLabelUpdated()"
+      (EntityLinkClick)="OnEntityLinkClick($event)">
+    </mj-label-detail-panel>
+  }
+</div>

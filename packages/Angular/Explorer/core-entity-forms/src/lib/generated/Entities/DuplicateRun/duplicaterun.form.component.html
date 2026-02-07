@@ -192,7 +192,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('duplicateRunDetails')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Details','DuplicateRunID')"
                 [NewRecordValues]="NewRecordValues('Duplicate Run Details')"
@@ -202,6 +203,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

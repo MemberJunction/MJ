@@ -1,24 +1,25 @@
 {
   "name": "@memberjunction/ai-heygen",
-  "version": "3.3.0",
+  "type": "module",
+  "version": "3.4.0",
   "description": "MemberJunction Wrapper for HeyGen Video Generation",
   "main": "dist/index.js",
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "3.3.0",
-    "@memberjunction/global": "3.3.0",
-    "axios": "^1.7.2",
-    "@elevenlabs/elevenlabs-js": "^2.32.0"
+    "@memberjunction/ai": "3.4.0",
+    "@memberjunction/global": "3.4.0",
+    "axios": "^1.13.4",
+    "@elevenlabs/elevenlabs-js": "^2.34.0"
   },
   "repository": {
     "type": "git",

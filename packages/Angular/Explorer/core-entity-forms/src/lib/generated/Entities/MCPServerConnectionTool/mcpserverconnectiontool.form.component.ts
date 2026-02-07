@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: MCP Server Connection Tools') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-mcpserverconnectiontool-form',
     templateUrl: './mcpserverconnectiontool.form.component.html'
 })

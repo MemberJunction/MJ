@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Action Contexts') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-actioncontext-form',
     templateUrl: './actioncontext.form.component.html'
 })

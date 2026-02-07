@@ -169,11 +169,3 @@ export class ListStorageAccountsAction extends BaseFileStorageAction {
         }
     }
 }
-
-/**
- * Load function to ensure the class is registered and not tree-shaken
- */
-export function LoadListStorageAccountsAction() {
-    // This function call ensures the class decorator executes
-    MJGlobal.Instance.ClassFactory.GetRegistration(BaseFileStorageAction, "List Storage Accounts");
-}

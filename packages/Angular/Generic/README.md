@@ -149,7 +149,7 @@ The Generic components are designed to be flexible, reusable, and easy to integr
 - Extensible design
 
 ### Modern Angular
-- Angular 18+ features
+- Angular 21+ features
 - Standalone components
 - Strong typing
 - Reactive patterns

@@ -1,31 +1,9 @@
 {
+  "extends": "../../tsconfig.server.json",
   "compilerOptions": {
-    "module": "ESNext",
-    "target": "ESNext",
     "outDir": "dist",
     "rootDir": "src",
-    "sourceMap": true,
-    "experimentalDecorators": true,
-    "resolveJsonModule": true,
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true,
-    "esModuleInterop": true,
-    "lib": ["es2020", "esnext.asynciterable"],
-    "moduleResolution": "node",
-    "removeComments": true,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
-    "strictFunctionTypes": true,
-    "noImplicitThis": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "allowSyntheticDefaultImports": true,
-    "emitDecoratorMetadata": true,
-    "skipLibCheck": true,
-    "strict": true
+    "module": "es2022"
   },
   "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts", "**/__tests__/**"],
   "include": ["./src/**/*.ts"]

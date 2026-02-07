@@ -10,6 +10,7 @@ import { GridComponent } from '@progress/kendo-angular-grid';
  * This component displays a list of available resources for a user for a specific Resource Type.
  */
 @Component({
+  standalone: false,
   selector: 'mj-available-resources',
   templateUrl: './available-resources.component.html',
   styleUrls: ['./available-resources.component.css']

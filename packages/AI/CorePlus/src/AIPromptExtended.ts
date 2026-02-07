@@ -157,6 +157,3 @@ export class AIPromptEntityExtended extends AIPromptEntity {
         }
     }    
 }
-
-//tree shaking stub
-export function LoadAIPromptEntityExtended() {}

@@ -17,6 +17,7 @@ import {
  */
 @RegisterClass(BaseConfigPanel, 'ArtifactPanelConfigDialog')
 @Component({
+  standalone: false,
     selector: 'mj-artifact-config-panel',
     templateUrl: './artifact-config-panel.component.html',
     styleUrls: ['./config-panel.component.css']

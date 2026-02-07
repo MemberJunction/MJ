@@ -7,12 +7,6 @@ const PANEL_WIDTH_SETTING_KEY = 'APIKeys.ApplicationsPanelWidth';
 const DEFAULT_PANEL_WIDTH = 570;
 const MIN_PANEL_WIDTH = 400;
 const MAX_PANEL_WIDTH = 800;
-
-/** Tree shaking prevention function */
-export function LoadAPIApplicationsPanel(): void {
-    // This function prevents tree shaking
-}
-
 /** Application with scope count */
 interface ApplicationWithScopes {
     application: APIApplicationEntity;
@@ -47,6 +41,7 @@ interface ScopeCategory {
  * Manages API Applications and their scope assignments
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-applications-panel',
     templateUrl: './api-applications-panel.component.html',
     styleUrls: ['./api-applications-panel.component.css']

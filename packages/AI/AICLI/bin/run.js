@@ -1,5 +1,5 @@
 #!/usr/bin/env node
+import 'dotenv/config';
+import { execute } from '@oclif/core';
 
-const oclif = require('@oclif/core')
-
-oclif.run().then(oclif.flush).catch(oclif.Errors.handle)
+await execute({ dir: import.meta.url });

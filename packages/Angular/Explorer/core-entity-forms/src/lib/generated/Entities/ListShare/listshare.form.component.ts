@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: List Shares') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-listshare-form',
     templateUrl: './listshare.form.component.html'
 })

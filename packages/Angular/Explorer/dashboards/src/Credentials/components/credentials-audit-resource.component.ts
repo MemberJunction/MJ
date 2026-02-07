@@ -3,11 +3,6 @@ import { ResourceData, AuditLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
-
-export function LoadCredentialsAuditResource() {
-    // Prevents tree-shaking
-}
-
 // The Credential Access AuditLogType ID from metadata
 const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = 'E8D4D100-E785-42D3-997F-ECFF3B0BCFC0';
 
@@ -34,6 +29,7 @@ interface TimelineGroup {
 
 @RegisterClass(BaseResourceComponent, 'CredentialsAuditResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-audit-resource',
     templateUrl: './credentials-audit-resource.component.html',
     styleUrls: ['./credentials-audit-resource.component.css'],

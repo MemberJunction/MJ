@@ -84,7 +84,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('workflows')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Workflows','WorkflowEngineName')"
                 [NewRecordValues]="NewRecordValues('Workflows')"
@@ -94,6 +95,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

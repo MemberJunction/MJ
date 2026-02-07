@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Dashboard User Preferences') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-dashboarduserpreference-form',
     templateUrl: './dashboarduserpreference.form.component.html'
 })

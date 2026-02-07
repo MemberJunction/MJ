@@ -81,6 +81,7 @@ export interface ViewSaveEvent {
  * - Save / Save As New / Cancel actions
  */
 @Component({
+  standalone: false,
   selector: 'mj-view-config-panel',
   templateUrl: './view-config-panel.component.html',
   styleUrls: ['./view-config-panel.component.css']

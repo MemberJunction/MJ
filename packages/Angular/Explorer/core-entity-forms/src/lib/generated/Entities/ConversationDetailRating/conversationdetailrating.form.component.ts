@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Conversation Detail Ratings') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-conversationdetailrating-form',
     templateUrl: './conversationdetailrating.form.component.html'
 })
@@ -16,7 +17,6 @@ export class ConversationDetailRatingFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'referenceIDs', sectionName: 'Reference IDs', isExpanded: true },
             { sectionKey: 'ratingInformation', sectionName: 'Rating Information', isExpanded: true },
-            { sectionKey: 'conversationContent', sectionName: 'Conversation Content', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

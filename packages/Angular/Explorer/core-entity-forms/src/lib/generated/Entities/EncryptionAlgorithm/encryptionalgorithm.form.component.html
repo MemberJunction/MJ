@@ -98,7 +98,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJEncryptionKeys')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Encryption Keys','EncryptionAlgorithmID')"
                 [NewRecordValues]="NewRecordValues('MJ: Encryption Keys')"
@@ -108,6 +109,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

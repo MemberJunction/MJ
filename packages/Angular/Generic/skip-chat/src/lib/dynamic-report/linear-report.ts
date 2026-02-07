@@ -7,6 +7,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
  * This component is used for dynamically rendering Skip Reports
  */
 @Component({
+  standalone: false,
   selector: 'skip-dynamic-linear-report',
   styleUrls: ['./linear-report.css'],
   templateUrl: './linear-report.html',

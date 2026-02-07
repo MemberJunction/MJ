@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Tasks') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-task-form',
     templateUrl: './task.form.component.html'
 })

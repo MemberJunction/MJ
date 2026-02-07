@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Company Integration Run API Logs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-companyintegrationrunapilog-form',
     templateUrl: './companyintegrationrunapilog.form.component.html'
 })

@@ -7,6 +7,7 @@ import { JoinGridComponent } from "@memberjunction/ng-join-grid"
 
 @RegisterClass(BaseFormComponent, 'Communication Providers') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-communicationprovider-form',
     templateUrl: './communicationprovider.form.component.html'
 })

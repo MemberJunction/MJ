@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Employee Skills') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-employeeskill-form',
     templateUrl: './employeeskill.form.component.html'
 })

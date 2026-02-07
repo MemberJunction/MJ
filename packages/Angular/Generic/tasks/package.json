@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-tasks",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "MemberJunction: Angular components for task visualization and management with Gantt chart support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,20 +9,20 @@
     "watch": "ngc --watch"
   },
   "dependencies": {
-    "@angular/animations": "18.2.14",
-    "@angular/common": "18.2.14",
-    "@angular/core": "18.2.14",
-    "@angular/platform-browser": "18.2.14",
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/core-entities": "3.3.0",
-    "@memberjunction/ai-core-plus": "3.3.0",
-    "@memberjunction/ai-engine-base": "3.3.0",
-    "dhtmlx-gantt": "^8.0.10",
-    "rxjs": "^7.8.1"
+    "@angular/animations": "21.1.3",
+    "@angular/common": "21.1.3",
+    "@angular/core": "21.1.3",
+    "@angular/platform-browser": "21.1.3",
+    "@memberjunction/core": "3.4.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/ai-core-plus": "3.4.0",
+    "@memberjunction/ai-engine-base": "3.4.0",
+    "dhtmlx-gantt": "^9.1.1",
+    "rxjs": "^7.8.2"
   },
   "peerDependencies": {
-    "@angular/common": "18.2.14",
-    "@angular/core": "18.2.14"
+    "@angular/common": "21.1.3",
+    "@angular/core": "21.1.3"
   },
   "author": "MemberJunction",
   "license": "MIT",

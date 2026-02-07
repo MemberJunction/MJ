@@ -474,7 +474,7 @@ export class AppModule { }
 ## Version Compatibility
 
 This package requires:
-- Angular 18.0.2 or compatible version
+- Angular 21 or compatible version
 - TypeScript 4.9 or higher
 - Node.js 16 or higher
 

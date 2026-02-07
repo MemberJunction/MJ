@@ -212,7 +212,3 @@ export class UpdateListItemStatusAction extends BaseAction {
     });
   }
 }
-
-export function LoadUpdateListItemStatusAction(): void {
-  // Prevents tree-shaking
-}

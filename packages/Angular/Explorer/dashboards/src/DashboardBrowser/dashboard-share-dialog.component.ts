@@ -31,6 +31,7 @@ export interface ShareDialogResult {
  * Allows setting granular permissions (CanRead, CanEdit, CanDelete, CanShare).
  */
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-share-dialog',
     templateUrl: './dashboard-share-dialog.component.html',
     styleUrls: ['./dashboard-share-dialog.component.css'],

@@ -187,7 +187,7 @@ export class ExcelExporter extends BaseExporter {
     workbook.modified = new Date();
 
     if (meta.title || this.options.title) {
-      workbook.title = meta.title || this.options.title;
+      workbook.title = (meta.title || this.options.title)!;
     }
     if (meta.subject) {
       workbook.subject = meta.subject;
@@ -768,7 +768,7 @@ export class ExcelExporter extends BaseExporter {
         : img.data;
 
       const imageId = workbook.addImage({
-        buffer: imageData,
+        buffer: imageData as unknown as ArrayBuffer,
         extension: img.type
       });
 

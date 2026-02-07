@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Run Medias') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-aipromptrunmedia-form',
     templateUrl: './aipromptrunmedia.form.component.html'
 })

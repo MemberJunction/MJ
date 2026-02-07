@@ -8,6 +8,7 @@ export default class CodeGenManifest extends Command {
         `<%= config.bin %> <%= command.id %> --output ./src/generated/class-registrations-manifest.ts`,
         `<%= config.bin %> <%= command.id %> --appDir ./packages/MJAPI --output ./packages/MJAPI/src/generated/class-registrations-manifest.ts`,
         `<%= config.bin %> <%= command.id %> --filter BaseEngine --filter BaseAction`,
+        `<%= config.bin %> <%= command.id %> --verbose`,
     ];
 
     static flags = {
@@ -25,9 +26,19 @@ export default class CodeGenManifest extends Command {
             description: 'Only include classes with this base class (can be repeated)',
             multiple: true,
         }),
+        'exclude-packages': Flags.string({
+            char: 'e',
+            description: 'Exclude packages matching this prefix from scanning (can be repeated). Example: --exclude-packages @memberjunction',
+            multiple: true,
+        }),
         quiet: Flags.boolean({
             char: 'q',
-            description: 'Suppress progress output',
+            description: 'Suppress all output',
+            default: false,
+        }),
+        verbose: Flags.boolean({
+            char: 'v',
+            description: 'Show detailed progress including skipped classes and per-package info',
             default: false,
         }),
     };
@@ -35,11 +46,13 @@ export default class CodeGenManifest extends Command {
     async run(): Promise<void> {
         const { flags } = await this.parse(CodeGenManifest);
 
+        const excludePackages = flags['exclude-packages'];
         const result = await generateClassRegistrationsManifest({
             outputPath: flags.output,
             appDir: flags.appDir || process.cwd(),
-            verbose: !flags.quiet,
+            verbose: flags.verbose,
             filterBaseClasses: flags.filter && flags.filter.length > 0 ? flags.filter : undefined,
+            excludePackages: excludePackages && excludePackages.length > 0 ? excludePackages : undefined,
         });
 
         if (!result.success) {
@@ -47,12 +60,11 @@ export default class CodeGenManifest extends Command {
         }
 
         if (!flags.quiet) {
-            this.log('');
-            this.log('Manifest generated successfully:');
-            this.log(`  Dependencies walked: ${result.totalDepsWalked}`);
-            this.log(`  Packages with @RegisterClass: ${result.packages.length}`);
-            this.log(`  Total classes: ${result.classes.length}`);
-            this.log(`  Output: ${result.outputPath}`);
+            if (result.ManifestChanged) {
+                this.log(`[class-manifest] Updated: ${result.classes.length} classes from ${result.packages.length} packages (${result.totalDepsWalked} deps walked)`);
+            } else {
+                this.log(`[class-manifest] No changes detected (${result.classes.length} classes, ${result.packages.length} packages)`);
+            }
         }
     }
 }

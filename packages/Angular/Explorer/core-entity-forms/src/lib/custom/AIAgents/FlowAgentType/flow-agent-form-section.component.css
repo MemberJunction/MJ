@@ -1,339 +1,38 @@
-.flow-agent-section {
-    padding: 1rem;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Tab Navigation */
-.flow-tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-    margin-bottom: 1rem;
-    border-bottom: 2px solid #e0e0e0;
-}
-
-.flow-tab {
-    padding: 0.75rem 1.5rem;
-    background: none;
-    border: none;
-    border-bottom: 3px solid transparent;
-    color: #666;
-    font-size: 0.95rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.flow-tab:hover {
-    color: #4a90e2;
-    background-color: #f5f5f5;
-}
-
-.flow-tab.active {
-    color: #4a90e2;
-    border-bottom-color: #4a90e2;
-}
-
-.flow-tab i {
-    font-size: 1rem;
-}
-
-.flow-tab-content {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 600px;
-    position: relative;
-}
-
-/* Ensure integrated flow editor has full height */
-mj-integrated-flow-editor {
+/* Flow Agent Form Section - thin wrapper */
+:host {
     display: block;
     width: 100%;
     height: 100%;
-    min-height: 600px;
 }
 
-.loading-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 2rem;
-    color: #666;
+mj-flow-agent-editor {
+    display: block;
+    width: 100%;
+    /* Subtract the full stack of containers above:
+       form-toolbar (~40px) + agent-header (~75px) + form-content padding (24px)
+       + panelbar-item header (~52px) + panel-content padding (16px) + margins (~30px)
+       + browser chrome (~50px) ≈ 290px. Use 300px with a safety buffer. */
+    height: calc(100vh - 300px);
+    min-height: 400px;
 }
 
-.loading-container i {
-    font-size: 1.5rem;
-}
-
-.error-message {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 1rem;
-    background-color: #fee;
-    border: 1px solid #fcc;
-    border-radius: 4px;
-    color: #c00;
-}
-
-.flow-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid #e0e0e0;
-}
-
-.flow-header h3 {
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 1.2rem;
-    color: #333;
-}
-
-.empty-state {
+.flow-empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 3rem;
+    padding: 40px 20px;
     text-align: center;
-    color: #666;
+    color: #94a3b8;
 }
 
-.empty-state i {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-    opacity: 0.5;
+.flow-empty-state i {
+    font-size: 32px;
+    margin-bottom: 12px;
+    color: #cbd5e1;
 }
 
-.rete-container {
-    flex: 1;
-    min-height: 500px;
-    background: #f5f5f5;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    position: relative;
-    overflow: hidden;
-}
-
-.flow-instructions {
-    margin-top: 0.5rem;
-    padding: 0.5rem 1rem;
-    background-color: #f0f7ff;
-    border: 1px solid #cce0ff;
-    border-radius: 4px;
-    color: #0066cc;
-    font-size: 0.875rem;
-}
-
-.flow-instructions p {
+.flow-empty-state p {
+    font-size: 14px;
     margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* List view styles */
-.flow-steps-list {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    margin-top: 1rem;
-}
-
-.steps-container, .paths-container {
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 1rem;
-}
-
-.steps-container h4, .paths-container h4 {
-    margin: 0 0 1rem 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: #333;
-    font-size: 1.1rem;
-}
-
-.step-item {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    padding: 0.75rem;
-    margin-bottom: 0.75rem;
-    transition: all 0.2s ease;
-    cursor: pointer;
-    position: relative;
-}
-
-.step-item:hover {
-    border-color: #4a90e2;
-    box-shadow: 0 2px 4px rgba(74, 144, 226, 0.1);
-}
-
-.step-item.selected {
-    background: #e3f2fd;
-    border-color: #2196f3;
-    box-shadow: 0 2px 6px rgba(33, 150, 243, 0.2);
-}
-
-.step-item.starting-step {
-    border-color: #28a745;
-    background: #f0fff4;
-}
-
-.step-item.starting-step.selected {
-    background: #d4edda;
-    border-color: #28a745;
-}
-
-.step-description {
-    margin-top: 0.5rem;
-    padding-left: 2rem;
-    color: #666;
-    font-size: 0.875rem;
-}
-
-.path-item {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    padding: 0.75rem;
-    margin-bottom: 0.75rem;
-    font-size: 0.875rem;
-}
-
-.path-condition {
-    margin-top: 0.5rem;
-    padding-left: 1.5rem;
-    color: #666;
-    font-size: 0.813rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* New styles for enhanced step display */
-.step-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-}
-
-.step-number {
-    font-size: 1.2rem;
-}
-
-.step-name {
-    font-weight: 600;
-    flex: 1;
-}
-
-.step-type {
-    padding: 0.2rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.85rem;
-    background: #e0e0e0;
-    color: #555;
-}
-
-.step-type.type-action {
-    background: #e3f2fd;
-    color: #1976d2;
-}
-
-.step-type.type-sub-agent {
-    background: #f3e5f5;
-    color: #7b1fa2;
-}
-
-.step-type.type-prompt {
-    background: #fff3e0;
-    color: #f57c00;
-}
-
-.step-status {
-    padding: 0.2rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.85rem;
-}
-
-.step-status.status-pending {
-    background: #fff3e0;
-    color: #f57c00;
-}
-
-.step-status.status-disabled {
-    background: #ffebee;
-    color: #c62828;
-}
-
-.step-mapping {
-    font-size: 0.85rem;
-    color: #555;
-    padding: 0.25rem 0;
-    padding-left: 2rem;
-    font-family: monospace;
-}
-
-.step-mapping i {
-    margin-right: 0.5rem;
-    color: #999;
-}
-
-/* Open button styles */
-.open-btn {
-    position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.open-btn:hover {
-    background: #f0f0f0;
-    border-color: #4a90e2;
-    color: #4a90e2;
-}
-
-.open-btn i {
-    margin-right: 0.25rem;
-}
-
-/* Path item with open button */
-.path-item {
-    position: relative;
-    padding-right: 4rem;
-}
-
-/* Selection info */
-.selection-info {
-    margin-bottom: 1rem;
-    padding: 0.5rem 1rem;
-    background-color: #e3f2fd;
-    border: 1px solid #2196f3;
-    border-radius: 4px;
-    color: #1976d2;
-    font-size: 0.875rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
 }

@@ -817,7 +817,8 @@ LEFT OUTER JOIN
 	sys.all_objects v
 ON
 	e.BaseView = v.name AND 
-	v.type = 'V' 
+	v.type = 'V' AND
+  v.schema_id = s.schema_id
 LEFT OUTER JOIN
     sys.schemas s_v
 ON   
@@ -1816,4 +1817,3 @@ BEGIN
     DROP TABLE #Procedures;
     DROP TABLE #ExcludedSchemas;
 END
-GO

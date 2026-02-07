@@ -30,6 +30,7 @@ export interface BreadcrumbDropEvent {
  * Supports drag-and-drop of dashboards onto breadcrumb items.
  */
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-breadcrumb',
     templateUrl: './dashboard-breadcrumb.component.html',
     styleUrls: ['./dashboard-breadcrumb.component.css'],
@@ -220,11 +221,4 @@ export class DashboardBreadcrumbComponent {
         this.Breadcrumbs = path;
         this.cdr.markForCheck();
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadDashboardBreadcrumb() {
-    // Prevents tree-shaking of the component
 }

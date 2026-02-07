@@ -6,6 +6,7 @@ import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@me
 import { ListBoxToolbarConfig } from '@progress/kendo-angular-listbox';
  
 @Component({
+  standalone: false,
   selector: 'mj-record-selector-dialog',
   templateUrl: './dialog.component.html',
   styleUrls: ['./dialog.component.css']

@@ -2,19 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadSchedulingDashboardResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * Scheduling Dashboard Resource - displays the overview dashboard with KPIs, health, and alerts
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingDashboardResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-dashboard-resource',
   template: `
     <div class="resource-container">

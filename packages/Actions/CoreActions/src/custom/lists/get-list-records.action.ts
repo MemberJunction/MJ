@@ -264,7 +264,3 @@ export class GetListRecordsAction extends BaseAction {
     }
   }
 }
-
-export function LoadGetListRecordsAction(): void {
-  // Prevents tree-shaking
-}

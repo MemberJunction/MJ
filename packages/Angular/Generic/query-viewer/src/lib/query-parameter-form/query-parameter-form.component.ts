@@ -45,6 +45,7 @@ interface ParameterField {
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-query-parameter-form',
     templateUrl: './query-parameter-form.component.html',
     styleUrls: ['./query-parameter-form.component.css'],

@@ -23,6 +23,7 @@ import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 
 @Component({
+  standalone: false,
   selector: 'mj-conversation-chat-area',
   templateUrl: `./conversation-chat-area.component.html`,
   styleUrls: ['./conversation-chat-area.component.css']

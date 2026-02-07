@@ -1,15 +1,16 @@
 {
   "name": "@memberjunction/ng-bootstrap",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "MemberJunction Angular Bootstrap - Encapsulates all Angular authentication and initialization logic",
   "main": "./dist/fesm2022/memberjunction-ng-bootstrap.mjs",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/types/memberjunction-ng-bootstrap.d.ts",
   "publishConfig": {
     "directory": "dist",
     "main": "./fesm2022/memberjunction-ng-bootstrap.mjs",
-    "types": "./index.d.ts"
+    "types": "./types/memberjunction-ng-bootstrap.d.ts"
   },
   "scripts": {
+    "prebuild": "mj codegen manifest --output ./src/generated/mj-class-registrations.ts",
     "build": "ng-packagr -p ng-package.json && node scripts/fix-dist-package.js",
     "watch": "ng-packagr -p ng-package.json --watch",
     "clean": "rimraf dist"
@@ -23,24 +24,37 @@
   "author": "MemberJunction",
   "license": "MIT",
   "peerDependencies": {
-    "@angular/common": "^18.0.0",
-    "@angular/core": "^18.0.0",
-    "@angular/router": "^18.0.0",
-    "rxjs": "^7.8.1"
+    "@angular/common": "^21.0.0",
+    "@angular/core": "^21.0.0",
+    "@angular/router": "^21.0.0",
+    "rxjs": "^7.8.2"
   },
   "dependencies": {
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/graphql-dataprovider": "3.3.0",
-    "@memberjunction/ng-auth-services": "3.3.0",
-    "@memberjunction/ng-shared": "3.3.0",
-    "rxjs": "^7.8.1"
+    "@memberjunction/actions-base": "3.4.0",
+    "@memberjunction/ai-core-plus": "3.4.0",
+    "@memberjunction/ai-engine-base": "3.4.0",
+    "@memberjunction/communication-types": "3.4.0",
+    "@memberjunction/core": "3.4.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/entity-communications-base": "3.4.0",
+    "@memberjunction/graphql-dataprovider": "3.4.0",
+    "@memberjunction/ng-artifacts": "3.4.0",
+    "@memberjunction/ng-auth-services": "3.4.0",
+    "@memberjunction/ng-core-entity-forms": "3.4.0",
+    "@memberjunction/ng-dashboard-viewer": "3.4.0",
+    "@memberjunction/ng-dashboards": "3.4.0",
+    "@memberjunction/ng-explorer-core": "3.4.0",
+    "@memberjunction/ng-explorer-settings": "3.4.0",
+    "@memberjunction/ng-file-storage": "3.4.0",
+    "@memberjunction/ng-shared": "3.4.0",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@angular/common": "^18.2.13",
-    "@angular/core": "^18.2.13",
-    "@angular/router": "^18.2.13",
-    "ng-packagr": "^18.2.1",
-    "typescript": "~5.5.4"
+    "@angular/common": "^21.1.3",
+    "@angular/core": "^21.1.3",
+    "@angular/router": "^21.1.3",
+    "ng-packagr": "^21.1.0",
+    "typescript": "~5.9.3"
   },
   "files": [
     "dist/**/*"

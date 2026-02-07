@@ -45,6 +45,7 @@ export interface AddableRecord {
  */
 @RegisterClass(BaseFormComponent, 'Lists')
 @Component({
+  standalone: false,
     selector: 'mj-list-form-extended',
     templateUrl: './list-form.component.html',
     styleUrls: ['./list-form.component.css', '../../../shared/form-styles.css'],
@@ -829,8 +830,4 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
         this.shareDialogConfig = null;
         this.cdr.markForCheck();
     }
-}
-
-export function LoadListFormComponentExtended() {
-    // Prevents tree-shaking
 }

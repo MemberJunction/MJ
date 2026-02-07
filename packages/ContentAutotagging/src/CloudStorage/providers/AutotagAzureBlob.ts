@@ -6,7 +6,7 @@ import { ContentItemEntity } from "@memberjunction/core-entities";
 import { Metadata } from "@memberjunction/core";
 import path from "path";
 import { ContentSourceParams } from "../../Engine";
-dotenv.config()
+dotenv.config({ quiet: true })
 
 export class AutotagAzureBlob extends CloudStorageBase {
     private blobServiceClient: BlobServiceClient;
@@ -94,7 +94,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
                 chunks.push(data instanceof Buffer ? data : Buffer.from(data));
             });
             readableStream.on("end", () => {
-                resolve(Buffer.concat(chunks));
+                resolve(Buffer.concat(chunks as unknown as Uint8Array[]));
             });
             readableStream.on("error", reject);
         });

@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: File Storage Accounts') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-filestorageaccount-form',
     templateUrl: './filestorageaccount.form.component.html'
 })

@@ -22,6 +22,3 @@ export class AIAgentEntityExtended extends AIAgentEntity {
         return this._notes;
     }
 }
-
-// tree shaking load stub
-export function LoadAIAgentEntityExtended() {}

@@ -16,6 +16,7 @@ interface CategoryTreeNode {
 
 @RegisterClass(BaseFormComponent, 'Queries') 
 @Component({
+  standalone: false,
     selector: 'mj-query-form',
     templateUrl: './query-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']
@@ -84,7 +85,6 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         // Ensure form is properly initialized after all data is loaded
         this.cdr.detectChanges();
     }
-
 
     ngOnDestroy() {
         this.destroy$.next();
@@ -404,7 +404,6 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             option.text && option.text.trim().toLowerCase() === normalizedName
         );
     }
-
 
     /**
      * Updates the hasUnsavedChanges flag based on entity dirty states
@@ -801,8 +800,4 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         return this.EditMode ? "Queue" : "None";
     }
 
-}
-
-export function LoadQueryFormExtendedComponent() {
-    // prevents tree shaking
 }

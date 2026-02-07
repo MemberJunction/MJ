@@ -9,14 +9,17 @@ import { TestRunFeedbackFormComponent } from '../../generated/Entities/TestRunFe
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Run Feedbacks')
 @Component({
+  standalone: false,
   selector: 'mj-test-run-feedback-form',
   template: `
     <div class="feedback-form">
       <div class="feedback-header">
         <h2><i class="fas fa-comment-dots"></i> Test Run Feedback</h2>
-        <button kendoButton *ngIf="record.TestRunID" (click)="openTestRun()">
-          <i class="fas fa-external-link"></i> View Test Run
-        </button>
+        @if (record.TestRunID) {
+          <button kendoButton (click)="openTestRun()">
+            <i class="fas fa-external-link"></i> View Test Run
+          </button>
+        }
       </div>
       <div class="feedback-content">
         <div class="field-group">
@@ -41,7 +44,7 @@ import { TestRunFeedbackFormComponent } from '../../generated/Entities/TestRunFe
         </div>
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .feedback-form { padding: 20px; }
     .feedback-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
@@ -73,6 +76,3 @@ export class TestRunFeedbackFormComponentExtended extends TestRunFeedbackFormCom
     }
   }
 }
-
-export function LoadTestRunFeedbackFormComponentExtended() {}
-LoadTestRunFeedbackFormComponentExtended();

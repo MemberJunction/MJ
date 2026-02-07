@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/query-gen",
-  "version": "3.3.0",
+  "type": "module",
+  "version": "3.4.0",
   "description": "AI-powered generation of domain-specific SQL query templates with automatic testing, refinement, and metadata export",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,7 +9,7 @@
     "mj-querygen": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",
@@ -25,25 +26,25 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/ai": "3.3.0",
-    "@memberjunction/ai-core-plus": "3.3.0",
-    "@memberjunction/aiengine": "3.3.0",
-    "@memberjunction/ai-prompts": "3.3.0",
-    "@memberjunction/ai-vectors-memory": "3.3.0",
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/core-entities": "3.3.0",
-    "@memberjunction/global": "3.3.0",
-    "@memberjunction/sqlserver-dataprovider": "3.3.0",
-    "chalk": "^4.1.2",
-    "commander": "^11.1.0",
+    "@memberjunction/ai": "3.4.0",
+    "@memberjunction/ai-core-plus": "3.4.0",
+    "@memberjunction/aiengine": "3.4.0",
+    "@memberjunction/ai-prompts": "3.4.0",
+    "@memberjunction/ai-vectors-memory": "3.4.0",
+    "@memberjunction/core": "3.4.0",
+    "@memberjunction/core-entities": "3.4.0",
+    "@memberjunction/global": "3.4.0",
+    "@memberjunction/sqlserver-dataprovider": "3.4.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
     "nunjucks": "^3.2.4",
-    "ora": "^5.4.1"
+    "ora": "^9.3.0"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
+    "@types/node": "24.10.11",
     "@types/nunjucks": "^3.2.6",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

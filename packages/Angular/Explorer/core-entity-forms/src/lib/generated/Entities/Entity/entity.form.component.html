@@ -584,7 +584,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('applicationEntities')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Application Entities','EntityID')"
                 [NewRecordValues]="NewRecordValues('Application Entities')"
@@ -594,6 +595,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Audit Logs Section -->
@@ -606,7 +608,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('auditLogs')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs','EntityID')"
                 [NewRecordValues]="NewRecordValues('Audit Logs')"
@@ -616,6 +619,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Company Integration Record Maps Section -->
@@ -628,7 +632,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('companyIntegrationRecordMaps')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Record Maps','EntityID')"
                 [NewRecordValues]="NewRecordValues('Company Integration Record Maps')"
@@ -638,6 +643,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Company Integration Run Details Section -->
@@ -650,7 +656,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('companyIntegrationRunDetails')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run Details','EntityID')"
                 [NewRecordValues]="NewRecordValues('Company Integration Run Details')"
@@ -660,6 +667,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Conversations Section -->
@@ -672,7 +680,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('conversations')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Conversations','LinkedEntityID')"
                 [NewRecordValues]="NewRecordValues('Conversations')"
@@ -682,6 +691,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Data Context Items Section -->
@@ -694,7 +704,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('dataContextItems')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items','EntityID')"
                 [NewRecordValues]="NewRecordValues('Data Context Items')"
@@ -704,6 +715,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Dataset Items Section -->
@@ -716,7 +728,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('datasetItems')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Dataset Items','EntityID')"
                 [NewRecordValues]="NewRecordValues('Dataset Items')"
@@ -726,6 +739,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Duplicate Runs Section -->
@@ -738,7 +752,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('duplicateRuns')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Runs','EntityID')"
                 [NewRecordValues]="NewRecordValues('Duplicate Runs')"
@@ -748,6 +763,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entities Section -->
@@ -760,7 +776,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entities')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entities','ParentID')"
                 [NewRecordValues]="NewRecordValues('Entities')"
@@ -770,6 +787,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entity Actions Section -->
@@ -782,7 +800,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityActions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Actions','EntityID')"
                 [NewRecordValues]="NewRecordValues('Entity Actions')"
@@ -792,6 +811,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- AI Actions Section -->
@@ -804,7 +824,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIActions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions','EntityID')"
                 [NewRecordValues]="NewRecordValues('Entity AI Actions')"
@@ -814,6 +835,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entity Communication Message Types Section -->
@@ -826,7 +848,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityCommunicationMessageTypes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Message Types','EntityID')"
                 [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
@@ -836,6 +859,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entity Documents Section -->
@@ -848,7 +872,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityDocuments')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','EntityID')"
                 [NewRecordValues]="NewRecordValues('Entity Documents')"
@@ -858,6 +883,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Fields Section -->
@@ -870,7 +896,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('fields')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Fields','EntityID')"
                 [NewRecordValues]="NewRecordValues('Entity Fields')"
@@ -880,6 +907,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Permissions Section -->
@@ -892,7 +920,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('permissions')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions','EntityID')"
                 [NewRecordValues]="NewRecordValues('Entity Permissions')"
@@ -902,6 +931,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entity Record Documents Section -->
@@ -914,7 +944,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entityRecordDocuments')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Record Documents','EntityID')"
                 [NewRecordValues]="NewRecordValues('Entity Record Documents')"
@@ -924,6 +955,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Relationships Section -->
@@ -936,7 +968,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('relationships')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Relationships','EntityID')"
                 [NewRecordValues]="NewRecordValues('Entity Relationships')"
@@ -946,6 +979,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Entity Settings Section -->
@@ -958,7 +992,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('entitySettings')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Settings','EntityID')"
                 [NewRecordValues]="NewRecordValues('Entity Settings')"
@@ -968,6 +1003,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- File Entity Record Links Section -->
@@ -980,7 +1016,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('fileEntityRecordLinks')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('File Entity Record Links','EntityID')"
                 [NewRecordValues]="NewRecordValues('File Entity Record Links')"
@@ -990,6 +1027,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Integration URL Formats Section -->
@@ -1002,7 +1040,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('integrationURLFormats')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Integration URL Formats','EntityID')"
                 [NewRecordValues]="NewRecordValues('Integration URL Formats')"
@@ -1012,6 +1051,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Lists Section -->
@@ -1024,7 +1064,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('lists')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Lists','EntityID')"
                 [NewRecordValues]="NewRecordValues('Lists')"
@@ -1034,6 +1075,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Query Fields Section -->
@@ -1046,7 +1088,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('queryFields')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Query Fields','SourceEntityID')"
                 [NewRecordValues]="NewRecordValues('Query Fields')"
@@ -1056,6 +1099,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Recommendation Items Section -->
@@ -1068,7 +1112,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('recommendationItems')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Recommendation Items','DestinationEntityID')"
                 [NewRecordValues]="NewRecordValues('Recommendation Items')"
@@ -1078,6 +1123,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Recommendations Section -->
@@ -1090,7 +1136,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('recommendations')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Recommendations','SourceEntityID')"
                 [NewRecordValues]="NewRecordValues('Recommendations')"
@@ -1100,6 +1147,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Record Changes Section -->
@@ -1112,7 +1160,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('recordChanges')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Record Changes','EntityID')"
                 [NewRecordValues]="NewRecordValues('Record Changes')"
@@ -1122,6 +1171,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Record Merge Logs Section -->
@@ -1134,7 +1184,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('recordMergeLogs')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Logs','EntityID')"
                 [NewRecordValues]="NewRecordValues('Record Merge Logs')"
@@ -1144,6 +1195,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Resource Types Section -->
@@ -1156,7 +1208,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('resourceTypes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Resource Types','EntityID')"
                 [NewRecordValues]="NewRecordValues('Resource Types')"
@@ -1166,6 +1219,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Tagged Items Section -->
@@ -1178,7 +1232,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('taggedItems')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Tagged Items','EntityID')"
                 [NewRecordValues]="NewRecordValues('Tagged Items')"
@@ -1188,6 +1243,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Template Params Section -->
@@ -1200,7 +1256,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('templateParams')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Template Params','EntityID')"
                 [NewRecordValues]="NewRecordValues('Template Params')"
@@ -1210,6 +1267,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- User Application Entities Section -->
@@ -1222,7 +1280,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userApplicationEntities')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Application Entities','EntityID')"
                 [NewRecordValues]="NewRecordValues('User Application Entities')"
@@ -1232,6 +1291,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- User Favorites Section -->
@@ -1244,7 +1304,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userFavorites')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Favorites','EntityID')"
                 [NewRecordValues]="NewRecordValues('User Favorites')"
@@ -1254,6 +1315,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- User Record Logs Section -->
@@ -1266,7 +1328,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userRecordLogs')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Record Logs','EntityID')"
                 [NewRecordValues]="NewRecordValues('User Record Logs')"
@@ -1276,6 +1339,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- User View Categories Section -->
@@ -1288,7 +1352,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userViewCategories')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User View Categories','EntityID')"
                 [NewRecordValues]="NewRecordValues('User View Categories')"
@@ -1298,6 +1363,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- User Views Section -->
@@ -1310,7 +1376,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('userViews')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Views','EntityID')"
                 [NewRecordValues]="NewRecordValues('User Views')"
@@ -1320,6 +1387,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Users Section -->
@@ -1332,7 +1400,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('users')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Users','LinkedEntityID')"
                 [NewRecordValues]="NewRecordValues('Users')"
@@ -1342,6 +1411,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- AI Agent Notes Section -->
@@ -1354,7 +1424,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentNotes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','PrimaryScopeEntityID')"
                 [NewRecordValues]="NewRecordValues('AI Agent Notes')"
@@ -1364,6 +1435,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Access Control Rules Section -->
@@ -1376,7 +1448,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAccessControlRules')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Access Control Rules','EntityID')"
                 [NewRecordValues]="NewRecordValues('MJ: Access Control Rules')"
@@ -1386,6 +1459,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Examples Section -->
@@ -1398,7 +1472,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentExamples')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','PrimaryScopeEntityID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
@@ -1408,6 +1483,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Record Links Section -->
@@ -1420,7 +1496,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJRecordLinks')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Links','SourceEntityID')"
                 [NewRecordValues]="NewRecordValues('MJ: Record Links')"
@@ -1430,6 +1507,55 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- MJ: Version Label Items Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJVersionLabelItems"
+        sectionName="MJ: Version Label Items"
+        icon="fa fa-history"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJVersionLabelItems')"
+        [defaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Items','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
+                [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- MJ: Version Labels Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJVersionLabels"
+        sectionName="MJ: Version Labels"
+        icon="fa fa-tag"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJVersionLabels')"
+        [defaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Labels','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
+                [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Query Entities Section -->
@@ -1442,7 +1568,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('queryEntities')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Query Entities','EntityID')"
                 [NewRecordValues]="NewRecordValues('Query Entities')"
@@ -1452,6 +1579,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Generated Codes Section -->
@@ -1464,7 +1592,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('generatedCodes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Generated Codes','LinkedEntityID')"
                 [NewRecordValues]="NewRecordValues('Generated Codes')"
@@ -1474,6 +1603,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Record Links Section -->
@@ -1486,7 +1616,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJRecordLinks')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Links','TargetEntityID')"
                 [NewRecordValues]="NewRecordValues('MJ: Record Links')"
@@ -1496,6 +1627,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Runs Section -->
@@ -1508,7 +1640,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentRuns')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','PrimaryScopeEntityID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
@@ -1518,6 +1651,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Test Runs Section -->
@@ -1530,7 +1664,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJTestRuns')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Runs','TargetLogEntityID')"
                 [NewRecordValues]="NewRecordValues('MJ: Test Runs')"
@@ -1540,6 +1675,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

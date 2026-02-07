@@ -168,7 +168,7 @@ The component uses CSS custom properties for theming:
 
 ## Dependencies
 
-- Angular 18.0.2+
+- Angular 21+
 - @memberjunction/core
 - @memberjunction/core-entities
 - @memberjunction/graphql-dataprovider

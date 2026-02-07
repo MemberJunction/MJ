@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "OAuth Authorization Initiated",
+      "Description": "Logs when a user initiates an OAuth 2.1 authorization flow for an MCP server connection, including the requested scopes and authorization server.",
+      "ParentID": null,
+      "AuthorizationID": null
+    }
+  },
+  {
+    "fields": {
+      "Name": "OAuth Authorization Completed",
+      "Description": "Logs when an OAuth authorization flow completes successfully with tokens received and stored.",
+      "ParentID": null,
+      "AuthorizationID": null
+    }
+  },
+  {
+    "fields": {
+      "Name": "OAuth Authorization Failed",
+      "Description": "Logs when an OAuth authorization flow fails due to user denial, timeout, or error from the authorization server.",
+      "ParentID": null,
+      "AuthorizationID": null
+    }
+  },
+  {
+    "fields": {
+      "Name": "OAuth Token Refreshed",
+      "Description": "Logs when OAuth tokens are successfully refreshed using a refresh token.",
+      "ParentID": null,
+      "AuthorizationID": null
+    }
+  },
+  {
+    "fields": {
+      "Name": "OAuth Token Refresh Failed",
+      "Description": "Logs when an OAuth token refresh fails, which may require user re-authorization.",
+      "ParentID": null,
+      "AuthorizationID": null
+    }
+  },
+  {
+    "fields": {
+      "Name": "OAuth Credentials Revoked",
+      "Description": "Logs when OAuth credentials are revoked by an administrator or the system.",
+      "ParentID": null,
+      "AuthorizationID": null
+    }
+  }
+]

@@ -103,7 +103,7 @@
         <div class="tab-content">
           <!-- Plugin Viewer - Created once, kept alive, shown/hidden with CSS -->
           @if (hasPlugin && artifactVersion && artifactTypeName) {
-            <div class="plugin-container" [style.display]="activeTab === 'display' ? 'block' : 'none'">
+            <div class="plugin-container" [class.plugin-hidden]="activeTab !== 'display'">
               <mj-artifact-type-plugin-viewer
                 [artifactVersion]="artifactVersion"
                 [artifactTypeName]="artifactTypeName"
@@ -144,7 +144,7 @@
           }
 
           <!-- Details Tab - Artifact metadata (always in DOM, hidden with CSS) -->
-          <div class="details-content" [style.display]="activeTab === 'details' ? 'block' : 'none'">
+          <div class="details-content" [class.tab-hidden]="activeTab !== 'details'">
               <div class="artifact-meta">
                 <div class="meta-item">
                   <label>Type</label>
@@ -197,7 +197,7 @@
             </div>
 
           <!-- Links Tab - Conversations and Collections (always in DOM, hidden with CSS) -->
-          <div class="links-container" [style.display]="activeTab === 'links' ? 'block' : 'none'">
+          <div class="links-container" [class.tab-hidden]="activeTab !== 'links'">
             @if (linksToShow.length > 0) {
               <div class="links-section">
                 @for (link of linksToShow; track link.id) {

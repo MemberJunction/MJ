@@ -12,6 +12,7 @@ import { ComponentNode, ComponentFeedback } from './skip-component-feedback-pane
 import { GraphQLComponentRegistryClient } from '@memberjunction/graphql-dataprovider';
 
 @Component({
+  standalone: false,
   selector: 'skip-artifact-viewer',
   templateUrl: './skip-artifact-viewer.component.html',
   styleUrls: ['./skip-artifact-viewer.component.css']

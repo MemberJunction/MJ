@@ -49,6 +49,7 @@ import {
  * which handles data loading, filtering, and view mode switching.
  */
 @Component({
+  standalone: false,
   selector: 'mj-data-explorer-dashboard',
   templateUrl: './data-explorer-dashboard.component.html',
   styleUrls: ['./data-explorer-dashboard.component.css'],
@@ -179,7 +180,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     return "Data Explorer"
   }
-
 
   /**
    * Filtered entities based on entityFilterText (for home screen)
@@ -2456,11 +2456,3 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.cdr.detectChanges();
   }
 }
-
-/**
- * Tree-shaking prevention
- */
-export function LoadDataExplorerDashboard() {
-  // Force inclusion in production builds
-}
-

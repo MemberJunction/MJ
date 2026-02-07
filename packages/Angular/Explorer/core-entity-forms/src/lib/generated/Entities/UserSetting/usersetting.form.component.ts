@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: User Settings') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-usersetting-form',
     templateUrl: './usersetting.form.component.html'
 })

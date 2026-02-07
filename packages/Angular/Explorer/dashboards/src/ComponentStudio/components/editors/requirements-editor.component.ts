@@ -7,6 +7,7 @@ type RequirementsField = 'functionalRequirements' | 'technicalDesign';
 type EditorMode = 'preview' | 'edit';
 
 @Component({
+  standalone: false,
   selector: 'mj-requirements-editor',
   template: `
     <div class="requirements-editor">

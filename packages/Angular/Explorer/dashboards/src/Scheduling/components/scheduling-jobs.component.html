@@ -1,134 +1,154 @@
 <div class="jobs-container">
-    <!-- Toolbar -->
-    <div class="jobs-toolbar">
-        <div class="toolbar-left">
-            <div class="search-box">
-                <i class="fa-solid fa-search"></i>
-                <input type="text"
-                       placeholder="Search jobs..."
-                       [value]="SearchTerm"
-                       (input)="OnSearchChange($any($event.target).value)" />
-            </div>
-            <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
-                <option value="">All Statuses</option>
-                <option *ngFor="let s of StatusOptions.slice(1)" [value]="s">{{s}}</option>
-            </select>
-            <select class="filter-select" [value]="TypeFilter" (change)="OnTypeFilterChange($any($event.target).value)">
-                <option value="">All Types</option>
-                <option *ngFor="let t of TypeOptions.slice(1)" [value]="t">{{t}}</option>
-            </select>
-        </div>
-        <div class="toolbar-right">
-            <span class="result-count">{{FilteredJobs.length}} of {{Jobs.length}} jobs</span>
-            <button class="control-btn" (click)="Refresh()">
-                <i class="fa-solid fa-arrows-rotate"></i> Refresh
-            </button>
-            <button class="primary-btn" (click)="OpenCreateSlideout()">
-                <i class="fa-solid fa-plus"></i> New Job
-            </button>
-        </div>
+  <!-- Toolbar -->
+  <div class="jobs-toolbar">
+    <div class="toolbar-left">
+      <div class="search-box">
+        <i class="fa-solid fa-search"></i>
+        <input type="text"
+          placeholder="Search jobs..."
+          [value]="SearchTerm"
+          (input)="OnSearchChange($any($event.target).value)" />
+      </div>
+      <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
+        <option value="">All Statuses</option>
+        @for (s of StatusOptions.slice(1); track s) {
+          <option [value]="s">{{s}}</option>
+        }
+      </select>
+      <select class="filter-select" [value]="TypeFilter" (change)="OnTypeFilterChange($any($event.target).value)">
+        <option value="">All Types</option>
+        @for (t of TypeOptions.slice(1); track t) {
+          <option [value]="t">{{t}}</option>
+        }
+      </select>
     </div>
-
-    <!-- Loading -->
-    <div *ngIf="IsLoading" class="loading-container">
-        <mj-loading text="Loading jobs..." size="medium"></mj-loading>
+    <div class="toolbar-right">
+      <span class="result-count">{{FilteredJobs.length}} of {{Jobs.length}} jobs</span>
+      <button class="control-btn" (click)="Refresh()">
+        <i class="fa-solid fa-arrows-rotate"></i> Refresh
+      </button>
+      <button class="primary-btn" (click)="OpenCreateSlideout()">
+        <i class="fa-solid fa-plus"></i> New Job
+      </button>
     </div>
+  </div>
 
-    <!-- Empty State -->
-    <div *ngIf="!IsLoading && FilteredJobs.length === 0" class="empty-state">
-        <div class="empty-icon">
-            <i class="fa-solid fa-calendar-xmark"></i>
-        </div>
-        <h3>No jobs found</h3>
-        <p *ngIf="SearchTerm || StatusFilter || TypeFilter">Try adjusting your filters</p>
-        <p *ngIf="!SearchTerm && !StatusFilter && !TypeFilter">Create your first scheduled job to get started</p>
-        <button *ngIf="!SearchTerm && !StatusFilter && !TypeFilter" class="primary-btn" (click)="OpenCreateSlideout()">
-            <i class="fa-solid fa-plus"></i> Create Job
+  <!-- Loading -->
+  @if (IsLoading) {
+    <div class="loading-container">
+      <mj-loading text="Loading jobs..." size="medium"></mj-loading>
+    </div>
+  }
+
+  <!-- Empty State -->
+  @if (!IsLoading && FilteredJobs.length === 0) {
+    <div class="empty-state">
+      <div class="empty-icon">
+        <i class="fa-solid fa-calendar-xmark"></i>
+      </div>
+      <h3>No jobs found</h3>
+      @if (SearchTerm || StatusFilter || TypeFilter) {
+        <p>Try adjusting your filters</p>
+      }
+      @if (!SearchTerm && !StatusFilter && !TypeFilter) {
+        <p>Create your first scheduled job to get started</p>
+      }
+      @if (!SearchTerm && !StatusFilter && !TypeFilter) {
+        <button class="primary-btn" (click)="OpenCreateSlideout()">
+          <i class="fa-solid fa-plus"></i> Create Job
         </button>
+      }
     </div>
+  }
 
-    <!-- Job Cards Grid -->
-    <div *ngIf="!IsLoading && FilteredJobs.length > 0" class="jobs-grid">
-        <div *ngFor="let job of FilteredJobs"
-             class="job-card"
-             (click)="OpenEditSlideout(job)">
-            <!-- Card Header -->
-            <div class="job-card-header">
-                <div class="job-card-title">
-                    <i [class]="GetTypeIcon(job.jobType)" class="type-icon"></i>
-                    <span class="job-name">{{job.jobName}}</span>
-                </div>
-                <span class="status-chip" [ngClass]="GetStatusClass(job.status)">{{job.status}}</span>
+  <!-- Job Cards Grid -->
+  @if (!IsLoading && FilteredJobs.length > 0) {
+    <div class="jobs-grid">
+      @for (job of FilteredJobs; track job) {
+        <div
+          class="job-card"
+          (click)="OpenEditSlideout(job)">
+          <!-- Card Header -->
+          <div class="job-card-header">
+            <div class="job-card-title">
+              <i [class]="GetTypeIcon(job.jobType)" class="type-icon"></i>
+              <span class="job-name">{{job.jobName}}</span>
             </div>
-
-            <!-- Card Body -->
-            <div class="job-card-body">
-                <div *ngIf="job.description" class="job-description">{{job.description}}</div>
-                <div class="job-meta-grid">
-                    <div class="meta-item">
-                        <span class="meta-label">Type</span>
-                        <span class="meta-value">{{job.jobType}}</span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label">Schedule</span>
-                        <span class="meta-value mono">{{job.cronExpression}}</span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label">Last Run</span>
-                        <span class="meta-value">{{FormatDate(job.lastRunAt)}}</span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label">Next Run</span>
-                        <span class="meta-value">{{FormatDate(job.nextRunAt)}}</span>
-                    </div>
-                </div>
-
-                <!-- Success Rate Bar -->
-                <div class="success-section">
-                    <div class="success-header">
-                        <span class="success-label">Success Rate</span>
-                        <span class="success-value" [style.color]="GetSuccessRateColor(job.successRate)">
-                            {{FormatPercentage(job.successRate)}}
-                        </span>
-                    </div>
-                    <div class="success-bar-track">
-                        <div class="success-bar-fill"
-                             [style.width]="(job.successRate * 100) + '%'"
-                             [style.background]="GetSuccessRateColor(job.successRate)">
-                        </div>
-                    </div>
-                    <div class="run-stats">
-                        <span class="stat-success"><i class="fa-solid fa-check"></i> {{job.successCount}}</span>
-                        <span class="stat-failure"><i class="fa-solid fa-xmark"></i> {{job.failureCount}}</span>
-                        <span class="stat-total">{{job.totalRuns}} total</span>
-                    </div>
-                </div>
+            <span class="status-chip" [ngClass]="GetStatusClass(job.status)">{{job.status}}</span>
+          </div>
+          <!-- Card Body -->
+          <div class="job-card-body">
+            @if (job.description) {
+              <div class="job-description">{{job.description}}</div>
+            }
+            <div class="job-meta-grid">
+              <div class="meta-item">
+                <span class="meta-label">Type</span>
+                <span class="meta-value">{{job.jobType}}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Schedule</span>
+                <span class="meta-value mono">{{job.cronExpression}}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Last Run</span>
+                <span class="meta-value">{{FormatDate(job.lastRunAt)}}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Next Run</span>
+                <span class="meta-value">{{FormatDate(job.nextRunAt)}}</span>
+              </div>
             </div>
-
-            <!-- Card Footer -->
-            <div class="job-card-footer">
-                <button class="action-btn" (click)="ToggleJobStatus(job, $event)">
-                    <i [class]="job.status === 'Active' ? 'fa-solid fa-pause' : 'fa-solid fa-play'"></i>
-                    {{job.status === 'Active' ? 'Pause' : 'Resume'}}
-                </button>
-                <button class="action-btn" (click)="OpenEntityRecord(job); $event.stopPropagation()">
-                    <i class="fa-solid fa-up-right-from-square"></i>
-                    Full Details
-                </button>
+            <!-- Success Rate Bar -->
+            <div class="success-section">
+              <div class="success-header">
+                <span class="success-label">Success Rate</span>
+                <span class="success-value" [style.color]="GetSuccessRateColor(job.successRate)">
+                  {{FormatPercentage(job.successRate)}}
+                </span>
+              </div>
+              <div class="success-bar-track">
+                <div class="success-bar-fill"
+                  [style.width]="(job.successRate * 100) + '%'"
+                  [style.background]="GetSuccessRateColor(job.successRate)">
+                </div>
+              </div>
+              <div class="run-stats">
+                <span class="stat-success"><i class="fa-solid fa-check"></i> {{job.successCount}}</span>
+                <span class="stat-failure"><i class="fa-solid fa-xmark"></i> {{job.failureCount}}</span>
+                <span class="stat-total">{{job.totalRuns}} total</span>
+              </div>
             </div>
+          </div>
+          <!-- Card Footer -->
+          <div class="job-card-footer">
+            <button class="action-btn" (click)="ToggleJobStatus(job, $event)">
+              <i [class]="job.status === 'Active' ? 'fa-solid fa-pause' : 'fa-solid fa-play'"></i>
+              {{job.status === 'Active' ? 'Pause' : 'Resume'}}
+            </button>
+            <button class="action-btn" (click)="OpenEntityRecord(job); $event.stopPropagation()">
+              <i class="fa-solid fa-up-right-from-square"></i>
+              Full Details
+            </button>
+          </div>
         </div>
+      }
     </div>
+  }
 
-    <!-- Slideout Panel -->
-    <div class="slideout-backdrop" *ngIf="SlideoutOpen" (click)="CloseSlideout()"></div>
-    <div class="slideout-panel" [class.open]="SlideoutOpen" [style.width.px]="SlideoutWidth">
-        <div class="slideout-resize-handle" (mousedown)="OnResizeStart($event)"></div>
-        <app-job-slideout
-            *ngIf="SlideoutOpen"
-            [Mode]="SlideoutMode"
-            [Job]="SelectedJob"
-            (Close)="CloseSlideout()"
-            (Saved)="OnSlideoutSaved()">
-        </app-job-slideout>
-    </div>
+  <!-- Slideout Panel -->
+  @if (SlideoutOpen) {
+    <div class="slideout-backdrop" (click)="CloseSlideout()"></div>
+  }
+  <div class="slideout-panel" [class.open]="SlideoutOpen" [style.width.px]="SlideoutWidth">
+    <div class="slideout-resize-handle" (mousedown)="OnResizeStart($event)"></div>
+    @if (SlideoutOpen) {
+      <app-job-slideout
+        [Mode]="SlideoutMode"
+        [Job]="SelectedJob"
+        (Close)="CloseSlideout()"
+        (Saved)="OnSlideoutSaved()">
+      </app-job-slideout>
+    }
+  </div>
 </div>

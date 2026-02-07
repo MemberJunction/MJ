@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Dashboard Part Types') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-dashboardparttype-form',
     templateUrl: './dashboardparttype.form.component.html'
 })

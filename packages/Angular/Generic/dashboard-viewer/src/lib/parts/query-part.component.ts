@@ -12,42 +12,51 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
  */
 @RegisterClass(BaseDashboardPart, 'QueryPanelRenderer')
 @Component({
+  standalone: false,
     selector: 'mj-query-part',
     template: `
         <div class="query-part" [class.loading]="IsLoading" [class.error]="ErrorMessage">
-            <!-- Loading state -->
-            <div class="loading-state" *ngIf="IsLoading">
-                <mj-loading text="Loading query..."></mj-loading>
+          <!-- Loading state -->
+          @if (IsLoading) {
+            <div class="loading-state">
+              <mj-loading text="Loading query..."></mj-loading>
             </div>
-
-            <!-- Error state -->
-            <div class="error-state" *ngIf="ErrorMessage && !IsLoading">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                <span>{{ ErrorMessage }}</span>
+          }
+        
+          <!-- Error state -->
+          @if (ErrorMessage && !IsLoading) {
+            <div class="error-state">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <span>{{ ErrorMessage }}</span>
             </div>
-
-            <!-- No query configured -->
-            <div class="empty-state" *ngIf="!IsLoading && !ErrorMessage && !hasQuery">
-                <i class="fa-solid fa-flask"></i>
-                <h4>No Query Selected</h4>
-                <p>Click the configure button to select a query for this part.</p>
+          }
+        
+          <!-- No query configured -->
+          @if (!IsLoading && !ErrorMessage && !hasQuery) {
+            <div class="empty-state">
+              <i class="fa-solid fa-flask"></i>
+              <h4>No Query Selected</h4>
+              <p>Click the configure button to select a query for this part.</p>
             </div>
-
-            <!-- Query Viewer -->
-            <div class="query-content" *ngIf="!IsLoading && !ErrorMessage && hasQuery && queryId">
-                <mj-query-viewer
-                    #queryViewer
-                    [QueryId]="queryId"
-                    [AutoRun]="true"
-                    [ShowToolbar]="showToolbar"
-                    [PersistState]="true"
-                    [PersistParameters]="true"
-                    (EntityLinkClick)="onEntityLinkClick($event)"
-                    (QueryError)="onQueryError($event)">
-                </mj-query-viewer>
+          }
+        
+          <!-- Query Viewer -->
+          @if (!IsLoading && !ErrorMessage && hasQuery && queryId) {
+            <div class="query-content">
+              <mj-query-viewer
+                #queryViewer
+                [QueryId]="queryId"
+                [AutoRun]="true"
+                [ShowToolbar]="showToolbar"
+                [PersistState]="true"
+                [PersistParameters]="true"
+                (EntityLinkClick)="onEntityLinkClick($event)"
+                (QueryError)="onQueryError($event)">
+              </mj-query-viewer>
             </div>
+          }
         </div>
-    `,
+        `,
     styles: [`
         :host {
             display: block;
@@ -232,11 +241,4 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
         this.queryEntity = null;
         this.queryId = null;
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadQueryPart() {
-    // Prevents tree-shaking of the component
 }

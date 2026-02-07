@@ -29,5 +29,3 @@ export class ConversationDetailEntityServer extends ConversationDetailEntity {
         return super.Save(options);
     }
 }
-
-export function LoadConversationDetailEntityServerSubClass() {}

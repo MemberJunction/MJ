@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Record Merge Deletion Logs') // Tell MemberJunction about this class
 @Component({
+    standalone: false,
     selector: 'gen-recordmergedeletionlog-form',
     templateUrl: './recordmergedeletionlog.form.component.html'
 })
@@ -15,7 +16,6 @@ export class RecordMergeDeletionLogFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'deletionAudit', sectionName: 'Deletion Audit', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

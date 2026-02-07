@@ -187,10 +187,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Testing Section -->
+    <!-- Test Run Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="testing"
-        sectionName="Testing"
+        sectionKey="testRunDetails"
+        sectionName="Test Run Details"
         icon="fa fa-flask"
         [form]="this"
         [formContext]="formContext">
@@ -254,7 +254,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('conversationDetails')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','ConversationID')"
                 [NewRecordValues]="NewRecordValues('Conversation Details')"
@@ -264,6 +265,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- Reports Section -->
@@ -276,7 +278,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('reports')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Reports','ConversationID')"
                 [NewRecordValues]="NewRecordValues('Reports')"
@@ -286,6 +289,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: Conversation Artifacts Section -->
@@ -298,7 +302,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJConversationArtifacts')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifacts','ConversationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Artifacts')"
@@ -308,6 +313,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- AI Agent Notes Section -->
@@ -320,7 +326,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('aIAgentNotes')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','SourceConversationID')"
                 [NewRecordValues]="NewRecordValues('AI Agent Notes')"
@@ -330,6 +337,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Runs Section -->
@@ -342,7 +350,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentRuns')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','ConversationID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
@@ -352,6 +361,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 
     <!-- MJ: AI Agent Examples Section -->
@@ -364,7 +374,8 @@
         [formContext]="formContext"
         [badgeCount]="GetSectionRowCount('mJAIAgentExamples')"
         [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
+        @if (record.IsSaved) {
+        <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','SourceConversationID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
@@ -374,6 +385,7 @@
                 >
             </mj-explorer-entity-data-grid>
         </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

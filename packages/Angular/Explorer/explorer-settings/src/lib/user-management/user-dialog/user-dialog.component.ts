@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
 import { UserEntity, RoleEntity, UserRoleEntity } from '@memberjunction/core-entities';
@@ -16,6 +16,7 @@ export interface UserDialogResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-user-dialog',
   encapsulation: ViewEncapsulation.None,
   templateUrl: './user-dialog.component.html',
@@ -89,7 +90,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscapeKey(event: KeyboardEvent): void {
+  onEscapeKey(event: Event): void {
     if (this.visible) {
       this.onCancel();
     }
