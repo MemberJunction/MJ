@@ -1,184 +1,315 @@
-# Social Media Actions for MemberJunction
+# @memberjunction/actions-bizapps-social
+
+Social media automation actions for MemberJunction, providing a unified interface to create posts, retrieve analytics, manage content, and search across eight major platforms: Twitter/X, LinkedIn, Facebook, Instagram, TikTok, YouTube, HootSuite, and Buffer.
 
 ## Overview
 
-This package provides comprehensive social media automation capabilities for MemberJunction, enabling agents and applications to interact with major social media platforms programmatically. The implementation follows MJ's established patterns for BizApps actions while providing platform-specific functionality.
+This package implements the [BizApps action patterns](../README.md) from the MemberJunction Actions framework, extending the shared `BaseOAuthAction` class to provide platform-specific social media operations. Each platform has its own base class handling authentication, rate limiting, and API conventions, with individual action classes for discrete operations like creating posts, fetching analytics, and searching content.
+
+All actions are registered via `@RegisterClass(BaseAction, ...)` for automatic discovery by MJ's metadata-driven action system, making them available to AI agents, workflow engines, and low-code environments. See the [Actions CLAUDE.md](../../CLAUDE.md) for the overall Actions design philosophy.
 
 ## Architecture
 
 ### Class Hierarchy
 
+```mermaid
+classDiagram
+    direction TB
+    class BaseAction {
+        +InternalRunAction()
+    }
+    class BaseOAuthAction {
+        +initializeOAuth()
+        +getAccessToken()
+        +getRefreshToken()
+        +updateStoredTokens()
+    }
+    class BaseSocialMediaAction {
+        +platformName
+        +apiBaseUrl
+        +normalizeAnalytics()
+        +uploadMedia()
+        +handleRateLimit()
+        +searchPosts()
+        +normalizePost()
+        +buildHeaders()
+    }
+    class TwitterBaseAction
+    class LinkedInBaseAction
+    class FacebookBaseAction
+    class InstagramBaseAction
+    class TikTokBaseAction
+    class YouTubeBaseAction
+    class HootSuiteBaseAction
+    class BufferBaseAction
+
+    BaseAction <|-- BaseOAuthAction
+    BaseOAuthAction <|-- BaseSocialMediaAction
+    BaseSocialMediaAction <|-- TwitterBaseAction
+    BaseSocialMediaAction <|-- LinkedInBaseAction
+    BaseSocialMediaAction <|-- FacebookBaseAction
+    BaseSocialMediaAction <|-- InstagramBaseAction
+    BaseSocialMediaAction <|-- TikTokBaseAction
+    BaseSocialMediaAction <|-- YouTubeBaseAction
+    BaseSocialMediaAction <|-- HootSuiteBaseAction
+    BaseSocialMediaAction <|-- BufferBaseAction
+
+    style BaseAction fill:#64748b,stroke:#475569,color:#fff
+    style BaseOAuthAction fill:#7c5295,stroke:#563a6b,color:#fff
+    style BaseSocialMediaAction fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style TwitterBaseAction fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style LinkedInBaseAction fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style FacebookBaseAction fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style InstagramBaseAction fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style TikTokBaseAction fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style YouTubeBaseAction fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style HootSuiteBaseAction fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style BufferBaseAction fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
-BaseAction (from @memberjunction/actions)
-    └── BaseOAuthAction (from @memberjunction/actions/Engine/src/generic)
-        └── BaseSocialMediaAction (base for all social actions)
-            ├── BaseHootSuiteAction
-            ├── BaseBufferAction
-            ├── BaseLinkedInAction
-            ├── BaseTwitterAction
-            ├── BaseFacebookAction
-            ├── BaseInstagramAction
-            ├── BaseTikTokAction
-            └── BaseYouTubeAction
+
+### Data Flow
+
+```mermaid
+flowchart LR
+    subgraph Consumers
+        Agent[AI Agent]
+        Workflow[Workflow Engine]
+        UI[Low-Code Builder]
+    end
+
+    subgraph SocialPackage["Social Actions Package"]
+        BSM[BaseSocialMediaAction]
+        subgraph Providers
+            TW[Twitter]
+            LI[LinkedIn]
+            FB[Facebook]
+            IG[Instagram]
+            TK[TikTok]
+            YT[YouTube]
+            HS[HootSuite]
+            BF[Buffer]
+        end
+    end
+
+    subgraph External["External APIs"]
+        TWA[Twitter API v2]
+        LIA[LinkedIn API v2]
+        FBA[Graph API v18.0]
+        IGA[Instagram Graph API]
+        TKA[TikTok Display API v2]
+        YTA[YouTube Data API v3]
+        HSA[HootSuite API v1]
+        BFA[Buffer API v1]
+    end
+
+    subgraph MJ["MJ Infrastructure"]
+        CI[CompanyIntegration]
+        OAuth[OAuth Tokens]
+    end
+
+    Agent --> BSM
+    Workflow --> BSM
+    UI --> BSM
+    BSM --> TW & LI & FB & IG & TK & YT & HS & BF
+    TW --> TWA
+    LI --> LIA
+    FB --> FBA
+    IG --> IGA
+    TK --> TKA
+    YT --> YTA
+    HS --> HSA
+    BF --> BFA
+    BSM --> CI
+    CI --> OAuth
+
+    style BSM fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style CI fill:#7c5295,stroke:#563a6b,color:#fff
+    style OAuth fill:#7c5295,stroke:#563a6b,color:#fff
+    style TW fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style LI fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style FB fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style IG fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style TK fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style YT fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style HS fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style BF fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
-### Authentication
+## Installation
 
-All social media platforms use OAuth 2.0 authentication. Credentials are stored in the MemberJunction CompanyIntegration table with the following structure:
+```bash
+npm install @memberjunction/actions-bizapps-social
+```
 
-- **Integration Entity**: Defines the platform (e.g., "Twitter", "LinkedIn")
-- **CompanyIntegration Entity**: Stores company-specific credentials
-  - `AccessToken`: OAuth access token
-  - `RefreshToken`: OAuth refresh token (where applicable)
-  - `ExpirationDate`: Token expiration timestamp
-  - `CustomAttribute1-5`: Platform-specific data (e.g., account IDs)
+This package is part of the MemberJunction monorepo. When working within the monorepo, add the dependency to your package's `package.json` and run `npm install` from the repository root.
 
-The `BaseOAuthAction` class provides:
-- Token retrieval from CompanyIntegration
+## Authentication
+
+All platforms authenticate via OAuth 2.0 credentials stored in the MemberJunction `CompanyIntegration` entity. The `BaseOAuthAction` base class (from `@memberjunction/actions`) provides:
+
+- Token retrieval from CompanyIntegration records
 - Automatic token refresh when expired
 - OAuth flow helpers
 - Standard error handling for auth failures
 
-## Package Structure
+### CompanyIntegration Field Mapping
 
-```
-packages/Actions/BizApps/Social/
-├── README.md (this file)
-├── package.json
-├── tsconfig.json
-├── src/
-│   ├── index.ts
-│   ├── base/
-│   │   └── base-social.action.ts
-│   └── providers/
-│       ├── hootsuite/
-│       │   ├── hootsuite-base.action.ts
-│       │   └── actions/
-│       │       ├── get-scheduled-posts.action.ts
-│       │       ├── create-scheduled-post.action.ts
-│       │       ├── get-analytics.action.ts
-│       │       ├── get-social-profiles.action.ts
-│       │       ├── update-scheduled-post.action.ts
-│       │       ├── delete-scheduled-post.action.ts
-│       │       ├── bulk-schedule-posts.action.ts
-│       │       └── search-posts.action.ts
-│       ├── buffer/
-│       │   ├── buffer-base.action.ts
-│       │   └── actions/
-│       │       ├── get-profiles.action.ts
-│       │       ├── create-post.action.ts
-│       │       ├── get-pending-posts.action.ts
-│       │       ├── get-sent-posts.action.ts
-│       │       ├── get-analytics.action.ts
-│       │       ├── reorder-queue.action.ts
-│       │       ├── delete-post.action.ts
-│       │       └── search-posts.action.ts
-│       ├── linkedin/
-│       │   ├── linkedin-base.action.ts
-│       │   └── actions/
-│       │       ├── create-post.action.ts
-│       │       ├── get-organization-posts.action.ts
-│       │       ├── get-personal-posts.action.ts
-│       │       ├── get-post-analytics.action.ts
-│       │       ├── schedule-post.action.ts
-│       │       ├── get-followers.action.ts
-│       │       ├── create-article.action.ts
-│       │       └── search-posts.action.ts
-│       ├── twitter/
-│       │   ├── twitter-base.action.ts
-│       │   └── actions/
-│       │       ├── create-tweet.action.ts
-│       │       ├── create-thread.action.ts
-│       │       ├── get-timeline.action.ts
-│       │       ├── get-mentions.action.ts
-│       │       ├── get-analytics.action.ts
-│       │       ├── schedule-tweet.action.ts
-│       │       ├── delete-tweet.action.ts
-│       │       └── search-tweets.action.ts
-│       ├── facebook/
-│       │   ├── facebook-base.action.ts
-│       │   └── actions/
-│       │       ├── create-post.action.ts
-│       │       ├── get-page-posts.action.ts
-│       │       ├── get-post-insights.action.ts
-│       │       ├── schedule-post.action.ts
-│       │       ├── create-album.action.ts
-│       │       ├── get-page-insights.action.ts
-│       │       ├── respond-to-comments.action.ts
-│       │       ├── boost-post.action.ts
-│       │       └── search-posts.action.ts
-│       ├── instagram/
-│       │   ├── instagram-base.action.ts
-│       │   └── actions/
-│       │       ├── create-post.action.ts
-│       │       ├── get-business-posts.action.ts
-│       │       ├── get-post-insights.action.ts
-│       │       ├── get-account-insights.action.ts
-│       │       ├── schedule-post.action.ts
-│       │       ├── get-comments.action.ts
-│       │       ├── create-story.action.ts
-│       │       └── search-posts.action.ts
-│       ├── tiktok/
-│       │   ├── tiktok-base.action.ts
-│       │   └── actions/
-│       │       ├── get-user-videos.action.ts
-│       │       ├── get-video-analytics.action.ts
-│       │       ├── get-account-analytics.action.ts
-│       │       ├── create-video-post.action.ts
-│       │       ├── get-comments.action.ts
-│       │       ├── get-trending-hashtags.action.ts
-│       │       └── search-videos.action.ts
-│       └── youtube/
-│           ├── youtube-base.action.ts
-│           └── actions/
-│               ├── upload-video.action.ts
-│               ├── get-channel-videos.action.ts
-│               ├── get-video-analytics.action.ts
-│               ├── update-video-metadata.action.ts
-│               ├── create-playlist.action.ts
-│               ├── schedule-video.action.ts
-│               ├── get-comments.action.ts
-│               ├── get-channel-analytics.action.ts
-│               └── search-videos.action.ts
-```
+| Field | Purpose |
+|---|---|
+| `AccessToken` | OAuth access token |
+| `RefreshToken` | OAuth refresh token (where applicable) |
+| `ExpirationDate` | Token expiration timestamp |
+| `CustomAttribute1` | Platform account/profile ID |
+| `CustomAttribute2` | OAuth Client ID / App ID |
+| `CustomAttribute3` | OAuth Client Secret / App Secret |
+| `CustomAttribute4` | Additional platform-specific data |
 
-## Common Features
+## Platform Reference
 
-### BaseSocialMediaAction
+### Twitter/X
 
-Provides common functionality for all social platforms:
+**API**: Twitter API v2 | **Rate Limits**: 15-900 requests per 15 min (varies by endpoint)
 
-```typescript
-export abstract class BaseSocialMediaAction extends BaseOAuthAction {
-    // Common parameters for all social actions
-    protected get commonParams(): ActionParam[] {
-        return [
-            { Name: 'CompanyIntegrationID', Type: 'guid', Required: true, Description: 'Company integration identifier' },
-            { Name: 'ProfileID', Type: 'string', Required: false, Description: 'Social profile/account ID' }
-        ];
-    }
+| Action | Class | Description |
+|---|---|---|
+| Create Tweet | `TwitterCreateTweetAction` | Post tweets with media, polls, replies, or quote tweets |
+| Create Thread | `TwitterCreateThreadAction` | Post multi-tweet threads |
+| Get Timeline | `TwitterGetTimelineAction` | Retrieve authenticated user's timeline |
+| Get Mentions | `TwitterGetMentionsAction` | Retrieve mentions of the authenticated user |
+| Get Analytics | `TwitterGetAnalyticsAction` | Retrieve tweet and account analytics |
+| Schedule Tweet | `TwitterScheduleTweetAction` | Schedule a tweet for future publication |
+| Delete Tweet | `TwitterDeleteTweetAction` | Delete an existing tweet |
+| Search Tweets | `TwitterSearchTweetsAction` | Search tweets with full Twitter search operators |
 
-    // Analytics normalization
-    protected normalizeAnalytics(platformData: any): SocialAnalytics {
-        // Convert platform-specific metrics to common format
-    }
+**Media**: JPEG, PNG, GIF (15MB), WebP images (5MB); MP4 video (512MB). Chunked upload with processing status polling for videos.
 
-    // Media handling
-    protected async uploadMedia(files: MediaFile[]): Promise<string[]> {
-        // Handle media uploads with size/format validation
-    }
+### LinkedIn
 
-    // Rate limiting
-    protected async handleRateLimit(retryAfter: number): Promise<void> {
-        // Intelligent rate limit handling
-    }
+**API**: LinkedIn Marketing Developer Platform v2 | **Rate Limits**: Application-level and member-level limits
 
-    // Historical post search
-    protected abstract searchPosts(params: SearchParams): Promise<SocialPost[]>;
-}
-```
+| Action | Class | Description |
+|---|---|---|
+| Create Post | `LinkedInCreatePostAction` | Post to personal profiles or organization pages |
+| Create Article | `LinkedInCreateArticleAction` | Publish long-form articles |
+| Get Organization Posts | `LinkedInGetOrganizationPostsAction` | Retrieve posts from an organization page |
+| Get Personal Posts | `LinkedInGetPersonalPostsAction` | Retrieve personal profile posts |
+| Get Post Analytics | `LinkedInGetPostAnalyticsAction` | Retrieve analytics for specific posts |
+| Get Followers | `LinkedInGetFollowersAction` | Retrieve follower information |
+| Schedule Post | `LinkedInSchedulePostAction` | Schedule a post for future publication |
+| Search Posts | `LinkedInSearchPostsAction` | Search organization posts |
 
-### Common Interfaces
+**Media**: JPEG, PNG, GIF, WebP images (10MB). Two-step upload via asset registration.
+
+### Facebook
+
+**API**: Graph API v18.0 | **Rate Limits**: 200 calls per hour per user
+
+| Action | Class | Description |
+|---|---|---|
+| Create Post | `FacebookCreatePostAction` | Create page or profile posts with media |
+| Get Page Posts | `FacebookGetPagePostsAction` | Retrieve posts from a managed page |
+| Get Post Insights | `FacebookGetPostInsightsAction` | Retrieve detailed post metrics |
+| Get Page Insights | `FacebookGetPageInsightsAction` | Retrieve page-level analytics |
+| Schedule Post | `FacebookSchedulePostAction` | Schedule posts for future publication |
+| Create Album | `FacebookCreateAlbumAction` | Create photo albums on pages |
+| Respond to Comments | `FacebookRespondToCommentsAction` | Reply to comments on posts |
+| Boost Post | `FacebookBoostPostAction` | Promote posts with paid advertising |
+| Search Posts | `FacebookSearchPostsAction` | Search within page posts |
+
+**Media**: JPEG, PNG, GIF, BMP, TIFF images (4MB); MP4, MOV, MKV, WebM video (10GB). Page-specific access tokens for page operations.
+
+### Instagram
+
+**API**: Instagram Graph API + Basic Display API | **Rate Limits**: 200 calls per hour per user
+
+| Action | Class | Description |
+|---|---|---|
+| Create Post | `InstagramCreatePostAction` | Create feed posts (image/video/carousel) |
+| Create Story | `InstagramCreateStoryAction` | Create Instagram stories |
+| Get Business Posts | `InstagramGetBusinessPostsAction` | Retrieve business account posts |
+| Get Post Insights | `InstagramGetPostInsightsAction` | Retrieve post-level metrics |
+| Get Account Insights | `InstagramGetAccountInsightsAction` | Retrieve account-level analytics |
+| Get Comments | `InstagramGetCommentsAction` | Retrieve comments on posts |
+| Schedule Post | `InstagramSchedulePostAction` | Schedule posts for future publication |
+| Search Posts | `InstagramSearchPostsAction` | Search business account posts by caption |
+
+**Media**: Requires publicly accessible URLs (CDN hosting). Container-based publishing workflow with status polling.
+
+### TikTok
+
+**API**: Display API v2 | **Rate Limits**: 1,000 requests per day
+
+| Action | Class | Description |
+|---|---|---|
+| Create Video Post | `TikTokCreateVideoPostAction` | Create video posts (requires API approval) |
+| Get User Videos | `TikTokGetUserVideosAction` | Retrieve authenticated user's videos |
+| Get Video Analytics | `TikTokGetVideoAnalyticsAction` | Retrieve analytics for specific videos |
+| Get Account Analytics | `TikTokGetAccountAnalyticsAction` | Retrieve account-level metrics |
+| Get Comments | `TikTokGetCommentsAction` | Retrieve comments on videos |
+| Get Trending Hashtags | `TikTokGetTrendingHashtagsAction` | Discover trending hashtags |
+| Search Videos | `TikTokSearchVideosAction` | Search within user's own videos |
+
+**Media**: Video only (MP4, MOV, WebM; max 287.6MB). Video upload requires special TikTok API approval.
+
+### YouTube
+
+**API**: Data API v3 | **Rate Limits**: 10,000 quota units per day
+
+| Action | Class | Description |
+|---|---|---|
+| Upload Video | `YouTubeUploadVideoAction` | Upload videos with metadata and thumbnails |
+| Get Channel Videos | `YouTubeGetChannelVideosAction` | Retrieve videos from a channel |
+| Get Video Analytics | `YouTubeGetVideoAnalyticsAction` | Retrieve per-video analytics |
+| Get Channel Analytics | `YouTubeGetChannelAnalyticsAction` | Retrieve channel-level metrics |
+| Get Comments | `YouTubeGetCommentsAction` | Retrieve video comments |
+| Update Video Metadata | `YouTubeUpdateVideoMetadataAction` | Update title, description, tags |
+| Create Playlist | `YouTubeCreatePlaylistAction` | Create and manage playlists |
+| Schedule Video | `YouTubeScheduleVideoAction` | Schedule video publication |
+| Search Videos | `YouTubeSearchVideosAction` | Search channel videos with filters |
+
+**Media**: MP4, AVI, MOV, WMV, FLV, WebM video (128GB). Resumable upload with chunked transfer. Quota-aware operations with cost tracking.
+
+### HootSuite
+
+**API**: Platform API v1 | **Rate Limits**: 250 requests per hour
+
+| Action | Class | Description |
+|---|---|---|
+| Create Scheduled Post | `HootSuiteCreateScheduledPostAction` | Create and schedule multi-platform posts |
+| Get Scheduled Posts | `HootSuiteGetScheduledPostsAction` | Retrieve scheduled post queue |
+| Update Scheduled Post | `HootSuiteUpdateScheduledPostAction` | Modify a scheduled post |
+| Delete Scheduled Post | `HootSuiteDeleteScheduledPostAction` | Remove a scheduled post |
+| Bulk Schedule Posts | `HootSuiteBulkSchedulePostsAction` | Schedule multiple posts at once |
+| Get Social Profiles | `HootSuiteGetSocialProfilesAction` | List connected social profiles |
+| Get Analytics | `HootSuiteGetAnalyticsAction` | Retrieve cross-platform analytics |
+| Search Posts | `HootSuiteSearchPostsAction` | Full text search across connected accounts |
+
+**Media**: Two-step upload (request URL, then PUT file data) with processing status polling.
+
+### Buffer
+
+**API**: Buffer API v1 | **Rate Limits**: 600 requests per hour
+
+| Action | Class | Description |
+|---|---|---|
+| Create Post | `BufferCreatePostAction` | Create posts across connected profiles |
+| Get Profiles | `BufferGetProfilesAction` | List connected social profiles |
+| Get Pending Posts | `BufferGetPendingPostsAction` | Retrieve queued/scheduled posts |
+| Get Sent Posts | `BufferGetSentPostsAction` | Retrieve published posts |
+| Get Analytics | `BufferGetAnalyticsAction` | Retrieve engagement analytics |
+| Reorder Queue | `BufferReorderQueueAction` | Reorder posts in the publishing queue |
+| Delete Post | `BufferDeletePostAction` | Remove a post from the queue |
+| Search Posts | `BufferSearchPostsAction` | Client-side search across sent posts |
+
+**Media**: Form-data upload returning media URLs for attachment to updates.
+
+## Common Interfaces
+
+All platform actions normalize data to shared interfaces defined in `BaseSocialMediaAction`:
+
+### SocialPost
+
+The standard format for posts across all platforms:
 
 ```typescript
 interface SocialPost {
@@ -190,9 +321,15 @@ interface SocialPost {
     publishedAt: Date;
     scheduledFor?: Date;
     analytics?: SocialAnalytics;
-    platformSpecificData: Record<string, any>;
+    platformSpecificData: Record<string, unknown>;
 }
+```
 
+### SocialAnalytics
+
+Normalized engagement metrics:
+
+```typescript
 interface SocialAnalytics {
     impressions: number;
     engagements: number;
@@ -203,9 +340,15 @@ interface SocialAnalytics {
     reach: number;
     saves?: number;
     videoViews?: number;
-    platformMetrics: Record<string, any>;
+    platformMetrics: Record<string, unknown>;
 }
+```
 
+### SearchParams
+
+Unified search parameters:
+
+```typescript
 interface SearchParams {
     query?: string;
     hashtags?: string[];
@@ -214,68 +357,102 @@ interface SearchParams {
     limit?: number;
     offset?: number;
 }
+```
 
+### MediaFile
+
+Standard media file representation:
+
+```typescript
 interface MediaFile {
     filename: string;
     mimeType: string;
-    data: Buffer | string; // Base64 or buffer
+    data: Buffer | string;  // Buffer or base64 string
     size: number;
 }
 ```
 
-## Platform-Specific Implementation Details
+## Usage Examples
 
-### HootSuite
-- **API Version**: v1
-- **Rate Limits**: 250 requests per hour
-- **Special Features**: Multi-platform posting, team collaboration
-- **Search Capabilities**: Full text search across connected accounts
+### Creating a Tweet with Media
 
-### Buffer
-- **API Version**: v1
-- **Rate Limits**: 600 requests per hour  
-- **Special Features**: Optimal timing suggestions, queue management
-- **Search Capabilities**: Search within scheduled and sent posts
+```typescript
+import { ActionEngineServer } from '@memberjunction/actions';
 
-### LinkedIn
-- **API Version**: v2 (LinkedIn Marketing Developer Platform)
-- **Rate Limits**: Application-level and member-level limits
-- **Special Features**: Organization vs personal posts, article publishing
-- **Search Capabilities**: Search organization posts, limited personal post search
+const engine = ActionEngineServer.Instance;
+const result = await engine.RunAction('TwitterCreateTweetAction', [
+    { Name: 'CompanyIntegrationID', Value: 'integration-uuid' },
+    { Name: 'Content', Value: 'Check out our latest product launch!' },
+    { Name: 'MediaFiles', Value: [{
+        filename: 'product.jpg',
+        mimeType: 'image/jpeg',
+        data: base64ImageData,
+        size: 1024000
+    }] }
+], contextUser);
 
-### Twitter/X
-- **API Version**: v2
-- **Rate Limits**: Varies by endpoint (15-900 requests per 15 min)
-- **Special Features**: Thread creation, advanced search operators
-- **Search Capabilities**: Full Twitter search API with operators
+if (result.Success) {
+    const tweetId = result.Params.find(p => p.Name === 'TweetID')?.Value;
+    const tweetUrl = result.Params.find(p => p.Name === 'TweetURL')?.Value;
+}
+```
 
-### Facebook
-- **API Version**: Graph API v18.0
-- **Rate Limits**: 200 calls per hour per user
-- **Special Features**: Page vs profile posts, boost capabilities
-- **Search Capabilities**: Search within page posts, limited by privacy
+### Creating a LinkedIn Organization Post
 
-### Instagram
-- **API Version**: Instagram Basic Display API + Graph API
-- **Rate Limits**: 200 calls per hour per user
-- **Special Features**: Stories, reels, shopping tags
-- **Search Capabilities**: Business account posts only
+```typescript
+const result = await engine.RunAction('LinkedInCreatePostAction', [
+    { Name: 'CompanyIntegrationID', Value: 'integration-uuid' },
+    { Name: 'Content', Value: 'Excited to announce our new partnership!' },
+    { Name: 'AuthorType', Value: 'organization' },
+    { Name: 'OrganizationID', Value: 'org-12345' },
+    { Name: 'Visibility', Value: 'PUBLIC' }
+], contextUser);
+```
 
-### TikTok
-- **API Version**: Display API v2
-- **Rate Limits**: 1000 requests per day
-- **Special Features**: Video only, trending discovery
-- **Search Capabilities**: Limited to user's own videos
+### Uploading a YouTube Video
 
-### YouTube
-- **API Version**: Data API v3
-- **Rate Limits**: 10,000 quota units per day
-- **Special Features**: Video management, playlists, premieres
-- **Search Capabilities**: Full channel video search with filters
+```typescript
+const result = await engine.RunAction('YouTubeUploadVideoAction', [
+    { Name: 'CompanyIntegrationID', Value: 'integration-uuid' },
+    { Name: 'Title', Value: 'Product Demo - Q1 2025' },
+    { Name: 'Description', Value: 'Full walkthrough of our latest features.' },
+    { Name: 'Tags', Value: ['demo', 'product', 'tutorial'] },
+    { Name: 'PrivacyStatus', Value: 'public' },
+    { Name: 'VideoFile', Value: videoFileObject },
+    { Name: 'NotifySubscribers', Value: true }
+], contextUser);
+
+if (result.Success) {
+    const videoUrl = result.Params.find(p => p.Name === 'VideoURL')?.Value;
+}
+```
+
+### Searching Historical Posts
+
+```typescript
+const result = await engine.RunAction('TwitterSearchTweetsAction', [
+    { Name: 'CompanyIntegrationID', Value: 'integration-uuid' },
+    { Name: 'Query', Value: 'product launch' },
+    { Name: 'StartDate', Value: '2025-01-01' },
+    { Name: 'EndDate', Value: '2025-06-30' },
+    { Name: 'Limit', Value: 100 }
+], contextUser);
+```
+
+### Multi-Platform Posting via Buffer
+
+```typescript
+const result = await engine.RunAction('BufferCreatePostAction', [
+    { Name: 'CompanyIntegrationID', Value: 'integration-uuid' },
+    { Name: 'ProfileIDs', Value: ['twitter-profile-id', 'linkedin-profile-id'] },
+    { Name: 'Content', Value: 'Big announcement coming soon!' },
+    { Name: 'ScheduledAt', Value: new Date('2025-03-15T10:00:00Z') }
+], contextUser);
+```
 
 ## Error Handling
 
-All actions implement comprehensive error handling:
+All actions use a standardized error code enum for consistent error classification:
 
 ```typescript
 enum SocialMediaErrorCode {
@@ -289,87 +466,71 @@ enum SocialMediaErrorCode {
 }
 ```
 
-## Usage Examples
+Each platform base class provides a dedicated error handler (e.g., `handleTwitterError`, `handleFacebookError`) that maps platform-specific HTTP status codes and error payloads to these standardized codes. Rate limiting is handled automatically with exponential backoff and request retry via Axios interceptors.
 
-### Creating a Post
-```typescript
-const action = new CreatePostAction();
-await action.RunAction({
-    CompanyIntegrationID: 'abc-123',
-    ProfileID: 'page-456',
-    Content: 'Check out our new product!',
-    MediaFiles: [{
-        filename: 'product.jpg',
-        mimeType: 'image/jpeg',
-        data: base64Data,
-        size: 1024000
-    }],
-    ScheduledTime: '2024-01-15T10:00:00Z'
-});
+## Package Structure
+
+```
+src/
+  index.ts                          # Package entry point
+  base/
+    base-social.action.ts           # BaseSocialMediaAction, interfaces, error codes
+  providers/
+    twitter/
+      twitter-base.action.ts        # TwitterBaseAction (API v2, OAuth 2.0)
+      actions/                      # 8 Twitter actions
+    linkedin/
+      linkedin-base.action.ts       # LinkedInBaseAction (Marketing API v2)
+      actions/                      # 8 LinkedIn actions
+    facebook/
+      facebook-base.action.ts       # FacebookBaseAction (Graph API v18.0)
+      actions/                      # 9 Facebook actions
+    instagram/
+      instagram-base.action.ts      # InstagramBaseAction (Graph API)
+      actions/                      # 8 Instagram actions
+    tiktok/
+      tiktok-base.action.ts         # TikTokBaseAction (Display API v2)
+      actions/                      # 7 TikTok actions
+    youtube/
+      youtube-base.action.ts        # YouTubeBaseAction (Data API v3)
+      actions/                      # 9 YouTube actions
+    hootsuite/
+      hootsuite-base.action.ts      # HootSuiteBaseAction (Platform API v1)
+      actions/                      # 8 HootSuite actions
+    buffer/
+      buffer-base.action.ts         # BufferBaseAction (Buffer API v1)
+      actions/                      # 8 Buffer actions
 ```
 
-### Searching Historical Posts
-```typescript
-const action = new SearchPostsAction();
-const result = await action.RunAction({
-    CompanyIntegrationID: 'abc-123',
-    Query: 'product launch',
-    StartDate: '2023-01-01',
-    EndDate: '2023-12-31',
-    Limit: 100
-});
+**Total**: 65 action classes across 8 platform providers.
 
-// Analyze content patterns
-const posts = result.Result as SocialPost[];
-const contentPatterns = analyzePostContent(posts);
+## Dependencies
+
+| Package | Purpose |
+|---|---|
+| `@memberjunction/core` | Logging (`LogStatus`, `LogError`) |
+| `@memberjunction/global` | `@RegisterClass` decorator for action discovery |
+| `@memberjunction/actions-base` | `ActionParam`, `ActionResultSimple`, `RunActionParams` |
+| `@memberjunction/actions` | `BaseAction`, `BaseOAuthAction` base classes |
+| `@memberjunction/core-entities` | MJ entity type definitions |
+| `axios` | HTTP client for platform API requests |
+| `form-data` | Multipart form data for media uploads |
+
+## Related Packages
+
+- [@memberjunction/actions](../../Engine/readme.md) - Actions execution engine providing `BaseAction` and `BaseOAuthAction`
+- [@memberjunction/actions-base](../../Base/README.md) - Base interfaces and type definitions
+- [@memberjunction/core-actions](../../CoreActions/readme.md) - Core pre-built actions (HTTP, email, AI)
+- [@memberjunction/actions-bizapps-accounting](../Accounting/README.md) - Accounting system integrations (same BizApps pattern)
+- [@memberjunction/actions-bizapps-lms](../LMS/README.md) - Learning management system integrations
+
+## Building
+
+```bash
+# From the package directory
+cd packages/Actions/BizApps/Social
+npm run build
+
+# Watch mode
+npm run watch
 ```
-
-### Getting Analytics
-```typescript
-const action = new GetPostAnalyticsAction();
-const result = await action.RunAction({
-    CompanyIntegrationID: 'abc-123',
-    PostID: 'post-789',
-    MetricTypes: ['impressions', 'engagements', 'clicks']
-});
-```
-
-## Development Guidelines
-
-1. **Credential Storage**: Always use CompanyIntegration for OAuth tokens
-2. **Rate Limiting**: Implement exponential backoff for rate limit errors
-3. **Media Handling**: Validate media size/format before upload
-4. **Error Messages**: Provide clear, actionable error messages
-5. **Logging**: Log all API requests for debugging
-6. **Testing**: Mock API responses for unit tests
-
-## Testing
-
-Each platform should have:
-- Unit tests for action logic
-- Integration tests with mock API responses
-- Manual testing checklist for OAuth flow
-- Performance tests for bulk operations
-
-## Future Enhancements
-
-1. **Webhook Support**: Real-time notifications for comments/mentions
-2. **Batch Operations**: Bulk post creation/scheduling
-3. **AI Integration**: Content suggestions based on historical performance
-4. **Cross-Platform Analytics**: Unified dashboard across all platforms
-5. **Content Calendar**: Visual planning interface
-
-## Contributing
-
-When adding new actions:
-1. Extend the appropriate base class
-2. Implement all required parameters
-3. Add comprehensive error handling
-4. Include search functionality where available
-5. Update metadata files
-6. Add unit tests
-7. Document any platform-specific quirks
-
-## License
-
-See MemberJunction main license.

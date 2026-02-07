@@ -1,22 +1,54 @@
 # @memberjunction/scheduled-actions-server
 
-A lightweight Express server application that executes scheduled actions in the MemberJunction framework. This server provides HTTP endpoints to trigger various scheduled actions including AI-powered content autotagging, vectorization, and data enrichment operations.
+A standalone Express server application that executes scheduled actions in the MemberJunction framework. This server exposes HTTP endpoints to trigger scheduled actions including AI-powered content autotagging, vectorization, Apollo data enrichment, and any custom scheduled actions defined in the MJ system.
 
-## Overview
+For the broader Actions design philosophy (when to use Actions, thin wrapper patterns, anti-patterns), see the [Actions CLAUDE.md](../CLAUDE.md) in the parent directory.
 
-The Scheduled Actions Server is designed to run as a standalone service that can be invoked via HTTP requests to execute scheduled actions defined in the MemberJunction system. It supports concurrent execution control, multiple action types, and integrates with various AI providers and vector databases.
+## Architecture
 
-## Features
+The server follows a simple request-driven architecture: an HTTP GET request arrives with a comma-delimited list of action options, the server initializes the MJ metadata layer (once per process lifetime), resolves the requested actions against a registry of `runOption` entries, and delegates execution to the `ScheduledActionEngine` from `@memberjunction/scheduled-actions`.
 
-- **HTTP API Interface**: Simple GET endpoint to trigger scheduled actions
-- **Multiple Action Types**: Support for various action types including:
-  - All scheduled actions execution
-  - Apollo data enrichment (accounts and contacts)
-  - Content autotagging and vectorization
-- **Concurrent Execution Control**: Built-in concurrency limits to prevent resource overload
-- **AI Integration**: Pre-configured with OpenAI, Mistral, and Pinecone vector database
-- **Flexible Configuration**: Environment variable based configuration
-- **TypeScript Support**: Fully typed with TypeScript
+```mermaid
+flowchart TD
+    subgraph Client["HTTP Client"]
+        style Client fill:#2d6a9f,stroke:#1a4971,color:#fff
+        REQ["GET /?options=ScheduledActions,enrichaccounts"]
+    end
+
+    subgraph Server["Express Server (index.ts)"]
+        style Server fill:#2d8659,stroke:#1a5c3a,color:#fff
+        PARSE["Parse comma-delimited options"]
+        MATCH["Match against runOptions registry"]
+        EXEC["executeRunOption with concurrency guard"]
+    end
+
+    subgraph Init["Server Initialization (util.ts)"]
+        style Init fill:#7c5295,stroke:#563a6b,color:#fff
+        POOL["SQL ConnectionPool connect"]
+        SETUP["setupSQLServerClient with config"]
+    end
+
+    subgraph Engine["ScheduledActionEngine"]
+        style Engine fill:#b8762f,stroke:#8a5722,color:#fff
+        ALL["ExecuteScheduledActions"]
+        SINGLE["ExecuteScheduledAction by name"]
+    end
+
+    REQ --> PARSE --> MATCH --> EXEC
+    EXEC -->|first call only| Init
+    EXEC -->|"all" option| ALL
+    EXEC -->|named action| SINGLE
+    Init --> POOL --> SETUP
+```
+
+### Source File Layout
+
+| File | Purpose |
+|------|---------|
+| `src/index.ts` | Express app, route handler, `runOption` registry, exported action functions |
+| `src/config.ts` | Environment variable parsing via `env-var` and `dotenv` |
+| `src/db.ts` | SQL Server connection pool configuration (`mssql`) |
+| `src/util.ts` | One-time server initialization (`handleServerInit`) and timeout helper |
 
 ## Installation
 
@@ -24,26 +56,25 @@ The Scheduled Actions Server is designed to run as a standalone service that can
 npm install @memberjunction/scheduled-actions-server
 ```
 
+This package is typically deployed as a standalone server rather than imported as a library, but its action functions are exported for programmatic use.
+
 ## Configuration
 
-The server requires the following environment variables to be set:
+All configuration is driven by environment variables (loaded via `dotenv`):
 
-```bash
-# Database Configuration
-DB_HOST=your_database_host
-DB_PORT=1433  # Optional, defaults to 1433
-DB_USERNAME=your_db_username
-DB_PASSWORD=your_db_password
-DB_DATABASE=your_database_name
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DB_HOST` | Yes | -- | SQL Server hostname |
+| `DB_PORT` | No | `1433` | SQL Server port |
+| `DB_USERNAME` | Yes | -- | Database username |
+| `DB_PASSWORD` | Yes | -- | Database password |
+| `DB_DATABASE` | Yes | -- | Database name |
+| `MJ_CORE_SCHEMA` | Yes | -- | MemberJunction schema name (e.g., `__mj`) |
+| `CURRENT_USER_EMAIL` | Yes | -- | Email of the user context for action execution |
+| `PORT` | No | `8000` | HTTP server listen port |
+| `METADATA_AUTO_REFRESH_INTERVAL` | No | `3600000` | Metadata cache refresh interval in milliseconds |
 
-# MemberJunction Configuration
-MJ_CORE_SCHEMA=__mj  # Your MJ schema name
-CURRENT_USER_EMAIL=user@example.com  # Email of the user executing actions
-
-# Server Configuration
-PORT=8000  # Optional, defaults to 8000
-METADATA_AUTO_REFRESH_INTERVAL=3600000  # Optional, in milliseconds
-```
+Create a `.env` file in the package root or set these variables in your deployment environment.
 
 ## Usage
 
@@ -53,207 +84,197 @@ METADATA_AUTO_REFRESH_INTERVAL=3600000  # Optional, in milliseconds
 # Development mode with hot reload
 npm run dev
 
-# Development with debugging
+# Development with debugging (inspector on port 4321)
 npm run dev:debug
 
 # Production mode
 npm run start
 ```
 
-### API Endpoints
-
-#### Execute Actions
+### HTTP API
 
 **GET** `/`
 
-Execute scheduled actions based on the provided options.
+Triggers one or more scheduled actions based on the `options` query parameter.
 
-Query Parameters:
-- `options` (string): Comma-separated list of actions to run
-
-Examples:
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `options` | string | Comma-delimited list of action option names to execute |
 
 ```bash
-# Run all scheduled actions
-curl http://localhost:8000/?options=all
+# Run all registered actions
+curl "http://localhost:8000/?options=all"
 
-# Run specific actions
-curl http://localhost:8000/?options=ScheduledActions
+# Run only the MJ scheduled actions engine
+curl "http://localhost:8000/?options=ScheduledActions"
 
-# Run multiple actions
-curl http://localhost:8000/?options=enrichaccounts,enrichcontacts
+# Run multiple specific actions
+curl "http://localhost:8000/?options=enrichaccounts,enrichcontacts"
 
 # Run content autotagging and vectorization
-curl http://localhost:8000/?options=autoTagAndVectorize
+curl "http://localhost:8000/?options=autoTagAndVectorize"
+```
+
+**Response format:**
+
+```json
+{ "Status": "Success" }
+```
+or
+```json
+{ "Status": "Error" }
 ```
 
 ### Available Action Options
 
 | Option | Description |
 |--------|-------------|
-| `all` | Run all configured processes |
-| `ScheduledActions` | Run all scheduled actions defined in the system |
-| `enrichaccounts` | Run Apollo enrichment for accounts |
-| `enrichcontacts` | Run Apollo enrichment for contacts |
-| `autoTagAndVectorize` | Run content autotagging and vectorization |
+| `all` | Runs every registered action (excluding itself) sequentially |
+| `ScheduledActions` | Executes all scheduled actions defined in the MJ system via `ScheduledActionEngine` |
+| `enrichaccounts` | Runs the "Apollo Enrichment - Accounts" scheduled action |
+| `enrichcontacts` | Runs the "Apollo Enrichment - Contacts" scheduled action |
+| `autoTagAndVectorize` | Runs the "Autotag And Vectorize Content" scheduled action |
 
-## Code Examples
+### Concurrency Control
 
-### Extending with Custom Actions
+Each `runOption` entry has a `maxConcurrency` property (default: `1`). If a request arrives while the maximum number of concurrent executions is already in progress for a given option, that option is skipped and an error is logged. This prevents resource exhaustion from overlapping long-running jobs.
 
-You can add custom actions by modifying the `runOptions` array:
+```mermaid
+flowchart LR
+    subgraph Guard["Concurrency Guard"]
+        style Guard fill:#2d6a9f,stroke:#1a4971,color:#fff
+        CHECK{"currentRuns < maxConcurrency?"}
+        INC["currentRuns++"]
+        RUN["Execute action"]
+        DEC["currentRuns-- (finally)"]
+        SKIP["Log error, return false"]
+    end
 
-```typescript
-import { runOption } from './index';
-
-const customAction: runOption = {
-    name: "customAction",
-    description: "My custom scheduled action",
-    run: async (initServer: boolean) => {
-        // Your custom logic here
-        return true; // Return success status
-    },
-    maxConcurrency: 1  // Limit concurrent executions
-};
-
-// Add to runOptions array
-runOptions.push(customAction);
+    CHECK -->|Yes| INC --> RUN --> DEC
+    CHECK -->|No| SKIP
 ```
 
-### Programmatic Execution
+### Programmatic Usage
 
-You can also use the exported functions directly:
+The package exports its action functions for use from other Node.js code:
 
 ```typescript
-import { 
-    runAll, 
-    runScheduledActions, 
+import {
+    runAll,
+    runScheduledActions,
     enrichAccounts,
     enrichContacts,
-    autotagAndVectorize 
+    autotagAndVectorize,
+    runScheduledAction
 } from '@memberjunction/scheduled-actions-server';
 
-// Execute all actions
-const success = await runAll();
+// Execute all registered actions
+const allSuccess = await runAll();
 
-// Execute specific scheduled action
-const actionSuccess = await runScheduledActions();
+// Execute a specific named scheduled action
+const result = await runScheduledAction('My Custom Scheduled Action');
 
-// Run enrichment
-const accountsEnriched = await enrichAccounts();
-const contactsEnriched = await enrichContacts();
-
-// Run autotagging
-const autotagSuccess = await autotagAndVectorize();
+// Execute built-in actions individually
+await runScheduledActions();
+await enrichAccounts();
+await enrichContacts();
+await autotagAndVectorize();
 ```
 
-## Dependencies
+### Server Initialization
 
-### Core Dependencies
-- `@memberjunction/core`: Core MemberJunction functionality
-- `@memberjunction/core-entities`: Entity definitions
-- `@memberjunction/actions`: Action framework
-- `@memberjunction/scheduled-actions`: Scheduled actions engine
-- `@memberjunction/ai`: AI integration framework
-- `express`: Web server framework
-- `typescript`: TypeScript support
+The server initializes the MJ metadata layer exactly once per process lifetime via `handleServerInit()`. This function:
 
-### AI and Vector Database Integrations
-- `@memberjunction/ai-mistral`: Mistral AI integration
-- `@memberjunction/ai-openai`: OpenAI integration
-- `@memberjunction/ai-vectors-pinecone`: Pinecone vector database
-- `@memberjunction/ai-vector-sync`: Vector synchronization
-- `@memberjunction/actions-content-autotag`: Content autotagging action
+1. Connects the `mssql` connection pool to SQL Server
+2. Configures the MJ SQL Server data provider with the schema name and optional auto-refresh interval
+3. Sets a flag to prevent re-initialization on subsequent requests
 
-## Integration with MemberJunction
+The SQL connection pool uses a 5-minute request timeout (`300000ms`) to accommodate long-running scheduled actions.
 
-This server integrates seamlessly with the MemberJunction ecosystem:
+## API Reference
 
-1. **Metadata System**: Uses MJ metadata for entity and action definitions
-2. **User Context**: Executes actions in the context of a specific user
-3. **Action Framework**: Leverages the MJ actions framework for extensibility
-4. **Database Access**: Uses MJ's SQL Server data provider for database operations
+### Types
+
+#### `runOption`
+
+```typescript
+type runOption = {
+    name: string;
+    description?: string;
+    run: (initServer: boolean) => Promise<boolean>;
+    maxConcurrency?: number;
+    currentRuns?: number;
+}
+```
+
+Defines a named action option that can be triggered via HTTP or programmatically.
+
+### Exported Functions
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `runAll` | `() => Promise<boolean>` | Runs all registered actions (excluding `all` itself) sequentially |
+| `runScheduledActions` | `() => Promise<boolean>` | Executes all MJ scheduled actions via `ScheduledActionEngine` |
+| `enrichAccounts` | `() => Promise<boolean>` | Runs the "Apollo Enrichment - Accounts" scheduled action |
+| `enrichContacts` | `() => Promise<boolean>` | Runs the "Apollo Enrichment - Contacts" scheduled action |
+| `autotagAndVectorize` | `() => Promise<boolean>` | Runs the "Autotag And Vectorize Content" scheduled action |
+| `runScheduledAction` | `(actionName: string) => Promise<boolean>` | Runs a single named scheduled action |
+
+All functions return `true` on success and `false` on failure. Errors are logged via MJ's `LogError` and `LogStatus` utilities.
 
 ## Build and Development
 
 ```bash
-# Build the project
+# Build TypeScript to dist/
 npm run build
 
 # Watch mode for development
 npm run watch
 
-# Run linting
+# Run linting (ESLint + TypeScript type checking)
 npm run lint
 
 # Clean build artifacts
 npm run clean
 
-# Create deployment package
+# Create deployment ZIP (node_modules + dist + package.json)
 npm run zip
 ```
 
-## Deployment Notes
+## Dependencies
 
-### Production Deployment
+### MemberJunction Packages
 
-1. Build the project: `npm run build`
-2. Set all required environment variables
-3. Run using a process manager like PM2:
-   ```bash
-   pm2 start dist/index.js --name scheduled-actions-server
-   ```
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/core` | Core metadata, logging (`LogStatus`, `LogError`), `Metadata` class |
+| `@memberjunction/core-entities` | Entity type definitions |
+| `@memberjunction/actions` | Action framework base classes |
+| `@memberjunction/scheduled-actions` | `ScheduledActionEngine` for executing scheduled actions |
+| `@memberjunction/sqlserver-dataprovider` | SQL Server data provider, `UserCache`, `setupSQLServerClient` |
+| `@memberjunction/ai` | AI integration framework |
+| `@memberjunction/ai-openai` | OpenAI model driver |
+| `@memberjunction/ai-mistral` | Mistral AI model driver |
+| `@memberjunction/ai-vectors-pinecone` | Pinecone vector database integration |
+| `@memberjunction/ai-vector-sync` | Vector synchronization utilities |
+| `@memberjunction/actions-apollo` | Apollo data enrichment actions |
+| `@memberjunction/actions-content-autotag` | Content autotagging action |
 
-### Docker Deployment
+### Third-Party
 
-Create a Dockerfile:
+| Package | Purpose |
+|---------|---------|
+| `express` | HTTP server framework |
+| `mssql` | SQL Server client (connection pooling, query execution) |
+| `dotenv` | `.env` file loading |
+| `env-var` | Type-safe environment variable parsing with defaults |
+| `typescript` | TypeScript compiler |
 
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY dist ./dist
-EXPOSE 8000
-CMD ["node", "dist/index.js"]
-```
+## Related Packages
 
-### Security Considerations
-
-- Always use HTTPS in production
-- Implement authentication/authorization for the endpoints
-- Restrict database permissions to minimum required
-- Use environment-specific configurations
-- Monitor and log all action executions
-
-## Error Handling
-
-The server includes comprehensive error handling:
-- All actions return success/failure status
-- Errors are logged using MJ's logging system
-- HTTP responses include status indicators
-- Graceful handling of missing or invalid options
-
-## Performance Considerations
-
-- Actions respect concurrency limits to prevent resource exhaustion
-- Long-running actions have extended timeouts (5 minutes default)
-- Server initialization is optimized to run once per session
-- Metadata caching reduces database load
-
-## Troubleshooting
-
-Common issues and solutions:
-
-1. **Database Connection Errors**: Verify database credentials and network connectivity
-2. **Missing User Error**: Ensure CURRENT_USER_EMAIL exists in the system
-3. **Action Not Found**: Check action names are correctly defined in the database
-4. **Timeout Errors**: Adjust request timeout in db.ts for long-running operations
-
-## License
-
-ISC
-
-## Support
-
-For issues and questions, please refer to the MemberJunction documentation or create an issue in the repository.
+| Package | Relationship |
+|---------|-------------|
+| [`@memberjunction/scheduled-actions`](../ScheduledActions/) | Core engine that this server wraps -- contains `ScheduledActionEngine` |
+| [`@memberjunction/actions`](../CoreActions/) | Base action framework used by all action implementations |
+| [`@memberjunction/actions-apollo`](../ActionProviders/Apollo/) | Apollo enrichment action implementations invoked by this server |
+| [`@memberjunction/actions-content-autotag`](../ActionProviders/ContentAutotag/) | Content autotagging action invoked by this server |

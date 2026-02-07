@@ -1,19 +1,38 @@
-# MemberJunction Core Entities Server
+# @memberjunction/core-entities-server
 
 Server-side entity subclasses for MemberJunction that provide extended functionality and business logic for core entities when running in a Node.js environment.
 
 ## Overview
 
-This package contains server-side implementations of MemberJunction entity subclasses that require server-specific functionality such as:
-- Direct database access
-- File system operations
-- Server-side API integrations
-- Complex business logic that should only run on the server
-- Automatic creation/management of related entities
+This package contains server-side implementations of MemberJunction entity subclasses that require server-specific functionality such as direct database access, file system operations, server-side API integrations, complex business logic, and automatic creation/management of related entities.
 
-## Purpose
+```mermaid
+graph TD
+    A["Core Entities Server"] --> B["AIPromptEntityExtended"]
+    A --> C["QueryEntityExtended"]
+    A --> D["ComponentEntityExtended"]
+    A --> E["ActionEntityExtended"]
+    A --> F["ApplicationEntityExtended"]
+    A --> G["Other Server Entities"]
 
-While the base `@memberjunction/core-entities` package provides entity classes that work in any JavaScript environment (browser or server), some entity operations require server-specific capabilities. This package provides those extended implementations.
+    B -->|manages| H["Templates<br/>Template Contents"]
+    C -->|manages| H
+    D -->|generates| I["Vector Embeddings"]
+
+    J["MJ Class Factory"] -->|returns server subclass| A
+    K["Core Entities<br/>(base classes)"] -->|extended by| A
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#7c5295,stroke:#563a6b,color:#fff
+    style D fill:#7c5295,stroke:#563a6b,color:#fff
+    style E fill:#7c5295,stroke:#563a6b,color:#fff
+    style F fill:#7c5295,stroke:#563a6b,color:#fff
+    style H fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style I fill:#b8762f,stroke:#8a5722,color:#fff
+    style J fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style K fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ### Key Differences from Core Entities
 

@@ -1,6 +1,6 @@
 # @memberjunction/ng-markdown
 
-A lightweight Angular module for rendering markdown content with rich features including syntax highlighting, Mermaid diagrams, collapsible sections, and more.
+A feature-rich Angular component for rendering Markdown content with syntax highlighting, Mermaid diagrams, collapsible sections, GitHub-style alerts, and SVG rendering.
 
 ## Installation
 
@@ -8,25 +8,47 @@ A lightweight Angular module for rendering markdown content with rich features i
 npm install @memberjunction/ng-markdown
 ```
 
+## Overview
+
+The Markdown component replaces `ngx-markdown` with a MemberJunction-native implementation. It uses [marked](https://marked.js.org/) for parsing, [Prism.js](https://prismjs.com/) for syntax highlighting, and [Mermaid](https://mermaid.js.org/) for diagram rendering. The module does not use `forRoot()` -- simply import `MarkdownModule` wherever needed.
+
+```mermaid
+flowchart LR
+    subgraph Input["Markdown Source"]
+        A["Raw Markdown String"]
+    end
+    subgraph Parser["Parsing Pipeline"]
+        B["marked parser"]
+        B --> C["marked-highlight (Prism.js)"]
+        B --> D["marked-alert (GitHub alerts)"]
+        B --> E["marked-smartypants (typography)"]
+    end
+    subgraph Render["Rendering"]
+        C --> F["Syntax-highlighted code blocks"]
+        D --> G["Alert blockquotes"]
+        B --> H["Mermaid diagrams"]
+        B --> I["SVG code blocks"]
+    end
+
+    A --> B
+
+    style Input fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Parser fill:#7c5295,stroke:#563a6b,color:#fff
+    style Render fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
+
 ## Usage
 
-### Basic Setup
-
-Import the `MarkdownModule` in your Angular module:
+### Module Import
 
 ```typescript
-import { NgModule } from '@angular/core';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 @NgModule({
-  imports: [
-    MarkdownModule
-  ]
+  imports: [MarkdownModule]  // No forRoot() needed
 })
-export class YourModule { }
+export class YourModule {}
 ```
-
-> **Note**: This module does NOT use `forRoot()`. Simply import `MarkdownModule` in any module where you need markdown rendering. The `MarkdownService` is provided at root level for efficient sharing across the application.
 
 ### Basic Usage
 
@@ -34,7 +56,7 @@ export class YourModule { }
 <mj-markdown [data]="markdownContent"></mj-markdown>
 ```
 
-### Advanced Usage
+### Full Configuration
 
 ```html
 <mj-markdown
@@ -48,109 +70,44 @@ export class YourModule { }
   [enableSmartypants]="true"
   [enableSvgRenderer]="true"
   [enableHtml]="false"
+  [mermaidTheme]="'default'"
   (rendered)="onRendered($event)"
   (headingClick)="onHeadingClick($event)"
   (codeCopied)="onCodeCopied($event)">
 </mj-markdown>
 ```
 
-## Features
+## Key Features
 
-### Syntax Highlighting (Prism.js)
-Code blocks are automatically highlighted using Prism.js with the Okaidia theme.
+| Feature | Default | Description |
+|---------|---------|-------------|
+| Syntax highlighting | Enabled | Prism.js with Okaidia theme |
+| Mermaid diagrams | Enabled | Render mermaid code blocks as diagrams |
+| Code copy button | Enabled | Copy-to-clipboard on hover |
+| GitHub-style alerts | Enabled | `[!NOTE]`, `[!TIP]`, `[!WARNING]` blockquotes |
+| Smartypants typography | Enabled | Curly quotes, em/en dashes, ellipsis |
+| SVG rendering | Enabled | Render SVG code blocks as images |
+| Collapsible headings | Disabled | Expand/collapse heading sections |
+| HTML passthrough | Disabled | Raw HTML rendering (security-sensitive) |
+| JavaScript | Disabled | Allow JS in HTML (use only for trusted content) |
 
-### Mermaid Diagrams
-Support for Mermaid diagram rendering:
-
-~~~markdown
-```mermaid
-graph TD
-    A[Start] --> B[Process]
-    B --> C[End]
-```
-~~~
-
-### Collapsible Headings
-Enable collapsible sections with expand/collapse all buttons:
-
-```html
-<mj-markdown
-  [data]="content"
-  [enableCollapsibleHeadings]="true"
-  [collapsibleHeadingLevel]="2"
-  [autoExpandLevels]="[2]">
-</mj-markdown>
-```
-
-- `collapsibleHeadingLevel`: Heading level to start collapsing (1-6)
-- `autoExpandLevels`: Array of heading levels to expand by default (e.g., `[2]` expands only h2)
-- `collapsibleDefaultExpanded`: Whether sections are expanded by default (true/false)
-
-### Copy-to-Clipboard
-Code blocks include a copy button that appears on hover.
-
-### GitHub-Style Alerts
-Support for GitHub-style blockquote alerts:
-
-```markdown
-> [!NOTE]
-> Useful information that users should know.
-
-> [!TIP]
-> Helpful advice for doing things better.
-
-> [!WARNING]
-> Urgent info that needs immediate attention.
-```
-
-### Smartypants Typography
-Automatically converts:
-- "quotes" to "curly quotes"
-- `--` to en-dash (–)
-- `---` to em-dash (—)
-- `...` to ellipsis (…)
-
-### SVG Code Block Rendering
-Render SVG code blocks as actual images:
-
-~~~markdown
-```svg
-<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="50" cy="50" r="40" fill="blue"/>
-</svg>
-```
-~~~
-
-### HTML Passthrough
-Enable raw HTML rendering for mockups and custom layouts:
-
-```html
-<mj-markdown
-  [data]="content"
-  [enableHtml]="true"
-  [enableJavaScript]="false">
-</mj-markdown>
-```
-
-> **Security Note**: When `enableHtml` is true, JavaScript is still stripped unless `enableJavaScript` is also true. Only enable `enableJavaScript` for fully trusted content.
-
-## Configuration Options
+## Configuration Inputs
 
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
 | `data` | `string` | `''` | Markdown content to render |
-| `enableHighlight` | `boolean` | `true` | Enable Prism.js syntax highlighting |
-| `enableMermaid` | `boolean` | `true` | Enable Mermaid diagram rendering |
-| `enableCodeCopy` | `boolean` | `true` | Enable copy button on code blocks |
-| `enableCollapsibleHeadings` | `boolean` | `false` | Enable collapsible heading sections |
+| `enableHighlight` | `boolean` | `true` | Prism.js syntax highlighting |
+| `enableMermaid` | `boolean` | `true` | Mermaid diagram rendering |
+| `enableCodeCopy` | `boolean` | `true` | Copy button on code blocks |
+| `enableCollapsibleHeadings` | `boolean` | `false` | Collapsible heading sections |
 | `collapsibleHeadingLevel` | `1-6` | `2` | Heading level to start collapsing |
 | `collapsibleDefaultExpanded` | `boolean` | `true` | Default expansion state |
 | `autoExpandLevels` | `number[]` | `undefined` | Specific levels to auto-expand |
-| `enableAlerts` | `boolean` | `true` | Enable GitHub-style alerts |
-| `enableSmartypants` | `boolean` | `true` | Enable typography improvements |
-| `enableSvgRenderer` | `boolean` | `true` | Enable SVG code block rendering |
-| `enableHtml` | `boolean` | `false` | Enable raw HTML passthrough |
-| `enableJavaScript` | `boolean` | `false` | Allow JavaScript in HTML (security risk) |
+| `enableAlerts` | `boolean` | `true` | GitHub-style alerts |
+| `enableSmartypants` | `boolean` | `true` | Typography improvements |
+| `enableSvgRenderer` | `boolean` | `true` | SVG code block rendering |
+| `enableHtml` | `boolean` | `false` | Raw HTML passthrough |
+| `enableJavaScript` | `boolean` | `false` | Allow JS in HTML |
 | `enableHeadingIds` | `boolean` | `true` | Generate heading IDs for anchors |
 | `headingIdPrefix` | `string` | `''` | Prefix for heading IDs |
 | `enableLineNumbers` | `boolean` | `false` | Show line numbers in code blocks |
@@ -158,56 +115,30 @@ Enable raw HTML rendering for mockups and custom layouts:
 | `mermaidTheme` | `string` | `'default'` | Mermaid theme (default/dark/forest/neutral/base) |
 | `sanitize` | `boolean` | `true` | Sanitize HTML output |
 
-## Events
+## Outputs
 
-| Output | Type | Description |
-|--------|------|-------------|
-| `rendered` | `MarkdownRenderEvent` | Emitted when rendering is complete |
+| Event | Type | Description |
+|-------|------|-------------|
+| `rendered` | `MarkdownRenderEvent` | Emitted when rendering completes |
 | `headingClick` | `HeadingInfo` | Emitted when a heading is clicked |
 | `codeCopied` | `string` | Emitted when code is copied to clipboard |
 
 ## Migration from ngx-markdown
 
-If you're migrating from `ngx-markdown`:
-
-1. Replace imports:
-   ```typescript
-   // Before
-   import { MarkdownModule } from 'ngx-markdown';
-
-   // After
-   import { MarkdownModule } from '@memberjunction/ng-markdown';
-   ```
-
-2. Update module imports (no `forRoot()` needed):
-   ```typescript
-   // Before
-   MarkdownModule.forRoot()
-
-   // After
-   MarkdownModule
-   ```
-
-3. Update template selectors:
-   ```html
-   <!-- Before -->
-   <markdown [data]="content"></markdown>
-
-   <!-- After -->
-   <mj-markdown [data]="content"></mj-markdown>
-   ```
-
-4. The `MarkdownComponent` still exposes an `element` property for backward compatibility with code that accessed `element.nativeElement`.
+1. Replace imports: `'ngx-markdown'` to `'@memberjunction/ng-markdown'`
+2. Remove `forRoot()` from module imports
+3. Update selectors: `<markdown>` to `<mj-markdown>`
+4. The `element` property is preserved for backward compatibility
 
 ## Dependencies
 
-- `marked` - Markdown parser
-- `marked-alert` - GitHub-style alerts
-- `marked-highlight` - Syntax highlighting integration
-- `marked-smartypants` - Typography improvements
-- `prismjs` - Syntax highlighting
-- `mermaid` - Diagram rendering
+- `marked` -- Markdown parser
+- `marked-alert` -- GitHub-style alerts
+- `marked-highlight` -- Syntax highlighting integration
+- `marked-smartypants` -- Typography improvements
+- `prismjs` -- Syntax highlighting
+- `mermaid` -- Diagram rendering
 
-## License
+## Related Packages
 
-ISC
+- [@memberjunction/ng-skip-chat](../skip-chat/README.md) -- Uses markdown for chat message rendering

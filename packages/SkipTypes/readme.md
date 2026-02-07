@@ -1,10 +1,31 @@
-# MemberJunction Skip Types
+# @memberjunction/skip-types
 
 Type definitions and interfaces for the Skip AI Assistant integration with MemberJunction. This package provides the contract between the MemberJunction API, Skip API, and the MemberJunction Explorer UI.
 
 ## Overview
 
 The `@memberjunction/skip-types` package contains TypeScript type definitions, interfaces, and enums that facilitate communication between different components of the MemberJunction Skip AI assistant system. It ensures type safety and consistent data structures when interacting with the Skip API or rendering Skip-generated content in MemberJunction applications.
+
+```mermaid
+graph LR
+    A["MJ Explorer UI"] -->|"SkipAPIRequest"| B["MJAPI Server"]
+    B -->|"SkipAPIRequest"| C["Skip API"]
+    C -->|"SkipAPIResponse"| B
+    B -->|"MJAPISkipResult"| A
+
+    C --> D["SkipMessage<br/>SkipConversation"]
+    C --> E["SkipComponent<br/>SkipComponentCallbacks"]
+    C --> F["SkipDataRequest<br/>SkipEntityInfo"]
+    C --> G["Learning Cycle<br/>Types"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#b8762f,stroke:#8a5722,color:#fff
+    style E fill:#b8762f,stroke:#8a5722,color:#fff
+    style F fill:#b8762f,stroke:#8a5722,color:#fff
+    style G fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Installation
 

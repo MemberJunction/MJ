@@ -1,15 +1,43 @@
 # @memberjunction/entity-communications-base
 
-Base types and abstractions for implementing entity-level communications in MemberJunction. This package provides the foundation for building communication engines that can send messages (email, SMS, etc.) to entity records.
+Shared types and base classes for entity-based communications in MemberJunction. This package defines the parameter, result, and data structures used by both the client-side (`entity-comm-client`) and server-side (`entity-comm-server`) entity communication implementations.
 
-## Overview
+## Architecture
 
-The Entity Communications Base package enables developers to:
-- Define communication message types for specific entities
-- Configure communication fields and templates per entity
-- Execute bulk communications against entity record sets
-- Support multiple communication providers (email, SMS, etc.)
-- Preview messages before sending
+```mermaid
+graph TD
+    subgraph base["@memberjunction/entity-communications-base"]
+        ENGINE["EntityCommunicationsEngineBase\n(Abstract Singleton)"]
+        PARAMS["EntityCommunicationParams"]
+        RESULT["EntityCommunicationResult"]
+        EXT["EntityCommunicationMessageTypeExtended"]
+    end
+
+    subgraph client["entity-comm-client"]
+        CC["EntityCommunicationsEngineClient\n(GraphQL)"]
+    end
+
+    subgraph server["entity-comm-server"]
+        CS["EntityCommunicationsEngine\n(Server-Side)"]
+    end
+
+    subgraph types["@memberjunction/communication-types"]
+        MSG["Message / ProcessedMessage"]
+    end
+
+    ENGINE --> CC
+    ENGINE --> CS
+    PARAMS --> CC
+    PARAMS --> CS
+    RESULT --> CC
+    RESULT --> CS
+    MSG --> PARAMS
+
+    style base fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style client fill:#b8762f,stroke:#8a5722,color:#fff
+    style server fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style types fill:#7c5295,stroke:#563a6b,color:#fff
+```
 
 ## Installation
 
@@ -17,221 +45,133 @@ The Entity Communications Base package enables developers to:
 npm install @memberjunction/entity-communications-base
 ```
 
-## Core Components
+## Key Exports
 
 ### EntityCommunicationsEngineBase
 
-Abstract base class for implementing entity communication engines. Provides metadata loading, configuration, and validation capabilities.
+Abstract singleton base class that loads entity communication metadata including message types, field mappings, and provider associations. Both the client and server implementations extend this class.
 
 ```typescript
 import { EntityCommunicationsEngineBase } from '@memberjunction/entity-communications-base';
 
-class MyEntityCommunicationEngine extends EntityCommunicationsEngineBase {
-    async RunEntityCommunication(params: EntityCommunicationParams): Promise<EntityCommunicationResult> {
-        // Implementation for sending communications
-    }
+// After Config(), access loaded metadata
+const messageTypes = engine.EntityCommunicationMessageTypes;
+
+// Check entity support
+if (engine.EntitySupportsCommunication(entityID)) {
+    const types = engine.GetEntityCommunicationMessageTypes(entityID);
 }
 ```
 
-### EntityCommunicationMessageTypeExtended
-
-Extended entity class that includes related communication fields.
+#### Abstract Method
 
 ```typescript
-const messageTypes = engine.GetEntityCommunicationMessageTypes(entityID);
-messageTypes.forEach(messageType => {
-    console.log(`Message Type: ${messageType.Name}`);
-    console.log(`Fields: ${messageType.CommunicationFields.map(f => f.Name).join(', ')}`);
-});
+abstract RunEntityCommunication(
+    params: EntityCommunicationParams
+): Promise<EntityCommunicationResult>;
 ```
+
+Both `EntityCommunicationsEngineClient` and `EntityCommunicationsEngine` (server) implement this method with their respective communication strategies.
 
 ### EntityCommunicationParams
 
-Parameters for executing entity communications:
+Defines the parameters for running an entity-based communication.
 
 ```typescript
+import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
+
 const params: EntityCommunicationParams = {
-    EntityID: 'entity-id-here',
+    EntityID: 'entity-uuid',
     RunViewParams: {
         EntityName: 'Contacts',
-        ExtraFilter: 'Status = "Active"'
-    },
-    ProviderName: 'SendGrid',
-    ProviderMessageTypeName: 'Email',
-    Message: {
-        Subject: 'Hello {{FirstName}}',
-        Body: 'Welcome to our service!',
-        HTMLBody: '<h1>Welcome {{FirstName}}!</h1>'
-    },
-    PreviewOnly: false,
-    IncludeProcessedMessages: true
-};
-```
-
-## Usage Examples
-
-### Basic Implementation
-
-```typescript
-import { 
-    EntityCommunicationsEngineBase, 
-    EntityCommunicationParams, 
-    EntityCommunicationResult 
-} from '@memberjunction/entity-communications-base';
-import { RegisterClass } from '@memberjunction/global';
-
-@RegisterClass(EntityCommunicationsEngineBase)
-export class CustomEntityCommunicationEngine extends EntityCommunicationsEngineBase {
-    
-    async RunEntityCommunication(params: EntityCommunicationParams): Promise<EntityCommunicationResult> {
-        try {
-            // Validate entity supports communication
-            if (!this.EntitySupportsCommunication(params.EntityID)) {
-                return {
-                    Success: false,
-                    ErrorMessage: 'Entity does not support communications'
-                };
-            }
-
-            // Get message types for entity
-            const messageTypes = this.GetEntityCommunicationMessageTypes(params.EntityID);
-            
-            // Process and send messages
-            const results = await this.processMessages(params);
-            
-            return {
-                Success: true,
-                Results: results
-            };
-        } catch (error) {
-            return {
-                Success: false,
-                ErrorMessage: error.message
-            };
-        }
-    }
-    
-    private async processMessages(params: EntityCommunicationParams) {
-        // Implementation specific to your communication provider
-    }
-}
-```
-
-### Configuration and Initialization
-
-```typescript
-import { CustomEntityCommunicationEngine } from './custom-engine';
-import { UserInfo } from '@memberjunction/core';
-
-// Initialize the engine
-const engine = CustomEntityCommunicationEngine.Instance;
-
-// Configure with user context
-const user = new UserInfo();
-await engine.Config(false, user);
-
-// Check if entity supports communication
-const entityID = 'some-entity-id';
-if (engine.EntitySupportsCommunication(entityID)) {
-    // Get available message types
-    const messageTypes = engine.GetEntityCommunicationMessageTypes(entityID);
-    console.log(`Found ${messageTypes.length} message types`);
-}
-```
-
-### Sending Communications
-
-```typescript
-// Send email to all active contacts
-const result = await engine.RunEntityCommunication({
-    EntityID: 'contact-entity-id',
-    RunViewParams: {
-        EntityName: 'Contacts',
-        ExtraFilter: 'IsActive = 1',
+        ExtraFilter: 'Status = "Active"',
         OrderBy: 'LastName, FirstName'
     },
     ProviderName: 'SendGrid',
     ProviderMessageTypeName: 'Email',
     Message: {
         Subject: 'Monthly Newsletter',
-        HTMLBody: '<html>...</html>',
-        Body: 'Plain text version...'
+        Body: 'Hello {{FirstName}}!',
+        HTMLBody: '<h1>Hello {{FirstName}}!</h1>',
+        ContextData: { CompanyName: 'Acme Corp' }
     },
     PreviewOnly: false,
     IncludeProcessedMessages: true
-});
+};
+```
 
-if (result.Success) {
-    console.log(`Sent ${result.Results.length} messages`);
-    result.Results.forEach(item => {
-        console.log(`Sent to: ${item.RecipientData.Email}`);
-        console.log(`Message ID: ${item.Message.MessageID}`);
-    });
-} else {
-    console.error(`Communication failed: ${result.ErrorMessage}`);
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `EntityID` | `string` | Yes | UUID of the entity to communicate with |
+| `RunViewParams` | `RunViewParams` | Yes | View parameters for selecting recipient records |
+| `ProviderName` | `string` | Yes | Communication provider name (e.g., "SendGrid") |
+| `ProviderMessageTypeName` | `string` | Yes | Message type (e.g., "Email", "SMS") |
+| `Message` | `Message` | Yes | Message content and optional templates |
+| `PreviewOnly` | `boolean` | No | Preview without sending |
+| `IncludeProcessedMessages` | `boolean` | No | Include rendered content in results |
+
+### EntityCommunicationResult / EntityCommunicationResultItem
+
+```typescript
+interface EntityCommunicationResult {
+    Success: boolean;
+    ErrorMessage?: string;
+    Results?: EntityCommunicationResultItem[];
+}
+
+interface EntityCommunicationResultItem {
+    RecipientData: Record<string, unknown>;  // Entity record fields
+    Message: ProcessedMessage;               // Rendered message
 }
 ```
 
-## API Reference
+### EntityCommunicationMessageTypeExtended
 
-### EntityCommunicationsEngineBase
+Extends the base `EntityCommunicationMessageTypeEntity` with communication field mappings, linking base message types to entity-specific fields for recipient resolution.
 
-#### Properties
+```typescript
+const messageTypes = engine.GetEntityCommunicationMessageTypes(entityID);
+messageTypes.forEach(mt => {
+    console.log(`Type: ${mt.BaseMessageType}`);
+    mt.CommunicationFields.forEach(field => {
+        console.log(`  Field: ${field.FieldName} (Priority: ${field.Priority})`);
+    });
+});
+```
 
-- `EntityCommunicationMessageTypes`: Array of extended message type entities
-- `EntityCommunicationFields`: Array of communication field entities
-- `Instance`: Static singleton instance of the engine
+## Data Flow
 
-#### Methods
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Engine as EntityCommEngine
+    participant View as RunView
+    participant Comm as CommunicationEngine
 
-- `Config(forceRefresh?, contextUser?, provider?)`: Initialize engine configuration
-- `GetEntityCommunicationMessageTypes(entityID)`: Get message types for an entity
-- `EntitySupportsCommunication(entityID)`: Check if entity supports communications
-- `RunEntityCommunication(params)`: Abstract method to implement communication execution
-
-### EntityCommunicationParams
-
-- `EntityID`: ID of the entity to communicate with
-- `RunViewParams`: Parameters for fetching entity records
-- `ProviderName`: Name of the communication provider
-- `ProviderMessageTypeName`: Type of message (e.g., 'Email', 'SMS')
-- `Message`: Message content object
-- `PreviewOnly?`: If true, preview without sending
-- `IncludeProcessedMessages?`: Include processed message data in results
-
-### EntityCommunicationResult
-
-- `Success`: Boolean indicating operation success
-- `ErrorMessage?`: Error details if operation failed
-- `Results?`: Array of `EntityCommunicationResultItem` objects
-
-### EntityCommunicationResultItem
-
-- `RecipientData`: Entity record data for recipient
-- `Message`: Processed message with provider-specific details
+    App->>Engine: RunEntityCommunication(params)
+    Engine->>Engine: Validate entity and message type
+    Engine->>View: RunView(params.RunViewParams)
+    View-->>Engine: Entity records[]
+    loop For each record
+        Engine->>Engine: Build message with record context
+        Engine->>Comm: SendSingleMessage(provider, type, msg)
+        Comm-->>Engine: MessageResult
+    end
+    Engine-->>App: EntityCommunicationResult
+```
 
 ## Dependencies
 
-- `@memberjunction/global`: Global utilities and registration
-- `@memberjunction/core`: Core MemberJunction functionality
-- `@memberjunction/core-entities`: Core entity definitions
-- `@memberjunction/communication-types`: Communication type definitions
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/core` | BaseEngine, RunView, UserInfo, EntityInfo |
+| `@memberjunction/core-entities` | Entity Communication metadata types |
+| `@memberjunction/communication-types` | Message and ProcessedMessage classes |
+| `@memberjunction/global` | RegisterClass decorator |
 
-## Integration with Other MJ Packages
+## Development
 
-This package integrates with:
-- **@memberjunction/communication-types**: Provides base communication types and interfaces
-- **@memberjunction/core**: Uses BaseEngine pattern and metadata providers
-- **@memberjunction/templates**: Can be used with template engine for dynamic content
-- **@memberjunction/server**: Server-side implementations typically extend this base
-
-## Build Notes
-
-- TypeScript compilation: `npm run build`
-- Source files in `/src`, compiled to `/dist`
-- Supports both CommonJS and ES modules
-- Type definitions included
-
-## License
-
-ISC
+```bash
+npm run build    # Compile TypeScript
+npm start        # Watch mode
+```
