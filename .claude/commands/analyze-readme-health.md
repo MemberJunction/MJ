@@ -1,5 +1,5 @@
 ---
-arguments: The directory to analyze and optional format (e.g., "packages/AI summary" or "packages/AI detailed")
+arguments: The directory to analyze and optional format -- examples: "packages/AI summary" or "packages/AI detailed"
 ---
 
 # Analyze README Health
