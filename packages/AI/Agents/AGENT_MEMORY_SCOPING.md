@@ -124,27 +124,40 @@ Notes must **exactly match** the dimension value. Notes without the dimension do
 
 ### Providing Scope at Execution Time
 
-Pass scope via `ExecuteAgentParams.userScope`:
+Pass scope as top-level params on `ExecuteAgentParams`:
 
 ```typescript
 const params: ExecuteAgentParams = {
     agent: myAgent,
     conversationMessages: messages,
     contextUser: user,
-    userScope: {
-        // Primary scope (indexed, fast filtering)
-        primaryEntityName: 'Organizations',
-        primaryRecordId: 'org-123',
-
-        // Secondary scopes (JSON filtering)
-        secondary: {
-            ContactID: 'contact-456',
-            TeamID: 'team-alpha'
-        }
+    // Primary scope (indexed, fast filtering)
+    PrimaryScopeEntityName: 'Organizations',
+    PrimaryScopeRecordID: 'org-123',
+    // Secondary scopes (arbitrary dimensions, stored as JSON)
+    SecondaryScopes: {
+        ContactID: 'contact-456',
+        TeamID: 'team-alpha'
     }
 };
 
 const result = await agentRunner.executeAgent(params);
+```
+
+Secondary scopes are arbitrary key/value pairs for external applications (Skip, Izzy, etc.). MJ's own chat infrastructure does not use them.
+
+### GraphQL Callers
+
+GraphQL callers pass scope info via the `data` JSON parameter. BaseAgent reads them from `params.data` as a fallback:
+
+```json
+{
+    "data": {
+        "PrimaryScopeEntityName": "Organizations",
+        "PrimaryScopeRecordID": "org-123",
+        "SecondaryScopes": { "ContactID": "contact-456" }
+    }
+}
 ```
 
 ### Secondary-Only Scoping
@@ -152,9 +165,8 @@ const result = await agentRunner.executeAgent(params);
 If `allowSecondaryOnly: true` in the agent's config, you can omit primary scope:
 
 ```typescript
-userScope: {
-    // No primaryEntityName or primaryRecordId
-    secondary: {
+{
+    SecondaryScopes: {
         Region: 'EMEA',
         ProductLine: 'Enterprise'
     }
@@ -180,17 +192,19 @@ The Memory Manager agent automatically inherits scope from the source agent run 
 ## Data Flow
 
 ```
-ExecuteAgentParams.userScope
+ExecuteAgentParams.PrimaryScopeEntityName / PrimaryScopeRecordID / SecondaryScopes
+  (or params.data.* fallback for GraphQL callers)
         │
         ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ BaseAgent.initializeAgentRun()                                  │
 │                                                                 │
-│ 1. Parse agent's SecondaryScopeConfig                           │
-│ 2. Validate runtime scope against config                        │
-│ 3. Apply default values for missing dimensions                  │
-│ 4. Set PrimaryScopeEntityID/RecordID on AgentRun                │
-│ 5. Set SecondaryScopes JSON on AgentRun                         │
+│ 1. Resolve scope from params or data fallback                   │
+│ 2. Parse agent's SecondaryScopeConfig                           │
+│ 3. Validate runtime scope against config                        │
+│ 4. Apply default values for missing dimensions                  │
+│ 5. Set PrimaryScopeEntityID/RecordID on AgentRun                │
+│ 6. Set SecondaryScopes JSON on AgentRun                         │
 └─────────────────────────────────────────────────────────────────┘
         │
         ▼
@@ -273,7 +287,7 @@ Or simply don't set `ScopeConfig` on the agent. All notes are global and visible
 
 ## Related Files
 
-- `packages/AI/CorePlus/src/agent-types.ts`: `SecondaryScopeConfig`, `SecondaryDimension` interfaces
+- `packages/AI/CorePlus/src/agent-types.ts`: `SecondaryScopeConfig`, `SecondaryDimension`, `SecondaryScopeValue` types
 - `packages/AI/Agents/src/agent-context-injector.ts`: Query building logic
 - `packages/AI/Agents/src/base-agent.ts`: Scope validation in `initializeAgentRun()`
 - `packages/AI/Agents/src/memory-manager-agent.ts`: Scope inheritance for note creation

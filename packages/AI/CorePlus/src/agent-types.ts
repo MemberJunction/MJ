@@ -24,60 +24,10 @@ import { AIPromptEntityExtended } from './AIPromptExtended';
 import { MediaModality } from './prompt.types';
 
 /**
- * Scope context for multi-tenant SaaS deployments.
- *
- * Allows SaaS applications to scope agent memory (notes/examples) by custom entity
- * hierarchies without hardcoding any specific schema into MJ core. The scoping pattern
- * uses a primary scope (indexed for fast filtering) plus secondary scopes (JSON for flexibility).
- *
- * Scope levels for retrieval (cascading inheritance):
- * - Global: primaryRecordId is null/undefined - applies to all users
- * - Primary-only: primaryRecordId set, no secondary - applies to all under primary scope
- * - Fully-scoped: both primary and secondary set - most specific
- *
- * @since 2.130.0
- *
- * @example
- * ```typescript
- * // Izzy customer service app scoping
- * params.userScope = {
- *     primaryEntityName: 'Organizations',
- *     primaryRecordId: organization.ID,
- *     secondary: {
- *         ContactID: contact.ID,
- *         TeamID: contact.SupportTeamID
- *     }
- * };
- *
- * // Skip analytics app scoping
- * params.userScope = {
- *     primaryEntityName: 'Skip Tenants',
- *     primaryRecordId: tenant.ID,
- *     secondary: {
- *         AnalystID: analyst.ID
- *     }
- * };
- * ```
+ * Value type for secondary scope dimensions.
+ * Supports strings, numbers, booleans, and string arrays (for multi-valued dimensions).
  */
-export interface UserScope {
-    /**
-     * Primary scope entity name (e.g., "Organizations", "Tenants").
-     * This should match an Entity name in MemberJunction.
-     */
-    primaryEntityName?: string;
-    /**
-     * Primary scope record ID - the actual record ID within the primary entity.
-     * This is the main indexed filter for performance.
-     */
-    primaryRecordId?: string;
-    /**
-     * Additional scope dimensions as key-value pairs.
-     * Keys are field names (e.g., "ContactID", "TeamID"), values are record IDs, arbitrary strings,
-     * or arrays of strings for multi-valued dimensions (e.g., multiple user roles).
-     * Stored as JSON and used for fine-grained filtering after primary scope.
-     */
-    secondary?: Record<string, string | string[]>;
-}
+export type SecondaryScopeValue = string | number | boolean | string[];
 
 /**
  * Configuration for secondary scope dimensions on an AI Agent.
@@ -114,7 +64,7 @@ export interface SecondaryScopeConfig {
     /**
      * Array of dimension definitions.
      * Each dimension defines a scope key that can be provided at runtime via
-     * `ExecuteAgentParams.userScope.secondary`.
+     * `ExecuteAgentParams.SecondaryScopes`.
      */
     dimensions: SecondaryDimension[];
 
@@ -129,7 +79,7 @@ export interface SecondaryScopeConfig {
     /**
      * Whether to allow secondary-only scoping (no primary scope required).
      * When true, the agent can function with only secondary dimensions provided
-     * in `ExecuteAgentParams.userScope.secondary` without requiring `primaryRecordId`.
+     * in `ExecuteAgentParams.SecondaryScopes` without requiring `PrimaryScopeRecordID`.
      * @default false
      */
     allowSecondaryOnly?: boolean;
@@ -154,7 +104,7 @@ export interface SecondaryScopeConfig {
 export interface SecondaryDimension {
     /**
      * Dimension name/key (e.g., "ContactID", "TeamName", "Region").
-     * This is the key used in `ExecuteAgentParams.userScope.secondary` and stored
+     * This is the key used in `ExecuteAgentParams.SecondaryScopes` and stored
      * in the `SecondaryScopes` JSON field on notes/examples/runs.
      */
     name: string;
@@ -169,7 +119,7 @@ export interface SecondaryDimension {
 
     /**
      * Whether this dimension is required at runtime.
-     * When true, `ExecuteAgentParams.userScope.secondary` must include this dimension
+     * When true, `ExecuteAgentParams.SecondaryScopes` must include this dimension
      * or have a `defaultValue` defined.
      * @default false
      */
@@ -620,28 +570,41 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /** Optional company ID for scoping context memory (notes/examples) */
     companyId?: string;
     /**
-     * Optional scope context for multi-tenant SaaS deployments.
+     * Primary scope entity name (e.g., 'Organizations', 'Skip Tenants').
+     * Resolved to PrimaryScopeEntityID on the AIAgentRun record.
+     * Used by external applications for multi-tenant memory scoping.
+     * Not used by MJ's own chat infrastructure.
      *
-     * When provided, agent memory (notes/examples) will be scoped to the specified
-     * entity hierarchy. This enables tenant isolation and hierarchical retrieval
-     * (global → org-level → fully-scoped notes).
+     * @since 2.132.0
+     */
+    PrimaryScopeEntityName?: string;
+    /**
+     * Primary scope record ID — the actual record ID within the primary entity.
+     * Stored as an indexed column on AIAgentRun/AIAgentNote for fast filtering.
+     * Used by external applications for multi-tenant memory scoping.
+     * Not used by MJ's own chat infrastructure.
      *
-     * The scope is recorded in AIAgentRun and propagated to Memory Manager for
-     * creating properly scoped notes/examples. The Context Injector uses it for
-     * hierarchical retrieval.
+     * @since 2.132.0
+     */
+    PrimaryScopeRecordID?: string;
+    /**
+     * Arbitrary key/value dimensions for external-app scoping.
+     * Stored as JSON in the SecondaryScopes column on AIAgentRun/AIAgentNote.
+     * Used by external applications (Skip, Izzy, etc.) to segment agent memory
+     * by custom dimensions. MJ's own chat infrastructure does not use this.
      *
-     * @since 2.130.0
+     * @since 2.132.0
      *
      * @example
      * ```typescript
-     * params.userScope = {
-     *     primaryEntityName: 'Organizations',
-     *     primaryRecordId: 'org-123',
-     *     secondary: { ContactID: '456', TeamID: 'alpha' }
+     * params.SecondaryScopes = {
+     *     ContactID: 'contact-456',
+     *     TeamID: 'team-alpha',
+     *     Region: 'EMEA'
      * };
      * ```
      */
-    userScope?: UserScope;
+    SecondaryScopes?: Record<string, SecondaryScopeValue>;
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */

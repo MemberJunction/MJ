@@ -44,8 +44,8 @@ import {
     ActionChange,
     ActionChangeScope,
     MediaOutput,
-    UserScope,
-    SecondaryScopeConfig
+    SecondaryScopeConfig,
+    SecondaryScopeValue
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult, ActionParam } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -1038,6 +1038,20 @@ export class BaseAgent {
                 try { scopeConfig = JSON.parse(scopeConfigJson); } catch { /* ignore bad JSON */ }
             }
 
+            // Resolve scope params from top-level params or data fallback (for GraphQL callers)
+            const primaryScopeEntityName = params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
+            const primaryScopeRecordId = params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined);
+            const secondaryScopes = params.SecondaryScopes ?? (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined);
+
+            // Resolve entity name to entity ID for scope filtering
+            let primaryScopeEntityId: string | undefined;
+            if (primaryScopeEntityName) {
+                const primaryEntity = this._metadata.Entities.find(e => e.Name === primaryScopeEntityName);
+                if (primaryEntity) {
+                    primaryScopeEntityId = primaryEntity.ID;
+                }
+            }
+
             // Inject context memory (notes and examples) into conversation messages
             await this.InjectContextMemory(
                 typeof inputText === 'string' ? inputText : '',
@@ -1046,7 +1060,9 @@ export class BaseAgent {
                 companyId,
                 params.contextUser,
                 wrappedParams.conversationMessages,
-                params.userScope,
+                primaryScopeEntityId,
+                primaryScopeRecordId,
+                secondaryScopes,
                 scopeConfig
             );
 
@@ -1247,7 +1263,9 @@ export class BaseAgent {
      * @param companyId - Optional company ID for scoping
      * @param contextUser - User context
      * @param conversationMessages - The conversation messages array to inject into
-     * @param userScope - Optional user scope for multi-tenant filtering
+     * @param primaryScopeEntityId - Optional primary scope entity ID for multi-tenant filtering
+     * @param primaryScopeRecordId - Optional primary scope record ID for multi-tenant filtering
+     * @param secondaryScopes - Optional secondary scope dimensions for multi-tenant filtering
      * @param secondaryScopeConfig - Optional agent-level scope config for per-dimension inheritance
      * @returns Object containing injected notes and examples
      */
@@ -1258,7 +1276,9 @@ export class BaseAgent {
         companyId?: string,
         contextUser?: UserInfo,
         conversationMessages?: ChatMessage[],
-        userScope?: UserScope,
+        primaryScopeEntityId?: string,
+        primaryScopeRecordId?: string,
+        secondaryScopes?: Record<string, SecondaryScopeValue>,
         secondaryScopeConfig?: SecondaryScopeConfig | null
     ): Promise<{ notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] }> {
         // Check if injection is enabled
@@ -1284,7 +1304,9 @@ export class BaseAgent {
                 maxNotes: agent.MaxNotesToInject || 5,
                 contextUser: contextUser!,
                 rerankerConfig,
-                userScope,
+                primaryScopeEntityId,
+                primaryScopeRecordId,
+                secondaryScopes,
                 secondaryScopeConfig,
                 // Pass observability context for run step tracking
                 observability: this._agentRun ? {
@@ -1305,7 +1327,9 @@ export class BaseAgent {
                 strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
                 maxExamples: agent.MaxExamplesToInject || 3,
                 contextUser: contextUser!,
-                userScope,
+                primaryScopeEntityId,
+                primaryScopeRecordId,
+                secondaryScopes,
                 secondaryScopeConfig
             })
             : [];
@@ -3945,7 +3969,9 @@ The context is now within limits. Please retry your request with the recovered c
                 context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
-                userScope: params.userScope, // propagate user scope to sub-agent for consistent memory filtering
+                PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
+                PrimaryScopeRecordID: params.PrimaryScopeRecordID,
+                SecondaryScopes: params.SecondaryScopes,
                 // Add callback to link AgentRun ID immediately when created
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
@@ -4381,44 +4407,49 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TestRunID = params.testRunId;
         }
 
-        // Set user scope for multi-tenant SaaS deployments
-        if (params.userScope) {
+        // Set scope for multi-tenant SaaS deployments
+        // Resolve from top-level params or data fallback (for GraphQL callers)
+        const primaryScopeEntityName = params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
+        const primaryScopeRecordID = params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined);
+        const secondaryScopes = params.SecondaryScopes ?? (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined);
+
+        if (primaryScopeEntityName || primaryScopeRecordID || secondaryScopes) {
             // Parse agent's SecondaryScopeConfig from the ScopeConfig field
             const scopeConfig = this.parseSecondaryScopeConfig(params.agent);
 
             // Validate and apply secondary scopes with defaults
             const validatedSecondary = this.validateAndApplySecondaryScopes(
-                params.userScope.secondary,
+                secondaryScopes,
                 scopeConfig,
                 params.agent.Name
             );
 
             // Check if secondary-only is allowed
             const hasSecondary = validatedSecondary && Object.keys(validatedSecondary).length > 0;
-            const hasPrimary = !!params.userScope.primaryRecordId;
+            const hasPrimary = !!primaryScopeRecordID;
             const allowSecondaryOnly = scopeConfig?.allowSecondaryOnly ?? false;
 
             if (hasSecondary && !hasPrimary && !allowSecondaryOnly) {
                 LogError(
-                    `UserScope: Agent "${params.agent.Name}" requires primary scope when using secondary scopes. ` +
+                    `Scoping: Agent "${params.agent.Name}" requires primary scope when using secondary scopes. ` +
                     `Set allowSecondaryOnly=true in ScopeConfig to allow secondary-only scoping.`
                 );
             }
 
             // Resolve primary entity ID from entity name
-            if (params.userScope.primaryEntityName) {
+            if (primaryScopeEntityName) {
                 const primaryEntity = this._metadata.Entities.find(
-                    e => e.Name === params.userScope!.primaryEntityName
+                    e => e.Name === primaryScopeEntityName
                 );
                 if (primaryEntity) {
                     this._agentRun.PrimaryScopeEntityID = primaryEntity.ID;
                 } else {
-                    LogError(`UserScope: Entity "${params.userScope.primaryEntityName}" not found in metadata`);
+                    LogError(`Scoping: Entity "${primaryScopeEntityName}" not found in metadata`);
                 }
             }
             // Set primary scope record ID
-            if (params.userScope.primaryRecordId) {
-                this._agentRun.PrimaryScopeRecordID = params.userScope.primaryRecordId;
+            if (primaryScopeRecordID) {
+                this._agentRun.PrimaryScopeRecordID = primaryScopeRecordID;
             }
             // Set secondary scopes as JSON (with defaults applied)
             if (validatedSecondary && Object.keys(validatedSecondary).length > 0) {
@@ -8349,22 +8380,21 @@ The context is now within limits. Please retry your request with the recovered c
      * - Applies default values for missing optional dimensions
      * - Warns about extra dimensions if strictValidation is enabled
      *
-     * @param secondary - Runtime secondary scope values from userScope
+     * @param secondary - Runtime secondary scope values from ExecuteAgentParams.SecondaryScopes
      * @param scopeConfig - The agent's scope configuration
      * @param agentName - Agent name for logging
      * @returns Validated and enriched secondary scopes
      */
     private validateAndApplySecondaryScopes(
-        secondary: Record<string, string | string[]> | undefined,
+        secondary: Record<string, SecondaryScopeValue> | undefined,
         scopeConfig: SecondaryScopeConfig | null,
         agentName: string
-    ): Record<string, string | string[]> | undefined {
+    ): Record<string, SecondaryScopeValue> | undefined {
         if (!scopeConfig) {
-            // No config = no validation, pass through as-is
             return secondary;
         }
 
-        const result: Record<string, string | string[]> = { ...(secondary || {}) };
+        const result: Record<string, SecondaryScopeValue> = { ...(secondary || {}) };
 
         // Build set of defined dimension names
         const definedDimensions = new Set<string>();
@@ -8380,7 +8410,7 @@ The context is now within limits. Please retry your request with the recovered c
                             result[dim.name] = dim.defaultValue;
                         } else {
                             LogError(
-                                `UserScope: Required dimension "${dim.name}" not provided for agent "${agentName}" ` +
+                                `Scoping: Required dimension "${dim.name}" not provided for agent "${agentName}" ` +
                                 `and no defaultValue is configured.`
                             );
                         }
@@ -8399,7 +8429,7 @@ The context is now within limits. Please retry your request with the recovered c
             for (const key of Object.keys(secondary)) {
                 if (!definedDimensions.has(key)) {
                     LogError(
-                        `UserScope: Unknown dimension "${key}" provided for agent "${agentName}". ` +
+                        `Scoping: Unknown dimension "${key}" provided for agent "${agentName}". ` +
                         `Agent's SecondaryScopeConfig has strictValidation enabled.`
                     );
                 }
