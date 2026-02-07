@@ -562,29 +562,212 @@ Phase 4.2  Write Tier 2 tests
 Phase 4.3  Write Tier 3 tests
 Phase 5.3  PR-scoped testing optimization
 Phase 6    Conventions, scaffolding, DX
+Phase 7    Release-cycle Docker Compose full-stack CI/CD
 ```
 
 Note: Phase 5.1/5.2 (CI gate) is deliberately placed after Tier 1 tests exist. We don't want to enforce a test gate before there are meaningful tests to run — otherwise it's just CI overhead for zero value.
 
 ---
 
-## Success Metrics
+## Phase 7: Release-Cycle Full-Stack CI/CD
 
-| Metric | Current | After Phase 3 | After Phase 4.1 | After Phase 4.3 |
-|--------|---------|---------------|-----------------|-----------------|
-| Packages with tests | 17 | 17 | 20 | 35+ |
-| Test files | 36 | 36 | 60+ | 120+ |
-| Frameworks | 4 | 1 (Vitest) | 1 | 1 |
-| CI test gate | No | No | Yes | Yes |
-| Root `npm test` | No | Yes | Yes | Yes |
-| Turbo test caching | No | Yes | Yes | Yes |
-| Coverage reporting | No | No | Yes | Yes |
+This phase connects Vitest unit testing with the `@memberjunction/testing-engine` browser automation regression suite in a single, automated release validation pipeline. This runs on release cycles (not per-PR) since the full suite takes hours.
+
+### 7.1 Docker Compose Environment
+
+**File**: `docker/docker-compose.test.yml`
+
+Spins up the full MJ stack from the `next` branch:
+
+```yaml
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "${TEST_SA_PASSWORD}"
+    ports:
+      - "1433:1433"
+    volumes:
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -Q "SELECT 1" -C
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mjapi:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      DB_HOST: sqlserver
+      DB_PORT: 1433
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: curl -f http://localhost:4000/health || exit 1
+      interval: 10s
+      retries: 10
+
+  mjexplorer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.explorer
+    depends_on:
+      mjapi:
+        condition: service_healthy
+    ports:
+      - "4200:4200"
+
+  playwright:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.playwright
+    depends_on:
+      mjexplorer:
+        condition: service_started
+    environment:
+      BASE_URL: http://mjexplorer:4200
+      API_URL: http://mjapi:4000
+    volumes:
+      - ./test-results:/app/test-results
+```
+
+### 7.2 Release Test Pipeline
+
+**File**: `.github/workflows/release-test.yml`
+
+Triggered manually or on release branch creation:
+
+```yaml
+name: Release Validation Suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to test'
+        default: 'next'
+  schedule:
+    # Run nightly against next (optional)
+    - cron: '0 2 * * 1-5'
+
+jobs:
+  unit-tests:
+    name: Unit Tests (Vitest)
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  full-stack-regression:
+    name: Full-Stack Regression (Playwright + Testing Framework)
+    needs: unit-tests   # Only run if unit tests pass
+    timeout-minutes: 180  # 3 hours max
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Docker Compose stack
+        run: docker compose -f docker/docker-compose.test.yml up -d --build --wait
+        timeout-minutes: 20
+
+      - name: Run database migrations
+        run: docker compose -f docker/docker-compose.test.yml exec mjapi npm run mj:migrate
+
+      - name: Run full regression suite
+        run: docker compose -f docker/docker-compose.test.yml exec playwright npx mj-test run --suite=regression
+
+      - name: Collect test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-results
+          path: docker/test-results/
+          retention-days: 90
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.test.yml down -v
+```
+
+### 7.3 Execution Order Within Release Pipeline
+
+```
+1. Unit tests via Vitest (fast gate — ~5-10 min)
+   └─ If pass →
+2. Docker Compose stack spins up (SQL Server + MJAPI + MJExplorer)
+   └─ Migrations run →
+3. Vitest unit tests run again inside the stack (validates built artifacts)
+   └─ If pass →
+4. Playwright browser automation regression suite via @memberjunction/testing-engine
+   └─ Hours of detailed functional testing
+5. Results collected, stack torn down
+```
+
+### 7.4 Local Developer Experience
+
+Any developer can run the same pipeline locally:
+
+```bash
+# Run just unit tests for a specific package (fast, no Docker needed)
+cd packages/MJCore && npm run test:watch
+
+# Run unit tests for all packages
+npm test
+
+# Run unit tests for packages you changed
+npx turbo run test --filter=...[HEAD~1]
+
+# Spin up full-stack environment locally
+docker compose -f docker/docker-compose.test.yml up -d --build --wait
+
+# Run regression suite against local stack
+npx mj-test run --suite=regression --base-url=http://localhost:4200
+
+# Tear down when done
+docker compose -f docker/docker-compose.test.yml down -v
+```
+
+The key principle: **same infrastructure for CI and local**. Docker Compose ensures the environment is identical whether running on a dev laptop or in GitHub Actions.
 
 ---
 
-## What This Plan Does NOT Cover
+## Success Metrics
 
-- **Angular component tests**: Deferred to a future phase. Requires jsdom/browser-mode configuration, and the 61 Angular packages are primarily UI-rendering code that benefits more from E2E testing.
-- **E2E / fullstack tests**: Handled by the existing `@memberjunction/testing-engine` + your Playwright vision agent.
-- **Performance/load testing**: Out of scope.
-- **Database integration tests**: Unit tests mock the database. Real database tests are the domain of the fullstack testing framework.
+| Metric | Current | After Phase 3 | After Phase 4.1 | After Phase 4.3 | After Phase 7 |
+|--------|---------|---------------|-----------------|-----------------|---------------|
+| Packages with tests | 17 | 17 | 20 | 35+ | 35+ |
+| Test files | 36 | 36 | 60+ | 120+ | 120+ |
+| Frameworks | 4 | 1 (Vitest) | 1 | 1 | 1 |
+| CI unit test gate (per-PR) | No | No | Yes | Yes | Yes |
+| CI full-stack gate (release) | No | No | No | No | Yes |
+| Root `npm test` | No | Yes | Yes | Yes | Yes |
+| Turbo test caching | No | Yes | Yes | Yes | Yes |
+| Coverage reporting | No | No | Yes | Yes | Yes |
+| Docker Compose test env | No | No | No | No | Yes |
+| Local full-stack testing | No | No | No | No | Yes |
+
+---
+
+## Overall Testing Strategy
+
+This plan is one layer of a two-layer automated testing strategy:
+
+| Layer | Tool | Trigger | Duration | What It Tests |
+|-------|------|---------|----------|---------------|
+| **Unit Tests** | Vitest | Every PR | ~5-10 min | Logic, utilities, services, data transformations — no DB, no network |
+| **Full-Stack Regression** | @memberjunction/testing-engine + Playwright | Release cycles / nightly | Hours | Browser automation, end-to-end flows, visual verification, database integration |
+
+Between the two layers, every PR is gated on unit tests, and every release is validated by comprehensive browser-driven regression testing. Both layers use the same infrastructure (Docker Compose) so developers can reproduce any failure locally.
