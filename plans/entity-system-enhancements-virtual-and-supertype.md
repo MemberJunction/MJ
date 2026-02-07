@@ -1,4 +1,4 @@
-# Entity System Enhancements: Virtual Entities & Parent/Child Type Modeling
+# Entity System Enhancements: Virtual Entities & IS-A Type Modeling
 
 ## Table of Contents
 1. [Executive Summary](#executive-summary)
@@ -6,18 +6,23 @@
 3. [Enhancement 1: Virtual Entities — Tightening the System](#enhancement-1-virtual-entities)
 4. [Config-Driven Virtual Entity Creation](#config-driven-virtual-entity-creation)
 5. [LLM-Assisted Virtual Entity Field Decoration](#llm-assisted-virtual-entity-field-decoration)
-6. [Enhancement 2: Parent/Child Type (IS-A) Relationships](#enhancement-2-parentchild-type-is-a-relationships)
-7. [Metadata Schema Changes (ERD)](#metadata-schema-changes-erd)
+6. [Enhancement 2: IS-A Type Relationships](#enhancement-2-is-a-type-relationships)
+7. [Metadata Schema & EntityInfo](#metadata-schema--entityinfo)
 8. [Example Domain: Product / Meeting / Publication / Webinar](#example-domain)
-9. [ORM Composition Architecture](#orm-composition-architecture)
-10. [Client/Server Save Orchestration](#clientserver-save-orchestration)
-11. [Transaction Scoping](#transaction-scoping)
-12. [Record Changes](#record-changes)
-13. [Operation Flow Diagrams](#operation-flow-diagrams)
-14. [CodeGen Changes](#codegen-changes)
-15. [UI Integration](#ui-integration)
-16. [Migration Plan](#migration-plan)
-17. [Open Questions & Future Work](#open-questions--future-work)
+9. [Object Composition Architecture](#object-composition-architecture)
+10. [Set/Get/SetMany Routing](#setgetsetmany-routing)
+11. [Load & NewRecord Flows](#load--newrecord-flows)
+12. [Save Orchestration](#save-orchestration)
+13. [Delete Orchestration](#delete-orchestration)
+14. [Provider Transaction Management](#provider-transaction-management)
+15. [Record Changes](#record-changes)
+16. [Disjoint Subtype Enforcement](#disjoint-subtype-enforcement)
+17. [Field Name Collision Detection](#field-name-collision-detection)
+18. [CodeGen Changes](#codegen-changes)
+19. [UI Integration](#ui-integration)
+20. [Implementation Phases & Checklist](#implementation-phases--checklist)
+21. [Resolved Decisions](#resolved-decisions)
+22. [Future Work](#future-work)
 
 ---
 
@@ -25,16 +30,18 @@
 
 This plan covers two related enhancements to MemberJunction's entity system:
 
-1. **Virtual Entities** — Entities backed only by a SQL view with no physical table. The infrastructure mostly exists (`VirtualEntity=1`, `spCreateVirtualEntity`, `manageVirtualEntities()` in CodeGen). This enhancement tightens the system so virtual entities are first-class citizens with proper read-only enforcement, composite PK support, UI awareness, **declarative config-driven creation** (replacing manual SP calls), and **LLM-assisted field decoration** that auto-identifies PKs, FKs, and source field mappings from view SQL.
+1. **Virtual Entities** — Entities backed only by a SQL view with no physical table. The infrastructure mostly exists (`VirtualEntity=1`, `spCreateVirtualEntity`, `manageVirtualEntities()` in CodeGen). This enhancement tightens the system so virtual entities are first-class citizens with proper read-only enforcement, composite PK support, UI awareness, **declarative config-driven creation**, and **LLM-assisted field decoration**.
 
-2. **Parent/Child Type Modeling (IS-A Relationships)** — First-class support for IS-A relationships using the existing `ParentID` column on the Entity table (e.g., Meeting IS-A Product). Combined with shared primary keys, ORM-layer composition, and provider-aware save orchestration, this enables unified views, full subclass validation chains, transactional saves, and cascade-aware deletes across the type hierarchy.
+2. **IS-A Type Relationships (Parent/Child Type Modeling)** — First-class support for type inheritance using the existing `Entity.ParentID` column (e.g., Meeting IS-A Product). Combined with shared primary keys, persistent ORM composition via `_parentEntity`, and provider-aware save orchestration, this enables unified views, full subclass validation chains, transactional saves, and cascade-aware deletes across type hierarchies.
 
 ### Key Architectural Decisions
-- **Reuse `Entity.ParentID`** — currently unused "reserved for future use" column, repurposed for IS-A relationships
-- **ORM Composition, not SP Chaining** — each entity's SP handles only its own table; the ORM layer orchestrates the parent chain, preserving subclass logic, validation, and events at every level
-- **Same entity class everywhere** — identical code on client and server; provider interprets `EntitySaveOptions.IsParentEntitySave` flag differently
-- **Disjoint subtypes enforced** — a parent record can only be one child type at a time (overlapping is a future option)
-- **Transaction scoping via stubs** — `BeginEntityTransaction()` / `CommitEntityTransaction()` / `RollbackEntityTransaction()` are no-ops on client, real SQL transactions on server
+- **Reuse `Entity.ParentID`** — currently unused "reserved for future use" column, repurposed for IS-A
+- **Persistent `_parentEntity` composition** — each child entity holds a live reference to its parent entity; all data routing, dirty tracking, and validation flow through this composition chain
+- **Generic Set/Get/SetMany routing in BaseEntity** — metadata-driven field routing; no per-subclass overrides for data access. Parent fields are routed to `_parentEntity` transparently
+- **Save/Delete orchestration in BaseEntity** — `_InnerSave()` and `_InnerDelete()` generically detect IS-A chains and orchestrate parent saves/deletes. Generated subclasses only initialize `_parentEntity` and generate typed accessors
+- **Leaf awareness, not transactions, on client** — the initiating entity sends one network call with all chain fields; parent entities validate but skip the network call
+- **Provider-level SQL transactions on server** — `SQLServerDataProvider` manages transaction lifecycle; composes with existing `TransactionGroup` when needed
+- **Disjoint subtypes enforced** — single batch query prevents a parent record from being multiple child types
 
 ---
 
@@ -44,27 +51,27 @@ We use **Parent entity** and **Child entity** (or **Parent type** / **Child type
 
 ### Why ParentID Works
 
-The `ParentID` column on the Entity table has been "reserved for future use" since its creation. After studying the codebase:
+The `ParentID` column on the Entity table has been "reserved for future use" since creation. After studying the codebase:
 
 - **All 5,650+ Entity records** in the baseline migration have `ParentID = NULL`
-- **No code anywhere** reads or writes `Entity.ParentID`
-- The virtual columns it feeds (`ParentEntity`, `ParentBaseTable`, `ParentBaseView`) exist in `vwEntities` but are **never referenced** in business logic
-- MJ already uses dedicated category entities (EntityCategory, ActionCategory, QueryCategory) for organizational grouping — `Entity.ParentID` was never needed for that purpose
-
-The IS-A relationship IS a hierarchy — "child" and "parent" naturally communicate type specialization when applied to entity definitions. A Meeting's parent entity is Product means "Meeting is a specialized Product." In the context of the Entity metadata table (which describes entity definitions, not records), this reading is unambiguous.
+- **No code anywhere** reads or writes `Entity.ParentID` for business logic
+- The virtual columns it feeds (`ParentEntity`, `ParentBaseTable`, `ParentBaseView`) exist in `vwEntities` but are **never referenced** in application code
+- MJ uses dedicated category entities for organizational grouping — `Entity.ParentID` was never needed for that
+- CodeGen's recursive FK detection is purely structural (`RelatedEntityID === entity.ID`), not name-based — repurposing ParentID for IS-A doesn't affect existing RootParentID generation
 
 ### Why Not "Supertype/Subtype"
 
-While "supertype/subtype" is the canonical ER modeling term (Elmasri & Navathe), we opted for parent/child because:
-
 | Consideration | Parent/Child | Supertype/Subtype |
 |---------------|-------------|-------------------|
-| **Existing infrastructure** | `ParentID` column, FK, index, view columns all exist | Would require new `SupertypeEntityID` column |
-| **Accessibility** | Widely understood by all developers | Academic jargon many developers don't know |
-| **Naming consistency** | "Sub" already implies "child" | More precise but verbose |
+| **Existing infrastructure** | `ParentID` column, FK, index, view columns all exist | Would require new column |
+| **Accessibility** | Widely understood by all developers | Academic jargon |
 | **Codebase fit** | Natural extension of existing schema | New concept introduction |
 
-The academic terms remain useful in documentation for precision. In comments and documentation we may reference "supertype/subtype" or "IS-A" to clarify the pattern, but the metadata column and API use `ParentID`.
+The academic terms remain useful in documentation for precision. In comments we may reference "supertype/subtype" or "IS-A" to clarify the pattern, but the metadata column and API use `ParentID`.
+
+### Entity.ParentID vs Other ParentID Fields
+
+`Entity.ParentID` gets a cross-entity IS-A semantic, which differs from `Action.ParentID` or `ActionCategory.ParentID` (same-entity tree hierarchy). This is not a conflict — no generic code assigns meaning to the name "ParentID." CodeGen's `detectRecursiveForeignKeys()` checks `RelatedEntityID === entity.ID` (structural), not field names.
 
 ---
 
@@ -74,26 +81,26 @@ The academic terms remain useful in documentation for precision. In comments and
 
 Virtual entities already work in MJ. The existing implementation:
 
-- `Entity.VirtualEntity = 1` flag exists
+- `Entity.VirtualEntity = 1` flag exists in schema and EntityInfo
 - `spCreateVirtualEntity` SP creates entity metadata with APIs disabled
 - `BaseTable` is set to the same value as `BaseView` (the view name)
 - CodeGen's `manageVirtualEntities()` syncs EntityField metadata from view columns
-- CodeGen skips SP and base view generation for virtual entities (`sql_codegen.ts` lines 576, 626, 662, 698)
+- CodeGen skips SP and base view generation for virtual entities
 
 ### BaseTable = BaseView: Not a Hack
 
-Setting `BaseTable` to the view name is **pragmatically correct**. External systems and internal code that does `SELECT * FROM [BaseTable]` will work fine because a view is SELECT-able just like a table. The `VirtualEntity=1` flag is the authoritative signal for "no physical table exists." CodeGen and BaseEntity use that flag (not table name comparisons) to gate behavior. No schema change needed here.
+Setting `BaseTable` to the view name is pragmatically correct. External systems doing `SELECT * FROM [BaseTable]` work fine. The `VirtualEntity=1` flag is the authoritative signal. No schema change needed.
 
 ### What Needs Tightening
 
 #### 1A. BaseEntity Read-Only Enforcement
 
-**Problem**: `BaseEntity.Save()` and `BaseEntity.Delete()` do NOT check `VirtualEntity`. The API flags (`AllowCreateAPI=0`, etc.) gate the GraphQL layer via `CheckPermissions()`, but nothing prevents server-side code from calling `.Save()` on a virtual entity object.
+**Problem**: `BaseEntity.Save()` and `Delete()` do NOT check `VirtualEntity`. The API flags gate the GraphQL layer, but nothing prevents server-side code from calling `.Save()` on a virtual entity.
 
-**Solution**: Add explicit guard in `CheckPermissions()`:
+**Solution**: Add guard in `CheckPermissions()`:
 
 ```typescript
-// In BaseEntity.CheckPermissions() - early exit for virtual entities
+// In BaseEntity.CheckPermissions() — early exit for virtual entities
 if (this.EntityInfo.VirtualEntity &&
     (type === EntityPermissionType.Create ||
      type === EntityPermissionType.Update ||
@@ -104,27 +111,20 @@ if (this.EntityInfo.VirtualEntity &&
 }
 ```
 
-This enforces read-only semantics regardless of how the entity is accessed (API, server-side code, actions, agents).
+#### 1B. Composite Primary Key Support
 
-#### 1B. Composite Primary Key Support in spCreateVirtualEntity
+**Problem**: `spCreateVirtualEntity` accepts a single `@PrimaryKeyFieldName`. Composite keys require manual intervention.
 
-**Problem**: `spCreateVirtualEntity` accepts a single `@PrimaryKeyFieldName` parameter. Views with composite keys require manual intervention after creation.
-
-**Solution**: Accept a comma-delimited list or rely on `additionalSchemaInfo` soft PK config for composite keys (already works). The SP is a convenience entry point; composite PKs can be configured post-creation via the existing soft PK mechanism.
+**Solution**: Accept comma-delimited list or rely on `additionalSchemaInfo` soft PK config (already works).
 
 #### 1C. UI Awareness
 
-**Problem**: Explorer and forms don't distinguish virtual entities from locked-down regular entities. Both show disabled CRUD buttons.
-
-**Solution**:
-- Surface `VirtualEntity` flag in entity forms with a distinct badge/label: "Virtual Entity (Read-Only View)"
-- Use a distinct icon (e.g., `fa-eye` or `fa-layer-group`) for virtual entities in entity lists
-- Hide Create/Edit/Delete buttons entirely (not just disable them) for virtual entities
-- Show the underlying view name prominently
+- Surface `VirtualEntity` flag with distinct badge: "Virtual Entity (Read-Only View)"
+- Distinct icon (e.g., `fa-eye`) for virtual entities in entity lists
+- Hide Create/Edit/Delete buttons entirely (not just disable) for virtual entities
+- Show underlying view name prominently
 
 #### 1D. Virtual Entity Flow
-
-Two creation paths converge in CodeGen:
 
 ```mermaid
 flowchart TD
@@ -139,7 +139,7 @@ flowchart TD
     E --> I[Query sys.columns for view<br/>Sync EntityField rows]
 
     I --> J{LLM available &<br/>VirtualEntityDecoration enabled?}
-    J -->|Yes| K[LLM analyzes view SQL:<br/>auto-identify PKs, FKs,<br/>source field mappings,<br/>computed field descriptions]
+    J -->|Yes| K[LLM analyzes view SQL:<br/>auto-identify PKs, FKs,<br/>source field mappings]
     J -->|No| L[Skip LLM decoration]
 
     K --> M[Apply soft PK/FK config<br/>Config always wins over LLM]
@@ -161,18 +161,11 @@ flowchart TD
 
 ### Problem: Manual SP Calls Are Fragile
 
-Currently, creating a virtual entity requires calling `spCreateVirtualEntity` with parameters. This is a manual, one-off operation that doesn't fit into a declarative, repeatable workflow. A DBA has to:
-
-1. Create the SQL view
-2. Call `spCreateVirtualEntity` with the right parameters
-3. Wait for CodeGen to sync fields from `sys.columns`
-4. Manually configure soft PKs/FKs via `additionalSchemaInfo` config
-
-Steps 2-4 should be automated via the same config file that already handles soft PK/FK declarations.
+Creating a virtual entity requires calling `spCreateVirtualEntity` with parameters — a manual, one-off operation. Steps 2-4 of the creation process should be automated via the same config file that handles soft PK/FK declarations.
 
 ### Solution: Extend `additionalSchemaInfo` Config
 
-The existing `database-metadata-config.json` (configured via `additionalSchemaInfo` in `mj.config.cjs`) already supports declaring soft PKs and FKs per table using PascalCase property names. We extend this same file to support a `VirtualEntities` section.
+The existing `database-metadata-config.json` already supports soft PKs and FKs per table using PascalCase property names. We extend it with a `VirtualEntities` section.
 
 #### Config File Format
 
@@ -197,9 +190,7 @@ The existing `database-metadata-config.json` (configured via `additionalSchemaIn
             "ViewName": "vwCustomerOrdersSummary",
             "EntityName": "Customer Orders Summary",
             "Description": "Aggregated view of customer order history",
-            "PrimaryKey": [
-                { "FieldName": "CustomerID" }
-            ],
+            "PrimaryKey": [{ "FieldName": "CustomerID" }],
             "ForeignKeys": [
                 {
                     "FieldName": "CustomerID",
@@ -229,10 +220,10 @@ The existing `database-metadata-config.json` (configured via `additionalSchemaIn
 |----------|----------|-------------|
 | `SchemaName` | Yes | Schema of the SQL view |
 | `ViewName` | Yes | Name of the SQL view |
-| `EntityName` | No | Display name for the entity. If omitted, CodeGen derives it from the view name (strip `vw` prefix, add spaces). |
-| `Description` | No | Entity description. If omitted and LLM is available, auto-generated. |
-| `PrimaryKey` | No | Array of PK fields. If omitted and LLM is available, auto-identified. |
-| `ForeignKeys` | No | Array of FK relationships. If omitted and LLM is available, auto-identified. |
+| `EntityName` | No | Display name. If omitted, derived from view name (strip `vw` prefix, add spaces). |
+| `Description` | No | Entity description. If omitted and LLM available, auto-generated. |
+| `PrimaryKey` | No | Array of PK fields. If omitted and LLM available, auto-identified. |
+| `ForeignKeys` | No | Array of FK relationships. If omitted and LLM available, auto-identified. |
 
 #### CodeGen Processing Flow
 
@@ -250,8 +241,8 @@ flowchart TD
     G --> I[manageSingleVirtualEntity<br/>Sync fields from sys.columns]
     H --> I
 
-    I --> J{LLM available &<br/>VirtualEntityDecoration<br/>feature enabled?}
-    J -->|Yes| K[LLM decorates fields<br/>Auto-identify PKs, FKs,<br/>source field mappings]
+    I --> J{LLM available &<br/>VirtualEntityDecoration enabled?}
+    J -->|Yes| K[LLM decorates fields]
     J -->|No| L[Skip LLM decoration]
 
     K --> M[Apply config PK/FK overrides<br/>Config always wins over LLM]
@@ -262,13 +253,10 @@ flowchart TD
 
 #### Key Design Decisions
 
-1. **Config PK/FK overrides LLM**: If the config explicitly defines `PrimaryKey` or `ForeignKeys`, those are applied after LLM decoration and take precedence. The `IsSoftPrimaryKey`/`IsSoftForeignKey` flags protect these from subsequent schema sync.
-
-2. **Entity creation is idempotent**: If the entity already exists (from a prior CodeGen run or manual `spCreateVirtualEntity` call), the config only updates PK/FK settings — it doesn't recreate the entity.
-
-3. **Same PascalCase conventions**: The `VirtualEntities` section uses the same PascalCase property names (`SchemaName`, `ViewName`, `FieldName`, `RelatedTable`, etc.) as the soft PK/FK sections.
-
-4. **Schema-as-key format for tables, flat array for virtual entities**: Tables use the schema name as a JSON key (e.g., `"dbo": [...]`) for conciseness since most tables share a schema. Virtual entities use a flat array with explicit `SchemaName` per entry since they may span multiple schemas.
+1. **Config PK/FK overrides LLM**: Explicit config values take precedence. `IsSoftPrimaryKey`/`IsSoftForeignKey` flags protect from subsequent schema sync.
+2. **Entity creation is idempotent**: If entity exists from prior run or manual SP call, only PK/FK settings are updated.
+3. **Same PascalCase conventions**: Consistent with soft PK/FK sections.
+4. **Schema-as-key for tables, flat array for virtual entities**: Tables use schema as JSON key for conciseness; virtual entities use flat array with explicit `SchemaName`.
 
 ---
 
@@ -276,19 +264,11 @@ flowchart TD
 
 ### Problem: sys.columns Gives Minimal Metadata
 
-When CodeGen syncs virtual entity fields from `sys.columns`, it gets column names, data types, lengths, nullability — but **nothing semantic**:
-
-- No primary key identification (views don't have PK constraints)
-- No foreign key relationships
-- No `RelatedEntityID`/`RelatedEntityFieldName` mappings
-- Type info is only what SQL Server infers from the view output (imprecise for computed columns)
-- No field descriptions
-
-Currently the DBA must manually configure all of this via `additionalSchemaInfo` or through the UI.
+When CodeGen syncs virtual entity fields from `sys.columns`, it gets column names, data types, lengths, nullability — but nothing semantic (no PKs, no FKs, no descriptions).
 
 ### Solution: LLM Analyzes View SQL
 
-A new AdvancedGeneration feature called `VirtualEntityDecoration` uses an LLM to analyze the **view SQL definition** along with **existing entity metadata context** to intelligently decorate virtual entity fields.
+A new `VirtualEntityDecoration` AdvancedGeneration feature uses an LLM to analyze the view SQL definition and existing entity metadata to intelligently decorate virtual entity fields.
 
 ### Feature Configuration
 
@@ -298,180 +278,36 @@ advancedGeneration: {
     enableAdvancedGeneration: true,
     features: [
         { name: 'VirtualEntityDecoration', enabled: true },
-        // ... other features
     ]
 }
 ```
 
-### New Prompt: `CodeGen: Virtual Entity Field Decoration`
-
-**Template:** `metadata/prompts/templates/codegen/virtual-entity-field-decoration.template.md`
-
-The prompt follows the same pattern as existing CodeGen prompts (`Smart Field Identification`, `Transitive Join Intelligence`, etc.), using Nunjucks templating and structured JSON output.
-
-#### Input Data
-
-```typescript
-{
-    entityName: string;                // e.g. "Customer Orders Summary"
-    entityDescription: string | null;
-    viewName: string;                  // e.g. "vwCustomerOrdersSummary"
-    schemaName: string;                // e.g. "dbo"
-    viewDefinition: string;            // Full SQL from OBJECT_DEFINITION()
-
-    // Fields as currently known from sys.columns
-    fields: Array<{
-        Name: string;
-        Type: string;
-        Length: number;
-        Precision: number;
-        Scale: number;
-        AllowsNull: boolean;
-        IsPrimaryKey: boolean;
-        IsSoftPrimaryKey: boolean;
-        RelatedEntityID: string | null;
-        RelatedEntityFieldName: string | null;
-        IsSoftForeignKey: boolean;
-    }>;
-
-    // Available entities for FK matching — compact summary
-    availableEntities: Array<{
-        Name: string;
-        SchemaName: string;
-        BaseTable: string;
-        PrimaryKeyFields: string[];
-        KeyFields: Array<{ Name: string; Type: string; IsPrimaryKey: boolean }>;
-    }>;
-}
-```
-
-The `viewDefinition` is obtained via `SELECT OBJECT_DEFINITION(OBJECT_ID('schema.viewName'))` — a single lightweight query against SQL Server system catalog.
-
-The `availableEntities` list is pre-filtered to relevant schemas (same schema as the view, plus `dbo` and the MJ core schema) to keep token usage manageable. Only PK fields and a few key identifying fields per entity are included.
-
-#### Expected Output
+### Expected Output
 
 ```typescript
 type VirtualEntityDecorationResult = {
-    primaryKeyFields: Array<{
-        fieldName: string;
-        reason: string;
-    }>;
-
+    primaryKeyFields: Array<{ fieldName: string; reason: string }>;
     foreignKeyFields: Array<{
         fieldName: string;
-        relatedEntityName: string;    // must match an entity in availableEntities
-        relatedFieldName: string;     // PK field on the related entity
+        relatedEntityName: string;
+        relatedFieldName: string;
         reason: string;
     }>;
-
     sourceFieldMappings: Array<{
         fieldName: string;
-        sourceEntityName: string;     // which entity this field originates from
-        sourceFieldName: string;      // which field on that entity
+        sourceEntityName: string;
+        sourceFieldName: string;
         confidence: 'high' | 'medium' | 'low';
     }>;
-
     computedFields: Array<{
         fieldName: string;
         computationType: 'aggregate' | 'expression' | 'case' | 'conversion' | 'other';
         description: string;
     }>;
-
     confidence: 'high' | 'medium' | 'low';
     reasoning: string;
 }
 ```
-
-#### Prompt Template Structure
-
-The prompt instructs the LLM to:
-
-1. **Identify Primary Keys** — Look for GROUP BY columns, columns sourced from a base table's PK, GUID columns named "ID", or UNIQUE source columns. The driving/main table's PK is preferred.
-
-2. **Identify Foreign Keys** — Trace columns back to source tables and match against available entities. Only columns in the SELECT list that reference another entity's PK qualify.
-
-3. **Map Source Fields** — For each SELECT column, trace back to the originating table and column. This enables copying richer metadata (descriptions, extended types, value lists) from the source entity's field.
-
-4. **Flag Computed Fields** — Recognize `COUNT()`, `SUM()`, `CASE WHEN`, `CAST()`, string concatenation, etc. These are not mapped to source fields and get a descriptive label instead.
-
-5. **Skip Already-Decorated Fields** — Fields with `IsSoftPrimaryKey=1` or `IsSoftForeignKey=1` are never touched (user config overrides).
-
-### Integration in CodeGen Pipeline
-
-The LLM decoration runs **inside `manageSingleVirtualEntity()`**, after field sync from `sys.columns` but before `applySoftPKFKConfig()`:
-
-```
-manageMetadata()
-  ...
-  manageVirtualEntities()
-    for each virtual entity:
-      manageSingleVirtualEntity()          // Step 1: sync fields from sys.columns
-        decorateVirtualEntityWithLLM()     // Step 2: LLM enrichment (if enabled)
-      ...
-  applySoftPKFKConfig()                   // Step 3: config overrides (always wins)
-  ...
-```
-
-### New Method on AdvancedGeneration
-
-```typescript
-public async decorateVirtualEntityFields(
-    virtualEntity: EntityInfo,
-    viewDefinition: string,
-    fields: VirtualEntityFieldInfo[],
-    availableEntities: EntitySummary[],
-    contextUser: UserInfo
-): Promise<VirtualEntityDecorationResult | null> {
-    if (!this.featureEnabled('VirtualEntityDecoration')) {
-        return null;
-    }
-
-    const prompt = await this.getPromptEntity(
-        'CodeGen: Virtual Entity Field Decoration', contextUser
-    );
-
-    const params = new AIPromptParams();
-    params.prompt = prompt;
-    params.data = {
-        entityName: virtualEntity.Name,
-        entityDescription: virtualEntity.Description,
-        viewName: virtualEntity.BaseView,
-        schemaName: virtualEntity.SchemaName,
-        viewDefinition,
-        fields,
-        availableEntities
-    };
-    params.contextUser = contextUser;
-
-    const result = await this.executePrompt<VirtualEntityDecorationResult>(params);
-
-    if (result.success && result.result) {
-        return result.result;
-    }
-    return null;  // Graceful fallback — entity works with basic sys.columns metadata
-}
-```
-
-### Applying LLM Results in manage-metadata.ts
-
-After `decorateVirtualEntityFields()` returns successfully:
-
-1. **Primary Keys**: For each `primaryKeyFields` entry, if the field's `IsSoftPrimaryKey` is NOT already set:
-   ```sql
-   UPDATE EntityField SET IsPrimaryKey=1
-   WHERE EntityID=@entityId AND Name=@fieldName AND IsSoftPrimaryKey=0
-   ```
-
-2. **Foreign Keys**: For each `foreignKeyFields` entry, if the field's `IsSoftForeignKey` is NOT already set:
-   - Look up `relatedEntityName` → get its Entity ID
-   - Set `RelatedEntityID` and `RelatedEntityFieldName`
-
-3. **Source Field Mappings** (high confidence only): Copy `Description`, `ExtendedType`, and value list info from the source entity field to the virtual entity field — but only if the virtual entity field doesn't already have those set.
-
-4. **Computed Fields**: Set `Description` on computed fields using the LLM's description text — but only if no description exists yet.
-
-5. All updates go through `LogSQLAndExecute()` for migration traceability.
 
 ### Precedence Chain
 
@@ -483,41 +319,17 @@ LLM decoration       → PKs, FKs, source mappings, computed flags (if enabled)
 additionalSchemaInfo → explicit PK/FK overrides (always wins, protected by IsSoft* flags)
 ```
 
-### Example
+### Integration in CodeGen Pipeline
 
-Given a view:
-```sql
-CREATE VIEW dbo.vwCustomerOrdersSummary AS
-SELECT
-    c.ID AS CustomerID, c.Name AS CustomerName,
-    COUNT(o.ID) AS OrderCount, SUM(o.Total) AS TotalSpent,
-    MAX(o.OrderDate) AS LastOrderDate
-FROM dbo.Customer c
-LEFT JOIN dbo.Orders o ON o.CustomerID = c.ID
-GROUP BY c.ID, c.Name
-```
-
-The LLM identifies:
-- **PK**: `CustomerID` (GROUP BY column from Customer.ID)
-- **FK**: `CustomerID` → Customers entity, field `ID`
-- **Source mappings**: `CustomerID` ← Customer.ID (high), `CustomerName` ← Customer.Name (high)
-- **Computed**: `OrderCount` (aggregate/COUNT), `TotalSpent` (aggregate/SUM), `LastOrderDate` (aggregate/MAX)
-
-After LLM decoration, the EntityField table for this virtual entity has proper PK/FK metadata, descriptions copied from Customer entity fields, and computed field descriptions — all without any manual configuration.
-
-### Idempotency and Graceful Fallback
-
-- **Idempotent**: If fields already have PK/FK decoration (from a prior run or soft config), the LLM call is skipped. The check is: "do any non-soft fields still lack PK/FK information?"
-- **Graceful fallback**: If the LLM is unavailable, returns errors, or the feature is disabled, the virtual entity still works with basic `sys.columns` metadata — identical to current behavior.
-- **Token efficiency**: `availableEntities` is filtered to relevant schemas only, with just PK and key identifying fields per entity. The view SQL itself is typically 10-100 lines.
+LLM decoration runs inside `manageSingleVirtualEntity()`, after field sync from `sys.columns` but before `applySoftPKFKConfig()`. Idempotent: if fields already have PK/FK decoration (from prior run or soft config), LLM call is skipped. Graceful fallback: if LLM is unavailable, entity works with basic `sys.columns` metadata.
 
 ---
 
-## Enhancement 2: Parent/Child Type (IS-A) Relationships
+## Enhancement 2: IS-A Type Relationships
 
 ### Core Concept
 
-An IS-A relationship models type specialization: **Meeting IS-A Product**, **Publication IS-A Product**. The child entity (Meeting) shares all attributes of the parent entity (Product) and adds its own specialized attributes.
+An IS-A relationship models type specialization: **Meeting IS-A Product**, **Publication IS-A Product**. The child entity shares all attributes of the parent and adds specialized attributes.
 
 In database terms, this is the **Table-Per-Type (TPT)** inheritance pattern:
 - Each type has its own table
@@ -528,26 +340,64 @@ In database terms, this is the **Table-Per-Type (TPT)** inheritance pattern:
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| **Column** | Reuse existing `Entity.ParentID` | Already exists with FK, index, view columns. Zero migration cost for the column itself. |
-| **PK sharing** | Child PK = Parent PK (same UUID values) | Guarantees 1:1 cardinality. No ambiguity. Lookup by ID works across hierarchy. |
-| **Join definition** | Via existing `RelatedEntityID`/`RelatedEntityFieldName` on PK EntityField | No new columns needed on EntityField. |
-| **Single vs. multiple inheritance** | Single inheritance only (`ParentID` is singular) | Simpler, covers 99% of cases. Multiple would need junction table. |
-| **Multi-level** | Supported (chain: Webinar → Meeting → Product) | `ParentID` chain naturally supports N levels. |
-| **Subtype exclusivity** | Disjoint enforced (a Product can only be ONE child type at a time) | Simplifies leaf resolution, prevents ambiguity. Overlapping is future option. |
-| **Save orchestration** | ORM composition (not SP chaining) | Preserves subclass logic, validation, events at every level. |
-| **Entity classes** | Same class on client and server | Provider interprets `IsParentEntitySave` flag differently. |
+| **Column** | Reuse `Entity.ParentID` | Already exists with FK, index, view columns. Zero migration cost. |
+| **PK sharing** | Child PK = Parent PK (same UUID) | 1:1 cardinality guaranteed. ID lookup works across hierarchy. |
+| **Single inheritance** | `ParentID` is singular | Simpler, covers 99% of cases. |
+| **Multi-level** | Supported (Webinar → Meeting → Product) | `ParentID` chain naturally supports N levels. |
+| **Subtype exclusivity** | Disjoint enforced | Single batch query. Overlapping is future option. |
+| **Data routing** | BaseEntity.Set/Get routes parent fields to `_parentEntity` | Generic, metadata-driven. No per-subclass overrides for data access. |
+| **Save orchestration** | Generic in BaseEntity._InnerSave() | Detects IS-A chain, orchestrates parent saves. Generated subclass only inits `_parentEntity`. |
+| **Client network** | Leaf sends ONE mutation with all chain fields | Parent entities validate but skip network call. |
+| **Server transactions** | SQLServerDataProvider-level | Composes with TransactionGroup when entity is in one. |
 
-### Metadata: No New Columns
+---
 
-The existing `Entity.ParentID` column, its FK constraint (`FK_Entity_ParentID`), index (`IDX_AUTO_MJ_FKEY_Entity_ParentID`), and computed view columns (`ParentEntity`, `ParentBaseTable`, `ParentBaseView`) are all already in place. We simply give them semantic meaning.
+## Metadata Schema & EntityInfo
 
-The subtype's PK field(s) use existing `RelatedEntityID` and `RelatedEntityFieldName` on EntityField to point to the parent entity and its PK field. This existing FK metadata IS the join definition.
+### Entity Table with ParentID for IS-A
 
-### EntityInfo Class Additions
+```mermaid
+erDiagram
+    Entity {
+        uniqueidentifier ID PK
+        uniqueidentifier ParentID FK "IS-A relationship to parent type"
+        nvarchar255 Name UK
+        nvarchar255 BaseTable
+        nvarchar255 BaseView
+        bit VirtualEntity
+        bit AllowCreateAPI
+        bit AllowUpdateAPI
+        bit AllowDeleteAPI
+        nvarchar255 SchemaName
+    }
+
+    EntityField {
+        uniqueidentifier ID PK
+        uniqueidentifier EntityID FK
+        int Sequence
+        nvarchar255 Name
+        bit IsPrimaryKey
+        bit IsVirtual "In view but not in own table"
+        uniqueidentifier RelatedEntityID FK
+        nvarchar255 RelatedEntityFieldName
+        bit IsSoftPrimaryKey
+        bit IsSoftForeignKey
+        nvarchar100 Type
+        bit AllowsNull
+    }
+
+    Entity ||--o| Entity : "ParentID (IS-A type inheritance)"
+    Entity ||--o{ EntityField : "has fields"
+```
+
+### Existing View Infrastructure (Already in Place)
+
+`vwEntities` already computes `ParentEntity`, `ParentBaseTable`, `ParentBaseView` via `LEFT OUTER JOIN Entity par ON e.ParentID = par.ID`. No view changes needed.
+
+### EntityInfo Computed Properties
 
 ```typescript
-// ParentID already exists on EntityInfo — just needs computed helpers
-
+// New computed helpers on EntityInfo
 get ParentEntity(): EntityInfo | null {
     if (!this.ParentID) return null;
     return this.Provider.Entities.find(e => e.ID === this.ParentID) ?? null;
@@ -558,7 +408,7 @@ get ChildEntities(): EntityInfo[] {
 }
 
 get ParentChain(): EntityInfo[] {
-    // Walk up: Webinar → Meeting → Product
+    // Walk up: Webinar → [Meeting, Product]
     const chain: EntityInfo[] = [];
     let current = this.ParentEntity;
     while (current) {
@@ -568,94 +418,32 @@ get ParentChain(): EntityInfo[] {
     return chain;
 }
 
-get IsChildType(): boolean {
-    return this.ParentID != null;
-}
+get IsChildType(): boolean { return this.ParentID != null; }
 
-get IsParentType(): boolean {
-    return this.ChildEntities.length > 0;
-}
+get IsParentType(): boolean { return this.ChildEntities.length > 0; }
 
 get AllParentFields(): EntityFieldInfo[] {
-    // All fields from all parents up the chain, excluding PKs (shared) and timestamps
+    // All fields from all parents, excluding PKs and timestamps
     const fields: EntityFieldInfo[] = [];
     for (const parent of this.ParentChain) {
-        fields.push(...parent.Fields.filter(f => !f.IsPrimaryKey && !f.Name.startsWith('__mj_')));
+        fields.push(...parent.Fields.filter(
+            f => !f.IsPrimaryKey && !f.IsVirtual && !f.Name.startsWith('__mj_')
+        ));
     }
     return fields;
 }
-```
 
----
-
-## Metadata Schema Changes (ERD)
-
-### Entity Table with ParentID for IS-A
-
-```mermaid
-erDiagram
-    Entity {
-        uniqueidentifier ID PK
-        uniqueidentifier ParentID FK "IS-A relationship to parent type"
-        nvarchar255 Name UK "Unique entity name"
-        nvarchar255 BaseTable "Physical table or view name"
-        nvarchar255 BaseView "Wrapper view name"
-        bit VirtualEntity "No physical table"
-        bit AllowCreateAPI
-        bit AllowUpdateAPI
-        bit AllowDeleteAPI
-        bit CascadeDeletes
-        nvarchar10 DeleteType "Hard or Soft"
-        nvarchar255 SchemaName
+// Cached set of field names belonging to parent entities — used for Set/Get routing
+private _parentEntityFieldNames: Set<string> | null = null;
+get ParentEntityFieldNames(): Set<string> {
+    if (!this._parentEntityFieldNames) {
+        this._parentEntityFieldNames = new Set(
+            this.AllParentFields.map(f => f.Name)
+        );
     }
-
-    EntityField {
-        uniqueidentifier ID PK
-        uniqueidentifier EntityID FK
-        int Sequence
-        nvarchar255 Name
-        bit IsPrimaryKey
-        bit IsVirtual "In view but not table"
-        uniqueidentifier RelatedEntityID FK "For child types: points to parent entity"
-        nvarchar255 RelatedEntityFieldName "For child types: parent PK field name"
-        bit IsSoftPrimaryKey "Metadata-only PK"
-        bit IsSoftForeignKey "Metadata-only FK"
-        nvarchar100 Type
-        bit AllowsNull
-        bit AllowUpdateAPI
-    }
-
-    EntityRelationship {
-        uniqueidentifier ID PK
-        uniqueidentifier EntityID FK
-        uniqueidentifier RelatedEntityID FK
-        nvarchar50 Type "One to Many, Many to Many"
-        bit DisplayInForm
-    }
-
-    Entity ||--o| Entity : "ParentID (IS-A type inheritance)"
-    Entity ||--o{ EntityField : "has fields"
-    Entity ||--o{ EntityRelationship : "has relationships"
+    return this._parentEntityFieldNames;
+}
 ```
-
-### Existing View Infrastructure (Already in Place)
-
-The `vwEntities` view already computes these columns from `ParentID`:
-
-```sql
--- Already exists in vwEntities
-par.Name AS ParentEntity,
-par.BaseTable AS ParentBaseTable,
-par.BaseView AS ParentBaseView
--- via LEFT OUTER JOIN Entity par ON e.ParentID = par.ID
-```
-
-These computed columns are already defined as virtual fields on `EntityInfo`:
-- `ParentEntity` (string, read-only)
-- `ParentBaseTable` (string, read-only)
-- `ParentBaseView` (string, read-only)
-
-No view changes needed.
 
 ---
 
@@ -699,7 +487,7 @@ erDiagram
     Meeting ||--o| Webinar : "ID = ID (IS-A)"
 ```
 
-### Type Hierarchy (Mermaid Class Diagram)
+### Type Hierarchy
 
 ```mermaid
 classDiagram
@@ -710,45 +498,29 @@ classDiagram
         +Price: decimal
         +SKU: string
     }
-
     class Meeting {
-        +ID: UUID (shared with Product)
+        +ID: UUID (shared)
         +MeetingPlatform: string
         +MaxAttendees: int
         +DurationMinutes: int
-        -- inherited from Product --
-        +Name: string (virtual)
-        +Description: string (virtual)
-        +Price: decimal (virtual)
-        +SKU: string (virtual)
+        +Name: string (routed to parent)
+        +Price: decimal (routed to parent)
     }
-
     class Publication {
-        +ID: UUID (shared with Product)
+        +ID: UUID (shared)
         +ISBN: string
         +PageCount: int
         +Publisher: string
-        -- inherited from Product --
-        +Name: string (virtual)
-        +Description: string (virtual)
-        +Price: decimal (virtual)
-        +SKU: string (virtual)
+        +Name: string (routed to parent)
+        +Price: decimal (routed to parent)
     }
-
     class Webinar {
-        +ID: UUID (shared with Meeting)
+        +ID: UUID (shared)
         +StreamingURL: string
         +IsRecorded: bool
         +WebinarProvider: string
-        -- inherited from Meeting --
-        +MeetingPlatform: string (virtual)
-        +MaxAttendees: int (virtual)
-        +DurationMinutes: int (virtual)
-        -- inherited from Product --
-        +Name: string (virtual)
-        +Description: string (virtual)
-        +Price: decimal (virtual)
-        +SKU: string (virtual)
+        +MeetingPlatform: string (routed to parent)
+        +Name: string (routed to grandparent)
     }
 
     Product <|-- Meeting : IS-A
@@ -756,7 +528,7 @@ classDiagram
     Meeting <|-- Webinar : IS-A
 ```
 
-### Entity Metadata for This Example
+### Entity Metadata
 
 ```
 Entity Table:
@@ -768,72 +540,32 @@ Entity Table:
 │ Publications │ <ID of Products>     │ Publication│
 │ Webinars     │ <ID of Meetings>     │ Webinar   │
 └──────────────┴──────────────────────┴───────────┘
-
-EntityField Table (Webinar entity — leaf of 3-level chain):
-┌──────────────────┬──────────────┬──────────┬───────────────────────────┬────────────────────────┐
-│ Name             │ IsPrimaryKey │ IsVirtual│ RelatedEntityID           │ RelatedEntityFieldName │
-├──────────────────┼──────────────┼──────────┼───────────────────────────┼────────────────────────┤
-│ ID               │ 1            │ 0        │ <ID of Meetings entity>   │ ID                     │
-│ StreamingURL     │ 0            │ 0        │ NULL                      │ NULL                   │
-│ IsRecorded       │ 0            │ 0        │ NULL                      │ NULL                   │
-│ WebinarProvider  │ 0            │ 0        │ NULL                      │ NULL                   │
-│ MeetingPlatform  │ 0            │ 1        │ NULL                      │ NULL                   │
-│ MaxAttendees     │ 0            │ 1        │ NULL                      │ NULL                   │
-│ DurationMinutes  │ 0            │ 1        │ NULL                      │ NULL                   │
-│ Name             │ 0            │ 1        │ NULL                      │ NULL                   │
-│ Description      │ 0            │ 1        │ NULL                      │ NULL                   │
-│ Price            │ 0            │ 1        │ NULL                      │ NULL                   │
-│ SKU              │ 0            │ 1        │ NULL                      │ NULL                   │
-└──────────────────┴──────────────┴──────────┴───────────────────────────┴────────────────────────┘
 ```
 
 ### Generated Base Views
 
 ```sql
--- Leaf entity: vwWebinars (3-level chain: Webinar → Meeting → Product)
-CREATE VIEW [dbo].[vwWebinars]
-AS
+-- vwWebinars (3-level: Webinar → Meeting → Product)
+CREATE VIEW [dbo].[vwWebinars] AS
 SELECT
     w.*,
-    -- Meeting fields (immediate parent)
-    m.[MeetingPlatform],
-    m.[MaxAttendees],
-    m.[DurationMinutes],
-    -- Product fields (grandparent, via Meeting)
-    p.[Name],
-    p.[Description],
-    p.[Price],
-    p.[SKU]
-FROM
-    [dbo].[Webinar] AS w
-INNER JOIN
-    [dbo].[Meeting] AS m ON w.[ID] = m.[ID]
-INNER JOIN
-    [dbo].[Product] AS p ON m.[ID] = p.[ID]
-WHERE
-    w.[__mj_DeletedAt] IS NULL
+    m.[MeetingPlatform], m.[MaxAttendees], m.[DurationMinutes],
+    p.[Name], p.[Description], p.[Price], p.[SKU]
+FROM [dbo].[Webinar] AS w
+INNER JOIN [dbo].[Meeting] AS m ON w.[ID] = m.[ID]
+INNER JOIN [dbo].[Product] AS p ON m.[ID] = p.[ID]
+WHERE w.[__mj_DeletedAt] IS NULL
 GO
 
--- Mid-level entity: vwMeetings (2-level chain: Meeting → Product)
-CREATE VIEW [dbo].[vwMeetings]
-AS
+-- vwMeetings (2-level: Meeting → Product)
+CREATE VIEW [dbo].[vwMeetings] AS
 SELECT
     m.*,
-    -- Product fields (parent)
-    p.[Name],
-    p.[Description],
-    p.[Price],
-    p.[SKU]
-FROM
-    [dbo].[Meeting] AS m
-INNER JOIN
-    [dbo].[Product] AS p ON m.[ID] = p.[ID]
-WHERE
-    m.[__mj_DeletedAt] IS NULL
+    p.[Name], p.[Description], p.[Price], p.[SKU]
+FROM [dbo].[Meeting] AS m
+INNER JOIN [dbo].[Product] AS p ON m.[ID] = p.[ID]
+WHERE m.[__mj_DeletedAt] IS NULL
 GO
-
--- Root entity: vwProducts (no parent chain)
--- Generated normally, no special handling
 ```
 
 ### Generated Stored Procedures (Single-Table Only)
@@ -850,7 +582,6 @@ CREATE PROC [dbo].[spCreateWebinar]
 AS
     INSERT INTO [dbo].[Webinar] (ID, StreamingURL, IsRecorded, WebinarProvider)
     VALUES (@ID, @StreamingURL, @IsRecorded, @WebinarProvider)
-
     SELECT * FROM [dbo].[vwWebinars] WHERE [ID] = @ID
 GO
 
@@ -863,7 +594,6 @@ CREATE PROC [dbo].[spCreateMeeting]
 AS
     INSERT INTO [dbo].[Meeting] (ID, MeetingPlatform, MaxAttendees, DurationMinutes)
     VALUES (@ID, @MeetingPlatform, @MaxAttendees, @DurationMinutes)
-
     SELECT * FROM [dbo].[vwMeetings] WHERE [ID] = @ID
 GO
 
@@ -877,374 +607,592 @@ CREATE PROC [dbo].[spCreateProduct]
 AS
     INSERT INTO [dbo].[Product] (ID, Name, Description, Price, SKU)
     VALUES (@ID, @Name, @Description, @Price, @SKU)
-
     SELECT * FROM [dbo].[vwProducts] WHERE [ID] = @ID
 GO
 ```
 
-Same pattern for spUpdate (each updates only its own table) and spDelete (each deletes only its own row).
+---
+
+## Object Composition Architecture
+
+### Why ORM Composition, Not SP Chaining
+
+If `spCreateMeeting` called `spCreateProduct` at the SQL level, we'd bypass everything the ORM provides for ProductEntity: subclass validation, BeforeSave/AfterSave events, Entity Actions, custom business logic. **SP chaining violates the core principle that business logic lives in entity classes, not stored procedures.**
+
+### Persistent `_parentEntity` Model
+
+Each IS-A child entity holds a **persistent** reference to its parent entity instance. This reference lives for the entity's lifetime — whether that's a brief resolver call on the server or a long-lived cached object in a `BaseEngine` subclass.
+
+```mermaid
+classDiagram
+    class BaseEntity {
+        -_parentEntity: BaseEntity
+        -_parentEntityFieldNames: Set~string~
+        +Set(fieldName, value) void
+        +Get(fieldName) unknown
+        +SetMany(data) void
+        +GetAll() Record
+        +Dirty: boolean
+        +Validate() ValidationResult
+        +Save(options) Promise~boolean~
+        +Delete(options) Promise~boolean~
+        +ProviderTransaction: unknown
+        #InitializeParentEntity() Promise~void~
+    }
+
+    class MeetingEntity {
+        +MeetingPlatform: string
+        +MaxAttendees: int
+        +DurationMinutes: int
+        +Name: string ~~routed to parent~~
+        +Price: decimal ~~routed to parent~~
+        +SKU: string ~~routed to parent~~
+    }
+
+    class ProductEntity {
+        +Name: string
+        +Description: string
+        +Price: decimal
+        +SKU: string
+    }
+
+    class WebinarEntity {
+        +StreamingURL: string
+        +IsRecorded: boolean
+        +WebinarProvider: string
+        +MeetingPlatform: string ~~routed~~
+        +Name: string ~~routed~~
+    }
+
+    BaseEntity <|-- ProductEntity
+    BaseEntity <|-- MeetingEntity
+    BaseEntity <|-- WebinarEntity
+    MeetingEntity *-- ProductEntity : _parentEntity
+    WebinarEntity *-- MeetingEntity : _parentEntity
+```
+
+### Runtime Object Structure
+
+```
+WebinarEntity instance
+├── _parentEntity → MeetingEntity instance
+│   ├── _parentEntity → ProductEntity instance
+│   │   ├── EntityFields: [ID, Name, Description, Price, SKU]
+│   │   └── _parentEntity: null (root)
+│   ├── EntityFields: [ID, MeetingPlatform, MaxAttendees, DurationMinutes]
+│   └── _parentEntityFieldNames: {Name, Description, Price, SKU}
+├── EntityFields: [ID, StreamingURL, IsRecorded, WebinarProvider,
+│                   MeetingPlatform*, MaxAttendees*, DurationMinutes*,
+│                   Name*, Description*, Price*, SKU*]
+│                   (* = virtual/mirror fields for UI)
+└── _parentEntityFieldNames: {MeetingPlatform, MaxAttendees, DurationMinutes,
+                               Name, Description, Price, SKU}
+```
+
+### Initialization Sequence
+
+`_parentEntity` must exist before any data operations (Load, NewRecord, Set, Get). It is created during entity initialization:
+
+```typescript
+// In BaseEntity — called from GetEntityObject pipeline
+protected async InitializeParentEntity(): Promise<void> {
+    if (!this.EntityInfo?.IsChildType) return;
+
+    const md = new Metadata();
+    this._parentEntity = await md.GetEntityObject(
+        this.EntityInfo.ParentEntity.Name,
+        this._contextCurrentUser
+    );
+    // ParentEntityFieldNames is computed/cached on EntityInfo
+    this._parentEntityFieldNames = this.EntityInfo.ParentEntityFieldNames;
+}
+```
+
+The exact hook point in the entity lifecycle (during `GetEntityObject()` completion, or as a lazy init before first data operation) will be determined during implementation. The requirement is: **_parentEntity is fully initialized before any Load/NewRecord/Set/Get call.**
+
+### BaseEngine Cache Interaction
+
+`BaseEngine` caches entity objects by reference for the server's lifetime. Entity `Save()` raises events that BaseEngine catches for cache sync via immediate mutation or debounced refresh. With persistent `_parentEntity`, the parent entity lives alongside the child in memory. When the child is updated and re-cached, the parent state is preserved.
 
 ---
 
-## ORM Composition Architecture
+## Set/Get/SetMany Routing
 
-### Why Not SP Chaining
+### Design Principle
 
-If `spCreateMeeting` directly called `spCreateProduct` at the SQL level, we would bypass everything the ORM layer provides for ProductEntity:
+All data routing is **generic in BaseEntity** using `EntityInfo.ParentEntityFieldNames`. No per-subclass overrides for data access. The routing is transparent: code calling `entity.Set('Name', value)` or `entity.Name = value` doesn't know or care whether `Name` belongs to the entity's own table or a parent table.
 
-- **Subclass validation** — someone wrote a `ProductEntityExtended` with custom `Validate()`
-- **BeforeSave/AfterSave events** — registered handlers on ProductEntity
-- **Entity Actions** — validation and save actions configured on Products
-- **Custom business logic** — any subclass overrides
+### Set() Routing
 
-The whole point of the ORM is that business logic lives in entity classes, not in stored procedures. **SP chaining violates that principle.**
-
-### Composition Model
-
-Each child entity class holds an internal instance of its parent entity class. The parent is a real, fully-functional entity object — same class used everywhere, with all subclass logic, validation, and events.
+```mermaid
+flowchart TD
+    A["Set(fieldName, value)"] --> B{_parentEntity exists<br/>AND fieldName in<br/>_parentEntityFieldNames?}
+    B -->|Yes| C["_parentEntity.Set(fieldName, value)<br/>(recursive — handles N-level)"]
+    C --> D["Also update mirror field on self<br/>super.Set(fieldName, value)<br/>for UI compatibility"]
+    B -->|No| E["super.Set(fieldName, value)<br/>normal local field set"]
+```
 
 ```typescript
-// Generated by CodeGen — SAME class on client and server
-class MeetingEntity extends BaseEntity {
-    private _parentEntity: ProductEntity;
-
-    // Initialized during Load() or NewRecord()
-    protected async InitParentEntity(): Promise<void> {
-        const md = new Metadata();
-        this._parentEntity = await md.GetEntityObject<ProductEntity>('Products');
+// In BaseEntity — generic override
+public Set(fieldName: string, value: unknown): void {
+    if (this._parentEntity && this._parentEntityFieldNames?.has(fieldName)) {
+        // Route to parent (recursive for N-level chains)
+        this._parentEntity.Set(fieldName, value);
+        // Mirror on self for UI — virtual EntityField gets value
+        // but authoritative state is on _parentEntity
+        super.Set(fieldName, value);
+        return;
     }
+    super.Set(fieldName, value);
+}
+```
 
-    // --- Parent field delegation ---
-    // Parent fields are writable through the child entity
-    get Name(): string { return this._parentEntity.Name; }
-    set Name(val: string) { this._parentEntity.Name = val; }
-    get Description(): string { return this._parentEntity.Description; }
-    set Description(val: string) { this._parentEntity.Description = val; }
-    get Price(): number { return this._parentEntity.Price; }
-    set Price(val: number) { this._parentEntity.Price = val; }
-    get SKU(): string { return this._parentEntity.SKU; }
-    set SKU(val: string) { this._parentEntity.SKU = val; }
+### Get() Routing
 
-    // --- Own fields (normal generated getters/setters) ---
-    get MeetingPlatform(): string { return this.Get('MeetingPlatform'); }
-    set MeetingPlatform(val: string) { this.Set('MeetingPlatform', val); }
-    get MaxAttendees(): number { return this.Get('MaxAttendees'); }
-    set MaxAttendees(val: number) { this.Set('MaxAttendees', val); }
-
-    // --- Validation includes parent ---
-    Validate(): ValidationResult {
-        const parentResult = this._parentEntity.Validate();
-        const ownResult = super.Validate();
-        return mergeValidationResults(parentResult, ownResult);
+```typescript
+// In BaseEntity — generic override
+public Get(fieldName: string): unknown {
+    if (this._parentEntity && this._parentEntityFieldNames?.has(fieldName)) {
+        return this._parentEntity.Get(fieldName); // Authoritative value from parent
     }
+    return super.Get(fieldName);
+}
+```
 
-    // --- Dirty includes parent ---
-    get Dirty(): boolean {
-        return super.Dirty || (this._parentEntity?.Dirty ?? false);
-    }
+### SetMany() Routing
 
-    // --- GetAll() includes parent fields for serialization ---
-    GetAll(): Record<string, unknown> {
-        return { ...this._parentEntity.GetAll(), ...super.GetAll() };
-    }
+`SetMany()` in BaseEntity directly accesses `EntityField.Value` rather than calling `Set()`. We override to split data between parent and self:
 
-    // --- Save orchestrates parent chain ---
-    async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const isTopOfChain = !options?.IsParentEntitySave;
+```typescript
+public SetMany(data: Record<string, unknown>, ...args): void {
+    // Set ALL fields on self first (including parent fields as mirrors)
+    super.SetMany(data, ...args);
 
-        if (isTopOfChain) {
-            // We're the leaf entity initiating the save — open transaction
-            const txCtx = await this.BeginEntityTransaction();
-            this._parentEntity.TransactionContext = txCtx;
+    // Route parent fields to _parentEntity for authoritative state
+    if (this._parentEntity && this._parentEntityFieldNames) {
+        const parentData: Record<string, unknown> = {};
+        for (const key of Object.keys(data)) {
+            if (this._parentEntityFieldNames.has(key)) {
+                parentData[key] = data[key];
+            }
         }
-
-        try {
-            // Save parent (with flag — provider decides behavior)
-            const parentResult = await this._parentEntity.Save({
-                ...options,
-                IsParentEntitySave: true
-            });
-            if (!parentResult) {
-                if (isTopOfChain) await this.RollbackEntityTransaction();
-                return false;
-            }
-
-            // Save own table
-            const result = await super.Save(options);
-            if (!result) {
-                if (isTopOfChain) await this.RollbackEntityTransaction();
-                return false;
-            }
-
-            if (isTopOfChain) await this.CommitEntityTransaction();
-            return true;
-        } catch (e) {
-            if (isTopOfChain) await this.RollbackEntityTransaction();
-            throw e;
+        if (Object.keys(parentData).length > 0) {
+            this._parentEntity.SetMany(parentData, ...args);
         }
     }
 }
 ```
 
-### N-Level Composition (Webinar → Meeting → Product)
+### GetAll() Merging
 
-The composition nests naturally:
-
+```typescript
+public GetAll(): Record<string, unknown> {
+    const ownData = super.GetAll();
+    if (this._parentEntity) {
+        // Parent fields first, own fields override (for ID which exists in both)
+        return { ...this._parentEntity.GetAll(), ...ownData };
+    }
+    return ownData;
+}
 ```
-WebinarEntity
-  └─ _parentEntity: MeetingEntity
-       └─ _parentEntity: ProductEntity
+
+### Dirty Composition
+
+```typescript
+get Dirty(): boolean {
+    // Own fields (excluding virtual parent mirrors)
+    const ownDirty = this.Fields
+        .filter(f => !this._parentEntityFieldNames?.has(f.Name))
+        .some(f => f.Dirty);
+    // Parent chain
+    const parentDirty = this._parentEntity?.Dirty ?? false;
+    return ownDirty || parentDirty;
+}
 ```
 
-- `WebinarEntity.Save()` is called (leaf, `isTopOfChain = true`)
-- Opens transaction, shares context with MeetingEntity
-- Calls `MeetingEntity.Save({ IsParentEntitySave: true })`
-- MeetingEntity is NOT top of chain, shares context with ProductEntity
-- Calls `ProductEntity.Save({ IsParentEntitySave: true })`
-- ProductEntity has no parent — just saves (using shared transaction connection)
-- MeetingEntity saves own table (same transaction)
-- WebinarEntity saves own table (same transaction)
-- WebinarEntity commits
+### Validate() Composition
 
-Each level's full ORM pipeline fires: validation, subclass logic, events, actions, record changes.
+```typescript
+public Validate(): ValidationResult {
+    const parentResult = this._parentEntity?.Validate();
+    const ownResult = super.Validate();
+    if (parentResult) {
+        return mergeValidationResults(parentResult, ownResult);
+    }
+    return ownResult;
+}
+```
+
+### Why the Mirror?
+
+Parent field values exist in two places: the authoritative value on `_parentEntity` (used for Save/Dirty/Validate) and a mirror on the child's virtual EntityField (used for UI). The mirror ensures code iterating `entity.Fields` and accessing `Field.Value` still works. `Get()` always returns the authoritative value from `_parentEntity`.
 
 ---
 
-## Client/Server Save Orchestration
+## Load & NewRecord Flows
 
-### The Challenge
+### LoadFromData Flow
 
-The same entity class runs in two contexts:
+When loading a MeetingEntity, `vwMeetings` returns ALL fields (Meeting + Product via JOIN).
 
-1. **Client-side** (Angular): `BaseEntity.Save()` → `GraphQLDataProvider.Save()` → HTTP mutation → server
-2. **Server-side** (MJAPI): `BaseEntity.Save()` → `SQLServerDataProvider.Save()` → SQL execution → database
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Meeting as MeetingEntity
+    participant Product as ProductEntity<br/>(_parentEntity)
 
-On the client, we do NOT want separate network calls for each entity in the parent chain. The child's mutation should carry all fields, and the server should orchestrate the real multi-table save.
+    Caller->>Meeting: LoadFromData(viewData)
+    Note over Meeting: viewData contains:<br/>ID, MeetingPlatform, MaxAttendees,<br/>Name, Description, Price, SKU
 
-### Solution: `EntitySaveOptions.IsParentEntitySave`
+    Meeting->>Meeting: SetMany(viewData)
+    Note over Meeting: super.SetMany sets ALL fields<br/>on Meeting's EntityFields<br/>(including virtual mirrors)
 
-New option on `EntitySaveOptions`:
+    Meeting->>Product: SetMany(parentFields)
+    Note over Product: Product's EntityFields get:<br/>Name, Description, Price, SKU<br/>with proper OldValue tracking
+
+    Note over Meeting,Product: Both entities start clean<br/>(OldValue = Value, not dirty)
+```
+
+Key: `SetMany` routing (described above) automatically distributes data. The resolver/RunView calls `entity.LoadFromData()` or `entity.SetMany()` exactly as it does today — no code change needed.
+
+### NewRecord Flow
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Meeting as MeetingEntity
+    participant Product as ProductEntity<br/>(_parentEntity)
+
+    Caller->>Meeting: NewRecord()
+    Meeting->>Meeting: Generate UUID for ID<br/>(existing logic in BaseEntity)
+
+    Note over Meeting: IS-A chain detected<br/>Propagate ID to parent
+
+    Meeting->>Product: NewRecord()
+    Meeting->>Product: Set('ID', meetingUUID)
+    Note over Product: Product now has same<br/>UUID as Meeting
+
+    Meeting-->>Caller: true
+```
+
+The ID propagation happens in BaseEntity's `NewRecord()` override:
+
+```typescript
+public NewRecord(newValues?: FieldValueCollection): boolean {
+    const result = super.NewRecord(newValues); // Generates UUID
+
+    // Propagate ID to parent entity
+    if (this._parentEntity && result) {
+        this._parentEntity.NewRecord();
+        // Share the same PK value
+        for (const pk of this.EntityInfo.PrimaryKeys) {
+            this._parentEntity.Set(pk.Name, this.Get(pk.Name));
+        }
+    }
+    return result;
+}
+```
+
+---
+
+## Save Orchestration
+
+### Key Principle: Leaf Awareness
+
+Every entity in an IS-A chain is a **potential leaf** (the entity whose Save() was directly called). Meeting is a leaf when saving a Meeting directly. Webinar is a leaf when saving a Webinar. The leaf:
+1. Orchestrates the parent chain upward (root first, then down to leaf)
+2. On client: sends ONE network call with all chain fields
+3. On server: manages the SQL transaction
+
+### EntitySaveOptions Addition
 
 ```typescript
 export class EntitySaveOptions {
     // ... existing options ...
 
     /**
-     * When true, indicates this entity is being saved as part of a parent
-     * chain initiated by a child entity. Provider-specific behavior:
-     * - GraphQLDataProvider: full validation pipeline runs, but skip network call
-     * - SQLServerDataProvider: real save, using shared transaction connection
+     * When true, this entity is being saved as part of an IS-A parent chain
+     * initiated by a child entity. Provider behavior:
+     * - GraphQLDataProvider: full ORM pipeline runs, skip network call
+     * - SQLServerDataProvider: real save using shared ProviderTransaction
      */
     IsParentEntitySave?: boolean = false;
 }
 ```
 
-### Provider Behavior
+### Generic Orchestration in BaseEntity._InnerSave()
 
-**GraphQLDataProvider.Save():**
+The save chain logic lives in `BaseEntity._InnerSave()` — NOT in generated subclasses. BaseEntity detects IS-A parents and orchestrates automatically:
+
 ```typescript
-async Save(entity, user, options) {
-    if (options.IsParentEntitySave) {
-        // Full ORM pipeline already ran in BaseEntity._InnerSave():
-        //   CheckPermissions ✓
-        //   Validate() ✓
-        //   ValidateAsync() ✓
-        //   BeforeSave events ✓
-        //   Subclass overrides ✓
-        //
-        // But skip the network call — the child's mutation carries all fields.
-        return entity.GetAll();  // Return current state, no HTTP
+// In BaseEntity._InnerSave() — new IS-A orchestration block
+// Added BEFORE the existing permission check / validation / provider save
+
+const isInitiator = !_options?.IsParentEntitySave;
+const hasParentChain = this._parentEntity != null;
+
+if (hasParentChain && isInitiator) {
+    // I'm the leaf/initiator — begin provider transaction
+    const txn = await this.ProviderToUse.BeginTransaction?.();
+    if (txn) {
+        this.ProviderTransaction = txn;
+        this.PropagateTransactionToParents();
     }
-    // ... normal mutation logic — sends ALL fields including parent fields via GetAll() ...
+}
+
+if (hasParentChain) {
+    // Save parent first (root → branch → ... → immediate parent)
+    const parentResult = await this._parentEntity.Save({
+        ...(_options ?? {}),
+        IsParentEntitySave: true
+    });
+    if (!parentResult) {
+        if (isInitiator && this.ProviderTransaction) {
+            await this.ProviderToUse.RollbackTransaction?.(this.ProviderTransaction);
+        }
+        return false;
+    }
+}
+
+// ... existing save logic (CheckPermissions, Validate, provider.Save) ...
+
+if (isInitiator && this.ProviderTransaction) {
+    await this.ProviderToUse.CommitTransaction?.(this.ProviderTransaction);
 }
 ```
 
-**SQLServerDataProvider.Save():**
-```typescript
-async Save(entity, user, options) {
-    // Normal save — uses transaction connection if available
-    const request = entity.TransactionContext?.Connection
-        ? new sql.Request(entity.TransactionContext.Connection)
-        : new sql.Request(this._pool);
-
-    // Execute SP (single-table only)
-    const result = await request.query(sSQL);
-    return result;
-}
-```
-
-On the server, `IsParentEntitySave` doesn't change SQL behavior — the save is real either way. The flag just tells BaseEntity whether to open/close the transaction (only the top of chain does that).
-
-### Server-Side Resolver Handling
-
-When the server receives a `CreateMeeting` mutation with all fields (Meeting + Product):
-
-1. Resolver calls `GetEntityObject('Meetings')` → gets MeetingEntity (with internal ProductEntity)
-2. Sets all field values from mutation input on the MeetingEntity (parent fields delegate to ProductEntity)
-3. Calls `entity.Save()` → MeetingEntity orchestrates the chain:
-   - Opens SQL transaction
-   - Saves ProductEntity (real INSERT via spCreateProduct)
-   - Saves MeetingEntity (real INSERT via spCreateMeeting)
-   - Commits transaction
-4. Returns complete record from `vwMeetings`
-
-### Flow Summary
+### Client-Side Save Flow
 
 ```mermaid
-flowchart TD
-    subgraph "Client Side"
-        C1[MeetingEntity.Save] --> C2[ProductEntity.Save<br/>IsParentEntitySave=true]
-        C2 --> C3[Validate, BeforeSave,<br/>Subclass logic fires]
-        C3 --> C4[GraphQLDataProvider.Save]
-        C4 --> C5[Skip network call<br/>return entity.GetAll]
-        C5 --> C6[MeetingEntity continues<br/>own Save]
-        C6 --> C7[GraphQLDataProvider.Save<br/>sends ONE mutation<br/>with ALL fields]
-    end
+sequenceDiagram
+    participant Caller
+    participant Meeting as MeetingEntity
+    participant Product as ProductEntity<br/>(_parentEntity)
+    participant GQL as GraphQLDataProvider
+    participant Server as MJAPI Server
 
-    C7 -->|HTTP| S1
+    Caller->>Meeting: meeting.Name = 'Standup'
+    Note over Meeting: Set() routes to _parentEntity
+    Meeting->>Product: product.Set('Name', 'Standup')
 
-    subgraph "Server Side"
-        S1[Resolver receives mutation<br/>all fields in payload] --> S2[GetEntityObject MeetingEntity]
-        S2 --> S3[Set all values from input]
-        S3 --> S4[entity.Save]
-        S4 --> S5[BEGIN TRANSACTION]
-        S5 --> S6[ProductEntity.Save<br/>IsParentEntitySave=true]
-        S6 --> S7[SQLServerDataProvider<br/>EXEC spCreateProduct<br/>on shared connection]
-        S7 --> S8[MeetingEntity own Save]
-        S8 --> S9[SQLServerDataProvider<br/>EXEC spCreateMeeting<br/>on shared connection]
-        S9 --> S10[COMMIT TRANSACTION]
-        S10 --> S11[Return vwMeetings record]
-    end
+    Caller->>Meeting: meeting.MaxAttendees = 50
+    Caller->>Meeting: Save()
+
+    Note over Meeting: isInitiator = true<br/>Begin transaction → no-op on client
+
+    Meeting->>Product: Save({ IsParentEntitySave: true })
+    Product->>Product: CheckPermissions ✓
+    Product->>Product: Validate() ✓
+    Product->>Product: BeforeSave events ✓
+    Product->>GQL: provider.Save(product, options)
+    Note over GQL: IsParentEntitySave = true<br/>→ skip network call<br/>→ return entity.GetAll()
+    GQL-->>Product: current state (no HTTP)
+
+    Note over Meeting: Parent saved, now save self
+    Meeting->>Meeting: CheckPermissions ✓
+    Meeting->>Meeting: Validate() ✓
+    Meeting->>GQL: provider.Save(meeting)
+    Note over GQL: Normal save path<br/>GetAll() includes parent fields
+    GQL->>Server: ONE CreateMeeting mutation<br/>with Name, MaxAttendees, etc.
+
+    Server-->>GQL: vwMeetings record
+    GQL-->>Meeting: finalizeSave()
+    Meeting-->>Caller: true
 ```
+
+### Server-Side Save Flow
+
+```mermaid
+sequenceDiagram
+    participant Resolver
+    participant Meeting as MeetingEntity
+    participant Product as ProductEntity<br/>(_parentEntity)
+    participant SQLProv as SQLServerDataProvider
+    participant DB as SQL Server
+
+    Resolver->>Meeting: GetEntityObject('Meetings')
+    Note over Meeting: _parentEntity (Product)<br/>created during init
+
+    Resolver->>Meeting: SetMany(mutationInput)
+    Note over Meeting: SetMany routes parent fields<br/>to _parentEntity automatically
+
+    Resolver->>Meeting: Save()
+
+    Note over Meeting: isInitiator = true
+
+    Meeting->>SQLProv: BeginTransaction()
+    SQLProv->>DB: BEGIN TRANSACTION
+    SQLProv-->>Meeting: sql.Transaction
+
+    Note over Meeting: Share transaction with parent
+    Meeting->>Product: .ProviderTransaction = txn
+
+    Meeting->>Product: Save({ IsParentEntitySave: true })
+    Product->>Product: CheckPermissions ✓
+    Product->>Product: Validate() ✓
+    Product->>SQLProv: provider.Save(product)
+    SQLProv->>DB: EXEC spCreateProduct<br/>(on shared transaction)
+    DB-->>SQLProv: Product row
+    SQLProv-->>Product: finalizeSave()
+
+    Note over Meeting: Parent saved, now save self
+    Meeting->>Meeting: CheckPermissions ✓
+    Meeting->>Meeting: Validate() ✓
+    Meeting->>SQLProv: provider.Save(meeting)
+    SQLProv->>DB: EXEC spCreateMeeting<br/>(on shared transaction)
+    DB-->>SQLProv: Meeting row from vwMeetings
+    SQLProv-->>Meeting: finalizeSave()
+
+    Meeting->>SQLProv: CommitTransaction()
+    SQLProv->>DB: COMMIT
+    Meeting-->>Resolver: true
+```
+
+### Direct Branch Entity Save
+
+If someone directly grabs a MeetingEntity (which IS-A Product but also has Webinar as a potential child type) and calls Save():
+
+- Meeting IS the initiator. It orchestrates Product.Save() first, then its own save.
+- **It does NOT touch Webinar.** IS-A chains go upward only during save.
+- A Meeting record without a corresponding Webinar row is perfectly valid — it's just a Meeting.
 
 ---
 
-## Transaction Scoping
+## Delete Orchestration
 
-### Approach: Lightweight Transaction Context
+Delete goes in **reverse order** compared to save: child first, then parent. This is required because the child's PK is an FK to the parent's PK — deleting the parent first would violate the FK constraint.
 
-BaseEntity gets transaction lifecycle methods that are no-ops on client and real SQL transactions on server.
+### Flow
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Meeting as MeetingEntity
+    participant Product as ProductEntity<br/>(_parentEntity)
+    participant SQLProv as SQLServerDataProvider
+    participant DB as SQL Server
+
+    Caller->>Meeting: Delete()
+    Meeting->>Meeting: CheckPermissions(Delete) ✓
+
+    Note over Meeting: isInitiator = true
+    Meeting->>SQLProv: BeginTransaction()
+    SQLProv->>DB: BEGIN TRANSACTION
+
+    Note over Meeting: Delete OWN row first (FK requires it)
+    Meeting->>SQLProv: provider.Delete(meeting)
+    SQLProv->>DB: EXEC spDeleteMeeting @ID
+    DB-->>SQLProv: Success
+
+    Note over Meeting: Then delete parent
+    Meeting->>Product: Delete({ IsParentEntitySave: true })
+    Product->>SQLProv: provider.Delete(product)
+    SQLProv->>DB: EXEC spDeleteProduct @ID
+    DB-->>SQLProv: Success
+
+    Meeting->>SQLProv: CommitTransaction()
+    SQLProv->>DB: COMMIT
+    Meeting-->>Caller: true
+```
+
+### Parent Delete Protection
+
+Deleting a parent record directly (e.g., deleting a Product that has a Meeting child record) is blocked by FK constraints. The ORM layer adds a pre-delete check for a clear error message:
 
 ```typescript
-// New type for shared transaction state
-export class TransactionContext {
-    private _connection: unknown;  // sql.Transaction on server, null on client
-
-    get Connection(): unknown { return this._connection; }
-
-    constructor(connection?: unknown) {
-        this._connection = connection ?? null;
+// In BaseEntity._InnerDelete() — before provider.Delete()
+if (this.EntityInfo.IsParentType) {
+    const childCheck = await this.CheckForChildRecords();
+    if (childCheck.hasChildren) {
+        throw new Error(
+            `Cannot delete ${this.EntityInfo.Name} record '${this.PrimaryKey.Values()}': ` +
+            `it is referenced as a ${childCheck.childEntityName} record. ` +
+            `Delete the ${childCheck.childEntityName} record first.`
+        );
     }
 }
+```
 
-// New on BaseEntity
-export class BaseEntity {
-    private _transactionContext: TransactionContext | null = null;
+The child record check uses a single batch query (see [Disjoint Subtype Enforcement](#disjoint-subtype-enforcement)).
 
-    get TransactionContext(): TransactionContext | null {
-        return this._transactionContext;
-    }
-    set TransactionContext(ctx: TransactionContext | null) {
-        this._transactionContext = ctx;
-    }
+---
 
-    async BeginEntityTransaction(): Promise<TransactionContext> {
-        const ctx = await this.ProviderToUse.BeginTransaction();
-        this._transactionContext = ctx;
-        return ctx;
-    }
+## Provider Transaction Management
 
-    async CommitEntityTransaction(): Promise<void> {
-        if (this._transactionContext) {
-            await this.ProviderToUse.CommitTransaction(this._transactionContext);
-            this._transactionContext = null;
-        }
-    }
+### No New Transaction Abstraction
 
-    async RollbackEntityTransaction(): Promise<void> {
-        if (this._transactionContext) {
-            await this.ProviderToUse.RollbackTransaction(this._transactionContext);
-            this._transactionContext = null;
-        }
+We do NOT create a TransactionContext class. Instead, we use a lightweight property on BaseEntity and optional methods on IEntityDataProvider:
+
+```typescript
+// BaseEntity addition
+private _providerTransaction: unknown = null;
+get ProviderTransaction(): unknown { return this._providerTransaction; }
+set ProviderTransaction(value: unknown) { this._providerTransaction = value; }
+
+protected PropagateTransactionToParents(): void {
+    let current = this._parentEntity;
+    while (current) {
+        current.ProviderTransaction = this._providerTransaction;
+        current = current._parentEntity;
     }
+}
+```
+
+```typescript
+// IEntityDataProvider optional additions
+interface IEntityDataProvider {
+    // ... existing methods ...
+    BeginTransaction?(): Promise<unknown>;
+    CommitTransaction?(txn: unknown): Promise<void>;
+    RollbackTransaction?(txn: unknown): Promise<void>;
 }
 ```
 
 ### Provider Implementations
 
+**GraphQLDataProvider**: Does NOT implement transaction methods. `BeginTransaction?.()` returns undefined.
+
+**SQLServerDataProvider**:
+
 ```typescript
-// IEntityDataProvider interface additions
-interface IEntityDataProvider {
-    BeginTransaction(): Promise<TransactionContext>;
-    CommitTransaction(ctx: TransactionContext): Promise<void>;
-    RollbackTransaction(ctx: TransactionContext): Promise<void>;
-}
-
-// GraphQLDataProvider — no-ops
-async BeginTransaction(): Promise<TransactionContext> {
-    return new TransactionContext();  // Empty context
-}
-async CommitTransaction(ctx: TransactionContext): Promise<void> { /* no-op */ }
-async RollbackTransaction(ctx: TransactionContext): Promise<void> { /* no-op */ }
-
-// SQLServerDataProvider — real SQL transactions
-async BeginTransaction(): Promise<TransactionContext> {
+async BeginTransaction(): Promise<sql.Transaction> {
     const transaction = new sql.Transaction(this._pool);
     await transaction.begin();
-    return new TransactionContext(transaction);
+    return transaction;
 }
-async CommitTransaction(ctx: TransactionContext): Promise<void> {
-    await (ctx.Connection as sql.Transaction).commit();
+
+async CommitTransaction(txn: unknown): Promise<void> {
+    await (txn as sql.Transaction).commit();
 }
-async RollbackTransaction(ctx: TransactionContext): Promise<void> {
-    await (ctx.Connection as sql.Transaction).rollback();
+
+async RollbackTransaction(txn: unknown): Promise<void> {
+    await (txn as sql.Transaction).rollback();
+}
+
+// In Save() — use transaction when available
+async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}> {
+    const request = entity.ProviderTransaction
+        ? new sql.Request(entity.ProviderTransaction as sql.Transaction)
+        : new sql.Request(this._pool);
+    // ... existing SP execution using `request` ...
 }
 ```
 
-### How the Transaction Flows Through the Chain
+### Composing with TransactionGroup
 
-```mermaid
-sequenceDiagram
-    participant Webinar as WebinarEntity<br/>(leaf)
-    participant Meeting as MeetingEntity<br/>(mid-level)
-    participant Product as ProductEntity<br/>(root)
-    participant Provider as SQLServerDataProvider
-    participant DB as SQL Server
+If an IS-A entity is inside a `TransactionGroup`, the entity's Save() detects this and defers to the group instead of managing its own transaction. The `TransactionGroup` already handles atomic batching. The IS-A chain orchestration (parent-first save order) still applies, but the transaction lifecycle is managed by the group.
 
-    Note over Webinar: isTopOfChain = true
-    Webinar->>Provider: BeginEntityTransaction()
-    Provider->>DB: BEGIN TRANSACTION
-    Provider-->>Webinar: TransactionContext (holds connection)
-
-    Webinar->>Meeting: .TransactionContext = txCtx
-    Meeting->>Product: .TransactionContext = txCtx
-
-    Note over Webinar: Save parent chain first
-
-    Webinar->>Meeting: Save({ IsParentEntitySave: true })
-    Note over Meeting: isTopOfChain = false (flag is set)
-    Meeting->>Product: Save({ IsParentEntitySave: true })
-    Note over Product: No parent — normal save
-    Product->>Provider: Save(productEntity)
-    Provider->>DB: EXEC spCreateProduct<br/>(using txCtx connection)
-    DB-->>Provider: Product row
-    Provider-->>Product: data
-
-    Meeting->>Provider: Save(meetingEntity)
-    Provider->>DB: EXEC spCreateMeeting<br/>(using txCtx connection)
-    DB-->>Provider: Meeting row
-    Provider-->>Meeting: data
-
-    Webinar->>Provider: Save(webinarEntity) [super.Save()]
-    Provider->>DB: EXEC spCreateWebinar<br/>(using txCtx connection)
-    DB-->>Provider: Webinar row
-    Provider-->>Webinar: data
-
-    Webinar->>Provider: CommitEntityTransaction()
-    Provider->>DB: COMMIT
+```typescript
+// In BaseEntity._InnerSave() orchestration
+if (this.TransactionGroup) {
+    // Already in a transaction group — don't create a new transaction.
+    // The group handles atomicity. We just orchestrate the parent chain.
+} else if (isInitiator && hasParentChain) {
+    // Standalone IS-A save — create provider transaction
+    const txn = await this.ProviderToUse.BeginTransaction?.();
+    // ...
+}
 ```
-
-All three inserts execute on the **same SQL connection** within a single transaction. If any save fails, the leaf entity catches the error and rolls back the entire chain.
 
 ---
 
@@ -1252,184 +1200,69 @@ All three inserts execute on the **same SQL connection** within a single transac
 
 ### Natural Per-Level Tracking
 
-With the ORM composition model, Record Changes happen naturally at each level. Each entity's `Save()` goes through `SQLServerDataProvider.Save()`, which calls `GetLogRecordChangeSQL()` for any entity with `TrackRecordChanges=true`.
-
-When saving a Webinar that changes `Name` (Product field), `MaxAttendees` (Meeting field), and `StreamingURL` (Webinar field):
+Each entity's Save() goes through the provider, which calls `GetLogRecordChangeSQL()` for entities with `TrackRecordChanges=true`. With ORM composition, each level records changes to its OWN fields:
 
 | Record Change Entry | Entity | RecordID | ChangesJSON |
 |---------------------|--------|----------|-------------|
 | 1 | Products | abc-123 | `{"Name": {"old": "Old", "new": "New"}}` |
 | 2 | Meetings | abc-123 | `{"MaxAttendees": {"old": 50, "new": 100}}` |
-| 3 | Webinars | abc-123 | `{"StreamingURL": {"old": "...", "new": "..."}}` |
 
-Each level records only changes to fields **owned by that entity's table**. The RecordID is the same at every level (shared PK), so querying the full change history by ID across all entities in the chain gives the complete picture.
-
-**Key behaviors:**
-- If only Webinar-specific fields changed, no Record Change entry is created for Product or Meeting (no dirty fields at those levels)
-- For creates, every level gets a Create record change entry
-- For deletes, every level gets a Delete record change entry
-- This all comes for free — no special code needed in `GetLogRecordChangeSQL()`
+- Same RecordID at every level (shared PK), so querying by ID gives full history
+- If only Meeting fields changed, no Record Change entry for Products (no dirty fields)
+- For creates, every level gets a Create entry
+- **Zero additional code needed** — this comes free from the ORM composition
 
 ---
 
-## Operation Flow Diagrams
+## Disjoint Subtype Enforcement
 
-### Create Operation (3-Level: Webinar → Meeting → Product)
+A parent record can only be ONE child type at a time. Enforced via single batch query during child entity creation:
 
-```mermaid
-sequenceDiagram
-    participant Caller
-    participant Webinar as WebinarEntity
-    participant Meeting as MeetingEntity<br/>(internal parent)
-    participant Product as ProductEntity<br/>(internal grandparent)
-    participant Provider as SQLServerDataProvider
-    participant DB as Database
-
-    Caller->>Webinar: Set fields: Name, Price,<br/>MeetingPlatform, MaxAttendees,<br/>StreamingURL, IsRecorded
-    Caller->>Webinar: Save()
-
-    Note over Webinar: Leaf entity — opens transaction
-    Webinar->>Provider: BeginEntityTransaction()
-    Provider->>DB: BEGIN TRANSACTION
-
-    Note over Webinar: Walk up parent chain
-
-    Webinar->>Meeting: Save({ IsParentEntitySave: true })
-    Meeting->>Meeting: Validate() [MeetingEntity subclass logic]
-    Meeting->>Product: Save({ IsParentEntitySave: true })
-    Product->>Product: Validate() [ProductEntity subclass logic]
-    Product->>Provider: Save(product)
-    Provider->>DB: EXEC spCreateProduct @ID, @Name, @Price...
-    DB-->>Provider: Product row
-    Provider-->>Product: finalizeSave()
-
-    Meeting->>Provider: Save(meeting)
-    Provider->>DB: EXEC spCreateMeeting @ID, @MeetingPlatform, @MaxAttendees...
-    DB-->>Provider: Meeting row
-    Provider-->>Meeting: finalizeSave()
-
-    Note over Webinar: Now save own table
-    Webinar->>Webinar: Validate() [WebinarEntity subclass logic]
-    Webinar->>Provider: Save(webinar)
-    Provider->>DB: EXEC spCreateWebinar @ID, @StreamingURL, @IsRecorded...
-    DB-->>Provider: Webinar row from vwWebinars (all fields)
-    Provider-->>Webinar: finalizeSave()
-
-    Webinar->>Provider: CommitEntityTransaction()
-    Provider->>DB: COMMIT
-
-    Webinar-->>Caller: true
+```sql
+-- Generated batch query for Meeting creation (checks sibling child types of Product)
+SELECT 'Publications' AS ChildEntity FROM [dbo].[Publication] WHERE [ID] = @ID
+UNION ALL
+SELECT 'Webinars' AS ChildEntity FROM [dbo].[Webinar] WHERE [ID] = @ID
+-- ... one SELECT per sibling child type
 ```
 
-### Delete Operation (Child Deletes Own Row, Then Parent Chain)
+If any rows returned, throw:
 
-```mermaid
-sequenceDiagram
-    participant Caller
-    participant Meeting as MeetingEntity
-    participant Product as ProductEntity<br/>(internal parent)
-    participant Provider as SQLServerDataProvider
-    participant DB as Database
-
-    Caller->>Meeting: Delete()
-    Meeting->>Meeting: CheckPermissions(Delete)
-
-    Note over Meeting: Open transaction
-    Meeting->>Provider: BeginEntityTransaction()
-    Provider->>DB: BEGIN TRANSACTION
-
-    Note over Meeting: Delete own row first
-    Meeting->>Provider: Delete(meeting)
-    Provider->>DB: EXEC spDeleteMeeting @ID
-    DB-->>Provider: Success
-
-    Note over Meeting: Then delete parent
-    Meeting->>Product: Delete({ IsParentEntitySave: true })
-    Product->>Provider: Delete(product)
-    Provider->>DB: EXEC spDeleteProduct @ID
-    DB-->>Provider: Success
-
-    Meeting->>Provider: CommitEntityTransaction()
-    Provider->>DB: COMMIT
-
-    Meeting-->>Caller: true
+```
+Cannot create Meetings record: ID 'abc-123' already exists as Publications.
+A Products record can only be one child type at a time.
 ```
 
-### Client-Side Save (Single Network Call)
+This check runs in `BaseEntity._InnerSave()` during CREATE operations on IS-A child entities. The batch query is constructed from `EntityInfo.ParentEntity.ChildEntities` (excluding self).
+
+---
+
+## Field Name Collision Detection
+
+### Hard Error in CodeGen
+
+When CodeGen creates virtual EntityField records for parent fields on child entities, it checks for name collisions:
 
 ```mermaid
-sequenceDiagram
-    participant Caller
-    participant Meeting as MeetingEntity
-    participant Product as ProductEntity<br/>(internal parent)
-    participant GQL as GraphQLDataProvider
-    participant Server as MJAPI Server
+flowchart TD
+    A[For each parent field<br/>to add to child entity] --> B{Child's OWN table<br/>has column with<br/>same name?}
+    B -->|Yes| C[HARD ERROR<br/>Log actionable message<br/>Skip entity generation]
+    B -->|No| D[Create virtual EntityField<br/>on child entity]
 
-    Caller->>Meeting: meeting.Name = 'Standup'
-    Note over Meeting: Delegates to _parentEntity
-    Meeting->>Product: product.Name = 'Standup'
-
-    Caller->>Meeting: meeting.MaxAttendees = 50
-    Caller->>Meeting: Save()
-
-    Note over Meeting: Save parent first
-    Meeting->>Product: Save({ IsParentEntitySave: true })
-    Product->>Product: Validate() ✓
-    Product->>Product: BeforeSave events ✓
-    Product->>GQL: Save(product, { IsParentEntitySave: true })
-    Note over GQL: IsParentEntitySave=true<br/>→ skip network call
-    GQL-->>Product: entity.GetAll()
-
-    Note over Meeting: Now save own entity
-    Meeting->>Meeting: Validate() ✓
-    Meeting->>GQL: Save(meeting)
-    Note over GQL: Normal save — GetAll() includes<br/>ALL fields (parent + own)
-    GQL->>Server: ONE CreateMeeting mutation<br/>with Name, MaxAttendees, etc.
-
-    Note over Server: Server orchestrates real saves<br/>Product first, then Meeting<br/>in SQL transaction
-
-    Server-->>GQL: Complete record from vwMeetings
-    GQL-->>Meeting: finalizeSave()
-    Meeting-->>Caller: true
+    C --> E["ERROR: Entity 'Meetings' cannot use IS-A<br/>with 'Products' — field collision on 'Name'.<br/>Meeting table has its own 'Name' column which<br/>conflicts with Product.Name.<br/>Remove or rename Meeting.Name to resolve."]
 ```
 
-### Virtual Entity Read Flow
-
-```mermaid
-sequenceDiagram
-    participant Caller
-    participant RunView
-    participant Provider
-    participant DB as Database
-
-    Caller->>RunView: RunView({ EntityName: 'Sales Summary',<br/>ResultType: 'simple' })
-    RunView->>Provider: Execute query
-    Provider->>DB: SELECT * FROM vwSalesSummary<br/>WHERE [filters]
-
-    Note over DB: vwSalesSummary is a virtual entity<br/>BaseTable = BaseView = 'vwSalesSummary'<br/>VirtualEntity = 1
-
-    DB-->>Provider: Result rows
-    Provider-->>RunView: Data
-    RunView-->>Caller: RunViewResult with Results[]
-
-    Note over Caller: Caller attempts Save()
-    Caller->>Caller: entity.Save()
-    Caller->>Caller: CheckPermissions(Create/Update)
-    Note over Caller: ERROR: Virtual entity is read-only
-```
+CodeGen continues processing other entities but marks the colliding entity as failed. No views, SPs, or entity classes are generated for it until the collision is resolved.
 
 ---
 
 ## CodeGen Changes
 
-### View Generation (`sql_codegen.ts`)
+### 4A: View Generation
 
-**New logic in `generateBaseView()`**: When `entity.ParentID` is set, auto-generate the parent JOIN chain.
-
-CodeGen walks the `ParentID` chain upward, generating INNER JOINs for each level. All non-PK, non-timestamp fields from each parent are included as virtual fields in the child's view.
+**`generateBaseView()`** in `sql_codegen.ts` gains a new `generateParentEntityJoins()` method. When `entity.ParentID` is set, auto-generates INNER JOIN chain upward through all parent entities. All non-PK, non-timestamp fields from each parent are included as columns in the child's view.
 
 ```typescript
-// Pseudocode for new generateParentEntityJoins() method
 protected generateParentEntityJoins(entity: EntityInfo): { joins: string, fields: string } {
     const joins: string[] = [];
     const fields: string[] = [];
@@ -1438,96 +1271,112 @@ protected generateParentEntityJoins(entity: EntityInfo): { joins: string, fields
 
     while (current.ParentEntity) {
         const parent = current.ParentEntity;
-        const alias = `p${depth}`;  // p0 = immediate parent, p1 = grandparent, etc.
-
-        // Join child PK to parent PK (shared PK pattern)
-        const prevAlias = depth === 0
-            ? entity.CodeName.charAt(0).toLowerCase()
-            : `p${depth - 1}`;
-        const pkJoins = current.PrimaryKeys
-            .map(pk => `${prevAlias}.[${pk.Name}] = ${alias}.[${pk.Name}]`)
-            .join(' AND ');
+        const alias = `p${depth}`;
+        const prevAlias = depth === 0 ? /*child alias*/ : `p${depth - 1}`;
 
         joins.push(
-            `INNER JOIN [${parent.SchemaName}].[${parent.BaseTable}] AS ${alias} ON ${pkJoins}`
+            `INNER JOIN [${parent.SchemaName}].[${parent.BaseTable}] AS ${alias} ON ${prevAlias}.[ID] = ${alias}.[ID]`
         );
 
-        // Include all non-PK, non-timestamp fields from parent
         for (const field of parent.Fields) {
             if (!field.IsPrimaryKey && !field.IsVirtual && !field.Name.startsWith('__mj_')) {
                 fields.push(`${alias}.[${field.Name}]`);
             }
         }
-
         current = parent;
         depth++;
     }
-
     return { joins: joins.join('\n'), fields: fields.join(',\n    ') };
 }
 ```
 
-### SP Generation (`sql_codegen.ts`)
+### 4B: SP Generation
 
-SPs are now **simple single-table only**. No multi-table logic, no parent calls. Each SP handles exactly one table.
+SPs are **single-table only**. When an entity has `ParentID`, the SP parameters include ONLY fields owned by that entity's table (not parent fields). Parent fields are handled by the parent entity's SP through the ORM chain.
 
-The key change is: when an entity has `ParentID` set, the SP parameters include ONLY the fields owned by that entity's table (not parent fields). Parent fields are handled by the parent entity's SP through the ORM chain.
+The SP's final SELECT still returns from the full view (e.g., `SELECT * FROM vwMeetings`), which includes parent fields via JOINs. Within the same SQL transaction, this correctly sees uncommitted parent INSERTs on the shared connection.
 
-### Entity Class Generation
+### 4C: GraphQL Schema Generation
 
-CodeGen generates the composition pattern for child entities:
+For IS-A child entities, CodeGen generates mutation input types that include all parent chain fields:
 
-1. Private `_parentEntity` property of the parent entity type
-2. Getter/setter wrappers for all parent fields that delegate to `_parentEntity`
-3. Override of `Save()` with parent chain orchestration
-4. Override of `Delete()` to delete child first, then call parent delete
-5. Override of `Validate()` to merge parent and own validation results
-6. Override of `Dirty` to include parent dirty state
-7. Override of `GetAll()` to include parent fields for serialization
-8. `InitParentEntity()` method to create and configure the internal parent instance
+```graphql
+# Generated for Meetings (IS-A Products)
+input CreateMeetingInput {
+    # Own fields
+    MeetingPlatform: String!
+    MaxAttendees: Int!
+    DurationMinutes: Int!
+    # Parent fields (from Products)
+    Name: String!
+    Description: String
+    Price: Float
+    SKU: String
+}
 
-### Metadata Sync (`manage-metadata.ts`)
-
-**New method**: `manageParentEntityFields()` — after entity fields are synced, create virtual EntityField records for parent fields on child entities.
-
-For each field in the parent entity (excluding PKs and timestamps), create a corresponding EntityField on the child entity with:
-- `IsVirtual = true` (field is in the view, not the child's table)
-- `AllowUpdateAPI = true` (writable through the child entity — ORM handles routing to parent)
-- Same `Type`, `Length`, `Precision`, `Scale` as the parent's field
-- `AllowsNull` matching the parent's field
-
-### Disjoint Subtype Enforcement
-
-Application-layer enforcement during save. Before creating a child record, verify no sibling child type already has that ID:
-
-```typescript
-// In BaseEntity or SQLServerDataProvider — during child entity create
-protected async EnforceDisjointChildTypes(entity: BaseEntity): Promise<void> {
-    const parentEntity = entity.EntityInfo.ParentEntity;
-    if (!parentEntity) return;
-
-    const siblings = parentEntity.ChildEntities.filter(
-        ce => ce.ID !== entity.EntityInfo.ID  // exclude self
-    );
-
-    for (const sibling of siblings) {
-        const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: sibling.Name,
-            ExtraFilter: `ID='${entity.PrimaryKey.Values()}'`,
-            ResultType: 'simple',
-            Fields: ['ID']
-        });
-        if (result.Results.length > 0) {
-            throw new Error(
-                `Cannot create ${entity.EntityInfo.Name} record: ` +
-                `ID ${entity.PrimaryKey.Values()} already exists as ${sibling.Name}. ` +
-                `A ${parentEntity.Name} record can only be one child type at a time.`
-            );
-        }
-    }
+# Generated for Webinars (IS-A Meetings IS-A Products)
+input CreateWebinarInput {
+    # Own fields
+    StreamingURL: String
+    IsRecorded: Boolean!
+    WebinarProvider: String
+    # Parent fields (from Meetings)
+    MeetingPlatform: String!
+    MaxAttendees: Int!
+    DurationMinutes: Int!
+    # Grandparent fields (from Products)
+    Name: String!
+    Description: String
+    Price: Float
+    SKU: String
 }
 ```
+
+### 4D: Entity Class Generation
+
+Generated subclasses are minimal. All IS-A logic is generic in BaseEntity. The generated code only needs:
+
+1. **`_parentEntity` initialization** — async, called during entity setup
+2. **Typed accessors for ALL fields** (own + parent) — same `Get()/Set()` pattern as existing
+
+```typescript
+// Generated MeetingEntity — IS-A additions are minimal
+@RegisterClass(BaseEntity, 'Meetings')
+export class MeetingEntity extends BaseEntity {
+    // --- Own fields (normal generation) ---
+    get MeetingPlatform(): string { return this.Get('MeetingPlatform'); }
+    set MeetingPlatform(val: string) { this.Set('MeetingPlatform', val); }
+    get MaxAttendees(): number { return this.Get('MaxAttendees'); }
+    set MaxAttendees(val: number) { this.Set('MaxAttendees', val); }
+    get DurationMinutes(): number { return this.Get('DurationMinutes'); }
+    set DurationMinutes(val: number) { this.Set('DurationMinutes', val); }
+
+    // --- Parent fields (routed via BaseEntity.Set/Get) ---
+    get Name(): string { return this.Get('Name'); }
+    set Name(val: string) { this.Set('Name', val); }
+    get Description(): string { return this.Get('Description'); }
+    set Description(val: string) { this.Set('Description', val); }
+    get Price(): number { return this.Get('Price'); }
+    set Price(val: number) { this.Set('Price', val); }
+    get SKU(): string { return this.Get('SKU'); }
+    set SKU(val: string) { this.Set('SKU', val); }
+}
+```
+
+The `InitializeParentEntity()`, `Set/Get` routing, `Save/Delete` orchestration, `Dirty/Validate` composition, and `NewRecord` ID propagation all live in `BaseEntity` and work automatically.
+
+### 4E: Metadata Sync
+
+New method `manageParentEntityFields()` in `manage-metadata.ts` — after entity fields are synced, create virtual EntityField records for parent fields on child entities:
+
+- `IsVirtual = true` (field is in view, not child's table)
+- `AllowUpdateAPI = true` (writable through child — ORM routes to parent)
+- Same Type, Length, Precision, Scale, AllowsNull as parent's field
+- Run collision detection before creating (see [Field Name Collision Detection](#field-name-collision-detection))
+
+### 4F: Resolver Generation (No Changes Needed)
+
+The resolver calls `entityObject.SetMany(input)` and `entityObject.Save()` — exactly as today. No resolver code changes. The only change is that mutation input types include more fields (parent chain fields), which is handled by 4C.
 
 ---
 
@@ -1535,13 +1384,12 @@ protected async EnforceDisjointChildTypes(entity: BaseEntity): Promise<void> {
 
 ### Entity Form Display
 
-For child entities, the form displays fields from both the child and parent in a unified view:
+For child entities, the form displays fields grouped by hierarchy level:
 
 ```
 ┌──────────────────────────────────────────────────────┐
 │  Webinar Form                [IS-A: Meeting > Product]│
 ├──────────────────────────────────────────────────────┤
-│                                                      │
 │  ── Product Fields (grandparent) ─────────────────── │
 │  Name:        [Q1 Planning Webinar  ]                │
 │  Description: [Quarterly planning...  ]              │
@@ -1562,128 +1410,318 @@ For child entities, the form displays fields from both the child and parent in a
 └──────────────────────────────────────────────────────┘
 ```
 
-All fields are editable — the ORM composition handles routing saves to the correct tables.
-
-### Entity List / Navigation
+### Entity List Badges
 
 ```
 Entities
-├── Products          [Parent type badge: "2 child types"]
-├── Meetings          [Child type badge: "IS-A Product", "1 child type"]
-├── Publications      [Child type badge: "IS-A Product"]
-├── Webinars          [Child type badge: "IS-A Meeting"]
-└── Sales Summary     [Virtual badge: "Read-Only View"]
+├── Products          [Parent type: "2 child types"]
+├── Meetings          [IS-A Product, "1 child type"]
+├── Publications      [IS-A Product]
+├── Webinars          [IS-A Meeting]
+└── Sales Summary     [Virtual: Read-Only View]
 ```
 
 ### Virtual Entity Display
 
-```
-┌──────────────────────────────────────────────────────┐
-│  Sales Summary                [Virtual: Read-Only]   │
-├──────────────────────────────────────────────────────┤
-│                                                      │
-│  ┌─────────────┬──────────┬───────────┐             │
-│  │ Region      │ Revenue  │ Orders    │             │
-│  ├─────────────┼──────────┼───────────┤             │
-│  │ Northeast   │ $1.2M    │ 340       │             │
-│  │ Southeast   │ $890K    │ 215       │             │
-│  │ Midwest     │ $1.1M    │ 298       │             │
-│  └─────────────┴──────────┴───────────┘             │
-│                                                      │
-│  [No Create/Edit/Delete buttons shown]               │
-└──────────────────────────────────────────────────────┘
-```
+No Create/Edit/Delete buttons. Read-only grid with "Virtual: Read-Only View" badge.
 
 ---
 
-## Migration Plan
+## Implementation Phases & Checklist
 
 ### Phase 1: Virtual Entity Tightening
-1. Add `VirtualEntity` guard in `BaseEntity.CheckPermissions()`
-2. Update `spCreateVirtualEntity` to support composite PKs (or document `additionalSchemaInfo` path)
-3. Add UI awareness (badges, hide CUD buttons)
-4. Update EntityInfo with `VirtualEntity`-aware computed properties
+
+- [ ] Add `VirtualEntity` guard in `BaseEntity.CheckPermissions()` (baseEntity.ts)
+  - [ ] Block Create, Update, Delete for virtual entities
+  - [ ] Throw meaningful error message including entity name
+  - [ ] Unit test: verify Save() and Delete() throw on virtual entity
+- [ ] Update `spCreateVirtualEntity` to support composite PKs (or document `additionalSchemaInfo` path)
+- [ ] Add UI awareness for virtual entities
+  - [ ] Surface `VirtualEntity` flag with distinct badge in entity forms
+  - [ ] Use `fa-eye` icon for virtual entities in entity lists
+  - [ ] Hide Create/Edit/Delete buttons entirely (not just disable)
+  - [ ] Show underlying view name prominently
 
 ### Phase 1B: Config-Driven Virtual Entity Creation
-1. Extend `additionalSchemaInfo` config format with `VirtualEntities` array (PascalCase property names)
-2. Add `processVirtualEntityConfig()` method in `manage-metadata.ts` — creates Entity records from config
-3. Ensure idempotent: skip entity creation if entity already exists for the view
-4. Integrate into CodeGen pipeline before `manageVirtualEntities()` — so newly created entities are immediately synced
-5. Update `database-metadata-config.template.json` with virtual entity examples
-6. Create JSON schema validation for the extended config format
+
+- [ ] Define `VirtualEntityConfig` interface (SchemaName, ViewName, EntityName, Description, PrimaryKey, ForeignKeys)
+- [ ] Extend `extractTablesFromConfig()` to also extract `VirtualEntities` array
+- [ ] Add `processVirtualEntityConfig()` method in `manage-metadata.ts`
+  - [ ] Check if entity already exists for each view name
+  - [ ] Create Entity record if not exists (VirtualEntity=1, BaseTable=BaseView=ViewName, CUD APIs=0)
+  - [ ] Idempotent: skip creation if entity exists
+- [ ] Integrate into CodeGen pipeline BEFORE `manageVirtualEntities()` so newly created entities are synced
+- [ ] Update `database-metadata-config.template.json` with virtual entity examples
+- [ ] Create JSON schema validation (`database-metadata-config.schema.json`)
 
 ### Phase 1C: LLM-Assisted Virtual Entity Field Decoration
-1. Create prompt template: `metadata/prompts/templates/codegen/virtual-entity-field-decoration.template.md`
-2. Create prompt metadata file: `metadata/prompts/.codegen-virtual-entity-field-decoration.json`
-3. Add `VirtualEntityDecorationResult` type and `decorateVirtualEntityFields()` method to `AdvancedGeneration` class
-4. Add `decorateVirtualEntityWithLLM()` integration method in `manage-metadata.ts`
-5. Fetch view SQL via `OBJECT_DEFINITION()` for LLM context
-6. Apply LLM results: set `IsPrimaryKey`, `RelatedEntityID`/`RelatedEntityFieldName`, copy source field descriptions
-7. Respect precedence chain: sys.columns → LLM → config overrides (soft flags protect config values)
-8. Ensure graceful fallback when LLM is unavailable
 
-### Phase 2: Parent/Child Type Metadata
-1. `Entity.ParentID` already exists — no column migration needed
-2. `vwEntities` already computes `ParentEntity`, `ParentBaseTable`, `ParentBaseView` — no view changes needed
-3. **EntityInfo**: Add computed getters (`ParentEntity`, `ChildEntities`, `ParentChain`, `IsChildType`, `IsParentType`, `AllParentFields`)
-4. **EntitySaveOptions**: Add `IsParentEntitySave` flag
-5. **BaseEntity**: Add `TransactionContext` property and `BeginEntityTransaction()` / `CommitEntityTransaction()` / `RollbackEntityTransaction()` methods
-6. **IEntityDataProvider**: Add `BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()` interface methods
+- [ ] Create prompt template: `metadata/prompts/templates/codegen/virtual-entity-field-decoration.template.md`
+- [ ] Create prompt metadata file: `metadata/prompts/.codegen-virtual-entity-field-decoration.json`
+- [ ] Define `VirtualEntityDecorationResult` type
+- [ ] Add `decorateVirtualEntityFields()` method to `AdvancedGeneration` class
+  - [ ] Accept entity info, view definition (via `OBJECT_DEFINITION()`), fields, available entities
+  - [ ] Execute prompt via `AIPromptRunner`
+  - [ ] Return structured result or null (graceful fallback)
+- [ ] Add `decorateVirtualEntityWithLLM()` integration in `manage-metadata.ts`
+  - [ ] Call after field sync from sys.columns, before applySoftPKFKConfig()
+  - [ ] Apply PK identifications (update `IsPrimaryKey` where `IsSoftPrimaryKey=0`)
+  - [ ] Apply FK identifications (set `RelatedEntityID`, `RelatedEntityFieldName`)
+  - [ ] Apply source field mappings (copy Description, ExtendedType from source)
+  - [ ] Apply computed field descriptions
+  - [ ] All updates via `LogSQLAndExecute()` for traceability
+- [ ] Idempotency: skip LLM call if all non-soft fields already have PK/FK info
+- [ ] Configure AI prompt model in `MJ: AI Prompt Models`
 
-### Phase 3: Provider Transaction Support
-1. **GraphQLDataProvider**: Implement transaction methods as no-ops; handle `IsParentEntitySave` in `Save()` (validate only, skip network call)
-2. **SQLServerDataProvider**: Implement real SQL transaction methods; use `TransactionContext.Connection` when available in `ExecuteSQL()`
-3. **Disjoint enforcement**: Add sibling check during child entity creation
+### Phase 2: IS-A Core Infrastructure (BaseEntity & EntityInfo)
 
-### Phase 4: CodeGen — Views and SPs
-1. **View generation**: Auto-join parent tables in child base views via `generateParentEntityJoins()`
-2. **SP generation**: SPs handle ONLY own table (simpler than before)
-3. **Metadata sync**: `manageParentEntityFields()` creates virtual EntityField records for parent fields on child entities
-4. **Entity class generation**: Generate composition pattern — `_parentEntity`, delegating getters/setters, `Save()` override with chain orchestration
+#### 2A: EntityInfo Computed Properties
+
+- [ ] Implement `ParentEntity` getter (find entity by ParentID)
+- [ ] Implement `ChildEntities` getter (filter entities by ParentID)
+- [ ] Implement `ParentChain` getter (walk up ParentID chain)
+- [ ] Implement `IsChildType` getter (`ParentID != null`)
+- [ ] Implement `IsParentType` getter (`ChildEntities.length > 0`)
+- [ ] Implement `AllParentFields` getter (all fields from parent chain, excluding PKs/timestamps)
+- [ ] Implement `ParentEntityFieldNames` getter (cached `Set<string>` for routing)
+- [ ] Add caching for computed properties (ParentChain, ChildEntities, ParentEntityFieldNames)
+- [ ] Unit tests for all computed properties with 1, 2, 3-level hierarchies
+
+#### 2B: BaseEntity `_parentEntity` Infrastructure
+
+- [ ] Add `_parentEntity: BaseEntity | null` private property
+- [ ] Add `_parentEntityFieldNames: Set<string> | null` private property
+- [ ] Implement `InitializeParentEntity()` async method
+  - [ ] Check `EntityInfo.IsChildType`
+  - [ ] Create parent entity via `Metadata.GetEntityObject()` with contextUser
+  - [ ] Set `_parentEntityFieldNames` from `EntityInfo.ParentEntityFieldNames`
+  - [ ] Handle N-level recursion (parent creates its own parent)
+- [ ] Hook `InitializeParentEntity()` into entity lifecycle (after EntityInfo available, before Load/NewRecord)
+- [ ] Unit test: verify _parentEntity chain is created correctly for 3-level hierarchy
+
+#### 2C: Set/Get/SetMany/GetAll Routing
+
+- [ ] Override `Set()` in BaseEntity
+  - [ ] Route parent fields to `_parentEntity.Set()` (recursive)
+  - [ ] Mirror parent field value on self via `super.Set()` for UI
+  - [ ] Pass through to `super.Set()` for own fields
+- [ ] Override `Get()` in BaseEntity
+  - [ ] Return `_parentEntity.Get()` for parent fields (authoritative)
+  - [ ] Return `super.Get()` for own fields
+- [ ] Override `SetMany()` in BaseEntity
+  - [ ] Call `super.SetMany()` with all data (mirrors for UI)
+  - [ ] Extract parent fields, call `_parentEntity.SetMany()` (authoritative)
+- [ ] Override `GetAll()` in BaseEntity
+  - [ ] Merge `_parentEntity.GetAll()` with `super.GetAll()`
+  - [ ] Own fields override parent fields (for shared PK 'ID')
+- [ ] Unit tests:
+  - [ ] Set parent field via Set() → Get() returns from parent
+  - [ ] SetMany with mixed fields → parent and own fields correctly split
+  - [ ] GetAll() includes all chain fields
+
+#### 2D: Dirty & Validate Composition
+
+- [ ] Override `Dirty` getter
+  - [ ] Check own fields (excluding parent field mirrors) for dirty state
+  - [ ] Include `_parentEntity?.Dirty`
+- [ ] Override `Validate()`
+  - [ ] Run `_parentEntity.Validate()` if parent exists
+  - [ ] Run `super.Validate()` for own fields
+  - [ ] Merge validation results
+- [ ] Implement `mergeValidationResults()` utility
+- [ ] Unit tests:
+  - [ ] Modify parent field → child shows Dirty
+  - [ ] Modify only child field → parent not Dirty
+  - [ ] Validate with invalid parent field → merged error includes parent error
+
+#### 2E: NewRecord ID Propagation
+
+- [ ] Override `NewRecord()` in BaseEntity
+  - [ ] Call `super.NewRecord()` (generates UUID)
+  - [ ] If `_parentEntity` exists: call `_parentEntity.NewRecord()`
+  - [ ] Propagate PK value: `_parentEntity.Set(pkName, this.Get(pkName))`
+- [ ] Unit test: verify child and parent share same UUID after NewRecord()
+
+#### 2F: EntitySaveOptions & Save Orchestration
+
+- [ ] Add `IsParentEntitySave?: boolean` to `EntitySaveOptions`
+- [ ] Add `ProviderTransaction: unknown` property to BaseEntity
+- [ ] Implement `PropagateTransactionToParents()` helper
+- [ ] Add IS-A orchestration block in `_InnerSave()`
+  - [ ] Detect initiator (`!options?.IsParentEntitySave`)
+  - [ ] Begin transaction if initiator with parent chain
+  - [ ] Propagate transaction to parent chain
+  - [ ] Save parent with `IsParentEntitySave: true` before own save
+  - [ ] Rollback on parent failure
+  - [ ] Commit after own save succeeds
+  - [ ] Handle composition with TransactionGroup (defer to group if present)
+- [ ] Unit tests:
+  - [ ] IS-A save orchestrates parent first on server
+  - [ ] IS-A save within TransactionGroup defers transaction to group
+  - [ ] Parent save failure rolls back entire chain
+
+#### 2G: Delete Orchestration
+
+- [ ] Add IS-A orchestration block in `_InnerDelete()`
+  - [ ] Delete OWN row first (FK constraint requires it)
+  - [ ] Then call `_parentEntity.Delete({ IsParentEntitySave: true })`
+  - [ ] Transaction management same pattern as save
+- [ ] Add parent delete protection
+  - [ ] Before deleting an `IsParentType` entity, check for child records
+  - [ ] Use batch query (UNION ALL across child entity tables)
+  - [ ] Throw clear error message with child entity name
+- [ ] Unit tests:
+  - [ ] Delete child → parent also deleted (within transaction)
+  - [ ] Delete parent directly → error if child records exist
+
+#### 2H: Disjoint Subtype Enforcement
+
+- [ ] Add disjoint check in `_InnerSave()` for CREATE operations on IS-A children
+  - [ ] Build batch query from `EntityInfo.ParentEntity.ChildEntities` (excluding self)
+  - [ ] Execute as single SQL batch
+  - [ ] Throw clear error if ID exists in any sibling child table
+- [ ] Unit test: attempt to create Meeting when Publication already exists with same ID → error
+
+### Phase 3: Provider Implementation
+
+#### 3A: IEntityDataProvider Transaction Methods
+
+- [ ] Add optional `BeginTransaction?(): Promise<unknown>` to IEntityDataProvider
+- [ ] Add optional `CommitTransaction?(txn: unknown): Promise<void>` to IEntityDataProvider
+- [ ] Add optional `RollbackTransaction?(txn: unknown): Promise<void>` to IEntityDataProvider
+
+#### 3B: SQLServerDataProvider Transaction Implementation
+
+- [ ] Implement `BeginTransaction()` — create `sql.Transaction` from pool
+- [ ] Implement `CommitTransaction()` — commit transaction
+- [ ] Implement `RollbackTransaction()` — rollback transaction
+- [ ] Modify `Save()` to use `entity.ProviderTransaction` when available
+  - [ ] If `ProviderTransaction` is set, create `sql.Request` from transaction
+  - [ ] Otherwise, use pool as today
+- [ ] Modify `Delete()` same pattern
+- [ ] Unit tests:
+  - [ ] Verify multiple SPs execute on same transaction
+  - [ ] Verify rollback on failure reverts all SPs
+
+#### 3C: GraphQLDataProvider IS-A Handling
+
+- [ ] In `Save()`: when `options.IsParentEntitySave === true`, skip network call
+  - [ ] Full ORM pipeline already ran (in BaseEntity._InnerSave)
+  - [ ] Return `entity.GetAll()` as save result (no HTTP)
+- [ ] Transaction methods: NOT implemented (optional interface methods left undefined)
+- [ ] Unit test: verify parent entity save doesn't trigger HTTP call
+
+### Phase 4: CodeGen
+
+#### 4A: View Generation with Parent JOINs
+
+- [ ] Implement `generateParentEntityJoins()` in `sql_codegen.ts`
+  - [ ] Walk `ParentID` chain upward
+  - [ ] Generate INNER JOIN for each level (PK-to-PK join)
+  - [ ] Include all non-PK, non-timestamp, non-virtual fields from each parent
+  - [ ] Handle column alias conflicts
+- [ ] Integrate into `generateBaseView()` — call when `entity.ParentID` is set
+- [ ] Unit test: verify generated SQL for 1, 2, 3-level hierarchies
+
+#### 4B: SP Generation (Single-Table)
+
+- [ ] When entity has `ParentID`, SP parameters include ONLY own-table fields
+  - [ ] Exclude parent fields from spCreate/spUpdate parameter lists
+  - [ ] Keep ID parameter (shared PK)
+  - [ ] SP SELECT still returns from full view (includes parent fields via JOIN)
+- [ ] Unit test: verify generated SP for Meeting only has Meeting table columns
+
+#### 4C: GraphQL Input Type Generation
+
+- [ ] When entity has `ParentID`, include parent chain fields in input types
+  - [ ] Walk ParentChain, collect all fields from each parent
+  - [ ] Exclude PKs (shared, auto-set), timestamps
+  - [ ] Apply proper nullability from parent field metadata
+- [ ] Generate for Create and Update input types
+- [ ] Unit test: verify CreateMeetingInput includes Product fields
+
+#### 4D: Entity Class Generation
+
+- [ ] When entity has `ParentID`, generate typed accessors for parent fields
+  - [ ] Same `Get()/Set()` pattern as own fields (routing is handled by BaseEntity)
+  - [ ] Include in Zod schema with proper types
+  - [ ] Mark parent field accessors with comment indicating parent source
+- [ ] Unit test: verify generated MeetingEntity has Name, Price, SKU accessors
+
+#### 4E: Metadata Sync — Parent Entity Fields
+
+- [ ] Implement `manageParentEntityFields()` in `manage-metadata.ts`
+  - [ ] For each entity with `ParentID`: iterate all parent fields
+  - [ ] Create virtual EntityField records (`IsVirtual=true`, `AllowUpdateAPI=true`)
+  - [ ] Match Type, Length, Precision, Scale, AllowsNull from parent field
+  - [ ] Skip PKs and timestamp fields
+  - [ ] Idempotent: update existing virtual fields, don't duplicate
+- [ ] Implement field collision detection
+  - [ ] Check if child's own table has column with same name as parent field
+  - [ ] HARD ERROR: log actionable message, skip entity generation
+- [ ] Integrate into CodeGen pipeline after regular field sync
+- [ ] Unit test: verify virtual fields created and collision detected
 
 ### Phase 5: UI Integration
-1. Entity form: Unified display of child + parent fields with section headers per level
-2. Entity list: Parent/child type badges and navigation
-3. Virtual entity: Read-only badges, hidden CUD buttons
-4. Entity admin: UI for setting `ParentID` on entities to establish IS-A relationships
 
-### Phase 6: Delete Orchestration
-1. Child entity `Delete()`: Delete own row first, then call parent entity delete (if no other children reference that parent record)
-2. Parent entity cascade: When deleting a parent record directly (e.g., deleting a Product), cascade to all child type records first
-3. Integrate with existing `CascadeDeletes` flag and soft/hard delete logic
+- [ ] Entity form: unified display with section headers per hierarchy level
+  - [ ] Use `EntityInfo.ParentChain` to determine grouping
+  - [ ] All fields editable (ORM handles routing)
+  - [ ] Show IS-A breadcrumb: `[IS-A: Meeting > Product]`
+- [ ] Entity list: parent/child type badges
+  - [ ] `IsParentType` → show "N child types" badge
+  - [ ] `IsChildType` → show "IS-A ParentName" badge
+- [ ] Virtual entity display
+  - [ ] Read-only badge, hidden CUD buttons
+  - [ ] Distinct icon (`fa-eye`)
+- [ ] Entity admin: UI for setting `ParentID` to establish IS-A relationships
+  - [ ] Dropdown of valid parent entities (filter out circular references)
+  - [ ] Warning about shared PK requirement
+
+### Phase 6: Advanced Delete & Enforcement
+
+- [ ] Integration with existing `CascadeDeletes` flag
+  - [ ] When `CascadeDeletes=true` on parent entity, auto-delete child records before parent
+  - [ ] When `CascadeDeletes=false`, require explicit child deletion first
+- [ ] Polymorphic delete queries
+  - [ ] "Delete this Product and whatever child type it is" — detect child type, load leaf entity, delete through chain
 
 ---
 
-## Open Questions & Future Work
+## Resolved Decisions
 
-### Resolved Decisions
-- **Column**: Reuse existing `Entity.ParentID` (no new column needed)
-- **Terminology**: "Parent entity / child entity" in code and UI
-- **PK sharing**: Child PK = Parent PK (same UUID, 1:1 guaranteed)
-- **Join definition**: Via existing `RelatedEntityID`/`RelatedEntityFieldName` on PK fields
-- **Single inheritance**: One `ParentID` per entity (no multiple inheritance)
-- **Disjoint subtypes**: Enforced — a parent record can only be one child type at a time
-- **SP design**: Single-table only, no chaining — ORM orchestrates the chain
-- **Entity classes**: Same class on client and server — provider interprets `IsParentEntitySave` flag
-- **Transactions**: Stub methods on BaseEntity — no-op on client, real SQL transactions on server
-- **Record Changes**: Natural per-level tracking — each entity's Save() generates its own record changes
-- **N-level depth**: Fully supported (practical limit ~3-4 levels)
-- **Virtual entity creation**: Declarative config-driven via `VirtualEntities` section in `additionalSchemaInfo` (replaces manual `spCreateVirtualEntity` calls)
-- **Config property naming**: PascalCase throughout (`FieldName`, `SchemaName`, `RelatedTable`, etc.) matching MJ naming conventions
-- **Config format**: Schema-as-key for table configs (e.g., `"dbo": [...]`), flat array for virtual entities (`"VirtualEntities": [...]`)
-- **LLM field decoration**: New `VirtualEntityDecoration` feature in AdvancedGeneration — auto-identifies PKs, FKs, source field mappings from view SQL
-- **Precedence chain**: sys.columns → LLM decoration → config overrides (soft PK/FK flags protect config values)
+| Decision | Resolution |
+|----------|-----------|
+| **Column for IS-A** | Reuse existing `Entity.ParentID` |
+| **Terminology** | "Parent entity / child entity" in code; "IS-A" in documentation |
+| **PK sharing** | Child PK = Parent PK (same UUID) |
+| **Single inheritance** | One `ParentID` per entity |
+| **Disjoint subtypes** | Enforced via single batch query |
+| **_parentEntity lifetime** | Persistent — lives for entity object's lifetime |
+| **Set/Get routing** | Generic in BaseEntity using `EntityInfo.ParentEntityFieldNames` |
+| **SetMany behavior** | Mirrors on child + routes to _parentEntity |
+| **Save orchestration** | Generic in BaseEntity._InnerSave(); NOT in generated subclasses |
+| **Delete order** | Child first → parent (FK constraint) |
+| **Client network** | Leaf sends ONE mutation; parent entities validate but skip network |
+| **Server transactions** | SQLServerDataProvider-level; `ProviderTransaction` property on BaseEntity |
+| **TransactionContext class** | NOT created — unnecessary abstraction |
+| **TransactionGroup composition** | IS-A defers to TransactionGroup if entity is in one |
+| **Resolver changes** | None — resolver calls SetMany/Save as today |
+| **Field collisions** | Hard error in CodeGen; skip entity until resolved |
+| **CodeGen entity class** | Minimal — only _parentEntity init + typed accessors |
+| **ParentID semantics** | No conflict with other ParentID fields; CodeGen is structural not name-based |
+| **Virtual entity creation** | Config-driven via `VirtualEntities` section in additionalSchemaInfo |
+| **LLM field decoration** | Precedence: sys.columns → LLM → config overrides |
 
-### Future Options
-1. **Overlapping subtypes**: Allow a parent record to be multiple child types simultaneously. Would require removing disjoint enforcement and handling ambiguity in leaf resolution. Configurable per parent entity.
-2. **Polymorphic load / leaf resolution**: `GetEntityObject('Products', user, { resolveToLeaf: true })` — given a Product ID, automatically detect if it's actually a Meeting or Publication and return the appropriate leaf entity type. Requires querying child tables to discover the actual type. Only deterministic with disjoint subtypes.
-3. **Database management agent**: Automate creation and configuration of IS-A relationships ("Meeting extends Product"), virtual entity creation from SQL views, schema diff analysis, and migration generation. Deferred to separate planning effort.
-4. **Multiple inheritance**: Would require a junction table (`EntityParents`) instead of a single `ParentID`. Significantly more complex for view generation and save orchestration. Very rarely needed in practice.
-5. **Polymorphic queries**: "Show me all Products regardless of child type" with type-discriminator column. The parent entity's view already shows all parent-level records; child-specific data requires joining child views.
+---
 
-### Technical Debt to Address
-1. **Entity.ParentID description**: Update the field description from "Reserved for future use" to document its IS-A type inheritance semantics
-2. **EntityEntity generated class**: Update JSDoc comments for `ParentID`, `ParentEntity`, `ParentBaseTable`, `ParentBaseView` to reflect IS-A meaning
-3. **Existing ParentID on other entities**: Ensure no confusion with `ParentID` fields on Action, ActionCategory, QueryCategory etc. (those are intra-entity hierarchy, unrelated to cross-entity IS-A)
-4. **JSON schema for config file**: Create `database-metadata-config.schema.json` to validate the extended config format (soft PKs/FKs + virtual entities)
-5. **LLM prompt model configuration**: Configure appropriate AI models for the `CodeGen: Virtual Entity Field Decoration` prompt in the `MJ: AI Prompt Models` relationship table
+## Future Work
+
+1. **Overlapping subtypes**: Allow parent record to be multiple child types. Requires removing disjoint enforcement. Configurable per parent entity.
+2. **Polymorphic load / leaf resolution**: `GetEntityObject('Products', user, { resolveToLeaf: true })` — given a Product ID, detect actual leaf type and return appropriate entity. Requires querying child tables. Only deterministic with disjoint subtypes.
+3. **Database management agent**: Automate IS-A relationship creation, virtual entity setup, schema analysis, migration generation.
+4. **Multiple inheritance**: Would require junction table (`EntityParents`) instead of singular `ParentID`. Significantly more complex.
+5. **Polymorphic queries**: "Show me all Products regardless of child type" with type-discriminator column.
+6. **Entity.ParentID description update**: Change from "Reserved for future use" to document IS-A semantics.
+7. **EntityEntity class JSDoc update**: Update comments for ParentID, ParentEntity, ParentBaseTable, ParentBaseView.
+8. **JSON schema for config file**: Create `database-metadata-config.schema.json` to validate extended config format.
