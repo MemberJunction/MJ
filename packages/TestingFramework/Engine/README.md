@@ -1,419 +1,190 @@
-# MemberJunction Testing Engine
+# @memberjunction/testing-engine
 
-Core execution engine for the MemberJunction Testing Framework. Provides the foundational infrastructure for running tests, evaluating results, and managing test execution.
+Core test execution and evaluation engine for the MemberJunction Testing Framework. Provides the driver/oracle architecture for running tests, evaluating results with multiple oracle strategies, and recording outcomes.
 
 ## Architecture
 
-The Testing Engine follows a driver-based architecture that allows for extensible test types:
+```mermaid
+graph TD
+    subgraph "@memberjunction/testing-engine"
+        A[TestEngine] --> B[Test Drivers]
+        A --> C[Oracles]
+        A --> D[Utilities]
 
-```
-TestEngine (Orchestration)
-    ↓
-BaseTestDriver (Abstract base class)
-    ↓
-Concrete Drivers:
-    - AgentEvalDriver
-    - WorkflowScenarioDriver (future)
-    - CodeGenTestDriver (future)
-    - IntegrationTestDriver (future)
-```
+        B --> E[BaseTestDriver]
+        E --> F[AgentEvalDriver]
 
-## Core Components
+        C --> G[ExactMatchOracle]
+        C --> H[LLMJudgeOracle]
+        C --> I[SchemaValidatorOracle]
+        C --> J[SQLValidatorOracle]
+        C --> K[TraceValidatorOracle]
 
-### 1. Test Engine (`TestEngine`)
-Main orchestration layer responsible for:
-- Loading test definitions from database
-- Instantiating appropriate test drivers via ClassFactory
-- Managing test execution lifecycle
-- Aggregating and storing results
-- Tracking costs and performance metrics
+        D --> L[Variable Resolver]
+        D --> M[Scoring Calculator]
+        D --> N[Cost Calculator]
+        D --> O[Result Formatter]
+        D --> P[Execution Context]
+    end
 
-### 2. Base Test Driver (`BaseTestDriver`)
-Abstract base class that all test drivers extend:
-- Defines execution contract
-- Provides common utilities (scoring, validation, result formatting)
-- Handles error management
-- Manages test context
+    subgraph "Base Layer"
+        Q["TestEngineBase<br/>(from engine-base)"]
+    end
 
-### 3. Oracle System
-Pluggable evaluation components:
-- **SchemaValidator** - Validates output structure
-- **TraceValidator** - Checks execution traces for errors
-- **LLMJudge** - Uses LLM to evaluate quality
-- **ExactMatcher** - Deterministic output comparison
-- **SQLValidator** - Database state verification
+    A -->|extends| Q
 
-### 4. Result Management
-Structured result capture and storage:
-- TestRun entity management
-- Metric collection and aggregation
-- Artifact storage coordination
-- Cost tracking
-
-## Class Structure
-
-### TestEngine
-
-```typescript
-export class TestEngine {
-  /**
-   * Run a single test by ID
-   */
-  async runTest(
-    testId: string,
-    contextUser: UserInfo,
-    options?: TestRunOptions
-  ): Promise<TestRunResult>
-
-  /**
-   * Run an entire test suite
-   */
-  async runSuite(
-    suiteId: string,
-    contextUser: UserInfo,
-    options?: SuiteRunOptions
-  ): Promise<SuiteRunResult>
-
-  /**
-   * Validate test definition without executing
-   */
-  async validateTest(testId: string): Promise<ValidationResult>
-}
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style E fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style F fill:#b8762f,stroke:#8a5722,color:#fff
+    style G fill:#7c5295,stroke:#563a6b,color:#fff
+    style H fill:#7c5295,stroke:#563a6b,color:#fff
+    style I fill:#7c5295,stroke:#563a6b,color:#fff
+    style J fill:#7c5295,stroke:#563a6b,color:#fff
+    style K fill:#7c5295,stroke:#563a6b,color:#fff
+    style Q fill:#2d6a9f,stroke:#1a4971,color:#fff
 ```
 
-### BaseTestDriver
+## Overview
 
-```typescript
-export abstract class BaseTestDriver {
-  /**
-   * Execute the test and return results
-   * Must be implemented by concrete drivers
-   */
-  abstract execute(
-    test: TestEntity,
-    contextUser: UserInfo,
-    options: ExecutionOptions
-  ): Promise<DriverExecutionResult>
+This is the **server-side execution engine** for MemberJunction tests. It implements a plugin-based architecture where:
 
-  /**
-   * Validate test configuration
-   * Can be overridden by concrete drivers
-   */
-  async validate(test: TestEntity): Promise<ValidationResult>
+- **Drivers** handle test execution (running agents, calling APIs, etc.)
+- **Oracles** evaluate test outputs against expected outcomes
+- **Utilities** handle variable resolution, scoring, cost tracking, and result formatting
 
-  /**
-   * Calculate overall score from oracle results
-   */
-  protected calculateScore(
-    oracleResults: OracleResult[],
-    weights: ScoringWeights
-  ): number
+**Key capabilities:**
 
-  /**
-   * Store execution results to database
-   */
-  protected async storeResults(
-    testRun: TestRunEntity,
-    results: DriverExecutionResult
-  ): Promise<void>
-}
+- Execute individual tests or full test suites with parallel/sequential modes
+- Multiple oracle strategies for evaluating test results
+- Variable resolution system with priority cascading (run > suite > test > type)
+- Automatic cost and duration tracking
+- Progress callbacks for real-time execution monitoring
+- Result persistence to `MJ: Test Runs` and `MJ: Test Suite Runs` entities
+
+## Installation
+
+```bash
+npm install @memberjunction/testing-engine
 ```
 
-### Oracle Interface
+## Core Concepts
 
-```typescript
-export interface IOracle {
-  /**
-   * Unique identifier for this oracle type
-   */
-  readonly type: string;
+### Driver/Oracle Pattern
 
-  /**
-   * Execute the oracle evaluation
-   */
-  evaluate(
-    input: OracleInput,
-    config: OracleConfig
-  ): Promise<OracleResult>
-}
+```mermaid
+graph LR
+    A[Test Definition] --> B[Driver]
+    B -->|Executes| C[Target System]
+    C -->|Output| D[Oracle 1]
+    C -->|Output| E[Oracle 2]
+    C -->|Output| F[Oracle N]
+    D --> G[Combined Score]
+    E --> G
+    F --> G
 
-export interface OracleResult {
-  oracleType: string;
-  passed: boolean;
-  score?: number;
-  message: string;
-  details?: any;
-}
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#7c5295,stroke:#563a6b,color:#fff
+    style E fill:#7c5295,stroke:#563a6b,color:#fff
+    style F fill:#7c5295,stroke:#563a6b,color:#fff
+    style G fill:#b8762f,stroke:#8a5722,color:#fff
 ```
 
-## Agent Eval Driver
+1. The **driver** executes the test target (e.g., runs an AI agent)
+2. Multiple **oracles** independently evaluate the output
+3. Scores are combined using configurable weights
 
-The first concrete implementation:
+### Test Drivers
 
-```typescript
-export class AgentEvalDriver extends BaseTestDriver {
-  async execute(
-    test: TestEntity,
-    contextUser: UserInfo,
-    options: ExecutionOptions
-  ): Promise<DriverExecutionResult> {
-    // 1. Parse test configuration
-    const config = this.parseConfig(test);
+| Driver | Description |
+|--------|-------------|
+| `BaseTestDriver` | Abstract base class for all test drivers |
+| `AgentEvalDriver` | Executes AI agents and captures their outputs |
 
-    // 2. Execute agent with test inputs
-    const agentRun = await this.executeAgent(config.inputs, contextUser);
+### Oracles
 
-    // 3. Run oracles to evaluate output
-    const oracleResults = await this.runOracles(
-      agentRun,
-      config.oracles,
-      config.expectedOutcomes
-    );
+| Oracle | Description |
+|--------|-------------|
+| `ExactMatchOracle` | Compares output against an expected string |
+| `LLMJudgeOracle` | Uses an LLM to evaluate output quality with rubrics |
+| `SchemaValidatorOracle` | Validates output against a JSON schema |
+| `SQLValidatorOracle` | Validates output by running SQL queries |
+| `TraceValidatorOracle` | Validates execution trace/steps of an agent run |
 
-    // 4. Calculate score based on weights
-    const score = this.calculateScore(oracleResults, config.weights);
+### Variable Resolution
 
-    // 5. Return structured results
-    return {
-      targetType: 'Agent Run',
-      targetLogId: agentRun.ID,
-      status: this.determineStatus(oracleResults),
-      score,
-      oracleResults,
-      cost: this.calculateCost(agentRun),
-      duration: this.calculateDuration(agentRun)
-    };
-  }
+Variables cascade through four levels with the highest priority winning:
 
-  private async runOracles(
-    agentRun: AIAgentRunEntity,
-    oracleConfigs: OracleConfig[],
-    expectedOutcomes: any
-  ): Promise<OracleResult[]> {
-    const results: OracleResult[] = [];
-
-    for (const config of oracleConfigs) {
-      const oracle = this.getOracle(config.type);
-      const result = await oracle.evaluate({
-        agentRun,
-        expectedOutcomes
-      }, config);
-      results.push(result);
-    }
-
-    return results;
-  }
-}
+```
+Run Variables > Suite Variables > Test Variables > Type Variables
 ```
 
-## Oracle Implementations
+The resolver tracks the source of each resolved value for auditing.
 
-### Schema Validator
-```typescript
-export class SchemaValidatorOracle implements IOracle {
-  readonly type = 'schema-validate';
+## Usage
 
-  async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
-    const { agentRun } = input;
-    const schema = this.loadSchema(config.schema);
-
-    try {
-      schema.parse(agentRun.ResultPayload);
-      return {
-        oracleType: this.type,
-        passed: true,
-        score: 1.0,
-        message: 'Output matches schema'
-      };
-    } catch (error) {
-      return {
-        oracleType: this.type,
-        passed: false,
-        score: 0.0,
-        message: `Schema validation failed: ${error.message}`,
-        details: error.errors
-      };
-    }
-  }
-}
-```
-
-### Trace Validator
-```typescript
-export class TraceValidatorOracle implements IOracle {
-  readonly type = 'trace-no-errors';
-
-  async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
-    const { agentRun } = input;
-
-    // Load agent run steps
-    const rv = new RunView();
-    const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
-      EntityName: 'MJ: AI Agent Run Steps',
-      ExtraFilter: `AgentRunID='${agentRun.ID}'`,
-      ResultType: 'entity_object'
-    });
-
-    if (!stepsResult.Success) {
-      throw new Error(`Failed to load agent run steps: ${stepsResult.ErrorMessage}`);
-    }
-
-    const steps = stepsResult.Results || [];
-    const errorSteps = steps.filter(s => s.Status === 'Error' || s.Status === 'Failed');
-
-    if (errorSteps.length === 0) {
-      return {
-        oracleType: this.type,
-        passed: true,
-        score: 1.0,
-        message: `All ${steps.length} steps completed without errors`
-      };
-    } else {
-      return {
-        oracleType: this.type,
-        passed: false,
-        score: 0.0,
-        message: `${errorSteps.length} of ${steps.length} steps had errors`,
-        details: errorSteps.map(s => ({
-          stepId: s.ID,
-          sequence: s.Sequence,
-          error: s.Notes
-        }))
-      };
-    }
-  }
-}
-```
-
-### LLM Judge
-```typescript
-export class LLMJudgeOracle implements IOracle {
-  readonly type = 'llm-judge';
-
-  async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
-    const { agentRun, expectedOutcomes } = input;
-
-    // Load rubric
-    const md = new Metadata();
-    const rubric = await md.GetEntityObject<TestRubricEntity>('Test Rubrics');
-    await rubric.Load(config.rubricId);
-
-    // Build evaluation prompt
-    const prompt = this.buildPrompt(rubric, agentRun, expectedOutcomes);
-
-    // Execute LLM evaluation
-    const judgmentResult = await this.executeJudgment(prompt);
-
-    // Parse structured response
-    const scores = this.parseScores(judgmentResult, rubric.Criteria);
-
-    // Calculate weighted score
-    const overallScore = this.calculateWeightedScore(scores, rubric.Criteria);
-
-    return {
-      oracleType: this.type,
-      passed: overallScore >= (config.threshold || 0.7),
-      score: overallScore,
-      message: `LLM judge score: ${(overallScore * 100).toFixed(1)}%`,
-      details: {
-        rubricId: rubric.ID,
-        rubricVersion: rubric.Version,
-        dimensionScores: scores,
-        judgmentNotes: judgmentResult.notes
-      }
-    };
-  }
-}
-```
-
-## Usage Example
+### Running a Single Test
 
 ```typescript
 import { TestEngine } from '@memberjunction/testing-engine';
-import { getSystemUser } from '@memberjunction/core';
 
-// Initialize engine
-const engine = new TestEngine();
+const engine = TestEngine.Instance;
+await engine.Config(false, contextUser);
 
-// Run a single test
-const contextUser = getSystemUser();
-const result = await engine.runTest('test-id-123', contextUser, {
-  dryRun: false,
-  environment: 'staging'
+const result = await engine.RunTest(testId, contextUser, {
+    verbose: true,
+    variables: { AIConfiguration: 'gpt-4o' },
+    progressCallback: (p) => console.log(`${p.percentage}%: ${p.message}`)
 });
 
-console.log(`Test ${result.status}: Score ${result.score}`);
-console.log(`Cost: $${result.cost}, Duration: ${result.duration}s`);
+console.log(`Status: ${result.status}, Score: ${result.score}`);
+```
 
-// Run a suite
-const suiteResult = await engine.runSuite('suite-id-456', contextUser, {
-  parallel: false,
-  failFast: true
+### Running a Test Suite
+
+```typescript
+const suiteResult = await engine.RunSuite(suiteId, contextUser, {
+    parallel: true,
+    maxParallel: 5,
+    failFast: false,
+    variables: { Temperature: 0.3 }
 });
 
-console.log(`Suite completed: ${suiteResult.passedTests}/${suiteResult.totalTests} passed`);
+console.log(`Passed: ${suiteResult.passedTests}/${suiteResult.totalTests}`);
+console.log(`Average Score: ${suiteResult.averageScore}`);
 ```
 
-## Extension Points
+## Utilities
 
-### Adding New Test Types
+| Utility | Description |
+|---------|-------------|
+| `variable-resolver` | Resolves variables through the priority cascade |
+| `scoring` | Combines oracle scores using weighted averages |
+| `cost-calculator` | Tracks and sums execution costs |
+| `result-formatter` | Formats test results for storage and display |
+| `execution-context` | Captures environment details (OS, Node.js version, CI/CD info) |
 
-1. Create driver class extending `BaseTestDriver`:
-```typescript
-export class WorkflowScenarioDriver extends BaseTestDriver {
-  async execute(test: TestEntity, contextUser: UserInfo, options: ExecutionOptions) {
-    // Your workflow test logic
-  }
-}
+## Testing
+
+```bash
+npm test
+npm run test:coverage
 ```
 
-2. Register with ClassFactory:
-```typescript
-MJGlobal.Instance.ClassFactory.Register(
-  BaseTestDriver,
-  'WorkflowScenarioDriver',
-  WorkflowScenarioDriver
-);
-```
+## Dependencies
 
-3. Create TestType record in database:
-```sql
-INSERT INTO TestType (Name, DriverClass, Status)
-VALUES ('Workflow Scenario', 'WorkflowScenarioDriver', 'Active');
-```
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/testing-engine-base` | Base engine, metadata caching, shared types |
+| `@memberjunction/ai` | AI model access for LLM oracles |
+| `@memberjunction/ai-agents` | Agent execution for AgentEvalDriver |
+| `@memberjunction/ai-prompts` | Prompt execution |
+| `@memberjunction/core` | Metadata, RunView, UserInfo |
+| `@memberjunction/core-entities` | Test entity types |
+| `@memberjunction/global` | Class factory |
+| `zod` | Schema validation |
+| `rxjs` | Observable patterns |
 
-### Adding New Oracles
+## License
 
-1. Implement `IOracle` interface:
-```typescript
-export class CustomOracle implements IOracle {
-  readonly type = 'custom-check';
-
-  async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
-    // Your evaluation logic
-  }
-}
-```
-
-2. Register with engine:
-```typescript
-engine.registerOracle(new CustomOracle());
-```
-
-## Testing Best Practices
-
-1. **Use appropriate oracles** - Combine deterministic checks (schema, trace) with semantic checks (LLM judge)
-2. **Set realistic weights** - Balance different evaluation dimensions
-3. **Track costs** - Monitor LLM evaluation costs
-4. **Validate before execute** - Use `validateTest()` to catch config errors
-5. **Leverage traces** - Link TestRun to target entities for debugging
-
-## Future Enhancements
-
-- [ ] Parallel test execution within suites
-- [ ] Test retry logic with exponential backoff
-- [ ] Result caching for expensive evaluations
-- [ ] Composite oracles (AND/OR logic)
-- [ ] Dataset-driven test execution (run same test with multiple inputs)
-- [ ] Comparative evaluation (A/B testing different agent versions)
-- [ ] Replay mode (re-evaluate existing agent runs)
+ISC
