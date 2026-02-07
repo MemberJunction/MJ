@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/react-runtime",
-  "version": "3.4.0",
+  "version": "4.0.0",
   "description": "Platform-agnostic React component runtime for MemberJunction. Provides core compilation, registry, and execution capabilities for React components in any JavaScript environment.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -27,11 +27,11 @@
   },
   "homepage": "https://github.com/MemberJunction/MJ#readme",
   "dependencies": {
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/global": "3.4.0",
-    "@memberjunction/interactive-component-types": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@memberjunction/graphql-dataprovider": "3.4.0",
+    "@memberjunction/core": "4.0.0",
+    "@memberjunction/global": "4.0.0",
+    "@memberjunction/interactive-component-types": "4.0.0",
+    "@memberjunction/core-entities": "4.0.0",
+    "@memberjunction/graphql-dataprovider": "4.0.0",
     "@babel/standalone": "^7.29.1",
     "rxjs": "^7.8.2"
   },
