@@ -15,15 +15,17 @@ You are creating or updating a folder-level README that serves as an overview an
 Folder-level READMEs provide:
 1. **Overview**: What this family of packages does together
 2. **Navigation**: Quick access to all sub-packages
-3. **Architecture**: How packages relate to each other
+3. **Architecture**: How packages relate to each other (using mermaid diagrams)
 4. **Getting Started**: Entry points for new developers
 
-## Quality Standards
+## Gold Standard
 
-Reference these excellent folder READMEs:
+Reference these folder READMEs:
 - `packages/AI/README.md` - AI framework overview
 - `packages/Actions/README.md` - Actions framework overview
 - `packages/Communication/README.md` - Communication framework overview
+
+Also study the hub-and-spoke model in `packages/MJCore/` where the README points to deep-dive `docs/` guides. Folder-level READMEs should similarly point to individual package READMEs and any docs/ folders within those packages.
 
 ## Process
 
@@ -45,6 +47,7 @@ Reference these excellent folder READMEs:
    - Read its package.json (name, description)
    - Read its README.md (extract key purpose)
    - Note its dependencies on other packages in this folder
+   - Check for docs/ folder with deep-dive guides
 
 4. **Check for CLAUDE.md**:
    ```
@@ -89,9 +92,35 @@ AI Framework Packages:
 - How packages work together
 - When to use this framework}
 
-## Package Structure
+## Architecture
 
-{Visual representation of packages and their relationships}
+{**Use a mermaid diagram** to show how packages relate to each other.
+Choose the diagram type that best fits the architecture.}
+
+\`\`\`mermaid
+flowchart TD
+    subgraph Core["Core Layer"]
+        C[ai-core<br/>Base Abstractions]
+    end
+    subgraph Engine["Orchestration"]
+        E[ai-engine<br/>Model Selection & Routing]
+    end
+    subgraph Providers["Provider Layer"]
+        P1[OpenAI]
+        P2[Anthropic]
+        P3[Google]
+    end
+    E --> C
+    P1 --> C
+    P2 --> C
+    P3 --> C
+    Consumer[Your Application] --> E
+    style Core fill:#d5e8f5,stroke:#2d5f8e
+    style Engine fill:#d5f5e8,stroke:#2d8e5f
+    style Providers fill:#f5e8d5,stroke:#8e5f2d
+\`\`\`
+
+## Package Structure
 
 \`\`\`
 {folderName}/
@@ -111,26 +140,6 @@ AI Framework Packages:
 | [@memberjunction/pkg1](./Pkg1/README.md) | {description} | `Class1`, `Class2` |
 | [@memberjunction/pkg2](./Pkg2/README.md) | {description} | `Class3` |
 
-## Architecture
-
-{Diagram or description of how packages relate}
-
-\`\`\`
-┌─────────────┐
-│  Consumer   │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐     ┌─────────────┐
-│   Engine    │────▶│    Core     │
-└──────┬──────┘     └─────────────┘
-       │
-       ▼
-┌─────────────┐
-│  Providers  │
-└─────────────┘
-\`\`\`
-
 ## Getting Started
 
 ### Installation
@@ -148,13 +157,13 @@ npm install @memberjunction/{provider-package}
 \`\`\`typescript
 import { ... } from '@memberjunction/{main-package}';
 
-// Basic usage example
+// Basic usage example — real MJ patterns, no pseudocode
 \`\`\`
 
 ## Key Concepts
 
 ### {Concept 1}
-{Explanation}
+{Explanation with code example or mermaid diagram if helpful}
 
 ### {Concept 2}
 {Explanation}
@@ -163,6 +172,13 @@ import { ... } from '@memberjunction/{main-package}';
 
 1. **{Use Case 1}**: {Brief description and which packages to use}
 2. **{Use Case 2}**: {Brief description and which packages to use}
+
+## Deep-Dive Guides
+
+{If any sub-packages have docs/ folders with topic guides, link to them here:}
+
+- [{Topic from Package A}](./PackageA/docs/topic-guide.md) - Description
+- [{Topic from Package B}](./PackageB/docs/another-guide.md) - Description
 
 ## Development
 
@@ -181,7 +197,7 @@ See the [MemberJunction Contributing Guide](../../CONTRIBUTING.md).
 
 ### Phase 4: Package Table Generation
 
-Create a comprehensive package table:
+Create a comprehensive package table, grouped by function:
 
 ```markdown
 ## Packages
@@ -198,24 +214,47 @@ Create a comprehensive package table:
 | Package | Description | Supported Models |
 |---------|-------------|------------------|
 | [@memberjunction/ai-openai](./Providers/OpenAI/README.md) | OpenAI integration | GPT-4, GPT-3.5 |
-| [@memberjunction/ai-anthropic](./Providers/Anthropic/README.md) | Anthropic integration | Claude 3, Claude 2 |
+| [@memberjunction/ai-anthropic](./Providers/Anthropic/README.md) | Anthropic integration | Claude 4, Claude 3.5 |
 ```
 
-### Phase 5: Cross-Linking
+### Phase 5: Mermaid Diagrams
+
+**Every folder-level README must include at least one mermaid diagram** showing the package architecture. Use mermaid instead of ASCII art for all diagrams.
+
+Recommended diagram types for folder READMEs:
+
+| Purpose | Diagram Type |
+|---------|-------------|
+| Package dependency graph | `flowchart TD` |
+| Data flow through framework | `flowchart LR` |
+| Request lifecycle | `sequenceDiagram` |
+| Class hierarchy (providers) | `classDiagram` |
+
+**Style the diagram** with colors to group related packages:
+- Core/base packages: blue tones (`fill:#d5e8f5,stroke:#2d5f8e`)
+- Engine/orchestration: green tones (`fill:#d5f5e8,stroke:#2d8e5f`)
+- Provider/plugin layer: orange tones (`fill:#f5e8d5,stroke:#8e5f2d`)
+- Consumer/application: neutral (`fill:#f5f5f5,stroke:#666`)
+
+### Phase 6: Cross-Linking
 
 1. **Link to All Sub-Package READMEs**:
    - Use relative paths: `./PackageName/README.md`
    - For nested: `./Providers/OpenAI/README.md`
 
-2. **Link to Related Folders**:
+2. **Link to docs/ Guides in Sub-Packages**:
+   - If a sub-package has docs/ with topic guides, surface those in the folder README
+   - Example: `See the [Virtual Entities Guide](./MJCore/docs/virtual-entities.md)`
+
+3. **Link to Related Folders**:
    - Use relative paths: `../Actions/README.md`
    - Link to parent: `../README.md` (if exists at packages/ level)
 
-3. **Link to Root Documentation**:
+4. **Link to Root Documentation**:
    - `../../CLAUDE.md` for development guide
    - `../../CONTRIBUTING.md` for contribution guide
 
-### Phase 6: Handle Special Folder Structures
+### Phase 7: Handle Special Folder Structures
 
 #### Nested Package Directories
 
@@ -239,11 +278,11 @@ For folders with both packages and non-package directories:
 ## Writing Guidelines
 
 1. **Focus on "Why"**: Explain why packages are organized this way
-2. **Show Relationships**: Make dependencies and data flow clear
+2. **Show Relationships**: Make dependencies and data flow clear with mermaid diagrams
 3. **Provide Entry Points**: Help developers know where to start
 4. **Keep Current**: Only document what exists
-5. **Use ASCII Diagrams**: For architecture visualization
-6. **Link Generously**: Every package should link to its README
+5. **Use Mermaid, Not ASCII**: All architecture diagrams should use mermaid for consistency
+6. **Link Generously**: Every package should link to its README; surface docs/ guides from sub-packages
 7. **No "NEW" Annotations**: Don't use "New" or similar tags for various features/abilities in readme docs as those quickly get out of date. If you see them in packages you're updating, remove New/similar tag.
 
 ## Output
@@ -253,4 +292,5 @@ For folders with both packages and non-package directories:
 3. Report:
    - Packages documented
    - Links created
+   - Deep-dive guides surfaced from sub-packages
    - Any packages missing READMEs (flag for follow-up)
