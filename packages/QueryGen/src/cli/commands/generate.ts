@@ -28,7 +28,9 @@ import { formatEntityMetadataForPrompt } from '../../utils/entity-helpers';
 import { extractErrorMessage } from '../../utils/error-handlers';
 import { buildQueryCategory, extractUniqueCategories } from '../../utils/category-builder';
 import { ValidatedQuery, GoldenQuery, EntityGroup, QueryCategoryInfo } from '../../data/schema';
-import goldenQueriesData from '../../data/golden-queries.json';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Execute the generate command
@@ -330,7 +332,11 @@ export async function generateCommand(options: Record<string, unknown>): Promise
  */
 async function loadGoldenQueries(config: { verbose: boolean }): Promise<GoldenQuery[]> {
   try {
-    // Cast imported JSON data to GoldenQuery array
+    // Load golden queries from JSON file using ES module compatible path resolution
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const goldenQueriesPath = join(__dirname, '../../data/golden-queries.json');
+    const goldenQueriesData = JSON.parse(readFileSync(goldenQueriesPath, 'utf-8'));
     const goldenQueries = goldenQueriesData as GoldenQuery[];
 
     // Validate that it's an array
