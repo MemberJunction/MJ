@@ -107,6 +107,7 @@ export default class Migrate extends Command {
           ...baseArgs,
           `-baselineVersion=${config.baselineVersion}`,
           `-baselineOnMigrate=${config.baselineOnMigrate}`,
+          `-createSchemas=true`,
           `-locations=${absoluteMigrationPaths.join(',')}`,
           'migrate'
         ];
