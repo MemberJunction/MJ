@@ -38,7 +38,7 @@ import { InteractionType } from '@azure/msal-browser';
 //***********************************************************
 import { AppComponent } from './app.component';
 import { GeneratedFormsModule } from './generated/generated-forms.module';
-import { environment } from 'src/environments/environment';
+import { environment } from '../environments/environment';
 import { NavigationItemDemoComponent } from './demo/navigation-item.component';
 import { HelloDashboardComponent } from './demo/hello-dashboard/hello-dashboard.component';
 
