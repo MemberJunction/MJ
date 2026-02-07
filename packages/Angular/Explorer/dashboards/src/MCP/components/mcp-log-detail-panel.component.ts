@@ -277,10 +277,3 @@ export class MCPLogDetailPanelComponent implements OnInit, OnDestroy {
         }
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPLogDetailPanel(): void {
-    // Ensures the component is not tree-shaken
-}

@@ -1,12 +1,6 @@
 import { Component, OnInit, EventEmitter, Output, ChangeDetectorRef } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { APIScopeEntity } from '@memberjunction/core-entities';
-
-/** Tree shaking prevention function */
-export function LoadAPIScopesPanel(): void {
-    // This function prevents tree shaking
-}
-
 /** Scope tree node structure */
 interface ScopeTreeNode {
     scope: APIScopeEntity;

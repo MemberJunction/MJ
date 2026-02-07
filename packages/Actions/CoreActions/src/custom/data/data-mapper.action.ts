@@ -309,10 +309,3 @@ export class DataMapperAction extends BaseAction {
         }
     }
 }
-
-/**
- * Loader function to ensure the DataMapperAction class is included in the bundle
- */
-export function LoadDataMapperAction() {
-    // Stub function to prevent tree shaking
-}

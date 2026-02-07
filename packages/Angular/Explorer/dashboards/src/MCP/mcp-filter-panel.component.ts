@@ -172,10 +172,3 @@ export class MCPFilterPanelComponent {
     }
   }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPFilterPanel(): void {
-  // Prevents tree-shaking by referencing the component
-}

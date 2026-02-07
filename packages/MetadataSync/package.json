@@ -27,6 +27,7 @@
     "build": "tsc -b && tsc-alias -f"
   },
   "dependencies": {
+    "@memberjunction/server-bootstrap-lite": "3.4.0",
     "@memberjunction/config": "3.4.0",
     "@memberjunction/core": "3.4.0",
     "@memberjunction/core-entities": "3.4.0",

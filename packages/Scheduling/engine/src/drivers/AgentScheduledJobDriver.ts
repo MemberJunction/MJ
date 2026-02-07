@@ -170,11 +170,3 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         return agent;
     }
 }
-
-/**
- * Loader function to ensure this driver is registered
- * Prevents tree-shaking from removing the class
- */
-export function LoadAgentScheduledJobDriver(): void {
-    // No-op function, just ensures class is loaded
-}

@@ -201,10 +201,3 @@ export abstract class BaseJobAction extends BaseAction {
         });
     }
 }
-
-/**
- * Loader function to prevent tree shaking
- */
-export function LoadBaseJobAction() {
-    // Stub function - ensures class is included in bundle
-}

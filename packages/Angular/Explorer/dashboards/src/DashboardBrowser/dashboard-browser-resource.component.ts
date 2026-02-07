@@ -28,11 +28,6 @@ import {
     DashboardBrowserViewMode,
     BreadcrumbNavigateEvent
 } from '@memberjunction/ng-dashboard-viewer';
-
-export function LoadDashboardBrowserResource() {
-    // Prevents tree-shaking
-}
-
 /**
  * Mode for the dashboard browser
  */

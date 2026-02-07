@@ -130,7 +130,6 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
         { id: 'settings', icon: 'fa-solid fa-sliders', label: 'Settings' }
     ];
 
-
     /** Computed statistics for the entity */
     public stats: EntityStats = {
         fieldCount: 0,
@@ -810,8 +809,4 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
             return value;
         }
     }
-}
-
-export function LoadEntityFormComponentExtended() {
-    // Prevents tree-shaking
 }

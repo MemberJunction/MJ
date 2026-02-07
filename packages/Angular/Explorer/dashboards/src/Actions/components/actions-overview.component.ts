@@ -5,14 +5,6 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionsOverviewResource() {
-  // Force inclusion in production builds
-}
-
 interface ActionMetrics {
   totalActions: number;
   activeActions: number;
@@ -37,7 +29,6 @@ interface CategoryStats {
 interface ExecutionWithExpanded extends ActionExecutionLogEntity {
   isExpanded?: boolean;
 }
-
 
 /**
  * Actions Overview Resource - displays action management dashboard
@@ -151,8 +142,6 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       this.NotifyLoadComplete();
     }
   }
-
-
 
   private calculateMetrics(
     actions: ActionEntity[], 
@@ -334,7 +323,6 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       return params;
     }
   }
-
 
   /**
    * Gets the icon class for an action

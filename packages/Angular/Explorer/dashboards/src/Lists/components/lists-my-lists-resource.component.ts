@@ -7,11 +7,6 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-
-export function LoadListsMyListsResource() {
-  // simple tree shaker prevention
-}
-
 interface ListViewModel {
   list: ListEntity;
   itemCount: number;

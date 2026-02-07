@@ -20,7 +20,7 @@ import {
     APIScopeEntity,
     UserEntity
 } from '@memberjunction/core-entities';
-import { APIKeysEngineBase, LoadAPIKeysEngineBase } from '@memberjunction/api-keys-base';
+import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { ScopeEvaluator } from './ScopeEvaluator';
 import { UsageLogger } from './UsageLogger';
 import { PatternMatcher } from './PatternMatcher';
@@ -88,9 +88,6 @@ export class APIKeyEngine {
             defaultBehaviorNoScopes: config.defaultBehaviorNoScopes ?? 'deny',
             scopeCacheTTLMs: config.scopeCacheTTLMs ?? 60000
         };
-
-        // Ensure APIKeysEngineBase is loaded (tree-shaking prevention)
-        LoadAPIKeysEngineBase();
 
         this._scopeEvaluator = new ScopeEvaluator(this._config.defaultBehaviorNoScopes);
         this._usageLogger = new UsageLogger();

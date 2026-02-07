@@ -8,11 +8,6 @@ import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
-
-export function LoadListsBrowseResource() {
-  // tree shaker
-}
-
 interface BrowseListItem {
   list: ListEntity;
   itemCount: number;

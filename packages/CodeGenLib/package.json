@@ -32,6 +32,7 @@
     "@memberjunction/core-entities": "3.4.0",
     "@memberjunction/core-entities-server": "3.4.0",
     "@memberjunction/global": "3.4.0",
+    "@memberjunction/server-bootstrap-lite": "3.4.0",
     "@memberjunction/sqlserver-dataprovider": "3.4.0",
     "cosmiconfig": "9.0.0",
     "fs-extra": "^11.3.3",

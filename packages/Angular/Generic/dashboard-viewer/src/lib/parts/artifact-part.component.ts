@@ -249,10 +249,3 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         this.versionNumber = undefined;
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadArtifactPart() {
-    // Prevents tree-shaking of the component
-}

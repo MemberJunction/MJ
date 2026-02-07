@@ -1220,10 +1220,3 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         }
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadDashboardBrowser() {
-    // Prevents tree-shaking of the component
-}

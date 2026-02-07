@@ -68,6 +68,3 @@ export class ObjectExistsAction extends BaseFileStorageAction {
         }
     }
 }
-export function LoadObjectExistsAction() {
-    // Stub function to prevent tree shaking
-}

@@ -8,11 +8,6 @@ import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 interface VersionGraphPreferences {
     SchemaFilter: string;
 }
-
-export function LoadVersionHistoryGraphResource() {
-    // Prevents tree-shaking
-}
-
 interface EntityNode {
     Name: string;
     ID: string;

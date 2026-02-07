@@ -944,8 +944,3 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         this.cdr.detectChanges();
     }
 }
-
-// Loader function required for the component to be properly registered
-export function LoadActionFormComponentExtended() {
-    // This function is called to ensure the form is loaded and registered
-}

@@ -145,8 +145,3 @@ export class ActionParamDialogComponent implements OnInit {
         return 'type-' + type.toLowerCase();
     }
 }
-
-// Tree-shaking prevention function
-export function LoadActionParamDialogComponent(): void {
-    // This function ensures the component is included in the bundle
-}

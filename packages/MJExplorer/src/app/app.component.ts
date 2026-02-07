@@ -6,9 +6,6 @@
  */
 
 import { Component } from '@angular/core';
-import { LoadGeneratedEntities } from 'mj_generatedentities';
-
-LoadGeneratedEntities(); // forces the generated entities library to load up, sometimes tree shaking in the build process can break this, so this is a workaround that ensures it always happens
 
 @Component({
   standalone: false,

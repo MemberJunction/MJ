@@ -129,10 +129,3 @@ export class ListMCPToolsAction extends BaseAction {
         });
     }
 }
-
-/**
- * Loader function to prevent tree-shaking
- */
-export function LoadListMCPToolsAction(): void {
-    // Intentionally empty - ensures decorator executes
-}

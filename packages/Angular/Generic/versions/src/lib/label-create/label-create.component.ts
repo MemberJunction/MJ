@@ -14,10 +14,6 @@ import {
     CreateVersionLabelProgress
 } from '@memberjunction/graphql-dataprovider';
 
-export function LoadMjLabelCreateComponent() {
-    // Prevents tree-shaking
-}
-
 export interface RecordOption {
     ID: string;
     DisplayName: string;

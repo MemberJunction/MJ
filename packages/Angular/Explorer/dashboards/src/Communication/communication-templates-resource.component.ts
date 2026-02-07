@@ -10,14 +10,6 @@ interface TemplateCardData {
     LastUpdated: Date | null;
     CategoryName: string;
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadCommunicationTemplatesResource() {
-    // Force inclusion in production builds
-}
-
 @RegisterClass(BaseResourceComponent, 'CommunicationTemplatesResource')
 @Component({
   standalone: false,

@@ -4,7 +4,6 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 
-
 interface ProviderHealth {
     Name: string;
     Type: string;
@@ -31,14 +30,6 @@ interface HourlyBucket {
     tokens: number;
     avgTime: number;
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadCommunicationMonitorResource() {
-    // Force inclusion in production builds
-}
-
 @RegisterClass(BaseResourceComponent, 'CommunicationMonitorResource')
 @Component({
   standalone: false,

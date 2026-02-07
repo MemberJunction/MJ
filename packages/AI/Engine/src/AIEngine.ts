@@ -20,7 +20,7 @@ import { AIActionEntity, ActionEntity,
          AIAgentDataSourceEntity, AIAgentConfigurationEntity, AIAgentExampleEntity,
          AICredentialBindingEntity, AIModalityEntity, AIAgentModalityEntity,
          AIModelModalityEntity } from "@memberjunction/core-entities";
-import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
+import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
 import { ActionEmbeddingService } from "./services/ActionEmbeddingService";
@@ -1303,7 +1303,3 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 }
 
-export function LoadAIEngine() {
-    // This function exists to prevent tree shaking from removing the AIEngine class
-    LoadBaseAIEngine();
-}

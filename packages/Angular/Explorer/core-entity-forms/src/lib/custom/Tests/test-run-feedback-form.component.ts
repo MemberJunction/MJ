@@ -76,6 +76,3 @@ export class TestRunFeedbackFormComponentExtended extends TestRunFeedbackFormCom
     }
   }
 }
-
-export function LoadTestRunFeedbackFormComponentExtended() {}
-LoadTestRunFeedbackFormComponentExtended();

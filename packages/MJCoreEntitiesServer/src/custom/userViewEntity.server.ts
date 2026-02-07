@@ -191,8 +191,3 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
         return [fkeyViewsDesc, relatedEntitiesDesc].filter(s => s.length > 0).join('\n');
     }
 }
-
-
-export function LoadUserViewEntityServerSubClass() {
-
-}

@@ -104,7 +104,3 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         ]
     }
 }
-
-export function LoadOpenAIEmbedding() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

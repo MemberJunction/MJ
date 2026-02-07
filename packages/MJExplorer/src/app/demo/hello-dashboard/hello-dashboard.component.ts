@@ -102,10 +102,6 @@ import { ResourceData } from '@memberjunction/core-entities';
  * @since 2.0.x
  * @version 1.0.0
  * @category Dashboard Components
- * @example
- * // Register the component in your module
- * import { LoadHelloDashboard } from './path/to/hello-dashboard.component';
- * LoadHelloDashboard(); // Prevents tree-shaking
  */
 @Component({
   standalone: false,
@@ -1097,21 +1093,3 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
   }
 }
 
-/**
- * Utility function to prevent tree-shaking of the HelloDashboardComponent.
- * Must be called during module initialization to ensure the component remains available.
- * 
- * @export
- * @function LoadHelloDashboard
- * @returns {void}
- * 
- * @example
- * ```typescript
- * // In your module or main.ts file:
- * import { LoadHelloDashboard } from './hello-dashboard.component';
- * LoadHelloDashboard(); // Prevents tree-shaking
- * ```
- */
-export function LoadHelloDashboard(): void {
-  // Intentionally empty - existence prevents tree-shaking of the component
-}

@@ -428,8 +428,3 @@ export class BaseUserMenu {
         }
     }
 }
-
-// Tree-shaking prevention
-export function LoadBaseUserMenu(): void {
-    // This function ensures the decorator executes
-}

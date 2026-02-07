@@ -153,14 +153,6 @@ export interface SystemDiagnosticsUserPreferences {
     chartGapCompression: boolean;
     autoRefresh: boolean;
 }
-
-/**
- * Tree-shaking prevention function - ensures component is included in builds
- */
-export function LoadSystemDiagnosticsResource() {
-    // Force inclusion in production builds
-}
-
 /**
  * System Diagnostics Resource Component
  *

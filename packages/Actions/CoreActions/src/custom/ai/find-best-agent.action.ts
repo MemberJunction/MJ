@@ -201,10 +201,3 @@ export class FindBestAgentAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the FindBestAgentAction class is included in the bundle
- */
-export function LoadFindBestAgentAction() {
-    // Stub function to prevent tree shaking
-}

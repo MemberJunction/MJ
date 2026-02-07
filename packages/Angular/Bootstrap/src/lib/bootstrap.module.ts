@@ -7,9 +7,6 @@
  *
  * Usage:
  * ```typescript
- * import { LoadGeneratedEntities } from 'mj_generatedentities';
- * LoadGeneratedEntities(); // Prevent tree shaking
- *
  * @NgModule({
  *   imports: [
  *     BrowserModule,
@@ -63,8 +60,6 @@ export class MJBootstrapModule {
    * @example
    * ```typescript
    * import { environment } from '../environments/environment';
-   * import { LoadGeneratedEntities } from 'mj_generatedentities';
-   * LoadGeneratedEntities();
    *
    * @NgModule({
    *   imports: [

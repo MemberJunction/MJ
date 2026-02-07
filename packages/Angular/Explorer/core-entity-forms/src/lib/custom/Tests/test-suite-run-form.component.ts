@@ -807,9 +807,3 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
     SharedService.Instance.CreateSimpleNotification('Export complete', 'success', 2000);
   }
 }
-
-export function LoadTestSuiteRunFormComponentExtended() {
-  // Prevents tree-shaking
-}
-
-LoadTestSuiteRunFormComponentExtended();

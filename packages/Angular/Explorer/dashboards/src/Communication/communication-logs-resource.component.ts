@@ -3,14 +3,6 @@ import { ResourceData, CommunicationLogEntity } from '@memberjunction/core-entit
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadCommunicationLogsResource() {
-    // Force inclusion in production builds
-}
-
 @RegisterClass(BaseResourceComponent, 'CommunicationLogsResource')
 @Component({
   standalone: false,

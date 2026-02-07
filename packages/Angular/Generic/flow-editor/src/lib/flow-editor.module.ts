@@ -49,8 +49,3 @@ import { AgentStepListComponent } from './agent-editor/agent-step-list.component
   ]
 })
 export class FlowEditorModule { }
-
-/** Prevents tree-shaking of the module and its components */
-export function LoadFlowEditorModule(): void {
-  // Intentionally empty — ensures module is included in the bundle
-}

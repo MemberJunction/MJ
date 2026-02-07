@@ -10,7 +10,3 @@ export class AIPromptCategoryEntityExtended extends AIPromptCategoryEntity {
         return this._prompts;
     }
 }
-
-
-//tree shaking stub
-export function LoadAIPromptCategoryEntityExtended() {}

@@ -854,10 +854,3 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         return this.SelectedTool?.ToolTitle || this.SelectedTool?.ToolName || '';
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPTestToolDialog(): void {
-    // Ensures the component is not tree-shaken
-}

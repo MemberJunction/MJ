@@ -212,11 +212,3 @@ export class SearchStorageFilesAction extends BaseFileStorageAction {
         }
     }
 }
-
-/**
- * Load function to ensure the class is registered and not tree-shaken
- */
-export function LoadSearchStorageFilesAction() {
-    // This function call ensures the class decorator executes
-    MJGlobal.Instance.ClassFactory.GetRegistration(BaseFileStorageAction, "Search Storage Files");
-}

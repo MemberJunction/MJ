@@ -10,11 +10,6 @@ import {
     QueryEntityLinkClickEvent,
     QueryRowClickEvent
 } from '@memberjunction/ng-query-viewer';
-
-export function LoadQueryBrowserResource() {
-    // Prevents tree-shaking
-}
-
 /**
  * Tree node for the query category hierarchy
  */

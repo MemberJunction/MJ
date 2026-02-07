@@ -804,10 +804,3 @@ export class WebPageContentAction extends BaseAction {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
-
-/**
- * Loader function to ensure the WebPageContentAction class is included in the bundle.
- */
-export function LoadWebPageContentAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

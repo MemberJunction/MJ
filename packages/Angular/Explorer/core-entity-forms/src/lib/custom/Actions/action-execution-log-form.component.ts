@@ -113,7 +113,6 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         }
     }
 
-
     private formatJSONFields() {
         const parseOptions: ParseJSONOptions = {
             extractInlineJson: true,
@@ -279,10 +278,3 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         }
     }
 }
-
-
-// Loader function for ActionExecutionLogFormComponentExtended
-export function LoadActionExecutionLogFormComponentExtended() {
-    // This function is called to ensure the form is loaded
-}
-

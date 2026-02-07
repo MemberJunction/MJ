@@ -76,6 +76,3 @@ export class DeleteDirectoryAction extends BaseFileStorageAction {
         }
     }
 }
-export function LoadDeleteDirectoryAction() {
-    // Stub function to prevent tree shaking
-}

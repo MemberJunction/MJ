@@ -289,10 +289,3 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
         return control?.hasError(errorType) && control?.touched || false;
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPServerDialog(): void {
-    // Ensures the component is not tree-shaken
-}

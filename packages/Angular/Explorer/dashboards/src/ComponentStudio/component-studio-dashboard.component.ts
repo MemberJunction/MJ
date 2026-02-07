@@ -712,10 +712,3 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 }
-
-/**
- * Function to prevent tree shaking of the ComponentStudioDashboardComponent.
- */
-export function LoadComponentStudioDashboard() {
-  // This function doesn't need to do anything
-}

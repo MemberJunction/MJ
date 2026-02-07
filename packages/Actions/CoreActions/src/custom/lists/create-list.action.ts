@@ -184,7 +184,3 @@ export class CreateListAction extends BaseAction {
     });
   }
 }
-
-export function LoadCreateListAction(): void {
-  // Prevents tree-shaking
-}

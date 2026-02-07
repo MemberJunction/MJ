@@ -92,10 +92,3 @@ export class ExplorerEntityDataGridComponent {
     }
 }
 
-/**
- * Tree-shaking prevention function - call this to ensure the component is included
- */
-export function LoadExplorerEntityDataGridComponent(): void {
-    // Reference the component to prevent tree-shaking
-    const c = ExplorerEntityDataGridComponent;
-}

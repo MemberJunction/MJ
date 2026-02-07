@@ -175,7 +175,3 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     }
   }
 }
-
-export function LoadEntityAdminDashboard() {
-  // Prevents tree-shaking
-}

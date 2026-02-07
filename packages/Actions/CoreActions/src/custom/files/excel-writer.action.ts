@@ -407,10 +407,3 @@ interface LegacyStyle {
         right?: { style?: string; color?: { argb?: string } | string };
     };
 }
-
-/**
- * Loader function to ensure the ExcelWriterAction class is included in the bundle
- */
-export function LoadExcelWriterAction() {
-    // Stub function to prevent tree shaking
-}

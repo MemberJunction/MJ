@@ -24,16 +24,13 @@ import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { SharedPipesModule } from '../shared/shared-pipes.module';
 
 // MCP Components
-import { MCPDashboardComponent, LoadMCPDashboard } from './mcp-dashboard.component';
-import { MCPResourceComponent, LoadMCPResource } from './mcp-resource.component';
-import { MCPFilterPanelComponent, LoadMCPFilterPanel } from './mcp-filter-panel.component';
-import { MCPServerDialogComponent, LoadMCPServerDialog } from './components/mcp-server-dialog.component';
-import { MCPConnectionDialogComponent, LoadMCPConnectionDialog } from './components/mcp-connection-dialog.component';
-import { MCPTestToolDialogComponent, LoadMCPTestToolDialog } from './components/mcp-test-tool-dialog.component';
-import { MCPLogDetailPanelComponent, LoadMCPLogDetailPanel } from './components/mcp-log-detail-panel.component';
-
-// MCP Services
-import { LoadMCPToolsService } from './services/mcp-tools.service';
+import { MCPDashboardComponent } from './mcp-dashboard.component';
+import { MCPResourceComponent } from './mcp-resource.component';
+import { MCPFilterPanelComponent } from './mcp-filter-panel.component';
+import { MCPServerDialogComponent } from './components/mcp-server-dialog.component';
+import { MCPConnectionDialogComponent } from './components/mcp-connection-dialog.component';
+import { MCPTestToolDialogComponent } from './components/mcp-test-tool-dialog.component';
+import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.component';
 
 @NgModule({
     declarations: [
@@ -69,17 +66,3 @@ import { LoadMCPToolsService } from './services/mcp-tools.service';
     ]
 })
 export class MCPModule { }
-
-/**
- * Loads all MCP components to prevent tree-shaking
- */
-export function LoadMCPModule(): void {
-    LoadMCPDashboard();
-    LoadMCPResource();
-    LoadMCPFilterPanel();
-    LoadMCPServerDialog();
-    LoadMCPConnectionDialog();
-    LoadMCPTestToolDialog();
-    LoadMCPLogDetailPanel();
-    LoadMCPToolsService();
-}

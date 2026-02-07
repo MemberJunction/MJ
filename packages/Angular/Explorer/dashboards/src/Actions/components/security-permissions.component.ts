@@ -2,14 +2,6 @@ import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionsSecurityResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * Security Permissions Resource - displays action security management
  */

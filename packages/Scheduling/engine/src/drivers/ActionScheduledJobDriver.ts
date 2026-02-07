@@ -214,11 +214,3 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         }
     }
 }
-
-/**
- * Loader function to ensure this driver is registered
- * Prevents tree-shaking from removing the class
- */
-export function LoadActionScheduledJobDriver(): void {
-    // No-op function, just ensures class is loaded
-}

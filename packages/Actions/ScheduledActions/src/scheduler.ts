@@ -4,12 +4,7 @@ import { ActionEntityExtended, ActionParam, ActionResult, RunActionParams } from
 import cronParser from 'cron-parser';
 import { SafeJSONParse } from "@memberjunction/global";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
-import { LoadVectorizeEntityAction } from "@memberjunction/core-actions";
 import { ActionEngineServer } from "@memberjunction/actions";
-import { LoadCoreEntitiesServerSubClasses } from "@memberjunction/core-entities-server";
-
-LoadVectorizeEntityAction();
-LoadCoreEntitiesServerSubClasses(); // Load the core entities server subclasses to ensure they are registered and not tree shaken
 
 /**
  * ScheduledActionEngine handles metadata caching and execution of scheduled actions based on their defined CronExpressions

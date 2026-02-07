@@ -48,10 +48,3 @@ export class MCPResourceComponent extends BaseResourceComponent implements OnIni
         return 'fa-solid fa-plug-circle-bolt';
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPResource(): void {
-    // Ensures the component is not tree-shaken
-}

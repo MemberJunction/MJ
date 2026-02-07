@@ -284,7 +284,3 @@ export class LocalEmbedding extends BaseEmbeddings {
         await this.getPipeline(modelName);
     }
 }
-
-export function LoadLocalEmbedding() {
-    // This function prevents the class from being removed by tree shaking
-}

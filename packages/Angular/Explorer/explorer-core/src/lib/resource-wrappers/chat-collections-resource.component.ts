@@ -6,13 +6,6 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, EnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { ArtifactStateService, ArtifactPermissionService, CollectionStateService } from '@memberjunction/ng-conversations';
 import { Subject, takeUntil, distinctUntilChanged, combineLatest, filter } from 'rxjs';
-
-export function LoadChatCollectionsResource() {
-  // Force inclusion in production builds (tree shaking workaround)
-  // Using null placeholders since Angular DI provides actual instances
-  const test = new ChatCollectionsResource(null!, null!, null!, null!, null!);
-}
-
 /**
  * Chat Collections Resource - displays the collections full view for tab-based display
  * Extends BaseResourceComponent to work with the resource type system

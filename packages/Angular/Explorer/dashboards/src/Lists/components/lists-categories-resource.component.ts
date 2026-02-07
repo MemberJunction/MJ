@@ -5,11 +5,6 @@ import { ResourceData, ListCategoryEntity, ListEntity } from '@memberjunction/co
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-
-export function LoadListsCategoriesResource() {
-  // tree shaker 
-}
-
 interface CategoryViewModel {
   category: ListCategoryEntity;
   listCount: number;

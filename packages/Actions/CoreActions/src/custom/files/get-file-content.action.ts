@@ -231,7 +231,3 @@ export class GetFileContentAction extends BaseFileStorageAction {
                contentType === 'application/msword'; // doc
     }
 }
-
-export function LoadGetFileContentAction() {
-    // Stub function to prevent tree shaking
-}

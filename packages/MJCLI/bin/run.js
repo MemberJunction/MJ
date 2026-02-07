@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 import 'dotenv/config';
+
+// Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
+import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
+
 import { execute } from '@oclif/core';
 
 // Skip TypeScript source path lookup in production mode.

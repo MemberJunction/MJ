@@ -8,6 +8,8 @@
     "dev:debug": "ts-node-dev --transpile-only --respawn --inspect=4321 --project tsconfig.json src/index.ts",
     "dev": "ts-node-dev --transpile-only --respawn --project tsconfig.json src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
+    "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
     "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf output",
@@ -22,6 +24,7 @@
   "dependencies": {
     "@memberjunction/core": "3.4.0",
     "@memberjunction/global": "3.4.0",
+    "@memberjunction/server-bootstrap-lite": "3.4.0",
     "@memberjunction/core-entities": "3.4.0",
     "@memberjunction/sqlserver-dataprovider": "3.4.0",
     "@memberjunction/codegen-lib": "3.4.0",

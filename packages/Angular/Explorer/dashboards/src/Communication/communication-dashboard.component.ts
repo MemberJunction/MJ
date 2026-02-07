@@ -128,7 +128,3 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         return tabIndex >= 0 ? labels[tabIndex] : 'Communication Management';
     }
 }
-
-export function LoadCommunicationDashboard() {
-    // Prevents tree-shaking
-}

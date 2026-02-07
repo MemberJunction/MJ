@@ -7,11 +7,6 @@ import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettin
 import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment } from '@memberjunction/ng-conversations';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
-
-export function LoadChatConversationsResource() {
-  // Tree-shaking prevention - function reference keeps class in bundle
-}
-
 /**
  * Chat Conversations Resource - wraps the conversation chat area for tab-based display
  * Extends BaseResourceComponent to work with the resource type system

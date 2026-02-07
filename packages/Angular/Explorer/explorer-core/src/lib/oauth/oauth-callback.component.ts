@@ -380,10 +380,3 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
         this.router.navigate(['/app/admin/MCP']);
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadOAuthCallbackComponent(): void {
-    // Prevents tree-shaking
-}

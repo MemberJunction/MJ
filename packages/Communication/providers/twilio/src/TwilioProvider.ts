@@ -485,7 +485,3 @@ export class TwilioProvider extends BaseCommunicationProvider {
     };
   }
 }
-
-export function LoadProvider() {
-  // do nothing, this prevents tree shaking from removing this class
-}

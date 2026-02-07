@@ -14,6 +14,3 @@ import { EntityActionFormComponent } from '../../generated/Entities/EntityAction
 export class EntityActionExtendedFormComponent extends EntityActionFormComponent {
     public record!: EntityActionEntity;
 }
-
-export function LoadEntityActionExtendedFormComponent() {
-}

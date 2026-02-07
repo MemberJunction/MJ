@@ -223,10 +223,3 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
         this.entityInfo = null;
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadViewPart() {
-    // Prevents tree-shaking of the component
-}

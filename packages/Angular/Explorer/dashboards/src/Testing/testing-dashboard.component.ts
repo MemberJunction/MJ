@@ -174,7 +174,3 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     });
   }
 }
-
-export function LoadTestingDashboard() {
-  // Prevents tree-shaking
-}

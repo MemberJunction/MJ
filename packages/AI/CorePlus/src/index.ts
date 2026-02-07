@@ -1,6 +1,3 @@
-import { LoadAIPromptCategoryEntityExtended } from './AIPromptCategoryExtended';
-import { LoadAIPromptEntityExtended } from './AIPromptExtended';
-
 export * from './prompt.types';
 export * from './agent-types';
 export * from './agent-payload-change-request';
@@ -19,9 +16,3 @@ export * from './AIModelExtended';
 export * from './AIAgentRunExtended';
 export * from './AIAgentRunStepExtended';
 export * from './AIPromptRunEntityExtended';
-
-export function LoadAICorePlus() {
-    LoadAIPromptEntityExtended();
-    LoadAIPromptCategoryEntityExtended();
-}
-LoadAICorePlus();

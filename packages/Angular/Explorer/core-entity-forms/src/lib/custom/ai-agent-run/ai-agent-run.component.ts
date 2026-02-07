@@ -638,9 +638,3 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     }
   }
 }
-
-
-// Loader function for AIAgentRunFormComponent
-export function LoadAIAgentRunFormComponent() {
-    // This function is called to ensure the form is loaded
-}

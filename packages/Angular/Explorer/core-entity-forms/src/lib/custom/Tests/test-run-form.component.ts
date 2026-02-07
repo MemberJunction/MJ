@@ -565,9 +565,3 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
     return d.toLocaleDateString();
   }
 }
-
-export function LoadTestRunFormComponentExtended() {
-  // Prevents tree-shaking
-}
-
-LoadTestRunFormComponentExtended();

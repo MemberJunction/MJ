@@ -43,10 +43,3 @@ export class AIAgentExampleEntityExtended extends AIAgentExampleEntity {
         }
     }
 }
-
-/**
- * Required export for MJ class factory registration
- */
-export function LoadAIAgentExampleEntityServerSubClass() {
-    // Registration happens via @RegisterClass decorator
-}

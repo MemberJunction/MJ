@@ -152,7 +152,3 @@ export class CheckUserPermissionAction extends BaseAction {
         }
     }
 }
-
-export function LoadCheckUserPermissionAction() {
-    // Prevent tree shaking
-}

@@ -72,6 +72,3 @@ export class TestRubricFormComponentExtended extends TestRubricFormComponent {
     super(elementRef, sharedService, router, route, cdr);
   }
 }
-
-export function LoadTestRubricFormComponentExtended() {}
-LoadTestRubricFormComponentExtended();

@@ -3,10 +3,6 @@ import { CredentialTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
-export function LoadCredentialTypeEditPanel() {
-    // Prevents tree-shaking
-}
-
 type CategoryType = 'AI' | 'Authentication' | 'Communication' | 'Database' | 'Integration' | 'Storage';
 
 interface SchemaField {

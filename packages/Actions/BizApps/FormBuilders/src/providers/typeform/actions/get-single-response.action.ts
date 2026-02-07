@@ -174,10 +174,3 @@ export class GetSingleTypeformResponseAction extends TypeformBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadGetSingleTypeformResponseAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

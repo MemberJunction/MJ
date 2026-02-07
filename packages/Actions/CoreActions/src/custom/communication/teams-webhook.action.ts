@@ -263,10 +263,3 @@ export class TeamsWebhookAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the TeamsWebhookAction class is included in the bundle
- */
-export function LoadTeamsWebhookAction() {
-    // Stub function to prevent tree shaking
-}

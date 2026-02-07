@@ -268,10 +268,3 @@ export class PDFGeneratorAction extends BaseFileHandlerAction {
         return lines;
     }
 }
-
-/**
- * Loader function to ensure the PDFGeneratorAction class is included in the bundle
- */
-export function LoadPDFGeneratorAction() {
-    // Stub function to prevent tree shaking
-}

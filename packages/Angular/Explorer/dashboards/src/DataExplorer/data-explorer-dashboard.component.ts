@@ -181,7 +181,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return "Data Explorer"
   }
 
-
   /**
    * Filtered entities based on entityFilterText (for home screen)
    * Excludes entities shown in recent or favorites sections
@@ -2457,11 +2456,3 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.cdr.detectChanges();
   }
 }
-
-/**
- * Tree-shaking prevention
- */
-export function LoadDataExplorerDashboard() {
-  // Force inclusion in production builds
-}
-

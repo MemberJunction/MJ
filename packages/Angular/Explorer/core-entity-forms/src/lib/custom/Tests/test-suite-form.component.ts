@@ -1950,6 +1950,3 @@ interface TestResultCell {
   humanComments: string | null;
   sequence: number;
 }
-
-export function LoadTestSuiteFormComponentExtended() {}
-LoadTestSuiteFormComponentExtended();

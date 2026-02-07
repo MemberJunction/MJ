@@ -8,11 +8,6 @@ import { ResourceData, UserInfoEngine, VersionLabelEntityType, VersionLabelItemE
 interface VersionDiffPreferences {
     DiffMode: 'label-to-label' | 'label-to-current';
 }
-
-export function LoadVersionHistoryDiffResource() {
-    // Prevents tree-shaking
-}
-
 interface DiffItemView {
     EntityName: string;
     EntityID: string;

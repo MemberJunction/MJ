@@ -334,10 +334,3 @@ export class CerebrasLLM extends BaseLLM {
     }
 }
  
-/**
- * Helper function that ensures the CerebrasLLM class is registered
- * Prevents tree-shaking from removing the class
- */
-export function LoadCerebrasLLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

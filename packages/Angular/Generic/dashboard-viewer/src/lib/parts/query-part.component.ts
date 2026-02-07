@@ -242,10 +242,3 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
         this.queryId = null;
     }
 }
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadQueryPart() {
-    // Prevents tree-shaking of the component
-}

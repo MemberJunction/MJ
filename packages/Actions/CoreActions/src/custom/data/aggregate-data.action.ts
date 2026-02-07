@@ -343,10 +343,3 @@ export class AggregateDataAction extends BaseAction {
         return squaredDifferences.reduce((sum, val) => sum + val, 0) / values.length;
     }
 }
-
-/**
- * Loader function to ensure the AggregateDataAction class is included in the bundle
- */
-export function LoadAggregateDataAction() {
-    // Stub function to prevent tree shaking
-}

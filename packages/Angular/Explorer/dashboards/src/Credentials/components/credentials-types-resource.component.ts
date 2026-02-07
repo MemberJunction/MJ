@@ -5,11 +5,6 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialTypeEditPanelComponent } from '@memberjunction/ng-credentials';
-
-export function LoadCredentialsTypesResource() {
-    // Prevents tree-shaking
-}
-
 interface FieldSchemaProperty {
     name: string;
     type: string;
